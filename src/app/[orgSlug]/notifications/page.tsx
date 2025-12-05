@@ -48,7 +48,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
   const getChannelBadge = (channel: string) => {
     switch (channel) {
       case "email":
-        return <Badge variant="info">Email</Badge>;
+        return <Badge variant="primary">Email</Badge>;
       case "sms":
         return <Badge variant="warning">SMS</Badge>;
       case "both":
@@ -63,7 +63,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
       <PageHeader
         title="Notifications"
         description="Send announcements to your organization members"
-        action={
+        actions={
           <Link href={`/${orgSlug}/notifications/new`}>
             <Button>
               <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

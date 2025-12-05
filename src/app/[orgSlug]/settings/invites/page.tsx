@@ -158,8 +158,8 @@ export default function InvitesPage() {
       <PageHeader
         title="Invite Members"
         description="Create and manage invite codes for your organization"
-        backLink={`/${orgSlug}`}
-        action={
+        backHref={`/${orgSlug}`}
+        actions={
           !showForm && (
             <Button onClick={() => setShowForm(true)}>
               <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -240,7 +240,7 @@ export default function InvitesPage() {
                       )}
                     </div>
                     <div className="flex gap-2">
-                      <Badge variant={invite.role === "admin" ? "warning" : "info"}>
+                      <Badge variant={invite.role === "admin" ? "warning" : "primary"}>
                         {invite.role}
                       </Badge>
                       {expired && <Badge variant="error">Expired</Badge>}

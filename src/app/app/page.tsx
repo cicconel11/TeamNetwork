@@ -31,7 +31,7 @@ export default async function OrgPickerPage() {
 
   // If user has exactly one org, redirect directly to it
   if (userOrgs && userOrgs.length === 1 && userOrgs[0].organizations) {
-    const org = userOrgs[0].organizations as { slug: string };
+    const org = userOrgs[0].organizations as unknown as { slug: string };
     redirect(`/${org.slug}`);
   }
 
@@ -91,7 +91,7 @@ export default async function OrgPickerPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {userOrgs!.map((userOrg) => {
-                const org = userOrg.organizations as {
+                const org = userOrg.organizations as unknown as {
                   id: string;
                   name: string;
                   slug: string;

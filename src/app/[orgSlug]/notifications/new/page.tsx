@@ -118,7 +118,7 @@ export default function NewNotificationPage() {
       <PageHeader
         title="Send Notification"
         description="Send an email or SMS blast to organization members"
-        backLink={`/${orgSlug}/notifications`}
+        backHref={`/${orgSlug}/notifications`}
       />
 
       <Card className="max-w-2xl p-6">

@@ -48,12 +48,13 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
   const categories = [...new Set(allRecords?.map((r) => r.category).filter(Boolean))];
 
   // Group records by category
+  type RecordItem = NonNullable<typeof records>[number];
   const recordsByCategory = records?.reduce((acc, record) => {
     const category = record.category || "General";
     if (!acc[category]) acc[category] = [];
     acc[category].push(record);
     return acc;
-  }, {} as Record<string, typeof records>) || {};
+  }, {} as Record<string, RecordItem[]>) || {};
 
   return (
     <div className="animate-fade-in">
@@ -106,7 +107,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
       {/* Records by Category */}
       {records && records.length > 0 ? (
         <div className="space-y-8 stagger-children">
-          {Object.entries(recordsByCategory).map(([category, categoryRecords]) => (
+          {(Object.entries(recordsByCategory) as [string, RecordItem[]][]).map(([category, categoryRecords]) => (
             <div key={category}>
               <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
                 <svg className="h-5 w-5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">

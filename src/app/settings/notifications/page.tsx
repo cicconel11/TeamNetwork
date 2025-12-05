@@ -42,7 +42,7 @@ export default function NotificationSettingsPage() {
         .eq("user_id", user.id);
 
       const orgs = (roles || []).map(r => {
-        const org = r.organizations as { id: string; name: string; slug: string };
+        const org = r.organizations as unknown as { id: string; name: string; slug: string };
         return org;
       }).filter(Boolean);
 

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import type { Organization, Alumni } from "@/types/database";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -14,29 +15,32 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const supabase = await createClient();
 
   // Fetch organization
-  const { data: org } = await supabase
+  const { data: orgData } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
     .single();
 
-  if (!org) {
-    notFound();
+  if (!orgData) {
+    return notFound();
   }
 
+  const org = orgData as Organization;
   const orgId = org.id;
 
   // Fetch alumni
-  const { data: alum } = await supabase
+  const { data: alumData } = await supabase
     .from("alumni")
     .select("*")
     .eq("id", alumniId)
     .eq("organization_id", orgId)
     .single();
 
-  if (!alum) {
-    notFound();
+  if (!alumData) {
+    return notFound();
   }
+
+  const alum = alumData as Alumni;
 
   const isAdmin = await isOrgAdmin(orgId);
 
