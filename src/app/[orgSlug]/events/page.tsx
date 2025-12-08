@@ -15,13 +15,15 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
   const supabase = await createClient();
 
   // Fetch organization
-  const { data: org } = await supabase
+  const { data: orgs, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!org) return null;
+  const org = orgs?.[0];
+
+  if (!org || orgError) return null;
 
   const isAdmin = await isOrgAdmin(org.id);
 

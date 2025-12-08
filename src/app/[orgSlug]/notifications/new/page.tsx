@@ -34,13 +34,15 @@ export default function NewNotificationPage() {
     const fetchData = async () => {
       const supabase = createClient();
 
-      const { data: org } = await supabase
+      const { data: orgs, error: orgError } = await supabase
         .from("organizations")
         .select("id")
         .eq("slug", orgSlug)
-        .single();
+        .limit(1);
 
-      if (org) {
+      const org = orgs?.[0];
+
+      if (org && !orgError) {
         setOrgId(org.id);
         const { stats } = await buildNotificationTargets({
           supabase,

@@ -21,13 +21,15 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   }
 
   // Fetch organization by slug
-  const { data: organization } = await supabase
+  const { data: organizations, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!organization) {
+  const organization = organizations?.[0];
+
+  if (!organization || orgError) {
     notFound();
   }
 

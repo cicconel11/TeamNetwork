@@ -12,13 +12,15 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   const supabase = await createClient();
 
   // Fetch organization
-  const { data: org } = await supabase
+  const { data: orgs, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!org) return null;
+  const org = orgs?.[0];
+
+  if (!org || orgError) return null;
 
   // Fetch counts and recent data in parallel
   const [

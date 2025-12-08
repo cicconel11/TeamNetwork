@@ -32,13 +32,15 @@ export default function NewPhilanthropyEventPage() {
     const supabase = createClient();
 
     // Get organization ID
-    const { data: org } = await supabase
+    const { data: orgs, error: orgError } = await supabase
       .from("organizations")
       .select("id")
       .eq("slug", orgSlug)
-      .single();
+      .limit(1);
 
-    if (!org) {
+    const org = orgs?.[0];
+
+    if (!org || orgError) {
       setError("Organization not found");
       setIsLoading(false);
       return;

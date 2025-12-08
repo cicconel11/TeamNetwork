@@ -47,13 +47,15 @@ export default function InvitesPage() {
       const supabase = createClient();
 
       // Get org
-      const { data: org } = await supabase
+      const { data: orgs, error: orgError } = await supabase
         .from("organizations")
         .select("id")
         .eq("slug", orgSlug)
-        .single();
+        .limit(1);
 
-      if (org) {
+      const org = orgs?.[0];
+
+      if (org && !orgError) {
         setOrgId(org.id);
 
         // Get invites

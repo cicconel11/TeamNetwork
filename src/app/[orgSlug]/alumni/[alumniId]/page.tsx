@@ -15,17 +15,17 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const supabase = await createClient();
 
   // Fetch organization
-  const { data: orgData } = await supabase
+  const { data: orgData, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!orgData) {
+  if (!orgData?.[0] || orgError) {
     return notFound();
   }
 
-  const org = orgData as Organization;
+  const org = orgData[0] as Organization;
   const orgId = org.id;
 
   // Fetch alumni

@@ -14,13 +14,15 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
   const supabase = await createClient();
 
   // Get org
-  const { data: org } = await supabase
+  const { data: orgs, error: orgError } = await supabase
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!org) notFound();
+  const org = orgs?.[0];
+
+  if (!org || orgError) notFound();
 
   // Check if user is admin
   const adminCheck = await isOrgAdmin(org.id);
