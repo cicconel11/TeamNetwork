@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 
@@ -28,6 +28,7 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
     .from("announcements")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("is_pinned", { ascending: false })
     .order("published_at", { ascending: false });
 
@@ -81,9 +82,21 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
                         })}
                       </p>
                     </div>
-                    {announcement.is_pinned && (
-                      <Badge variant="warning">Pinned</Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {announcement.is_pinned && (
+                        <Badge variant="warning">Pinned</Badge>
+                      )}
+                      {isAdmin && (
+                        <SoftDeleteButton
+                          table="announcements"
+                          id={announcement.id}
+                          organizationField="organization_id"
+                          organizationId={org.id}
+                          redirectTo={`/${orgSlug}/announcements`}
+                          label="Delete"
+                        />
+                      )}
+                    </div>
                   </div>
                   
                   {announcement.body && (

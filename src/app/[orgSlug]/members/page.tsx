@@ -30,6 +30,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .from("members")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("last_name");
 
   // Apply filters
@@ -50,7 +51,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const { data: allMembers } = await supabase
     .from("members")
     .select("role")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
   
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 

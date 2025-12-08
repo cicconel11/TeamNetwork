@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 
@@ -30,6 +30,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
     .from("records")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("category")
     .order("title");
 
@@ -43,7 +44,8 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
   const { data: allRecords } = await supabase
     .from("records")
     .select("category")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
   
   const categories = [...new Set(allRecords?.map((r) => r.category).filter(Boolean))];
 
@@ -132,6 +134,16 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
                       {record.year && (
                         <Badge variant="muted">{record.year}</Badge>
                       )}
+                  {isAdmin && (
+                    <SoftDeleteButton
+                      table="records"
+                      id={record.id}
+                      organizationField="organization_id"
+                      organizationId={org.id}
+                      redirectTo={`/${orgSlug}/records`}
+                      label="Delete"
+                    />
+                  )}
                     </div>
                     {record.notes && (
                       <p className="text-sm text-muted-foreground mt-3 pt-3 border-t border-border">

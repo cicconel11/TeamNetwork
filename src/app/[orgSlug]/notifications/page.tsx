@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { Button, Card, Badge, EmptyState } from "@/components/ui";
+import { Button, Card, Badge, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { isOrgAdmin } from "@/lib/auth";
 
 interface NotificationsPageProps {
@@ -33,6 +33,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
     .from("notifications")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   const formatDate = (dateStr: string) => {
@@ -55,6 +56,17 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
         return <Badge variant="success">Email + SMS</Badge>;
       default:
         return <Badge>{channel}</Badge>;
+    }
+  };
+
+  const formatAudience = (audience: string) => {
+    switch (audience) {
+      case "members":
+        return "Members";
+      case "alumni":
+        return "Alumni";
+      default:
+        return "Members + Alumni";
     }
   };
 
@@ -84,6 +96,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-semibold text-foreground">{notification.title}</h3>
                     {getChannelBadge(notification.channel)}
+                    <Badge variant="muted">{formatAudience(notification.audience)}</Badge>
                     {notification.sent_at && (
                       <Badge variant="success">Sent</Badge>
                     )}
@@ -98,6 +111,14 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
                     {notification.sent_at && ` • Sent ${formatDate(notification.sent_at)}`}
                   </p>
                 </div>
+                <SoftDeleteButton
+                  table="notifications"
+                  id={notification.id}
+                  organizationField="organization_id"
+                  organizationId={org.id}
+                  redirectTo={`/${orgSlug}/notifications`}
+                  label="Delete"
+                />
               </div>
             </Card>
           ))}

@@ -30,6 +30,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     .from("alumni")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("graduation_year", { ascending: false });
 
   if (filters.year) {
@@ -42,7 +43,8 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { data: allAlumni } = await supabase
     .from("alumni")
     .select("graduation_year")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
   
   const years = [...new Set(allAlumni?.map((a) => a.graduation_year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0));
 

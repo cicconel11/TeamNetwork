@@ -30,6 +30,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     .from("events")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .or("is_philanthropy.eq.true,event_type.eq.philanthropy");
 
   if (filters.view === "past") {
@@ -45,6 +46,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     .from("events")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .or("is_philanthropy.eq.true,event_type.eq.philanthropy");
 
   const totalEvents = allPhilanthropyEvents?.length || 0;

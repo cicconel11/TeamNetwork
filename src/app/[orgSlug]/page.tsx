@@ -29,19 +29,20 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     { data: upcomingEvents },
     { data: recentDonations },
   ] = await Promise.all([
-    supabase.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-    supabase.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-    supabase.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id),
-    supabase.from("announcements").select("*").eq("organization_id", org.id).order("published_at", { ascending: false }).limit(3),
-    supabase.from("events").select("*").eq("organization_id", org.id).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
-    supabase.from("donations").select("*").eq("organization_id", org.id).order("date", { ascending: false }).limit(5),
+    supabase.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    supabase.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    supabase.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    supabase.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
+    supabase.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
+    supabase.from("donations").select("*").eq("organization_id", org.id).is("deleted_at", null).order("date", { ascending: false }).limit(5),
   ]);
 
   // Calculate total donations
   const { data: donationTotals } = await supabase
     .from("donations")
     .select("amount")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
   
   const totalDonations = donationTotals?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
 

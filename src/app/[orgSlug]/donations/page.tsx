@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Button, EmptyState } from "@/components/ui";
+import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 
@@ -30,6 +30,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
     .from("donations")
     .select("*")
     .eq("organization_id", org.id)
+    .is("deleted_at", null)
     .order("date", { ascending: false });
 
   if (filters.campaign) {
@@ -42,7 +43,8 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
   const { data: allDonations } = await supabase
     .from("donations")
     .select("amount, campaign")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
 
   // Calculate stats
   const totalAmount = allDonations?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
@@ -166,6 +168,9 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Campaign</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
                     <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
+                    {isAdmin && (
+                      <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -184,6 +189,18 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
                       <td className="p-4 text-right font-mono font-medium text-foreground">
                         ${Number(donation.amount).toLocaleString()}
                       </td>
+                      {isAdmin && (
+                        <td className="p-4 text-right">
+                          <SoftDeleteButton
+                            table="donations"
+                            id={donation.id}
+                            organizationField="organization_id"
+                            organizationId={org.id}
+                            redirectTo={`/${orgSlug}/donations`}
+                            label="Delete"
+                          />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

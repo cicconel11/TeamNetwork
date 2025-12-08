@@ -29,7 +29,8 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
   let query = supabase
     .from("events")
     .select("*")
-    .eq("organization_id", org.id);
+    .eq("organization_id", org.id)
+    .is("deleted_at", null);
 
   // Default: show upcoming events first
   if (filters.view === "past") {

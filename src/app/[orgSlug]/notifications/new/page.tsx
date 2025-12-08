@@ -6,6 +6,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Input, Card, Textarea, Select } from "@/components/ui";
+import type { NotificationAudience } from "@/types/database";
+import { sendNotificationBlast, buildNotificationTargets } from "@/lib/notifications";
 
 export default function NewNotificationPage() {
   const router = useRouter();
@@ -15,17 +17,22 @@ export default function NewNotificationPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<"email" | "sms" | "both">("email");
+  const [audience, setAudience] = useState<NotificationAudience>("both");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [preview, setPreview] = useState<{
+    total: number;
+    emailCount: number;
+    smsCount: number;
+    skippedMissingContact: number;
+  } | null>(null);
 
-  // Fetch org and recipient count
+  // Fetch org and preview target counts
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient();
 
-      // Get org
       const { data: org } = await supabase
         .from("organizations")
         .select("id")
@@ -34,19 +41,18 @@ export default function NewNotificationPage() {
 
       if (org) {
         setOrgId(org.id);
-
-        // Get count of users with notification preferences for this org
-        const { count } = await supabase
-          .from("notification_preferences")
-          .select("*", { count: "exact", head: true })
-          .eq("organization_id", org.id);
-
-        setRecipientCount(count || 0);
+        const { stats } = await buildNotificationTargets({
+          supabase,
+          organizationId: org.id,
+          audience,
+          channel,
+        });
+        setPreview(stats);
       }
     };
 
     fetchData();
-  }, [orgSlug]);
+  }, [orgSlug, audience, channel]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,18 +71,6 @@ export default function NewNotificationPage() {
       return;
     }
 
-    // Get recipients based on channel
-    const { data: preferences } = await supabase
-      .from("notification_preferences")
-      .select("user_id, email_enabled, sms_enabled, email_address, phone_number")
-      .eq("organization_id", orgId);
-
-    if (!preferences || preferences.length === 0) {
-      setError("No recipients have notification preferences set up for this organization.");
-      setIsLoading(false);
-      return;
-    }
-
     // Create the notification record
     const { data: notification, error: notifError } = await supabase
       .from("notifications")
@@ -86,6 +80,7 @@ export default function NewNotificationPage() {
         title,
         body,
         channel,
+        audience,
       })
       .select()
       .single();
@@ -96,11 +91,16 @@ export default function NewNotificationPage() {
       return;
     }
 
-    // In a real implementation, we would call an API route or edge function
-    // to send the actual notifications. For now, we just mark it as sent.
-    // The sendNotificationBlast function from lib/notifications.ts would be called server-side.
+    const blastResult = await sendNotificationBlast({
+      supabase,
+      organizationId: orgId,
+      audience,
+      channel,
+      title,
+      body,
+    });
 
-    // Mark notification as sent
+    // Mark notification as sent (blast would occur server-side in production)
     await supabase
       .from("notifications")
       .update({ sent_at: new Date().toISOString() })
@@ -110,7 +110,7 @@ export default function NewNotificationPage() {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Success - redirect back to notifications list
-    router.push(`/${orgSlug}/notifications`);
+    router.push(`/${orgSlug}/notifications?sent=${blastResult.total}`);
   };
 
   return (
@@ -153,21 +153,37 @@ export default function NewNotificationPage() {
             onChange={(e) => setChannel(e.target.value as "email" | "sms" | "both")}
             options={[
               { value: "email", label: "Email only" },
-              { value: "sms", label: "SMS only" },
+              { value: "sms", label: "SMS only (requires phone in preferences)" },
               { value: "both", label: "Email and SMS" },
             ]}
           />
 
-          {recipientCount !== null && (
-            <div className="p-4 rounded-xl bg-muted/50 text-sm">
+          <Select
+            label="Audience"
+            value={audience}
+            onChange={(e) => setAudience(e.target.value as NotificationAudience)}
+            options={[
+              { value: "members", label: "Members" },
+              { value: "alumni", label: "Alumni" },
+              { value: "both", label: "Both" },
+            ]}
+          />
+
+          {preview && (
+            <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-1">
+              <p className="text-foreground font-semibold">Recipient preview</p>
               <p className="text-muted-foreground">
-                <strong className="text-foreground">{recipientCount}</strong> member(s) have notification preferences for this organization.
-                {recipientCount === 0 && (
-                  <span className="block mt-1 text-amber-600 dark:text-amber-400">
-                    Members need to set up their notification preferences before they can receive blasts.
-                  </span>
-                )}
+                Total targets: <strong className="text-foreground">{preview.total}</strong>
               </p>
+              <p className="text-muted-foreground">
+                Via email: <strong className="text-foreground">{preview.emailCount}</strong> • Via SMS:{" "}
+                <strong className="text-foreground">{preview.smsCount}</strong>
+              </p>
+              {preview.skippedMissingContact > 0 && (
+                <p className="text-amber-600 dark:text-amber-400">
+                  Skipped {preview.skippedMissingContact} missing contact info or disabled channel.
+                </p>
+              )}
             </div>
           )}
 
@@ -177,11 +193,11 @@ export default function NewNotificationPage() {
                 Cancel
               </Button>
             </Link>
-            <Button 
-              type="submit" 
-              className="flex-1" 
+            <Button
+              type="submit"
+              className="flex-1"
               isLoading={isLoading}
-              disabled={recipientCount === 0}
+              disabled={!preview || preview.total === 0}
             >
               Send Notification
             </Button>

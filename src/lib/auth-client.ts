@@ -26,3 +26,4 @@ export async function checkIsOrgAdmin(orgSlug: string): Promise<boolean> {
   return role?.role === "admin";
 }
 
+

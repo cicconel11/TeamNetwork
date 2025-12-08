@@ -50,7 +50,8 @@ export default function AddPointsPage() {
         const { data: points } = await supabase
           .from("competition_points")
           .select("team_name")
-          .eq("competition_id", competitions[0].id);
+          .eq("competition_id", competitions[0].id)
+          .is("deleted_at", null);
 
         const teams = [...new Set(points?.map((p) => p.team_name).filter(Boolean))] as string[];
         setExistingTeams(teams);

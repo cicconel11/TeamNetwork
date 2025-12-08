@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, Textarea } from "@/components/ui";
+import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
 
 export default function CreateOrgPage() {
   const router = useRouter();
@@ -14,6 +14,9 @@ export default function CreateOrgPage() {
   const [primaryColor, setPrimaryColor] = useState("#1e3a5f");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [billingInterval, setBillingInterval] = useState<SubscriptionInterval>("month");
+  const [alumniBucket, setAlumniBucket] = useState<AlumniBucket>("none");
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // Auto-generate slug from name
   const handleNameChange = (value: string) => {
@@ -32,67 +35,44 @@ export default function CreateOrgPage() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setInfoMessage(null);
 
-    const supabase = createClient();
-
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError("You must be logged in to create an organization");
-      setIsLoading(false);
-      return;
-    }
-
-    // Check if slug is already taken
-    const { data: existing } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", slug)
-      .single();
-
-    if (existing) {
-      setError("This URL slug is already taken. Please choose a different one.");
-      setIsLoading(false);
-      return;
-    }
-
-    // Create the organization
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .insert({
-        name,
-        slug,
-        description: description || null,
-        primary_color: primaryColor,
-      })
-      .select()
-      .single();
-
-    if (orgError) {
-      setError(orgError.message);
-      setIsLoading(false);
-      return;
-    }
-
-    // Add user as admin of the new organization
-    const { error: roleError } = await supabase
-      .from("user_organization_roles")
-      .insert({
-        user_id: user.id,
-        organization_id: org.id,
-        role: "admin",
+    try {
+      const response = await fetch("/api/stripe/create-org-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          slug,
+          description,
+          primaryColor,
+          billingInterval,
+          alumniBucket,
+        }),
       });
 
-    if (roleError) {
-      // Rollback: delete the org if we couldn't add the role
-      await supabase.from("organizations").delete().eq("id", org.id);
-      setError("Failed to set up organization admin. Please try again.");
-      setIsLoading(false);
-      return;
-    }
+      const data = await response.json();
 
-    // Success! Redirect to the new org
-    router.push(`/${slug}`);
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to start checkout");
+      }
+
+      if (data.mode === "sales") {
+        setInfoMessage("Thank you! We will contact you to finalize a custom alumni plan.");
+        router.push(`/app?org=${slug}&billing=pending-sales`);
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url as string;
+        return;
+      }
+
+      throw new Error("Missing checkout URL");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -137,6 +117,11 @@ export default function CreateOrgPage() {
               {error}
             </div>
           )}
+          {infoMessage && (
+            <div className="mb-6 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-sm">
+              {infoMessage}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit}>
             <div className="space-y-6">
@@ -169,6 +154,17 @@ export default function CreateOrgPage() {
                 rows={3}
               />
 
+              <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-1">
+                <p className="font-semibold text-foreground">Pricing</p>
+                <p className="text-muted-foreground">Base app: $10/mo or $100/yr.</p>
+                <p className="text-muted-foreground">
+                  Alumni add-on: 0–200: +$10/mo or $100/yr; 201–600: +$20/mo or $200/yr; 601–1500: +$30/mo or $300/yr.
+                </p>
+                <p className="text-muted-foreground">
+                  1500+ alumni routes to a custom quote (no checkout; we will contact you).
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">
                   Brand Color
@@ -193,6 +189,55 @@ export default function CreateOrgPage() {
                 </p>
               </div>
 
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Billing Interval</p>
+                  <div className="flex gap-2">
+                    {["month", "year"].map((interval) => (
+                      <button
+                        key={interval}
+                        type="button"
+                        onClick={() => setBillingInterval(interval as SubscriptionInterval)}
+                        className={`flex-1 px-4 py-3 rounded-xl border ${
+                          billingInterval === interval
+                            ? "border-org-primary bg-org-primary text-white"
+                            : "border-border bg-muted text-foreground"
+                        }`}
+                      >
+                        {interval === "month" ? "Monthly" : "Yearly (save 2 months)"}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Monthly = $10/mo base. Yearly = $100/yr (save 2 months on base and add-ons).
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Alumni Access</p>
+                  <select
+                    value={alumniBucket}
+                    onChange={(e) => setAlumniBucket(e.target.value as AlumniBucket)}
+                    className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-org-primary"
+                  >
+                    <option value="none">No alumni access</option>
+                    <option value="0-200">0–200 alumni</option>
+                    <option value="201-600">201–600 alumni</option>
+                    <option value="601-1500">601–1500 alumni</option>
+                    <option value="1500+">Over 1500 (custom pricing)</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Alumni access adds read access for alumni directories and communications; pricing scales by bucket.
+                  </p>
+                </div>
+              </div>
+
+              {alumniBucket === "1500+" && (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+                  For 1500+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
+                </div>
+              )}
+
               <div className="flex gap-4 pt-4">
                 <Link href="/app" className="flex-1">
                   <Button type="button" variant="secondary" className="w-full">
@@ -210,4 +255,5 @@ export default function CreateOrgPage() {
     </div>
   );
 }
+
 

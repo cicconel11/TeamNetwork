@@ -1,4 +1,5 @@
 import { HTMLAttributes } from "react";
+import Image from "next/image";
 
 interface AvatarProps extends HTMLAttributes<HTMLDivElement> {
   src?: string | null;
@@ -30,7 +31,13 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
         className={`${sizes[size]} rounded-full overflow-hidden bg-muted flex-shrink-0 ${className}`}
         {...props}
       >
-        <img src={src} alt={alt || name || "Avatar"} className="h-full w-full object-cover" />
+        <Image
+          src={src}
+          alt={alt || name || "Avatar"}
+          fill
+          className="object-cover"
+          sizes="64px"
+        />
       </div>
     );
   }

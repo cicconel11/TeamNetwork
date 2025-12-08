@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button, Card } from "@/components/ui";
@@ -111,11 +112,16 @@ export default async function OrgPickerPage() {
                     <Card className="p-6 h-full hover:border-emerald-500/50 transition-colors">
                       <div className="flex items-center gap-4 mb-4">
                         {org.logo_url ? (
-                          <img
-                            src={org.logo_url}
-                            alt={org.name}
-                            className="h-14 w-14 rounded-xl object-cover"
-                          />
+                          <div className="relative h-14 w-14 overflow-hidden rounded-xl">
+                            <Image
+                              src={org.logo_url}
+                              alt={org.name}
+                              fill
+                              className="object-cover"
+                              sizes="56px"
+                              priority={false}
+                            />
+                          </div>
                         ) : (
                           <div
                             className="h-14 w-14 rounded-xl flex items-center justify-center text-white font-bold text-xl"

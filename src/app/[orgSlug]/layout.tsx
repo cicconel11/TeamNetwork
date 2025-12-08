@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
+import { BillingGate } from "@/components/layout/BillingGate";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -41,6 +42,37 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   // If user doesn't have access to this org, redirect to /app
   if (!userRole) {
     redirect("/app");
+  }
+
+  const { data: subscription } = await supabase
+    .from("organization_subscriptions")
+    .select("status")
+    .eq("organization_id", organization.id)
+    .maybeSingle();
+
+  const isActive = subscription?.status === "active";
+
+  if (!isActive) {
+    if (userRole.role === "admin") {
+      return (
+        <BillingGate
+          orgSlug={orgSlug}
+          organizationId={organization.id}
+          status={subscription?.status || "pending"}
+        />
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="text-2xl font-semibold text-foreground">Organization not active</h1>
+          <p className="text-muted-foreground">
+            This organization&apos;s subscription is not active yet. Please contact an admin.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (

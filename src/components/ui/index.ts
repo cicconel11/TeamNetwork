@@ -6,4 +6,5 @@ export { Avatar } from "./Avatar";
 export { EmptyState } from "./EmptyState";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
+export { SoftDeleteButton } from "./SoftDeleteButton";
 

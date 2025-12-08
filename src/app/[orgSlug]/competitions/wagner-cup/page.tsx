@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 
@@ -50,6 +50,7 @@ export default async function WagnerCupPage({ params }: WagnerCupPageProps) {
       .from("competition_points")
       .select("team_name, points, notes, created_at, id")
       .eq("competition_id", competition.id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false });
 
     pointHistory = points || [];
@@ -186,11 +187,23 @@ export default async function WagnerCupPage({ params }: WagnerCupPageProps) {
                 <div className="divide-y divide-border max-h-96 overflow-y-auto">
                   {pointHistory.slice(0, 10).map((entry) => (
                     <div key={entry.id} className="p-4">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="font-medium text-foreground">{entry.team_name}</p>
-                        <Badge variant={entry.points > 0 ? "success" : "error"}>
-                          {entry.points > 0 ? "+" : ""}{entry.points}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={entry.points > 0 ? "success" : "error"}>
+                            {entry.points > 0 ? "+" : ""}{entry.points}
+                          </Badge>
+                          {isAdmin && (
+                            <SoftDeleteButton
+                              table="competition_points"
+                              id={entry.id}
+                              organizationField="competition_id"
+                              organizationId={competition.id}
+                              redirectTo={`/${orgSlug}/competitions/wagner-cup`}
+                              label="Delete"
+                            />
+                          )}
+                        </div>
                       </div>
                       {entry.notes && (
                         <p className="text-sm text-muted-foreground mt-1">{entry.notes}</p>

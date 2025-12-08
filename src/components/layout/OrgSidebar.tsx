@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { Organization } from "@/types/database";
 
@@ -37,11 +38,16 @@ export function OrgSidebar({ organization, userRole }: OrgSidebarProps) {
       <div className="p-6 border-b border-border">
         <Link href={basePath} className="flex items-center gap-3">
           {organization.logo_url ? (
-            <img 
-              src={organization.logo_url} 
-              alt={organization.name} 
-              className="h-10 w-10 rounded-xl object-cover"
-            />
+            <div className="relative h-10 w-10 rounded-xl overflow-hidden">
+              <Image
+                src={organization.logo_url}
+                alt={organization.name}
+                fill
+                className="object-cover"
+                sizes="40px"
+                priority={false}
+              />
+            </div>
           ) : (
             <div 
               className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"

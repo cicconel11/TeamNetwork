@@ -13,7 +13,8 @@
     "@supabase/supabase-js": "^2.86.2",
     "next": "14.2.33",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "stripe": "^20.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
