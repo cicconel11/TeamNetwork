@@ -43,6 +43,7 @@ export interface Member {
   graduation_year: number | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Alumni {
@@ -58,6 +59,7 @@ export interface Alumni {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Event {
@@ -73,6 +75,7 @@ export interface Event {
   created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Announcement {
@@ -85,6 +88,7 @@ export interface Announcement {
   is_pinned: boolean;
   created_at: string;
   updated_at: string;
+  deleted_at: string | null;
 }
 
 export interface Donation {
@@ -97,6 +101,7 @@ export interface Donation {
   campaign: string | null;
   notes: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Record {
@@ -109,6 +114,7 @@ export interface Record {
   year: number | null;
   notes: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Competition {
@@ -128,6 +134,7 @@ export interface CompetitionPoint {
   points: number;
   notes: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface PhilanthropyEvent {
@@ -140,9 +147,13 @@ export interface PhilanthropyEvent {
   slots_available: number | null;
   signup_link: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export type NotificationChannel = "email" | "sms" | "both";
+export type NotificationAudience = "members" | "alumni" | "both";
+export type SubscriptionInterval = "month" | "year";
+export type AlumniBucket = "none" | "0-200" | "201-600" | "601-1500" | "1500+";
 
 export interface NotificationPreference {
   id: string;
@@ -163,8 +174,10 @@ export interface Notification {
   title: string;
   body: string | null;
   channel: NotificationChannel;
+  audience: NotificationAudience;
   created_at: string;
   sent_at: string | null;
+  deleted_at: string | null;
 }
 
 export type InviteRole = "admin" | "member";
@@ -178,6 +191,20 @@ export interface OrganizationInvite {
   uses_remaining: number | null;
   expires_at: string | null;
   created_at: string;
+}
+
+export interface OrganizationSubscription {
+  id: string;
+  organization_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  base_plan_interval: SubscriptionInterval;
+  alumni_bucket: AlumniBucket;
+  alumni_plan_interval: SubscriptionInterval | null;
+  status: string;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Supabase Database type for typed client
@@ -201,32 +228,44 @@ export interface Database {
       };
       members: {
         Row: Member;
-        Insert: Omit<Member, "id" | "created_at" | "updated_at">;
+        Insert: Omit<Member, "id" | "created_at" | "updated_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Member, "id" | "created_at">>;
       };
       alumni: {
         Row: Alumni;
-        Insert: Omit<Alumni, "id" | "created_at" | "updated_at">;
+        Insert: Omit<Alumni, "id" | "created_at" | "updated_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Alumni, "id" | "created_at">>;
       };
       events: {
         Row: Event;
-        Insert: Omit<Event, "id" | "created_at" | "updated_at">;
+        Insert: Omit<Event, "id" | "created_at" | "updated_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Event, "id" | "created_at">>;
       };
       announcements: {
         Row: Announcement;
-        Insert: Omit<Announcement, "id" | "created_at" | "updated_at">;
+        Insert: Omit<Announcement, "id" | "created_at" | "updated_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Announcement, "id" | "created_at">>;
       };
       donations: {
         Row: Donation;
-        Insert: Omit<Donation, "id" | "created_at">;
+        Insert: Omit<Donation, "id" | "created_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Donation, "id" | "created_at">>;
       };
       records: {
         Row: Record;
-        Insert: Omit<Record, "id" | "created_at">;
+        Insert: Omit<Record, "id" | "created_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Record, "id" | "created_at">>;
       };
       competitions: {
@@ -236,12 +275,16 @@ export interface Database {
       };
       competition_points: {
         Row: CompetitionPoint;
-        Insert: Omit<CompetitionPoint, "id" | "created_at">;
+        Insert: Omit<CompetitionPoint, "id" | "created_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<CompetitionPoint, "id" | "created_at">>;
       };
       philanthropy_events: {
         Row: PhilanthropyEvent;
-        Insert: Omit<PhilanthropyEvent, "id" | "created_at">;
+        Insert: Omit<PhilanthropyEvent, "id" | "created_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<PhilanthropyEvent, "id" | "created_at">>;
       };
       notification_preferences: {
@@ -251,13 +294,25 @@ export interface Database {
       };
       notifications: {
         Row: Notification;
-        Insert: Omit<Notification, "id" | "created_at">;
+        Insert: Omit<Notification, "id" | "created_at" | "deleted_at"> & {
+          deleted_at?: string | null;
+        };
         Update: Partial<Omit<Notification, "id" | "created_at">>;
       };
       organization_invites: {
         Row: OrganizationInvite;
         Insert: Omit<OrganizationInvite, "id" | "created_at">;
         Update: Partial<Omit<OrganizationInvite, "id" | "created_at">>;
+      };
+      organization_subscriptions: {
+        Row: OrganizationSubscription;
+        Insert: Omit<OrganizationSubscription, "id" | "created_at" | "updated_at" | "stripe_customer_id" | "stripe_subscription_id" | "current_period_end" | "status"> & {
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          current_period_end?: string | null;
+          status?: string;
+        };
+        Update: Partial<Omit<OrganizationSubscription, "id">>;
       };
     };
     Enums: {

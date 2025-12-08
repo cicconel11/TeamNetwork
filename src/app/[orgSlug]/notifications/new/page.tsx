@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Input, Card, Textarea, Select } from "@/components/ui";
-import type { NotificationAudience } from "@/types/database";
+import type { Database } from "@/types/database";
 import { sendNotificationBlast, buildNotificationTargets } from "@/lib/notifications";
 
 export default function NewNotificationPage() {
@@ -17,6 +17,7 @@ export default function NewNotificationPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<"email" | "sms" | "both">("email");
+  type NotificationAudience = Database["public"]["Tables"]["notifications"]["Row"]["audience"];
   const [audience, setAudience] = useState<NotificationAudience>("both");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
