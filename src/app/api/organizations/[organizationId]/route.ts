@@ -40,10 +40,11 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     .select("stripe_subscription_id")
     .eq("organization_id", organizationId)
     .maybeSingle();
+  const sub = subscription as { stripe_subscription_id: string | null } | null;
 
   try {
-    if (subscription?.stripe_subscription_id) {
-      await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+    if (sub?.stripe_subscription_id) {
+      await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     }
 
     // Delete related records (best-effort order to satisfy FKs)

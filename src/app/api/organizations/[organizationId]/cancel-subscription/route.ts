@@ -40,13 +40,15 @@ export async function POST(_req: Request, { params }: RouteParams) {
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (!subscription) {
+  const sub = subscription as { stripe_subscription_id: string | null; status?: string | null } | null;
+
+  if (!sub) {
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }
 
   try {
-    if (subscription.stripe_subscription_id) {
-      await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
+    if (sub.stripe_subscription_id) {
+      await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     }
 
     await serviceSupabase
