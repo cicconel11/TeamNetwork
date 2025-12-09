@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   }
 
   const serviceSupabase = createServiceClient();
+  type OrgSubUpdate = Database["public"]["Tables"]["organization_subscriptions"]["Update"];
 
   // Fetch subscription to cancel on Stripe, if any
   const { data: subscription } = await serviceSupabase

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function POST(_req: Request, { params }: RouteParams) {
   }
 
   const serviceSupabase = createServiceClient();
+  type OrgSubUpdate = Database["public"]["Tables"]["organization_subscriptions"]["Update"];
 
   const { data: subscription } = await serviceSupabase
     .from("organization_subscriptions")
@@ -51,13 +53,15 @@ export async function POST(_req: Request, { params }: RouteParams) {
       await stripe.subscriptions.cancel(sub.stripe_subscription_id);
     }
 
+    const payload: OrgSubUpdate = {
+      status: "canceled",
+      stripe_subscription_id: null,
+      updated_at: new Date().toISOString(),
+    };
+
     await serviceSupabase
       .from("organization_subscriptions")
-      .update({
-        status: "canceled",
-        stripe_subscription_id: null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(payload)
       .eq("organization_id", organizationId);
 
     return NextResponse.json({ status: "canceled" });
