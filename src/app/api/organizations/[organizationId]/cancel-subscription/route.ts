@@ -59,8 +59,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
       updated_at: new Date().toISOString(),
     };
 
-    await (serviceSupabase.from("organization_subscriptions") as any)
-      .update(payload)
+    const orgSubs = serviceSupabase.from("organization_subscriptions") as ReturnType<typeof serviceSupabase["from"]>;
+
+    await orgSubs
+      .update(payload as Database["public"]["Tables"]["organization_subscriptions"]["Update"])
       .eq("organization_id", organizationId);
 
     return NextResponse.json({ status: "canceled" });
