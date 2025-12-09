@@ -33,7 +33,7 @@ export async function getUserRoleForOrg(organizationId: string): Promise<UserRol
     .select("role")
     .eq("user_id", user.id)
     .eq("organization_id", organizationId)
-    .single();
+    .maybeSingle();
 
   return data?.role || null;
 }

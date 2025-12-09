@@ -27,15 +27,13 @@ export default function AddPointsPage() {
       const supabase = createClient();
       
       // Get organization
-      const { data: orgs, error: orgError } = await supabase
+      const { data: org } = await supabase
         .from("organizations")
         .select("id")
         .eq("slug", orgSlug)
-        .limit(1);
+        .single();
 
-      const org = orgs?.[0];
-
-      if (!org || orgError) return;
+      if (!org) return;
 
       // Get Wagner Cup competition
       const { data: competitions } = await supabase
@@ -52,8 +50,7 @@ export default function AddPointsPage() {
         const { data: points } = await supabase
           .from("competition_points")
           .select("team_name")
-          .eq("competition_id", competitions[0].id)
-          .is("deleted_at", null);
+          .eq("competition_id", competitions[0].id);
 
         const teams = [...new Set(points?.map((p) => p.team_name).filter(Boolean))] as string[];
         setExistingTeams(teams);

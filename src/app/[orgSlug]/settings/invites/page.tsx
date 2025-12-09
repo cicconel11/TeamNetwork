@@ -40,6 +40,8 @@ export default function InvitesPage() {
   const [newRole, setNewRole] = useState<"member" | "admin">("member");
   const [newUses, setNewUses] = useState<string>("");
   const [newExpires, setNewExpires] = useState<string>("");
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch org and invites
   useEffect(() => {
@@ -120,6 +122,52 @@ export default function InvitesPage() {
       .eq("id", inviteId);
 
     setInvites(invites.filter(i => i.id !== inviteId));
+  };
+
+  const cancelSubscription = async () => {
+    if (!orgId) return;
+    if (!confirm("Cancel billing for this organization? Access will end when the period closes.")) return;
+
+    setIsCancelling(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/cancel-subscription`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to cancel subscription");
+      }
+      alert("Subscription canceled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to cancel subscription");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const deleteOrganization = async () => {
+    if (!orgId) return;
+    if (!confirm("This will delete the organization, all data, and cancel billing. Continue?")) return;
+
+    setIsDeleting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to delete organization");
+      }
+      alert("Organization deleted.");
+      window.location.href = "/app";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to delete organization");
+      setIsDeleting(false);
+    }
   };
 
   const copyToClipboard = (code: string, type: "code" | "link" = "code") => {
@@ -301,6 +349,35 @@ export default function InvitesPage() {
           <Button onClick={() => setShowForm(true)}>Create Invite Code</Button>
         </Card>
       )}
+
+      {/* Danger zone */}
+      <Card className="p-6 mt-8 border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-900/10">
+        <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+          <div>
+            <h3 className="text-red-700 dark:text-red-300 font-semibold">Danger Zone</h3>
+            <p className="text-sm text-red-700/80 dark:text-red-200/80">
+              Cancel billing or permanently delete this organization. Deletion removes all data.
+            </p>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <Button
+              variant="secondary"
+              onClick={cancelSubscription}
+              isLoading={isCancelling}
+            >
+              Cancel Subscription
+            </Button>
+            <Button
+              variant="ghost"
+              className="text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
+              onClick={deleteOrganization}
+              isLoading={isDeleting}
+            >
+              Delete Organization
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

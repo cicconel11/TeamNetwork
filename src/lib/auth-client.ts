@@ -7,13 +7,15 @@ export async function checkIsOrgAdmin(orgSlug: string): Promise<boolean> {
   if (!user) return false;
 
   // Get org
-  const { data: org } = await supabase
+  const { data: orgs, error: orgError } = await supabase
     .from("organizations")
     .select("id")
     .eq("slug", orgSlug)
-    .single();
+    .limit(1);
 
-  if (!org) return false;
+  const org = orgs?.[0];
+
+  if (!org || orgError) return false;
 
   // Check role
   const { data: role } = await supabase
