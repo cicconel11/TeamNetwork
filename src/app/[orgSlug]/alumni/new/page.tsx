@@ -23,12 +23,27 @@ export default function NewAlumniPage() {
     job_title: "",
     photo_url: "",
     notes: "",
+    linkedin_url: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    const linkedin = formData.linkedin_url?.trim();
+    if (linkedin) {
+      try {
+        const url = new URL(linkedin);
+        if (url.protocol !== "https:") {
+          throw new Error("LinkedIn URL must start with https://");
+        }
+      } catch {
+        setError("Please enter a valid LinkedIn profile URL (https://...)");
+        setIsLoading(false);
+        return;
+      }
+    }
 
     const supabase = createClient();
 
@@ -55,6 +70,7 @@ export default function NewAlumniPage() {
       job_title: formData.job_title || null,
       photo_url: formData.photo_url || null,
       notes: formData.notes || null,
+      linkedin_url: linkedin || null,
     });
 
     if (insertError) {
@@ -138,6 +154,15 @@ export default function NewAlumniPage() {
             onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
             placeholder="https://example.com/photo.jpg"
             helperText="Direct link to alumni photo"
+          />
+
+          <Input
+            label="LinkedIn profile (optional)"
+            type="url"
+            value={formData.linkedin_url}
+            onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
+            placeholder="https://www.linkedin.com/in/username"
+            helperText="Must be a valid https:// URL"
           />
 
           <Textarea

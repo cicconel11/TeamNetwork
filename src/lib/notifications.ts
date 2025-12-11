@@ -7,7 +7,7 @@ export interface NotificationTarget {
   email?: string | null;
   phone?: string | null;
   channels: DeliveryChannel[];
-  source: "member" | "alumni";
+  source: "member" | "alumni" | "user";
   id: string;
 }
 
@@ -18,6 +18,7 @@ export interface NotificationBlastInput {
   channel: NotificationChannel; // "email" | "sms" | "both"
   title: string;
   body: string;
+  targetUserIds?: string[] | null;
 }
 
 export interface NotificationBlastResult {
@@ -109,63 +110,86 @@ export async function buildNotificationTargets(params: {
   organizationId: string;
   audience: NotificationAudience;
   channel: NotificationChannel;
+  targetUserIds?: string[] | null;
 }): Promise<{ targets: NotificationTarget[]; stats: { total: number; emailCount: number; smsCount: number; skippedMissingContact: number } }> {
-  const { supabase, organizationId, audience, channel } = params;
+  const { supabase, organizationId, audience, channel, targetUserIds } = params;
   const desired = DESIRED_CHANNELS[channel];
 
-  const [prefsRes, membersRes, alumniRes] = await Promise.all([
+  const audienceRoles =
+    audience === "members"
+      ? ["admin", "active_member"]
+      : audience === "alumni"
+      ? ["alumni"]
+      : ["admin", "active_member", "alumni"];
+
+  const membershipFilter = supabase
+    .from("user_organization_roles")
+    .select("user_id, role, status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("role", audienceRoles);
+
+  const [prefsRes, usersRes, membershipsRes] = await Promise.all([
     supabase
       .from("notification_preferences")
       .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id")
       .eq("organization_id", organizationId),
-    audience === "alumni"
-      ? Promise.resolve({ data: [] })
-      : supabase
-          .from("members")
-          .select("id,email,first_name,last_name")
-          .eq("organization_id", organizationId)
-          .is("deleted_at", null),
-    audience === "members"
-      ? Promise.resolve({ data: [] })
-      : supabase
-          .from("alumni")
-          .select("id,email,first_name,last_name")
-          .eq("organization_id", organizationId)
-          .is("deleted_at", null),
+    supabase
+      .from("users")
+      .select("id,email,name"),
+    targetUserIds && targetUserIds.length > 0 ? membershipFilter.in("user_id", targetUserIds) : membershipFilter,
   ]);
 
   const prefs = (prefsRes.data as PreferenceRow[] | null) || [];
-  const prefByEmail = new Map<string, PreferenceRow>();
+  const prefByUser = new Map<string, PreferenceRow>();
   prefs.forEach((pref) => {
-    if (pref.email_address) prefByEmail.set(pref.email_address.toLowerCase(), pref);
+    if (pref.user_id) prefByUser.set(pref.user_id, pref);
   });
+
+  const users =
+    (usersRes.data as { id: string; email: string | null; name: string | null }[] | null) || [];
+  const userById = new Map<string, { email: string | null }>();
+  users.forEach((u) => {
+    userById.set(u.id, { email: u.email });
+  });
+
+  const membershipRows =
+    (membershipsRes.data as { user_id: string; role: string; status: string }[] | null) || [];
+
+  const memberships =
+    targetUserIds && targetUserIds.length > 0
+      ? membershipRows.filter((m) => targetUserIds.includes(m.user_id))
+      : membershipRows;
 
   const targets: NotificationTarget[] = [];
   let emailCount = 0;
   let smsCount = 0;
   let skippedMissingContact = 0;
 
-  const processPerson = (record: { id: string; email: string | null }, source: "member" | "alumni") => {
-    const email = record.email;
-    const pref = email ? prefByEmail.get(email.toLowerCase()) : undefined;
-    const { channels, email: resolvedEmail, phone } = getChannelsForContact({ desired, pref, email });
+  memberships.forEach((membership) => {
+    const user = userById.get(membership.user_id);
+    const pref = prefByUser.get(membership.user_id);
+    const { channels, email, phone } = getChannelsForContact({
+      desired,
+      pref,
+      email: user?.email || null,
+    });
+
     if (channels.length === 0) {
       skippedMissingContact += 1;
       return;
     }
+
     if (channels.includes("email")) emailCount += 1;
     if (channels.includes("sms")) smsCount += 1;
     targets.push({
-      id: record.id,
-      source,
-      email: resolvedEmail,
+      id: membership.user_id,
+      source: membership.role === "alumni" ? "alumni" : "member",
+      email,
       phone,
       channels,
     });
-  };
-
-  membersRes.data?.forEach((m) => processPerson(m, "member"));
-  alumniRes.data?.forEach((a) => processPerson(a, "alumni"));
+  });
 
   return {
     targets,
@@ -179,8 +203,14 @@ export async function buildNotificationTargets(params: {
 }
 
 export async function sendNotificationBlast(input: NotificationBlastInput): Promise<NotificationBlastResult> {
-  const { supabase, organizationId, audience, channel, title, body } = input;
-  const { targets, stats } = await buildNotificationTargets({ supabase, organizationId, audience, channel });
+  const { supabase, organizationId, audience, channel, title, body, targetUserIds } = input;
+  const { targets, stats } = await buildNotificationTargets({
+    supabase,
+    organizationId,
+    audience,
+    channel,
+    targetUserIds: targetUserIds || undefined,
+  });
 
   const errors: string[] = [];
   let emailSent = 0;

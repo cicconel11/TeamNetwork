@@ -1,29 +1,35 @@
 "use client";
 
+import type { ComponentType } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { Organization } from "@/types/database";
+import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface OrgSidebarProps {
   organization: Organization;
+  role: OrgRole | null;
 }
 
-const navItems = [
-  { href: "", label: "Dashboard", icon: HomeIcon },
-  { href: "/members", label: "Members", icon: UsersIcon },
-  { href: "/alumni", label: "Alumni", icon: GraduationCapIcon },
-  { href: "/events", label: "Events", icon: CalendarIcon },
-  { href: "/announcements", label: "Announcements", icon: MegaphoneIcon },
-  { href: "/philanthropy", label: "Philanthropy", icon: HeartIcon },
-  { href: "/donations", label: "Donations", icon: DollarIcon },
-  { href: "/records", label: "Records", icon: TrophyIcon },
-  { href: "/competitions/wagner-cup", label: "Wagner Cup", icon: AwardIcon },
+const navItems: Array<{ href: string; label: string; icon: ComponentType<{ className?: string }>; roles: OrgRole[] }> = [
+  { href: "", label: "Dashboard", icon: HomeIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/members", label: "Members", icon: UsersIcon, roles: ["admin", "active_member"] },
+  { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/mentorship", label: "Mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/workouts", label: "Workouts", icon: DumbbellIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/competition", label: "Competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/events", label: "Events", icon: CalendarIcon, roles: ["admin", "active_member"] },
+  { href: "/announcements", label: "Announcements", icon: MegaphoneIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/philanthropy", label: "Philanthropy", icon: HeartIcon, roles: ["admin", "active_member"] },
+  { href: "/donations", label: "Donations", icon: DollarIcon, roles: ["admin"] },
+  { href: "/records", label: "Records", icon: TrophyIcon, roles: ["admin", "active_member"] },
 ];
 
-export function OrgSidebar({ organization }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
+  const visibleNav = role ? navItems.filter((item) => item.roles.includes(role)) : navItems;
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-card border-r border-border flex flex-col z-40">
@@ -58,7 +64,7 @@ export function OrgSidebar({ organization }: OrgSidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1">
-          {navItems.map((item) => {
+          {visibleNav.map((item) => {
             const href = `${basePath}${item.href}`;
             const isActive = pathname === href || (item.href !== "" && pathname.startsWith(href));
             const Icon = item.icon;
@@ -165,6 +171,22 @@ function AwardIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+    </svg>
+  );
+}
+
+function HandshakeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 10.5l2.25-2.25M12.75 14.25l-1.5 1.5a2.121 2.121 0 01-3 0l-2.25-2.25a2.121 2.121 0 010-3l3.75-3.75a2.121 2.121 0 013 0l2.25 2.25m-3 3l2.25-2.25m-2.25 2.25l3 3a2.121 2.121 0 003 0l1.128-1.128a2.121 2.121 0 000-3l-3.75-3.75a2.121 2.121 0 00-3 0l-.75.75" />
+    </svg>
+  );
+}
+
+function DumbbellIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75v10.5M3.75 9.75v4.5m12-7.5v10.5m3-7.5v4.5m-9-4.5h6" />
     </svg>
   );
 }

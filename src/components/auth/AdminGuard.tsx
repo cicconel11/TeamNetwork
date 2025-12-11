@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeRole } from "@/lib/auth/role-utils";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
+import type { UserRole } from "@/types/database";
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -55,13 +57,14 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
 
       const { data: role } = await supabase
         .from("user_organization_roles")
-        .select("role")
+        .select("role,status")
         .eq("user_id", session.user.id)
         .eq("organization_id", org.id)
-        .single();
+        .maybeSingle();
 
-      console.log("[AdminGuard] User role for org:", role?.role || "none");
-      setIsAdmin(role?.role === "admin");
+      const normalized = normalizeRole((role?.role as UserRole | null) ?? null);
+      console.log("[AdminGuard] User role for org:", normalized || "none");
+      setIsAdmin(normalized === "admin" && role?.status !== "revoked");
     } catch (err) {
       console.error("[AdminGuard] Error checking auth:", err);
       setAuthState("unauthenticated");

@@ -143,6 +143,23 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
               <dt className="text-sm text-muted-foreground">Email</dt>
               <dd className="text-foreground font-medium">{alum.email || "—"}</dd>
             </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">LinkedIn</dt>
+            <dd className="text-foreground font-medium">
+              {alum.linkedin_url ? (
+                <a
+                  href={alum.linkedin_url}
+                  className="text-org-primary hover:underline break-all"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  View profile
+                </a>
+              ) : (
+                "—"
+              )}
+            </dd>
+          </div>
             <div>
               <dt className="text-sm text-muted-foreground">Added</dt>
               <dd className="text-foreground font-medium">

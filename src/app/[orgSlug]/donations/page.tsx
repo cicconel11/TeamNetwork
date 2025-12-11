@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { DonationEmbedSettings } from "@/components/donations/DonationEmbedSettings";
 
 interface DonationsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -24,6 +25,10 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
   if (!org) return null;
 
   const isAdmin = await isOrgAdmin(org.id);
+  const embedUrl =
+    org.donation_embed_url && org.donation_embed_url.startsWith("https://")
+      ? org.donation_embed_url
+      : null;
 
   // Build query
   let query = supabase
@@ -78,6 +83,33 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
           )
         }
       />
+
+      {(embedUrl || isAdmin) && (
+        <Card className="mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3">
+            {isAdmin && (
+              <div className="border-b border-border lg:border-b-0 lg:border-r border-border">
+                <DonationEmbedSettings orgId={org.id} orgSlug={orgSlug} currentUrl={embedUrl} />
+              </div>
+            )}
+            <div className="lg:col-span-2">
+              {embedUrl ? (
+                <div className="relative aspect-video">
+                  <iframe
+                    src={embedUrl}
+                    className="w-full h-full rounded-b-xl lg:rounded-xl border-0"
+                    title="Donation embed"
+                  />
+                </div>
+              ) : (
+                <div className="p-6 text-muted-foreground">
+                  No embed configured yet. Add a URL to display it here.
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">

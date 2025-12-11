@@ -1,31 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Card, Button, Input, Textarea } from "@/components/ui";
+import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+
+type TeamOption = { id: string; name: string };
 
 export default function AddPointsPage() {
   const router = useRouter();
   const params = useParams();
   const orgSlug = params.orgSlug as string;
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [competitionId, setCompetitionId] = useState<string | null>(null);
-  const [existingTeams, setExistingTeams] = useState<string[]>([]);
-  
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+
   const [formData, setFormData] = useState({
+    team_id: "",
     team_name: "",
     points: "",
     notes: "",
+    reason: "",
   });
 
   useEffect(() => {
     const fetchCompetition = async () => {
       const supabase = createClient();
-      
+
       // Get organization
       const { data: org } = await supabase
         .from("organizations")
@@ -34,26 +39,26 @@ export default function AddPointsPage() {
         .single();
 
       if (!org) return;
+      setOrganizationId(org.id);
 
-      // Get Wagner Cup competition
+      // Get latest competition
       const { data: competitions } = await supabase
         .from("competitions")
         .select("id")
         .eq("organization_id", org.id)
-        .ilike("name", "%wagner%")
+        .order("created_at", { ascending: false })
         .limit(1);
 
       if (competitions?.[0]) {
         setCompetitionId(competitions[0].id);
 
-        // Get existing team names
-        const { data: points } = await supabase
-          .from("competition_points")
-          .select("team_name")
-          .eq("competition_id", competitions[0].id);
+        const { data: teamRows } = await supabase
+          .from("competition_teams")
+          .select("id,name")
+          .eq("competition_id", competitions[0].id)
+          .order("name");
 
-        const teams = [...new Set(points?.map((p: { team_name: string | null }) => p.team_name).filter(Boolean))] as string[];
-        setExistingTeams(teams);
+        setTeams(teamRows || []);
       }
     };
 
@@ -67,6 +72,11 @@ export default function AddPointsPage() {
       return;
     }
 
+    if (!formData.team_id && !formData.team_name) {
+      setError("Select a team or enter a team name");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -74,9 +84,12 @@ export default function AddPointsPage() {
 
     const { error: insertError } = await supabase.from("competition_points").insert({
       competition_id: competitionId,
-      team_name: formData.team_name,
+      organization_id: organizationId,
+      team_id: formData.team_id || null,
+      team_name: formData.team_name || null,
       points: parseInt(formData.points),
       notes: formData.notes || null,
+      reason: formData.reason || null,
     });
 
     if (insertError) {
@@ -93,7 +106,7 @@ export default function AddPointsPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Add Points"
-        description="Award points to a team in the Wagner Cup"
+        description="Award points to a team"
         backHref={`/${orgSlug}/competition`}
       />
 
@@ -105,42 +118,22 @@ export default function AddPointsPage() {
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1.5">Team Name</label>
-            <Input
-              value={formData.team_name}
-              onChange={(e) => setFormData({ ...formData, team_name: e.target.value })}
-              placeholder="Enter team name"
-              required
-              list="existing-teams"
-            />
-            {existingTeams.length > 0 && (
-              <datalist id="existing-teams">
-                {existingTeams.map((team) => (
-                  <option key={team} value={team} />
-                ))}
-              </datalist>
-            )}
-            {existingTeams.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                <span className="text-xs text-muted-foreground">Quick select:</span>
-                {existingTeams.map((team) => (
-                  <button
-                    key={team}
-                    type="button"
-                    onClick={() => setFormData({ ...formData, team_name: team })}
-                    className={`text-xs px-2 py-1 rounded-lg transition-colors ${
-                      formData.team_name === team
-                        ? "bg-org-primary text-white"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {team}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <Select
+            label="Select Team"
+            value={formData.team_id}
+            onChange={(e) => setFormData({ ...formData, team_id: e.target.value, team_name: "" })}
+            options={[
+              { value: "", label: "Choose a team" },
+              ...teams.map((team) => ({ value: team.id, label: team.name })),
+            ]}
+          />
+
+          <Input
+            label="Or enter a new team name"
+            value={formData.team_name}
+            onChange={(e) => setFormData({ ...formData, team_name: e.target.value, team_id: "" })}
+            placeholder="e.g., Blue Squad"
+          />
 
           <Input
             label="Points"
@@ -151,11 +144,18 @@ export default function AddPointsPage() {
             required
           />
 
+          <Input
+            label="Reason"
+            value={formData.reason}
+            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+            placeholder="Why the points were awarded"
+          />
+
           <Textarea
             label="Notes (Optional)"
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            placeholder="e.g., Won the scrimmage, Community service hours"
+            placeholder="e.g., Won the scrimmage, community service hours"
             rows={3}
           />
 

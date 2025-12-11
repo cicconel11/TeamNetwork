@@ -6,19 +6,19 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
-export default function NewCompetitionPage() {
+export default function NewWorkoutPage() {
   const router = useRouter();
   const params = useParams();
   const orgSlug = params.orgSlug as string;
-  
+
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    workout_date: "",
+    external_url: "",
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState({
-    name: "Intersquad Competition",
-    description: "",
-    season: new Date().getFullYear().toString(),
-  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,27 +26,42 @@ export default function NewCompetitionPage() {
     setError(null);
 
     const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     // Get organization ID
-    const { data: orgs, error: orgError } = await supabase
+    const { data: org } = await supabase
       .from("organizations")
       .select("id")
       .eq("slug", orgSlug)
-      .limit(1);
+      .single();
 
-    const org = orgs?.[0];
-
-    if (!org || orgError) {
+    if (!org) {
       setError("Organization not found");
       setIsLoading(false);
       return;
     }
 
-    const { error: insertError } = await supabase.from("competitions").insert({
+    const external = formData.external_url.trim();
+    if (external) {
+      try {
+        const url = new URL(external);
+        if (url.protocol !== "https:") throw new Error("URL must start with https://");
+      } catch {
+        setError("Please provide a valid https:// URL");
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    const { error: insertError } = await supabase.from("workouts").insert({
       organization_id: org.id,
-      name: formData.name,
+      title: formData.title,
       description: formData.description || null,
-      season: formData.season || null,
+      workout_date: formData.workout_date ? formData.workout_date : null,
+      external_url: external || null,
+      created_by: user?.id || null,
     });
 
     if (insertError) {
@@ -55,16 +70,16 @@ export default function NewCompetitionPage() {
       return;
     }
 
-    router.push(`/${orgSlug}/competition`);
+    router.push(`/${orgSlug}/workouts`);
     router.refresh();
   };
 
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Create Competition"
-        description="Set up a new internal competition"
-        backHref={`/${orgSlug}/competition`}
+        title="Post Workout"
+        description="Create a new workout for the team"
+        backHref={`/${orgSlug}/workouts`}
       />
 
       <Card className="max-w-2xl">
@@ -76,10 +91,9 @@ export default function NewCompetitionPage() {
           )}
 
           <Input
-            label="Competition Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="e.g., Wagner Cup"
+            label="Title"
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             required
           />
 
@@ -87,15 +101,23 @@ export default function NewCompetitionPage() {
             label="Description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Describe the competition and how points are earned..."
             rows={3}
           />
 
           <Input
-            label="Season"
-            value={formData.season}
-            onChange={(e) => setFormData({ ...formData, season: e.target.value })}
-            placeholder="e.g., 2025, Fall 2025"
+            label="Date"
+            type="date"
+            value={formData.workout_date}
+            onChange={(e) => setFormData({ ...formData, workout_date: e.target.value })}
+          />
+
+          <Input
+            label="External workout link (optional)"
+            type="url"
+            value={formData.external_url}
+            onChange={(e) => setFormData({ ...formData, external_url: e.target.value })}
+            placeholder="https://example.com/workout"
+            helperText="Must be https://"
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
@@ -103,7 +125,7 @@ export default function NewCompetitionPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isLoading}>
-              Create Competition
+              Post Workout
             </Button>
           </div>
         </form>

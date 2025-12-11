@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
+import { getOrgContext } from "@/lib/auth/roles";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -9,18 +9,24 @@ interface OrgLayoutProps {
 
 export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const { orgSlug } = await params;
-  const supabase = await createClient();
+  const orgContext = await getOrgContext(orgSlug);
 
-  // Fetch organization by slug
-  const { data: organization } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .single();
+  if (!orgContext.organization) notFound();
 
-  if (!organization) {
-    notFound();
+  if (!orgContext.role || orgContext.status === "revoked") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="max-w-lg text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">Access removed</h1>
+          <p className="text-muted-foreground">
+            Your access to this organization has been revoked. If you believe this is an error, please contact an admin.
+          </p>
+        </div>
+      </div>
+    );
   }
+
+  const organization = orgContext.organization;
 
   return (
     <div 
@@ -36,7 +42,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
           : "#0f2a4f",
       } as React.CSSProperties}
     >
-      <OrgSidebar organization={organization} />
+      <OrgSidebar organization={organization} role={orgContext.role} />
       <main className="ml-64 p-8">
         {children}
       </main>

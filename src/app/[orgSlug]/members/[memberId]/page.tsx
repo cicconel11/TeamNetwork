@@ -136,6 +136,23 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               <dd className="text-foreground font-medium">{member.email || "—"}</dd>
             </div>
             <div>
+              <dt className="text-sm text-muted-foreground">LinkedIn</dt>
+              <dd className="text-foreground font-medium">
+                {member.linkedin_url ? (
+                  <a
+                    href={member.linkedin_url}
+                    className="text-org-primary hover:underline break-all"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    View profile
+                  </a>
+                ) : (
+                  "—"
+                )}
+              </dd>
+            </div>
+            <div>
               <dt className="text-sm text-muted-foreground">Added</dt>
               <dd className="text-foreground font-medium">
                 {new Date(member.created_at).toLocaleDateString()}

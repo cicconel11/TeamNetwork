@@ -67,8 +67,10 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
         return "Members";
       case "alumni":
         return "Alumni";
-      default:
+      case "both":
         return "Members + Alumni";
+      default:
+        return audience;
     }
   };
 

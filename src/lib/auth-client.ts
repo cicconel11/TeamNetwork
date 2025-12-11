@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/client";
+import { normalizeRole } from "./auth/role-utils";
+import type { UserRole } from "@/types/database";
 
 export async function checkIsOrgAdmin(orgSlug: string): Promise<boolean> {
   const supabase = createClient();
@@ -20,12 +22,13 @@ export async function checkIsOrgAdmin(orgSlug: string): Promise<boolean> {
   // Check role
   const { data: role } = await supabase
     .from("user_organization_roles")
-    .select("role")
+    .select("role,status")
     .eq("user_id", user.id)
     .eq("organization_id", org.id)
-    .single();
+    .maybeSingle();
 
-  return role?.role === "admin";
+  const normalized = normalizeRole((role?.role as UserRole | null) ?? null);
+  return normalized === "admin" && role?.status !== "revoked";
 }
 
 

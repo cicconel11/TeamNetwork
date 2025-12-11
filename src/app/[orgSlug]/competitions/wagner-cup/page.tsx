@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -10,6 +11,7 @@ interface WagnerCupPageProps {
 
 export default async function WagnerCupPage({ params }: WagnerCupPageProps) {
   const { orgSlug } = await params;
+  redirect(`/${orgSlug}/competition`);
   const supabase = await createClient();
 
   // Fetch organization

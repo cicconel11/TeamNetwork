@@ -15,6 +15,13 @@ interface Invite {
   created_at: string;
 }
 
+interface Membership {
+  user_id: string;
+  role: string;
+  status: "active" | "revoked";
+  users?: { name: string | null; email: string | null };
+}
+
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -34,6 +41,7 @@ export default function InvitesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
 
   // New invite form state
   const [showForm, setShowForm] = useState(false);
@@ -68,6 +76,27 @@ export default function InvitesPage() {
           .order("created_at", { ascending: false });
 
         setInvites(inviteData || []);
+
+          const { data: membershipRows } = await supabase
+            .from("user_organization_roles")
+            .select("user_id, role, status, users(name,email)")
+            .eq("organization_id", org.id);
+
+          const normalizedMemberships: Membership[] =
+            membershipRows?.map((m) => {
+              const user = Array.isArray(m.users) ? m.users[0] : m.users;
+              return {
+                user_id: m.user_id,
+                role: m.role,
+                status: m.status,
+                users: {
+                  name: user?.name ?? null,
+                  email: user?.email ?? null,
+                },
+              };
+            }) || [];
+
+          setMemberships(normalizedMemberships);
       }
 
       setIsLoading(false);
@@ -190,6 +219,20 @@ export default function InvitesPage() {
   const isExpired = (expiresAt: string | null) => {
     if (!expiresAt) return false;
     return new Date(expiresAt) < new Date();
+  };
+
+  const updateAccess = async (userId: string, status: "active" | "revoked") => {
+    if (!orgId) return;
+    const supabase = createClient();
+    await supabase
+      .from("user_organization_roles")
+      .update({ status })
+      .eq("organization_id", orgId)
+      .eq("user_id", userId);
+
+    setMemberships((prev) =>
+      prev.map((m) => (m.user_id === userId ? { ...m, status } : m))
+    );
   };
 
   if (isLoading) {
@@ -349,6 +392,53 @@ export default function InvitesPage() {
           <Button onClick={() => setShowForm(true)}>Create Invite Code</Button>
         </Card>
       )}
+
+      {/* Access control */}
+      <Card className="p-6 mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-foreground">Access control</h3>
+            <p className="text-sm text-muted-foreground">Revoke or restore access for members of this org.</p>
+          </div>
+        </div>
+        {memberships.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No members found.</p>
+        ) : (
+          <div className="divide-y divide-border">
+            {memberships.map((m) => (
+              <div key={m.user_id} className="py-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-foreground">{m.users?.name || m.users?.email || "User"}</p>
+                  <p className="text-xs text-muted-foreground">{m.role}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Badge variant={m.status === "active" ? "success" : "error"}>
+                    {m.status}
+                  </Badge>
+                  {m.status === "active" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateAccess(m.user_id, "revoked")}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      Remove access
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => updateAccess(m.user_id, "active")}
+                    >
+                      Restore access
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* Danger zone */}
       <Card className="p-6 mt-8 border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-900/10">

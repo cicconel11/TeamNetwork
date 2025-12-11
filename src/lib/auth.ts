@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/database";
+import { normalizeRole } from "./auth/role-utils";
 
 export async function getCurrentUser() {
   const supabase = await createClient();
@@ -32,12 +33,14 @@ export async function getUserRoleForOrg(organizationId: string): Promise<UserRol
 
   const { data } = await supabase
     .from("user_organization_roles")
-    .select("role")
+    .select("role,status")
     .eq("user_id", user.id)
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  return data?.role || null;
+  if (!data || data.status === "revoked") return null;
+
+  return normalizeRole((data.role as UserRole | null) || null);
 }
 
 export async function isOrgAdmin(organizationId: string): Promise<boolean> {

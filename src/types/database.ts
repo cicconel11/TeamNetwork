@@ -1,11 +1,14 @@
 // Database types for TeamNetwork
 // These match the Supabase schema we created
 
-export type UserRole = "admin" | "member" | "viewer";
+export type UserRole = "admin" | "active_member" | "alumni" | "member" | "viewer";
 export type MemberStatus = "active" | "inactive";
 export type EventType = "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
 export type NotificationChannel = "email" | "sms" | "both";
-export type NotificationAudience = "members" | "alumni" | "all";
+export type NotificationAudience = "members" | "alumni" | "both";
+export type MembershipStatus = "active" | "revoked";
+export type MentorshipStatus = "active" | "completed" | "paused";
+export type WorkoutStatus = "not_started" | "in_progress" | "completed";
 
 export interface Organization {
   id: string;
@@ -14,6 +17,7 @@ export interface Organization {
   description: string | null;
   logo_url: string | null;
   primary_color: string | null;
+  donation_embed_url?: string | null;
   created_at: string;
 }
 
@@ -30,6 +34,7 @@ export interface UserOrganizationRole {
   user_id: string;
   organization_id: string;
   role: UserRole;
+  status: MembershipStatus;
   created_at: string;
 }
 
@@ -41,6 +46,7 @@ export interface Member {
   email: string | null;
   photo_url: string | null;
   role: string | null;
+  linkedin_url: string | null;
   status: MemberStatus;
   graduation_year: number | null;
   created_at: string;
@@ -58,6 +64,7 @@ export interface Alumni {
   major: string | null;
   job_title: string | null;
   notes: string | null;
+  linkedin_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -125,11 +132,69 @@ export interface Competition {
 export interface CompetitionPoint {
   id: string;
   competition_id: string;
+  organization_id: string | null;
+  team_id: string | null;
   team_name: string | null;
   member_id: string | null;
   points: number;
+  reason: string | null;
   notes: string | null;
+  created_by: string | null;
   created_at: string;
+}
+
+export interface CompetitionTeam {
+  id: string;
+  organization_id: string;
+  competition_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface MentorshipPair {
+  id: string;
+  organization_id: string;
+  mentor_user_id: string;
+  mentee_user_id: string;
+  status: MentorshipStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MentorshipLog {
+  id: string;
+  organization_id: string;
+  pair_id: string;
+  created_by: string;
+  entry_date: string;
+  notes: string | null;
+  progress_metric: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Workout {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string | null;
+  workout_date: string | null;
+  external_url: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkoutLog {
+  id: string;
+  organization_id: string;
+  workout_id: string;
+  user_id: string;
+  status: WorkoutStatus;
+  notes: string | null;
+  metrics: { [key: string]: unknown } | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type SubscriptionInterval = "month" | "year";
@@ -168,6 +233,7 @@ export interface Notification {
   body: string | null;
   channel: NotificationChannel;
   audience: NotificationAudience;
+  target_user_ids: string[] | null;
   sent_at: string | null;
   created_at: string;
   deleted_at: string | null;
@@ -243,6 +309,31 @@ export interface Database {
         Insert: Omit<CompetitionPoint, "id" | "created_at">;
         Update: Partial<Omit<CompetitionPoint, "id" | "created_at">>;
       };
+      competition_teams: {
+        Row: CompetitionTeam;
+        Insert: Omit<CompetitionTeam, "id" | "created_at">;
+        Update: Partial<Omit<CompetitionTeam, "id" | "created_at">>;
+      };
+      mentorship_pairs: {
+        Row: MentorshipPair;
+        Insert: Omit<MentorshipPair, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<MentorshipPair, "id" | "created_at">>;
+      };
+      mentorship_logs: {
+        Row: MentorshipLog;
+        Insert: Omit<MentorshipLog, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<MentorshipLog, "id" | "created_at">>;
+      };
+      workouts: {
+        Row: Workout;
+        Insert: Omit<Workout, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<Workout, "id" | "created_at">>;
+      };
+      workout_logs: {
+        Row: WorkoutLog;
+        Insert: Omit<WorkoutLog, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<WorkoutLog, "id" | "created_at">>;
+      };
       organization_subscriptions: {
         Row: OrganizationSubscription;
         Insert: Omit<OrganizationSubscription, "id" | "created_at" | "updated_at">;
@@ -268,6 +359,7 @@ export interface Database {
       user_role: UserRole;
       member_status: MemberStatus;
       event_type: EventType;
+      membership_status: MembershipStatus;
     };
   };
 }
