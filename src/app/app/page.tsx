@@ -27,8 +27,7 @@ export default async function AppHomePage() {
   const { data: memberships, error: membershipError } = await supabase
     .from("user_organization_roles")
     .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role")
-    .eq("user_id", user.id)
-    .is("deleted_at", null);
+    .eq("user_id", user.id);
 
   // Debug: Log membership query results
   console.log("[app/page] User:", user.id, user.email);
