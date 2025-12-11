@@ -29,25 +29,28 @@ export async function GET(request: Request) {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          console.log("[auth/callback] Setting cookies:", cookiesToSet.map(c => c.name));
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
-          } catch {
-            // Ignore errors in route handlers
+          } catch (e) {
+            console.error("[auth/callback] Cookie set error:", e);
           }
         },
       },
     });
     
+    console.log("[auth/callback] Exchanging code for session...");
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error && data.session) {
       console.log("[auth/callback] Session created for user:", data.session.user.id, data.session.user.email);
+      console.log("[auth/callback] Cookies after exchange:", cookieStore.getAll().map(c => c.name));
       return NextResponse.redirect(`${origin}${redirect}`);
     }
     
-    console.error("[auth/callback] Error:", error?.message || "No session returned");
+    console.error("[auth/callback] Exchange failed - Error:", error?.message, "Has session:", !!data?.session);
   }
 
   console.log("[auth/callback] Redirecting to error page");
