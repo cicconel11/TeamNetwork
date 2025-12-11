@@ -52,7 +52,7 @@ export default function AddPointsPage() {
           .select("team_name")
           .eq("competition_id", competitions[0].id);
 
-        const teams = [...new Set(points?.map((p) => p.team_name).filter(Boolean))] as string[];
+        const teams = [...new Set(points?.map((p: { team_name: string | null }) => p.team_name).filter(Boolean))] as string[];
         setExistingTeams(teams);
       }
     };

@@ -1,32 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 
 interface AdminGuardProps {
   children: React.ReactNode;
   fallback?: React.ReactNode;
 }
 
+// Auth check states: null = loading, "authenticated" = has user, "unauthenticated" = no user
+type AuthState = "loading" | "authenticated" | "unauthenticated";
+
 export function AdminGuard({ children, fallback }: AdminGuardProps) {
+  const [authState, setAuthState] = useState<AuthState>("loading");
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const params = useParams();
   const router = useRouter();
   const orgSlug = params.orgSlug as string;
 
-  useEffect(() => {
-    const checkAdmin = async () => {
-      const supabase = createClient();
-      
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push(`/auth/login?redirect=/${orgSlug}`);
-        return;
-      }
-
-      // Get organization
+  const checkAuth = useCallback(async () => {
+    const supabase = createClient();
+    
+    // Helper to check admin role for a given user ID
+    const verifyAdminRole = async (userId: string) => {
       const { data: orgs, error: orgError } = await supabase
         .from("organizations")
         .select("id")
@@ -34,27 +32,90 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
         .limit(1);
 
       const org = orgs?.[0];
-
       if (!org || orgError) {
+        console.log("[AdminGuard] Org not found:", orgSlug, orgError?.message);
         setIsAdmin(false);
         return;
       }
 
-      // Check if user is admin for this org
       const { data: role } = await supabase
         .from("user_organization_roles")
         .select("role")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("organization_id", org.id)
         .single();
 
+      console.log("[AdminGuard] User role for org:", role?.role || "none");
       setIsAdmin(role?.role === "admin");
     };
-
-    checkAdmin();
+    
+    try {
+      // Get current user - this reads from cookies
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      console.log("[AdminGuard] Auth check result:", user ? `user:${user.id.slice(0, 8)}` : "no-user", userError?.message || "");
+      
+      if (!user) {
+        // Double-check by trying to get session (in case getUser failed but session exists)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.log("[AdminGuard] No session found, redirecting to login");
+          setAuthState("unauthenticated");
+          // Use replace to avoid back button loop
+          router.replace(`/auth/login?redirect=/${orgSlug}`);
+          return;
+        }
+        // Session exists but getUser failed - try again with session user
+        if (session.user) {
+          console.log("[AdminGuard] Found user via session:", session.user.id.slice(0, 8));
+          setAuthState("authenticated");
+          await verifyAdminRole(session.user.id);
+          return;
+        }
+      }
+      
+      setAuthState("authenticated");
+      await verifyAdminRole(user!.id);
+    } catch (err) {
+      console.error("[AdminGuard] Error checking auth:", err);
+      setAuthState("unauthenticated");
+      router.replace(`/auth/login?redirect=/${orgSlug}`);
+    }
   }, [orgSlug, router]);
 
-  if (isAdmin === null) {
+  useEffect(() => {
+    checkAuth();
+    
+    // Also listen for auth state changes
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      console.log("[AdminGuard] Auth state changed:", event, session?.user?.id?.slice(0, 8) || "no-user");
+      if (event === "SIGNED_OUT") {
+        setAuthState("unauthenticated");
+        router.replace(`/auth/login?redirect=/${orgSlug}`);
+      } else if (event === "SIGNED_IN" && session?.user) {
+        setAuthState("authenticated");
+        // Re-check admin status
+        checkAuth();
+      }
+    });
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [orgSlug, router, checkAuth]);
+
+  // Show loading while checking auth
+  if (authState === "loading" || (authState === "authenticated" && isAdmin === null)) {
+    return (
+      <div className="flex items-center justify-center min-h-[200px]">
+        <div className="animate-spin h-8 w-8 border-4 border-org-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  // If unauthenticated, we're redirecting - show loading
+  if (authState === "unauthenticated") {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <div className="animate-spin h-8 w-8 border-4 border-org-primary border-t-transparent rounded-full" />

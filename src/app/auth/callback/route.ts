@@ -25,27 +25,9 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    // Build response with headers that will carry cookies
-    const response = new NextResponse(
-      `<!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta http-equiv="refresh" content="0;url=${redirect}" />
-          <title>Redirecting...</title>
-        </head>
-        <body>
-          <p>Redirecting...</p>
-          <script>window.location.href = "${redirect}";</script>
-        </body>
-      </html>`,
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html",
-        },
-      }
-    );
+    // Create a redirect response first - we'll add cookies to it
+    const redirectUrl = new URL(redirect, requestUrl.origin);
+    const response = NextResponse.redirect(redirectUrl);
     
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
@@ -55,7 +37,13 @@ export async function GET(request: NextRequest) {
         setAll(cookiesToSet) {
           console.log("[auth/callback] setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, { ...options, path: options?.path || "/" });
+            // Ensure cookies are set with correct options for cross-route access
+            response.cookies.set(name, value, { 
+              ...options, 
+              path: "/",  // Always use root path for auth cookies
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
+            });
           });
         },
       },
@@ -72,7 +60,7 @@ export async function GET(request: NextRequest) {
     if (data.session) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
       console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
-      // Return HTML page instead of redirect - this allows cookies to be properly set
+      console.log("[auth/callback] Redirecting to:", redirectUrl.toString());
       return response;
     }
     

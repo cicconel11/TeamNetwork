@@ -38,13 +38,16 @@ export async function middleware(request: NextRequest) {
   // Use getUser() which validates the session and refreshes cookies if needed.
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
 
-  // Debug logging
-  if (!pathname.startsWith("/api") && !pathname.startsWith("/_next")) {
-    console.log("[middleware]", pathname, user ? `user:${user.id.slice(0, 8)}` : "no-user");
+  // Debug logging for non-static routes
+  if (!pathname.startsWith("/_next") && !pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico)$/)) {
+    console.log("[middleware]", pathname, user ? `user:${user.id.slice(0, 8)}` : "no-user", 
+      `cookies:${request.cookies.getAll().map(c => c.name).filter(n => n.startsWith('sb-')).join(',') || 'none'}`,
+      authError ? `error:${authError.message}` : '');
   }
 
   // Check if this is a public route
@@ -52,8 +55,22 @@ export async function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith("/auth/")
   );
 
-  // For public routes, just pass through
+  // For public routes, just pass through (but still refresh session if present)
   if (isPublicRoute) {
+    return supabaseResponse;
+  }
+
+  // API routes should return 401 JSON, not redirect to login page
+  // This prevents client-side fetch calls from following redirects to HTML
+  if (pathname.startsWith("/api/")) {
+    if (!user) {
+      console.log("[middleware] API route unauthorized:", pathname);
+      return NextResponse.json(
+        { error: "Unauthorized", message: "Authentication required" },
+        { status: 401 }
+      );
+    }
+    // API routes pass through if authenticated
     return supabaseResponse;
   }
 
@@ -66,6 +83,7 @@ export async function middleware(request: NextRequest) {
 
   // If user is not authenticated and trying to access a protected route
   if (!user) {
+    console.log("[middleware] Redirecting to login, no user found for:", pathname);
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect", pathname);
