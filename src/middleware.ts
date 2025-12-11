@@ -61,9 +61,14 @@ export async function middleware(request: NextRequest) {
   });
 
   // Refresh session if it exists
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  
+  // Debug: log auth state for protected routes
+  if (!pathname.startsWith("/auth") && !pathname.startsWith("/api") && pathname !== "/") {
+    console.log("[middleware]", pathname, user ? `user:${user.id.slice(0,8)}` : "no-user", authError?.message || "");
+  }
 
   // Check if this is a public route
   const isPublicRoute = publicRoutes.some(route => 
