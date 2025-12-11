@@ -8,25 +8,29 @@ export async function GET(request: Request) {
   const errorParam = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
 
+  console.log("[auth/callback] Starting with code:", code ? "present" : "missing", "redirect:", redirect);
+
   // Handle OAuth errors (e.g., user denied access)
   if (errorParam) {
-    console.error("OAuth error:", errorParam, errorDescription);
+    console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
     return NextResponse.redirect(`${origin}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
   }
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    if (!error) {
+    if (!error && data.session) {
+      console.log("[auth/callback] Session created for user:", data.session.user.id, data.session.user.email);
       // Successful auth - redirect to /app (org picker) or specified redirect
       // The /app page will handle checking if user has orgs
       return NextResponse.redirect(`${origin}${redirect}`);
     }
     
-    console.error("Auth callback error:", error.message);
+    console.error("[auth/callback] Error:", error?.message || "No session returned");
   }
 
   // Return the user to an error page with instructions
+  console.log("[auth/callback] Redirecting to error page");
   return NextResponse.redirect(`${origin}/auth/error`);
 }
