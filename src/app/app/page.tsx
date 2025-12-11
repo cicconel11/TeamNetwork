@@ -24,11 +24,15 @@ export default async function AppHomePage() {
     redirect("/auth/login");
   }
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("user_organization_roles")
     .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role")
     .eq("user_id", user.id)
     .is("deleted_at", null);
+
+  // Debug: Log membership query results
+  console.log("[app/page] User:", user.id, user.email);
+  console.log("[app/page] Memberships:", memberships?.length || 0, membershipError?.message || "OK");
 
   const orgs = (memberships as Membership[] | null)?.filter((m) => m.organization).map((m) => ({
     ...m.organization!,

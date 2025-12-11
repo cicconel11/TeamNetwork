@@ -79,6 +79,7 @@ export async function POST(req: Request) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const organizationId = session.metadata?.organization_id;
+      console.log("[stripe-webhook] checkout.session.completed - org:", organizationId, "session:", session.id);
       const subscriptionId =
         typeof session.subscription === "string"
           ? session.subscription
@@ -104,12 +105,14 @@ export async function POST(req: Request) {
         }
       }
 
+      console.log("[stripe-webhook] Updating subscription for org:", organizationId, { subscriptionId, customerId, status, currentPeriodEnd });
       await updateByOrgId(organizationId, {
         stripe_subscription_id: subscriptionId,
         stripe_customer_id: customerId,
         status,
         current_period_end: currentPeriodEnd,
       });
+      console.log("[stripe-webhook] Subscription updated successfully for org:", organizationId);
       break;
     }
     case "customer.subscription.created":
