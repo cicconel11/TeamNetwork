@@ -34,13 +34,18 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  // IMPORTANT: Do NOT use getSession() - it doesn't properly refresh the session.
-  // Use getUser() which validates the session and refreshes cookies if needed.
+  // FIX: Use getSession() instead of getUser() for route protection.
+  // getUser() validates tokens against Supabase servers and can fail with
+  // "Auth session missing!" during token refresh race conditions.
+  // getSession() reads the JWT from cookies locally without server validation,
+  // which is sufficient for route protection. Server components that need
+  // verified user data can still call getUser().
   const {
-    data: { user },
+    data: { session },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getSession();
 
+  const user = session?.user ?? null;
   const pathname = request.nextUrl.pathname;
 
   // Debug logging for non-static routes

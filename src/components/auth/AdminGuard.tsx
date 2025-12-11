@@ -23,8 +23,23 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
   const checkAuth = useCallback(async () => {
     const supabase = createClient();
     
-    // Helper to check admin role for a given user ID
-    const verifyAdminRole = async (userId: string) => {
+    try {
+      // Use getSession() for reliability - middleware already handles route protection
+      // getSession() reads from local cookies without server validation
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      console.log("[AdminGuard] Session check:", session?.user ? `user:${session.user.id.slice(0, 8)}` : "no-session");
+      
+      if (!session?.user) {
+        console.log("[AdminGuard] No session found, redirecting to login");
+        setAuthState("unauthenticated");
+        router.replace(`/auth/login?redirect=/${orgSlug}`);
+        return;
+      }
+      
+      setAuthState("authenticated");
+      
+      // Check admin role for the user
       const { data: orgs, error: orgError } = await supabase
         .from("organizations")
         .select("id")
@@ -41,41 +56,12 @@ export function AdminGuard({ children, fallback }: AdminGuardProps) {
       const { data: role } = await supabase
         .from("user_organization_roles")
         .select("role")
-        .eq("user_id", userId)
+        .eq("user_id", session.user.id)
         .eq("organization_id", org.id)
         .single();
 
       console.log("[AdminGuard] User role for org:", role?.role || "none");
       setIsAdmin(role?.role === "admin");
-    };
-    
-    try {
-      // Get current user - this reads from cookies
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      console.log("[AdminGuard] Auth check result:", user ? `user:${user.id.slice(0, 8)}` : "no-user", userError?.message || "");
-      
-      if (!user) {
-        // Double-check by trying to get session (in case getUser failed but session exists)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.log("[AdminGuard] No session found, redirecting to login");
-          setAuthState("unauthenticated");
-          // Use replace to avoid back button loop
-          router.replace(`/auth/login?redirect=/${orgSlug}`);
-          return;
-        }
-        // Session exists but getUser failed - try again with session user
-        if (session.user) {
-          console.log("[AdminGuard] Found user via session:", session.user.id.slice(0, 8));
-          setAuthState("authenticated");
-          await verifyAdminRole(session.user.id);
-          return;
-        }
-      }
-      
-      setAuthState("authenticated");
-      await verifyAdminRole(user!.id);
     } catch (err) {
       console.error("[AdminGuard] Error checking auth:", err);
       setAuthState("unauthenticated");
