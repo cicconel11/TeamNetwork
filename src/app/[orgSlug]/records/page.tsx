@@ -48,12 +48,15 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
   const categories = [...new Set(allRecords?.map((r) => r.category).filter(Boolean))];
 
   // Group records by category
-  const recordsByCategory = records?.reduce((acc, record) => {
-    const category = record.category || "General";
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(record);
-    return acc;
-  }, {} as Record<string, typeof records>) || {};
+  const recordsByCategory: Record<string, NonNullable<typeof records>> = (records ?? []).reduce(
+    (acc, record) => {
+      const category = record.category || "General";
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(record);
+      return acc;
+    },
+    {} as Record<string, NonNullable<typeof records>>
+  );
 
   return (
     <div className="animate-fade-in">
