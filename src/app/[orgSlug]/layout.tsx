@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
 import { getOrgContext } from "@/lib/auth/roles";
 
@@ -13,13 +14,30 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   if (!orgContext.organization) notFound();
 
-  if (!orgContext.role || orgContext.status === "revoked") {
+  if (!orgContext.userId) {
+    redirect(`/auth/login?redirect=/${orgSlug}`);
+  }
+
+  if (orgContext.status === "revoked") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="max-w-lg text-center space-y-4">
           <h1 className="text-2xl font-bold text-foreground">Access removed</h1>
           <p className="text-muted-foreground">
             Your access to this organization has been revoked. If you believe this is an error, please contact an admin.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!orgContext.role) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="max-w-lg text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">No membership found</h1>
+          <p className="text-muted-foreground">
+            You are signed in but do not have access to this organization. Please ask an admin to invite you.
           </p>
         </div>
       </div>
