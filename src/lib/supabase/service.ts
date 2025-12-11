@@ -1,12 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { requireEnv } from "../env";
-
-const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
-const supabaseServiceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+import { getSupabaseServiceEnv } from "./config";
 
 export function createServiceClient() {
-  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+  const { supabaseUrl, serviceRoleKey } = getSupabaseServiceEnv();
+  return createClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }

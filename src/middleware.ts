@@ -1,8 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { getSupabaseBrowserEnv } from "./lib/supabase/config";
 
 // Routes that don't require authentication
 const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms"];
@@ -11,6 +9,7 @@ const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/au
 const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
 
 export async function middleware(request: NextRequest) {
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseBrowserEnv();
   // Canonical host redirect: ensure cookies stay scoped to www domain
   const host = request.headers.get("host");
   if (host === "myteamnetwork.com") {
@@ -57,27 +56,21 @@ export async function middleware(request: NextRequest) {
   const user = session?.user ?? null;
   const hasAuthCookies = request.cookies
     .getAll()
-    .some((c) => c.name.includes("auth-token"));
+    .some((c) => c.name.startsWith("sb-") || c.name.includes("auth-token"));
   const pathname = request.nextUrl.pathname;
 
-  // Optional detailed logging (enable by setting NEXT_PUBLIC_LOG_AUTH=true)
-  if (process.env.NEXT_PUBLIC_LOG_AUTH === "true") {
-    const sbCookies = request.cookies.getAll().map((c) => c.name).filter((n) => n.startsWith("sb-"));
-    console.log("[middleware:session]", {
+  const shouldLog = process.env.NEXT_PUBLIC_LOG_AUTH === "true";
+  const sbCookies = request.cookies.getAll().map((c) => c.name).filter((n) => n.startsWith("sb-"));
+
+  if (shouldLog) {
+    console.log("[AUTH-MW]", {
       host,
       pathname,
-      cookies: sbCookies,
-      sessionUser: user ? user.id.slice(0, 8) : null,
+      sbCookies,
+      sessionUser: user ? user.id : null,
       sessionNull: !session,
       authError: authError?.message || null,
     });
-  }
-
-  // Debug logging for non-static routes
-  if (!pathname.startsWith("/_next") && !pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico)$/)) {
-    console.log("[middleware]", pathname, user ? `user:${user.id.slice(0, 8)}` : "no-user", 
-      `cookies:${request.cookies.getAll().map(c => c.name).filter(n => n.startsWith('sb-')).join(',') || 'none'}`,
-      authError ? `error:${authError.message}` : '');
   }
 
   // Check if this is a public route
@@ -94,7 +87,7 @@ export async function middleware(request: NextRequest) {
   // This prevents client-side fetch calls from following redirects to HTML
   if (pathname.startsWith("/api/")) {
     if (!user) {
-      console.log("[middleware] API route unauthorized:", pathname);
+      console.log("[AUTH-MW] API route unauthorized:", pathname);
       return NextResponse.json(
         { error: "Unauthorized", message: "Authentication required" },
         { status: 401 }
@@ -116,9 +109,12 @@ export async function middleware(request: NextRequest) {
     // If we have Supabase auth cookies but getSession() returned null (e.g., parsing/refresh hiccup),
     // allow the request to continue so server components can validate later.
     if (hasAuthCookies) {
+      if (shouldLog) {
+        console.log("[AUTH-MW] session null but sb-* cookies present, allowing passthrough", { pathname });
+      }
       return supabaseResponse;
     }
-    console.log("[middleware] Redirecting to login, no user found for:", pathname);
+    console.log("[AUTH-MW] Redirecting to login, no user found for:", pathname);
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("redirect", pathname);

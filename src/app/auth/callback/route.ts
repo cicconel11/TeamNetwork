@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const redirect = requestUrl.searchParams.get("redirect") || "/app";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
 
@@ -21,12 +22,12 @@ export async function GET(request: NextRequest) {
   // Handle OAuth errors
   if (errorParam) {
     console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
-    return NextResponse.redirect(`${requestUrl.origin}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
+    return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
   }
 
   if (code) {
     // Create a redirect response first - we'll add cookies to it
-    const redirectUrl = new URL(redirect, requestUrl.origin);
+    const redirectUrl = new URL(redirect, siteUrl);
     const response = NextResponse.redirect(redirectUrl);
     
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
     
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
-      return NextResponse.redirect(`${requestUrl.origin}/auth/error?message=${encodeURIComponent(error.message)}`);
+      return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent(error.message)}`);
     }
     
     if (data.session) {
@@ -67,5 +68,5 @@ export async function GET(request: NextRequest) {
     console.error("[auth/callback] No session returned");
   }
 
-  return NextResponse.redirect(`${requestUrl.origin}/auth/error`);
+  return NextResponse.redirect(`${siteUrl}/auth/error`);
 }

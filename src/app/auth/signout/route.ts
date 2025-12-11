@@ -7,10 +7,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(request: Request) {
   const { origin } = new URL(request.url);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
   const cookieStore = await cookies();
   
   // Create response first so we can set cookies on it
-  const response = NextResponse.redirect(`${origin}/`);
+  const response = NextResponse.redirect(`${siteUrl}/`);
   
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -34,10 +35,11 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const { origin } = new URL(request.url);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
   const cookieStore = await cookies();
   
   // Create response first so we can set cookies on it
-  const response = NextResponse.redirect(`${origin}/`, {
+  const response = NextResponse.redirect(`${siteUrl}/`, {
     status: 303, // Use 303 to convert POST to GET redirect
   });
   

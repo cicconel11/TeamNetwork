@@ -13,6 +13,7 @@ export default function SignupPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
   const handleGoogleSignup = async () => {
     setIsGoogleLoading(true);
@@ -22,7 +23,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirect=/app`,
+        redirectTo: `${siteUrl}/auth/callback?redirect=/app`,
       },
     });
 
@@ -45,7 +46,7 @@ export default function SignupPage() {
         data: {
           name,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback?redirect=/app`,
+        emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
       },
     });
 
