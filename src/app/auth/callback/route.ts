@@ -25,8 +25,27 @@ export async function GET(request: NextRequest) {
   }
 
   if (code) {
-    const redirectUrl = new URL(redirect, requestUrl.origin);
-    const response = NextResponse.redirect(redirectUrl);
+    // Build response with headers that will carry cookies
+    const response = new NextResponse(
+      `<!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta http-equiv="refresh" content="0;url=${redirect}" />
+          <title>Redirecting...</title>
+        </head>
+        <body>
+          <p>Redirecting...</p>
+          <script>window.location.href = "${redirect}";</script>
+        </body>
+      </html>`,
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html",
+        },
+      }
+    );
     
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
@@ -36,7 +55,6 @@ export async function GET(request: NextRequest) {
         setAll(cookiesToSet) {
           console.log("[auth/callback] setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
           cookiesToSet.forEach(({ name, value, options }) => {
-            // Use Supabase's options but ensure path is set
             response.cookies.set(name, value, { ...options, path: options?.path || "/" });
           });
         },
@@ -54,6 +72,7 @@ export async function GET(request: NextRequest) {
     if (data.session) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
       console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
+      // Return HTML page instead of redirect - this allows cookies to be properly set
       return response;
     }
     
