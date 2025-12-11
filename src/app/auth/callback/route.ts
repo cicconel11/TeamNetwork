@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -25,14 +25,17 @@ export async function GET(request: Request) {
     
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
+        getAll() {
+          return cookieStore.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.delete({ name, ...options });
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Ignore errors in route handlers
+          }
         },
       },
     });
@@ -41,14 +44,12 @@ export async function GET(request: Request) {
     
     if (!error && data.session) {
       console.log("[auth/callback] Session created for user:", data.session.user.id, data.session.user.email);
-      // Successful auth - redirect to /app (org picker) or specified redirect
       return NextResponse.redirect(`${origin}${redirect}`);
     }
     
     console.error("[auth/callback] Error:", error?.message || "No session returned");
   }
 
-  // Return the user to an error page with instructions
   console.log("[auth/callback] Redirecting to error page");
   return NextResponse.redirect(`${origin}/auth/error`);
 }
