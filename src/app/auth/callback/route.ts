@@ -6,23 +6,26 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const redirect = searchParams.get("redirect") || "/app";
-  const errorParam = searchParams.get("error");
-  const errorDescription = searchParams.get("error_description");
+  const requestUrl = new URL(request.url);
+  const code = requestUrl.searchParams.get("code");
+  const redirect = requestUrl.searchParams.get("redirect") || "/app";
+  const errorParam = requestUrl.searchParams.get("error");
+  const errorDescription = requestUrl.searchParams.get("error_description");
 
-  console.log("[auth/callback] Starting with code:", code ? "present" : "missing", "redirect:", redirect);
+  console.log("[auth/callback] Starting", {
+    hasCode: !!code,
+    redirect,
+    origin: requestUrl.origin,
+  });
 
-  // Handle OAuth errors (e.g., user denied access)
+  // Handle OAuth errors
   if (errorParam) {
     console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
-    return NextResponse.redirect(`${origin}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
+    return NextResponse.redirect(`${requestUrl.origin}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
   }
 
   if (code) {
-    // Create response first - cookies will be set on this response
-    const redirectUrl = `${origin}${redirect}`;
+    const redirectUrl = new URL(redirect, requestUrl.origin);
     const response = NextResponse.redirect(redirectUrl);
     
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -31,9 +34,10 @@ export async function GET(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          console.log("[auth/callback] Setting cookies on response:", cookiesToSet.map(c => c.name));
+          console.log("[auth/callback] setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
+            // Use Supabase's options but ensure path is set
+            response.cookies.set(name, value, { ...options, path: options?.path || "/" });
           });
         },
       },
@@ -42,15 +46,19 @@ export async function GET(request: NextRequest) {
     console.log("[auth/callback] Exchanging code for session...");
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    if (!error && data.session) {
-      console.log("[auth/callback] Session created for user:", data.session.user.id, data.session.user.email);
-      console.log("[auth/callback] Response cookies:", response.cookies.getAll().map(c => c.name));
+    if (error) {
+      console.error("[auth/callback] Exchange error:", error.message);
+      return NextResponse.redirect(`${requestUrl.origin}/auth/error?message=${encodeURIComponent(error.message)}`);
+    }
+    
+    if (data.session) {
+      console.log("[auth/callback] Success! User:", data.session.user.id);
+      console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
       return response;
     }
     
-    console.error("[auth/callback] Exchange failed - Error:", error?.message, "Has session:", !!data?.session);
+    console.error("[auth/callback] No session returned");
   }
 
-  console.log("[auth/callback] Redirecting to error page");
-  return NextResponse.redirect(`${origin}/auth/error`);
+  return NextResponse.redirect(`${requestUrl.origin}/auth/error`);
 }
