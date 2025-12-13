@@ -169,6 +169,13 @@ export async function middleware(request: NextRequest) {
             redirectUrl.searchParams.set("error", "access_revoked");
             return NextResponse.redirect(redirectUrl);
           }
+
+          if (membership?.status === "pending") {
+            // User's membership is pending approval - redirect to app with pending message
+            const redirectUrl = new URL("/app", request.url);
+            redirectUrl.searchParams.set("pending", orgSlug);
+            return NextResponse.redirect(redirectUrl);
+          }
         }
       } catch (e) {
         // Log error but don't block the request

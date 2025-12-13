@@ -16,6 +16,7 @@ function JoinOrgForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoSubmitting, setAutoSubmitting] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<{ orgName: string } | null>(null);
 
   // Auto-fill code from URL and optionally auto-submit
   useEffect(() => {
@@ -113,7 +114,7 @@ function JoinOrgForm() {
 
         const { error: roleError } = await supabase
           .from("user_organization_roles")
-          .insert({ user_id: user.id, organization_id: invite.organization_id, role, status: "active" });
+          .insert({ user_id: user.id, organization_id: invite.organization_id, role, status: "pending" });
 
         if (roleError) {
           setError("Failed to join organization. Please try again.");
@@ -130,7 +131,9 @@ function JoinOrgForm() {
             .gt("uses_remaining", 0);
         }
 
-        router.push(`/${invite.organizations.slug}`);
+        // Show pending approval message instead of redirecting
+        setPendingApproval({ orgName: invite.organizations.name });
+        setIsLoading(false);
       } else if (code) {
         const form = document.getElementById("join-form") as HTMLFormElement;
         if (form) form.requestSubmit();
@@ -242,14 +245,14 @@ function JoinOrgForm() {
     if (role === "member") role = "active_member";
     if (role === "viewer") role = "alumni";
 
-    // Add user to organization with the role specified in the invite
+    // Add user to organization with the role specified in the invite (pending status)
     const { error: roleError } = await supabase
       .from("user_organization_roles")
       .insert({
         user_id: user.id,
         organization_id: invite.organization_id,
         role: role,
-        status: "active",
+        status: "pending",
       });
 
     if (roleError) {
@@ -267,8 +270,9 @@ function JoinOrgForm() {
         .gt("uses_remaining", 0);
     }
 
-    // Success! Redirect to the organization
-    router.push(`/${invite.organizations.slug}`);
+    // Show pending approval message instead of redirecting
+    setPendingApproval({ orgName: invite.organizations.name });
+    setIsLoading(false);
   };
 
   return (
@@ -301,62 +305,91 @@ function JoinOrgForm() {
         </div>
 
         <Card className="p-8">
-          <div className="text-center mb-8">
-            <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
-              <svg className="h-8 w-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Join an Organization</h2>
-            <p className="text-muted-foreground">
-              {tokenFromUrl 
-                ? "Processing your invite link..."
-                : "Enter the invite code you received from an organization admin."}
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          {!tokenFromUrl && (
-            <form id="join-form" onSubmit={handleSubmit}>
-              <div className="space-y-6">
-                <Input
-                  label="Invite Code"
-                  type="text"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase())}
-                  placeholder="ABCD1234"
-                  className="text-center text-2xl tracking-widest font-mono"
-                  required
-                />
-
-                <Button type="submit" className="w-full" isLoading={isLoading}>
-                  Join Organization
-                </Button>
+          {pendingApproval ? (
+            // Pending approval success state
+            <div className="text-center">
+              <div className="h-16 w-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+                <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-            </form>
-          )}
-
-          {tokenFromUrl && isLoading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+              <h2 className="text-2xl font-bold text-foreground mb-2">Request Sent!</h2>
+              <p className="text-muted-foreground mb-6">
+                Your request to join <span className="font-semibold text-foreground">{pendingApproval.orgName}</span> has been submitted.
+              </p>
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm mb-6">
+                <p className="font-medium mb-1">Awaiting Admin Approval</p>
+                <p className="text-amber-600 dark:text-amber-400">
+                  An admin will review your request and grant you access. You&apos;ll be able to access the organization once approved.
+                </p>
+              </div>
+              <Link href="/app">
+                <Button variant="secondary">
+                  Back to Dashboard
+                </Button>
+              </Link>
             </div>
-          )}
+          ) : (
+            // Join form state
+            <>
+              <div className="text-center mb-8">
+                <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                  <svg className="h-8 w-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-foreground mb-2">Join an Organization</h2>
+                <p className="text-muted-foreground">
+                  {tokenFromUrl 
+                    ? "Processing your invite link..."
+                    : "Enter the invite code you received from an organization admin."}
+                </p>
+              </div>
 
-          <div className="mt-6 pt-6 border-t border-border text-center">
-            <p className="text-sm text-muted-foreground mb-3">
-              Want to create your own organization instead?
-            </p>
-            <Link href="/app/create-org">
-              <Button variant="secondary" size="sm">
-                Create Organization
-              </Button>
-            </Link>
-          </div>
+              {error && (
+                <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
+
+              {!tokenFromUrl && (
+                <form id="join-form" onSubmit={handleSubmit}>
+                  <div className="space-y-6">
+                    <Input
+                      label="Invite Code"
+                      type="text"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      placeholder="ABCD1234"
+                      className="text-center text-2xl tracking-widest font-mono"
+                      required
+                    />
+
+                    <Button type="submit" className="w-full" isLoading={isLoading}>
+                      Join Organization
+                    </Button>
+                  </div>
+                </form>
+              )}
+
+              {tokenFromUrl && isLoading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+                </div>
+              )}
+
+              <div className="mt-6 pt-6 border-t border-border text-center">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Want to create your own organization instead?
+                </p>
+                <Link href="/app/create-org">
+                  <Button variant="secondary" size="sm">
+                    Create Organization
+                  </Button>
+                </Link>
+              </div>
+            </>
+          )}
         </Card>
       </main>
     </div>

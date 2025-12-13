@@ -14,9 +14,15 @@ type Membership = {
     primary_color: string | null;
   } | null;
   role: string | null;
+  status: string | null;
 };
 
-export default async function AppHomePage() {
+interface AppHomePageProps {
+  searchParams: Promise<{ error?: string; pending?: string }>;
+}
+
+export default async function AppHomePage({ searchParams }: AppHomePageProps) {
+  const { error: errorParam, pending: pendingOrg } = await searchParams;
   const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
   const user = session?.user;
@@ -27,17 +33,28 @@ export default async function AppHomePage() {
 
   const { data: memberships, error: membershipError } = await supabase
     .from("user_organization_roles")
-    .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role")
+    .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role, status")
     .eq("user_id", user.id);
 
   // Debug: Log membership query results
   console.log("[app/page] User:", user.id, user.email);
   console.log("[app/page] Memberships:", memberships?.length || 0, membershipError?.message || "OK");
 
-  const orgs = (memberships as Membership[] | null)?.filter((m) => m.organization).map((m) => ({
-    ...m.organization!,
-    role: m.role ?? "member",
-  })) ?? [];
+  // Filter to only show active memberships
+  const orgs = (memberships as Membership[] | null)
+    ?.filter((m) => m.organization && m.status === "active")
+    .map((m) => ({
+      ...m.organization!,
+      role: m.role ?? "member",
+    })) ?? [];
+
+  // Get pending memberships for display
+  const pendingMemberships = (memberships as Membership[] | null)
+    ?.filter((m) => m.organization && m.status === "pending")
+    .map((m) => ({
+      ...m.organization!,
+      role: m.role ?? "member",
+    })) ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,6 +75,34 @@ export default async function AppHomePage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Error banner for revoked access */}
+        {errorParam === "access_revoked" && (
+          <Card className="p-4 mb-6 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
+            <div className="flex items-center gap-3">
+              <svg className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm text-red-700 dark:text-red-300">
+                Your access to this organization has been revoked. Please contact an admin if you believe this is an error.
+              </p>
+            </div>
+          </Card>
+        )}
+
+        {/* Pending approval banner */}
+        {pendingOrg && (
+          <Card className="p-4 mb-6 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-3">
+              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Your request to join <strong>{pendingOrg}</strong> is pending admin approval. You&apos;ll be able to access it once approved.
+              </p>
+            </div>
+          </Card>
+        )}
+
         <div className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-sm text-muted-foreground">Welcome back</p>
@@ -129,6 +174,48 @@ export default async function AppHomePage() {
                 </Card>
               </Link>
             ))}
+          </div>
+        )}
+
+        {/* Pending memberships section */}
+        {pendingMemberships.length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              Pending Approval
+              <Badge variant="warning">{pendingMemberships.length}</Badge>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {pendingMemberships.map((org) => (
+                <Card key={org.id} className="p-5 space-y-3 opacity-70">
+                  <div className="flex items-center gap-3">
+                    {org.logo_url ? (
+                      <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-muted">
+                        <Image
+                          src={org.logo_url}
+                          alt={org.name}
+                          fill
+                          className="object-cover"
+                          sizes="48px"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                        style={{ backgroundColor: org.primary_color || "#1e3a5f" }}
+                      >
+                        {org.name.charAt(0)}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{org.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">/{org.slug}</p>
+                    </div>
+                    <Badge variant="warning" className="ml-auto">Pending</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">Awaiting admin approval</p>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </main>

@@ -27,14 +27,26 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
 
   const isAdmin = await isOrgAdmin(org.id);
 
-  // Fetch philanthropy embeds
-  const { data: embedsData } = await supabase
+  // Fetch philanthropy embeds (with graceful error handling for missing table)
+  let embeds: PhilanthropyEmbed[] = [];
+  let embedsError: string | null = null;
+  
+  const { data: embedsData, error: embedsFetchError } = await supabase
     .from("org_philanthropy_embeds")
     .select("*")
     .eq("organization_id", org.id)
     .order("display_order", { ascending: true });
 
-  const embeds = (embedsData || []) as PhilanthropyEmbed[];
+  if (embedsFetchError) {
+    // Check if this is a "table not found" error
+    if (embedsFetchError.message.includes("schema cache") || embedsFetchError.code === "42P01") {
+      embedsError = "Philanthropy embeds table not found. Please run database migrations.";
+    } else {
+      embedsError = embedsFetchError.message;
+    }
+  } else {
+    embeds = (embedsData || []) as PhilanthropyEmbed[];
+  }
 
   // Fetch philanthropy events (events where is_philanthropy = true or event_type = philanthropy)
   let query = supabase
@@ -81,11 +93,29 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         }
       />
 
+      {/* Dev mode error banner for missing table */}
+      {embedsError && process.env.NODE_ENV === "development" && (
+        <Card className="p-4 mb-6 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
+          <div className="flex items-start gap-3">
+            <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <div>
+              <p className="font-medium text-amber-800 dark:text-amber-200">Database Migration Required</p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">{embedsError}</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                Run: <code className="bg-amber-100 dark:bg-amber-800 px-1 py-0.5 rounded">npx supabase db push</code> or apply the migration manually.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Admin Embed Manager */}
-      {isAdmin && <EmbedManager orgId={org.id} embeds={embeds} />}
+      {isAdmin && !embedsError && <EmbedManager orgId={org.id} embeds={embeds} />}
 
       {/* Public Embed Viewer */}
-      {!isAdmin && <EmbedViewer embeds={embeds} />}
+      {!isAdmin && !embedsError && <EmbedViewer embeds={embeds} />}
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
