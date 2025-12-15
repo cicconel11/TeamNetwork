@@ -47,11 +47,19 @@ function JoinOrgForm() {
           return;
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'join/page.tsx:50',message:'Before token lookup query',data:{tokenFromUrl:tokenFromUrl?.slice(0,8)+'...'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         const { data: inviteData, error: inviteError } = await supabase
           .from("organization_invites")
           .select(`*, organizations (id, name, slug)`)
           .eq("token", tokenFromUrl)
           .single();
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'join/page.tsx:60',message:'After token lookup query',data:{hasData:!!inviteData,error:inviteError?.message||null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
 
         if (inviteError || !inviteData) {
           setError("Invalid invite link. Please check and try again.");

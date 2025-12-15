@@ -66,6 +66,10 @@ export default function InvitesPage() {
 
   // Fetch org and invites
   useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:useEffect',message:'Component mounted, starting fetch',data:{orgSlug},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
+
     const fetchData = async () => {
       const supabase = createClient();
 
@@ -81,12 +85,34 @@ export default function InvitesPage() {
       if (org && !orgError) {
         setOrgId(org.id);
 
+        // #region agent log
+        await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:85',message:'Before organization_invites query',data:{orgId:org.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         // Get invites
-        const { data: inviteData } = await supabase
-          .from("organization_invites")
-          .select("*")
-          .eq("organization_id", org.id)
-          .order("created_at", { ascending: false });
+        let inviteData = null;
+        let inviteError = null;
+        try {
+          const result = await supabase
+            .from("organization_invites")
+            .select("*")
+            .eq("organization_id", org.id)
+            .order("created_at", { ascending: false });
+          inviteData = result.data;
+          inviteError = result.error;
+        } catch (e: unknown) {
+          inviteError = { message: e instanceof Error ? e.message : String(e) };
+        }
+
+        // #region agent log
+        await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:95',message:'After organization_invites query',data:{inviteDataLength:inviteData?.length??'null',inviteErrorMsg:inviteError?.message||'none',hasError:!!inviteError},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
+        if (inviteError) {
+          // #region agent log
+          await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:error',message:'INVITE QUERY ERROR DETECTED',data:{errorMessage:inviteError.message,errorFull:JSON.stringify(inviteError)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+        }
 
         setInvites(inviteData || []);
 

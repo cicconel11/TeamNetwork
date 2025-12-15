@@ -108,13 +108,21 @@ export default function ApprovalsPage() {
         setPendingMembers(normalizedMemberships.filter(m => m.role === "active_member" || m.role === "admin"));
         setPendingAlumni(normalizedMemberships.filter(m => m.role === "alumni"));
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'approvals/page.tsx:112',message:'Before organization_invites query',data:{orgId:org.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
+
         // Get active invites
-        const { data: inviteData } = await supabase
+        const { data: inviteData, error: inviteError } = await supabase
           .from("organization_invites")
           .select("*")
           .eq("organization_id", org.id)
           .is("revoked_at", null)
           .order("created_at", { ascending: false });
+
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'approvals/page.tsx:122',message:'After organization_invites query',data:{inviteCount:inviteData?.length,inviteError:inviteError?.message||null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
 
         setInvites(inviteData || []);
       }
