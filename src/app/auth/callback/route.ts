@@ -13,6 +13,11 @@ export async function GET(request: NextRequest) {
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
 
+  // #region agent log
+  const incomingCookies = request.cookies.getAll();
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth/callback/route.ts:GET-start',message:'Callback started',data:{hasCode:!!code,redirect,incomingCookieNames:incomingCookies.map(c=>c.name),incomingCookieCount:incomingCookies.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
+  // #endregion
+
   console.log("[auth/callback] Starting", {
     hasCode: !!code,
     redirect,
@@ -62,6 +67,10 @@ export async function GET(request: NextRequest) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
       console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
       console.log("[auth/callback] Redirecting to:", redirectUrl.toString());
+      // #region agent log
+      const setCookies = response.cookies.getAll();
+      fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth/callback/route.ts:session-success',message:'Session created successfully',data:{userId:data.session.user.id,userEmail:data.session.user.email,provider:data.session.user.app_metadata?.provider,setCookieNames:setCookies.map(c=>c.name),setCookieCount:setCookies.length,accessTokenLength:data.session.access_token?.length,expiresAt:data.session.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
+      // #endregion
       return response;
     }
     

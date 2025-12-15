@@ -65,6 +65,11 @@ export async function middleware(request: NextRequest) {
     (c) => c.name.startsWith("sb-") || c.name.includes("auth-token")
   );
 
+  // #region agent log
+  const sbCookieDetails = cookiesAll.filter(c => c.name.startsWith("sb-")).map(c => ({name: c.name, valueLen: c.value?.length || 0}));
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:before-getSession',message:'Middleware checking session',data:{pathname,hasAuthCookies,sbCookieDetails,totalCookies:cookiesAll.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,C'})}).catch(()=>{});
+  // #endregion
+
   // Safer: read session from cookies; allow pass-through if cookies exist but session null
   const isTestMode = process.env.AUTH_TEST_MODE === "true";
   let session = null;
@@ -78,6 +83,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const user = session?.user ?? null;
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:after-getSession',message:'Session check result',data:{pathname,hasSession:!!session,hasUser:!!user,userId:user?.id,authError:authError?.message||null,sessionExpiresAt:session?.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D,E'})}).catch(()=>{});
+  // #endregion
 
   const shouldLog = process.env.NEXT_PUBLIC_LOG_AUTH === "true";
   const sbCookies = cookiesAll.map((c) => c.name).filter((n) => n.startsWith("sb-"));
