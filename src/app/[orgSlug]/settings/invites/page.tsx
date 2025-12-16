@@ -21,26 +21,8 @@ interface Invite {
 interface Membership {
   user_id: string;
   role: string;
-  status: "active" | "revoked";
+  status: "active" | "revoked" | "pending";
   users?: { name: string | null; email: string | null };
-}
-
-function generateCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
-
-function generateToken(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let token = "";
-  for (let i = 0; i < 32; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return token;
 }
 
 export default function InvitesPage() {
@@ -66,10 +48,6 @@ export default function InvitesPage() {
 
   // Fetch org and invites
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:useEffect',message:'Component mounted, starting fetch',data:{orgSlug},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
-
     const fetchData = async () => {
       const supabase = createClient();
 
@@ -85,57 +63,40 @@ export default function InvitesPage() {
       if (org && !orgError) {
         setOrgId(org.id);
 
-        // #region agent log
-        await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:85',message:'Before organization_invites query',data:{orgId:org.id},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-
         // Get invites
-        let inviteData = null;
-        let inviteError = null;
-        try {
-          const result = await supabase
-            .from("organization_invites")
-            .select("*")
-            .eq("organization_id", org.id)
-            .order("created_at", { ascending: false });
-          inviteData = result.data;
-          inviteError = result.error;
-        } catch (e: unknown) {
-          inviteError = { message: e instanceof Error ? e.message : String(e) };
-        }
-
-        // #region agent log
-        await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:95',message:'After organization_invites query',data:{inviteDataLength:inviteData?.length??'null',inviteErrorMsg:inviteError?.message||'none',hasError:!!inviteError},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        const { data: inviteData, error: inviteError } = await supabase
+          .from("organization_invites")
+          .select("*")
+          .eq("organization_id", org.id)
+          .order("created_at", { ascending: false });
 
         if (inviteError) {
-          // #region agent log
-          await fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'invites/page.tsx:error',message:'INVITE QUERY ERROR DETECTED',data:{errorMessage:inviteError.message,errorFull:JSON.stringify(inviteError)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-          // #endregion
+          console.error("Failed to fetch invites:", inviteError.message);
         }
 
         setInvites(inviteData || []);
 
-          const { data: membershipRows } = await supabase
-            .from("user_organization_roles")
-            .select("user_id, role, status, users(name,email)")
-            .eq("organization_id", org.id);
+        // Get memberships
+        const { data: membershipRows } = await supabase
+          .from("user_organization_roles")
+          .select("user_id, role, status, users(name,email)")
+          .eq("organization_id", org.id);
 
-          const normalizedMemberships: Membership[] =
-            membershipRows?.map((m) => {
-              const user = Array.isArray(m.users) ? m.users[0] : m.users;
-              return {
-                user_id: m.user_id,
-                role: m.role,
-                status: m.status,
-                users: {
-                  name: user?.name ?? null,
-                  email: user?.email ?? null,
-                },
-              };
-            }) || [];
+        const normalizedMemberships: Membership[] =
+          membershipRows?.map((m) => {
+            const user = Array.isArray(m.users) ? m.users[0] : m.users;
+            return {
+              user_id: m.user_id,
+              role: m.role,
+              status: m.status as "active" | "revoked" | "pending",
+              users: {
+                name: user?.name ?? null,
+                email: user?.email ?? null,
+              },
+            };
+          }) || [];
 
-          setMemberships(normalizedMemberships);
+        setMemberships(normalizedMemberships);
       }
 
       setIsLoading(false);
@@ -150,31 +111,23 @@ export default function InvitesPage() {
     setError(null);
 
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const code = generateCode();
-    const token = generateToken();
+    
+    // Use server-side RPC to generate invite (secure code generation)
     const usesRemaining = newUses ? parseInt(newUses) : null;
     const expiresAt = newExpires ? new Date(newExpires).toISOString() : null;
 
-    const { data, error: insertError } = await supabase
-      .from("organization_invites")
-      .insert({
-        organization_id: orgId,
-        code,
-        token,
-        role: newRole,
-        uses_remaining: usesRemaining,
-        expires_at: expiresAt,
-        created_by_user_id: user?.id,
-      })
-      .select()
-      .single();
+    const { data, error: rpcError } = await supabase.rpc("create_org_invite", {
+      p_organization_id: orgId,
+      p_role: newRole,
+      p_uses: usesRemaining,
+      p_expires_at: expiresAt,
+    });
 
-    if (insertError) {
-      setError(insertError.message);
+    if (rpcError) {
+      setError(rpcError.message);
     } else if (data) {
-      setInvites([data, ...invites]);
+      // RPC returns the created invite
+      setInvites([data as Invite, ...invites]);
       setShowForm(false);
       setNewRole("active_member");
       setNewUses("");

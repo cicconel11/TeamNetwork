@@ -70,19 +70,21 @@ export async function middleware(request: NextRequest) {
   fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:before-getSession',message:'Middleware checking session',data:{pathname,hasAuthCookies,sbCookieDetails,totalCookies:cookiesAll.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,C'})}).catch(()=>{});
   // #endregion
 
-  // Safer: read session from cookies; allow pass-through if cookies exist but session null
+  // Use getUser() instead of getSession() - getUser() validates JWT and refreshes tokens
+  // This is required for OAuth sessions to work correctly
   const isTestMode = process.env.AUTH_TEST_MODE === "true";
-  let session = null;
+  let user = null;
   let authError: Error | null = null;
   if (isTestMode) {
-    session = hasAuthCookies ? { user: { id: "test-user" } as { id: string } } : null;
+    user = hasAuthCookies ? { id: "test-user" } as { id: string } : null;
   } else {
-    const res = await supabase.auth.getSession();
-    session = res.data.session;
+    const res = await supabase.auth.getUser();
+    user = res.data.user;
     authError = res.error;
   }
 
-  const user = session?.user ?? null;
+  // For compatibility, create a session-like object
+  const session = user ? { user, expires_at: null } : null;
 
   // #region agent log
   fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:after-getSession',message:'Session check result',data:{pathname,hasSession:!!session,hasUser:!!user,userId:user?.id,authError:authError?.message||null,sessionExpiresAt:session?.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D,E'})}).catch(()=>{});

@@ -123,17 +123,27 @@ export default function NewAnnouncementPage() {
           : formData.audience === "individuals" ? "both"
           : formData.audience;
         
-        await supabase.from("notifications").insert({
+        // Create notification record
+        const { data: notification } = await supabase.from("notifications").insert({
           organization_id: org.id,
           title: formData.title,
           body: formData.body || null,
           channel: "email",
           audience: notifAudience,
           target_user_ids: audienceUserIds,
-          sent_at: new Date().toISOString(),
-        });
+        }).select().single();
+
+        // Trigger actual email sending via API
+        if (notification) {
+          await fetch("/api/notifications/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ announcementId: announcement.id }),
+          });
+        }
       } catch (notifError) {
-        console.error("Failed to create notification record:", notifError);
+        console.error("Failed to send notification:", notifError);
+        // Don't block on notification failure - announcement was created successfully
       }
     }
 

@@ -6,6 +6,18 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card } from "@/components/ui";
 
+interface RedeemResult {
+  success: boolean;
+  error?: string;
+  organization_id?: string;
+  slug?: string;
+  name?: string;
+  role?: string;
+  already_member?: boolean;
+  pending_approval?: boolean;
+  status?: string;
+}
+
 function JoinOrgForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -39,6 +51,8 @@ function JoinOrgForm() {
         setError(null);
 
         const supabase = createClient();
+
+        // Check if user is logged in
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setError("You must be logged in to join an organization");
@@ -47,100 +61,56 @@ function JoinOrgForm() {
           return;
         }
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'join/page.tsx:50',message:'Before token lookup query',data:{tokenFromUrl:tokenFromUrl?.slice(0,8)+'...'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
+        // Use server-side RPC to redeem invite
+        const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
+          p_code: tokenFromUrl.trim(),
+        });
 
-        const { data: inviteData, error: inviteError } = await supabase
-          .from("organization_invites")
-          .select(`*, organizations (id, name, slug)`)
-          .eq("token", tokenFromUrl)
-          .single();
-
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'join/page.tsx:60',message:'After token lookup query',data:{hasData:!!inviteData,error:inviteError?.message||null},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
-
-        if (inviteError || !inviteData) {
-          setError("Invalid invite link. Please check and try again.");
+        if (rpcError) {
+          setError(rpcError.message);
           setIsLoading(false);
           setAutoSubmitting(false);
           return;
         }
 
-        const invite = inviteData as {
-          id: string;
-          organization_id: string;
-          role: string;
-          uses_remaining: number | null;
-          expires_at: string | null;
-          revoked_at: string | null;
-          organizations: { id: string; name: string; slug: string };
-        };
+        const result = data as RedeemResult;
 
-        if (invite.revoked_at) {
-          setError("This invite has been revoked.");
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
-        if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-          setError("This invite has expired.");
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
-        if (invite.uses_remaining !== null && invite.uses_remaining <= 0) {
-          setError("This invite has no uses remaining.");
+        if (!result.success) {
+          setError(result.error || "Failed to join organization");
           setIsLoading(false);
           setAutoSubmitting(false);
           return;
         }
 
-        const { data: existingRole } = await supabase
-          .from("user_organization_roles")
-          .select("id, status")
-          .eq("user_id", user.id)
-          .eq("organization_id", invite.organization_id)
-          .single();
-
-        if (existingRole) {
-          if ((existingRole as { status: string }).status === "revoked") {
-            setError("Your access to this organization has been revoked. Contact an admin.");
+        // Handle already a member
+        if (result.already_member) {
+          if (result.status === "pending") {
+            setPendingApproval({ orgName: result.name || "the organization" });
           } else {
             setError("You are already a member of this organization.");
-            setTimeout(() => router.push(`/${invite.organizations.slug}`), 1500);
+            setTimeout(() => {
+              if (result.slug) {
+                router.push(`/${result.slug}`);
+              }
+            }, 1500);
           }
           setIsLoading(false);
           setAutoSubmitting(false);
           return;
         }
 
-        let role = invite.role;
-        if (role === "member") role = "active_member";
-        if (role === "viewer") role = "alumni";
-
-        const { error: roleError } = await supabase
-          .from("user_organization_roles")
-          .insert({ user_id: user.id, organization_id: invite.organization_id, role, status: "pending" });
-
-        if (roleError) {
-          setError("Failed to join organization. Please try again.");
+        // Handle pending approval
+        if (result.pending_approval) {
+          setPendingApproval({ orgName: result.name || "the organization" });
           setIsLoading(false);
           setAutoSubmitting(false);
           return;
         }
 
-        if (invite.uses_remaining !== null) {
-          await supabase
-            .from("organization_invites")
-            .update({ uses_remaining: invite.uses_remaining - 1 })
-            .eq("id", invite.id)
-            .gt("uses_remaining", 0);
+        // Should not reach here normally
+        if (result.slug) {
+          router.push(`/${result.slug}`);
         }
-
-        // Show pending approval message instead of redirecting
-        setPendingApproval({ orgName: invite.organizations.name });
         setIsLoading(false);
       } else if (code) {
         const form = document.getElementById("join-form") as HTMLFormElement;
@@ -152,14 +122,13 @@ function JoinOrgForm() {
     processAutoSubmit();
   }, [autoSubmitting, code, tokenFromUrl, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const redeemInvite = async (inviteCode: string) => {
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient();
 
-    // Get current user
+    // Check if user is logged in
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setError("You must be logged in to join an organization");
@@ -167,120 +136,58 @@ function JoinOrgForm() {
       return;
     }
 
-    // Look up the invite code
-    const { data: inviteData, error: inviteError } = await supabase
-      .from("organization_invites")
-      .select(`
-        *,
-        organizations (
-          id,
-          name,
-          slug
-        )
-      `)
-      .eq("code", code.trim().toUpperCase())
-      .single();
+    // Use server-side RPC to redeem invite (handles all validation)
+    const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
+      p_code: inviteCode.trim(),
+    });
 
-    if (inviteError || !inviteData) {
-      setError("Invalid invite code. Please check and try again.");
+    if (rpcError) {
+      setError(rpcError.message);
       setIsLoading(false);
       return;
     }
 
-    await processInvite(supabase, inviteData, user);
-  };
+    const result = data as RedeemResult;
 
-  const processInvite = async (
-    supabase: ReturnType<typeof createClient>,
-    inviteData: {
-      id: string;
-      organization_id: string;
-      code: string;
-      token: string | null;
-      role: string;
-      uses_remaining: number | null;
-      expires_at: string | null;
-      revoked_at: string | null;
-      organizations: { id: string; name: string; slug: string };
-    },
-    user: { id: string }
-  ) => {
-    const invite = inviteData;
-
-    // Check if invite has been revoked
-    if (invite.revoked_at) {
-      setError("This invite has been revoked.");
+    if (!result.success) {
+      setError(result.error || "Failed to join organization");
       setIsLoading(false);
       return;
     }
 
-    // Check if invite has expired
-    if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
-      setError("This invite has expired.");
-      setIsLoading(false);
-      return;
-    }
-
-    // Check if invite has uses remaining
-    if (invite.uses_remaining !== null && invite.uses_remaining <= 0) {
-      setError("This invite has no uses remaining.");
-      setIsLoading(false);
-      return;
-    }
-
-    // Check if user is already a member
-    const { data: existingRole } = await supabase
-      .from("user_organization_roles")
-      .select("id, status")
-      .eq("user_id", user.id)
-      .eq("organization_id", invite.organization_id)
-      .single();
-
-    if (existingRole) {
-      if (existingRole.status === "revoked") {
-        setError("Your access to this organization has been revoked. Contact an admin.");
+    // Handle already a member
+    if (result.already_member) {
+      if (result.status === "pending") {
+        setPendingApproval({ orgName: result.name || "the organization" });
       } else {
         setError("You are already a member of this organization.");
-        // Redirect them anyway after a short delay
-        setTimeout(() => router.push(`/${invite.organizations.slug}`), 1500);
+        setTimeout(() => {
+          if (result.slug) {
+            router.push(`/${result.slug}`);
+          }
+        }, 1500);
       }
       setIsLoading(false);
       return;
     }
 
-    // Map role if needed (legacy support)
-    let role = invite.role;
-    if (role === "member") role = "active_member";
-    if (role === "viewer") role = "alumni";
-
-    // Add user to organization with the role specified in the invite (pending status)
-    const { error: roleError } = await supabase
-      .from("user_organization_roles")
-      .insert({
-        user_id: user.id,
-        organization_id: invite.organization_id,
-        role: role,
-        status: "pending",
-      });
-
-    if (roleError) {
-      setError("Failed to join organization. Please try again.");
+    // Handle pending approval
+    if (result.pending_approval) {
+      setPendingApproval({ orgName: result.name || "the organization" });
       setIsLoading(false);
       return;
     }
 
-    // Decrement uses_remaining if it's set (atomic update)
-    if (invite.uses_remaining !== null) {
-      await supabase
-        .from("organization_invites")
-        .update({ uses_remaining: invite.uses_remaining - 1 })
-        .eq("id", invite.id)
-        .gt("uses_remaining", 0);
+    // Should not reach here normally, but handle just in case
+    if (result.slug) {
+      router.push(`/${result.slug}`);
     }
-
-    // Show pending approval message instead of redirecting
-    setPendingApproval({ orgName: invite.organizations.name });
     setIsLoading(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await redeemInvite(code);
   };
 
   return (

@@ -253,6 +253,7 @@ export interface Notification {
 export interface NotificationPreference {
   id: string;
   user_id: string;
+  organization_id?: string;
   email_enabled: boolean;
   email_address: string | null;
   sms_enabled: boolean;
@@ -421,6 +422,68 @@ export interface Database {
       member_status: MemberStatus;
       event_type: EventType;
       membership_status: MembershipStatus;
+    };
+    Functions: {
+      is_org_member: {
+        Args: { org_id: string };
+        Returns: boolean;
+      };
+      is_org_admin: {
+        Args: { org_id: string };
+        Returns: boolean;
+      };
+      has_active_role: {
+        Args: { org: string; allowed_roles: string[] };
+        Returns: boolean;
+      };
+      create_org_invite: {
+        Args: {
+          p_organization_id: string;
+          p_role?: string;
+          p_uses?: number | null;
+          p_expires_at?: string | null;
+        };
+        Returns: OrganizationInvite;
+      };
+      redeem_org_invite: {
+        Args: { p_code: string };
+        Returns: {
+          success: boolean;
+          error?: string;
+          organization_id?: string;
+          slug?: string;
+          name?: string;
+          role?: string;
+          already_member?: boolean;
+          pending_approval?: boolean;
+          status?: string;
+        };
+      };
+      get_dropdown_options: {
+        Args: { p_org_id: string };
+        Returns: {
+          alumni: {
+            graduation_years: number[];
+            industries: string[];
+            companies: string[];
+            cities: string[];
+            positions: string[];
+            majors: string[];
+          };
+          members: {
+            roles: string[];
+            graduation_years: number[];
+            statuses: string[];
+          };
+          events: {
+            locations: string[];
+            types: string[];
+          };
+          donations: {
+            campaigns: string[];
+          };
+        };
+      };
     };
   };
 }
