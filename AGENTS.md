@@ -39,4 +39,4 @@
 - After schema changes, add a migration and regenerate types.
 
 ## Agent-Specific Instructions
-- Use `mgrep` for semantic searches in the repository.
+- Use `grep -r` or `rg` (ripgrep) for searching the repository instead of mgrep.
