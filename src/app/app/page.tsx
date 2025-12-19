@@ -27,10 +27,6 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
   // Use getUser() instead of getSession() - validates JWT and refreshes tokens for OAuth
   const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'app/page.tsx:getUser',message:'App page user check',data:{hasUser:!!user,userId:user?.id,userError:userError?.message||null,provider:user?.app_metadata?.provider},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D,E'})}).catch(()=>{});
-  // #endregion
-
   if (!user) {
     redirect("/auth/login");
   }
@@ -226,4 +222,3 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     </div>
   );
 }
-

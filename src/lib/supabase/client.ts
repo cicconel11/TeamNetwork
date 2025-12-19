@@ -27,9 +27,6 @@ export function createClient() {
   // Log auth state changes for debugging
   browserClient.auth.onAuthStateChange((event, session) => {
     console.log("[supabase/client] Auth state changed:", event, session?.user?.id?.slice(0, 8) || "no-user");
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supabase/client.ts:onAuthStateChange',message:'Browser auth state changed',data:{event,hasSession:!!session,userId:session?.user?.id,provider:session?.user?.app_metadata?.provider,expiresAt:session?.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
   });
   
   return browserClient;
