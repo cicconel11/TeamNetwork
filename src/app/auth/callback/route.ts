@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   // #region agent log
   const incomingCookies = request.cookies.getAll();
-  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth/callback/route.ts:GET-start',message:'Callback started',data:{hasCode:!!code,redirect,incomingCookieNames:incomingCookies.map(c=>c.name),incomingCookieCount:incomingCookies.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'auth/callback/route.ts:GET-start', message: 'Callback started', data: { hasCode: !!code, redirect, incomingCookieNames: incomingCookies.map(c => c.name), incomingCookieCount: incomingCookies.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A,C' }) }).catch(() => { });
   // #endregion
 
   console.log("[auth/callback] Starting", {
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     // Create a redirect response first - we'll add cookies to it
     const redirectUrl = new URL(redirect, siteUrl);
     const response = NextResponse.redirect(redirectUrl);
-    
+
     const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
       cookies: {
         getAll() {
@@ -44,36 +44,38 @@ export async function GET(request: NextRequest) {
           console.log("[auth/callback] setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
           cookiesToSet.forEach(({ name, value, options }) => {
             // Ensure cookies are set with correct options for cross-route access
-            response.cookies.set(name, value, { 
-              ...options, 
+            // Domain is set to .myteamnetwork.com to work across www and non-www
+            response.cookies.set(name, value, {
+              ...options,
               path: "/",  // Always use root path for auth cookies
               sameSite: "lax",
               secure: process.env.NODE_ENV === "production",
+              domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
             });
           });
         },
       },
     });
-    
+
     console.log("[auth/callback] Exchanging code for session...");
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    
+
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
       return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent(error.message)}`);
     }
-    
+
     if (data.session) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
       console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
       console.log("[auth/callback] Redirecting to:", redirectUrl.toString());
       // #region agent log
       const setCookies = response.cookies.getAll();
-      fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'auth/callback/route.ts:session-success',message:'Session created successfully',data:{userId:data.session.user.id,userEmail:data.session.user.email,provider:data.session.user.app_metadata?.provider,setCookieNames:setCookies.map(c=>c.name),setCookieCount:setCookies.length,accessTokenLength:data.session.access_token?.length,expiresAt:data.session.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'auth/callback/route.ts:session-success', message: 'Session created successfully', data: { userId: data.session.user.id, userEmail: data.session.user.email, provider: data.session.user.app_metadata?.provider, setCookieNames: setCookies.map(c => c.name), setCookieCount: setCookies.length, accessTokenLength: data.session.access_token?.length, expiresAt: data.session.expires_at }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'A,C' }) }).catch(() => { });
       // #endregion
       return response;
     }
-    
+
     console.error("[auth/callback] No session returned");
   }
 

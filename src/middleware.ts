@@ -40,22 +40,32 @@ export async function middleware(request: NextRequest) {
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        request.cookies.set({ name, value, ...options });
+        // Add domain for production to ensure cookies work across www and non-www
+        const cookieOptions = {
+          ...options,
+          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+        };
+        request.cookies.set({ name, value, ...cookieOptions });
         response = NextResponse.next({
           request: {
             headers: request.headers,
           },
         });
-        response.cookies.set({ name, value, ...options });
+        response.cookies.set({ name, value, ...cookieOptions });
       },
       remove(name: string, options: CookieOptions) {
-        request.cookies.set({ name, value: "", ...options });
+        // Add domain for production to ensure cookies are removed across www and non-www
+        const cookieOptions = {
+          ...options,
+          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+        };
+        request.cookies.set({ name, value: "", ...cookieOptions });
         response = NextResponse.next({
           request: {
             headers: request.headers,
           },
         });
-        response.cookies.set({ name, value: "", ...options });
+        response.cookies.set({ name, value: "", ...cookieOptions });
       },
     },
   });
@@ -66,8 +76,8 @@ export async function middleware(request: NextRequest) {
   );
 
   // #region agent log
-  const sbCookieDetails = cookiesAll.filter(c => c.name.startsWith("sb-")).map(c => ({name: c.name, valueLen: c.value?.length || 0}));
-  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:before-getSession',message:'Middleware checking session',data:{pathname,hasAuthCookies,sbCookieDetails,totalCookies:cookiesAll.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,C'})}).catch(()=>{});
+  const sbCookieDetails = cookiesAll.filter(c => c.name.startsWith("sb-")).map(c => ({ name: c.name, valueLen: c.value?.length || 0 }));
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'middleware.ts:before-getSession', message: 'Middleware checking session', data: { pathname, hasAuthCookies, sbCookieDetails, totalCookies: cookiesAll.length }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,C' }) }).catch(() => { });
   // #endregion
 
   // Use getUser() instead of getSession() - getUser() validates JWT and refreshes tokens
@@ -87,7 +97,7 @@ export async function middleware(request: NextRequest) {
   const session = user ? { user, expires_at: null } : null;
 
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'middleware.ts:after-getSession',message:'Session check result',data:{pathname,hasSession:!!session,hasUser:!!user,userId:user?.id,authError:authError?.message||null,sessionExpiresAt:session?.expires_at},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D,E'})}).catch(()=>{});
+  fetch('http://127.0.0.1:7242/ingest/f6fe50b5-6abd-4a79-8685-54d1dabba251', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'middleware.ts:after-getSession', message: 'Session check result', data: { pathname, hasSession: !!session, hasUser: !!user, userId: user?.id, authError: authError?.message || null, sessionExpiresAt: session?.expires_at }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'B,D,E' }) }).catch(() => { });
   // #endregion
 
   const shouldLog = process.env.NEXT_PUBLIC_LOG_AUTH === "true";
@@ -145,16 +155,16 @@ export async function middleware(request: NextRequest) {
 
   // Check for revoked access on org routes
   // Org routes are paths like /[orgSlug]/... but not /app/ or /auth/ or /api/ or /settings/
-  const isOrgRoute = !pathname.startsWith("/app") && 
-                     !pathname.startsWith("/auth") && 
-                     !pathname.startsWith("/api") &&
-                     !pathname.startsWith("/settings") &&
-                     pathname !== "/" &&
-                     pathname.split("/").filter(Boolean).length >= 1;
+  const isOrgRoute = !pathname.startsWith("/app") &&
+    !pathname.startsWith("/auth") &&
+    !pathname.startsWith("/api") &&
+    !pathname.startsWith("/settings") &&
+    pathname !== "/" &&
+    pathname.split("/").filter(Boolean).length >= 1;
 
   if (isOrgRoute && user) {
     const orgSlug = pathname.split("/")[1];
-    
+
     // Only check if it looks like an org slug (not a system path)
     if (orgSlug && !["app", "auth", "api", "settings", "_next", "favicon.ico"].includes(orgSlug)) {
       try {

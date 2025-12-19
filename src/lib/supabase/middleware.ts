@@ -18,10 +18,15 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
+        // Add domain for production to ensure cookies work across www and non-www
+        const cookieOptions = {
+          ...options,
+          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+        };
         request.cookies.set({
           name,
           value,
-          ...options,
+          ...cookieOptions,
         });
         response = NextResponse.next({
           request: {
@@ -31,14 +36,19 @@ export async function updateSession(request: NextRequest) {
         response.cookies.set({
           name,
           value,
-          ...options,
+          ...cookieOptions,
         });
       },
       remove(name: string, options: CookieOptions) {
+        // Add domain for production to ensure cookies are removed across www and non-www
+        const cookieOptions = {
+          ...options,
+          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+        };
         request.cookies.set({
           name,
           value: "",
-          ...options,
+          ...cookieOptions,
         });
         response = NextResponse.next({
           request: {
@@ -48,7 +58,7 @@ export async function updateSession(request: NextRequest) {
         response.cookies.set({
           name,
           value: "",
-          ...options,
+          ...cookieOptions,
         });
       },
     },
