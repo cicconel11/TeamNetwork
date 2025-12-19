@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url, { status: 308 });
   }
 
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
