@@ -13,52 +13,25 @@ export async function updateSession(request: NextRequest) {
   });
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: {
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+    },
     cookies: {
-      get(name: string) {
-        return request.cookies.get(name)?.value;
+      getAll() {
+        return request.cookies.getAll();
       },
-      set(name: string, value: string, options: CookieOptions) {
-        // Add domain for production to ensure cookies work across www and non-www
-        const cookieOptions = {
-          ...options,
-          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
-        };
-        request.cookies.set({
-          name,
-          value,
-          ...cookieOptions,
-        });
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        response.cookies.set({
-          name,
-          value,
-          ...cookieOptions,
-        });
-      },
-      remove(name: string, options: CookieOptions) {
-        // Add domain for production to ensure cookies are removed across www and non-www
-        const cookieOptions = {
-          ...options,
-          domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
-        };
-        request.cookies.set({
-          name,
-          value: "",
-          ...cookieOptions,
-        });
-        response = NextResponse.next({
-          request: {
-            headers: request.headers,
-          },
-        });
-        response.cookies.set({
-          name,
-          value: "",
-          ...cookieOptions,
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          const cookieOptions: CookieOptions = {
+            ...options,
+            path: options.path ?? "/",
+            domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+          };
+          request.cookies.set({ name, value, ...cookieOptions });
+          response.cookies.set({ name, value, ...cookieOptions });
         });
       },
     },
@@ -69,4 +42,3 @@ export async function updateSession(request: NextRequest) {
 
   return response;
 }
-

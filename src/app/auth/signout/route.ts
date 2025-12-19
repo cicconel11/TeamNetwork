@@ -20,7 +20,11 @@ export async function GET(request: Request) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, { ...options, path: "/" });
+          response.cookies.set(name, value, {
+            ...options,
+            path: options.path ?? "/",
+            domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+          });
         });
       },
     },
@@ -50,7 +54,11 @@ export async function POST(request: Request) {
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {
-          response.cookies.set(name, value, { ...options, path: "/" });
+          response.cookies.set(name, value, {
+            ...options,
+            path: options.path ?? "/",
+            domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+          });
         });
       },
     },
@@ -62,4 +70,3 @@ export async function POST(request: Request) {
   
   return response;
 }
-

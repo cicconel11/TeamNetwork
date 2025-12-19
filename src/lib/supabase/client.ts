@@ -15,7 +15,14 @@ export function createClient() {
     return browserClient;
   }
   
-  browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey);
+  browserClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: {
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      domain: process.env.NODE_ENV === "production" ? ".myteamnetwork.com" : undefined,
+    },
+  });
   
   // Log auth state changes for debugging
   browserClient.auth.onAuthStateChange((event, session) => {
@@ -27,4 +34,3 @@ export function createClient() {
   
   return browserClient;
 }
-
