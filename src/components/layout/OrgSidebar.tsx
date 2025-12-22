@@ -10,6 +10,8 @@ import type { OrgRole } from "@/lib/auth/role-utils";
 interface OrgSidebarProps {
   organization: Organization;
   role: OrgRole | null;
+  className?: string;
+  onClose?: () => void;
 }
 
 const navItems: Array<{ href: string; label: string; icon: ComponentType<{ className?: string }>; roles: OrgRole[] }> = [
@@ -27,13 +29,13 @@ const navItems: Array<{ href: string; label: string; icon: ComponentType<{ class
   { href: "/settings/invites", label: "Invite", icon: InviteIcon, roles: ["admin"] },
 ];
 
-export function OrgSidebar({ organization, role }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const visibleNav = role ? navItems.filter((item) => item.roles.includes(role)) : navItems;
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-64 bg-card border-r border-border flex flex-col z-40">
+    <aside className={`flex flex-col bg-card border-r border-border h-full ${className}`}>
       {/* Logo/Org Header */}
       <div className="p-6 border-b border-border">
         <Link href={basePath} className="flex items-center gap-3">
@@ -74,6 +76,7 @@ export function OrgSidebar({ organization, role }: OrgSidebarProps) {
               <li key={item.href}>
                 <Link
                   href={href}
+                  onClick={onClose}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
                       ? "bg-org-primary text-white"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"

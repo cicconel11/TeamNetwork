@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
+import { MobileNav } from "@/components/layout/MobileNav";
 import { getOrgContext } from "@/lib/auth/roles";
 
 interface OrgLayoutProps {
@@ -66,8 +67,13 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
           : "#0f2a4f",
       } as React.CSSProperties}
     >
-      <OrgSidebar organization={organization} role={orgContext.role} />
-      <main className="ml-64 p-8">
+      <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
+        <OrgSidebar organization={organization} role={orgContext.role} />
+      </div>
+
+      <MobileNav organization={organization} role={orgContext.role} />
+
+      <main className="lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8">
         {children}
       </main>
     </div>
