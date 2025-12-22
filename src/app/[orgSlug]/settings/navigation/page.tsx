@@ -77,8 +77,11 @@ function NavigationSettingsContent() {
 
   const handleLabelChange = (href: string, label: string) => {
     updateEntry(href, (current = {}) => {
-      const next = { ...current, label };
-      if (!next.label?.trim()) {
+      const trimmed = label.trim();
+      const next: NavConfigEntry = { ...current };
+      if (trimmed) {
+        next.label = trimmed;
+      } else {
         delete next.label;
       }
       if (!next.hidden && !next.hiddenForRoles?.length) {
@@ -93,8 +96,10 @@ function NavigationSettingsContent() {
       const roles = Array.isArray(current.hiddenForRoles) ? [...current.hiddenForRoles] : [];
       const exists = roles.includes(role);
       const nextRoles = exists ? roles.filter((r) => r !== role) : [...roles, role];
-      const next = { ...current, hiddenForRoles: nextRoles };
-      if (!next.hiddenForRoles?.length) {
+      const next: NavConfigEntry = { ...current };
+      if (nextRoles.length) {
+        next.hiddenForRoles = nextRoles;
+      } else {
         delete next.hiddenForRoles;
       }
       if (!next.label && !next.hidden && !next.hiddenForRoles?.length) {
@@ -106,7 +111,8 @@ function NavigationSettingsContent() {
 
   const toggleHiddenEverywhere = (href: string) => {
     updateEntry(href, (current = {}) => {
-      const next = { ...current, hidden: !current.hidden };
+      const next: NavConfigEntry = { ...current };
+      next.hidden = !current.hidden;
       if (!next.hidden) {
         delete next.hidden;
       }
