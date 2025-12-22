@@ -66,3 +66,6 @@ DROP POLICY IF EXISTS user_org_roles_delete ON public.user_organization_roles;
 CREATE POLICY user_org_roles_delete ON public.user_organization_roles
   FOR DELETE USING (has_active_role(organization_id, array['admin']));
 
+
+
+

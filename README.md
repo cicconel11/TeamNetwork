@@ -34,3 +34,49 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Audit System
+
+This project includes a comprehensive automated audit system for QA and monitoring. The audit system crawls your application, analyzes the codebase, and audits the backend database schema.
+
+### Quick Start
+
+1. **Install Playwright browsers**:
+   ```bash
+   npm run audit:install
+   ```
+
+2. **Configure environment variables** (see `docs/audit-setup.md` for details):
+   ```bash
+   AUDIT_BASE_URL=https://www.myteamnetwork.com
+   AUDIT_START_PATH=/testing123
+   AUDIT_EMAIL=your-test-user@example.com
+   AUDIT_PASSWORD=your-test-password
+   AUDIT_SAFE_MODE=true
+   ```
+
+3. **Run complete audit**:
+   ```bash
+   npm run audit:all
+   ```
+
+### Audit Commands
+
+- `npm run audit:ui` - Crawl UI and validate all reachable pages
+- `npm run audit:static` - Analyze codebase for routes and hardcoded links
+- `npm run audit:backend` - Audit database schema and performance issues
+- `npm run audit:all` - Run all audits and generate combined report
+
+### Generated Reports
+
+Reports are saved to the `audit/` directory:
+- `combined_report.md` - Executive summary with action items
+- `report.md` - UI crawl results with screenshots of failures
+- `static-inventory.md` - Code analysis results
+- `backend_report.md` - Database audit findings
+
+### Safe Mode
+
+The UI crawler includes **SAFE MODE** by default, which prevents any destructive operations during audits by blocking POST/PUT/PATCH/DELETE requests.
+
+See `docs/audit-setup.md` for complete setup instructions and troubleshooting.

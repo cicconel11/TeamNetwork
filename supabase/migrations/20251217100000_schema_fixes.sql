@@ -625,3 +625,6 @@ GRANT EXECUTE ON FUNCTION public.redeem_org_invite(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.redeem_org_invite_by_token(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_dropdown_options(uuid) TO authenticated;
 
+
+
+

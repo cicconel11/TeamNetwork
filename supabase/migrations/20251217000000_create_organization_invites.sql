@@ -61,3 +61,6 @@ CREATE POLICY organization_invites_delete
 -- Grant permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_invites TO authenticated;
 
+
+
+

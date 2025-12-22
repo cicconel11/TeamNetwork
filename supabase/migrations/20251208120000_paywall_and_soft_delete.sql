@@ -35,3 +35,6 @@ alter table if exists public.notifications add column if not exists deleted_at t
 
 
 
+
+
+

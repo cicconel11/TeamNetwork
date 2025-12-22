@@ -102,3 +102,6 @@ Regenerated database types to match the updated schema, ensuring:
 - Use `pg_notify('pgrst', 'reload schema')` after schema changes
 - Regenerate TypeScript types after any database schema changes
 - Test RLS policies thoroughly when adding new tables or modifying permissions
+
+
+

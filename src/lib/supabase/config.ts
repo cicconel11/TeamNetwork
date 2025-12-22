@@ -26,3 +26,16 @@ export function getSupabaseServiceEnv() {
   return { supabaseUrl, supabaseAnonKey, serviceRoleKey };
 }
 
+export function validateSiteUrl() {
+  if (process.env.NODE_ENV === "production") {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!siteUrl) {
+      console.warn("[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL is not set in production - OAuth redirects may be unreliable");
+      return false;
+    } else if (!siteUrl.includes("www.myteamnetwork.com")) {
+      console.warn(`[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL (${siteUrl}) doesn't match expected domain`);
+      return false;
+    }
+  }
+  return true;
+}

@@ -104,14 +104,23 @@ export async function middleware(request: NextRequest) {
 
 
   const sbCookies = cookiesAll.map((c) => c.name).filter((n) => n.startsWith("sb-"));
-  if (shouldLog) {
+  
+  // Always log auth failures in production for debugging user-specific issues
+  const isAuthFailure = !user && hasAuthCookies;
+  if (shouldLog || isAuthFailure) {
     console.log("[AUTH-MW]", {
       host,
       pathname,
+      origin: request.headers.get("origin"),
+      referer: request.headers.get("referer"),
+      userAgent: request.headers.get("user-agent")?.slice(0, 100),
       sbCookies,
+      allCookieNames: cookiesAll.map((c) => c.name),
+      hasAuthCookies,
       sessionUser: user ? user.id : null,
       sessionNull: !session,
-      authError: authError?.message || null,
+      authError: authError ? { message: authError.message, name: authError.name } : null,
+      isAuthFailure,
     });
     if (pathname.startsWith("/testing123")) {
       console.log("[AUTH-MW-testing123]", {

@@ -194,3 +194,6 @@ WHERE donation_embed_url IS NOT NULL
   AND donation_embed_url ~ '^https://'
 ON CONFLICT DO NOTHING;
 
+
+
+

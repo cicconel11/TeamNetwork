@@ -136,3 +136,6 @@ CREATE POLICY organization_invites_delete
   ON public.organization_invites
   FOR DELETE USING (has_active_role(organization_id, array['admin']));
 
+
+
+

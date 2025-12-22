@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
     hasCode: !!code,
     redirect,
     origin: requestUrl.origin,
+    siteUrl,
+    host: request.headers.get("host"),
+    incomingCookies: request.cookies.getAll().map((c) => c.name),
   });
 
   // Handle OAuth errors
@@ -62,7 +65,12 @@ export async function GET(request: NextRequest) {
 
     if (data.session) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
-      console.log("[auth/callback] Cookies set:", response.cookies.getAll().map(c => c.name));
+      console.log("[auth/callback] Cookies set:", response.cookies.getAll().map((c) => ({
+        name: c.name,
+        domain: (c as { domain?: string }).domain || "default",
+        path: c.path || "/",
+        secure: c.secure,
+      })));
       console.log("[auth/callback] Redirecting to:", redirectUrl.toString());
       return response;
     }
