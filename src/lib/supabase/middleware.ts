@@ -32,6 +32,14 @@ export async function updateSession(request: NextRequest) {
           };
           request.cookies.set({ name, value, ...cookieOptions });
           response.cookies.set({ name, value, ...cookieOptions });
+
+          // Legacy cleanup: Ensure we clear cookies on the root domain if they exist
+          if (process.env.NODE_ENV === "production" && (value === "" || options.maxAge === 0)) {
+            response.headers.append(
+              "Set-Cookie",
+              `${name}=; Path=/; Domain=.myteamnetwork.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`
+            );
+          }
         });
       },
     },

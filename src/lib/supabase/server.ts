@@ -27,6 +27,19 @@ export async function createClient() {
               domain: undefined,
             };
             cookieStore.set(name, value, cookieOptions);
+
+            // Legacy cleanup: Ensure we clear cookies on the root domain if they exist
+            if (process.env.NODE_ENV === "production" && value === "") {
+               try {
+                 cookieStore.set(name, "", {
+                   ...cookieOptions,
+                   domain: ".myteamnetwork.com",
+                   maxAge: 0,
+                 });
+               } catch {
+                 // Ignore errors if we can't set multiple cookies
+               }
+            }
           });
         } catch {
           // The `setAll` method was called from a Server Component.

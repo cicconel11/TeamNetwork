@@ -48,5 +48,18 @@ export async function POST(request: Request) {
 
   console.log("[signout] Signed out, cookies cleared");
 
+  // Force-clear any legacy cookies on .myteamnetwork.com domain to prevent conflicts
+  if (process.env.NODE_ENV === "production") {
+    const allCookies = cookieStore.getAll();
+    allCookies.forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        response.headers.append(
+          "Set-Cookie",
+          `${cookie.name}=; Path=/; Domain=.myteamnetwork.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`
+        );
+      }
+    });
+  }
+
   return response;
 }
