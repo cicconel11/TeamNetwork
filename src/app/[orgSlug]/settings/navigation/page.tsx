@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Input, Badge } from "@/components/ui";
@@ -20,6 +20,7 @@ const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni"];
 function NavigationSettingsContent() {
   const params = useParams();
   const orgSlug = params.orgSlug as string;
+  const router = useRouter();
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [navConfig, setNavConfig] = useState<NavConfig>({});
@@ -185,6 +186,7 @@ function NavigationSettingsContent() {
 
       setNavConfig((data?.navConfig as NavConfig) || payload);
       setSaved(true);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save navigation");
     } finally {
