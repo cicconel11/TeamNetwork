@@ -4,6 +4,8 @@ import { Card, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { MentorshipAdminPanel } from "@/components/mentorship/MentorshipAdminPanel";
 import { MentorshipLogForm } from "@/components/mentorship/MentorshipLogForm";
+import { MentorPairManager } from "@/components/mentorship/MentorPairManager";
+import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -69,7 +71,12 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
         description="Manage and track mentorship pairs"
       />
 
+      {orgCtx.role === "active_member" && <MenteeStatusToggle orgId={orgId} />}
+
       {orgCtx.isAdmin && <MentorshipAdminPanel orgId={orgId} orgSlug={orgSlug} />}
+      {!orgCtx.isAdmin && orgCtx.role === "alumni" && (
+        <MentorPairManager orgId={orgId} orgSlug={orgSlug} />
+      )}
 
       {filteredPairs.length === 0 ? (
         <Card>
@@ -130,4 +137,3 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     </div>
   );
 }
-
