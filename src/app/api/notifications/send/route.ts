@@ -201,6 +201,14 @@ export async function POST(request: Request) {
       targetUserIds: targetUserIds || undefined,
     });
 
+    // In production require configured provider; in dev allow stub
+    if (!resend && process.env.NODE_ENV === "production") {
+      return NextResponse.json(
+        { error: "Notifications not configured: set RESEND_API_KEY and FROM_EMAIL" },
+        { status: 500 }
+      );
+    }
+
     let emailSent = 0;
     let smsSent = 0;
     const errors: string[] = [];
@@ -237,15 +245,21 @@ export async function POST(request: Request) {
         .eq("id", resolvedNotificationId);
     }
 
-    return NextResponse.json({
-      success: true,
-      sent: emailSent + smsSent,
-      emailSent,
-      smsSent,
-      total: targets.length,
-      skipped: stats.skippedMissingContact,
-      errors: errors.length > 0 ? errors : undefined,
-    });
+    const sent = emailSent + smsSent;
+    const success = errors.length === 0 && sent > 0;
+
+    return NextResponse.json(
+      {
+        success,
+        sent,
+        emailSent,
+        smsSent,
+        total: targets.length,
+        skipped: stats.skippedMissingContact,
+        errors: errors.length > 0 ? errors : undefined,
+      },
+      { status: success ? 200 : 500 }
+    );
   } catch (err) {
     console.error("Error sending notifications:", err);
     return NextResponse.json(
@@ -254,4 +268,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
