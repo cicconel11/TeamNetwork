@@ -130,10 +130,13 @@ function NavigationSettingsContent() {
       const hasRole = existing.includes(role);
       const nextRoles = hasRole ? existing.filter((r) => r !== role) : [...existing, role];
       const next: NavConfigEntry = { ...current, editRoles: Array.from(new Set([...nextRoles, "admin"])) };
-      if (next.editRoles.length === 0 || (next.editRoles.length === 1 && next.editRoles[0] === "admin")) {
+      const editCount = next.editRoles?.length ?? 0;
+      if (editCount === 0 || (editCount === 1 && next.editRoles?.[0] === "admin")) {
         delete next.editRoles;
       }
-      if (!next.label && !next.hidden && !next.hiddenForRoles?.length && !next.editRoles?.length) {
+      const hasHiddenRoles = !!next.hiddenForRoles?.length;
+      const hasEditRoles = !!next.editRoles?.length;
+      if (!next.label && !next.hidden && !hasHiddenRoles && !hasEditRoles) {
         return undefined;
       }
       return next;

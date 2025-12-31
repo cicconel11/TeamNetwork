@@ -131,7 +131,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       )}
 
       {/* Public Embed Viewer */}
-      {!isAdmin && !embedsError && embeds.length > 0 && (
+      {!canEdit && !embedsError && embeds.length > 0 && (
         <EmbedsViewer
           embeds={embeds}
           emptyTitle="No fundraising links"
@@ -252,7 +252,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             title={filters.view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
             description="Philanthropy and volunteer events will appear here"
             action={
-              isAdmin && (
+              canEdit && (
                 <Link href={`/${orgSlug}/philanthropy/new`}>
                   <Button>Create Philanthropy Event</Button>
                 </Link>
