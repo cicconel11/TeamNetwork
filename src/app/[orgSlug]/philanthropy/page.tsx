@@ -3,8 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { EmbedsManager, EmbedsViewer, type EmbedItem } from "@/components/shared";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { PhilanthropyEmbed } from "@/types/database";
+import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
 
 interface PhilanthropyPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -14,18 +17,11 @@ interface PhilanthropyPageProps {
 export default async function PhilanthropyPage({ params, searchParams }: PhilanthropyPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+  const orgCtx = await getOrgContext(orgSlug);
+  if (!orgCtx.organization) return null;
+  const org = orgCtx.organization;
+  const canEdit = canEditNavItem(org.nav_config as NavConfig, "/philanthropy", orgCtx.role, ["admin", "active_member"]);
   const supabase = await createClient();
-
-  // Fetch organization
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .single();
-
-  if (!org) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
 
   // Fetch philanthropy embeds (with graceful error handling for missing table)
   let embeds: PhilanthropyEmbed[] = [];
@@ -80,7 +76,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         title="Philanthropy"
         description="Community service and volunteer events"
         actions={
-          isAdmin && (
+          canEdit && (
             <Link href={`/${orgSlug}/philanthropy/new`}>
               <Button>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -124,7 +120,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       )}
 
       {/* Admin Embed Manager */}
-      {isAdmin && !embedsError && (
+      {canEdit && !embedsError && (
         <EmbedsManager
           orgId={org.id}
           embeds={embeds as EmbedItem[]}
@@ -188,26 +184,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
 
       {/* Filters */}
       <div className="flex gap-2 mb-6">
-        <Link
-          href={`/${orgSlug}/philanthropy`}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-            !filters.view
-              ? "bg-org-primary text-white"
-              : "bg-muted text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Upcoming
-        </Link>
-        <Link
-          href={`/${orgSlug}/philanthropy?view=past`}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-            filters.view === "past"
-              ? "bg-org-primary text-white"
-              : "bg-muted text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Past
-        </Link>
+        <PhilanthropyFilter orgSlug={orgSlug} currentView={filters.view} />
       </div>
 
       {/* Events List */}

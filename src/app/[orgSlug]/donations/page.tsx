@@ -2,8 +2,10 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
 import { EmbedsManager, EmbedsViewer, type EmbedItem } from "@/components/shared";
+import { getOrgContext } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { DonationEmbed } from "@/types/database";
 
 interface DonationsPageProps {
@@ -14,18 +16,12 @@ interface DonationsPageProps {
 export default async function DonationsPage({ params, searchParams }: DonationsPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+  const orgCtx = await getOrgContext(orgSlug);
+  if (!orgCtx.organization) return null;
+  const org = orgCtx.organization;
+
+  const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
   const supabase = await createClient();
-
-  // Fetch organization
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .single();
-
-  if (!org) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
 
   // Fetch donation embeds
   let donationEmbeds: DonationEmbed[] = [];
@@ -89,7 +85,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
         title="Donations"
         description={`${donationCount} donations totaling $${totalAmount.toLocaleString()}`}
         actions={
-          isAdmin && (
+          canEdit && (
             <Link href={`/${orgSlug}/donations/new`}>
               <Button>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -123,7 +119,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
       )}
 
       {/* Admin Embed Manager */}
-      {isAdmin && (
+      {canEdit && (
         <EmbedsManager
           orgId={org.id}
           embeds={donationEmbeds as EmbedItem[]}
@@ -278,4 +274,3 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
     </div>
   );
 }
-

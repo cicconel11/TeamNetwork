@@ -13,6 +13,7 @@ export type NavConfigEntry = {
   label?: string;
   hidden?: boolean;
   hiddenForRoles?: OrgRole[];
+  editRoles?: OrgRole[];
 };
 
 export type NavConfig = Record<string, NavConfigEntry>;
@@ -26,8 +27,8 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/competition", label: "Competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/events", label: "Events", icon: CalendarIcon, roles: ["admin", "active_member"] },
   { href: "/announcements", label: "Announcements", icon: MegaphoneIcon, roles: ["admin", "active_member", "alumni"] },
-  { href: "/philanthropy", label: "Philanthropy", icon: HeartIcon, roles: ["admin", "active_member"] },
-  { href: "/donations", label: "Donations", icon: DollarIcon, roles: ["admin"] },
+  { href: "/philanthropy", label: "Philanthropy", icon: HeartIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/donations", label: "Donations", icon: DollarIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/records", label: "Records", icon: TrophyIcon, roles: ["admin", "active_member"] },
   { href: "/settings/invites", label: "Invite", icon: InviteIcon, roles: ["admin"] },
   { href: "/settings/navigation", label: "Navigation", icon: SettingsIcon, roles: ["admin"], configurable: false },

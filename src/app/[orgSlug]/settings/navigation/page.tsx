@@ -124,6 +124,22 @@ function NavigationSettingsContent() {
     });
   };
 
+  const toggleEditRole = (href: string, role: OrgRole) => {
+    updateEntry(href, (current = {}) => {
+      const existing = Array.isArray(current.editRoles) ? [...current.editRoles] : [];
+      const hasRole = existing.includes(role);
+      const nextRoles = hasRole ? existing.filter((r) => r !== role) : [...existing, role];
+      const next: NavConfigEntry = { ...current, editRoles: Array.from(new Set([...nextRoles, "admin"])) };
+      if (next.editRoles.length === 0 || (next.editRoles.length === 1 && next.editRoles[0] === "admin")) {
+        delete next.editRoles;
+      }
+      if (!next.label && !next.hidden && !next.hiddenForRoles?.length && !next.editRoles?.length) {
+        return undefined;
+      }
+      return next;
+    });
+  };
+
   const resetTab = (href: string) => {
     setNavConfig((prev) => {
       const next = { ...prev };
@@ -152,6 +168,12 @@ function NavigationSettingsContent() {
         const roles = entry.hiddenForRoles.filter((role): role is OrgRole => ALLOWED_ROLES.includes(role as OrgRole));
         if (roles.length) {
           clean.hiddenForRoles = Array.from(new Set(roles));
+        }
+      }
+      if (Array.isArray(entry.editRoles) && entry.editRoles.length > 0) {
+        const roles = entry.editRoles.filter((role): role is OrgRole => ALLOWED_ROLES.includes(role as OrgRole));
+        if (roles.length) {
+          clean.editRoles = Array.from(new Set([...roles, "admin"] as OrgRole[]));
         }
       }
 
@@ -234,6 +256,7 @@ function NavigationSettingsContent() {
           const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
           const isHiddenEverywhere = entry?.hidden === true;
           const hasChanges = Boolean(entry && Object.keys(entry).length);
+          const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
 
           return (
             <Card key={item.href} className={isHiddenEverywhere ? "border-red-200 dark:border-red-900/40" : ""}>
@@ -295,6 +318,33 @@ function NavigationSettingsContent() {
                       onChange={() => toggleHiddenEverywhere(item.href)}
                     />
                     Disable tab for everyone (including admins)
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Who can edit this page?</p>
+                  <p className="text-xs text-muted-foreground">Admins are always allowed.</p>
+                  <label className="flex items-center gap-3 text-sm text-foreground">
+                    <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
+                    Admins (always on)
+                  </label>
+                  <label className="flex items-center gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={editRoles.includes("active_member")}
+                      onChange={() => toggleEditRole(item.href, "active_member")}
+                    />
+                    Active members
+                  </label>
+                  <label className="flex items-center gap-3 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={editRoles.includes("alumni")}
+                      onChange={() => toggleEditRole(item.href, "alumni")}
+                    />
+                    Alumni
                   </label>
                 </div>
               </div>

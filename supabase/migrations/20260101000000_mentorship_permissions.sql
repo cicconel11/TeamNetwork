@@ -55,6 +55,6 @@ create policy user_org_roles_self_update on public.user_organization_roles
   using (user_id = auth.uid())
   with check (
     user_id = auth.uid()
-    and role = any (array['active_member','alumni'])
-    and status = any (array['active','revoked','pending'])
+    and role = any (ARRAY['active_member','alumni']::public.user_role[])
+    and status = any (ARRAY['active','revoked','pending']::public.membership_status[])
   );

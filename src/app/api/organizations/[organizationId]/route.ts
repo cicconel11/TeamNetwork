@@ -25,8 +25,8 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
   for (const [href, value] of Object.entries(payload as Record<string, unknown>)) {
     if (!href || !ALLOWED_NAV_PATHS.has(href) || typeof value !== "object" || value === null || Array.isArray(value)) continue;
 
-    const entry = value as { label?: unknown; hidden?: unknown; hiddenForRoles?: unknown };
-    const clean: { label?: string; hidden?: boolean; hiddenForRoles?: OrgRole[] } = {};
+    const entry = value as { label?: unknown; hidden?: unknown; hiddenForRoles?: unknown; editRoles?: unknown };
+    const clean: { label?: string; hidden?: boolean; hiddenForRoles?: OrgRole[]; editRoles?: OrgRole[] } = {};
 
     if (typeof entry.label === "string" && entry.label.trim()) {
       clean.label = entry.label.trim();
@@ -38,6 +38,12 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
       const roles = entry.hiddenForRoles.filter((role): role is OrgRole => ALLOWED_ROLES.includes(role as OrgRole));
       if (roles.length) {
         clean.hiddenForRoles = Array.from(new Set(roles));
+      }
+    }
+    if (Array.isArray(entry.editRoles)) {
+      const roles = entry.editRoles.filter((role): role is OrgRole => ALLOWED_ROLES.includes(role as OrgRole));
+      if (roles.length) {
+        clean.editRoles = Array.from(new Set([...roles, "admin"] as OrgRole[]));
       }
     }
 
