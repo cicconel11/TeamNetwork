@@ -21,6 +21,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
   const org = orgCtx.organization;
 
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
+  const isAdmin = orgCtx.role === "admin";
   const supabase = await createClient();
 
   // Fetch donation embeds
@@ -129,8 +130,8 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
         />
       )}
 
-      {/* Public Embed Viewer (non-admin) */}
-      {!isAdmin && donationEmbeds.length > 0 && (
+      {/* Public Embed Viewer (non-editors) */}
+      {!canEdit && donationEmbeds.length > 0 && (
         <EmbedsViewer
           embeds={donationEmbeds}
           emptyTitle="No donation links"
@@ -225,7 +226,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Campaign</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
                     <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
-                    {isAdmin && <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>}
+                    {canEdit && <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -244,7 +245,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
                       <td className="p-4 text-right font-mono font-medium text-foreground">
                         ${Number(donation.amount).toLocaleString()}
                       </td>
-                      {isAdmin && (
+                      {canEdit && (
                         <td className="p-4 text-right">
                           <Link href={`/${orgSlug}/donations/${donation.id}/edit`}>
                             <Button variant="ghost" size="sm">Edit</Button>
@@ -261,7 +262,7 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
               title="No donations yet"
               description="Donations will appear here once recorded"
               action={
-                isAdmin && (
+                canEdit && (
                   <Link href={`/${orgSlug}/donations/new`}>
                     <Button>Record First Donation</Button>
                   </Link>

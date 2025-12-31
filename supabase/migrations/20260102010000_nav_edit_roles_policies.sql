@@ -9,15 +9,16 @@ as $$
     or exists (
       select 1
       from public.organizations o
-      where o.id = org_id
       cross join lateral (
         select coalesce(o.nav_config -> path -> 'editRoles', '["admin"]'::jsonb) as roles
       ) cfg
       cross join lateral jsonb_array_elements_text(cfg.roles) as r(role)
-      where
-        (r.role = 'admin' and public.has_active_role(org_id, array['admin']))
-        or (r.role = 'active_member' and public.has_active_role(org_id, array['active_member']))
-        or (r.role = 'alumni' and public.has_active_role(org_id, array['alumni']))
+      where o.id = org_id
+        and (
+          (r.role = 'admin' and public.has_active_role(org_id, array['admin']))
+          or (r.role = 'active_member' and public.has_active_role(org_id, array['active_member']))
+          or (r.role = 'alumni' and public.has_active_role(org_id, array['alumni']))
+        )
     );
 $$;
 
