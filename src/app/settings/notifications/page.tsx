@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import type { NotificationPreference } from "@/types/database";
 import { Card, Button, Badge, Input } from "@/components/ui";
 
 type OrgPrefForm = {
@@ -53,8 +54,8 @@ export default function NotificationSettingsPage() {
           .eq("user_id", user.id),
       ]);
 
-      const prefByOrg = new Map<string, (typeof prefs)[number]>();
-      (prefs || []).forEach((p) => {
+      const prefByOrg = new Map<string, NotificationPreference>();
+      ((prefs || []) as NotificationPreference[]).forEach((p) => {
         prefByOrg.set(p.organization_id, p);
       });
 
