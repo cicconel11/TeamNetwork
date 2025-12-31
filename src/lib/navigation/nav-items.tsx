@@ -30,6 +30,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/philanthropy", label: "Philanthropy", icon: HeartIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/donations", label: "Donations", icon: DollarIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/records", label: "Records", icon: TrophyIcon, roles: ["admin", "active_member"] },
+  { href: "/settings", label: "Settings", icon: SettingsIcon, roles: ["admin", "active_member", "alumni"], configurable: false },
   { href: "/settings/invites", label: "Invite", icon: InviteIcon, roles: ["admin"] },
   { href: "/settings/navigation", label: "Navigation", icon: SettingsIcon, roles: ["admin"], configurable: false },
 ];
