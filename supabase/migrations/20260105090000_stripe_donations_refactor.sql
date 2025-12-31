@@ -18,9 +18,58 @@ create table if not exists public.organization_donations (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+-- Ensure columns exist when the table predates this migration
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'currency'
+  ) then
+    alter table public.organization_donations add column currency text not null default 'usd';
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'stripe_checkout_session_id'
+  ) then
+    alter table public.organization_donations add column stripe_checkout_session_id text;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'event_id'
+  ) then
+    alter table public.organization_donations add column event_id uuid references public.events(id);
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'purpose'
+  ) then
+    alter table public.organization_donations add column purpose text;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'metadata'
+  ) then
+    alter table public.organization_donations add column metadata jsonb;
+  end if;
+
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'organization_donations' and column_name = 'updated_at'
+  ) then
+    alter table public.organization_donations add column updated_at timestamptz not null default timezone('utc', now());
+  end if;
+end;
+$$;
+
 create index if not exists organization_donations_org_idx on public.organization_donations(organization_id);
 create index if not exists organization_donations_status_idx on public.organization_donations(organization_id, status);
 create index if not exists organization_donations_pi_idx on public.organization_donations(stripe_payment_intent_id);
+create unique index if not exists organization_donations_pi_unique on public.organization_donations(stripe_payment_intent_id);
+create unique index if not exists organization_donations_checkout_session_unique on public.organization_donations(stripe_checkout_session_id);
 
 drop trigger if exists organization_donations_updated_at on public.organization_donations;
 create trigger organization_donations_updated_at

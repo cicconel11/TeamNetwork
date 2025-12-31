@@ -166,7 +166,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                         })}
                       </td>
                       <td className="p-4 text-right">
-                        <Badge variant={donation.status === "succeeded" ? "success" : donation.status === "failed" ? "destructive" : "secondary"}>
+                        <Badge variant={donation.status === "succeeded" ? "success" : donation.status === "failed" ? "error" : "muted"}>
                           {donation.status}
                         </Badge>
                       </td>

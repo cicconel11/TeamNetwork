@@ -117,7 +117,8 @@ export async function POST(req: Request) {
     occurredAt: string | null,
     countDelta = 1
   ) => {
-    await supabase.rpc("increment_donation_stats", {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).rpc("increment_donation_stats", {
       p_org_id: organizationId,
       p_amount_delta: amountCents,
       p_count_delta: countDelta,
