@@ -2,11 +2,11 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { EmbedsManager, EmbedsViewer, type EmbedItem } from "@/components/shared";
+import { DonationForm, ConnectSetup } from "@/components/donations";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { PhilanthropyEmbed } from "@/types/database";
+import type { OrganizationDonationStat } from "@/types/database";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
 
 interface PhilanthropyPageProps {
@@ -23,58 +23,47 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/philanthropy", orgCtx.role, ["admin", "active_member"]);
   const supabase = await createClient();
 
-  // Fetch philanthropy embeds (with graceful error handling for missing table)
-  let embeds: PhilanthropyEmbed[] = [];
-  let embedsError: string | null = null;
-  
-  const { data: embedsData, error: embedsFetchError } = await supabase
-    .from("org_philanthropy_embeds")
-    .select("*")
-    .eq("organization_id", org.id)
-    .order("display_order", { ascending: true });
-
-  if (embedsFetchError) {
-    // Check if this is a "table not found" error
-    if (embedsFetchError.message.includes("schema cache") || embedsFetchError.code === "42P01") {
-      embedsError = "Philanthropy embeds table not found. Please run database migrations.";
-    } else {
-      embedsError = embedsFetchError.message;
-    }
-  } else {
-    embeds = (embedsData || []) as PhilanthropyEmbed[];
-  }
-
-  // Fetch philanthropy events (events where is_philanthropy = true or event_type = philanthropy)
-  let query = supabase
+  let eventsQuery = supabase
     .from("events")
     .select("*")
     .eq("organization_id", org.id)
     .or("is_philanthropy.eq.true,event_type.eq.philanthropy");
 
   if (filters.view === "past") {
-    query = query.lt("start_date", new Date().toISOString()).order("start_date", { ascending: false });
+    eventsQuery = eventsQuery.lt("start_date", new Date().toISOString()).order("start_date", { ascending: false });
   } else {
-    query = query.gte("start_date", new Date().toISOString()).order("start_date");
+    eventsQuery = eventsQuery.gte("start_date", new Date().toISOString()).order("start_date");
   }
 
-  const { data: events } = await query;
+  const [{ data: events }, { data: donationStats }, { data: allPhilanthropyEvents }] = await Promise.all([
+    eventsQuery,
+    supabase
+      .from("organization_donation_stats")
+      .select("*")
+      .eq("organization_id", org.id)
+      .maybeSingle(),
+    supabase
+      .from("events")
+      .select("*")
+      .eq("organization_id", org.id)
+      .or("is_philanthropy.eq.true,event_type.eq.philanthropy"),
+  ]);
 
-  // Calculate stats
-  const { data: allPhilanthropyEvents } = await supabase
-    .from("events")
-    .select("*")
-    .eq("organization_id", org.id)
-    .or("is_philanthropy.eq.true,event_type.eq.philanthropy");
+  const donationStat = (donationStats || null) as OrganizationDonationStat | null;
+  const totalRaised = (donationStat?.total_amount_cents ?? 0) / 100;
+  const donationCount = donationStat?.donation_count ?? 0;
 
   const totalEvents = allPhilanthropyEvents?.length || 0;
-  const upcomingCount = allPhilanthropyEvents?.filter(e => new Date(e.start_date) >= new Date()).length || 0;
+  const upcomingCount = allPhilanthropyEvents?.filter((e) => new Date(e.start_date) >= new Date()).length || 0;
   const pastCount = totalEvents - upcomingCount;
+  const eventsForForm = (allPhilanthropyEvents || []).map((evt) => ({ id: evt.id, title: evt.title }));
+  const isConnected = Boolean(org.stripe_connect_account_id);
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Philanthropy"
-        description="Community service and volunteer events"
+        description="Community service and fundraising for your organization."
         actions={
           canEdit && (
             <Link href={`/${orgSlug}/philanthropy/new`}>
@@ -89,57 +78,35 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         }
       />
 
-      {/* Donation Prompt Banner */}
-      <Card className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
-        <div className="flex items-start gap-3">
-          <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            If you donated externally, please remember to record your exact donation in the app using the button in the top-right corner.
-          </p>
+      {canEdit && !isConnected && (
+        <div className="mb-6">
+          <ConnectSetup organizationId={org.id} isConnected={isConnected} />
         </div>
-      </Card>
+      )}
 
-      {/* Dev mode error banner for missing table */}
-      {embedsError && process.env.NODE_ENV === "development" && (
-        <Card className="p-4 mb-6 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
-          <div className="flex items-start gap-3">
-            <svg className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-            </svg>
-            <div>
-              <p className="font-medium text-red-800 dark:text-red-200">Database Migration Required</p>
-              <p className="text-sm text-red-700 dark:text-red-300 mt-1">{embedsError}</p>
-              <p className="text-xs text-red-600 dark:text-red-400 mt-2">
-                Run: <code className="bg-red-100 dark:bg-red-800 px-1 py-0.5 rounded">npx supabase db push</code> or apply the migration manually.
-              </p>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-2">
+          <DonationForm
+            organizationId={org.id}
+            organizationSlug={org.slug}
+            philanthropyEventsForForm={eventsForForm}
+            isStripeConnected={isConnected}
+          />
+        </div>
+        <Card className="p-6 space-y-3">
+          <div>
+            <p className="text-sm text-muted-foreground">Stripe Donations</p>
+            <p className="text-3xl font-bold text-foreground font-mono">
+              ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+            <p className="text-sm text-muted-foreground">{donationCount} contributions recorded</p>
+          </div>
+          <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${isConnected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+            {isConnected ? "Connected" : "Connect Stripe to accept donations"}
           </div>
         </Card>
-      )}
+      </div>
 
-      {/* Admin Embed Manager */}
-      {canEdit && !embedsError && (
-        <EmbedsManager
-          orgId={org.id}
-          embeds={embeds as EmbedItem[]}
-          tableName="org_philanthropy_embeds"
-          title="Fundraising Embeds"
-          description="Add external fundraising pages or embeddable content"
-        />
-      )}
-
-      {/* Public Embed Viewer */}
-      {!canEdit && !embedsError && embeds.length > 0 && (
-        <EmbedsViewer
-          embeds={embeds}
-          emptyTitle="No fundraising links"
-          emptyDescription="There are no external fundraising pages linked yet."
-        />
-      )}
-
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <Card className="p-5">
           <div className="flex items-center gap-3">
@@ -182,19 +149,16 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         </Card>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-2 mb-6">
         <PhilanthropyFilter orgSlug={orgSlug} currentView={filters.view} />
       </div>
 
-      {/* Events List */}
       {events && events.length > 0 ? (
         <div className="space-y-4 stagger-children">
           {events.map((event) => (
             <Link key={event.id} href={`/${orgSlug}/events/${event.id}`}>
               <Card interactive className="p-5">
                 <div className="flex items-start gap-4">
-                  {/* Date Block */}
                   <div className="h-16 w-16 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex flex-col items-center justify-center text-center flex-shrink-0">
                     <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300 uppercase">
                       {new Date(event.start_date).toLocaleDateString("en-US", { month: "short" })}
@@ -204,7 +168,6 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
                     </span>
                   </div>
 
-                  {/* Event Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-foreground">{event.title}</h3>
@@ -220,9 +183,9 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        {new Date(event.start_date).toLocaleTimeString("en-US", { 
-                          hour: "numeric", 
-                          minute: "2-digit" 
+                        {new Date(event.start_date).toLocaleTimeString("en-US", {
+                          hour: "numeric",
+                          minute: "2-digit",
                         })}
                       </div>
                       {event.location && (
@@ -242,24 +205,17 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
           ))}
         </div>
       ) : (
-        <Card>
-          <EmptyState
-            icon={
-              <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-              </svg>
-            }
-            title={filters.view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
-            description="Philanthropy and volunteer events will appear here"
-            action={
-              canEdit && (
-                <Link href={`/${orgSlug}/philanthropy/new`}>
-                  <Button>Create Philanthropy Event</Button>
-                </Link>
-              )
-            }
-          />
-        </Card>
+        <EmptyState
+          title={filters.view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
+          description={filters.view === "past" ? "Completed events will appear here." : "Add a new philanthropy event to get started."}
+          action={
+            canEdit ? (
+              <Link href={`/${orgSlug}/philanthropy/new`}>
+                <Button>Add Event</Button>
+              </Link>
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

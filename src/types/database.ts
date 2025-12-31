@@ -855,38 +855,95 @@ export type Database = {
         Row: {
           amount_cents: number
           created_at: string
+          currency: string
           donor_email: string | null
-          donor_name: string
+          donor_name: string | null
+          event_id: string | null
           id: string
+          metadata: Json | null
           organization_id: string
+          purpose: string | null
           status: string
+          stripe_checkout_session_id: string | null
           stripe_payment_intent_id: string | null
+          updated_at: string
         }
         Insert: {
           amount_cents: number
           created_at?: string
+          currency?: string
           donor_email?: string | null
-          donor_name: string
+          donor_name?: string | null
+          event_id?: string | null
           id?: string
+          metadata?: Json | null
           organization_id: string
+          purpose?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          updated_at?: string
         }
         Update: {
           amount_cents?: number
           created_at?: string
+          currency?: string
           donor_email?: string | null
-          donor_name?: string
+          donor_name?: string | null
+          event_id?: string | null
           id?: string
+          metadata?: Json | null
           organization_id?: string
+          purpose?: string | null
           status?: string
+          stripe_checkout_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "organization_donations_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_donations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_donation_stats: {
+        Row: {
+          donation_count: number
+          last_donation_at: string | null
+          organization_id: string
+          total_amount_cents: number
+          updated_at: string
+        }
+        Insert: {
+          donation_count?: number
+          last_donation_at?: string | null
+          organization_id: string
+          total_amount_cents?: number
+          updated_at?: string
+        }
+        Update: {
+          donation_count?: number
+          last_donation_at?: string | null
+          organization_id?: string
+          total_amount_cents?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_donation_stats_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
@@ -1491,6 +1548,7 @@ export type Notification = Tables<'notifications'>;
 export type NotificationPreference = Tables<'notification_preferences'>;
 export type Organization = Tables<'organizations'>;
 export type OrganizationDonation = Tables<'organization_donations'>;
+export type OrganizationDonationStat = Tables<'organization_donation_stats'>;
 export type OrganizationInvite = Tables<'organization_invites'>;
 export type OrganizationSubscription = Tables<'organization_subscriptions'>;
 export type PhilanthropyEvent = Tables<'philanthropy_events'>;

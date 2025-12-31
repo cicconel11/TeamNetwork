@@ -1,6 +1,8 @@
 # Stripe Connect Donations - Testing Guide
 
 This document explains how to test the Stripe Connect donations flow locally using the Stripe CLI.
+Donations are created on each organization’s connected Stripe account (via Checkout or Payment Intents); the app never touches funds.
+Webhook events write into `organization_donations` and roll up totals in `organization_donation_stats` so dashboards stay in sync automatically.
 
 ## Prerequisites
 
@@ -50,10 +52,10 @@ npm run dev
 
 ### 3. Make a test donation
 
-1. On the Philanthropy page, use the donation form
+1. On the Philanthropy or Donations page, use the donation form
 2. Enter an amount (e.g., $25)
 3. Optionally enter name and email
-4. Click "Donate"
+4. Click "Donate" (this calls `/api/stripe/create-donation` and opens Stripe Checkout)
 5. In the Stripe Checkout page, use test card: `4242 4242 4242 4242`
    - Expiry: Any future date (e.g., 12/34)
    - CVC: Any 3 digits (e.g., 123)
@@ -118,4 +120,3 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 # No additional variables needed for Connect donations
 # The same webhook endpoint handles both subscription and donation events
 ```
-

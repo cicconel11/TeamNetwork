@@ -1,21 +1,19 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Button, EmptyState } from "@/components/ui";
+import { Card, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { EmbedsManager, EmbedsViewer, type EmbedItem } from "@/components/shared";
+import { DonationForm, ConnectSetup } from "@/components/donations";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { DonationEmbed } from "@/types/database";
+import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
 
 interface DonationsPageProps {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ campaign?: string }>;
 }
 
-export default async function DonationsPage({ params, searchParams }: DonationsPageProps) {
+export default async function DonationsPage({ params }: DonationsPageProps) {
   const { orgSlug } = await params;
-  const filters = await searchParams;
   const orgCtx = await getOrgContext(orgSlug);
   if (!orgCtx.organization) return null;
   const org = orgCtx.organization;
@@ -23,234 +21,155 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
   const supabase = await createClient();
 
-  // Fetch donation embeds
-  let donationEmbeds: DonationEmbed[] = [];
-  let embedsError: string | null = null;
-
-  try {
-    const { data: embedsData, error: fetchError } = await supabase
-      .from("org_donation_embeds")
+  const [{ data: donationStats }, { data: donations }, { data: philanthropyEvents }] = await Promise.all([
+    supabase
+      .from("organization_donation_stats")
       .select("*")
       .eq("organization_id", org.id)
-      .order("display_order", { ascending: true });
+      .maybeSingle(),
+    supabase
+      .from("organization_donations")
+      .select("*")
+      .eq("organization_id", org.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("events")
+      .select("id, title")
+      .eq("organization_id", org.id)
+      .or("is_philanthropy.eq.true,event_type.eq.philanthropy")
+      .order("start_date"),
+  ]);
 
-    if (fetchError) {
-      throw fetchError;
-    }
-    donationEmbeds = (embedsData || []) as DonationEmbed[];
-  } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    console.error("Error fetching donation embeds:", message);
-    embedsError = `Error loading embeds: ${message}. Ensure migration is applied.`;
-  }
+  const stats = (donationStats || null) as OrganizationDonationStat | null;
+  const donationRows = (donations || []) as OrganizationDonation[];
+  const eventsForForm = (philanthropyEvents || []) as { id: string; title: string }[];
 
-  // Build query
-  let query = supabase
-    .from("donations")
-    .select("*")
-    .eq("organization_id", org.id)
-    .order("date", { ascending: false });
-
-  if (filters.campaign) {
-    query = query.eq("campaign", filters.campaign);
-  }
-
-  const { data: donations } = await query;
-
-  // Get all donations for stats
-  const { data: allDonations } = await supabase
-    .from("donations")
-    .select("amount, campaign")
-    .eq("organization_id", org.id);
-
-  // Calculate stats
-  const totalAmount = allDonations?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
-  const donationCount = allDonations?.length || 0;
+  const isConnected = Boolean(org.stripe_connect_account_id);
+  const totalAmount = (stats?.total_amount_cents ?? 0) / 100;
+  const donationCount = stats?.donation_count ?? donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
 
-  // Get unique campaigns for filter
-  // Campaigns list available for future filtering features
-// const campaigns = [...new Set(allDonations?.map((d) => d.campaign).filter(Boolean))];
-
-  // Group donations by campaign for breakdown
-  const campaignTotals = allDonations?.reduce((acc, d) => {
-    const campaign = d.campaign || "General";
-    acc[campaign] = (acc[campaign] || 0) + Number(d.amount);
+  const purposeTotals = donationRows.reduce<Record<string, number>>((acc, donation) => {
+    const label = donation.purpose || "General support";
+    acc[label] = (acc[label] || 0) + (donation.amount_cents || 0);
     return acc;
-  }, {} as Record<string, number>) || {};
+  }, {});
 
   return (
     <div className="animate-fade-in">
       <PageHeader
         title="Donations"
-        description={`${donationCount} donations totaling $${totalAmount.toLocaleString()}`}
-        actions={
-          canEdit && (
-            <Link href={`/${orgSlug}/donations/new`}>
-              <Button>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Add Donation
-              </Button>
-            </Link>
-          )
-        }
+        description={`${donationCount} contributions totaling $${totalAmount.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`}
       />
 
-      {/* Donation Prompt Banner */}
-      <Card className="p-4 mb-6 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
-        <div className="flex items-start gap-3">
-          <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <p className="text-sm text-amber-800 dark:text-amber-200">
-            If you donated externally, please remember to record your exact donation in the app using the button in the top-right corner.
-          </p>
-        </div>
-      </Card>
-
-      {/* Donation Embeds Error Banner (dev only) */}
-      {embedsError && process.env.NODE_ENV === "development" && (
-        <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          <p className="font-semibold">Development Error:</p>
-          <p>{embedsError}</p>
+      {canEdit && !isConnected && (
+        <div className="mb-6">
+          <ConnectSetup organizationId={org.id} isConnected={isConnected} />
         </div>
       )}
 
-      {/* Admin Embed Manager */}
-      {canEdit && (
-        <EmbedsManager
-          orgId={org.id}
-          embeds={donationEmbeds as EmbedItem[]}
-          tableName="org_donation_embeds"
-          title="Donation Embeds"
-          description="Add external donation pages or embeddable fundraising content"
-        />
-      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div className="lg:col-span-2">
+          <DonationForm
+            organizationId={org.id}
+            organizationSlug={org.slug}
+            philanthropyEventsForForm={eventsForForm}
+            isStripeConnected={isConnected}
+          />
+        </div>
 
-      {/* Public Embed Viewer (non-editors) */}
-      {!canEdit && donationEmbeds.length > 0 && (
-        <EmbedsViewer
-          embeds={donationEmbeds}
-          emptyTitle="No donation links"
-          emptyDescription="There are no external donation pages linked yet."
-        />
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-              <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground font-mono">${totalAmount.toLocaleString()}</p>
-              <p className="text-sm text-muted-foreground">Total Raised</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-              <svg className="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground font-mono">{donationCount}</p>
-              <p className="text-sm text-muted-foreground">Total Donations</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-              <svg className="h-5 w-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-              </svg>
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-foreground font-mono">${avgDonation.toFixed(0)}</p>
-              <p className="text-sm text-muted-foreground">Average Donation</p>
-            </div>
-          </div>
-        </Card>
+        <div className="space-y-3">
+          <Card className="p-5">
+            <p className="text-sm text-muted-foreground mb-1">Total Raised</p>
+            <p className="text-3xl font-bold text-foreground font-mono">
+              ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-sm text-muted-foreground mb-1">Contributions</p>
+            <p className="text-3xl font-bold text-foreground font-mono">{donationCount}</p>
+          </Card>
+          <Card className="p-5">
+            <p className="text-sm text-muted-foreground mb-1">Average Gift</p>
+            <p className="text-3xl font-bold text-foreground font-mono">
+              ${avgDonation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Campaign Breakdown */}
         <Card className="p-6 lg:col-span-1">
-          <h3 className="font-semibold text-foreground mb-4">By Campaign</h3>
+          <h3 className="font-semibold text-foreground mb-4">By Purpose</h3>
           <div className="space-y-3">
-            {Object.entries(campaignTotals)
-              .sort(([, a], [, b]) => b - a)
-              .map(([campaign, amount]) => (
-                <Link
-                  key={campaign}
-                  href={`/${orgSlug}/donations?campaign=${encodeURIComponent(campaign === "General" ? "" : campaign)}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
-                >
-                  <span className="text-foreground">{campaign}</span>
-                  <span className="font-mono font-medium text-foreground">
-                    ${amount.toLocaleString()}
-                  </span>
-                </Link>
-              ))}
+            {Object.entries(purposeTotals).length > 0 ? (
+              Object.entries(purposeTotals)
+                .sort(([, a], [, b]) => b - a)
+                .map(([purpose, cents]) => (
+                  <div key={purpose} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
+                    <span className="text-foreground">{purpose}</span>
+                    <span className="font-mono font-medium text-foreground">
+                      ${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Donations will be grouped here once received.</p>
+            )}
           </div>
         </Card>
 
-        {/* Donations List */}
         <Card className="p-0 lg:col-span-2 overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">
-              {filters.campaign ? `${filters.campaign} Donations` : "All Donations"}
-            </h3>
-            {filters.campaign && (
-              <Link href={`/${orgSlug}/donations`} className="text-sm text-muted-foreground hover:text-foreground">
-                View all →
-              </Link>
+            <h3 className="font-semibold text-foreground">Recent Donations</h3>
+            {canEdit && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                {isConnected ? "Funds settle directly via Stripe Connect" : "Stripe not connected yet"}
+              </div>
             )}
           </div>
-          
-          {donations && donations.length > 0 ? (
+
+          {donationRows.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Donor</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Campaign</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Purpose</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
                     <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
-                    {canEdit && <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>}
+                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {donations.map((donation) => (
+                  {donationRows.map((donation) => (
                     <tr key={donation.id} className="hover:bg-muted/50 transition-colors">
                       <td className="p-4">
-                        <p className="font-medium text-foreground">{donation.donor_name}</p>
+                        <p className="font-medium text-foreground">{donation.donor_name || "Anonymous"}</p>
                         {donation.donor_email && (
                           <p className="text-sm text-muted-foreground">{donation.donor_email}</p>
                         )}
                       </td>
-                      <td className="p-4 text-muted-foreground">{donation.campaign || "General"}</td>
+                      <td className="p-4 text-muted-foreground">{donation.purpose || "General support"}</td>
                       <td className="p-4 text-muted-foreground">
-                        {new Date(donation.date).toLocaleDateString()}
+                        {donation.created_at
+                          ? new Date(donation.created_at).toLocaleDateString()
+                          : "—"}
                       </td>
                       <td className="p-4 text-right font-mono font-medium text-foreground">
-                        ${Number(donation.amount).toLocaleString()}
+                        ${(donation.amount_cents / 100).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                       </td>
-                      {canEdit && (
-                        <td className="p-4 text-right">
-                          <Link href={`/${orgSlug}/donations/${donation.id}/edit`}>
-                            <Button variant="ghost" size="sm">Edit</Button>
-                          </Link>
-                        </td>
-                      )}
+                      <td className="p-4 text-right">
+                        <Badge variant={donation.status === "succeeded" ? "success" : donation.status === "failed" ? "destructive" : "secondary"}>
+                          {donation.status}
+                        </Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -259,13 +178,11 @@ export default async function DonationsPage({ params, searchParams }: DonationsP
           ) : (
             <EmptyState
               title="No donations yet"
-              description="Donations will appear here once recorded"
+              description="Donations will appear after Stripe completes a payment."
               action={
-                canEdit && (
-                  <Link href={`/${orgSlug}/donations/new`}>
-                    <Button>Record First Donation</Button>
-                  </Link>
-                )
+                <Link href={`/${orgSlug}/philanthropy`} className="text-sm text-muted-foreground hover:text-foreground">
+                  View philanthropy events →
+                </Link>
               }
             />
           )}

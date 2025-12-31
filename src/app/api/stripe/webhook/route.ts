@@ -69,6 +69,62 @@ export async function POST(req: Request) {
     data: Partial<Pick<OrgSubUpdate, "stripe_customer_id" | "status" | "current_period_end">>
   ) => applyUpdate({ stripe_subscription_id: subscriptionId }, data);
 
+  type DonationInsert = Database["public"]["Tables"]["organization_donations"]["Insert"];
+
+  const upsertDonationRecord = async (params: {
+    organizationId: string;
+    paymentIntentId?: string | null;
+    checkoutSessionId?: string | null;
+    amountCents: number;
+    currency?: string | null;
+    donorName?: string | null;
+    donorEmail?: string | null;
+    eventId?: string | null;
+    purpose?: string | null;
+    metadata?: Stripe.Metadata | null;
+    status: string;
+  }) => {
+    const payload: DonationInsert = {
+      organization_id: params.organizationId,
+      stripe_payment_intent_id: params.paymentIntentId ?? null,
+      stripe_checkout_session_id: params.checkoutSessionId ?? null,
+      amount_cents: params.amountCents,
+      currency: (params.currency ?? "usd").toLowerCase(),
+      donor_name: params.donorName ?? null,
+      donor_email: params.donorEmail ?? null,
+      event_id: params.eventId ?? null,
+      purpose: params.purpose ?? null,
+      metadata: params.metadata ?? null,
+      status: params.status,
+    };
+
+    const conflictTarget = payload.stripe_payment_intent_id
+      ? "stripe_payment_intent_id"
+      : payload.stripe_checkout_session_id
+        ? "stripe_checkout_session_id"
+        : undefined;
+
+    const query = conflictTarget
+      ? supabase.from("organization_donations").upsert(payload, { onConflict: conflictTarget })
+      : supabase.from("organization_donations").insert(payload);
+
+    await query;
+  };
+
+  const incrementDonationStats = async (
+    organizationId: string,
+    amountCents: number,
+    occurredAt: string | null,
+    countDelta = 1
+  ) => {
+    await supabase.rpc("increment_donation_stats", {
+      p_org_id: organizationId,
+      p_amount_delta: amountCents,
+      p_count_delta: countDelta,
+      p_last: occurredAt ?? new Date().toISOString(),
+    });
+  };
+
   type SubscriptionWithPeriod = Stripe.Subscription & { current_period_end?: number | null };
   type InvoiceWithSub = Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
@@ -87,32 +143,52 @@ export async function POST(req: Request) {
       const customerId =
         typeof session.customer === "string" ? session.customer : session.customer?.id || null;
 
-      if (!organizationId) {
-        break;
-      }
+      if (session.mode === "subscription" || subscriptionId) {
+        if (!organizationId) break;
 
-      let status = session.status || "completed";
-      let currentPeriodEnd: string | null = null;
+        let status = session.status || "completed";
+        let currentPeriodEnd: string | null = null;
 
-      if (subscriptionId) {
-        const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
-        if ("current_period_end" in subscription) {
-          status = subscription.status;
-          const periodEnd = Number(subscription.current_period_end);
-          currentPeriodEnd = periodEnd
-            ? new Date(periodEnd * 1000).toISOString()
-            : null;
+        if (subscriptionId) {
+          const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
+          if ("current_period_end" in subscription) {
+            status = subscription.status;
+            const periodEnd = Number(subscription.current_period_end);
+            currentPeriodEnd = periodEnd
+              ? new Date(periodEnd * 1000).toISOString()
+              : null;
+          }
         }
-      }
 
-      console.log("[stripe-webhook] Updating subscription for org:", organizationId, { subscriptionId, customerId, status, currentPeriodEnd });
-      await updateByOrgId(organizationId, {
-        stripe_subscription_id: subscriptionId,
-        stripe_customer_id: customerId,
-        status,
-        current_period_end: currentPeriodEnd,
-      });
-      console.log("[stripe-webhook] Subscription updated successfully for org:", organizationId);
+        console.log("[stripe-webhook] Updating subscription for org:", organizationId, { subscriptionId, customerId, status, currentPeriodEnd });
+        await updateByOrgId(organizationId, {
+          stripe_subscription_id: subscriptionId,
+          stripe_customer_id: customerId,
+          status,
+          current_period_end: currentPeriodEnd,
+        });
+        console.log("[stripe-webhook] Subscription updated successfully for org:", organizationId);
+      } else if (session.mode === "payment" && organizationId) {
+        const paymentIntentId =
+          typeof session.payment_intent === "string"
+            ? session.payment_intent
+            : session.payment_intent?.id || null;
+        const amountCents = session.amount_total ?? session.amount_subtotal ?? 0;
+
+        await upsertDonationRecord({
+          organizationId,
+          paymentIntentId,
+          checkoutSessionId: session.id,
+          amountCents: amountCents ?? 0,
+          currency: session.currency || "usd",
+          donorName: session.customer_details?.name || (session.metadata?.donor_name ?? null),
+          donorEmail: session.customer_details?.email || (session.metadata?.donor_email ?? null),
+          eventId: session.metadata?.event_id || null,
+          purpose: session.metadata?.purpose || null,
+          metadata: session.metadata || null,
+          status: session.payment_status || "processing",
+        });
+      }
       break;
     }
     case "customer.subscription.created":
@@ -170,32 +246,24 @@ export async function POST(req: Request) {
       const orgId = pi.metadata?.organization_id;
       if (!orgId) break;
 
-      // Check for duplicate (idempotency)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existingSucceeded } = await (supabase as any)
-        .from("organization_donations")
-        .select("id")
-        .eq("stripe_payment_intent_id", pi.id)
-        .maybeSingle();
-      if (existingSucceeded) break;
-
       const amountSucceeded = pi.amount_received ?? pi.amount ?? 0;
-      const donorNameSucceeded = pi.metadata?.donor_name || null;
-      const donorEmailSucceeded = pi.receipt_email || null;
-      const eventIdSucceeded = pi.metadata?.event_id || null;
-      const purposeSucceeded = pi.metadata?.purpose || null;
+      const occurredAt = pi.created ? new Date(pi.created * 1000).toISOString() : new Date().toISOString();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from("organization_donations").insert({
-        organization_id: orgId,
-        stripe_payment_intent_id: pi.id,
-        amount_cents: amountSucceeded,
-        donor_name: donorNameSucceeded,
-        donor_email: donorEmailSucceeded,
-        event_id: eventIdSucceeded || null,
-        purpose: purposeSucceeded,
+      await upsertDonationRecord({
+        organizationId: orgId,
+        paymentIntentId: pi.id,
+        checkoutSessionId: (pi.metadata?.checkout_session_id as string | undefined) ?? null,
+        amountCents: amountSucceeded,
+        currency: pi.currency || "usd",
+        donorName: pi.metadata?.donor_name || null,
+        donorEmail: pi.receipt_email || pi.metadata?.donor_email || null,
+        eventId: pi.metadata?.event_id || null,
+        purpose: pi.metadata?.purpose || null,
+        metadata: pi.metadata || null,
         status: "succeeded",
       });
+
+      await incrementDonationStats(orgId, amountSucceeded, occurredAt, 1);
       break;
     }
 
@@ -204,30 +272,18 @@ export async function POST(req: Request) {
       const orgIdFailed = piFailed.metadata?.organization_id;
       if (!orgIdFailed) break;
 
-      // Check for duplicate (idempotency)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existingFailed } = await (supabase as any)
-        .from("organization_donations")
-        .select("id")
-        .eq("stripe_payment_intent_id", piFailed.id)
-        .maybeSingle();
-      if (existingFailed) break;
-
       const amountFailed = piFailed.amount ?? 0;
-      const donorNameFailed = piFailed.metadata?.donor_name || null;
-      const donorEmailFailed = piFailed.receipt_email || null;
-      const eventIdFailed = piFailed.metadata?.event_id || null;
-      const purposeFailed = piFailed.metadata?.purpose || null;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from("organization_donations").insert({
-        organization_id: orgIdFailed,
-        stripe_payment_intent_id: piFailed.id,
-        amount_cents: amountFailed,
-        donor_name: donorNameFailed,
-        donor_email: donorEmailFailed,
-        event_id: eventIdFailed || null,
-        purpose: purposeFailed,
+      await upsertDonationRecord({
+        organizationId: orgIdFailed,
+        paymentIntentId: piFailed.id,
+        checkoutSessionId: (piFailed.metadata?.checkout_session_id as string | undefined) ?? null,
+        amountCents: amountFailed,
+        currency: piFailed.currency || "usd",
+        donorName: piFailed.metadata?.donor_name || null,
+        donorEmail: piFailed.receipt_email || piFailed.metadata?.donor_email || null,
+        eventId: piFailed.metadata?.event_id || null,
+        purpose: piFailed.metadata?.purpose || null,
+        metadata: piFailed.metadata || null,
         status: "failed",
       });
       break;
@@ -240,5 +296,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ received: true });
 }
-
-

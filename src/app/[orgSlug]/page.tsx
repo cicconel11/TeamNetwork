@@ -30,29 +30,29 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     { data: recentAnnouncements },
     { data: upcomingEvents },
     { data: recentDonations },
+    { data: donationStat },
   ] = await Promise.all([
     supabase.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     supabase.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     supabase.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     supabase.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
     supabase.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
-    supabase.from("donations").select("*").eq("organization_id", org.id).is("deleted_at", null).order("date", { ascending: false }).limit(5),
+    supabase.from("organization_donations").select("*").eq("organization_id", org.id).order("created_at", { ascending: false }).limit(5),
+    supabase.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
   ]);
 
-  // Calculate total donations
-  const { data: donationTotals } = await supabase
-    .from("donations")
-    .select("amount")
-    .eq("organization_id", org.id)
-    .is("deleted_at", null);
-  
-  const totalDonations = donationTotals?.reduce((sum, d) => sum + Number(d.amount), 0) || 0;
+  const totalDonations = ((donationStat as { total_amount_cents?: number } | null)?.total_amount_cents ?? 0) / 100;
 
   const stats = [
     { label: "Active Members", value: membersCount || 0, href: `/${orgSlug}/members`, color: "bg-blue-500" },
     { label: "Alumni", value: alumniCount || 0, href: `/${orgSlug}/alumni`, color: "bg-purple-500" },
     { label: "Events", value: eventsCount || 0, href: `/${orgSlug}/events`, color: "bg-emerald-500" },
-    { label: "Total Donations", value: `$${totalDonations.toLocaleString()}`, href: `/${orgSlug}/donations`, color: "bg-amber-500" },
+    {
+      label: "Total Donations",
+      value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      href: `/${orgSlug}/donations`,
+      color: "bg-amber-500",
+    },
   ];
 
   return (
@@ -174,29 +174,29 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Donor</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Campaign</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
-                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recentDonations && recentDonations.length > 0 ? (
-                  recentDonations.map((donation) => (
-                    <tr key={donation.id}>
-                      <td className="p-4 text-foreground">{donation.donor_name}</td>
-                      <td className="p-4 text-muted-foreground">{donation.campaign || "—"}</td>
-                      <td className="p-4 text-muted-foreground">
-                        {new Date(donation.date).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-right font-mono font-medium text-foreground">
-                        ${Number(donation.amount).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Donor</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Purpose</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
+                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {recentDonations && recentDonations.length > 0 ? (
+                    recentDonations.map((donation) => (
+                      <tr key={donation.id}>
+                        <td className="p-4 text-foreground">{donation.donor_name}</td>
+                        <td className="p-4 text-muted-foreground">{donation.purpose || "General support"}</td>
+                        <td className="p-4 text-muted-foreground">
+                        {donation.created_at ? new Date(donation.created_at).toLocaleDateString() : "—"}
+                        </td>
+                        <td className="p-4 text-right font-mono font-medium text-foreground">
+                        ${(donation.amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))
                 ) : (
                   <tr>
                     <td colSpan={4} className="p-8 text-center text-muted-foreground">
@@ -212,4 +212,3 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     </div>
   );
 }
-
