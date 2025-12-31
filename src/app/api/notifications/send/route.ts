@@ -201,6 +201,17 @@ export async function POST(request: Request) {
       targetUserIds: targetUserIds || undefined,
     });
 
+    if (targets.length === 0) {
+      return NextResponse.json(
+        {
+          error: "No recipients matched the selected audience",
+          total: 0,
+          skipped: stats.skippedMissingContact,
+        },
+        { status: 400 }
+      );
+    }
+
     // In production require configured provider; in dev allow stub
     if (!resend && process.env.NODE_ENV === "production") {
       return NextResponse.json(
@@ -248,18 +259,22 @@ export async function POST(request: Request) {
     const sent = emailSent + smsSent;
     const success = errors.length === 0 && sent > 0;
 
-    return NextResponse.json(
-      {
-        success,
-        sent,
-        emailSent,
-        smsSent,
-        total: targets.length,
-        skipped: stats.skippedMissingContact,
-        errors: errors.length > 0 ? errors : undefined,
-      },
-      { status: success ? 200 : 500 }
-    );
+    const payload = {
+      success,
+      sent,
+      emailSent,
+      smsSent,
+      total: targets.length,
+      skipped: stats.skippedMissingContact,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+
+    const status = success ? 200 : 500;
+    if (!success) {
+      console.error("Notification send failed:", payload);
+    }
+
+    return NextResponse.json(payload, { status });
   } catch (err) {
     console.error("Error sending notifications:", err);
     return NextResponse.json(
