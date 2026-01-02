@@ -85,12 +85,14 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
                     <div>
                       <h3 className="font-semibold text-foreground">{announcement.title}</h3>
                       <p className="text-sm text-muted-foreground mt-0.5">
-                        {new Date(announcement.published_at).toLocaleDateString("en-US", {
-                          weekday: "short",
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        })}
+                        {announcement.published_at
+                          ? new Date(announcement.published_at).toLocaleDateString("en-US", {
+                              weekday: "short",
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "Scheduled"}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
