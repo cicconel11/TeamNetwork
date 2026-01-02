@@ -166,13 +166,13 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
             <div>
               <dt className="text-sm text-muted-foreground">Added</dt>
               <dd className="text-foreground font-medium">
-                {new Date(member.created_at).toLocaleDateString()}
+                {member.created_at ? new Date(member.created_at).toLocaleDateString() : "—"}
               </dd>
             </div>
             <div>
               <dt className="text-sm text-muted-foreground">Last Updated</dt>
               <dd className="text-foreground font-medium">
-                {new Date(member.updated_at).toLocaleDateString()}
+                {member.updated_at ? new Date(member.updated_at).toLocaleDateString() : "—"}
               </dd>
             </div>
           </dl>
