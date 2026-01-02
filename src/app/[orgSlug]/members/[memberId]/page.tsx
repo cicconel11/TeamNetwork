@@ -43,7 +43,8 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
     data: { session },
   } = await supabase.auth.getSession();
   const currentUserId = session?.user?.id ?? null;
-  const canEdit = isAdmin || (currentUserId && member.user_id === currentUserId);
+  const memberUserId = (member as Member & { user_id?: string | null }).user_id || null;
+  const canEdit = isAdmin || (currentUserId && memberUserId === currentUserId);
 
   return (
     <div className="animate-fade-in">

@@ -48,7 +48,8 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
     data: { session },
   } = await supabase.auth.getSession();
   const currentUserId = session?.user?.id ?? null;
-  const canEdit = isAdmin || (currentUserId && alum.user_id === currentUserId);
+  const alumUserId = (alum as Alumni & { user_id?: string | null }).user_id || null;
+  const canEdit = isAdmin || (currentUserId && alumUserId === currentUserId);
 
   return (
     <div className="animate-fade-in">
