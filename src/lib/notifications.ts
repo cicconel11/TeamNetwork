@@ -115,12 +115,19 @@ export async function buildNotificationTargets(params: {
   const { supabase, organizationId, audience, channel, targetUserIds } = params;
   const desired = DESIRED_CHANNELS[channel];
 
+  // Include legacy role aliases so older memberships still receive blasts
   const audienceRoles: readonly UserRole[] =
     audience === "members"
-      ? ["admin", "active_member"]
+      ? ["admin", "active_member", "member"]
       : audience === "alumni"
-      ? ["alumni"]
-      : ["admin", "active_member", "alumni"];
+      ? ["alumni", "viewer"]
+      : ["admin", "active_member", "member", "alumni", "viewer"];
+
+  const normalizeRole = (role: UserRole) => {
+    if (role === "member") return "active_member";
+    if (role === "viewer") return "alumni";
+    return role;
+  };
 
   const membershipFilter = supabase
     .from("user_organization_roles")
@@ -182,9 +189,10 @@ export async function buildNotificationTargets(params: {
 
     if (channels.includes("email")) emailCount += 1;
     if (channels.includes("sms")) smsCount += 1;
+    const normalizedRole = normalizeRole(membership.role as UserRole);
     targets.push({
       id: membership.user_id,
-      source: membership.role === "alumni" ? "alumni" : "member",
+      source: normalizedRole === "alumni" ? "alumni" : "member",
       email,
       phone,
       channels,
