@@ -40,6 +40,7 @@ function buildQuotaResponse(params: {
   alumniCount: number;
   status: string;
   stripeSubscriptionId: string | null;
+  stripeCustomerId: string | null;
 }) {
   const remaining = params.alumniLimit === null ? null : Math.max(params.alumniLimit - params.alumniCount, 0);
   return NextResponse.json({
@@ -49,6 +50,7 @@ function buildQuotaResponse(params: {
     remaining,
     status: params.status,
     stripeSubscriptionId: params.stripeSubscriptionId,
+    stripeCustomerId: params.stripeCustomerId,
   });
 }
 
@@ -60,7 +62,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
   const serviceSupabase = createServiceClient();
   const { data: sub, error: subError } = await serviceSupabase
     .from("organization_subscriptions")
-    .select("alumni_bucket, status, base_plan_interval, stripe_subscription_id")
+    .select("alumni_bucket, status, base_plan_interval, stripe_subscription_id, stripe_customer_id")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -89,6 +91,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
     alumniCount,
     status,
     stripeSubscriptionId: (sub?.stripe_subscription_id as string | null) ?? null,
+    stripeCustomerId: (sub?.stripe_customer_id as string | null) ?? null,
   });
 }
 
@@ -121,7 +124,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const serviceSupabase = createServiceClient();
   const { data: sub, error: subError } = await serviceSupabase
     .from("organization_subscriptions")
-    .select("stripe_subscription_id, base_plan_interval, alumni_bucket, status")
+    .select("stripe_subscription_id, stripe_customer_id, base_plan_interval, alumni_bucket, status")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -133,9 +136,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  if (!sub?.stripe_subscription_id) {
+  if (!sub?.stripe_subscription_id || !sub?.stripe_customer_id) {
     return NextResponse.json(
-      { error: "No active Stripe subscription found for this organization." },
+      { error: "Billing is not set up for this organization." },
       { status: 400 },
     );
   }
@@ -159,6 +162,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       alumniCount,
       status: (sub?.status as string | undefined) ?? "active",
       stripeSubscriptionId: sub.stripe_subscription_id as string,
+      stripeCustomerId: sub.stripe_customer_id as string,
     });
   }
 
@@ -237,6 +241,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       alumniCount,
       status: (sub?.status as string | undefined) ?? "active",
       stripeSubscriptionId: sub.stripe_subscription_id as string,
+      stripeCustomerId: sub.stripe_customer_id as string,
     });
   } catch (error) {
     console.error("[subscription-update] Failed to update subscription", error);

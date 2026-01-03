@@ -34,6 +34,7 @@ interface SubscriptionInfo {
   remaining: number | null;
   status: string;
   stripeSubscriptionId: string | null;
+  stripeCustomerId: string | null;
 }
 
 const BUCKET_OPTIONS: { value: AlumniBucket; label: string; limit: number | null }[] = [
@@ -273,7 +274,7 @@ export default function InvitesPage() {
 
   const handleUpdatePlan = async () => {
     if (!orgId) return;
-    if (!quota?.stripeSubscriptionId) {
+    if (!quota?.stripeSubscriptionId || !quota.stripeCustomerId) {
       setPlanError("Billing is not set up for this organization yet.");
       return;
     }
@@ -312,7 +313,7 @@ export default function InvitesPage() {
 
   const openBillingPortal = async () => {
     if (!orgId) return;
-    if (!quota?.stripeSubscriptionId) {
+    if (!quota?.stripeCustomerId) {
       setPlanError("Billing is not set up for this organization yet.");
       return;
     }
@@ -460,6 +461,9 @@ export default function InvitesPage() {
             <p className="text-lg font-semibold text-foreground">
               {isLoadingQuota ? "Loading..." : quota?.bucket || "none"}
             </p>
+            {!quota?.stripeSubscriptionId && (
+              <p className="text-xs text-amber-600">Billing not connected</p>
+            )}
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Alumni used</p>
@@ -495,7 +499,7 @@ export default function InvitesPage() {
               label="Alumni plan"
               value={selectedBucket}
               onChange={(e) => setSelectedBucket(e.target.value as AlumniBucket)}
-              disabled={isLoadingQuota || !quota?.stripeSubscriptionId}
+              disabled={isLoadingQuota || !quota?.stripeSubscriptionId || !quota?.stripeCustomerId}
               options={BUCKET_OPTIONS.map((option) => ({
                 ...option,
                 disabled:
@@ -506,7 +510,7 @@ export default function InvitesPage() {
               }))}
             />
             <p className="text-xs text-muted-foreground">
-              {quota?.stripeSubscriptionId
+              {quota?.stripeSubscriptionId && quota?.stripeCustomerId
                 ? "Downgrades are disabled if your alumni count exceeds the plan limit."
                 : "Billing is not set up yet for this organization."}
             </p>
@@ -515,7 +519,12 @@ export default function InvitesPage() {
             <Button
               onClick={handleUpdatePlan}
               isLoading={isUpdatingPlan}
-              disabled={isLoadingQuota || !quota || !quota.stripeSubscriptionId}
+              disabled={
+                isLoadingQuota ||
+                !quota ||
+                !quota.stripeSubscriptionId ||
+                !quota.stripeCustomerId
+              }
             >
               Update plan
             </Button>
@@ -523,7 +532,7 @@ export default function InvitesPage() {
               variant="secondary"
               onClick={openBillingPortal}
               isLoading={isOpeningPortal}
-              disabled={isLoadingQuota || !quota || !quota.stripeSubscriptionId}
+              disabled={isLoadingQuota || !quota || !quota.stripeCustomerId}
             >
               Billing portal
             </Button>
