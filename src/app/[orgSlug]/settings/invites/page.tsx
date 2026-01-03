@@ -274,10 +274,6 @@ export default function InvitesPage() {
 
   const handleUpdatePlan = async () => {
     if (!orgId) return;
-    if (!quota?.stripeSubscriptionId || !quota.stripeCustomerId) {
-      setPlanError("Billing is not set up for this organization yet.");
-      return;
-    }
     const targetLimit = ALUMNI_LIMITS[selectedBucket];
     if (
       quota &&
@@ -293,7 +289,11 @@ export default function InvitesPage() {
     setPlanSuccess(null);
 
     try {
-      const res = await fetch(`/api/organizations/${orgId}/subscription`, {
+      const endpoint = !quota?.stripeSubscriptionId || !quota?.stripeCustomerId
+        ? `/api/organizations/${orgId}/start-checkout`
+        : `/api/organizations/${orgId}/subscription`;
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ alumniBucket: selectedBucket }),
@@ -301,6 +301,10 @@ export default function InvitesPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Unable to update subscription");
+      }
+      if (data.url) {
+        window.location.href = data.url as string;
+        return;
       }
       setQuota(data as SubscriptionInfo);
       setPlanSuccess("Subscription updated.");
@@ -313,10 +317,6 @@ export default function InvitesPage() {
 
   const openBillingPortal = async () => {
     if (!orgId) return;
-    if (!quota?.stripeCustomerId) {
-      setPlanError("Billing is not set up for this organization yet.");
-      return;
-    }
     setPlanError(null);
     setPlanSuccess(null);
     setIsOpeningPortal(true);
@@ -519,12 +519,7 @@ export default function InvitesPage() {
             <Button
               onClick={handleUpdatePlan}
               isLoading={isUpdatingPlan}
-              disabled={
-                isLoadingQuota ||
-                !quota ||
-                !quota.stripeSubscriptionId ||
-                !quota.stripeCustomerId
-              }
+              disabled={isLoadingQuota || !quota}
             >
               Update plan
             </Button>
@@ -532,7 +527,7 @@ export default function InvitesPage() {
               variant="secondary"
               onClick={openBillingPortal}
               isLoading={isOpeningPortal}
-              disabled={isLoadingQuota || !quota || !quota.stripeCustomerId}
+              disabled={isLoadingQuota || !quota}
             >
               Billing portal
             </Button>
