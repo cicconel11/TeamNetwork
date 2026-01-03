@@ -315,7 +315,7 @@ export default function NewAlumniPage() {
               isLoading={isLoading}
               disabled={
                 isLoadingQuota ||
-                (quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit)
+                Boolean(quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit)
               }
             >
               Add Alumni
