@@ -12,6 +12,31 @@ interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
 
+async function ensureStripeCustomerId(params: {
+  stripeSubscriptionId?: string | null;
+  stripeCustomerId?: string | null;
+  organizationId: string;
+  serviceSupabase: ReturnType<typeof createServiceClient>;
+}) {
+  if (params.stripeCustomerId || !params.stripeSubscriptionId) return params.stripeCustomerId ?? null;
+  try {
+    const { stripe } = await import("@/lib/stripe");
+    const sub = await stripe.subscriptions.retrieve(params.stripeSubscriptionId);
+    const customerId =
+      typeof sub.customer === "string" ? sub.customer : sub.customer?.id || null;
+    if (customerId) {
+      await params.serviceSupabase
+        .from("organization_subscriptions")
+        .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
+        .eq("organization_id", params.organizationId);
+    }
+    return customerId;
+  } catch (error) {
+    console.error("[subscription] Unable to backfill stripe_customer_id", error);
+    return null;
+  }
+}
+
 async function requireAdmin(orgId: string) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -84,6 +109,12 @@ export async function GET(_req: Request, { params }: RouteParams) {
   );
   const alumniLimit = getAlumniLimit(bucket);
   const status = (sub?.status as string | undefined) ?? "pending";
+  const stripeCustomerId = await ensureStripeCustomerId({
+    stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
+    stripeCustomerId: sub?.stripe_customer_id as string | null,
+    organizationId,
+    serviceSupabase,
+  });
 
   return buildQuotaResponse({
     bucket,
@@ -91,7 +122,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
     alumniCount,
     status,
     stripeSubscriptionId: (sub?.stripe_subscription_id as string | null) ?? null,
-    stripeCustomerId: (sub?.stripe_customer_id as string | null) ?? null,
+    stripeCustomerId,
   });
 }
 
@@ -136,7 +167,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  if (!sub?.stripe_subscription_id || !sub?.stripe_customer_id) {
+  const stripeCustomerId = await ensureStripeCustomerId({
+    stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
+    stripeCustomerId: sub?.stripe_customer_id as string | null,
+    organizationId,
+    serviceSupabase,
+  });
+
+  if (!sub?.stripe_subscription_id || !stripeCustomerId) {
     return NextResponse.json(
       { error: "Billing is not set up for this organization." },
       { status: 400 },
@@ -162,7 +200,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       alumniCount,
       status: (sub?.status as string | undefined) ?? "active",
       stripeSubscriptionId: sub.stripe_subscription_id as string,
-      stripeCustomerId: sub.stripe_customer_id as string,
+      stripeCustomerId,
     });
   }
 

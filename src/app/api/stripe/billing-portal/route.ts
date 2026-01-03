@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
+import { stripe } from "@/lib/stripe";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,22 +60,42 @@ export async function POST(req: Request) {
 
   const { data: subscription } = await supabase
     .from("organization_subscriptions")
-    .select("stripe_customer_id")
+    .select("stripe_customer_id, stripe_subscription_id")
     .eq("organization_id", organization.id)
     .maybeSingle();
 
-  if (!subscription?.stripe_customer_id) {
+  let stripeCustomerId = subscription?.stripe_customer_id || null;
+
+  // Attempt to backfill missing customer from Stripe using subscription id
+  if (!stripeCustomerId && subscription?.stripe_subscription_id) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+      const customerId =
+        typeof sub.customer === "string" ? sub.customer : sub.customer?.id || null;
+      if (customerId) {
+        stripeCustomerId = customerId;
+        const serviceSupabase = createServiceClient();
+        await serviceSupabase
+          .from("organization_subscriptions")
+          .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
+          .eq("organization_id", organization.id);
+      }
+    } catch (error) {
+      console.error("[billing-portal] Unable to backfill Stripe customer id", error);
+    }
+  }
+
+  if (!stripeCustomerId) {
     return NextResponse.json({ error: "No Stripe customer found for this org" }, { status: 400 });
   }
 
   const session = await stripe.billingPortal.sessions.create({
-    customer: subscription.stripe_customer_id,
+    customer: stripeCustomerId,
     return_url: `${origin}/${organization.slug}`,
   });
 
   return NextResponse.json({ url: session.url });
 }
-
 
 
 
