@@ -557,7 +557,7 @@ export default function InvitesPage() {
               onChange={(e) => setNewExpires(e.target.value)}
             />
           </div>
-          {newRole === "alumni" && quota?.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit && (
+          {newRole === "alumni" && quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit && (
             <p className="text-xs text-amber-600">
               Alumni limit reached for your plan. Upgrade above to add more alumni invites.
             </p>
