@@ -273,6 +273,10 @@ export default function InvitesPage() {
 
   const handleUpdatePlan = async () => {
     if (!orgId) return;
+    if (!quota?.stripeSubscriptionId) {
+      setPlanError("Billing is not set up for this organization yet.");
+      return;
+    }
     const targetLimit = ALUMNI_LIMITS[selectedBucket];
     if (
       quota &&
@@ -308,6 +312,10 @@ export default function InvitesPage() {
 
   const openBillingPortal = async () => {
     if (!orgId) return;
+    if (!quota?.stripeSubscriptionId) {
+      setPlanError("Billing is not set up for this organization yet.");
+      return;
+    }
     setPlanError(null);
     setPlanSuccess(null);
     setIsOpeningPortal(true);
@@ -487,7 +495,7 @@ export default function InvitesPage() {
               label="Alumni plan"
               value={selectedBucket}
               onChange={(e) => setSelectedBucket(e.target.value as AlumniBucket)}
-              disabled={isLoadingQuota}
+              disabled={isLoadingQuota || !quota?.stripeSubscriptionId}
               options={BUCKET_OPTIONS.map((option) => ({
                 ...option,
                 disabled:
@@ -498,14 +506,16 @@ export default function InvitesPage() {
               }))}
             />
             <p className="text-xs text-muted-foreground">
-              Downgrades are disabled if your alumni count exceeds the plan limit.
+              {quota?.stripeSubscriptionId
+                ? "Downgrades are disabled if your alumni count exceeds the plan limit."
+                : "Billing is not set up yet for this organization."}
             </p>
           </div>
           <div className="flex gap-3 flex-wrap items-end">
             <Button
               onClick={handleUpdatePlan}
               isLoading={isUpdatingPlan}
-              disabled={isLoadingQuota || !quota}
+              disabled={isLoadingQuota || !quota || !quota.stripeSubscriptionId}
             >
               Update plan
             </Button>
@@ -513,7 +523,7 @@ export default function InvitesPage() {
               variant="secondary"
               onClick={openBillingPortal}
               isLoading={isOpeningPortal}
-              disabled={isLoadingQuota || !quota}
+              disabled={isLoadingQuota || !quota || !quota.stripeSubscriptionId}
             >
               Billing portal
             </Button>
