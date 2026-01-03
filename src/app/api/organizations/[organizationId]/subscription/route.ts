@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-import { stripe, getPriceIds } from "@/lib/stripe";
+import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAlumniLimit, normalizeBucket } from "@/lib/alumni-quota";
@@ -12,27 +11,6 @@ export const runtime = "nodejs";
 interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
-
-type QuotaRow = {
-  bucket?: string | null;
-  alumni_limit?: number | null;
-  alumni_count?: number | null;
-  status?: string | null;
-};
-
-const fetchQuota = async (client: ReturnType<typeof createServiceClient>, orgId: string) => {
-  const rpc = (
-    client as unknown as {
-      rpc: (fn: string, args: { p_org_id: string }) => Promise<{ data: unknown; error: unknown }>;
-    }
-  ).rpc;
-  const { data, error } = await rpc("get_alumni_quota", { p_org_id: orgId });
-  if (error) {
-    console.error("[subscription] get_alumni_quota failed", error);
-    return null;
-  }
-  return data as QuotaRow | null;
-};
 
 async function requireAdmin(orgId: string) {
   const supabase = await createClient();
@@ -80,35 +58,30 @@ export async function GET(_req: Request, { params }: RouteParams) {
   if ("error" in auth) return auth.error;
 
   const serviceSupabase = createServiceClient();
-  const quotaData = await fetchQuota(serviceSupabase, organizationId);
-
-  const { data: sub } = await serviceSupabase
+  const { data: sub, error: subError } = await serviceSupabase
     .from("organization_subscriptions")
     .select("alumni_bucket, status, base_plan_interval, stripe_subscription_id")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
+  if (subError) {
+    console.error("[subscription] Failed to load subscription", subError);
+    return NextResponse.json({ error: "Unable to load subscription details" }, { status: 500 });
+  }
+
+  const { count: alumniCountRaw, error: countError } = await serviceSupabase
+    .from("alumni")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
+
+  const alumniCount = countError ? 0 : alumniCountRaw ?? 0;
   const bucket = normalizeBucket(
-    quotaData?.bucket ??
     (sub?.alumni_bucket as string | null) ??
     "none",
   );
   const alumniLimit = getAlumniLimit(bucket);
-
-  let alumniCount = quotaData?.alumni_count ?? 0;
-  if (alumniCount === 0) {
-    const { count } = await serviceSupabase
-      .from("alumni")
-      .select("*", { count: "exact", head: true })
-      .eq("organization_id", organizationId)
-      .is("deleted_at", null);
-    alumniCount = count ?? 0;
-  }
-
-  const status =
-    quotaData?.status ??
-    (sub?.status as string | undefined) ??
-    "pending";
+  const status = (sub?.status as string | undefined) ?? "pending";
 
   return buildQuotaResponse({
     bucket,
@@ -123,6 +96,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const auth = await requireAdmin(organizationId);
   if ("error" in auth) return auth.error;
+
+  const { stripe, getPriceIds } = await import("@/lib/stripe");
 
   let body: { alumniBucket?: string };
   try {
@@ -144,11 +119,19 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const serviceSupabase = createServiceClient();
-  const { data: sub } = await serviceSupabase
+  const { data: sub, error: subError } = await serviceSupabase
     .from("organization_subscriptions")
     .select("stripe_subscription_id, base_plan_interval, alumni_bucket, status")
     .eq("organization_id", organizationId)
     .maybeSingle();
+
+  if (subError) {
+    console.error("[subscription] Failed to load subscription", subError);
+    return NextResponse.json(
+      { error: "Unable to load subscription details" },
+      { status: 500 },
+    );
+  }
 
   if (!sub?.stripe_subscription_id) {
     return NextResponse.json(
@@ -161,9 +144,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     sub?.base_plan_interval === "year" ? "year" : "month";
   const currentBucket = normalizeBucket(sub?.alumni_bucket as string | null);
 
+  const { count: alumniCountRaw, error: countError } = await serviceSupabase
+    .from("alumni")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
+  const alumniCount = countError ? 0 : alumniCountRaw ?? 0;
+
   if (currentBucket === targetBucket) {
-    const quotaData = await fetchQuota(serviceSupabase, organizationId);
-    const alumniCount = quotaData?.alumni_count ?? 0;
     const alumniLimit = getAlumniLimit(targetBucket);
     return buildQuotaResponse({
       bucket: targetBucket,
@@ -173,9 +161,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       stripeSubscriptionId: sub.stripe_subscription_id as string,
     });
   }
-
-  const quotaData = await fetchQuota(serviceSupabase, organizationId);
-  const alumniCount = quotaData?.alumni_count ?? 0;
 
   const targetLimit = getAlumniLimit(targetBucket);
   if (targetLimit !== null && alumniCount > targetLimit) {
