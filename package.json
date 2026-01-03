@@ -14,6 +14,7 @@
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.2",
+    "codex": "^0.2.3",
     "next": "14.2.33",
     "react": "^18",
     "react-dom": "^18",

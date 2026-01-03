@@ -499,7 +499,7 @@ export default function InvitesPage() {
               label="Alumni plan"
               value={selectedBucket}
               onChange={(e) => setSelectedBucket(e.target.value as AlumniBucket)}
-              disabled={isLoadingQuota || !quota?.stripeSubscriptionId || !quota?.stripeCustomerId}
+              disabled={isLoadingQuota}
               options={BUCKET_OPTIONS.map((option) => ({
                 ...option,
                 disabled:
@@ -512,7 +512,7 @@ export default function InvitesPage() {
             <p className="text-xs text-muted-foreground">
               {quota?.stripeSubscriptionId && quota?.stripeCustomerId
                 ? "Downgrades are disabled if your alumni count exceeds the plan limit."
-                : "Billing is not set up yet for this organization."}
+                : "Select a plan and click Update to start billing checkout."}
             </p>
           </div>
           <div className="flex gap-3 flex-wrap items-end">
