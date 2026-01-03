@@ -429,7 +429,7 @@ export default function InvitesPage() {
             </p>
           </div>
           {quota?.status && (
-            <Badge variant="secondary" className="uppercase tracking-wide">
+            <Badge variant="muted" className="uppercase tracking-wide">
               {quota.status}
             </Badge>
           )}
