@@ -228,20 +228,26 @@ export default function InvitesPage() {
 
   const cancelSubscription = async () => {
     if (!orgId) return;
-    if (!confirm("Cancel billing for this organization? Access will end when the period closes.")) return;
+    if (!confirm("Open Stripe to cancel billing for this organization? Access will end when the period closes.")) return;
 
     setIsCancelling(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/organizations/${orgId}/cancel-subscription`, {
+      const res = await fetch("/api/stripe/billing-portal", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: orgId }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Unable to cancel subscription");
       }
-      alert("Subscription canceled.");
+      if (data.url) {
+        window.location.href = data.url as string;
+        return;
+      }
+      alert("Open Stripe billing to cancel the subscription.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to cancel subscription");
     } finally {
