@@ -12,6 +12,13 @@ interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
 
+type PriceLookup = {
+  priceId: string;
+  bucket: AlumniBucket;
+  interval: SubscriptionInterval;
+  type: "base" | "alumni";
+};
+
 async function ensureStripeCustomerId(params: {
   stripeSubscriptionId?: string | null;
   stripeCustomerId?: string | null;
@@ -34,6 +41,80 @@ async function ensureStripeCustomerId(params: {
   } catch (error) {
     console.error("[subscription] Unable to backfill stripe_customer_id", error);
     return null;
+  }
+}
+
+async function ensureStripePlan(params: {
+  stripeSubscriptionId?: string | null;
+  currentBucket: AlumniBucket;
+  currentBaseInterval: SubscriptionInterval;
+  organizationId: string;
+  serviceSupabase: ReturnType<typeof createServiceClient>;
+}) {
+  if (!params.stripeSubscriptionId) {
+    return {
+      bucket: params.currentBucket,
+      baseInterval: params.currentBaseInterval,
+    };
+  }
+
+  try {
+    const { stripe, getPriceIds } = await import("@/lib/stripe");
+    const priceMap: PriceLookup[] = [];
+    const intervals: SubscriptionInterval[] = ["month", "year"];
+    const buckets: AlumniBucket[] = ["none", "0-200", "201-600", "601-1500"];
+
+    intervals.forEach((interval) => {
+      buckets.forEach((bucket) => {
+        const { basePrice, alumniPrice } = getPriceIds(interval, bucket);
+        priceMap.push({ priceId: basePrice, bucket, interval, type: "base" });
+        if (alumniPrice) {
+          priceMap.push({ priceId: alumniPrice, bucket, interval, type: "alumni" });
+        }
+      });
+    });
+
+    const subscription = (await stripe.subscriptions.retrieve(params.stripeSubscriptionId, {
+      expand: ["items.data.price"],
+    })) as Stripe.Subscription;
+
+    const items = subscription.items?.data ?? [];
+    let detectedBucket: AlumniBucket | null = null;
+    let detectedInterval: SubscriptionInterval | null = null;
+
+    for (const item of items) {
+      const priceId = item.price?.id;
+      if (!priceId) continue;
+      const match = priceMap.find((p) => p.priceId === priceId && p.type === "alumni");
+      const baseMatch = priceMap.find((p) => p.priceId === priceId && p.type === "base");
+      if (match && !detectedBucket) {
+        detectedBucket = match.bucket;
+        detectedInterval = match.interval;
+      }
+      if (baseMatch && !detectedInterval) {
+        detectedInterval = baseMatch.interval;
+      }
+    }
+
+    const bucket = detectedBucket ?? params.currentBucket;
+    const baseInterval = detectedInterval ?? params.currentBaseInterval;
+    await params.serviceSupabase
+      .from("organization_subscriptions")
+      .update({
+        alumni_bucket: bucket,
+        base_plan_interval: baseInterval,
+        alumni_plan_interval: bucket === "none" ? null : baseInterval,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("organization_id", params.organizationId);
+
+    return { bucket, baseInterval };
+  } catch (error) {
+    console.error("[subscription] Unable to backfill plan details", error);
+    return {
+      bucket: params.currentBucket,
+      baseInterval: params.currentBaseInterval,
+    };
   }
 }
 
@@ -107,7 +188,18 @@ export async function GET(_req: Request, { params }: RouteParams) {
     (sub?.alumni_bucket as string | null) ??
     "none",
   );
-  const alumniLimit = getAlumniLimit(bucket);
+  const baseInterval: SubscriptionInterval =
+    sub?.base_plan_interval === "year" ? "year" : "month";
+
+  const planDetails = await ensureStripePlan({
+    stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
+    currentBucket: bucket,
+    currentBaseInterval: baseInterval,
+    organizationId,
+    serviceSupabase,
+  });
+
+  const alumniLimit = getAlumniLimit(planDetails.bucket);
   const status = (sub?.status as string | undefined) ?? "pending";
   const stripeCustomerId = await ensureStripeCustomerId({
     stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
@@ -117,7 +209,7 @@ export async function GET(_req: Request, { params }: RouteParams) {
   });
 
   return buildQuotaResponse({
-    bucket,
+    bucket: planDetails.bucket,
     alumniLimit,
     alumniCount,
     status,
@@ -192,10 +284,21 @@ export async function POST(req: Request, { params }: RouteParams) {
     .is("deleted_at", null);
   const alumniCount = countError ? 0 : alumniCountRaw ?? 0;
 
+  const baseInterval: SubscriptionInterval =
+    sub?.base_plan_interval === "year" ? "year" : "month";
+
+  const planDetails = await ensureStripePlan({
+    stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
+    currentBucket: currentBucket,
+    currentBaseInterval: baseInterval,
+    organizationId,
+    serviceSupabase,
+  });
+
   if (currentBucket === targetBucket) {
     const alumniLimit = getAlumniLimit(targetBucket);
     return buildQuotaResponse({
-      bucket: targetBucket,
+      bucket: planDetails.bucket,
       alumniLimit,
       alumniCount,
       status: (sub?.status as string | undefined) ?? "active",
