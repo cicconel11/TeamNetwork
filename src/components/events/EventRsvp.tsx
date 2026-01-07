@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RsvpStatus } from "@/types/database";
 
@@ -34,6 +35,7 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
   const handleRsvp = async (newStatus: RsvpStatus) => {
@@ -59,6 +61,8 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
       setStatus(previousStatus);
       setError("Failed to save RSVP");
       console.error("RSVP error:", upsertError);
+    } else {
+      router.refresh();
     }
 
     setSaving(false);
