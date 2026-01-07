@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
-type Channel = "email" | "sms" | "both";
 type Audience = "members" | "alumni" | "both" | "specific";
 
 type TargetUser = {
@@ -23,7 +22,6 @@ export default function NewNotificationPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [channel, setChannel] = useState<Channel>("email");
   const [audience, setAudience] = useState<Audience>("both");
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
@@ -89,7 +87,7 @@ export default function NewNotificationPage() {
         organization_id: orgIdToUse,
         title,
         body: body || null,
-        channel,
+        channel: "email",
         audience: audience === "specific" ? "both" : audience,
         target_user_ids: audience === "specific" ? targetUserIds : null,
         sent_at: null,
@@ -136,17 +134,6 @@ export default function NewNotificationPage() {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             rows={4}
-          />
-
-          <Select
-            label="Channel"
-            value={channel}
-            onChange={(e) => setChannel(e.target.value as Channel)}
-            options={[
-              { label: "Email", value: "email" },
-              { label: "SMS", value: "sms" },
-              { label: "Email + SMS", value: "both" },
-            ]}
           />
 
           <Select

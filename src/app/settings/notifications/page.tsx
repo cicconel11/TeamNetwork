@@ -11,9 +11,7 @@ type OrgPrefForm = {
   orgName: string;
   orgSlug: string;
   email: string;
-  phone: string;
   emailEnabled: boolean;
-  smsEnabled: boolean;
   prefId?: string;
   isSaving?: boolean;
   error?: string | null;
@@ -68,9 +66,7 @@ export default function NotificationSettingsPage() {
             orgName: org?.name || "Organization",
             orgSlug: org?.slug || "",
             email: pref?.email_address || user.email || "",
-            phone: pref?.phone_number || "",
             emailEnabled: pref?.email_enabled ?? true,
-            smsEnabled: pref?.sms_enabled ?? false,
             prefId: pref?.id,
             isSaving: false,
             error: null,
@@ -112,8 +108,8 @@ export default function NotificationSettingsPage() {
         user_id: user.id,
         email_address: form.email.trim() || null,
         email_enabled: form.emailEnabled,
-        phone_number: form.phone.trim() || null,
-        sms_enabled: form.smsEnabled,
+        phone_number: null,
+        sms_enabled: false,
       })
       .select()
       .maybeSingle();
@@ -137,7 +133,7 @@ export default function NotificationSettingsPage() {
         <p className="text-sm text-muted-foreground">Settings</p>
         <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
         <p className="text-muted-foreground">
-          Choose how you want to receive notifications for each organization. Turn email or text on/off any time.
+          Choose how you want to receive email notifications for each organization.
         </p>
       </div>
 
@@ -175,7 +171,7 @@ export default function NotificationSettingsPage() {
                 <Badge variant="muted">{form.orgSlug || "org"}</Badge>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="max-w-md">
                 <Input
                   label="Email"
                   type="email"
@@ -185,58 +181,27 @@ export default function NotificationSettingsPage() {
                   }
                   placeholder="you@example.com"
                 />
-                <Input
-                  label="Phone (for texts)"
-                  type="tel"
-                  value={form.phone}
+              </div>
+
+              <label htmlFor={`email-${form.orgId}`} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  id={`email-${form.orgId}`}
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border"
+                  checked={form.emailEnabled}
                   onChange={(e) =>
-                    updateForm(form.orgId, (f) => ({ ...f, phone: e.target.value, success: null }))
+                    updateForm(form.orgId, (f) => ({
+                      ...f,
+                      emailEnabled: e.target.checked,
+                      success: null,
+                    }))
                   }
-                  placeholder="e.g., +1 555 123 4567"
                 />
-              </div>
-
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <label htmlFor={`email-${form.orgId}`} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    id={`email-${form.orgId}`}
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={form.emailEnabled}
-                    onChange={(e) =>
-                      updateForm(form.orgId, (f) => ({
-                        ...f,
-                        emailEnabled: e.target.checked,
-                        success: null,
-                      }))
-                    }
-                  />
-                  <div>
-                    <span className="font-medium text-sm text-foreground">Email notifications</span>
-                    <p className="text-xs text-muted-foreground">Turn emails on or off for this org.</p>
-                  </div>
-                </label>
-
-                <label htmlFor={`sms-${form.orgId}`} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    id={`sms-${form.orgId}`}
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={form.smsEnabled}
-                    onChange={(e) =>
-                      updateForm(form.orgId, (f) => ({
-                        ...f,
-                        smsEnabled: e.target.checked,
-                        success: null,
-                      }))
-                    }
-                  />
-                  <div>
-                    <span className="font-medium text-sm text-foreground">Text notifications</span>
-                    <p className="text-xs text-muted-foreground">Uses the phone number above.</p>
-                  </div>
-                </label>
-              </div>
+                <div>
+                  <span className="font-medium text-sm text-foreground">Email notifications</span>
+                  <p className="text-xs text-muted-foreground">Turn emails on or off for this org.</p>
+                </div>
+              </label>
 
               {form.error && (
                 <div className="text-sm text-red-600 dark:text-red-400">{form.error}</div>

@@ -48,19 +48,6 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
     });
   };
 
-  const getChannelBadge = (channel: string) => {
-    switch (channel) {
-      case "email":
-        return <Badge variant="primary">Email</Badge>;
-      case "sms":
-        return <Badge variant="warning">SMS</Badge>;
-      case "both":
-        return <Badge variant="success">Email + SMS</Badge>;
-      default:
-        return <Badge>{channel}</Badge>;
-    }
-  };
-
   const formatAudience = (audience: string) => {
     switch (audience) {
       case "members":
@@ -99,7 +86,7 @@ export default async function NotificationsPage({ params }: NotificationsPagePro
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="font-semibold text-foreground">{notification.title}</h3>
-                    {getChannelBadge(notification.channel)}
+                    <Badge variant="primary">Email</Badge>
                     <Badge variant="muted">{formatAudience(notification.audience)}</Badge>
                     {notification.sent_at && (
                       <Badge variant="success">Sent</Badge>

@@ -16,9 +16,7 @@ export default function OrgSettingsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string>("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [emailEnabled, setEmailEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(false);
   const [prefId, setPrefId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -79,9 +77,7 @@ export default function OrgSettingsPage() {
 
       const typedPref = pref as NotificationPreference | null;
       setEmail(typedPref?.email_address || user.email || "");
-      setPhone(typedPref?.phone_number || "");
       setEmailEnabled(typedPref?.email_enabled ?? true);
-      setSmsEnabled(typedPref?.sms_enabled ?? false);
       setPrefId(typedPref?.id || null);
       setLoading(false);
     };
@@ -113,8 +109,8 @@ export default function OrgSettingsPage() {
         user_id: user.id,
         email_address: email.trim() || null,
         email_enabled: emailEnabled,
-        phone_number: phone.trim() || null,
-        sms_enabled: smsEnabled,
+        phone_number: null,
+        sms_enabled: false,
       })
       .select("id")
       .maybeSingle();
@@ -154,7 +150,7 @@ export default function OrgSettingsPage() {
             <Badge variant="muted">{orgName}</Badge>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="max-w-md">
             <Input
               label="Email"
               type="email"
@@ -165,51 +161,23 @@ export default function OrgSettingsPage() {
               }}
               placeholder="you@example.com"
             />
-            <Input
-              label="Phone (for texts)"
-              type="tel"
-              value={phone}
+          </div>
+
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={emailEnabled}
               onChange={(e) => {
-                setPhone(e.target.value);
+                setEmailEnabled(e.target.checked);
                 setSuccess(null);
               }}
-              placeholder="e.g., +1 555 123 4567"
             />
-          </div>
-
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-border"
-                checked={emailEnabled}
-                onChange={(e) => {
-                  setEmailEnabled(e.target.checked);
-                  setSuccess(null);
-                }}
-              />
-              <div>
-                <span className="font-medium text-sm text-foreground">Email notifications</span>
-                <p className="text-xs text-muted-foreground">Send emails for this org.</p>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-border"
-                checked={smsEnabled}
-                onChange={(e) => {
-                  setSmsEnabled(e.target.checked);
-                  setSuccess(null);
-                }}
-              />
-              <div>
-                <span className="font-medium text-sm text-foreground">Text notifications</span>
-                <p className="text-xs text-muted-foreground">Uses the phone number above.</p>
-              </div>
-            </label>
-          </div>
+            <div>
+              <span className="font-medium text-sm text-foreground">Email notifications</span>
+              <p className="text-xs text-muted-foreground">Send emails for this org.</p>
+            </div>
+          </label>
 
           {success && <div className="text-sm text-green-600 dark:text-green-400">{success}</div>}
           {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
