@@ -295,7 +295,7 @@ export default function InvitesPage() {
     setPlanSuccess(null);
 
     try {
-      const endpoint = !quota?.stripeSubscriptionId || !quota?.stripeCustomerId
+      const endpoint = !quota?.stripeSubscriptionId
         ? `/api/organizations/${orgId}/start-checkout`
         : `/api/organizations/${orgId}/subscription`;
 
@@ -525,7 +525,7 @@ export default function InvitesPage() {
             <Button
               onClick={handleUpdatePlan}
               isLoading={isUpdatingPlan}
-              disabled={isLoadingQuota || !quota}
+              disabled={isLoadingQuota || !quota || selectedBucket === quota.bucket}
             >
               Update plan
             </Button>
@@ -533,7 +533,7 @@ export default function InvitesPage() {
               variant="secondary"
               onClick={openBillingPortal}
               isLoading={isOpeningPortal}
-              disabled={isLoadingQuota || !quota}
+              disabled={isLoadingQuota || !quota || !quota.stripeSubscriptionId}
             >
               Billing portal
             </Button>

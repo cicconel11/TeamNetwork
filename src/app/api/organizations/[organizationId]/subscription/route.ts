@@ -27,13 +27,38 @@ type PriceLookup = {
   type: "base" | "alumni";
 };
 
+function isInvalidSubscriptionError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return error.message.includes("No such subscription");
+  }
+  return false;
+}
+
+async function clearInvalidSubscription(
+  organizationId: string,
+  serviceSupabase: ReturnType<typeof createServiceClient>
+) {
+  console.log("[subscription] Clearing invalid subscription ID for org:", organizationId);
+  await serviceSupabase
+    .from("organization_subscriptions")
+    .update({
+      stripe_subscription_id: null,
+      stripe_customer_id: null,
+      status: "canceled",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("organization_id", organizationId);
+}
+
 async function ensureStripeCustomerId(params: {
   stripeSubscriptionId?: string | null;
   stripeCustomerId?: string | null;
   organizationId: string;
   serviceSupabase: ReturnType<typeof createServiceClient>;
-}) {
-  if (params.stripeCustomerId || !params.stripeSubscriptionId) return params.stripeCustomerId ?? null;
+}): Promise<{ customerId: string | null; subscriptionInvalid: boolean }> {
+  if (params.stripeCustomerId || !params.stripeSubscriptionId) {
+    return { customerId: params.stripeCustomerId ?? null, subscriptionInvalid: false };
+  }
   try {
     const { stripe } = await import("@/lib/stripe");
     const sub = await stripe.subscriptions.retrieve(params.stripeSubscriptionId);
@@ -45,10 +70,14 @@ async function ensureStripeCustomerId(params: {
         .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
         .eq("organization_id", params.organizationId);
     }
-    return customerId;
+    return { customerId, subscriptionInvalid: false };
   } catch (error) {
     console.error("[subscription] Unable to backfill stripe_customer_id", error);
-    return null;
+    if (isInvalidSubscriptionError(error)) {
+      await clearInvalidSubscription(params.organizationId, params.serviceSupabase);
+      return { customerId: null, subscriptionInvalid: true };
+    }
+    return { customerId: null, subscriptionInvalid: false };
   }
 }
 
@@ -58,11 +87,12 @@ async function ensureStripePlan(params: {
   currentBaseInterval: SubscriptionInterval;
   organizationId: string;
   serviceSupabase: ReturnType<typeof createServiceClient>;
-}) {
+}): Promise<{ bucket: AlumniBucket; baseInterval: SubscriptionInterval; subscriptionInvalid: boolean }> {
   if (!params.stripeSubscriptionId) {
     return {
       bucket: params.currentBucket,
       baseInterval: params.currentBaseInterval,
+      subscriptionInvalid: false,
     };
   }
 
@@ -116,12 +146,21 @@ async function ensureStripePlan(params: {
       })
       .eq("organization_id", params.organizationId);
 
-    return { bucket, baseInterval };
+    return { bucket, baseInterval, subscriptionInvalid: false };
   } catch (error) {
     console.error("[subscription] Unable to backfill plan details", error);
+    if (isInvalidSubscriptionError(error)) {
+      await clearInvalidSubscription(params.organizationId, params.serviceSupabase);
+      return {
+        bucket: params.currentBucket,
+        baseInterval: params.currentBaseInterval,
+        subscriptionInvalid: true,
+      };
+    }
     return {
       bucket: params.currentBucket,
       baseInterval: params.currentBaseInterval,
+      subscriptionInvalid: false,
     };
   }
 }
@@ -233,14 +272,39 @@ export async function GET(req: Request, { params }: RouteParams) {
     serviceSupabase,
   });
 
+  // If subscription was found to be invalid, return as if no subscription exists
+  if (planDetails.subscriptionInvalid) {
+    const alumniLimit = getAlumniLimit(planDetails.bucket);
+    return buildQuotaResponse({
+      bucket: planDetails.bucket,
+      alumniLimit,
+      alumniCount,
+      status: "canceled",
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+    }, respond);
+  }
+
   const alumniLimit = getAlumniLimit(planDetails.bucket);
   const status = (sub?.status as string | undefined) ?? "pending";
-  const stripeCustomerId = await ensureStripeCustomerId({
+  const customerResult = await ensureStripeCustomerId({
     stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
     stripeCustomerId: sub?.stripe_customer_id as string | null,
     organizationId,
     serviceSupabase,
   });
+
+  // If subscription was found to be invalid during customer lookup, return as if no subscription exists
+  if (customerResult.subscriptionInvalid) {
+    return buildQuotaResponse({
+      bucket: planDetails.bucket,
+      alumniLimit,
+      alumniCount,
+      status: "canceled",
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+    }, respond);
+  }
 
   return buildQuotaResponse({
     bucket: planDetails.bucket,
@@ -248,7 +312,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     alumniCount,
     status,
     stripeSubscriptionId: (sub?.stripe_subscription_id as string | null) ?? null,
-    stripeCustomerId,
+    stripeCustomerId: customerResult.customerId,
   }, respond);
 }
 
@@ -298,14 +362,22 @@ export async function POST(req: Request, { params }: RouteParams) {
       );
     }
 
-    const stripeCustomerId = await ensureStripeCustomerId({
+    const customerResult = await ensureStripeCustomerId({
       stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
       stripeCustomerId: sub?.stripe_customer_id as string | null,
       organizationId,
       serviceSupabase,
     });
 
-    if (!sub?.stripe_subscription_id || !stripeCustomerId) {
+    // If subscription was found to be invalid, tell user to start fresh checkout
+    if (customerResult.subscriptionInvalid) {
+      return respond(
+        { error: "Your subscription is no longer active. Please start a new subscription." },
+        400,
+      );
+    }
+
+    if (!sub?.stripe_subscription_id || !customerResult.customerId) {
       return respond(
         { error: "Billing is not set up for this organization." },
         400,
@@ -342,7 +414,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         alumniCount,
         status: (sub?.status as string | undefined) ?? "active",
         stripeSubscriptionId: sub.stripe_subscription_id as string,
-        stripeCustomerId,
+        stripeCustomerId: customerResult.customerId,
       }, respond);
     }
 

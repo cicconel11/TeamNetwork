@@ -14,8 +14,7 @@
     "@supabase/auth-helpers-nextjs": "^0.15.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.2",
-    "codex": "^0.2.3",
-    "next": "14.2.33",
+    "next": "^14.2.35",
     "react": "^18",
     "react-dom": "^18",
     "resend": "^6.6.0",
@@ -28,7 +27,7 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "eslint": "^8",
-    "eslint-config-next": "14.2.33",
+    "eslint-config-next": "^14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
