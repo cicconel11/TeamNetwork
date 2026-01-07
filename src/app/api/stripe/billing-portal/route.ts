@@ -110,13 +110,27 @@ export async function POST(req: Request) {
         }
       } catch (error) {
         console.error("[billing-portal] Unable to backfill Stripe customer id", error);
+        // If subscription doesn't exist in Stripe, clear it from database
+        if (error instanceof Error && error.message.includes("No such subscription")) {
+          console.log("[billing-portal] Clearing invalid subscription ID for org:", organization.id);
+          const serviceSupabase = createServiceClient();
+          await serviceSupabase
+            .from("organization_subscriptions")
+            .update({
+              stripe_subscription_id: null,
+              stripe_customer_id: null,
+              status: "canceled",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("organization_id", organization.id);
+        }
       }
     }
 
     if (!stripeCustomerId) {
       return respond(
         {
-          error: "No Stripe customer found for this org",
+          error: "No active billing subscription. Please set up billing by selecting a plan and clicking 'Update plan'.",
           stripe_subscription_id: stripeSubId,
         },
         400,
