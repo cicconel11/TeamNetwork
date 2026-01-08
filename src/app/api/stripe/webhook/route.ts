@@ -181,7 +181,7 @@ export async function POST(req: Request) {
     value === "year" ? "year" : "month";
 
   const normalizeBucket = (value?: string | null): AlumniBucket => {
-    const allowed: AlumniBucket[] = ["none", "0-200", "201-600", "601-1500", "1500+"];
+    const allowed: AlumniBucket[] = ["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"];
     return allowed.includes(value as AlumniBucket) ? (value as AlumniBucket) : "none";
   };
 
@@ -259,7 +259,7 @@ export async function POST(req: Request) {
   const ensureSubscriptionSeed = async (orgId: string, metadata: OrgMetadata) => {
     const baseInterval = metadata.baseInterval || "month";
     const alumniBucket = metadata.alumniBucket || "none";
-    const alumniPlanInterval = alumniBucket === "none" || alumniBucket === "1500+" ? null : baseInterval;
+    const alumniPlanInterval = alumniBucket === "none" || alumniBucket === "5000+" ? null : baseInterval;
 
     const { data: existing } = await orgSubs()
       .select("id")

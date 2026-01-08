@@ -10,12 +10,16 @@ const supabaseServiceRoleForAudit = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
 const priceEnv = {
   STRIPE_PRICE_BASE_MONTHLY: requireEnv("STRIPE_PRICE_BASE_MONTHLY"),
   STRIPE_PRICE_BASE_YEARLY: requireEnv("STRIPE_PRICE_BASE_YEARLY"),
-  STRIPE_PRICE_ALUMNI_0_200_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_0_200_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_0_200_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_0_200_YEARLY"),
-  STRIPE_PRICE_ALUMNI_201_600_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_201_600_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_201_600_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_201_600_YEARLY"),
-  STRIPE_PRICE_ALUMNI_601_1500_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_601_1500_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_601_1500_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_601_1500_YEARLY"),
+  STRIPE_PRICE_ALUMNI_0_250_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_0_250_MONTHLY"),
+  STRIPE_PRICE_ALUMNI_0_250_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_0_250_YEARLY"),
+  STRIPE_PRICE_ALUMNI_251_500_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_251_500_MONTHLY"),
+  STRIPE_PRICE_ALUMNI_251_500_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_251_500_YEARLY"),
+  STRIPE_PRICE_ALUMNI_501_1000_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_501_1000_MONTHLY"),
+  STRIPE_PRICE_ALUMNI_501_1000_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_501_1000_YEARLY"),
+  STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY"),
+  STRIPE_PRICE_ALUMNI_1001_2500_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_1001_2500_YEARLY"),
+  STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY"),
+  STRIPE_PRICE_ALUMNI_2500_5000_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_2500_5000_YEARLY"),
 } as const;
 
 function validatePriceIds() {
@@ -47,18 +51,26 @@ const basePrices: PriceMap = {
   year: priceEnv.STRIPE_PRICE_BASE_YEARLY,
 };
 
-const alumniPrices: Record<Exclude<AlumniBucket, "none" | "1500+">, PriceMap> = {
-  "0-200": {
-    month: priceEnv.STRIPE_PRICE_ALUMNI_0_200_MONTHLY,
-    year: priceEnv.STRIPE_PRICE_ALUMNI_0_200_YEARLY,
+const alumniPrices: Record<Exclude<AlumniBucket, "none" | "5000+">, PriceMap> = {
+  "0-250": {
+    month: priceEnv.STRIPE_PRICE_ALUMNI_0_250_MONTHLY,
+    year: priceEnv.STRIPE_PRICE_ALUMNI_0_250_YEARLY,
   },
-  "201-600": {
-    month: priceEnv.STRIPE_PRICE_ALUMNI_201_600_MONTHLY,
-    year: priceEnv.STRIPE_PRICE_ALUMNI_201_600_YEARLY,
+  "251-500": {
+    month: priceEnv.STRIPE_PRICE_ALUMNI_251_500_MONTHLY,
+    year: priceEnv.STRIPE_PRICE_ALUMNI_251_500_YEARLY,
   },
-  "601-1500": {
-    month: priceEnv.STRIPE_PRICE_ALUMNI_601_1500_MONTHLY,
-    year: priceEnv.STRIPE_PRICE_ALUMNI_601_1500_YEARLY,
+  "501-1000": {
+    month: priceEnv.STRIPE_PRICE_ALUMNI_501_1000_MONTHLY,
+    year: priceEnv.STRIPE_PRICE_ALUMNI_501_1000_YEARLY,
+  },
+  "1001-2500": {
+    month: priceEnv.STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY,
+    year: priceEnv.STRIPE_PRICE_ALUMNI_1001_2500_YEARLY,
+  },
+  "2500-5000": {
+    month: priceEnv.STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY,
+    year: priceEnv.STRIPE_PRICE_ALUMNI_2500_5000_YEARLY,
   },
 };
 
@@ -71,7 +83,7 @@ function requirePriceId(id: string, label: string) {
 
 export function getPriceIds(interval: SubscriptionInterval, alumniBucket: AlumniBucket) {
   const basePrice = requirePriceId(basePrices[interval], `base ${interval}`);
-  if (alumniBucket === "none" || alumniBucket === "1500+") {
+  if (alumniBucket === "none" || alumniBucket === "5000+") {
     return { basePrice, alumniPrice: null as string | null };
   }
 
@@ -81,7 +93,7 @@ export function getPriceIds(interval: SubscriptionInterval, alumniBucket: Alumni
 }
 
 export function isSalesLedBucket(bucket: AlumniBucket) {
-  return bucket === "1500+";
+  return bucket === "5000+";
 }
 
 export const STRIPE_PUBLISHABLE_KEY = stripePublishableKey;

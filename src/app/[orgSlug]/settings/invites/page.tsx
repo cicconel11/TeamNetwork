@@ -38,10 +38,12 @@ interface SubscriptionInfo {
 }
 
 const BUCKET_OPTIONS: { value: AlumniBucket; label: string; limit: number | null }[] = [
-  { value: "0-200", label: "0–200 alumni", limit: ALUMNI_LIMITS["0-200"] },
-  { value: "201-600", label: "201–600 alumni", limit: ALUMNI_LIMITS["201-600"] },
-  { value: "601-1500", label: "601–1500 alumni", limit: ALUMNI_LIMITS["601-1500"] },
-  { value: "1500+", label: "1500+ (contact us)", limit: ALUMNI_LIMITS["1500+"] },
+  { value: "0-250", label: "0–250 alumni", limit: ALUMNI_LIMITS["0-250"] },
+  { value: "251-500", label: "251–500 alumni", limit: ALUMNI_LIMITS["251-500"] },
+  { value: "501-1000", label: "501–1,000 alumni", limit: ALUMNI_LIMITS["501-1000"] },
+  { value: "1001-2500", label: "1,001–2,500 alumni", limit: ALUMNI_LIMITS["1001-2500"] },
+  { value: "2500-5000", label: "2,500–5,000 alumni", limit: ALUMNI_LIMITS["2500-5000"] },
+  { value: "5000+", label: "5,000+ (contact us)", limit: ALUMNI_LIMITS["5000+"] },
 ];
 
 export default function InvitesPage() {
@@ -61,7 +63,8 @@ export default function InvitesPage() {
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
   const [isLoadingQuota, setIsLoadingQuota] = useState(true);
   const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
-  const [selectedBucket, setSelectedBucket] = useState<AlumniBucket>("0-200");
+  const [selectedBucket, setSelectedBucket] = useState<AlumniBucket>("0-250");
+  const [selectedInterval, setSelectedInterval] = useState<"month" | "year">("month");
 
   // New invite form state
   const [showForm, setShowForm] = useState(false);
@@ -300,7 +303,7 @@ export default function InvitesPage() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alumniBucket: selectedBucket }),
+        body: JSON.stringify({ alumniBucket: selectedBucket, interval: selectedInterval }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -475,7 +478,7 @@ export default function InvitesPage() {
           </div>
         )}
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-[2fr_1fr]">
+        <div className="mt-4 grid gap-4 sm:grid-cols-[2fr_1fr_1fr]">
           <div className="space-y-2">
             <Select
               label="Alumni plan"
@@ -487,8 +490,8 @@ export default function InvitesPage() {
                 disabled:
                   (quota
                     ? (option.limit !== null && quota.alumniCount > option.limit) ||
-                      (option.value === "1500+" && quota.bucket !== "1500+")
-                    : option.value === "1500+") || false,
+                      (option.value === "5000+" && quota.bucket !== "5000+")
+                    : option.value === "5000+") || false,
               }))}
             />
             <p className="text-xs text-muted-foreground">
@@ -496,6 +499,18 @@ export default function InvitesPage() {
                 ? "Downgrades are disabled if your alumni count exceeds the plan limit."
                 : "Select a plan and click Update to start billing checkout."}
             </p>
+          </div>
+          <div className="space-y-2">
+            <Select
+              label="Billing interval"
+              value={selectedInterval}
+              onChange={(e) => setSelectedInterval(e.target.value as "month" | "year")}
+              disabled={isLoadingQuota}
+              options={[
+                { value: "month", label: "Monthly" },
+                { value: "year", label: "Yearly (save ~17%)" },
+              ]}
+            />
           </div>
           <div className="flex gap-3 flex-wrap items-end">
             <Button

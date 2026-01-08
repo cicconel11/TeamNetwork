@@ -182,14 +182,14 @@ export default function CreateOrgPage() {
                 rows={3}
               />
 
-              <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-1">
+              <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-2">
                 <p className="font-semibold text-foreground">Pricing</p>
-                <p className="text-muted-foreground">Base app: $10/mo or $100/yr.</p>
+                <p className="text-muted-foreground">Active Team (Required): $15/mo or $150/yr.</p>
                 <p className="text-muted-foreground">
-                  Alumni add-on: 0–200: +$10/mo or $100/yr; 201–600: +$20/mo or $200/yr; 601–1500: +$30/mo or $300/yr.
+                  Alumni Add-On (Optional): 0–250: +$10/mo or $100/yr; 251–500: +$20/mo or $200/yr; 501–1,000: +$35/mo or $350/yr; 1,001–2,500: +$60/mo or $600/yr; 2,500–5,000: +$100/mo or $1,000/yr.
                 </p>
                 <p className="text-muted-foreground">
-                  1500+ alumni routes to a custom quote (no checkout; we will contact you).
+                  5,000+ alumni routes to a custom quote (no checkout; we will contact you).
                 </p>
               </div>
 
@@ -237,7 +237,7 @@ export default function CreateOrgPage() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Monthly = $10/mo base. Yearly = $100/yr (save 2 months on base and add-ons).
+                    Monthly = $15/mo base. Yearly = $150/yr (save 2 months).
                   </p>
                 </div>
 
@@ -249,10 +249,12 @@ export default function CreateOrgPage() {
                     className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-org-primary"
                   >
                     <option value="none">No alumni access</option>
-                    <option value="0-200">0–200 alumni</option>
-                    <option value="201-600">201–600 alumni</option>
-                    <option value="601-1500">601–1500 alumni</option>
-                    <option value="1500+">Over 1500 (custom pricing)</option>
+                    <option value="0-250">0–250 alumni</option>
+                    <option value="251-500">251–500 alumni</option>
+                    <option value="501-1000">501–1,000 alumni</option>
+                    <option value="1001-2500">1,001–2,500 alumni</option>
+                    <option value="2500-5000">2,500–5,000 alumni</option>
+                    <option value="5000+">Over 5,000 (custom pricing)</option>
                   </select>
                   <p className="text-xs text-muted-foreground">
                     Alumni access adds read access for alumni directories and communications; pricing scales by bucket.
@@ -260,9 +262,9 @@ export default function CreateOrgPage() {
                 </div>
               </div>
 
-              {alumniBucket === "1500+" && (
+              {alumniBucket === "5000+" && (
                 <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
-                  For 1500+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
+                  For 5,000+ alumni, we will contact you with custom pricing. No payment is collected now and the org will remain pending_sales.
                 </div>
               )}
 

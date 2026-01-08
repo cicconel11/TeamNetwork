@@ -34,7 +34,7 @@ const createOrgSchema = z
     description: optionalSafeString(800),
     primaryColor: baseSchemas.hexColor.optional(),
     billingInterval: z.enum(["month", "year"]),
-    alumniBucket: z.enum(["none", "0-200", "201-600", "601-1500", "1500+"]),
+    alumniBucket: z.enum(["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"]),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
   })

@@ -21,7 +21,7 @@ interface RouteParams {
 
 const bodySchema = z
   .object({
-    alumniBucket: z.enum(["none", "0-200", "201-600", "601-1500", "1500+"]).optional(),
+    alumniBucket: z.enum(["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"]).optional(),
     interval: z.enum(["month", "year"]).optional(),
   })
   .strict();
@@ -82,7 +82,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       .maybeSingle();
     if (!org) return respond({ error: "Organization not found" }, 404);
 
-    if (targetBucket === "1500+") {
+    if (targetBucket === "5000+") {
       await serviceSupabase
         .from("organization_subscriptions")
         .upsert({

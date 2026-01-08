@@ -100,7 +100,7 @@ async function ensureStripePlan(params: {
     const { stripe, getPriceIds } = await import("@/lib/stripe");
     const priceMap: PriceLookup[] = [];
     const intervals: SubscriptionInterval[] = ["month", "year"];
-    const buckets: AlumniBucket[] = ["none", "0-200", "201-600", "601-1500"];
+    const buckets: AlumniBucket[] = ["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000"];
 
     intervals.forEach((interval) => {
       buckets.forEach((bucket) => {
@@ -167,7 +167,7 @@ async function ensureStripePlan(params: {
 
 const postSchema = z
   .object({
-    alumniBucket: z.enum(["none", "0-200", "201-600", "601-1500", "1500+"]),
+    alumniBucket: z.enum(["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"]),
   })
   .strict();
 
@@ -340,9 +340,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     const targetBucket = normalizeBucket(body.alumniBucket);
-    if (targetBucket === "1500+") {
+    if (targetBucket === "5000+") {
       return respond(
-        { error: "Contact support to manage the 1500+ alumni plan." },
+        { error: "Contact support to manage the 5000+ alumni plan." },
         400,
       );
     }

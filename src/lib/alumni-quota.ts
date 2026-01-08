@@ -2,10 +2,12 @@ import type { AlumniBucket } from "@/types/database";
 
 export const ALUMNI_LIMITS: Record<AlumniBucket, number | null> = {
   none: 0,
-  "0-200": 200,
-  "201-600": 600,
-  "601-1500": 1500,
-  "1500+": null,
+  "0-250": 250,
+  "251-500": 500,
+  "501-1000": 1000,
+  "1001-2500": 2500,
+  "2500-5000": 5000,
+  "5000+": null,
 };
 
 export function getAlumniLimit(bucket: AlumniBucket | null | undefined) {
@@ -14,6 +16,6 @@ export function getAlumniLimit(bucket: AlumniBucket | null | undefined) {
 }
 
 export function normalizeBucket(bucket: string | null | undefined): AlumniBucket {
-  const allowed: AlumniBucket[] = ["none", "0-200", "201-600", "601-1500", "1500+"];
+  const allowed: AlumniBucket[] = ["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"];
   return allowed.includes(bucket as AlumniBucket) ? (bucket as AlumniBucket) : "none";
 }
