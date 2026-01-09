@@ -22,6 +22,7 @@
   --muted-foreground: #64748b;
   --border: #e2e8f0;
   --ring: var(--color-org-primary);
+  --selection: var(--color-org-secondary-light);
 
   /* Accent colors */
   --success: #10b981;
@@ -60,6 +61,11 @@ body {
   background: var(--background);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--selection);
+  color: #0f172a;
 }
 
 /* Custom scrollbar */

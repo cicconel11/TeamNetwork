@@ -52,6 +52,12 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   }
 
   const organization = orgContext.organization;
+  const primary = organization.primary_color || "#1e3a5f";
+  const secondary = organization.secondary_color || "#10b981";
+  const primaryLight = organization.primary_color ? adjustColor(organization.primary_color, 20) : "#2d4a6f";
+  const primaryDark = organization.primary_color ? adjustColor(organization.primary_color, -20) : "#0f2a4f";
+  const secondaryLight = organization.secondary_color ? adjustColor(organization.secondary_color, 20) : "#34d399";
+  const secondaryDark = organization.secondary_color ? adjustColor(organization.secondary_color, -20) : "#047857";
 
   return (
     <div 
@@ -59,22 +65,29 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       className="min-h-screen bg-background"
       style={{
         // Set org primary color as CSS variable
-        "--color-org-primary": organization.primary_color || "#1e3a5f",
-        "--color-org-primary-light": organization.primary_color 
-          ? adjustColor(organization.primary_color, 20) 
-          : "#2d4a6f",
-        "--color-org-primary-dark": organization.primary_color 
-          ? adjustColor(organization.primary_color, -20) 
-          : "#0f2a4f",
-        "--color-org-secondary": organization.secondary_color || "#10b981",
-        "--color-org-secondary-light": organization.secondary_color
-          ? adjustColor(organization.secondary_color, 20)
-          : "#34d399",
-        "--color-org-secondary-dark": organization.secondary_color
-          ? adjustColor(organization.secondary_color, -20)
-          : "#047857",
+        "--color-org-primary": primary,
+        "--color-org-primary-light": primaryLight,
+        "--color-org-primary-dark": primaryDark,
+        "--color-org-secondary": secondary,
+        "--color-org-secondary-light": secondaryLight,
+        "--color-org-secondary-dark": secondaryDark,
       } as React.CSSProperties}
     >
+      <style
+        // Mirror theme variables to :root so portals/modals also pick up org branding
+        dangerouslySetInnerHTML={{
+          __html: `
+            :root {
+              --color-org-primary: ${primary};
+              --color-org-primary-light: ${primaryLight};
+              --color-org-primary-dark: ${primaryDark};
+              --color-org-secondary: ${secondary};
+              --color-org-secondary-light: ${secondaryLight};
+              --color-org-secondary-dark: ${secondaryDark};
+            }
+          `,
+        }}
+      />
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
         <OrgSidebar organization={organization} role={orgContext.role} />
       </div>
