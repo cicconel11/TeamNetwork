@@ -1,4 +1,6 @@
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
+import { Users, GraduationCap, CalendarClock, HandHeart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -53,15 +55,47 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
 
   const totalDonations = ((donationStat as { total_amount_cents?: number } | null)?.total_amount_cents ?? 0) / 100;
 
-  const stats = [
-    { label: "Active Members", value: membersCount || 0, href: `/${orgSlug}/members`, color: "bg-blue-500" },
-    { label: "Alumni", value: alumniCount || 0, href: `/${orgSlug}/alumni`, color: "bg-purple-500" },
-    { label: "Events", value: eventsCount || 0, href: `/${orgSlug}/events`, color: "bg-emerald-500" },
+  type StatCard = {
+    label: string;
+    value: number | string;
+    href: string;
+    icon: LucideIcon;
+    accentFrom: string;
+    accentTo: string;
+  };
+
+  const stats: StatCard[] = [
+    {
+      label: "Active Members",
+      value: membersCount || 0,
+      href: `/${orgSlug}/members`,
+      icon: Users,
+      accentFrom: "var(--color-org-secondary)",
+      accentTo: "var(--color-org-secondary-dark)",
+    },
+    {
+      label: "Alumni",
+      value: alumniCount || 0,
+      href: `/${orgSlug}/alumni`,
+      icon: GraduationCap,
+      accentFrom: "var(--color-org-secondary-light)",
+      accentTo: "var(--color-org-secondary)",
+    },
+    {
+      label: "Events",
+      value: eventsCount || 0,
+      href: `/${orgSlug}/events`,
+      icon: CalendarClock,
+      accentFrom: "var(--color-org-primary-light)",
+      accentTo: "var(--color-org-primary)",
+    },
     {
       label: "Total Donations",
       value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       href: `/${orgSlug}/donations`,
-      color: "bg-amber-500",
+      icon: HandHeart,
+      accentFrom: "var(--color-org-secondary)",
+      accentTo: "var(--color-org-secondary-dark)",
     },
   ];
 
@@ -76,12 +110,16 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => (
           <Link key={stat.label} href={stat.href}>
-            <Card interactive className="p-5">
+            <Card interactive className="p-5 bg-card/90 backdrop-blur">
               <div className="flex items-center gap-4">
-                <div className={`h-12 w-12 ${stat.color} rounded-xl flex items-center justify-center`}>
-                  <span className="text-white font-bold text-lg font-mono">
-                    {typeof stat.value === "number" ? stat.value : "$"}
-                  </span>
+                <div
+                  className="h-12 w-12 rounded-xl flex items-center justify-center text-white shadow-soft"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, ${stat.accentFrom}, ${stat.accentTo})`,
+                    boxShadow: "0 12px 30px -10px rgba(0,0,0,0.35)",
+                  }}
+                >
+                  <stat.icon className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground font-mono">{stat.value}</p>
