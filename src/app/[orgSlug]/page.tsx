@@ -112,14 +112,12 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
           <Link key={stat.label} href={stat.href}>
             <Card interactive className="p-5 bg-card/90 backdrop-blur">
               <div className="flex items-center gap-4">
-                <div
-                  className="h-12 w-12 rounded-xl flex items-center justify-center text-white shadow-soft"
+                <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white shadow-soft"
                   style={{
-                    backgroundImage: `linear-gradient(135deg, ${stat.accentFrom}, ${stat.accentTo})`,
+                    backgroundColor: stat.accentFrom,
                     boxShadow: "0 12px 30px -10px rgba(0,0,0,0.35)",
-                  }}
-                >
-                  <stat.icon className="h-6 w-6" />
+                  }}>
+                    <stat.icon className="h-6 w-6" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-foreground font-mono">{stat.value}</p>

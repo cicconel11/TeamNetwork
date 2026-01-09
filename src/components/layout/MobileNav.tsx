@@ -38,9 +38,7 @@ export function MobileNav({ organization, role }: MobileNavProps) {
           ) : (
             <div
               className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-              style={{
-                backgroundImage: "linear-gradient(135deg, var(--color-org-primary), var(--color-org-secondary))",
-              }}
+              style={{ backgroundColor: "var(--color-org-primary)" }}
             >
               {organization.name.charAt(0)}
             </div>

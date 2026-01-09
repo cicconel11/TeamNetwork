@@ -334,7 +334,7 @@ export default function OrgSettingsPage() {
             <div
               className="org-brand-preview relative overflow-hidden rounded-2xl border border-border p-5 shadow-soft"
               style={{
-                backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+                backgroundColor: primaryColor,
               }}
             >
               <div className="absolute inset-0 bg-black/5 dark:bg-black/20" />
@@ -447,7 +447,7 @@ export default function OrgSettingsPage() {
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Accent surfaces, pills, and gradients pull from this color.
+                    Accent surfaces and pills pull from this color.
                   </p>
                 </div>
               </div>
