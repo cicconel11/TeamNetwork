@@ -23,7 +23,7 @@
     "react-dom": "^18",
     "resend": "^6.6.0",
     "strip": "^3.0.0",
-    "stripe": "^20.0.0",
+    "stripe": "^20.1.2",
     "zod": "^4.3.5"
   },
   "devDependencies": {
