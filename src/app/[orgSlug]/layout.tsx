@@ -65,7 +65,6 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const muted = isPrimaryDark ? adjustColor(primary, 28) : adjustColor(primary, -20);
   const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
   const borderColor = isPrimaryDark ? adjustColor(primary, 35) : adjustColor(primary, -28);
-  const backgroundGradient = `linear-gradient(140deg, ${primaryDark} 0%, ${primary} 45%, ${primaryLight} 100%)`;
 
   return (
     <div 
@@ -89,7 +88,6 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         "--border": borderColor,
         "--ring": secondary,
         backgroundColor: primary,
-        backgroundImage: backgroundGradient,
         color: baseForeground,
       } as React.CSSProperties}
     >
