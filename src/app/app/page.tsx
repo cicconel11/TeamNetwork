@@ -3,6 +3,8 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
+import { AppPageAnimations } from "@/components/app/AppPageAnimations";
+import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
 
 type Membership = {
   organization: {
@@ -57,13 +59,15 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     })) ?? [];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-card">
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      <AppBackgroundEffects />
+      <AppPageAnimations />
+      <header className="relative z-10 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">
+          <h1 className="app-hero-animate text-2xl font-bold text-foreground" style={{ opacity: 0 }}>
             Team<span className="text-emerald-500">Network</span>
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
             <form action="/auth/signout" method="POST">
               <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
             </form>
@@ -77,7 +81,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {/* Error banner for revoked access */}
         {errorParam === "access_revoked" && (
           <Card className="p-4 mb-6 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">
@@ -107,11 +111,11 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         )}
 
         <div className="mb-8 flex items-center justify-between">
-          <div>
+          <div className="app-hero-animate" style={{ opacity: 0 }}>
             <p className="text-sm text-muted-foreground">Welcome back</p>
             <h2 className="text-2xl font-bold text-foreground">Your organizations</h2>
           </div>
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="app-hero-animate hidden sm:flex items-center gap-2" style={{ opacity: 0 }}>
             <Link href="/app/join">
               <Button variant="secondary" size="sm">Join existing</Button>
             </Link>
@@ -142,10 +146,10 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="orgs-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {orgs.map((org) => (
               <Link key={org.id} href={`/${org.slug}`}>
-                <Card interactive className="p-5 space-y-3">
+                <Card interactive className="org-card p-5 space-y-3" style={{ opacity: 0 }}>
                   <div className="flex items-center gap-3">
                     {org.logo_url ? (
                       <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-muted">

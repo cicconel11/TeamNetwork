@@ -535,3 +535,55 @@ noscript~.scroll-reveal {
 .landing-page .terms-card {
   will-change: opacity, transform;
 }
+
+/* App Page Animations */
+.app-gradient-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  animation: orbFloat 30s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Org card enhanced hover effect */
+.org-card {
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.org-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 
+    0 20px 40px -15px rgba(0, 0, 0, 0.15),
+    0 0 0 1px var(--color-org-primary);
+}
+
+@media (prefers-color-scheme: dark) {
+  .org-card:hover {
+    box-shadow: 
+      0 20px 40px -15px rgba(0, 0, 0, 0.5),
+      0 0 0 1px var(--color-org-primary),
+      0 0 30px rgba(52, 211, 153, 0.1);
+  }
+}
+
+/* App page hero elements visibility fallback */
+.app-hero-animate,
+.app-scroll-reveal,
+.org-card {
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-hero-animate,
+  .app-scroll-reveal,
+  .org-card {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  
+  .org-card:hover {
+    transform: none;
+  }
+}
