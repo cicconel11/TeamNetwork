@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import anime from "animejs/lib/anime.es.js";
+import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
@@ -133,11 +133,11 @@ export default function OrgSettingsPage() {
 
   useEffect(() => {
     if (loading) return;
-    const animation = anime({
+    const animation = animate({
       targets: ".org-settings-card",
       opacity: [0, 1],
       translateY: [12, 0],
-      delay: anime.stagger(70),
+      delay: stagger(70),
       duration: 550,
       easing: "easeOutQuad",
     });
@@ -147,7 +147,7 @@ export default function OrgSettingsPage() {
 
   useEffect(() => {
     if (loading) return;
-    anime({
+    animate({
       targets: ".org-brand-preview",
       scale: [0.98, 1],
       opacity: [0.9, 1],
