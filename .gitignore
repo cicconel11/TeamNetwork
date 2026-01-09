@@ -6,6 +6,11 @@
 .pnp.js
 .yarn/install-state.gz
 
+# package manager lockfiles (standardize on npm)
+pnpm-lock.yaml
+yarn.lock
+bun.lockb
+
 # testing
 /coverage
 

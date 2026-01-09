@@ -35,8 +35,14 @@ test("concurrent donation checkout requests reuse the same Stripe session", asyn
     });
 
     if (!claimed) {
-      const awaited = await waitForExistingStripeResource(supabase as never, claimedAttempt.id, 5);
-      return (awaited ?? claimedAttempt).checkout_url;
+      const deadline = Date.now() + 250;
+      while (Date.now() < deadline) {
+        const awaited = await waitForExistingStripeResource(supabase as never, claimedAttempt.id, 5);
+        if (awaited?.checkout_url) {
+          return awaited.checkout_url;
+        }
+      }
+      return claimedAttempt.checkout_url;
     }
 
     stripeCalls.push(claimedAttempt.idempotency_key);

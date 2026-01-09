@@ -79,7 +79,11 @@ export function createSupabaseStub() {
           return builder;
         },
         is(column: string, value: unknown) {
-          filters.push((row) => (value === null ? row[column] === null : row[column] === value));
+          filters.push((row) => {
+            const cell = row[column];
+            if (value === null) return cell === null || cell === undefined;
+            return cell === value;
+          });
           return builder;
         },
         select() {
@@ -120,7 +124,11 @@ export function createSupabaseStub() {
           return builder;
         },
         is(column: string, value: unknown) {
-          filters.push((row) => (value === null ? row[column] === null : row[column] === value));
+          filters.push((row) => {
+            const cell = row[column];
+            if (value === null) return cell === null || cell === undefined;
+            return cell === value;
+          });
           return builder;
         },
         maybeSingle(): SupabaseResponse<Row> {

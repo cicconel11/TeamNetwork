@@ -6,6 +6,7 @@ import { requireEnv } from "@/lib/env";
 import type { AlumniBucket, Database, SubscriptionInterval } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/stripe-events";
+import { checkWebhookRateLimit, getWebhookClientIp } from "@/lib/security/webhook-rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,6 +15,19 @@ const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
 
 export async function POST(req: Request) {
   console.log("[stripe-webhook] Received request");
+
+  // Rate limiting - defense in depth against compromised Stripe accounts or DoS
+  const clientIp = getWebhookClientIp(req);
+  if (clientIp) {
+    const rateLimit = checkWebhookRateLimit(clientIp);
+    if (!rateLimit.ok) {
+      console.warn("[stripe-webhook] Rate limit exceeded for IP:", clientIp);
+      return NextResponse.json(
+        { error: "Too many requests", retryAfterSeconds: rateLimit.retryAfterSeconds },
+        { status: 429, headers: rateLimit.headers }
+      );
+    }
+  }
   
   const signature = req.headers.get("stripe-signature");
   if (!signature) {

@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:auth": "node --test tests/middleware.testing123.test.ts",
-    "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts"
+    "test:auth": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts",
+    "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts tests/platform-fee.test.ts",
+    "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.15.0",

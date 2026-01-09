@@ -20,6 +20,7 @@ import {
   updatePaymentAttempt,
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
+import { calculatePlatformFee } from "@/lib/payments/platform-fee";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,6 +40,8 @@ const donationSchema = z
     mode: z.enum(["checkout", "payment_intent"]).optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
+    // SECURITY: platformFeeAmountCents is accepted but IGNORED - fee is calculated server-side
+    // This field is deprecated and will be removed in a future version
     platformFeeAmountCents: z.coerce.number().int().min(0).optional(),
   })
   .strict()
@@ -85,11 +88,9 @@ export async function POST(req: Request) {
 
   const currency = normalizeCurrency(body.currency);
   const mode: DonationMode = body.mode === "payment_intent" ? "payment_intent" : "checkout";
-  const platformFeeCentsRaw = Math.round(Number(body.platformFeeAmountCents ?? 0));
-  const platformFeeCents = Math.max(
-    0,
-    Math.min(amountCents, Number.isFinite(platformFeeCentsRaw) ? platformFeeCentsRaw : 0),
-  );
+  // SECURITY: Platform fee is ALWAYS calculated server-side to prevent fee bypass attacks
+  // Client-provided platformFeeAmountCents is intentionally ignored
+  const platformFeeCents = calculatePlatformFee(amountCents);
   const idempotencyKey = body.idempotencyKey ?? null;
   const paymentAttemptId = body.paymentAttemptId ?? null;
 
