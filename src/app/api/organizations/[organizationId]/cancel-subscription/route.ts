@@ -82,9 +82,10 @@ export async function POST(_req: Request, { params }: RouteParams) {
         cancel_at_period_end: true,
       });
       
-      // Get the period end from Stripe
-      if (updatedSub.current_period_end) {
-        currentPeriodEnd = new Date(updatedSub.current_period_end * 1000).toISOString();
+      // Get the period end from the first subscription item
+      const firstItem = updatedSub.items?.data?.[0];
+      if (firstItem?.current_period_end) {
+        currentPeriodEnd = new Date(firstItem.current_period_end * 1000).toISOString();
       }
     }
 
