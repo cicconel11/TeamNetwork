@@ -42,7 +42,7 @@ export default async function LandingPage() {
             <Link href="/terms" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Terms</Link>
           </nav>
           <div className="flex items-center gap-3">
-            <ButtonLink href="/auth/login" variant="ghost" className="text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
+            <ButtonLink href="/auth/login" variant="custom" className="text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
               Sign In
             </ButtonLink>
             <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5">
@@ -86,7 +86,7 @@ export default async function LandingPage() {
                 <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-8 py-6 text-base green-glow">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="secondary" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-6 text-base">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-6 text-base">
                   Sign In
                 </ButtonLink>
               </div>
@@ -347,7 +347,7 @@ export default async function LandingPage() {
             <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-10 py-6 text-lg green-glow">
               Create Your Organization
             </ButtonLink>
-            <ButtonLink href="/auth/login" size="lg" variant="secondary" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-10 py-6 text-lg">
+            <ButtonLink href="/auth/login" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-10 py-6 text-lg">
               Sign In
             </ButtonLink>
           </div>
