@@ -73,9 +73,7 @@ export default function InvitesPage() {
   const [newUses, setNewUses] = useState<string>("");
   const [newExpires, setNewExpires] = useState<string>("");
   const [isCancelling, setIsCancelling] = useState(false);
-  const [isResuming, setIsResuming] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadQuota = useCallback(async (organizationId: string) => {
     setIsLoadingQuota(true);
@@ -232,71 +230,23 @@ export default function InvitesPage() {
 
   const cancelSubscription = async () => {
     if (!orgId) return;
-    if (!quota) {
-      setError("Unable to load subscription details. Please try again.");
-      return;
-    }
-
-    const hasStripeSubscription = !!quota.stripeSubscriptionId;
-    const hasStripeCustomer = !!quota.stripeCustomerId;
-    const confirmMessage = hasStripeSubscription
-      ? "Cancel your subscription? You will retain access until the end of your current billing period."
-      : "We will open the Stripe billing portal so you can cancel your subscription. Continue?";
-
-    if (!confirm(confirmMessage)) return;
-
-    if (!hasStripeSubscription) {
-      if (!hasStripeCustomer) {
-        setError("Billing is not connected for this organization.");
-        return;
-      }
-      await openBillingPortal();
-      return;
-    }
+    if (!confirm("Are you sure you want to cancel your subscription and permanently delete this organization? This action cannot be undone.")) return;
 
     setIsCancelling(true);
     setError(null);
 
     try {
-      const res = await fetch(`/api/organizations/${orgId}/cancel-subscription`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
+      const res = await fetch(`/api/organizations/${orgId}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Unable to cancel subscription");
       }
-      // Refresh subscription status to show canceling state
-      await loadQuota(orgId);
+      alert("Organization deleted.");
+      window.location.href = "/app";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to cancel subscription");
     } finally {
       setIsCancelling(false);
-    }
-  };
-
-  const resumeSubscription = async () => {
-    if (!orgId) return;
-    if (!confirm("Resume your subscription? You will continue to be billed at the regular rate.")) return;
-
-    setIsResuming(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/organizations/${orgId}/resume-subscription`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Unable to resume subscription");
-      }
-      // Refresh subscription status
-      await loadQuota(orgId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to resume subscription");
-    } finally {
-      setIsResuming(false);
     }
   };
 
@@ -325,29 +275,6 @@ export default function InvitesPage() {
       setError(err instanceof Error ? err.message : "Unable to open billing portal");
     } finally {
       setIsOpeningPortal(false);
-    }
-  };
-
-  const deleteOrganization = async () => {
-    if (!orgId) return;
-    if (!confirm("This will delete the organization, all data, and cancel billing. Continue?")) return;
-
-    setIsDeleting(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/organizations/${orgId}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Unable to delete organization");
-      }
-      alert("Organization deleted.");
-      window.location.href = "/app";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to delete organization");
-      setIsDeleting(false);
     }
   };
 
@@ -836,7 +763,7 @@ export default function InvitesPage() {
           <div>
             <h3 className="text-red-700 dark:text-red-300 font-semibold">Danger Zone</h3>
             <p className="text-sm text-red-700/80 dark:text-red-200/80">
-              Cancel billing or permanently delete this organization. Deletion removes all data.
+              Cancel billing and permanently delete this organization. This action cannot be undone.
             </p>
             {error && (
               <p className="text-sm text-red-600 dark:text-red-400 mt-2 font-medium">
@@ -845,49 +772,14 @@ export default function InvitesPage() {
             )}
           </div>
 
-          {/* Show cancellation scheduled message */}
-          {quota?.status === "canceling" && quota?.currentPeriodEnd && (
-            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                <strong>Subscription ending:</strong> Your subscription is scheduled to cancel on{" "}
-                <strong>
-                  {new Date(quota.currentPeriodEnd).toLocaleDateString(undefined, {
-                    year: "numeric",
-                    month: "long",
-                    day: "numeric",
-                  })}
-                </strong>
-                . You will retain access until then.
-              </p>
-            </div>
-          )}
-
           <div className="flex gap-3 flex-wrap">
-            {quota?.status === "canceling" ? (
-              <Button
-                variant="secondary"
-                onClick={resumeSubscription}
-                isLoading={isResuming}
-              >
-                Resume Subscription
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                onClick={cancelSubscription}
-                isLoading={isCancelling}
-                disabled={isLoadingQuota || !quota || quota?.status === "canceled"}
-              >
-                {quota?.status === "canceled" ? "Subscription Cancelled" : "Cancel Subscription"}
-              </Button>
-            )}
             <Button
-              variant="ghost"
-              className="text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900/30"
-              onClick={deleteOrganization}
-              isLoading={isDeleting}
+              variant="secondary"
+              onClick={cancelSubscription}
+              isLoading={isCancelling}
+              disabled={isCancelling || !orgId}
             >
-              Delete Organization
+              Cancel Subscription
             </Button>
           </div>
         </div>
