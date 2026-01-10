@@ -200,6 +200,15 @@ export async function POST(req: Request) {
     return allowed.includes(value as AlumniBucket) ? (value as AlumniBucket) : "none";
   };
 
+  const getSubscriptionStatus = (subscription: Stripe.Subscription | null | undefined): string => {
+    if (!subscription) return "canceled";
+    const status = subscription.status || "canceled";
+    if (subscription.cancel_at_period_end && status !== "canceled") {
+      return "canceling";
+    }
+    return status;
+  };
+
   const parseOrgMetadata = (metadata?: Stripe.Metadata | null): OrgMetadata => ({
     organizationId: (metadata?.organization_id as string | undefined) ?? null,
     organizationSlug: (metadata?.organization_slug as string | undefined) ?? null,
@@ -375,7 +384,7 @@ export async function POST(req: Request) {
           if (subscriptionId) {
             const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
             if ("current_period_end" in subscription) {
-              status = subscription.status;
+              status = getSubscriptionStatus(subscription);
               const periodEnd = Number(subscription.current_period_end);
               currentPeriodEnd = periodEnd
                 ? new Date(periodEnd * 1000).toISOString()
@@ -449,7 +458,7 @@ export async function POST(req: Request) {
         const currentPeriodEnd = periodEnd
           ? new Date(periodEnd * 1000).toISOString()
           : null;
-        const status = subscription.status || "canceled";
+        const status = getSubscriptionStatus(subscription);
 
         // Set grace period when subscription is deleted (canceled)
         // Clear grace period when subscription is reactivated (active/trialing)
@@ -497,7 +506,7 @@ export async function POST(req: Request) {
             ? new Date(periodEnd * 1000).toISOString()
             : null;
           await updateBySubscriptionId(subscriptionId, {
-            status: subscription.status,
+            status: getSubscriptionStatus(subscription),
             current_period_end: currentPeriodEnd,
             stripe_customer_id: customerId,
           });
