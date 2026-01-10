@@ -232,7 +232,27 @@ export default function InvitesPage() {
 
   const cancelSubscription = async () => {
     if (!orgId) return;
-    if (!confirm("Cancel your subscription? You will retain access until the end of your current billing period.")) return;
+    if (!quota) {
+      setError("Unable to load subscription details. Please try again.");
+      return;
+    }
+
+    const hasStripeSubscription = !!quota.stripeSubscriptionId;
+    const hasStripeCustomer = !!quota.stripeCustomerId;
+    const confirmMessage = hasStripeSubscription
+      ? "Cancel your subscription? You will retain access until the end of your current billing period."
+      : "We will open the Stripe billing portal so you can cancel your subscription. Continue?";
+
+    if (!confirm(confirmMessage)) return;
+
+    if (!hasStripeSubscription) {
+      if (!hasStripeCustomer) {
+        setError("Billing is not connected for this organization.");
+        return;
+      }
+      await openBillingPortal();
+      return;
+    }
 
     setIsCancelling(true);
     setError(null);
@@ -856,7 +876,7 @@ export default function InvitesPage() {
                 variant="secondary"
                 onClick={cancelSubscription}
                 isLoading={isCancelling}
-                disabled={quota?.status === "canceled" || !quota?.stripeSubscriptionId}
+                disabled={isLoadingQuota || !quota || quota?.status === "canceled"}
               >
                 {quota?.status === "canceled" ? "Subscription Cancelled" : "Cancel Subscription"}
               </Button>
