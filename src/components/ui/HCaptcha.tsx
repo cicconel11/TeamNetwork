@@ -9,6 +9,9 @@ import {
 } from "react";
 import ReactHCaptcha from "@hcaptcha/react-hcaptcha";
 
+// Must be a top-level constant for Next.js to inline at build time
+const HCAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
+
 export interface HCaptchaProps {
   siteKey?: string;
   onVerify: (token: string) => void;
@@ -46,8 +49,7 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
     const [error, setError] = useState<string | null>(null);
 
     // Use provided siteKey or fall back to environment variable
-    const resolvedSiteKey =
-      siteKey || process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
+    const resolvedSiteKey = siteKey || HCAPTCHA_SITE_KEY;
 
     // Expose execute and reset methods via ref
     useImperativeHandle(ref, () => ({
