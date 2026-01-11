@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert";
 import fc from "fast-check";
-import { canEditOrgName } from "../src/lib/validation/role-editability";
-import type { OrgRole } from "../src/lib/auth/role-utils";
+import { canEditOrgName } from "../src/lib/validation/role-editability.ts";
+import type { OrgRole } from "../src/lib/auth/role-utils.ts";
 
 /**
  * Property 1: Role-based Organization Name Editability

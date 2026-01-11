@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, Button, Input, Textarea, Select } from "@/components/ui";
-import { useIdempotencyKey } from "@/hooks";
+import { Card, Button, Input, Textarea, Select, HCaptcha } from "@/components/ui";
+import { useIdempotencyKey, useCaptcha } from "@/hooks";
 
 interface PhilanthropyEventOption {
   id: string;
@@ -31,6 +31,13 @@ export function DonationForm({
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const {
+    token: captchaToken,
+    isVerified: isCaptchaVerified,
+    onVerify: onCaptchaVerify,
+    onExpire: onCaptchaExpire,
+    onError: onCaptchaError,
+  } = useCaptcha();
   const fingerprint = useMemo(
     () =>
       JSON.stringify({
@@ -91,6 +98,7 @@ export function DonationForm({
             : "General support"),
       mode: "checkout",
       idempotencyKey,
+      captchaToken,
     };
 
     try {
@@ -207,7 +215,13 @@ export function DonationForm({
           </div>
         )}
 
-        <Button type="submit" className="w-full" isLoading={isLoading} disabled={!isStripeConnected}>
+        <HCaptcha
+          onVerify={onCaptchaVerify}
+          onExpire={onCaptchaExpire}
+          onError={onCaptchaError}
+        />
+
+        <Button type="submit" className="w-full" isLoading={isLoading} disabled={!isStripeConnected || !isCaptchaVerified}>
           Donate with Stripe
         </Button>
       </form>

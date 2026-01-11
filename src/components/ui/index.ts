@@ -8,4 +8,6 @@ export { EmptyState } from "./EmptyState";
 export { Select } from "./Select";
 export { Textarea } from "./Textarea";
 export { SoftDeleteButton } from "./SoftDeleteButton";
+export { HCaptcha } from "./HCaptcha";
+export type { HCaptchaProps, HCaptchaRef } from "./HCaptcha";
 

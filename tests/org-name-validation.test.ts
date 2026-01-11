@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
 import fc from "fast-check";
-import { validateOrgName } from "../src/lib/validation/org-name";
+import { validateOrgName } from "../src/lib/validation/org-name.ts";
 
 /**
  * Property 2: Organization Name Validation

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card } from "@/components/ui";
+import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { useCaptcha } from "@/hooks/useCaptcha";
 
 function LoginForm() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,9 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"password" | "magic-link">("password");
+  
+  const captchaRef = useRef<HCaptchaRef>(null);
+  const { token: captchaToken, isVerified, onVerify, onExpire, onError } = useCaptcha();
   
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -41,6 +45,13 @@ function LoginForm() {
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Require captcha verification before submission
+    if (!isVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -53,6 +64,8 @@ function LoginForm() {
     if (error) {
       setError(error.message);
       setIsLoading(false);
+      // Reset captcha on error so user must re-verify
+      captchaRef.current?.reset();
       return;
     }
 
@@ -62,6 +75,13 @@ function LoginForm() {
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Require captcha verification before submission
+    if (!isVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -76,11 +96,15 @@ function LoginForm() {
     if (error) {
       setError(error.message);
       setIsLoading(false);
+      // Reset captcha on error so user must re-verify
+      captchaRef.current?.reset();
       return;
     }
 
     setMessage("Check your email for the magic link!");
     setIsLoading(false);
+    // Reset captcha after successful submission
+    captchaRef.current?.reset();
   };
 
   return (
@@ -183,7 +207,22 @@ function LoginForm() {
             />
           )}
 
-          <Button type="submit" className="w-full" isLoading={isLoading}>
+          <div className="flex justify-center">
+            <HCaptcha
+              ref={captchaRef}
+              onVerify={onVerify}
+              onExpire={onExpire}
+              onError={onError}
+              theme="light"
+            />
+          </div>
+
+          <Button 
+            type="submit" 
+            className="w-full" 
+            isLoading={isLoading}
+            disabled={!isVerified}
+          >
             {mode === "password" ? "Sign In" : "Send Magic Link"}
           </Button>
         </div>

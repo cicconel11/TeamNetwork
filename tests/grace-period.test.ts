@@ -8,7 +8,7 @@ import {
   isOrgReadOnly,
   GRACE_PERIOD_DAYS,
   type SubscriptionStatus,
-} from "../src/lib/subscription/grace-period";
+} from "../src/lib/subscription/grace-period.ts";
 
 describe("Grace Period Utilities", () => {
   describe("getGracePeriodInfo", () => {
@@ -38,14 +38,14 @@ describe("Grace Period Utilities", () => {
     it("detects active grace period", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 15);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: futureDate.toISOString(),
         currentPeriodEnd: new Date().toISOString(),
       };
       const result = getGracePeriodInfo(subscription);
-      
+
       assert.strictEqual(result.isCanceled, true);
       assert.strictEqual(result.isInGracePeriod, true);
       assert.strictEqual(result.isGracePeriodExpired, false);
@@ -56,14 +56,14 @@ describe("Grace Period Utilities", () => {
     it("detects expired grace period", () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 5);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: pastDate.toISOString(),
         currentPeriodEnd: new Date().toISOString(),
       };
       const result = getGracePeriodInfo(subscription);
-      
+
       assert.strictEqual(result.isCanceled, true);
       assert.strictEqual(result.isInGracePeriod, false);
       assert.strictEqual(result.isGracePeriodExpired, true);
@@ -77,7 +77,7 @@ describe("Grace Period Utilities", () => {
         currentPeriodEnd: new Date().toISOString(),
       };
       const result = getGracePeriodInfo(subscription);
-      
+
       assert.strictEqual(result.isCanceled, true);
       assert.strictEqual(result.isInGracePeriod, false);
       assert.strictEqual(result.isGracePeriodExpired, true);
@@ -89,7 +89,7 @@ describe("Grace Period Utilities", () => {
       const result = calculateGracePeriodEnd();
       const resultDate = new Date(result);
       const now = new Date();
-      
+
       const diffDays = Math.round((resultDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       assert.strictEqual(diffDays, GRACE_PERIOD_DAYS);
     });
@@ -130,7 +130,7 @@ describe("Grace Period Utilities", () => {
     it("allows access for canceled subscription in grace period", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 15);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: futureDate.toISOString(),
@@ -142,7 +142,7 @@ describe("Grace Period Utilities", () => {
     it("blocks access for canceled subscription with expired grace period", () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 5);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: pastDate.toISOString(),
@@ -187,7 +187,7 @@ describe("Grace Period Utilities", () => {
     it("returns true for canceled subscription in grace period", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 15);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: futureDate.toISOString(),
@@ -199,7 +199,7 @@ describe("Grace Period Utilities", () => {
     it("returns false for canceled subscription with expired grace period", () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 5);
-      
+
       const subscription: SubscriptionStatus = {
         status: "canceled",
         gracePeriodEndsAt: pastDate.toISOString(),

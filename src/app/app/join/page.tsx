@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card } from "@/components/ui";
+import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { useCaptcha } from "@/hooks/useCaptcha";
 
 interface RedeemResult {
   success: boolean;
@@ -27,102 +28,106 @@ function JoinOrgForm() {
   const [code, setCode] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [autoSubmitting, setAutoSubmitting] = useState(false);
   const [pendingApproval, setPendingApproval] = useState<{ orgName: string } | null>(null);
+  const [pendingTokenSubmit, setPendingTokenSubmit] = useState(false);
+
+  // Captcha state management
+  const captchaRef = useRef<HCaptchaRef>(null);
+  const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
   // Auto-fill code from URL and optionally auto-submit
   useEffect(() => {
     if (tokenFromUrl && !code) {
-      // For token-based invites, we auto-submit immediately
-      setAutoSubmitting(true);
+      // For token-based invites, we need captcha verification first
+      // Set pending state to show captcha before processing
+      setPendingTokenSubmit(true);
     } else if (codeFromUrl && !code) {
       setCode(codeFromUrl.toUpperCase());
-      setAutoSubmitting(true);
+      // Don't auto-submit for code-based invites - user needs to complete captcha first
     }
   }, [codeFromUrl, tokenFromUrl, code]);
 
-  // Auto-submit when code is filled from URL or token is present
+  // Process token-based invite after captcha verification
   useEffect(() => {
-    const processAutoSubmit = async () => {
-      if (!autoSubmitting) return;
+    const processTokenInvite = async () => {
+      if (!pendingTokenSubmit || !isVerified || !tokenFromUrl) return;
 
-      if (tokenFromUrl) {
-        setIsLoading(true);
-        setError(null);
+      setIsLoading(true);
+      setError(null);
+      setPendingTokenSubmit(false);
 
-        const supabase = createClient();
+      const supabase = createClient();
 
-        // Check if user is logged in
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setError("You must be logged in to join an organization");
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
+      // Check if user is logged in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError("You must be logged in to join an organization");
+        setIsLoading(false);
+        captchaRef.current?.reset();
+        return;
+      }
 
-        // Use server-side RPC to redeem invite
-        const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
-          p_code: tokenFromUrl.trim(),
-        });
+      // Use server-side RPC to redeem invite
+      const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
+        p_code: tokenFromUrl.trim(),
+      });
 
-        if (rpcError) {
-          setError(rpcError.message);
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
+      if (rpcError) {
+        setError(rpcError.message);
+        setIsLoading(false);
+        captchaRef.current?.reset();
+        return;
+      }
 
-        const result = data as RedeemResult;
+      const result = data as RedeemResult;
 
-        if (!result.success) {
-          setError(result.error || "Failed to join organization");
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
+      if (!result.success) {
+        setError(result.error || "Failed to join organization");
+        setIsLoading(false);
+        captchaRef.current?.reset();
+        return;
+      }
 
-        // Handle already a member
-        if (result.already_member) {
-          if (result.status === "pending") {
-            setPendingApproval({ orgName: result.name || "the organization" });
-          } else {
-            setError("You are already a member of this organization.");
-            setTimeout(() => {
-              if (result.slug) {
-                router.push(`/${result.slug}`);
-              }
-            }, 1500);
-          }
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
-
-        // Handle pending approval
-        if (result.pending_approval) {
+      // Handle already a member
+      if (result.already_member) {
+        if (result.status === "pending") {
           setPendingApproval({ orgName: result.name || "the organization" });
-          setIsLoading(false);
-          setAutoSubmitting(false);
-          return;
-        }
-
-        // Should not reach here normally
-        if (result.slug) {
-          router.push(`/${result.slug}`);
+        } else {
+          setError("You are already a member of this organization.");
+          setTimeout(() => {
+            if (result.slug) {
+              router.push(`/${result.slug}`);
+            }
+          }, 1500);
         }
         setIsLoading(false);
-      } else if (code) {
-        const form = document.getElementById("join-form") as HTMLFormElement;
-        if (form) form.requestSubmit();
+        return;
       }
-      setAutoSubmitting(false);
+
+      // Handle pending approval
+      if (result.pending_approval) {
+        setPendingApproval({ orgName: result.name || "the organization" });
+        setIsLoading(false);
+        return;
+      }
+
+      // Success - redirect to organization
+      if (result.slug) {
+        router.push(`/${result.slug}`);
+      }
+      setIsLoading(false);
     };
 
-    processAutoSubmit();
-  }, [autoSubmitting, code, tokenFromUrl, router]);
+    processTokenInvite();
+  }, [pendingTokenSubmit, isVerified, tokenFromUrl, router]);
 
   const redeemInvite = async (inviteCode: string) => {
+    // Require captcha verification before submission
+    if (!isVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -133,6 +138,7 @@ function JoinOrgForm() {
     if (!user) {
       setError("You must be logged in to join an organization");
       setIsLoading(false);
+      captchaRef.current?.reset();
       return;
     }
 
@@ -144,6 +150,7 @@ function JoinOrgForm() {
     if (rpcError) {
       setError(rpcError.message);
       setIsLoading(false);
+      captchaRef.current?.reset();
       return;
     }
 
@@ -152,6 +159,7 @@ function JoinOrgForm() {
     if (!result.success) {
       setError(result.error || "Failed to join organization");
       setIsLoading(false);
+      captchaRef.current?.reset();
       return;
     }
 
@@ -178,7 +186,7 @@ function JoinOrgForm() {
       return;
     }
 
-    // Should not reach here normally, but handle just in case
+    // Success - redirect to organization
     if (result.slug) {
       router.push(`/${result.slug}`);
     }
@@ -255,7 +263,9 @@ function JoinOrgForm() {
                 </div>
                 <h2 className="text-2xl font-bold text-foreground mb-2">Join an Organization</h2>
                 <p className="text-muted-foreground">
-                  {tokenFromUrl 
+                  {tokenFromUrl && !isVerified
+                    ? "Complete the captcha verification to continue."
+                    : tokenFromUrl && isVerified
                     ? "Processing your invite link..."
                     : "Enter the invite code you received from an organization admin."}
                 </p>
@@ -280,16 +290,50 @@ function JoinOrgForm() {
                       required
                     />
 
-                    <Button type="submit" className="w-full" isLoading={isLoading}>
+                    <div className="flex justify-center">
+                      <HCaptcha
+                        ref={captchaRef}
+                        onVerify={onVerify}
+                        onExpire={onExpire}
+                        onError={onCaptchaError}
+                        theme="light"
+                      />
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      isLoading={isLoading}
+                      disabled={!isVerified}
+                    >
                       Join Organization
                     </Button>
                   </div>
                 </form>
               )}
 
-              {tokenFromUrl && isLoading && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+              {tokenFromUrl && (
+                <div className="space-y-6">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-center text-muted-foreground">
+                        Complete the captcha to join the organization.
+                      </p>
+                      <div className="flex justify-center">
+                        <HCaptcha
+                          ref={captchaRef}
+                          onVerify={onVerify}
+                          onExpire={onExpire}
+                          onError={onCaptchaError}
+                          theme="light"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 

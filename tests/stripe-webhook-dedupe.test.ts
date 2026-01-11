@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
-import { markStripeEventProcessed, registerStripeEvent } from "../src/lib/payments/stripe-events";
-import { createSupabaseStub } from "./utils/supabaseStub";
+import { markStripeEventProcessed, registerStripeEvent } from "../src/lib/payments/stripe-events.ts";
+import { createSupabaseStub } from "./utils/supabaseStub.ts";
 
 test("stripe webhook events are only processed once", async () => {
   const supabase = createSupabaseStub();

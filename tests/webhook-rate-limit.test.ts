@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { checkWebhookRateLimit, resetWebhookRateLimitStore } from "../src/lib/security/webhook-rate-limit";
+import { checkWebhookRateLimit, resetWebhookRateLimitStore } from "../src/lib/security/webhook-rate-limit.ts";
 
 test("webhook rate limiting allows requests under the limit", () => {
   resetWebhookRateLimitStore();

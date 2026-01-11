@@ -21,6 +21,7 @@ import {
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
 import { calculatePlatformFee } from "@/lib/payments/platform-fee";
+import { verifyCaptcha } from "@/lib/security/captcha";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,6 +41,7 @@ const donationSchema = z
     mode: z.enum(["checkout", "payment_intent"]).optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
+    captchaToken: z.string().min(1, "Captcha verification required"),
     // SECURITY: platformFeeAmountCents is accepted but IGNORED - fee is calculated server-side
     // This field is deprecated and will be removed in a future version
     platformFeeAmountCents: z.coerce.number().int().min(0).optional(),
@@ -79,6 +81,17 @@ export async function POST(req: Request) {
       );
     }
     throw error;
+  }
+
+  // Verify captcha token before processing donation
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || undefined;
+  const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
+  if (!captchaResult.success) {
+    const errorCode = captchaResult.error_codes?.[0];
+    if (errorCode === "missing-input-response") {
+      return respond({ error: "Captcha verification required" }, 400);
+    }
+    return respond({ error: "Captcha verification failed" }, 403);
   }
 
   const amountCents = Math.round(Number(body.amount || 0) * 100);

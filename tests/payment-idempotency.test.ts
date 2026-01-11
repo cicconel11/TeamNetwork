@@ -5,8 +5,8 @@ import {
   ensurePaymentAttempt,
   updatePaymentAttempt,
   waitForExistingStripeResource,
-} from "../src/lib/payments/idempotency";
-import { createSupabaseStub } from "./utils/supabaseStub";
+} from "../src/lib/payments/idempotency.ts";
+import { createSupabaseStub } from "./utils/supabaseStub.ts";
 
 test("concurrent donation checkout requests reuse the same Stripe session", async () => {
   const supabase = createSupabaseStub();

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
-import { calculatePlatformFee, PLATFORM_FEE_PERCENTAGE } from "../src/lib/payments/platform-fee";
+import { calculatePlatformFee, PLATFORM_FEE_PERCENTAGE } from "../src/lib/payments/platform-fee.ts";
 
 test("platform fee is calculated at the correct percentage", () => {
   const amountCents = 10000; // $100.00
@@ -25,7 +25,7 @@ test("platform fee has minimum of 0", () => {
 test("platform fee handles large amounts correctly", () => {
   const amountCents = 10000000; // $100,000.00
   const fee = calculatePlatformFee(amountCents);
-  
+
   // 3% of $100,000 = $3,000 = 300000 cents
   assert.strictEqual(fee, 300000, "Fee should scale correctly with large amounts");
 });

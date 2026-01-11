@@ -5,7 +5,8 @@
  * for expiration, revocation, and max uses.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, beforeEach } from "node:test";
+import assert from "node:assert";
 
 // Mock invite data structure
 interface MockInvite {
@@ -38,15 +39,15 @@ function isValidInvite(invite: MockInvite): { valid: boolean; reason?: string } 
   if (isRevoked(invite.revoked_at)) {
     return { valid: false, reason: "This invite has been revoked." };
   }
-  
+
   if (isExpired(invite.expires_at)) {
     return { valid: false, reason: "This invite has expired." };
   }
-  
+
   if (!hasUsesRemaining(invite.uses_remaining)) {
     return { valid: false, reason: "This invite has no uses remaining." };
   }
-  
+
   return { valid: true };
 }
 
@@ -68,69 +69,69 @@ describe("Invite Validation", () => {
 
   describe("isExpired", () => {
     it("should return false for null expires_at (no expiration)", () => {
-      expect(isExpired(null)).toBe(false);
+      assert.strictEqual(isExpired(null), false);
     });
 
     it("should return false for future expiration date", () => {
       const futureDate = new Date();
       futureDate.setDate(futureDate.getDate() + 7);
-      expect(isExpired(futureDate.toISOString())).toBe(false);
+      assert.strictEqual(isExpired(futureDate.toISOString()), false);
     });
 
     it("should return true for past expiration date", () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 1);
-      expect(isExpired(pastDate.toISOString())).toBe(true);
+      assert.strictEqual(isExpired(pastDate.toISOString()), true);
     });
   });
 
   describe("isRevoked", () => {
     it("should return false for null revoked_at", () => {
-      expect(isRevoked(null)).toBe(false);
+      assert.strictEqual(isRevoked(null), false);
     });
 
     it("should return true for non-null revoked_at", () => {
-      expect(isRevoked(new Date().toISOString())).toBe(true);
+      assert.strictEqual(isRevoked(new Date().toISOString()), true);
     });
   });
 
   describe("hasUsesRemaining", () => {
     it("should return true for null uses_remaining (unlimited)", () => {
-      expect(hasUsesRemaining(null)).toBe(true);
+      assert.strictEqual(hasUsesRemaining(null), true);
     });
 
     it("should return true for positive uses_remaining", () => {
-      expect(hasUsesRemaining(5)).toBe(true);
-      expect(hasUsesRemaining(1)).toBe(true);
+      assert.strictEqual(hasUsesRemaining(5), true);
+      assert.strictEqual(hasUsesRemaining(1), true);
     });
 
     it("should return false for zero uses_remaining", () => {
-      expect(hasUsesRemaining(0)).toBe(false);
+      assert.strictEqual(hasUsesRemaining(0), false);
     });
 
     it("should return false for negative uses_remaining", () => {
-      expect(hasUsesRemaining(-1)).toBe(false);
+      assert.strictEqual(hasUsesRemaining(-1), false);
     });
   });
 
   describe("isValidInvite", () => {
     it("should validate a fresh invite with no restrictions", () => {
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(true);
-      expect(result.reason).toBeUndefined();
+      assert.strictEqual(result.valid, true);
+      assert.strictEqual(result.reason, undefined);
     });
 
     it("should validate an invite with unlimited uses", () => {
       validInvite.uses_remaining = null;
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(true);
+      assert.strictEqual(result.valid, true);
     });
 
     it("should reject a revoked invite", () => {
       validInvite.revoked_at = new Date().toISOString();
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(false);
-      expect(result.reason).toBe("This invite has been revoked.");
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.reason, "This invite has been revoked.");
     });
 
     it("should reject an expired invite", () => {
@@ -138,15 +139,15 @@ describe("Invite Validation", () => {
       pastDate.setDate(pastDate.getDate() - 1);
       validInvite.expires_at = pastDate.toISOString();
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(false);
-      expect(result.reason).toBe("This invite has expired.");
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.reason, "This invite has expired.");
     });
 
     it("should reject an invite with no uses remaining", () => {
       validInvite.uses_remaining = 0;
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(false);
-      expect(result.reason).toBe("This invite has no uses remaining.");
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.reason, "This invite has no uses remaining.");
     });
 
     it("should prioritize revoked status over expiration", () => {
@@ -155,8 +156,8 @@ describe("Invite Validation", () => {
       pastDate.setDate(pastDate.getDate() - 1);
       validInvite.expires_at = pastDate.toISOString();
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(false);
-      expect(result.reason).toBe("This invite has been revoked.");
+      assert.strictEqual(result.valid, false);
+      assert.strictEqual(result.reason, "This invite has been revoked.");
     });
 
     it("should accept an invite about to expire", () => {
@@ -164,13 +165,13 @@ describe("Invite Validation", () => {
       futureDate.setMinutes(futureDate.getMinutes() + 1);
       validInvite.expires_at = futureDate.toISOString();
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(true);
+      assert.strictEqual(result.valid, true);
     });
 
     it("should accept an invite with exactly 1 use remaining", () => {
       validInvite.uses_remaining = 1;
       const result = isValidInvite(validInvite);
-      expect(result.valid).toBe(true);
+      assert.strictEqual(result.valid, true);
     });
   });
 
@@ -180,15 +181,8 @@ describe("Invite Validation", () => {
       roles.forEach((role) => {
         validInvite.role = role;
         const result = isValidInvite(validInvite);
-        expect(result.valid).toBe(true);
+        assert.strictEqual(result.valid, true);
       });
     });
   });
 });
-
-
-
-
-
-
-

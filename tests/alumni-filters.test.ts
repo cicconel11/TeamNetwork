@@ -5,7 +5,8 @@
  * with various filter combinations.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert";
 
 // Mock alumni data structure matching the expanded schema
 interface MockAlumni {
@@ -96,7 +97,7 @@ function filterAlumni(alumni: MockAlumni[], filters: AlumniFilters): MockAlumni[
 // Extract unique filter options
 function getFilterOptions(alumni: MockAlumni[]) {
   const activeAlumni = alumni.filter((a) => a.deleted_at === null);
-  
+
   return {
     years: [...new Set(activeAlumni.map((a) => a.graduation_year).filter(Boolean))].sort((a, b) => (b || 0) - (a || 0)),
     industries: uniqueCaseInsensitive(activeAlumni.map((a) => a.industry)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
@@ -104,6 +105,11 @@ function getFilterOptions(alumni: MockAlumni[]) {
     cities: uniqueCaseInsensitive(activeAlumni.map((a) => a.current_city)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
     positions: uniqueCaseInsensitive(activeAlumni.map((a) => a.position_title)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" })),
   };
+}
+
+// Helper to check if array contains all expected items
+function arrayContainsAll<T>(arr: T[], expected: T[]): boolean {
+  return expected.every(item => arr.includes(item));
 }
 
 describe("Alumni Filters", () => {
@@ -191,38 +197,39 @@ describe("Alumni Filters", () => {
   describe("filterAlumni", () => {
     it("should return all non-deleted alumni with no filters", () => {
       const result = filterAlumni(mockAlumni, {});
-      expect(result).toHaveLength(5);
-      expect(result.find((a) => a.id === "5")).toBeUndefined();
+      assert.strictEqual(result.length, 5);
+      assert.strictEqual(result.find((a) => a.id === "5"), undefined);
     });
 
     it("should filter by graduation year", () => {
       const result = filterAlumni(mockAlumni, { year: "2020" });
-      expect(result).toHaveLength(2);
-      expect(result.every((a) => a.graduation_year === 2020)).toBe(true);
+      // John, Bob, and Case all have graduation_year 2020
+      assert.strictEqual(result.length, 3);
+      assert.strictEqual(result.every((a) => a.graduation_year === 2020), true);
     });
 
     it("should filter by industry", () => {
       const result = filterAlumni(mockAlumni, { industry: "Technology" });
-      expect(result).toHaveLength(3);
-      expect(result.every((a) => a.industry?.toLowerCase() === "technology")).toBe(true);
+      assert.strictEqual(result.length, 3);
+      assert.strictEqual(result.every((a) => a.industry?.toLowerCase() === "technology"), true);
     });
 
     it("should filter by company", () => {
       const result = filterAlumni(mockAlumni, { company: "Google" });
-      expect(result).toHaveLength(2);
-      expect(result.map((a) => a.first_name)).toEqual(expect.arrayContaining(["John", "Case"]));
+      assert.strictEqual(result.length, 2);
+      assert.ok(arrayContainsAll(result.map((a) => a.first_name), ["John", "Case"]));
     });
 
     it("should filter by city", () => {
       const result = filterAlumni(mockAlumni, { city: "San Francisco" });
-      expect(result).toHaveLength(3);
-      expect(result.every((a) => a.current_city?.toLowerCase() === "san francisco")).toBe(true);
+      assert.strictEqual(result.length, 3);
+      assert.strictEqual(result.every((a) => a.current_city?.toLowerCase() === "san francisco"), true);
     });
 
     it("should filter by position", () => {
       const result = filterAlumni(mockAlumni, { position: "Software Engineer" });
-      expect(result).toHaveLength(3);
-      expect(result.every((a) => a.position_title?.toLowerCase() === "software engineer")).toBe(true);
+      assert.strictEqual(result.length, 3);
+      assert.strictEqual(result.every((a) => a.position_title?.toLowerCase() === "software engineer"), true);
     });
 
     it("should combine multiple filters with AND logic", () => {
@@ -230,7 +237,7 @@ describe("Alumni Filters", () => {
         year: "2020",
         industry: "Technology",
       });
-      expect(result).toHaveLength(3);
+      assert.strictEqual(result.length, 3);
     });
 
     it("should combine all filters", () => {
@@ -240,15 +247,15 @@ describe("Alumni Filters", () => {
         city: "San Francisco",
         position: "Software Engineer",
       });
-      expect(result).toHaveLength(2);
-      expect(result.map((a) => a.first_name)).toEqual(expect.arrayContaining(["John", "Case"]));
+      assert.strictEqual(result.length, 2);
+      assert.ok(arrayContainsAll(result.map((a) => a.first_name), ["John", "Case"]));
     });
 
     it("should return empty array when no matches", () => {
       const result = filterAlumni(mockAlumni, {
         year: "2025",
       });
-      expect(result).toHaveLength(0);
+      assert.strictEqual(result.length, 0);
     });
 
     it("should exclude soft-deleted records", () => {
@@ -256,8 +263,8 @@ describe("Alumni Filters", () => {
         year: "2020",
         company: "Google",
       });
-      expect(result).toHaveLength(2);
-      expect(result.map((a) => a.first_name)).toEqual(expect.arrayContaining(["John", "Case"]));
+      assert.strictEqual(result.length, 2);
+      assert.ok(arrayContainsAll(result.map((a) => a.first_name), ["John", "Case"]));
     });
 
     it("should match filters regardless of casing", () => {
@@ -265,48 +272,48 @@ describe("Alumni Filters", () => {
         company: "GOOGLE",
         city: "SAN FRANCISCO",
       });
-      expect(result).toHaveLength(2);
-      expect(result.map((a) => a.first_name)).toEqual(expect.arrayContaining(["John", "Case"]));
+      assert.strictEqual(result.length, 2);
+      assert.ok(arrayContainsAll(result.map((a) => a.first_name), ["John", "Case"]));
     });
   });
 
   describe("getFilterOptions", () => {
     it("should extract unique graduation years sorted descending", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.years).toEqual([2021, 2020, 2019]);
+      assert.deepStrictEqual(options.years, [2021, 2020, 2019]);
     });
 
     it("should extract unique industries sorted alphabetically", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.industries).toEqual(["Finance", "Healthcare", "Technology"]);
+      assert.deepStrictEqual(options.industries, ["Finance", "Healthcare", "Technology"]);
     });
 
     it("should extract unique companies sorted alphabetically", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.companies).toEqual(["Goldman Sachs", "Google", "Kaiser", "Microsoft"]);
+      assert.deepStrictEqual(options.companies, ["Goldman Sachs", "Google", "Kaiser", "Microsoft"]);
     });
 
     it("should extract unique cities sorted alphabetically", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.cities).toEqual(["New York", "San Francisco", "Seattle"]);
+      assert.deepStrictEqual(options.cities, ["New York", "San Francisco", "Seattle"]);
     });
 
     it("should extract unique positions sorted alphabetically", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.positions).toEqual(["Analyst", "Doctor", "Software Engineer"]);
+      assert.deepStrictEqual(options.positions, ["Analyst", "Doctor", "Software Engineer"]);
     });
 
     it("should exclude deleted records from filter options", () => {
       // The deleted user would add an extra "Google" and "San Francisco" if included
       const options = getFilterOptions(mockAlumni);
-      expect(options.companies.filter((c) => c === "Google")).toHaveLength(1);
+      assert.strictEqual(options.companies.filter((c) => c === "Google").length, 1);
     });
 
     it("should group duplicate values with different casing into a single option", () => {
       const options = getFilterOptions(mockAlumni);
-      expect(options.industries).toEqual(["Finance", "Healthcare", "Technology"]);
-      expect(options.companies).toContain("Google");
-      expect(options.companies.filter((c) => c === "Google")).toHaveLength(1);
+      assert.deepStrictEqual(options.industries, ["Finance", "Healthcare", "Technology"]);
+      assert.ok(options.companies.includes("Google"));
+      assert.strictEqual(options.companies.filter((c) => c === "Google").length, 1);
     });
   });
 
@@ -330,24 +337,19 @@ describe("Alumni Filters", () => {
 
     it("should not match null values to filters", () => {
       const result = filterAlumni(alumniWithNulls, { industry: "Technology" });
-      expect(result).toHaveLength(1);
-      expect(result[0].first_name).toBe("John");
+      assert.strictEqual(result.length, 1);
+      assert.strictEqual(result[0].first_name, "John");
     });
 
     it("should include records with null fields when no filter applied", () => {
       const result = filterAlumni(alumniWithNulls, {});
-      expect(result).toHaveLength(3);
+      assert.strictEqual(result.length, 3);
     });
 
     it("should exclude null values from filter options", () => {
       const options = getFilterOptions(alumniWithNulls);
-      expect(options.industries).not.toContain(null);
-      expect(options.companies).not.toContain(null);
+      assert.ok(!options.industries.includes(null as unknown as string));
+      assert.ok(!options.companies.includes(null as unknown as string));
     });
   });
 });
-
-
-
-
-

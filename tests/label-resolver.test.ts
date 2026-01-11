@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert";
 import fc from "fast-check";
-import { resolveLabel, resolveActionLabel } from "../src/lib/navigation/label-resolver";
-import { ORG_NAV_ITEMS, type NavConfig } from "../src/lib/navigation/nav-items";
+import { resolveLabel, resolveActionLabel } from "../src/lib/navigation/label-resolver.ts";
+import { ORG_NAV_ITEMS, type NavConfig } from "../src/lib/navigation/nav-items.tsx";
 
 /**
  * Property 4: Nav Label Resolution with Fallback

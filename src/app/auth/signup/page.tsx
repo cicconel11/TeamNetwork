@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card } from "@/components/ui";
+import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { useCaptcha } from "@/hooks/useCaptcha";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -14,6 +15,9 @@ export default function SignupPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  
+  const captchaRef = useRef<HCaptchaRef>(null);
+  const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
   const handleGoogleSignup = async () => {
     setIsGoogleLoading(true);
@@ -35,6 +39,13 @@ export default function SignupPage() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Require captcha verification before submission
+    if (!isVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
@@ -53,11 +64,15 @@ export default function SignupPage() {
     if (error) {
       setError(error.message);
       setIsLoading(false);
+      // Reset captcha on error so user must re-verify
+      captchaRef.current?.reset();
       return;
     }
 
     setMessage("Check your email to confirm your account!");
     setIsLoading(false);
+    // Reset captcha after successful submission
+    captchaRef.current?.reset();
   };
 
   return (
@@ -154,7 +169,22 @@ export default function SignupPage() {
                 minLength={6}
               />
 
-              <Button type="submit" className="w-full" isLoading={isLoading}>
+              <div className="flex justify-center">
+                <HCaptcha
+                  ref={captchaRef}
+                  onVerify={onVerify}
+                  onExpire={onExpire}
+                  onError={onCaptchaError}
+                  theme="light"
+                />
+              </div>
+
+              <Button 
+                type="submit" 
+                className="w-full" 
+                isLoading={isLoading}
+                disabled={!isVerified}
+              >
                 Create Account
               </Button>
             </div>
