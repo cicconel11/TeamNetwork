@@ -189,9 +189,11 @@ export default function OrgSettingsPage() {
     const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
     const cardColor = isPrimaryDark ? adjustColor(nextPrimary, 18) : adjustColor(nextPrimary, -12);
     const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-    const muted = isPrimaryDark ? adjustColor(nextPrimary, 28) : adjustColor(nextPrimary, -20);
+    // For light themes, use a more visible muted color that provides better contrast
+    const muted = isPrimaryDark ? adjustColor(nextPrimary, 28) : adjustColor(nextPrimary, -35);
     const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-    const borderColor = isPrimaryDark ? adjustColor(nextPrimary, 35) : adjustColor(nextPrimary, -28);
+    // For light themes, use a darker border for better visibility
+    const borderColor = isPrimaryDark ? adjustColor(nextPrimary, 35) : adjustColor(nextPrimary, -45);
 
     target.style.setProperty("--color-org-primary", nextPrimary);
     target.style.setProperty("--color-org-primary-light", primaryLight);

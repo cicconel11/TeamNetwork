@@ -96,9 +96,11 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
   const cardColor = isPrimaryDark ? adjustColor(primary, 18) : adjustColor(primary, -12);
   const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-  const muted = isPrimaryDark ? adjustColor(primary, 28) : adjustColor(primary, -20);
+  // For light themes, use a more visible muted color that provides better contrast
+  const muted = isPrimaryDark ? adjustColor(primary, 28) : adjustColor(primary, -35);
   const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-  const borderColor = isPrimaryDark ? adjustColor(primary, 35) : adjustColor(primary, -28);
+  // For light themes, use a darker border for better visibility
+  const borderColor = isPrimaryDark ? adjustColor(primary, 35) : adjustColor(primary, -45);
 
   return (
     <div 
