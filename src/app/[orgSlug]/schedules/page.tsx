@@ -5,6 +5,8 @@ import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
 import { ScheduleFilesSection } from "@/components/schedules/ScheduleFilesSection";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { AcademicSchedule, ScheduleFile, User } from "@/types/database";
 
 interface SchedulesPageProps {
@@ -94,18 +96,22 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
     allFiles = (filesData || []) as (ScheduleFile & { users: Pick<User, "name" | "email"> | null })[];
   }
 
+  const navConfig = orgCtx.organization.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/schedules", navConfig);
+  const actionLabel = resolveActionLabel("/schedules", navConfig);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Schedules"
-        description="Manage your class schedules and academic commitments"
+        title={pageLabel}
+        description={`Manage your class ${pageLabel.toLowerCase()} and academic commitments`}
         actions={
           <Link href={`/${orgSlug}/schedules/new`}>
             <Button>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Add Schedule
+              {actionLabel}
             </Button>
           </Link>
         }
@@ -113,7 +119,7 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
 
       {/* My Schedules Section */}
       <section>
-        <h2 className="text-lg font-semibold text-foreground mb-4">My Schedules</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-4">My {pageLabel}</h2>
         {mySchedules && mySchedules.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {mySchedules.map((schedule) => (
@@ -141,11 +147,11 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         ) : (
           <Card>
             <EmptyState
-              title="No schedules yet"
-              description="Add your class schedules so coaches can plan around your availability."
+              title={`No ${pageLabel.toLowerCase()} yet`}
+              description={`Add your class ${pageLabel.toLowerCase()} so coaches can plan around your availability.`}
               action={
                 <Link href={`/${orgSlug}/schedules/new`}>
-                  <Button>Add First Schedule</Button>
+                  <Button>{resolveActionLabel("/schedules", navConfig, "Add First")}</Button>
                 </Link>
               }
             />

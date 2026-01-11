@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/layout";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { WorkoutLogEditor } from "@/components/workouts/WorkoutLogEditor";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { WorkoutLog } from "@/types/database";
 
 interface WorkoutsPageProps {
@@ -39,11 +41,15 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
   const logByWorkout = new Map<string, WorkoutLog>();
   userLogsList.forEach((log) => logByWorkout.set(log.workout_id, log));
 
+  const navConfig = orgCtx.organization.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/workouts", navConfig);
+  const actionLabel = resolveActionLabel("/workouts", navConfig, "Post");
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Workouts"
-        description="View assigned workouts and track your progress"
+        title={pageLabel}
+        description={`View assigned ${pageLabel.toLowerCase()} and track your progress`}
         actions={
           orgCtx.isAdmin && (
             <Link href={`/${orgSlug}/workouts/new`}>
@@ -51,7 +57,7 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Post Workout
+                {actionLabel}
               </Button>
             </Link>
           )
@@ -130,12 +136,12 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
       ) : (
         <Card>
           <EmptyState
-            title="No workouts yet"
-            description="Workouts will appear here once posted."
+            title={`No ${pageLabel.toLowerCase()} yet`}
+            description={`${pageLabel} will appear here once posted.`}
             action={
               orgCtx.isAdmin && (
                 <Link href={`/${orgSlug}/workouts/new`}>
-                  <Button>Post First Workout</Button>
+                  <Button>{resolveActionLabel("/workouts", navConfig, "Post First")}</Button>
                 </Link>
               )
             }

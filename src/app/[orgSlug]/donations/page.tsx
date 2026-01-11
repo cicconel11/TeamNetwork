@@ -6,6 +6,7 @@ import { DonationForm, ConnectSetup } from "@/components/donations";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
+import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
 
@@ -60,11 +61,14 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
     return acc;
   }, {});
 
+  const navConfig = org.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/donations", navConfig);
+
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Donations"
-        description={`${donationCount} contributions totaling $${totalAmount.toLocaleString(undefined, {
+        title={pageLabel}
+        description={`${donationCount} contributions totaling ${totalAmount.toLocaleString(undefined, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })}`}
@@ -122,14 +126,14 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                   </div>
                 ))
             ) : (
-              <p className="text-sm text-muted-foreground">Donations will be grouped here once received.</p>
+              <p className="text-sm text-muted-foreground">{pageLabel} will be grouped here once received.</p>
             )}
           </div>
         </Card>
 
         <Card className="p-0 lg:col-span-2 overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">Recent Donations</h3>
+            <h3 className="font-semibold text-foreground">Recent {pageLabel}</h3>
             {canEdit && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 {isConnected ? "Funds settle directly via Stripe Connect" : "Stripe not connected yet"}
@@ -182,8 +186,8 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
             </div>
           ) : (
             <EmptyState
-              title="No donations yet"
-              description="Donations will appear after Stripe completes a payment."
+              title={`No ${pageLabel.toLowerCase()} yet`}
+              description={`${pageLabel} will appear after Stripe completes a payment.`}
               action={
                 <Link href={`/${orgSlug}/philanthropy`} className="text-sm text-muted-foreground hover:text-foreground">
                   View philanthropy events →

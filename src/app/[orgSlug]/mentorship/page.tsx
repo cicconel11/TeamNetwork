@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
-import { Card, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { MentorshipAdminPanel } from "@/components/mentorship/MentorshipAdminPanel";
-import { MentorshipLogForm } from "@/components/mentorship/MentorshipLogForm";
 import { MentorPairManager } from "@/components/mentorship/MentorPairManager";
 import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
+import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
+import { resolveLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -50,11 +51,6 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
       ? await supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
       : { data: [] };
 
-  const userLabel = (id: string) => {
-    const u = users?.find((user) => user.id === id);
-    return u?.name || u?.email || "Unknown";
-  };
-
   const filteredPairs =
     orgCtx.isAdmin
       ? pairs || []
@@ -64,11 +60,31 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
             : p.mentor_user_id === orgCtx.userId
         );
 
+  // Prepare logs for the client component
+  const logsForClient = (logs || []).map((log) => ({
+    id: log.id,
+    pair_id: log.pair_id,
+    entry_date: log.entry_date,
+    notes: log.notes,
+    progress_metric: log.progress_metric,
+    created_by: log.created_by,
+  }));
+
+  // Prepare users for the client component
+  const usersForClient = (users || []).map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+  }));
+
+  const navConfig = orgCtx.organization.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/mentorship", navConfig);
+
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Mentorship"
-        description="Manage and track mentorship pairs"
+        title={pageLabel}
+        description={`Manage and track ${pageLabel.toLowerCase()} pairs`}
       />
 
       {orgCtx.role === "active_member" && <MenteeStatusToggle orgId={orgId} />}
@@ -78,62 +94,14 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
         <MentorPairManager orgId={orgId} orgSlug={orgSlug} />
       )}
 
-      {filteredPairs.length === 0 ? (
-        <Card>
-          <EmptyState
-            title="No mentorship pairs yet"
-            description="Pairs will appear here once created."
-          />
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {filteredPairs.map((pair) => {
-            const pairLogs = logs?.filter((l) => l.pair_id === pair.id) || [];
-            return (
-              <Card key={pair.id} className="p-6 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-foreground">{userLabel(pair.mentor_user_id)}</h3>
-                    <p className="text-sm text-muted-foreground">Mentor</p>
-                  </div>
-                  <div className="text-center">
-                    <Badge variant="primary">{pair.status}</Badge>
-                  </div>
-                  <div className="text-right">
-                    <h3 className="font-semibold text-foreground">{userLabel(pair.mentee_user_id)}</h3>
-                    <p className="text-sm text-muted-foreground">Mentee</p>
-                  </div>
-                </div>
-
-                {pairLogs.length > 0 ? (
-                  <div className="space-y-3">
-                    {pairLogs.slice(0, 5).map((log) => (
-                      <div key={log.id} className="p-3 rounded-xl bg-muted/50 space-y-1">
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>{new Date(log.entry_date).toLocaleDateString()}</span>
-                          <span>by {userLabel(log.created_by)}</span>
-                        </div>
-                        {log.notes && <p className="text-foreground">{log.notes}</p>}
-                        {log.progress_metric !== null && (
-                          <p className="text-xs text-muted-foreground">Progress: {log.progress_metric}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No activity logged yet.</p>
-                )}
-
-                {(orgCtx.isAdmin || orgCtx.isActiveMember) && (
-                  <div className="pt-2 border-t border-border">
-                    <MentorshipLogForm orgId={orgId} pairId={pair.id} />
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      <MentorshipPairsList
+        initialPairs={filteredPairs}
+        logs={logsForClient}
+        users={usersForClient}
+        isAdmin={orgCtx.isAdmin}
+        canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
+        orgId={orgId}
+      />
     </div>
   );
 }

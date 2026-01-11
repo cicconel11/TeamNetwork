@@ -368,7 +368,7 @@ export default async function LandingPage() {
             <div className="flex items-center gap-8 text-sm text-landing-cream/50">
               <Link href="/terms" className="hover:text-landing-cream transition-colors">Terms</Link>
               <Link href="#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
-              <a href="mailto:mckillopm25@gmail.com" className="hover:text-landing-cream transition-colors">Contact</a>
+              <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
 
             <p className="text-sm text-landing-cream/30">

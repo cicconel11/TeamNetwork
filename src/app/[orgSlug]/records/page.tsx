@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface RecordsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -58,11 +60,15 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
     {} as Record<string, NonNullable<typeof records>>
   );
 
+  const navConfig = org.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/records", navConfig);
+  const actionLabel = resolveActionLabel("/records", navConfig);
+
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Record Book"
-        description={`${records?.length || 0} records in ${categories.length || 1} categories`}
+        title={pageLabel}
+        description={`${records?.length || 0} ${pageLabel.toLowerCase()} in ${categories.length || 1} categories`}
         actions={
           isAdmin && (
             <Link href={`/${orgSlug}/records/new`}>
@@ -70,7 +76,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Add Record
+                {actionLabel}
               </Button>
             </Link>
           )
@@ -154,12 +160,12 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
               </svg>
             }
-            title="No records yet"
-            description="Add records to create your organization's record book"
+            title={`No ${pageLabel.toLowerCase()} yet`}
+            description={`Add ${pageLabel.toLowerCase()} to create your organization's record book`}
             action={
               isAdmin && (
                 <Link href={`/${orgSlug}/records/new`}>
-                  <Button>Add First Record</Button>
+                  <Button>{resolveActionLabel("/records", navConfig, "Add First")}</Button>
                 </Link>
               )
             }

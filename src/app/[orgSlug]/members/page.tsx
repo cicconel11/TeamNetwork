@@ -4,6 +4,8 @@ import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { MembersFilter } from "@/components/members/MembersFilter";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -59,11 +61,15 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
+  const navConfig = org.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/members", navConfig);
+  const actionLabel = resolveActionLabel("/members", navConfig);
+
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Members"
-        description={`${members?.length || 0} ${filters.status === "inactive" ? "inactive" : "active"} members`}
+        title={pageLabel}
+        description={`${members?.length || 0} ${filters.status === "inactive" ? "inactive" : "active"} ${pageLabel.toLowerCase()}`}
         actions={
           isAdmin && (
             <Link href={`/${orgSlug}/members/new`}>
@@ -71,7 +77,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                Add Member
+                {actionLabel}
               </Button>
             </Link>
           )
@@ -131,12 +137,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
               </svg>
             }
-            title="No members found"
-            description={filters.status === "inactive" ? "No inactive members" : "No active members yet"}
+            title={`No ${pageLabel.toLowerCase()} found`}
+            description={filters.status === "inactive" ? `No inactive ${pageLabel.toLowerCase()}` : `No active ${pageLabel.toLowerCase()} yet`}
             action={
               isAdmin && (
                 <Link href={`/${orgSlug}/members/new`}>
-                  <Button>Add First Member</Button>
+                  <Button>{resolveActionLabel("/members", navConfig, "Add First")}</Button>
                 </Link>
               )
             }

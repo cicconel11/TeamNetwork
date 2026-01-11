@@ -37,6 +37,7 @@ const patchSchema = z
   .object({
     navConfig: z.record(z.string(), navEntrySchema).optional(),
     nav_config: z.record(z.string(), navEntrySchema).optional(),
+    name: z.string().max(100).optional(),
   })
   .strict();
 const ALLOWED_NAV_PATHS = new Set(ORG_NAV_ITEMS.map((item) => item.href));
@@ -91,6 +92,20 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const parsedBody = await validateJson(req, patchSchema);
     const navConfigInput = parsedBody.navConfig ?? parsedBody.nav_config ?? {};
     const navConfig = sanitizeNavConfig(navConfigInput);
+    const nameInput = parsedBody.name;
+
+    // Validate name if provided
+    let sanitizedName: string | undefined;
+    if (nameInput !== undefined) {
+      const trimmedName = nameInput.trim();
+      if (!trimmedName) {
+        return NextResponse.json({ error: "Organization name cannot be empty" }, { status: 400 });
+      }
+      if (trimmedName.length > 100) {
+        return NextResponse.json({ error: "Organization name must be under 100 characters" }, { status: 400 });
+      }
+      sanitizedName = trimmedName;
+    }
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -132,11 +147,30 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     const serviceSupabase = createServiceClient();
+
+    // Build update payload - only include fields that were provided
+    const updatePayload: { nav_config?: NavConfig; name?: string } = {};
+
+    // Only update nav_config if navConfig or nav_config was provided in the request
+    if (parsedBody.navConfig !== undefined || parsedBody.nav_config !== undefined) {
+      updatePayload.nav_config = navConfig;
+    }
+
+    // Only update name if it was provided
+    if (sanitizedName !== undefined) {
+      updatePayload.name = sanitizedName;
+    }
+
+    // If nothing to update, return early
+    if (Object.keys(updatePayload).length === 0) {
+      return respond({ error: "No valid fields to update" }, 400);
+    }
+
     const { data: updatedOrg, error: updateError } = await serviceSupabase
       .from("organizations")
-      .update({ nav_config: navConfig })
+      .update(updatePayload)
       .eq("id", organizationId)
-      .select("id")
+      .select("id, name, nav_config")
       .maybeSingle();
 
     if (updateError) {
@@ -147,7 +181,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return respond({ error: "Organization not found" }, 404);
     }
 
-    return respond({ navConfig });
+    // Return response with updated fields
+    const response: { navConfig?: NavConfig; name?: string } = {};
+    if (updatePayload.nav_config !== undefined) {
+      response.navConfig = navConfig;
+    }
+    if (sanitizedName !== undefined) {
+      response.name = updatedOrg.name;
+    }
+
+    return respond(response);
   } catch (error) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(error);

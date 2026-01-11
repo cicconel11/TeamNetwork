@@ -9,6 +9,7 @@ import type { NotificationPreference, UserRole } from "@/types/database";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { validateOrgName } from "@/lib/validation/org-name";
 
 function adjustColor(hex: string, amount: number): string {
   const clamp = (num: number) => Math.min(255, Math.max(0, num));
@@ -54,6 +55,7 @@ export default function OrgSettingsPage() {
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string>("");
+  const [editedOrgName, setEditedOrgName] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [primaryColor, setPrimaryColor] = useState("#1e3a5f");
   const [secondaryColor, setSecondaryColor] = useState("#10b981");
@@ -64,11 +66,14 @@ export default function OrgSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [prefSaving, setPrefSaving] = useState(false);
   const [brandSaving, setBrandSaving] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [prefError, setPrefError] = useState<string | null>(null);
   const [prefSuccess, setPrefSuccess] = useState<string | null>(null);
   const [brandError, setBrandError] = useState<string | null>(null);
   const [brandSuccess, setBrandSuccess] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameSuccess, setNameSuccess] = useState<string | null>(null);
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
@@ -98,6 +103,7 @@ export default function OrgSettingsPage() {
 
       setOrgId(org.id);
       setOrgName(org.name || "Organization");
+      setEditedOrgName(org.name || "Organization");
       setLogoUrl(org.logo_url);
       setPrimaryColor(org.primary_color || "#1e3a5f");
       setSecondaryColor(org.secondary_color || "#10b981");
@@ -306,6 +312,46 @@ export default function OrgSettingsPage() {
   const displayLogo = logoPreview || logoUrl;
   const isAdmin = role === "admin";
 
+  const handleNameSave = async () => {
+    if (!orgId) return;
+    if (role !== "admin") {
+      setNameError("Only admins can change the organization name.");
+      return;
+    }
+
+    const validation = validateOrgName(editedOrgName);
+    if (!validation.valid) {
+      setNameError(validation.error || "Invalid organization name");
+      return;
+    }
+
+    setNameSaving(true);
+    setNameError(null);
+    setNameSuccess(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editedOrgName.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Unable to update organization name");
+      }
+
+      const updatedName = data?.name || editedOrgName.trim();
+      setOrgName(updatedName);
+      setEditedOrgName(updatedName);
+      setNameSuccess("Organization name updated successfully.");
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Unable to update organization name");
+    } finally {
+      setNameSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -319,8 +365,63 @@ export default function OrgSettingsPage() {
       ) : pageError ? (
         <Card className="p-5 text-red-600 dark:text-red-400 text-sm">{pageError}</Card>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="org-settings-card p-6 space-y-5 opacity-0 translate-y-2">
+        <div className="grid gap-5 lg:grid-cols-2">
+          {/* Organization Name Card */}
+          <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2 lg:col-span-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold text-foreground">Organization name</p>
+                <p className="text-sm text-muted-foreground">
+                  Change your organization&apos;s display name.
+                </p>
+              </div>
+              <Badge variant={isAdmin ? "muted" : "warning"}>{isAdmin ? "Admin" : "View only"}</Badge>
+            </div>
+
+            <div className="max-w-md space-y-4">
+              {isAdmin ? (
+                <Input
+                  label="Name"
+                  type="text"
+                  value={editedOrgName}
+                  onChange={(e) => {
+                    setEditedOrgName(e.target.value);
+                    setNameSuccess(null);
+                    setNameError(null);
+                  }}
+                  placeholder="Organization name"
+                  maxLength={100}
+                />
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-foreground">Name</p>
+                  <p className="text-foreground">{orgName}</p>
+                </div>
+              )}
+            </div>
+
+            {nameSuccess && <div className="text-sm text-green-600 dark:text-green-400">{nameSuccess}</div>}
+            {nameError && <div className="text-sm text-red-600 dark:text-red-400">{nameError}</div>}
+            {!isAdmin && (
+              <div className="text-sm text-muted-foreground">
+                Only admins can change the organization name.
+              </div>
+            )}
+
+            {isAdmin && (
+              <div className="flex justify-end pt-1">
+                <Button
+                  onClick={handleNameSave}
+                  isLoading={nameSaving}
+                  disabled={editedOrgName.trim() === orgName}
+                >
+                  Save name
+                </Button>
+              </div>
+            )}
+          </Card>
+
+          <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-semibold text-foreground">Organization branding</p>
@@ -461,14 +562,14 @@ export default function OrgSettingsPage() {
               </div>
             )}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-1">
               <Button onClick={handleBrandingSave} isLoading={brandSaving} disabled={!isAdmin}>
                 Save branding
               </Button>
             </div>
           </Card>
 
-          <Card className="org-settings-card p-6 space-y-5 opacity-0 translate-y-2">
+          <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="font-semibold text-foreground">Notification preferences</p>
@@ -479,7 +580,7 @@ export default function OrgSettingsPage() {
               <Badge variant="muted">{orgName}</Badge>
             </div>
 
-            <div className="max-w-md space-y-5">
+            <div className="max-w-md space-y-4">
               <Input
                 label="Email"
                 type="email"
@@ -511,7 +612,7 @@ export default function OrgSettingsPage() {
             {prefSuccess && <div className="text-sm text-green-600 dark:text-green-400">{prefSuccess}</div>}
             {prefError && <div className="text-sm text-red-600 dark:text-red-400">{prefError}</div>}
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-1">
               <Button onClick={handlePreferenceSave} isLoading={prefSaving}>
                 Save preferences
               </Button>

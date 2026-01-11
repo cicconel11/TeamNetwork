@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,9 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
   if (!org) return null;
 
   const isAdmin = await isOrgAdmin(org.id);
+  const navConfig = org.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/expenses", navConfig);
+  const actionLabel = resolveActionLabel("/expenses", navConfig, "Submit");
 
   // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -34,7 +39,7 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
     return (
       <div className="animate-fade-in">
         <PageHeader
-          title="Expenses"
+          title={pageLabel}
           description="Sign in to view expenses"
           actions={
             <Link href={`/auth/login?redirect=/${orgSlug}/expenses`}>
@@ -50,7 +55,7 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
               </svg>
             }
             title="Session required"
-            description="Your session could not be verified. Refresh or sign in again to load expenses."
+            description={`Your session could not be verified. Refresh or sign in again to load ${pageLabel.toLowerCase()}.`}
             action={
               <Link href={`/auth/login?redirect=/${orgSlug}/expenses`}>
                 <Button>Sign In</Button>
@@ -91,11 +96,11 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
     return (
       <div className="animate-fade-in">
         <PageHeader
-          title="Expenses"
-          description="Unable to load expenses"
+          title={pageLabel}
+          description={`Unable to load ${pageLabel.toLowerCase()}`}
           actions={
             <Link href={`/${orgSlug}/expenses/new`}>
-              <Button>Submit Expense</Button>
+              <Button>{actionLabel}</Button>
             </Link>
           }
         />
@@ -106,11 +111,11 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75A4.5 4.5 0 008.25 9.75v6.75a4.5 4.5 0 008.25-3.75v-2.25z" />
               </svg>
             }
-            title="Expenses unavailable"
+            title={`${pageLabel} unavailable`}
             description={
               expensesError?.message
-                ? `We couldn't load expenses: ${expensesError.message}`
-                : "We couldn't load expenses for this organization. Try refreshing the page."
+                ? `We couldn't load ${pageLabel.toLowerCase()}: ${expensesError.message}`
+                : `We couldn't load ${pageLabel.toLowerCase()} for this organization. Try refreshing the page.`
             }
           />
         </Card>
@@ -154,15 +159,15 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Expenses"
-        description={`${expenses?.length || 0} expenses totaling $${total.toFixed(2)}`}
+        title={pageLabel}
+        description={`${expenses?.length || 0} ${pageLabel.toLowerCase()} totaling ${total.toFixed(2)}`}
         actions={
           <Link href={`/${orgSlug}/expenses/new`}>
             <Button>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Submit Expense
+              {actionLabel}
             </Button>
           </Link>
         }
@@ -284,7 +289,7 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
                           organizationField="organization_id"
                           organizationId={org.id}
                           label="Delete"
-                          confirmMessage="Are you sure you want to delete this expense?"
+                          confirmMessage={`Are you sure you want to delete this ${resolveActionLabel("/expenses", navConfig, "").toLowerCase().trim()}?`}
                         />
                       </div>
                     )}
@@ -302,11 +307,11 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25l6-6m4.5-3.493V21.75l-3.75-1.5-3.75 1.5-3.75-1.5-3.75 1.5V4.757c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0c1.1.128 1.907 1.077 1.907 2.185zM9.75 9h.008v.008H9.75V9zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm4.125 4.5h.008v.008h-.008V13.5zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
               </svg>
             }
-            title="No expenses yet"
-            description="Submit an expense to request reimbursement"
+            title={`No ${pageLabel.toLowerCase()} yet`}
+            description={`Submit an ${resolveActionLabel("/expenses", navConfig, "").toLowerCase().trim()} to request reimbursement`}
             action={
               <Link href={`/${orgSlug}/expenses/new`}>
-                <Button>Submit First Expense</Button>
+                <Button>{resolveActionLabel("/expenses", navConfig, "Submit First")}</Button>
               </Link>
             }
           />

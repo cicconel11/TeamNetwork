@@ -6,6 +6,7 @@ import { DonationForm, ConnectSetup } from "@/components/donations";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
+import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat } from "@/types/database";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
@@ -63,10 +64,13 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     : null;
   const isConnected = Boolean(connectStatus?.isReady);
 
+  const navConfig = org.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/philanthropy", navConfig);
+
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Philanthropy"
+        title={pageLabel}
         description="Community service and fundraising for your organization."
         actions={
           canEdit && (
@@ -210,7 +214,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         </div>
       ) : (
         <EmptyState
-          title={filters.view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
+          title={filters.view === "past" ? `No past ${pageLabel.toLowerCase()} events` : `No upcoming ${pageLabel.toLowerCase()} events`}
           description={filters.view === "past" ? "Completed events will appear here." : "Add a new philanthropy event to get started."}
           action={
             canEdit ? (
