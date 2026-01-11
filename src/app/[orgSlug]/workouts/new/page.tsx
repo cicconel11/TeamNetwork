@@ -202,11 +202,11 @@ export default function NewWorkoutPage() {
           />
 
           <Input
-            label="External workout link (optional)"
+            label={`External ${singularLabel.toLowerCase()} link (optional)`}
             type="url"
             value={formData.external_url}
             onChange={(e) => setFormData({ ...formData, external_url: e.target.value })}
-            placeholder="https://example.com/workout"
+            placeholder={`https://example.com/${singularLabel.toLowerCase()}`}
             helperText="Must be https://"
           />
 
