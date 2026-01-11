@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type Audience = "members" | "alumni" | "both" | "specific";
@@ -33,9 +33,8 @@ export default function NewWorkoutPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get the custom label for this page
-  const pageLabel = resolveLabel("/workouts", navConfig);
-  const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim(); // Get singular without prefix
+  // Get the custom label for this page (singular form for action buttons)
+  const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim();
 
   useEffect(() => {
     const supabase = createClient();
