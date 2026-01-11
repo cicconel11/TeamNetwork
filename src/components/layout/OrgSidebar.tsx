@@ -102,7 +102,7 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
                   onClick={onClose}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
-                      ? "bg-org-secondary text-white shadow-soft"
+                      ? "bg-org-secondary text-org-secondary-foreground shadow-soft"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >

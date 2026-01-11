@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type Audience = "members" | "alumni" | "both" | "specific";
 type Channel = "email" | "sms" | "both";
@@ -16,6 +18,7 @@ export default function NewWorkoutPage() {
   const orgSlug = params.orgSlug as string;
 
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -30,17 +33,26 @@ export default function NewWorkoutPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Get the custom label for this page
+  const pageLabel = resolveLabel("/workouts", navConfig);
+  const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim(); // Get singular without prefix
+
   useEffect(() => {
     const supabase = createClient();
     const load = async () => {
       const { data: org } = await supabase
         .from("organizations")
-        .select("id")
+        .select("id, nav_config")
         .eq("slug", orgSlug)
         .maybeSingle();
 
       if (!org) return;
       setOrgId(org.id);
+      
+      // Parse nav_config
+      if (org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)) {
+        setNavConfig(org.nav_config as NavConfig);
+      }
 
       const { data: memberships } = await supabase
         .from("user_organization_roles")
@@ -126,7 +138,7 @@ export default function NewWorkoutPage() {
     }
 
     if (formData.send_notification && workout) {
-      const workoutDateLine = formData.workout_date ? `Workout date: ${formData.workout_date}` : "";
+      const workoutDateLine = formData.workout_date ? `${singularLabel} date: ${formData.workout_date}` : "";
       const notificationBody = [formData.description || "", workoutDateLine, external ? `Link: ${external}` : ""]
         .filter(Boolean)
         .join("\n\n");
@@ -137,15 +149,15 @@ export default function NewWorkoutPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: orgIdToUse,
-            title: `New Workout: ${formData.title}`,
-            body: notificationBody || `Workout posted for ${formData.workout_date || "the team"}`,
+            title: `New ${singularLabel}: ${formData.title}`,
+            body: notificationBody || `${singularLabel} posted for ${formData.workout_date || "the team"}`,
             channel: formData.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
           }),
         });
       } catch (notifError) {
-        console.error("Failed to send workout notification:", notifError);
+        console.error(`Failed to send ${singularLabel.toLowerCase()} notification:`, notifError);
       }
     }
 
@@ -156,8 +168,8 @@ export default function NewWorkoutPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Post Workout"
-        description="Create a new workout for the team"
+        title={`Post ${singularLabel}`}
+        description={`Create a new ${singularLabel.toLowerCase()} for the team`}
         backHref={`/${orgSlug}/workouts`}
       />
 
@@ -262,7 +274,7 @@ export default function NewWorkoutPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isLoading}>
-              Post Workout
+              Post {singularLabel}
             </Button>
           </div>
         </form>

@@ -24,6 +24,7 @@ const config: Config = {
           secondary: "var(--color-org-secondary)",
           "secondary-light": "var(--color-org-secondary-light)",
           "secondary-dark": "var(--color-org-secondary-dark)",
+          "secondary-foreground": "var(--color-org-secondary-foreground)",
         },
         landing: {
           navy: "rgb(var(--landing-navy-rgb) / <alpha-value>)",

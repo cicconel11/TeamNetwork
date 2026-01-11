@@ -186,7 +186,10 @@ export default function OrgSettingsPage() {
     const secondaryLight = adjustColor(nextSecondary, 20);
     const secondaryDark = adjustColor(nextSecondary, -20);
     const isPrimaryDark = isColorDark(nextPrimary);
+    const isSecondaryDark = isColorDark(nextSecondary);
     const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
+    // Use black text on bright secondary colors for better readability
+    const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
     const cardColor = isPrimaryDark ? adjustColor(nextPrimary, 18) : adjustColor(nextPrimary, -12);
     const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
     // For light themes, use a more visible muted color that provides better contrast
@@ -201,6 +204,7 @@ export default function OrgSettingsPage() {
     target.style.setProperty("--color-org-secondary", nextSecondary);
     target.style.setProperty("--color-org-secondary-light", secondaryLight);
     target.style.setProperty("--color-org-secondary-dark", secondaryDark);
+    target.style.setProperty("--color-org-secondary-foreground", secondaryForeground);
     target.style.setProperty("--background", nextPrimary);
     target.style.setProperty("--foreground", baseForeground);
     target.style.setProperty("--card", cardColor);

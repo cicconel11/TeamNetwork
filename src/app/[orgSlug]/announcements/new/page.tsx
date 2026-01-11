@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type Audience = "all" | "members" | "active_members" | "alumni" | "individuals";
 
@@ -21,6 +23,10 @@ export default function NewAnnouncementPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
+
+  // Get the custom label for this page
+  const singularLabel = resolveActionLabel("/announcements", navConfig, "").trim();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -36,11 +42,16 @@ export default function NewAnnouncementPage() {
     const load = async () => {
       const { data: org } = await supabase
         .from("organizations")
-        .select("id")
+        .select("id, nav_config")
         .eq("slug", orgSlug)
         .maybeSingle();
 
       if (!org) return;
+
+      // Parse nav_config
+      if (org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)) {
+        setNavConfig(org.nav_config as NavConfig);
+      }
 
       const { data: memberships } = await supabase
         .from("user_organization_roles")
@@ -154,7 +165,7 @@ export default function NewAnnouncementPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="New Announcement"
+        title={`New ${singularLabel}`}
         description="Share news with your organization"
         backHref={`/${orgSlug}/announcements`}
       />
@@ -249,7 +260,7 @@ export default function NewAnnouncementPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isLoading}>
-              Publish Announcement
+              Publish {singularLabel}
             </Button>
           </div>
         </form>

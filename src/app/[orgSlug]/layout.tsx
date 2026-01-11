@@ -93,7 +93,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const secondaryLight = organization.secondary_color ? adjustColor(organization.secondary_color, 20) : "#34d399";
   const secondaryDark = organization.secondary_color ? adjustColor(organization.secondary_color, -20) : "#047857";
   const isPrimaryDark = isColorDark(primary);
+  const isSecondaryDark = isColorDark(secondary);
   const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
+  // Use black text on bright secondary colors for better readability
+  const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
   const cardColor = isPrimaryDark ? adjustColor(primary, 18) : adjustColor(primary, -12);
   const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
   // For light themes, use a more visible muted color that provides better contrast
@@ -114,6 +117,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         "--color-org-secondary": secondary,
         "--color-org-secondary-light": secondaryLight,
         "--color-org-secondary-dark": secondaryDark,
+        "--color-org-secondary-foreground": secondaryForeground,
         // Apply org colors to global surface tokens for this layout
         "--background": primary,
         "--foreground": baseForeground,
@@ -138,6 +142,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
               --color-org-secondary: ${secondary};
               --color-org-secondary-light: ${secondaryLight};
               --color-org-secondary-dark: ${secondaryDark};
+              --color-org-secondary-foreground: ${secondaryForeground};
               --background: ${primary};
               --foreground: ${baseForeground};
               --card: ${cardColor};

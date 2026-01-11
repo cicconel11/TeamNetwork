@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type Audience = "members" | "alumni" | "both" | "specific";
 type Channel = "email" | "sms" | "both";
@@ -20,9 +22,13 @@ export default function NewEventPage() {
   const orgSlug = params.orgSlug as string;
 
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
+
+  // Get the custom label for this page
+  const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
 
   const [formData, setFormData] = useState({
     title: "",
@@ -45,12 +51,17 @@ export default function NewEventPage() {
     const load = async () => {
       const { data: org } = await supabase
         .from("organizations")
-        .select("id")
+        .select("id, nav_config")
         .eq("slug", orgSlug)
         .maybeSingle();
 
       if (!org) return;
       setOrgId(org.id);
+      
+      // Parse nav_config
+      if (org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)) {
+        setNavConfig(org.nav_config as NavConfig);
+      }
 
       const { data: memberships } = await supabase
         .from("user_organization_roles")
@@ -149,8 +160,8 @@ export default function NewEventPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: orgIdToUse,
-            title: `New Event: ${formData.title}`,
-            body: notificationBody || `Event scheduled for ${formData.start_date} at ${formData.start_time}`,
+            title: `New ${singularLabel}: ${formData.title}`,
+            body: notificationBody || `${singularLabel} scheduled for ${formData.start_date} at ${formData.start_time}`,
             channel: formData.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
@@ -168,8 +179,8 @@ export default function NewEventPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Create New Event"
-        description="Add an event to your organization's calendar"
+        title={`Create New ${singularLabel}`}
+        description={`Add ${singularLabel.toLowerCase().startsWith("a") || singularLabel.toLowerCase().startsWith("e") || singularLabel.toLowerCase().startsWith("i") || singularLabel.toLowerCase().startsWith("o") || singularLabel.toLowerCase().startsWith("u") ? "an" : "a"} ${singularLabel.toLowerCase()} to your organization's calendar`}
         backHref={`/${orgSlug}/events`}
       />
 
@@ -182,7 +193,7 @@ export default function NewEventPage() {
           )}
 
           <Input
-            label="Event Title"
+            label={`${singularLabel} Title`}
             value={formData.title}
             onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="e.g., Team Meeting, vs Cornell"
@@ -326,7 +337,7 @@ export default function NewEventPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isLoading}>
-              Create Event
+              Create {singularLabel}
             </Button>
           </div>
         </form>

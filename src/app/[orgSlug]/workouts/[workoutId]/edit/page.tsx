@@ -5,6 +5,8 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Workout } from "@/types/database";
 
 export default function EditWorkoutPage() {
@@ -16,6 +18,7 @@ export default function EditWorkoutPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -24,13 +27,16 @@ export default function EditWorkoutPage() {
     external_url: "",
   });
 
+  // Get the custom label for this page
+  const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim();
+
   useEffect(() => {
     const fetchWorkout = async () => {
       const supabase = createClient();
 
       const { data: org } = await supabase
         .from("organizations")
-        .select("id")
+        .select("id, nav_config")
         .eq("slug", orgSlug)
         .single();
 
@@ -38,6 +44,11 @@ export default function EditWorkoutPage() {
         setError("Organization not found");
         setIsFetching(false);
         return;
+      }
+
+      // Parse nav_config
+      if (org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)) {
+        setNavConfig(org.nav_config as NavConfig);
       }
 
       const { data: workout } = await supabase
@@ -123,7 +134,7 @@ export default function EditWorkoutPage() {
     return (
       <div className="animate-fade-in">
         <PageHeader
-          title="Edit Workout"
+          title={`Edit ${singularLabel}`}
           description="Loading..."
           backHref={`/${orgSlug}/workouts`}
         />
@@ -141,8 +152,8 @@ export default function EditWorkoutPage() {
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Edit Workout"
-        description="Update workout details"
+        title={`Edit ${singularLabel}`}
+        description={`Update ${singularLabel.toLowerCase()} details`}
         backHref={`/${orgSlug}/workouts`}
       />
 
