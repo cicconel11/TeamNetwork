@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { LoginClient } from "./LoginClient";
 
+// Force dynamic rendering so env vars are read at request time
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   // Read env var on server side and pass to client
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";

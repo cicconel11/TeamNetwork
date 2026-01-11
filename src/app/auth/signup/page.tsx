@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { SignupClient } from "./SignupClient";
 
+// Force dynamic rendering so env vars are read at request time
+export const dynamic = "force-dynamic";
+
 export default function SignupPage() {
   // Read env var on server side and pass to client
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
