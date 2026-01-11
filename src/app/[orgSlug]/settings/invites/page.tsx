@@ -819,21 +819,21 @@ export default function InvitesPage() {
       </Card>
 
       {/* Danger zone */}
-      <Card className="p-6 mt-8 border border-red-200 dark:border-red-900/40 bg-red-50/50 dark:bg-red-900/10">
+      <Card className="p-6 mt-8 border border-amber-300 dark:border-amber-700/50 bg-amber-50/50 dark:bg-amber-900/10">
         <div className="flex flex-col gap-6">
           <div>
-            <h3 className="text-red-700 dark:text-red-300 font-semibold">Danger Zone</h3>
-            <p className="text-sm text-red-700/80 dark:text-red-200/80">
+            <h3 className="text-amber-800 dark:text-amber-200 font-semibold">Danger Zone</h3>
+            <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
               These actions can affect your organization&apos;s access and data.
             </p>
           </div>
 
           {/* Cancel Subscription Section */}
-          <div className="border-t border-red-200 dark:border-red-900/40 pt-4">
+          <div className="border-t border-amber-300 dark:border-amber-700/50 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <h4 className="font-medium text-red-700 dark:text-red-300">Cancel Subscription</h4>
-                <p className="text-sm text-red-700/70 dark:text-red-200/70">
+                <h4 className="font-medium text-amber-800 dark:text-amber-200">Cancel Subscription</h4>
+                <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
                   Your subscription will remain active until the end of your billing period.
                   After that, you&apos;ll have 30 days of read-only access to resubscribe.
                 </p>
@@ -855,11 +855,11 @@ export default function InvitesPage() {
           </div>
 
           {/* Delete Organization Section */}
-          <div className="border-t border-red-200 dark:border-red-900/40 pt-4">
+          <div className="border-t border-amber-300 dark:border-amber-700/50 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <h4 className="font-medium text-red-700 dark:text-red-300">Delete Organization</h4>
-                <p className="text-sm text-red-700/70 dark:text-red-200/70">
+                <h4 className="font-medium text-amber-800 dark:text-amber-200">Delete Organization</h4>
+                <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
                   Permanently delete this organization and all its data.
                   This action cannot be undone.
                 </p>
@@ -869,7 +869,7 @@ export default function InvitesPage() {
                 onClick={handleDeleteOrganization}
                 isLoading={isDeleting}
                 disabled={isDeleting || !orgId}
-                className="!bg-red-600 !text-white hover:!bg-red-700 !border-red-600"
+                className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
                 Delete Organization
               </Button>
@@ -877,7 +877,7 @@ export default function InvitesPage() {
           </div>
 
           {error && (
-            <p className="text-sm text-red-600 dark:text-red-400 font-medium">
+            <p className="text-sm text-amber-700 dark:text-amber-300 font-medium">
               {error}
             </p>
           )}
@@ -889,7 +889,7 @@ export default function InvitesPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="max-w-md w-full p-6 space-y-4">
             <div>
-              <h3 className="text-lg font-bold text-red-600 dark:text-red-400">
+              <h3 className="text-lg font-bold text-amber-700 dark:text-amber-300">
                 Confirm Organization Deletion
               </h3>
               <p className="text-sm text-muted-foreground mt-2">
@@ -930,7 +930,7 @@ export default function InvitesPage() {
                 onClick={confirmDeleteOrganization}
                 disabled={isDeleting || (deleteConfirmText !== orgName && deleteConfirmText !== orgSlug)}
                 isLoading={isDeleting}
-                className="!bg-red-600 !text-white hover:!bg-red-700 !border-red-600"
+                className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
                 Delete Forever
               </Button>
