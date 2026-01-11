@@ -78,7 +78,21 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
         <ul className="space-y-1">
           {visibleNav.map((item) => {
             const href = `${basePath}${item.href}`;
-            const isActive = pathname === href || (item.href !== "" && pathname.startsWith(href));
+            // Check for exact match first
+            let isActive = pathname === href;
+            // For non-root items, check if pathname starts with href
+            // but only if there's no more specific nav item that matches
+            if (!isActive && item.href !== "") {
+              const isPathMatch = pathname.startsWith(href + "/") || pathname === href;
+              // Ensure we don't highlight parent items when a child item should be active
+              // e.g., don't highlight /settings when on /settings/invites
+              const hasMoreSpecificMatch = visibleNav.some(
+                (other) => other.href !== item.href && 
+                           other.href.startsWith(item.href + "/") && 
+                           pathname.startsWith(`${basePath}${other.href}`)
+              );
+              isActive = isPathMatch && !hasMoreSpecificMatch;
+            }
             const Icon = item.icon;
 
             return (
