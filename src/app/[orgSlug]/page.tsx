@@ -86,8 +86,8 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
       value: eventsCount || 0,
       href: `/${orgSlug}/events`,
       icon: CalendarClock,
-      accentFrom: "var(--color-org-primary-light)",
-      accentTo: "var(--color-org-primary)",
+      accentFrom: "var(--color-org-secondary)",
+      accentTo: "var(--color-org-secondary-dark)",
     },
     {
       label: "Total Donations",
