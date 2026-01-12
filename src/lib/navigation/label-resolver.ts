@@ -61,14 +61,15 @@ function toSingular(word: string): string {
     }
 
     // Handle words ending in "es" for words ending in s, x, z, ch, sh
-    if (word.endsWith("ses") || word.endsWith("xes") || word.endsWith("zes")) {
+    // But NOT words like "expenses" where the base word ends in "se"
+    if (word.endsWith("sses") || word.endsWith("xes") || word.endsWith("zes")) {
         return word.slice(0, -2);
     }
     if (word.endsWith("ches") || word.endsWith("shes")) {
         return word.slice(0, -2);
     }
 
-    // Handle regular "s" plural
+    // Handle regular "s" plural (including "expenses" -> "expense")
     if (word.endsWith("s") && !word.endsWith("ss")) {
         return word.slice(0, -1);
     }
