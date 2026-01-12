@@ -137,6 +137,22 @@ export default function EditEventPage() {
       return;
     }
 
+    // Trigger Google Calendar sync for users with connected calendars (Requirement 3.1)
+    try {
+      await fetch("/api/calendar/event-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          eventId: eventId,
+          organizationId: org.id,
+          operation: "update",
+        }),
+      });
+    } catch (syncError) {
+      // Calendar sync errors should not block event update
+      console.error("Failed to trigger calendar sync:", syncError);
+    }
+
     router.push(`/${orgSlug}/events/${eventId}`);
     router.refresh();
   };

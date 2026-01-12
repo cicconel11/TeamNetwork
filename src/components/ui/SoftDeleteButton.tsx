@@ -13,6 +13,7 @@ interface SoftDeleteButtonProps {
   organizationId?: string;
   label?: string;
   confirmMessage?: string;
+  onAfterDelete?: () => Promise<void>;
 }
 
 export function SoftDeleteButton({
@@ -23,6 +24,7 @@ export function SoftDeleteButton({
   organizationId,
   label = "Delete",
   confirmMessage = "Are you sure? This will remove the record from active lists.",
+  onAfterDelete,
 }: SoftDeleteButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -44,6 +46,16 @@ export function SoftDeleteButton({
       setError(error.message);
       setIsLoading(false);
       return;
+    }
+
+    // Call optional post-delete callback (e.g., for calendar sync)
+    if (onAfterDelete) {
+      try {
+        await onAfterDelete();
+      } catch (callbackError) {
+        // Log but don't block - post-delete actions should not prevent navigation
+        console.error("Post-delete callback error:", callbackError);
+      }
     }
 
     if (redirectTo) {

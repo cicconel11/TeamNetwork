@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Badge, Button, SoftDeleteButton } from "@/components/ui";
+import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
-import { EventRsvp, AttendanceList } from "@/components/events";
+import { EventRsvp, AttendanceList, EventDeleteButton } from "@/components/events";
 import type { RsvpStatus } from "@/types/database";
 
 interface EventDetailPageProps {
@@ -86,10 +86,8 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   Edit
                 </Button>
               </Link>
-              <SoftDeleteButton
-                table="events"
-                id={eventId}
-                organizationField="organization_id"
+              <EventDeleteButton
+                eventId={eventId}
                 organizationId={org.id}
                 redirectTo={`/${orgSlug}/events`}
               />

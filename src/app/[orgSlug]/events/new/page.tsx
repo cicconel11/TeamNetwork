@@ -172,6 +172,24 @@ export default function NewEventPage() {
       }
     }
 
+    // Trigger Google Calendar sync for users with connected calendars (Requirement 2.1)
+    if (event) {
+      try {
+        await fetch("/api/calendar/event-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            eventId: event.id,
+            organizationId: orgIdToUse,
+            operation: "create",
+          }),
+        });
+      } catch (syncError) {
+        // Calendar sync errors should not block event creation
+        console.error("Failed to trigger calendar sync:", syncError);
+      }
+    }
+
     router.push(`/${orgSlug}/events`);
     router.refresh();
   };
