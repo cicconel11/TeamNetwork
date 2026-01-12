@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
@@ -622,6 +623,39 @@ export default function OrgSettingsPage() {
               <Button onClick={handlePreferenceSave} isLoading={prefSaving}>
                 Save preferences
               </Button>
+            </div>
+          </Card>
+
+          {/* Google Calendar Sync Card */}
+          <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <svg
+                  className="w-6 h-6 text-foreground"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
+                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                </svg>
+                <div>
+                  <p className="font-semibold text-foreground">Google Calendar Sync</p>
+                  <p className="text-sm text-muted-foreground">
+                    Automatically sync organization events to your Google Calendar.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground">
+              Connect your Google Calendar to have events from this organization automatically added to your personal calendar.
+            </p>
+
+            <div className="flex justify-end pt-1">
+              <Link href="/settings/notifications">
+                <Button variant="secondary">
+                  Manage Calendar Sync
+                </Button>
+              </Link>
             </div>
           </Card>
         </div>
