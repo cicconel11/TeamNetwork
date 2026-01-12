@@ -111,11 +111,11 @@ export default async function LandingPage() {
                 <div className="bg-landing-cream/5 border-b border-landing-cream/10 p-6">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-xl bg-landing-cream/20 flex items-center justify-center border border-landing-cream/20">
-                      <span className="font-display font-bold text-landing-cream text-lg">RC</span>
+                      <span className="font-display font-bold text-landing-cream text-lg">SR</span>
                     </div>
                     <div>
-                      <h3 className="font-display font-bold text-xl text-landing-cream">Riverside University Crew</h3>
-                      <p className="text-sm text-landing-cream/50">Est. 1987 • Boulder, CO</p>
+                      <h3 className="font-display font-bold text-xl text-landing-cream">South Rock Ridge High School</h3>
+                      <p className="text-sm text-landing-cream/50">Central Pennsylvania</p>
                     </div>
                   </div>
                 </div>
