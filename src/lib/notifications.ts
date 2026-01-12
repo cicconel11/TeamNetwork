@@ -19,6 +19,8 @@ export interface NotificationBlastInput {
   title: string;
   body: string;
   targetUserIds?: string[] | null;
+  /** Optional custom email sender (e.g., Resend). Falls back to stub if not provided. */
+  sendEmailFn?: (params: EmailParams) => Promise<NotificationResult>;
 }
 
 export interface NotificationBlastResult {
@@ -60,6 +62,36 @@ const DESIRED_CHANNELS: Record<NotificationChannel, DeliveryChannel[]> = {
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Runs an array of async task functions with a concurrency limit.
+ * Returns results in the order tasks were provided.
+ * Tasks that throw are caught and returned as { success: false, error }.
+ */
+async function runWithConcurrency<T extends { success: boolean; error?: string }>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const currentIndex = index++;
+      try {
+        results[currentIndex] = await tasks[currentIndex]();
+      } catch (err) {
+        // Safely handle thrown errors without rejecting the whole batch
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        results[currentIndex] = { success: false, error: errorMsg } as T;
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
 
 export async function sendEmail(params: EmailParams): Promise<NotificationResult> {
   console.log("[STUB] Sending email:", {
@@ -129,6 +161,7 @@ export async function buildNotificationTargets(params: {
     return role;
   };
 
+  // Step 1: Fetch memberships first to get the list of relevant user IDs
   const membershipFilter = supabase
     .from("user_organization_roles")
     .select("user_id, role, status")
@@ -136,15 +169,40 @@ export async function buildNotificationTargets(params: {
     .eq("status", "active")
     .in("role", audienceRoles);
 
-  const [prefsRes, usersRes, membershipsRes] = await Promise.all([
+  const membershipsRes = targetUserIds && targetUserIds.length > 0
+    ? await membershipFilter.in("user_id", targetUserIds)
+    : await membershipFilter;
+
+  const membershipRows =
+    (membershipsRes.data as { user_id: string; role: string; status: string }[] | null) || [];
+
+  const memberships =
+    targetUserIds && targetUserIds.length > 0
+      ? membershipRows.filter((m) => targetUserIds.includes(m.user_id))
+      : membershipRows;
+
+  // Collect member user IDs to scope subsequent queries
+  const memberUserIds = memberships.map((m) => m.user_id);
+
+  // Early return if no members match
+  if (memberUserIds.length === 0) {
+    return {
+      targets: [],
+      stats: { total: 0, emailCount: 0, smsCount: 0, skippedMissingContact: 0 },
+    };
+  }
+
+  // Step 2: Fetch users and preferences scoped to member IDs only
+  const [prefsRes, usersRes] = await Promise.all([
     supabase
       .from("notification_preferences")
       .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id")
-      .eq("organization_id", organizationId),
+      .eq("organization_id", organizationId)
+      .in("user_id", memberUserIds),
     supabase
       .from("users")
-      .select("id,email,name"),
-    targetUserIds && targetUserIds.length > 0 ? membershipFilter.in("user_id", targetUserIds) : membershipFilter,
+      .select("id,email,name")
+      .in("id", memberUserIds),
   ]);
 
   const prefs = (prefsRes.data as PreferenceRow[] | null) || [];
@@ -159,14 +217,6 @@ export async function buildNotificationTargets(params: {
   users.forEach((u) => {
     userById.set(u.id, { email: u.email });
   });
-
-  const membershipRows =
-    (membershipsRes.data as { user_id: string; role: string; status: string }[] | null) || [];
-
-  const memberships =
-    targetUserIds && targetUserIds.length > 0
-      ? membershipRows.filter((m) => targetUserIds.includes(m.user_id))
-      : membershipRows;
 
   const targets: NotificationTarget[] = [];
   let emailCount = 0;
@@ -211,7 +261,7 @@ export async function buildNotificationTargets(params: {
 }
 
 export async function sendNotificationBlast(input: NotificationBlastInput): Promise<NotificationBlastResult> {
-  const { supabase, organizationId, audience, channel, title, body, targetUserIds } = input;
+  const { supabase, organizationId, audience, channel, title, body, targetUserIds, sendEmailFn } = input;
   const { targets, stats } = await buildNotificationTargets({
     supabase,
     organizationId,
@@ -224,17 +274,36 @@ export async function sendNotificationBlast(input: NotificationBlastInput): Prom
   let emailSent = 0;
   let smsSent = 0;
 
+  const emailFn = sendEmailFn || sendEmail;
+
+  // Build tasks for concurrent execution
+  type SendResult = { type: "email" | "sms"; success: boolean; error?: string };
+  const tasks: (() => Promise<SendResult>)[] = [];
+
   for (const target of targets) {
     if (target.channels.includes("email") && target.email) {
-      const result = await sendEmail({ to: target.email, subject: title, body });
-      if (result.success) emailSent += 1;
-      else if (result.error) errors.push(`Email to ${target.email}: ${result.error}`);
+      const email = target.email;
+      tasks.push(async () => {
+        const result = await emailFn({ to: email, subject: title, body });
+        return { type: "email" as const, success: result.success, error: result.error ? `Email to ${email}: ${result.error}` : undefined };
+      });
     }
     if (target.channels.includes("sms") && target.phone) {
-      const result = await sendSMS({ to: target.phone, message: `${title}\n\n${body}` });
-      if (result.success) smsSent += 1;
-      else if (result.error) errors.push(`SMS to ${target.phone}: ${result.error}`);
+      const phone = target.phone;
+      tasks.push(async () => {
+        const result = await sendSMS({ to: phone, message: `${title}\n\n${body}` });
+        return { type: "sms" as const, success: result.success, error: result.error ? `SMS to ${phone}: ${result.error}` : undefined };
+      });
     }
+  }
+
+  // Run with concurrency limit of 10
+  const results = await runWithConcurrency(tasks, 10);
+
+  for (const r of results) {
+    if (r.type === "email" && r.success) emailSent += 1;
+    if (r.type === "sms" && r.success) smsSent += 1;
+    if (r.error) errors.push(r.error);
   }
 
   return {

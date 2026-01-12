@@ -3,7 +3,8 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { buildNotificationTargets, sendEmail as sendEmailStub, sendSMS } from "@/lib/notifications";
+import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
+import type { EmailParams, NotificationResult } from "@/lib/notifications";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -244,25 +245,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const { targets, stats } = await buildNotificationTargets({
-      supabase: service,
-      organizationId,
-      audience,
-      channel,
-      targetUserIds: targetUserIds || undefined,
-    });
-
-    if (targets.length === 0) {
-      return respond(
-        {
-          error: "No recipients matched the selected audience",
-          total: 0,
-          skipped: stats.skippedMissingContact,
-        },
-        400,
-      );
-    }
-
+    // Check Resend config before doing any send work
     if (!resend && process.env.NODE_ENV === "production") {
       return respond(
         { error: "Notifications not configured: set RESEND_API_KEY and FROM_EMAIL" },
@@ -270,32 +253,29 @@ export async function POST(request: Request) {
       );
     }
 
-    let emailSent = 0;
-    let smsSent = 0;
-    const errors: string[] = [];
+    // Use sendNotificationBlast which handles targeting, concurrency, and sending
+    const blastResult = await sendNotificationBlast({
+      supabase: service,
+      organizationId,
+      audience,
+      channel,
+      title,
+      body: bodyText,
+      targetUserIds: targetUserIds || undefined,
+      sendEmailFn: async (params: EmailParams): Promise<NotificationResult> => {
+        return sendEmailWithFallback(params.to, params.subject, params.body);
+      },
+    });
 
-    for (const target of targets) {
-      if (target.channels.includes("email") && target.email) {
-        const result = await sendEmailWithFallback(target.email, title, bodyText);
-        if (result.success) {
-          emailSent += 1;
-        } else if (result.error) {
-          errors.push(`Email to ${target.email}: ${result.error}`);
-        }
-      }
-
-      if (target.channels.includes("sms") && target.phone) {
-        const smsResult = await sendSMS({
-          to: target.phone,
-          message: `${title}\n\n${bodyText}`,
-        });
-
-        if (smsResult.success) {
-          smsSent += 1;
-        } else if (smsResult.error) {
-          errors.push(`SMS to ${target.phone}: ${smsResult.error}`);
-        }
-      }
+    if (blastResult.total === 0) {
+      return respond(
+        {
+          error: "No recipients matched the selected audience",
+          total: 0,
+          skipped: blastResult.skippedMissingContact,
+        },
+        400,
+      );
     }
 
     if (resolvedNotificationId) {
@@ -305,17 +285,17 @@ export async function POST(request: Request) {
         .eq("id", resolvedNotificationId);
     }
 
-    const sent = emailSent + smsSent;
-    const success = errors.length === 0 && sent > 0;
+    const sent = blastResult.emailCount + blastResult.smsCount;
+    const success = blastResult.errors.length === 0 && sent > 0;
 
     const payload = {
       success,
       sent,
-      emailSent,
-      smsSent,
-      total: targets.length,
-      skipped: stats.skippedMissingContact,
-      errors: errors.length > 0 ? errors : undefined,
+      emailSent: blastResult.emailCount,
+      smsSent: blastResult.smsCount,
+      total: blastResult.total,
+      skipped: blastResult.skippedMissingContact,
+      errors: blastResult.errors.length > 0 ? blastResult.errors : undefined,
     };
 
     const status = success ? 200 : 500;
