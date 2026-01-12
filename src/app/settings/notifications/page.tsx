@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -34,6 +34,29 @@ interface OrgCalendarPrefs {
 }
 
 export default function NotificationSettingsPage() {
+  return (
+    <Suspense fallback={<NotificationSettingsLoading />}>
+      <NotificationSettingsContent />
+    </Suspense>
+  );
+}
+
+function NotificationSettingsLoading() {
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">Settings</p>
+        <h1 className="text-2xl font-bold text-foreground">Notifications</h1>
+        <p className="text-muted-foreground">
+          Choose how you want to receive email notifications for each organization.
+        </p>
+      </div>
+      <Card className="p-5 text-muted-foreground text-sm">Loading…</Card>
+    </div>
+  );
+}
+
+function NotificationSettingsContent() {
   const [loading, setLoading] = useState(true);
   const [forms, setForms] = useState<OrgPrefForm[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
