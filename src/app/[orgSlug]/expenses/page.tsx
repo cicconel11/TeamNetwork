@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { ExpensesFilters } from "@/components/expenses";
 import { isOrgAdmin } from "@/lib/auth";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -175,56 +176,7 @@ export default async function ExpensesPage({ params, searchParams }: ExpensesPag
 
       {/* Admin Filters */}
       {isAdmin && (expenseTypes.length > 0 || submitters.length > 0) && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {/* All filter */}
-          <Link
-            href={`/${orgSlug}/expenses`}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-              !filters.type && !filters.user
-                ? "bg-org-primary text-white"
-                : "bg-muted text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            All
-          </Link>
-
-          {/* Expense type filters */}
-          {expenseTypes.map((type) => (
-            <Link
-              key={type}
-              href={`/${orgSlug}/expenses?type=${encodeURIComponent(type)}${filters.user ? `&user=${filters.user}` : ""}`}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                filters.type === type
-                  ? "bg-org-primary text-white"
-                  : "bg-muted text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {type}
-            </Link>
-          ))}
-
-          {/* User filter dropdown */}
-          {submitters.length > 0 && (
-            <form method="get" className="flex items-center gap-2">
-              {filters.type && <input type="hidden" name="type" value={filters.type} />}
-              <select
-                name="user"
-                defaultValue={filters.user || ""}
-                className="px-4 py-2 rounded-xl text-sm font-medium bg-muted text-foreground border-0 focus:ring-2 focus:ring-org-primary"
-              >
-                <option value="">All Users</option>
-                {submitters.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name || u.email}
-                  </option>
-                ))}
-              </select>
-              <Button type="submit" variant="secondary" size="sm">
-                Filter
-              </Button>
-            </form>
-          )}
-        </div>
+        <ExpensesFilters expenseTypes={expenseTypes} submitters={submitters} />
       )}
 
       {/* Expenses List */}
