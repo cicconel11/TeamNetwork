@@ -89,10 +89,21 @@ Regenerated database types to match the updated schema, ensuring:
 - `supabase/migrations/20251216121000_cleanup_rls_policies.sql` (new)
 - `src/types/database.ts` (regenerated)
 
+## Performance Advisor Follow-Up (RLS)
+
+Supabase Performance Advisor may flag RLS policy performance issues when `auth.uid()`, `auth.role()`, or `current_setting()` are called directly in `USING`/`WITH CHECK` expressions. These functions can be re-evaluated per-row, which becomes expensive at scale.
+
+**Guidelines**
+
+- Prefer `(select auth.uid())` over `auth.uid()` in RLS policies.
+- Prefer `(select auth.role())` over `auth.role()` in RLS policies.
+- Avoid multiple permissive policies for the same table + role + action; merge conditions into a single policy where feasible.
+- Be careful with admin policies declared as `FOR ALL` if you also have a separate `FOR SELECT` policy: `FOR ALL` includes `SELECT` and can reintroduce the “multiple permissive policies” performance warning. Prefer separate `FOR INSERT` / `FOR UPDATE` / `FOR DELETE` policies for write access.
+
 ## Next Steps
 
-1. Test all CRUD operations in the application to ensure no regressions
-2. Monitor for any remaining schema cache issues
+1. Keep database changes in `supabase/migrations/` to avoid production drift
+2. Run Supabase Performance Advisor after schema/RLS work
 3. Consider adding database tests for RLS policies
 4. Document the expected behavior for admin-only operations in the UI
 

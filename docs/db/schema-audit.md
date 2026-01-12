@@ -164,12 +164,13 @@ These would simplify policy definitions and RPC checks.
 - `org_donation_embeds_org_idx`
 - `org_donation_embeds_org_order_idx`
 
-### Missing Indexes (Need to Add)
-- `members_org_id_idx` on `members(organization_id)`
-- `events_org_id_idx` on `events(organization_id)`
-- `announcements_org_id_idx` on `announcements(organization_id)`
-- `donations_org_id_idx` on `donations(organization_id)`
-- `notifications_org_id_idx` on `notifications(organization_id)`
+### Index Follow-Ups
+
+- `members(organization_id)` already exists as `idx_members_org`.
+- If `members` uses soft-delete heavily, prefer a partial index:
+  - `members(organization_id) WHERE deleted_at IS NULL` (reduces filtering work and keeps list queries fast as the table grows).
+- For other org-scoped tables, consider adding `organization_id` indexes as they begin to grow (avoid premature indexing).
+
 
 ---
 
