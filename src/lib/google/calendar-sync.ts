@@ -256,7 +256,7 @@ export function isUserEligibleForSync(
         sync_fundraiser?: boolean | null;
         sync_philanthropy?: boolean | null;
     } | null,
-    userRole: "member" | "alumni" | "admin" | null
+    userRole: "member" | "active_member" | "alumni" | "admin" | null
 ): boolean {
     // 1. User must have a connected Google Calendar
     if (!connection || connection.status !== "connected") {
@@ -274,9 +274,11 @@ export function isUserEligibleForSync(
         }
     } else {
         // Check audience-based eligibility
+        // Note: roles can be "admin", "active_member", "member", or "alumni"
         switch (audience) {
             case "members":
-                if (userRole !== "member" && userRole !== "admin") {
+                // "members" audience includes admin, active_member, and member roles
+                if (userRole !== "member" && userRole !== "active_member" && userRole !== "admin") {
                     return false;
                 }
                 break;
@@ -356,6 +358,8 @@ export async function getEligibleUsersForEvent(
         .filter(c => c.status === "connected")
         .map(c => c.user_id);
 
+    console.log(`[calendar-sync] Found ${connections.length} total connections, ${connectedUserIds.length} connected`);
+
     if (connectedUserIds.length === 0) {
         return [];
     }
@@ -372,6 +376,8 @@ export async function getEligibleUsersForEvent(
         return [];
     }
 
+    console.log(`[calendar-sync] Found ${orgUsers.length} connected users in organization ${organizationId}`);
+
     // Get sync preferences for these users
     const { data: preferences, error: prefError } = await supabase
         .from("calendar_sync_preferences")
@@ -386,7 +392,7 @@ export async function getEligibleUsersForEvent(
 
     // Build lookup maps
     const connectionMap = new Map(connections.map(c => [c.user_id, c]));
-    const roleMap = new Map(orgUsers.map(u => [u.user_id, u.role as "member" | "alumni" | "admin"]));
+    const roleMap = new Map(orgUsers.map(u => [u.user_id, u.role as "member" | "active_member" | "alumni" | "admin"]));
     const prefMap = new Map((preferences || []).map(p => [p.user_id, p]));
 
     // Filter to eligible users
@@ -428,6 +434,8 @@ export async function syncEventToUsers(
     eventId: string,
     operation: SyncOperation
 ): Promise<void> {
+    console.log(`[calendar-sync] Starting sync for event ${eventId}, operation: ${operation}`);
+
     // Fetch the event details
     const { data: event, error: eventError } = await supabase
         .from("events")
@@ -439,6 +447,8 @@ export async function syncEventToUsers(
         console.error("[calendar-sync] Failed to fetch event:", eventError);
         return;
     }
+
+    console.log(`[calendar-sync] Event found: ${event.title}, type: ${event.event_type}, audience: ${event.audience}`);
 
     // For delete operations, we need to process existing entries
     if (operation === "delete") {
@@ -452,6 +462,8 @@ export async function syncEventToUsers(
         target_user_ids: event.target_user_ids,
         event_type: event.event_type as EventType | null,
     });
+
+    console.log(`[calendar-sync] Found ${eligibleUserIds.length} eligible users for sync`);
 
     if (eligibleUserIds.length === 0) {
         console.log("[calendar-sync] No eligible users for event:", eventId);
@@ -469,8 +481,11 @@ export async function syncEventToUsers(
 
     // Process each eligible user
     for (const userId of eligibleUserIds) {
+        console.log(`[calendar-sync] Syncing event to user ${userId}`);
         await syncEventForUser(supabase, userId, eventId, organizationId, calendarEvent, operation);
     }
+
+    console.log(`[calendar-sync] Sync complete for event ${eventId}`);
 }
 
 /**
