@@ -61,6 +61,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
           name,
         },
         emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
+        captchaToken,
       },
     });
 

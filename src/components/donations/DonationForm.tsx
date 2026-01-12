@@ -63,6 +63,13 @@ export function DonationForm({
     setIsLoading(true);
     setError(null);
     setMessage(null);
+    
+    if (!isCaptchaVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      setIsLoading(false);
+      return;
+    }
+    
     if (!idempotencyKey) {
       setError("Preparing checkout... please try again.");
       setIsLoading(false);

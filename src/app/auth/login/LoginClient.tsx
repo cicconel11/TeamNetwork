@@ -61,6 +61,9 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      options: {
+        captchaToken,
+      },
     });
 
     if (error) {
@@ -90,6 +93,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
       email,
       options: {
         emailRedirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
+        captchaToken,
       },
     });
 
