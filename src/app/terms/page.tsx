@@ -291,6 +291,7 @@ export default function TermsPage() {
             <div className="flex items-center gap-8 text-sm text-landing-cream/50">
               <Link href="/" className="hover:text-landing-cream transition-colors">Home</Link>
               <Link href="/#pricing" className="hover:text-landing-cream transition-colors">Pricing</Link>
+              <Link href="/privacy" className="hover:text-landing-cream transition-colors">Privacy</Link>
               <a href="mailto:support@myteamnetwork.com" className="hover:text-landing-cream transition-colors">Contact</a>
             </div>
             
