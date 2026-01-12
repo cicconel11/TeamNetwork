@@ -13,23 +13,28 @@ export const dynamic = "force-dynamic";
  * Requirements: 1.2
  * - Generates state parameter with user ID for CSRF protection
  * - Redirects to Google authorization URL
+ * - Supports optional redirect parameter to return to a specific page
  */
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        const url = new URL(request.url);
+        const redirectPath = url.searchParams.get("redirect") || "/settings/notifications";
+
         // Get the authenticated user
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
         if (authError || !user) {
             return NextResponse.redirect(
-                new URL("/auth/login?error=unauthorized&next=/settings/notifications", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
+                new URL(`/auth/login?error=unauthorized&next=${encodeURIComponent(redirectPath)}`, process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
             );
         }
 
-        // Generate state parameter containing user ID for CSRF protection
-        // Format: userId:timestamp to prevent replay attacks
+        // Generate state parameter containing user ID and redirect path for CSRF protection
+        // Format: userId:timestamp:redirectPath (base64 encoded redirect path)
         const timestamp = Date.now();
-        const state = `${user.id}:${timestamp}`;
+        const encodedRedirect = Buffer.from(redirectPath).toString("base64");
+        const state = `${user.id}:${timestamp}:${encodedRedirect}`;
 
         // Get the Google OAuth authorization URL
         const authUrl = getAuthorizationUrl(state);

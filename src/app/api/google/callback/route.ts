@@ -10,7 +10,34 @@ import {
 export const dynamic = "force-dynamic";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-const SETTINGS_URL = `${APP_URL}/settings/notifications`;
+const DEFAULT_REDIRECT = "/settings/notifications";
+
+/**
+ * Parses the state parameter and extracts user ID, timestamp, and redirect path
+ */
+function parseState(state: string): { userId: string; timestamp: number; redirectPath: string } | null {
+    const parts = state.split(":");
+
+    // Support both old format (userId:timestamp) and new format (userId:timestamp:encodedRedirect)
+    if (parts.length < 2) return null;
+
+    const userId = parts[0];
+    const timestamp = parseInt(parts[1], 10);
+
+    if (!userId || isNaN(timestamp)) return null;
+
+    let redirectPath = DEFAULT_REDIRECT;
+    if (parts.length >= 3) {
+        try {
+            redirectPath = Buffer.from(parts[2], "base64").toString("utf-8");
+        } catch {
+            // If decoding fails, use default
+            redirectPath = DEFAULT_REDIRECT;
+        }
+    }
+
+    return { userId, timestamp, redirectPath };
+}
 
 /**
  * GET /api/google/callback
@@ -29,10 +56,15 @@ export async function GET(request: Request) {
     const state = url.searchParams.get("state");
     const error = url.searchParams.get("error");
 
+    // Parse state to get redirect path (use default if parsing fails)
+    const parsedState = state ? parseState(state) : null;
+    const redirectPath = parsedState?.redirectPath || DEFAULT_REDIRECT;
+    const settingsUrl = `${APP_URL}${redirectPath}`;
+
     // Handle OAuth errors from Google
     if (error) {
         console.error("[google-callback] OAuth error from Google:", error);
-        const errorUrl = new URL(SETTINGS_URL);
+        const errorUrl = new URL(settingsUrl);
         errorUrl.searchParams.set("error", error);
         errorUrl.searchParams.set("error_message", getOAuthErrorMessage(error));
         return NextResponse.redirect(errorUrl);
@@ -41,39 +73,28 @@ export async function GET(request: Request) {
     // Validate required parameters
     if (!code) {
         console.error("[google-callback] Missing authorization code");
-        const errorUrl = new URL(SETTINGS_URL);
+        const errorUrl = new URL(settingsUrl);
         errorUrl.searchParams.set("error", "missing_code");
         errorUrl.searchParams.set("error_message", "Authorization code was not provided. Please try again.");
         return NextResponse.redirect(errorUrl);
     }
 
-    if (!state) {
-        console.error("[google-callback] Missing state parameter");
-        const errorUrl = new URL(SETTINGS_URL);
+    if (!state || !parsedState) {
+        console.error("[google-callback] Missing or invalid state parameter");
+        const errorUrl = new URL(settingsUrl);
         errorUrl.searchParams.set("error", "missing_state");
         errorUrl.searchParams.set("error_message", "Invalid request. Please try connecting again.");
         return NextResponse.redirect(errorUrl);
     }
 
     try {
-        // Parse and validate state parameter
-        // Format: userId:timestamp
-        const [stateUserId, timestampStr] = state.split(":");
-        const timestamp = parseInt(timestampStr, 10);
-
-        if (!stateUserId || isNaN(timestamp)) {
-            console.error("[google-callback] Invalid state format");
-            const errorUrl = new URL(SETTINGS_URL);
-            errorUrl.searchParams.set("error", "invalid_state");
-            errorUrl.searchParams.set("error_message", "Invalid request. Please try connecting again.");
-            return NextResponse.redirect(errorUrl);
-        }
+        const { userId: stateUserId, timestamp } = parsedState;
 
         // Check if state is not too old (15 minutes max)
         const maxAge = 15 * 60 * 1000; // 15 minutes
         if (Date.now() - timestamp > maxAge) {
             console.error("[google-callback] State parameter expired");
-            const errorUrl = new URL(SETTINGS_URL);
+            const errorUrl = new URL(settingsUrl);
             errorUrl.searchParams.set("error", "state_expired");
             errorUrl.searchParams.set("error_message", "The authorization request has expired. Please try again.");
             return NextResponse.redirect(errorUrl);
@@ -86,13 +107,13 @@ export async function GET(request: Request) {
         if (authError || !user) {
             console.error("[google-callback] User not authenticated");
             return NextResponse.redirect(
-                new URL("/auth/login?error=unauthorized&next=/settings/notifications", APP_URL)
+                new URL(`/auth/login?error=unauthorized&next=${encodeURIComponent(redirectPath)}`, APP_URL)
             );
         }
 
         if (user.id !== stateUserId) {
             console.error("[google-callback] State user ID mismatch");
-            const errorUrl = new URL(SETTINGS_URL);
+            const errorUrl = new URL(settingsUrl);
             errorUrl.searchParams.set("error", "state_mismatch");
             errorUrl.searchParams.set("error_message", "Session mismatch. Please try connecting again.");
             return NextResponse.redirect(errorUrl);
@@ -107,22 +128,22 @@ export async function GET(request: Request) {
 
         if (!result.success) {
             console.error("[google-callback] Failed to store connection:", result.error);
-            const errorUrl = new URL(SETTINGS_URL);
+            const errorUrl = new URL(settingsUrl);
             errorUrl.searchParams.set("error", "storage_failed");
             errorUrl.searchParams.set("error_message", "Failed to save your Google Calendar connection. Please try again.");
             return NextResponse.redirect(errorUrl);
         }
 
         // Success - redirect back to settings
-        const successUrl = new URL(SETTINGS_URL);
-        successUrl.searchParams.set("calendar_connected", "true");
+        const successUrl = new URL(settingsUrl);
+        successUrl.searchParams.set("calendar", "connected");
         return NextResponse.redirect(successUrl);
 
     } catch (error) {
         console.error("[google-callback] Error processing callback:", error);
 
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
-        const errorUrl = new URL(SETTINGS_URL);
+        const errorUrl = new URL(settingsUrl);
 
         // Provide user-friendly error messages for common errors
         if (errorMessage.includes("invalid_grant") || errorMessage.includes("expired")) {

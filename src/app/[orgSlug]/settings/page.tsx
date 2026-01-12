@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
@@ -11,6 +10,14 @@ import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { validateOrgName } from "@/lib/validation/org-name";
+import { CalendarConnectionCard } from "@/components/settings/CalendarConnectionCard";
+import { SyncPreferencesForm, type SyncPreferences } from "@/components/settings/SyncPreferencesForm";
+
+interface CalendarConnection {
+  googleEmail: string;
+  status: "connected" | "disconnected" | "error";
+  lastSyncAt: string | null;
+}
 
 function adjustColor(hex: string, amount: number): string {
   const clamp = (num: number) => Math.min(255, Math.max(0, num));
@@ -48,8 +55,33 @@ function isColorDark(hex: string): boolean {
 }
 
 export default function OrgSettingsPage() {
+  return (
+    <Suspense fallback={<OrgSettingsLoading />}>
+      <OrgSettingsContent />
+    </Suspense>
+  );
+}
+
+function OrgSettingsLoading() {
+  const params = useParams();
+  const orgSlug = params.orgSlug as string;
+  
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Settings"
+        description="Update your org brand and notifications in one place."
+        backHref={`/${orgSlug}`}
+      />
+      <Card className="p-5 text-muted-foreground text-sm">Loading settings…</Card>
+    </div>
+  );
+}
+
+function OrgSettingsContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const orgSlug = params.orgSlug as string;
   const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,12 +110,79 @@ export default function OrgSettingsPage() {
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
+  // Calendar connection state
+  const [calendarConnection, setCalendarConnection] = useState<CalendarConnection | null>(null);
+  const [calendarLoading, setCalendarLoading] = useState(true);
+  const [calendarPrefs, setCalendarPrefs] = useState<SyncPreferences>({
+    sync_general: true,
+    sync_game: true,
+    sync_meeting: true,
+    sync_social: true,
+    sync_fundraiser: true,
+    sync_philanthropy: true,
+  });
+  const [calendarPrefsLoading, setCalendarPrefsLoading] = useState(true);
+
+  // Check for OAuth callback status
+  const oauthStatus = searchParams.get("calendar");
+  const oauthError = searchParams.get("error");
+
   useEffect(() => {
     if (!selectedLogo) return;
     const previewUrl = URL.createObjectURL(selectedLogo);
     setLogoPreview(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [selectedLogo]);
+
+  // Load calendar connection status
+  const loadCalendarConnection = useCallback(async () => {
+    setCalendarLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCalendarLoading(false);
+        return;
+      }
+
+      const { data: connection } = await supabase
+        .from("user_calendar_connections")
+        .select("google_email, status, last_sync_at")
+        .eq("user_id", user.id)
+        .single();
+
+      if (connection) {
+        setCalendarConnection({
+          googleEmail: connection.google_email,
+          status: connection.status,
+          lastSyncAt: connection.last_sync_at,
+        });
+      } else {
+        setCalendarConnection(null);
+      }
+    } catch (err) {
+      console.error("Failed to load calendar connection:", err);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [supabase]);
+
+  // Load calendar sync preferences for the organization
+  const loadCalendarPreferences = useCallback(async (organizationId: string) => {
+    setCalendarPrefsLoading(true);
+    try {
+      const response = await fetch(`/api/calendar/preferences?organizationId=${organizationId}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.preferences) {
+          setCalendarPrefs(data.preferences);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load calendar preferences:", err);
+    } finally {
+      setCalendarPrefsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -149,10 +248,14 @@ export default function OrgSettingsPage() {
       setEmailEnabled(typedPref?.email_enabled ?? true);
       setPrefId(typedPref?.id || null);
       setLoading(false);
+
+      // Load calendar connection and preferences
+      await loadCalendarConnection();
+      await loadCalendarPreferences(org.id);
     };
 
     load();
-  }, [orgSlug, router, supabase]);
+  }, [orgSlug, router, supabase, loadCalendarConnection, loadCalendarPreferences]);
 
   useEffect(() => {
     if (loading) return;
@@ -358,6 +461,48 @@ export default function OrgSettingsPage() {
       setNameSaving(false);
     }
   };
+
+  const handleConnectCalendar = () => {
+    // Pass the current org slug so OAuth callback redirects back here
+    window.location.href = `/api/google/auth?redirect=/${orgSlug}/settings`;
+  };
+
+  const handleDisconnectCalendar = async () => {
+    const response = await fetch("/api/google/disconnect", { method: "POST" });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.message || "Failed to disconnect");
+    }
+    setCalendarConnection(null);
+  };
+
+  const handleSyncCalendar = async () => {
+    const response = await fetch("/api/calendar/sync", { method: "POST" });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.message || "Failed to sync");
+    }
+    // Reload connection to get updated last_sync_at
+    await loadCalendarConnection();
+  };
+
+  const handleCalendarPreferenceChange = async (preferences: SyncPreferences) => {
+    if (!orgId) return;
+    const response = await fetch("/api/calendar/preferences", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ organizationId: orgId, preferences }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.message || "Failed to save preferences");
+    }
+
+    setCalendarPrefs(preferences);
+  };
+
+  const isCalendarConnected = calendarConnection?.status === "connected";
 
   return (
     <div className="space-y-6">
@@ -646,17 +791,40 @@ export default function OrgSettingsPage() {
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground">
-              Connect your Google Calendar to have events from this organization automatically added to your personal calendar.
-            </p>
+            {/* OAuth callback messages */}
+            {oauthStatus === "connected" && (
+              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+                Google Calendar connected successfully! Your events will now sync automatically.
+              </div>
+            )}
+            {oauthError && (
+              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+                {oauthError === "access_denied"
+                  ? "You denied access to your Google Calendar. Please try again and allow access."
+                  : oauthError === "invalid_code"
+                  ? "The authorization code has expired. Please try connecting again."
+                  : "Failed to connect Google Calendar. Please try again."}
+              </div>
+            )}
 
-            <div className="flex justify-end pt-1">
-              <Link href="/settings/notifications">
-                <Button variant="secondary">
-                  Manage Calendar Sync
-                </Button>
-              </Link>
-            </div>
+            <CalendarConnectionCard
+              connection={calendarConnection}
+              isLoading={calendarLoading}
+              onConnect={handleConnectCalendar}
+              onDisconnect={handleDisconnectCalendar}
+              onSync={isCalendarConnected ? handleSyncCalendar : undefined}
+            />
+
+            {/* Sync Preferences - only show when connected */}
+            {isCalendarConnected && orgId && (
+              <SyncPreferencesForm
+                organizationId={orgId}
+                preferences={calendarPrefs}
+                isLoading={calendarPrefsLoading}
+                disabled={!isCalendarConnected}
+                onPreferenceChange={handleCalendarPreferenceChange}
+              />
+            )}
           </Card>
         </div>
       )}
