@@ -33,6 +33,8 @@ interface OrgCalendarPrefs {
   isLoading: boolean;
 }
 
+const GCAL_UI_ENABLED = false;
+
 export default function NotificationSettingsPage() {
   return (
     <Suspense fallback={<NotificationSettingsLoading />}>
@@ -187,34 +189,38 @@ function NotificationSettingsContent() {
       setForms(nextForms);
       setLoading(false);
 
-      // Load calendar connection
-      await loadCalendarConnection();
+      if (GCAL_UI_ENABLED) {
+        // Load calendar connection
+        await loadCalendarConnection();
 
-      // Load calendar preferences for each org
-      if (nextForms.length > 0) {
-        const calPrefs: OrgCalendarPrefs[] = nextForms.map((f) => ({
-          orgId: f.orgId,
-          preferences: {
-            sync_general: true,
-            sync_game: true,
-            sync_meeting: true,
-            sync_social: true,
-            sync_fundraiser: true,
-            sync_philanthropy: true,
-          },
-          isLoading: true,
-        }));
-        setCalendarPrefs(calPrefs);
+        // Load calendar preferences for each org
+        if (nextForms.length > 0) {
+          const calPrefs: OrgCalendarPrefs[] = nextForms.map((f) => ({
+            orgId: f.orgId,
+            preferences: {
+              sync_general: true,
+              sync_game: true,
+              sync_meeting: true,
+              sync_social: true,
+              sync_fundraiser: true,
+              sync_philanthropy: true,
+            },
+            isLoading: true,
+          }));
+          setCalendarPrefs(calPrefs);
 
-        // Load preferences for each org
-        for (const form of nextForms) {
-          const prefs = await loadCalendarPreferences(form.orgId);
-          setCalendarPrefs((prev) =>
-            prev.map((p) =>
-              p.orgId === form.orgId ? { ...p, preferences: prefs, isLoading: false } : p
-            )
-          );
+          // Load preferences for each org
+          for (const form of nextForms) {
+            const prefs = await loadCalendarPreferences(form.orgId);
+            setCalendarPrefs((prev) =>
+              prev.map((p) =>
+                p.orgId === form.orgId ? { ...p, preferences: prefs, isLoading: false } : p
+              )
+            );
+          }
         }
+      } else {
+        setCalendarLoading(false);
       }
     };
 
@@ -322,20 +328,24 @@ function NotificationSettingsContent() {
         </p>
       </div>
 
-      {/* OAuth callback messages */}
-      {oauthStatus === "connected" && (
-        <Card className="p-4 bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
-          Google Calendar connected successfully! Your events will now sync automatically.
-        </Card>
-      )}
-      {oauthError && (
-        <Card className="p-4 bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
-          {oauthError === "access_denied"
-            ? "You denied access to your Google Calendar. Please try again and allow access."
-            : oauthError === "invalid_code"
-            ? "The authorization code has expired. Please try connecting again."
-            : "Failed to connect Google Calendar. Please try again."}
-        </Card>
+      {GCAL_UI_ENABLED && (
+        <>
+          {/* OAuth callback messages */}
+          {oauthStatus === "connected" && (
+            <Card className="p-4 bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+              Google Calendar connected successfully! Your events will now sync automatically.
+            </Card>
+          )}
+          {oauthError && (
+            <Card className="p-4 bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+              {oauthError === "access_denied"
+                ? "You denied access to your Google Calendar. Please try again and allow access."
+                : oauthError === "invalid_code"
+                ? "The authorization code has expired. Please try connecting again."
+                : "Failed to connect Google Calendar. Please try again."}
+            </Card>
+          )}
+        </>
       )}
 
       {loadError && (
@@ -344,60 +354,64 @@ function NotificationSettingsContent() {
         </Card>
       )}
 
-      {/* Google Calendar Connection Section */}
-      <div className="space-y-2">
-        <h2 className="text-lg font-semibold text-foreground">Calendar Sync</h2>
-        <p className="text-sm text-muted-foreground">
-          Connect your Google Calendar to automatically sync organization events.
-        </p>
-      </div>
-
-      <CalendarConnectionCard
-        connection={calendarConnection}
-        isLoading={calendarLoading}
-        onConnect={handleConnectCalendar}
-        onDisconnect={handleDisconnectCalendar}
-        onSync={isCalendarConnected ? handleSyncCalendar : undefined}
-      />
-
-      {/* Calendar Sync Preferences per Organization */}
-      {isCalendarConnected && forms.length > 0 && (
-        <div className="space-y-4">
+      {GCAL_UI_ENABLED && (
+        <>
+          {/* Google Calendar Connection Section */}
           <div className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">Event Type Preferences</h2>
+            <h2 className="text-lg font-semibold text-foreground">Calendar Sync</h2>
             <p className="text-sm text-muted-foreground">
-              Choose which types of events sync to your calendar for each organization.
+              Connect your Google Calendar to automatically sync organization events.
             </p>
           </div>
 
-          {forms.map((form) => {
-            const orgCalPrefs = calendarPrefs.find((p) => p.orgId === form.orgId);
-            return (
-              <div key={form.orgId} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-foreground">{form.orgName}</span>
-                  <Badge variant="muted">{form.orgSlug || "org"}</Badge>
-                </div>
-                <SyncPreferencesForm
-                  organizationId={form.orgId}
-                  preferences={
-                    orgCalPrefs?.preferences || {
-                      sync_general: true,
-                      sync_game: true,
-                      sync_meeting: true,
-                      sync_social: true,
-                      sync_fundraiser: true,
-                      sync_philanthropy: true,
-                    }
-                  }
-                  isLoading={orgCalPrefs?.isLoading ?? true}
-                  disabled={!isCalendarConnected}
-                  onPreferenceChange={(prefs) => handleCalendarPreferenceChange(form.orgId, prefs)}
-                />
+          <CalendarConnectionCard
+            connection={calendarConnection}
+            isLoading={calendarLoading}
+            onConnect={handleConnectCalendar}
+            onDisconnect={handleDisconnectCalendar}
+            onSync={isCalendarConnected ? handleSyncCalendar : undefined}
+          />
+
+          {/* Calendar Sync Preferences per Organization */}
+          {isCalendarConnected && forms.length > 0 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <h2 className="text-lg font-semibold text-foreground">Event Type Preferences</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose which types of events sync to your calendar for each organization.
+                </p>
               </div>
-            );
-          })}
-        </div>
+
+              {forms.map((form) => {
+                const orgCalPrefs = calendarPrefs.find((p) => p.orgId === form.orgId);
+                return (
+                  <div key={form.orgId} className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">{form.orgName}</span>
+                      <Badge variant="muted">{form.orgSlug || "org"}</Badge>
+                    </div>
+                    <SyncPreferencesForm
+                      organizationId={form.orgId}
+                      preferences={
+                        orgCalPrefs?.preferences || {
+                          sync_general: true,
+                          sync_game: true,
+                          sync_meeting: true,
+                          sync_social: true,
+                          sync_fundraiser: true,
+                          sync_philanthropy: true,
+                        }
+                      }
+                      isLoading={orgCalPrefs?.isLoading ?? true}
+                      disabled={!isCalendarConnected}
+                      onPreferenceChange={(prefs) => handleCalendarPreferenceChange(form.orgId, prefs)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Email Notifications Section */}

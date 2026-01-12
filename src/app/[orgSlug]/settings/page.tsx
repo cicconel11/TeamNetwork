@@ -19,6 +19,8 @@ interface CalendarConnection {
   lastSyncAt: string | null;
 }
 
+const GCAL_UI_ENABLED = false;
+
 function adjustColor(hex: string, amount: number): string {
   const clamp = (num: number) => Math.min(255, Math.max(0, num));
 
@@ -250,8 +252,13 @@ function OrgSettingsContent() {
       setLoading(false);
 
       // Load calendar connection and preferences
-      await loadCalendarConnection();
-      await loadCalendarPreferences(org.id);
+      if (GCAL_UI_ENABLED) {
+        await loadCalendarConnection();
+        await loadCalendarPreferences(org.id);
+      } else {
+        setCalendarLoading(false);
+        setCalendarPrefsLoading(false);
+      }
     };
 
     load();
@@ -771,63 +778,64 @@ function OrgSettingsContent() {
             </div>
           </Card>
 
-          {/* Google Calendar Sync Card */}
-          <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <svg
-                  className="w-6 h-6 text-foreground"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
-                </svg>
-                <div>
-                  <p className="font-semibold text-foreground">Google Calendar Sync</p>
-                  <p className="text-sm text-muted-foreground">
-                    Automatically sync organization events to your Google Calendar.
-                  </p>
+          {GCAL_UI_ENABLED && (
+            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <svg
+                    className="w-6 h-6 text-foreground"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+                  </svg>
+                  <div>
+                    <p className="font-semibold text-foreground">Google Calendar Sync</p>
+                    <p className="text-sm text-muted-foreground">
+                      Automatically sync organization events to your Google Calendar.
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* OAuth callback messages */}
-            {oauthStatus === "connected" && (
-              <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
-                Google Calendar connected successfully! Your events will now sync automatically.
-              </div>
-            )}
-            {oauthError && (
-              <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
-                {oauthError === "access_denied"
-                  ? "You denied access to your Google Calendar. Please try again and allow access."
-                  : oauthError === "invalid_code"
-                  ? "The authorization code has expired. Please try connecting again."
-                  : oauthError === "oauth_init_failed"
-                  ? "Google Calendar integration is not configured. Please contact the administrator."
-                  : "Failed to connect Google Calendar. Please try again."}
-              </div>
-            )}
+              {/* OAuth callback messages */}
+              {oauthStatus === "connected" && (
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+                  Google Calendar connected successfully! Your events will now sync automatically.
+                </div>
+              )}
+              {oauthError && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+                  {oauthError === "access_denied"
+                    ? "You denied access to your Google Calendar. Please try again and allow access."
+                    : oauthError === "invalid_code"
+                    ? "The authorization code has expired. Please try connecting again."
+                    : oauthError === "oauth_init_failed"
+                    ? "Google Calendar integration is not configured. Please contact the administrator."
+                    : "Failed to connect Google Calendar. Please try again."}
+                </div>
+              )}
 
-            <CalendarConnectionCard
-              connection={calendarConnection}
-              isLoading={calendarLoading}
-              onConnect={handleConnectCalendar}
-              onDisconnect={handleDisconnectCalendar}
-              onSync={isCalendarConnected ? handleSyncCalendar : undefined}
-            />
-
-            {/* Sync Preferences - only show when connected */}
-            {isCalendarConnected && orgId && (
-              <SyncPreferencesForm
-                organizationId={orgId}
-                preferences={calendarPrefs}
-                isLoading={calendarPrefsLoading}
-                disabled={!isCalendarConnected}
-                onPreferenceChange={handleCalendarPreferenceChange}
+              <CalendarConnectionCard
+                connection={calendarConnection}
+                isLoading={calendarLoading}
+                onConnect={handleConnectCalendar}
+                onDisconnect={handleDisconnectCalendar}
+                onSync={isCalendarConnected ? handleSyncCalendar : undefined}
               />
-            )}
-          </Card>
+
+              {/* Sync Preferences - only show when connected */}
+              {isCalendarConnected && orgId && (
+                <SyncPreferencesForm
+                  organizationId={orgId}
+                  preferences={calendarPrefs}
+                  isLoading={calendarPrefsLoading}
+                  disabled={!isCalendarConnected}
+                  onPreferenceChange={handleCalendarPreferenceChange}
+                />
+              )}
+            </Card>
+          )}
         </div>
       )}
     </div>
