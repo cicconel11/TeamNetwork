@@ -6,7 +6,7 @@ const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 // Routes that don't require authentication
-const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms"];
+const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
 
 // Routes that should redirect to /app if user is already authenticated
 const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
@@ -112,7 +112,7 @@ export async function middleware(request: NextRequest) {
 
 
   const sbCookies = cookiesAll.map((c) => c.name).filter((n) => n.startsWith("sb-"));
-  
+
   // Always log auth failures in production for debugging user-specific issues
   const isAuthFailure = !user && hasAuthCookies;
   if (shouldLog || isAuthFailure) {
