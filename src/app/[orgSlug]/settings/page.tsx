@@ -803,6 +803,8 @@ function OrgSettingsContent() {
                   ? "You denied access to your Google Calendar. Please try again and allow access."
                   : oauthError === "invalid_code"
                   ? "The authorization code has expired. Please try connecting again."
+                  : oauthError === "oauth_init_failed"
+                  ? "Google Calendar integration is not configured. Please contact the administrator."
                   : "Failed to connect Google Calendar. Please try again."}
               </div>
             )}
