@@ -2055,6 +2055,196 @@ export type Database = {
           },
         ]
       }
+      chat_groups: {
+        Row: {
+          id: string
+          organization_id: string
+          name: string
+          description: string | null
+          is_default: boolean
+          require_approval: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          name: string
+          description?: string | null
+          is_default?: boolean
+          require_approval?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          name?: string
+          description?: string | null
+          is_default?: boolean
+          require_approval?: boolean
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+          deleted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_groups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_group_members: {
+        Row: {
+          id: string
+          chat_group_id: string
+          user_id: string
+          organization_id: string
+          role: Database["public"]["Enums"]["chat_group_role"]
+          joined_at: string
+          last_read_at: string | null
+        }
+        Insert: {
+          id?: string
+          chat_group_id: string
+          user_id: string
+          organization_id: string
+          role?: Database["public"]["Enums"]["chat_group_role"]
+          joined_at?: string
+          last_read_at?: string | null
+        }
+        Update: {
+          id?: string
+          chat_group_id?: string
+          user_id?: string
+          organization_id?: string
+          role?: Database["public"]["Enums"]["chat_group_role"]
+          joined_at?: string
+          last_read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_group_members_chat_group_id_fkey"
+            columns: ["chat_group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_group_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_group_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_messages: {
+        Row: {
+          id: string
+          chat_group_id: string
+          organization_id: string
+          author_id: string
+          body: string
+          status: Database["public"]["Enums"]["chat_message_status"]
+          approved_by: string | null
+          approved_at: string | null
+          rejected_by: string | null
+          rejected_at: string | null
+          edited_at: string | null
+          created_at: string
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          chat_group_id: string
+          organization_id: string
+          author_id: string
+          body: string
+          status?: Database["public"]["Enums"]["chat_message_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          rejected_by?: string | null
+          rejected_at?: string | null
+          edited_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          chat_group_id?: string
+          organization_id?: string
+          author_id?: string
+          body?: string
+          status?: Database["public"]["Enums"]["chat_message_status"]
+          approved_by?: string | null
+          approved_at?: string | null
+          rejected_by?: string | null
+          rejected_at?: string | null
+          edited_at?: string | null
+          created_at?: string
+          deleted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_chat_group_id_fkey"
+            columns: ["chat_group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2120,6 +2310,8 @@ export type Database = {
       member_status: "active" | "inactive"
       membership_status: "active" | "revoked"
       user_role: "admin" | "member" | "viewer" | "active_member" | "alumni"
+      chat_group_role: "admin" | "moderator" | "member"
+      chat_message_status: "pending" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -2299,6 +2491,13 @@ export type CalendarSyncPreference = Tables<'calendar_sync_preferences'>;
 export type CalendarConnectionStatus = "connected" | "disconnected" | "error";
 export type CalendarSyncStatus = "pending" | "synced" | "failed" | "deleted";
 
+// Chat types
+export type ChatGroup = Tables<'chat_groups'>;
+export type ChatGroupMember = Tables<'chat_group_members'>;
+export type ChatMessage = Tables<'chat_messages'>;
+export type ChatGroupRole = Enums<'chat_group_role'>;
+export type ChatMessageStatus = Enums<'chat_message_status'>;
+
 // Enum type exports
 export type EventType = Enums<'event_type'>;
 export type MemberStatus = Enums<'member_status'>;
@@ -2353,6 +2552,8 @@ export const Constants = {
       member_status: ["active", "inactive"],
       membership_status: ["active", "revoked"],
       user_role: ["admin", "member", "viewer", "active_member", "alumni"],
+      chat_group_role: ["admin", "moderator", "member"],
+      chat_message_status: ["pending", "approved", "rejected"],
     },
   },
 } as const
