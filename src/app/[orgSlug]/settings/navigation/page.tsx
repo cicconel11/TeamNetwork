@@ -29,12 +29,21 @@ function NavigationSettingsContent() {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   // Sort items by their order in navConfig
+  // Use the same logic as OrgSidebar: items with explicit order come first, then default order
   const sortItemsByOrder = useCallback((items: typeof CONFIGURABLE_ITEMS, config: NavConfig) => {
     return [...items].sort((a, b) => {
-      const orderA = config[a.href]?.order ?? 999;
-      const orderB = config[b.href]?.order ?? 999;
-      if (orderA !== orderB) return orderA - orderB;
-      return items.indexOf(a) - items.indexOf(b);
+      const orderA = config[a.href]?.order;
+      const orderB = config[b.href]?.order;
+      
+      // If both have explicit orders, compare them
+      if (orderA !== undefined && orderB !== undefined) {
+        return orderA - orderB;
+      }
+      // If only one has an explicit order, it comes first
+      if (orderA !== undefined) return -1;
+      if (orderB !== undefined) return 1;
+      // If neither has an order, use default position from ORG_NAV_ITEMS
+      return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
     });
   }, []);
 

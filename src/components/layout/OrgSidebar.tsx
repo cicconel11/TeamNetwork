@@ -40,12 +40,18 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
       return {
         ...item,
         label: config?.label?.trim() || item.label,
-        order: config?.order ?? 999,
+        order: config?.order,
       };
     })
     .sort((a, b) => {
-      // Sort by order, then by default position
-      if (a.order !== b.order) return a.order - b.order;
+      // If both have explicit orders, compare them
+      if (a.order !== undefined && b.order !== undefined) {
+        return a.order - b.order;
+      }
+      // If only one has an explicit order, it comes first
+      if (a.order !== undefined) return -1;
+      if (b.order !== undefined) return 1;
+      // If neither has an order, use default position from ORG_NAV_ITEMS
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
     });
 
