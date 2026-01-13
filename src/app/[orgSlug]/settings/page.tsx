@@ -71,7 +71,7 @@ function OrgSettingsLoading() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
+        title="Customization"
         description="Update your org brand and notifications in one place."
         backHref={`/${orgSlug}`}
       />
@@ -514,7 +514,7 @@ function OrgSettingsContent() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
+        title="Customization"
         description="Update your org brand and notifications in one place."
         backHref={`/${orgSlug}`}
       />

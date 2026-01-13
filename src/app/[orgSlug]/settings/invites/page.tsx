@@ -532,7 +532,7 @@ export default function InvitesPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Invite Members" description="Loading..." />
+        <PageHeader title="Settings" description="Loading..." />
         <div className="animate-pulse space-y-4">
           <div className="h-32 bg-muted rounded-xl" />
         </div>
@@ -543,8 +543,8 @@ export default function InvitesPage() {
   return (
     <div>
       <PageHeader
-        title="Invite Members"
-        description="Create and manage invite codes for your organization"
+        title="Settings"
+        description="Manage invites, subscriptions, and organization access"
         backHref={`/${orgSlug}`}
         actions={
           !showForm && (
