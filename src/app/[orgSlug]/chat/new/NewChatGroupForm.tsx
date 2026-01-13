@@ -154,8 +154,16 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
 
     if (membersError) {
       console.error("Failed to add members:", membersError);
+      // Don't redirect if we couldn't add members - the user won't be able to see the group
+      setError("Failed to add members to the group. Please try again.");
+      setIsSubmitting(false);
+      return;
     }
 
+    // Small delay to ensure RLS policies see the new membership
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    router.refresh();
     router.push(`/${orgSlug}/chat/${group.id}`);
   };
 

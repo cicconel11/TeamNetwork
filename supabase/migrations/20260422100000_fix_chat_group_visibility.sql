@@ -64,24 +64,46 @@ GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
 -- =====================================================
 -- Recreate RLS policy for chat_groups with explicit logic
 -- =====================================================
--- ALL users (including admins) can only see groups they are members of
+-- Users can see groups they are members of.
+-- Admins can also see groups they created (needed for INSERT...RETURNING
+-- before they're added as a member in the next step).
 DROP POLICY IF EXISTS chat_groups_select ON public.chat_groups;
 CREATE POLICY chat_groups_select ON public.chat_groups
   FOR SELECT USING (
     deleted_at IS NULL
     AND has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
-    AND is_chat_group_member(id) = TRUE
+    AND (
+      is_chat_group_member(id) = TRUE
+      OR (
+        -- Allow admins to see groups they just created (for INSERT...RETURNING)
+        created_by = auth.uid()
+        AND has_active_role(organization_id, array['admin'])
+      )
+    )
   );
 
 -- =====================================================
 -- Also fix chat_group_members SELECT policy
 -- =====================================================
 -- Users can only see members of groups they belong to
+-- Also allow group creators (admins) to see members for management
 DROP POLICY IF EXISTS chat_group_members_select ON public.chat_group_members;
 CREATE POLICY chat_group_members_select ON public.chat_group_members
   FOR SELECT USING (
     has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
-    AND is_chat_group_member(chat_group_id) = TRUE
+    AND (
+      is_chat_group_member(chat_group_id) = TRUE
+      OR (
+        -- Allow admins who created the group to see members
+        EXISTS (
+          SELECT 1 FROM public.chat_groups cg
+          WHERE cg.id = chat_group_id
+            AND cg.created_by = auth.uid()
+            AND cg.deleted_at IS NULL
+        )
+        AND has_active_role(organization_id, array['admin'])
+      )
+    )
   );
 
 -- =====================================================
@@ -109,4 +131,19 @@ CREATE POLICY chat_messages_insert ON public.chat_messages
     has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
     AND is_chat_group_member(chat_group_id) = TRUE
     AND author_id = auth.uid()
+  );
+
+
+-- =====================================================
+-- Fix chat_groups UPDATE policy for soft-deletes
+-- =====================================================
+-- Admins need to be able to soft-delete groups (set deleted_at)
+-- The WITH CHECK must allow the row even after deleted_at is set
+DROP POLICY IF EXISTS chat_groups_update ON public.chat_groups;
+CREATE POLICY chat_groups_update ON public.chat_groups
+  FOR UPDATE USING (
+    has_active_role(organization_id, array['admin'])
+  )
+  WITH CHECK (
+    has_active_role(organization_id, array['admin'])
   );
