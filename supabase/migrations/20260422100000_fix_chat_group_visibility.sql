@@ -65,18 +65,27 @@ GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
 -- Recreate RLS policy for chat_groups with explicit logic
 -- =====================================================
 -- Users can see groups they are members of.
--- Admins can also see groups they created (needed for INSERT...RETURNING
--- before they're added as a member in the next step).
+-- Admins can also see groups they created OR soft-deleted groups
+-- (needed for INSERT...RETURNING and UPDATE...RETURNING after soft-delete)
 DROP POLICY IF EXISTS chat_groups_select ON public.chat_groups;
 CREATE POLICY chat_groups_select ON public.chat_groups
   FOR SELECT USING (
-    deleted_at IS NULL
-    AND has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
+    has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
     AND (
-      is_chat_group_member(id) = TRUE
+      -- Regular case: non-deleted groups where user is a member
+      (
+        deleted_at IS NULL
+        AND is_chat_group_member(id) = TRUE
+      )
       OR (
-        -- Allow admins to see groups they just created (for INSERT...RETURNING)
-        created_by = auth.uid()
+        -- Allow admins to see groups they created (for INSERT...RETURNING)
+        deleted_at IS NULL
+        AND created_by = auth.uid()
+        AND has_active_role(organization_id, array['admin'])
+      )
+      OR (
+        -- Allow admins to see soft-deleted groups (for UPDATE...RETURNING after delete)
+        deleted_at IS NOT NULL
         AND has_active_role(organization_id, array['admin'])
       )
     )

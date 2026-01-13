@@ -160,11 +160,8 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
       return;
     }
 
-    // Small delay to ensure RLS policies see the new membership
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    router.refresh();
-    router.push(`/${orgSlug}/chat/${group.id}`);
+    // Use window.location for a hard navigation to ensure fresh data
+    window.location.href = `/${orgSlug}/chat/${group.id}`;
   };
 
   return (
