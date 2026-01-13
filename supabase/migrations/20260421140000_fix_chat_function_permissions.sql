@@ -14,6 +14,42 @@ GRANT EXECUTE ON FUNCTION public.is_chat_group_member(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.has_active_role(uuid, text[]) TO authenticated;
 
+-- Recreate the helper functions with proper permissions
+CREATE OR REPLACE FUNCTION public.is_chat_group_member(group_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.chat_group_members cgm
+    WHERE cgm.chat_group_id = group_id
+      AND cgm.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_chat_group_moderator(group_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.chat_group_members cgm
+    WHERE cgm.chat_group_id = group_id
+      AND cgm.user_id = auth.uid()
+      AND cgm.role IN ('admin', 'moderator')
+  );
+$$;
+
+-- Re-grant after recreating
+GRANT EXECUTE ON FUNCTION public.is_chat_group_member(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
+
 -- =====================================================
 -- Fix RLS Policies: chat_groups
 -- =====================================================
