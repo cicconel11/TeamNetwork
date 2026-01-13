@@ -166,17 +166,21 @@ export async function POST(req: Request) {
     purpose: purpose || null,
     platformFeeCents,
   });
+  // Stripe metadata (no PII - stored in payment_attempts instead)
   const metadata: Record<string, string> = {
     organization_id: org.id,
     organization_slug: org.slug,
     flow: mode,
   };
 
-  if (donorName) metadata.donor_name = donorName;
-  if (donorEmail) metadata.donor_email = donorEmail;
   if (body.eventId) metadata.event_id = body.eventId;
   if (purpose) metadata.purpose = purpose;
   if (platformFeeCents) metadata.platform_fee_cents = String(platformFeeCents);
+
+  // Store donor PII in payment_attempts metadata (not sent to Stripe)
+  const paymentAttemptMetadata: Record<string, string> = { ...metadata };
+  if (donorName) paymentAttemptMetadata.donor_name = donorName;
+  if (donorEmail) paymentAttemptMetadata.donor_email = donorEmail;
 
   try {
     const { attempt } = await ensurePaymentAttempt({
@@ -189,7 +193,7 @@ export async function POST(req: Request) {
       organizationId: org.id,
       stripeConnectedAccountId: org.stripe_connect_account_id,
       requestFingerprint: fingerprint,
-      metadata,
+      metadata: paymentAttemptMetadata, // Includes donor PII for webhook retrieval
     });
 
     metadata.payment_attempt_id = attempt.id;

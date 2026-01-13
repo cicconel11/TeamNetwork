@@ -206,10 +206,45 @@ export async function POST(req: Request) {
     organizationName: (metadata?.organization_name as string | undefined) ?? null,
     organizationDescription: (metadata?.organization_description as string | undefined) ?? null,
     organizationColor: (metadata?.organization_color as string | undefined) ?? null,
-    createdBy: (metadata?.created_by as string | undefined) ?? null,
+    // SECURITY FIX: Never trust created_by from Stripe metadata - will be resolved from payment_attempts
+    createdBy: null,
     baseInterval: normalizeInterval((metadata?.base_interval as string | undefined) ?? null),
     alumniBucket: normalizeBucket((metadata?.alumni_bucket as string | undefined) ?? null),
   });
+
+  const resolveCreatorFromPaymentAttempt = async (
+    paymentAttemptId: string | null
+  ): Promise<string | null> => {
+    if (!paymentAttemptId) return null;
+
+    const { data } = await supabase
+      .from("payment_attempts")
+      .select("user_id")
+      .eq("id", paymentAttemptId)
+      .maybeSingle();
+
+    return data?.user_id ?? null;
+  };
+
+  type DonorInfo = { donorName: string | null; donorEmail: string | null };
+
+  const resolveDonorFromPaymentAttempt = async (
+    paymentAttemptId: string | null
+  ): Promise<DonorInfo> => {
+    if (!paymentAttemptId) return { donorName: null, donorEmail: null };
+
+    const { data } = await supabase
+      .from("payment_attempts")
+      .select("metadata")
+      .eq("id", paymentAttemptId)
+      .maybeSingle();
+
+    const meta = data?.metadata as Record<string, string> | null;
+    return {
+      donorName: meta?.donor_name ?? null,
+      donorEmail: meta?.donor_email ?? null,
+    };
+  };
 
   const ensureOrganizationFromMetadata = async (metadata: OrgMetadata) => {
     if (!metadata.organizationId && !metadata.organizationSlug) return null;
@@ -254,21 +289,36 @@ export async function POST(req: Request) {
       return null;
     }
 
-    if (metadata.createdBy) {
+    return org.id;
+  };
+
+  const grantAdminRole = async (organizationId: string, paymentAttemptId: string | null) => {
+    const createdBy = await resolveCreatorFromPaymentAttempt(paymentAttemptId);
+    if (createdBy) {
+      console.log("[SECURITY-AUDIT] Admin role granted via webhook", {
+        organizationId,
+        userId: createdBy,
+        paymentAttemptId,
+        timestamp: new Date().toISOString(),
+      });
+
       await supabase
         .from("user_organization_roles")
         .upsert(
           {
-            user_id: metadata.createdBy,
-            organization_id: org.id,
+            user_id: createdBy,
+            organization_id: organizationId,
             role: "admin",
             status: "active",
           },
           { onConflict: "organization_id,user_id" },
         );
+    } else {
+      console.warn("[stripe-webhook] No creator found in payment_attempts", {
+        organizationId,
+        paymentAttemptId,
+      });
     }
-
-    return org.id;
   };
 
   const ensureSubscriptionSeed = async (orgId: string, metadata: OrgMetadata) => {
@@ -306,13 +356,118 @@ export async function POST(req: Request) {
     }
   };
 
-  const resolveOrgForSubscriptionFlow = async (metadata: Stripe.Metadata | null | undefined) => {
+  const resolveOrgForSubscriptionFlow = async (
+    metadata: Stripe.Metadata | null | undefined,
+    paymentAttemptId?: string | null
+  ) => {
     const parsed = parseOrgMetadata(metadata);
     const organizationId = await ensureOrganizationFromMetadata(parsed);
     if (organizationId) {
       await ensureSubscriptionSeed(organizationId, parsed);
+      // Grant admin role from verified payment_attempts, not from untrusted metadata
+      if (paymentAttemptId) {
+        await grantAdminRole(organizationId, paymentAttemptId);
+      }
     }
     return { organizationId, parsed };
+  };
+
+  /**
+   * Validates that webhook metadata matches the organization's Stripe resources.
+   * Prevents cross-org subscription hijacking while allowing legitimate re-subscribe flows.
+   */
+  const validateOrgOwnsStripeResource = async (
+    organizationId: string,
+    stripeCustomerId: string | null,
+    stripeSubscriptionId: string | null
+  ): Promise<boolean> => {
+    const { data: subscription } = await supabase
+      .from("organization_subscriptions")
+      .select("stripe_customer_id, stripe_subscription_id, organization_id, status")
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+
+    if (!subscription) {
+      return true; // New organization - no existing subscription
+    }
+
+    const status = subscription.status || "";
+    const replaceableStatuses = ["canceled", "incomplete_expired"];
+    const matchRequiredStatuses = ["unpaid", "past_due", "canceling"];
+    const canReplaceIds = replaceableStatuses.includes(status);
+    const requiresMatch = matchRequiredStatuses.includes(status);
+
+    // If no existing Stripe IDs stored, allow the update
+    if (!subscription.stripe_customer_id && !subscription.stripe_subscription_id) {
+      return true;
+    }
+
+    // If subscription is fully inactive, allow new Stripe IDs (re-subscribe flow)
+    if (canReplaceIds) {
+      console.log("[stripe-webhook] Allowing Stripe ID update for inactive subscription", {
+        organizationId,
+        status,
+        oldCustomerId: subscription.stripe_customer_id,
+        newCustomerId: stripeCustomerId,
+      });
+      return true;
+    }
+
+    // For unpaid/past_due/canceling subscriptions, require matching IDs
+    if (requiresMatch) {
+      if (subscription.stripe_customer_id) {
+        if (!stripeCustomerId || subscription.stripe_customer_id !== stripeCustomerId) {
+          console.error("[SECURITY] Stripe customer ID mismatch on troubled subscription", {
+            organizationId,
+            expected: subscription.stripe_customer_id,
+            provided: stripeCustomerId,
+            status,
+          });
+          return false;
+        }
+      }
+
+      if (subscription.stripe_subscription_id && stripeSubscriptionId) {
+        if (subscription.stripe_subscription_id !== stripeSubscriptionId) {
+          console.error("[SECURITY] Stripe subscription ID mismatch on troubled subscription", {
+            organizationId,
+            expected: subscription.stripe_subscription_id,
+            provided: stripeSubscriptionId,
+            status,
+          });
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    // For active subscriptions, validate IDs match
+    if (subscription.stripe_customer_id && stripeCustomerId) {
+      if (subscription.stripe_customer_id !== stripeCustomerId) {
+        console.error("[SECURITY] Stripe customer ID mismatch on active subscription", {
+          organizationId,
+          expected: subscription.stripe_customer_id,
+          provided: stripeCustomerId,
+          status: subscription.status,
+        });
+        return false;
+      }
+    }
+
+    if (subscription.stripe_subscription_id && stripeSubscriptionId) {
+      if (subscription.stripe_subscription_id !== stripeSubscriptionId) {
+        console.error("[SECURITY] Stripe subscription ID mismatch on active subscription", {
+          organizationId,
+          expected: subscription.stripe_subscription_id,
+          provided: stripeSubscriptionId,
+          status: subscription.status,
+        });
+        return false;
+      }
+    }
+
+    return true;
   };
 
   const objectId =
@@ -363,10 +518,24 @@ export async function POST(req: Request) {
             break;
           }
 
-          const { organizationId } = await resolveOrgForSubscriptionFlow(session.metadata);
+          const paymentAttemptId = (session.metadata?.payment_attempt_id as string | undefined) ?? null;
+          const { organizationId } = await resolveOrgForSubscriptionFlow(session.metadata, paymentAttemptId);
           if (!organizationId) {
             console.warn("[stripe-webhook] Missing organization info for checkout.session.completed");
             break;
+          }
+
+          // SECURITY FIX: Validate org owns this Stripe resource
+          const isValid = await validateOrgOwnsStripeResource(organizationId, customerId, subscriptionId);
+          if (!isValid) {
+            console.error("[SECURITY] Cross-org subscription hijacking attempt blocked", {
+              eventId: event.id,
+              organizationId,
+              customerId,
+              subscriptionId,
+            });
+            await markStripeEventProcessed(supabase, event.id);
+            return NextResponse.json({ received: true });
           }
 
           let status = session.status || "completed";
@@ -406,6 +575,7 @@ export async function POST(req: Request) {
           const donationOrgId = session.metadata?.organization_id;
           if (!donationOrgId) break;
 
+          const donationPaymentAttemptId = (session.metadata?.payment_attempt_id as string | undefined) ?? null;
           const paymentIntentId =
             typeof session.payment_intent === "string"
               ? session.payment_intent
@@ -413,7 +583,7 @@ export async function POST(req: Request) {
           const amountCents = session.amount_total ?? session.amount_subtotal ?? 0;
 
           await updatePaymentAttemptStatus({
-            paymentAttemptId: (session.metadata?.payment_attempt_id as string | undefined) ?? null,
+            paymentAttemptId: donationPaymentAttemptId,
             paymentIntentId,
             checkoutSessionId: session.id,
             status: session.payment_status || "processing",
@@ -421,14 +591,16 @@ export async function POST(req: Request) {
             stripeConnectedAccountId: session.metadata?.destination || null,
           });
 
+          // Get donor info from customer_details first, fall back to payment_attempts
+          const donorFromAttempt = await resolveDonorFromPaymentAttempt(donationPaymentAttemptId);
           await upsertDonationRecord({
             organizationId: donationOrgId,
             paymentIntentId,
             checkoutSessionId: session.id,
             amountCents: amountCents ?? 0,
             currency: session.currency || "usd",
-            donorName: session.customer_details?.name || (session.metadata?.donor_name ?? null),
-            donorEmail: session.customer_details?.email || (session.metadata?.donor_email ?? null),
+            donorName: session.customer_details?.name || donorFromAttempt.donorName,
+            donorEmail: session.customer_details?.email || donorFromAttempt.donorEmail,
             eventId: session.metadata?.event_id || null,
             purpose: session.metadata?.purpose || null,
             metadata: session.metadata || null,
@@ -469,6 +641,18 @@ export async function POST(req: Request) {
           ? await resolveOrgForSubscriptionFlow(subscription.metadata)
           : { organizationId: null };
         if (organizationId) {
+          // SECURITY FIX: Validate org owns this Stripe resource
+          const isValid = await validateOrgOwnsStripeResource(organizationId, customerId, subscription.id);
+          if (!isValid) {
+            console.error("[SECURITY] Cross-org subscription update blocked", {
+              eventId: event.id,
+              organizationId,
+              subscriptionId: subscription.id,
+            });
+            await markStripeEventProcessed(supabase, event.id);
+            return NextResponse.json({ received: true });
+          }
+
           await updateByOrgId(organizationId, {
             stripe_subscription_id: subscription.id,
             stripe_customer_id: customerId,
@@ -520,11 +704,12 @@ export async function POST(req: Request) {
         const orgId = pi.metadata?.organization_id;
         if (!orgId) break;
 
+        const piPaymentAttemptId = (pi.metadata?.payment_attempt_id as string | undefined) ?? null;
         const amountSucceeded = pi.amount_received ?? pi.amount ?? 0;
         const occurredAt = pi.created ? new Date(pi.created * 1000).toISOString() : new Date().toISOString();
 
         await updatePaymentAttemptStatus({
-          paymentAttemptId: (pi.metadata?.payment_attempt_id as string | undefined) ?? null,
+          paymentAttemptId: piPaymentAttemptId,
           paymentIntentId: pi.id,
           checkoutSessionId: (pi.metadata?.checkout_session_id as string | undefined) ?? null,
           status: "succeeded",
@@ -535,14 +720,16 @@ export async function POST(req: Request) {
             null,
         });
 
+        // Get donor info from payment_attempts (receipt_email as fallback)
+        const piDonorInfo = await resolveDonorFromPaymentAttempt(piPaymentAttemptId);
         await upsertDonationRecord({
           organizationId: orgId,
           paymentIntentId: pi.id,
           checkoutSessionId: (pi.metadata?.checkout_session_id as string | undefined) ?? null,
           amountCents: amountSucceeded,
           currency: pi.currency || "usd",
-          donorName: pi.metadata?.donor_name || null,
-          donorEmail: pi.receipt_email || pi.metadata?.donor_email || null,
+          donorName: piDonorInfo.donorName,
+          donorEmail: pi.receipt_email || piDonorInfo.donorEmail,
           eventId: pi.metadata?.event_id || null,
           purpose: pi.metadata?.purpose || null,
           metadata: pi.metadata || null,
@@ -558,9 +745,10 @@ export async function POST(req: Request) {
         const orgIdFailed = piFailed.metadata?.organization_id;
         if (!orgIdFailed) break;
 
+        const piFailedAttemptId = (piFailed.metadata?.payment_attempt_id as string | undefined) ?? null;
         const amountFailed = piFailed.amount ?? 0;
         await updatePaymentAttemptStatus({
-          paymentAttemptId: (piFailed.metadata?.payment_attempt_id as string | undefined) ?? null,
+          paymentAttemptId: piFailedAttemptId,
           paymentIntentId: piFailed.id,
           checkoutSessionId: (piFailed.metadata?.checkout_session_id as string | undefined) ?? null,
           status: "failed",
@@ -572,14 +760,16 @@ export async function POST(req: Request) {
             null,
         });
 
+        // Get donor info from payment_attempts
+        const piFailedDonorInfo = await resolveDonorFromPaymentAttempt(piFailedAttemptId);
         await upsertDonationRecord({
           organizationId: orgIdFailed,
           paymentIntentId: piFailed.id,
           checkoutSessionId: (piFailed.metadata?.checkout_session_id as string | undefined) ?? null,
           amountCents: amountFailed,
           currency: piFailed.currency || "usd",
-          donorName: piFailed.metadata?.donor_name || null,
-          donorEmail: piFailed.receipt_email || piFailed.metadata?.donor_email || null,
+          donorName: piFailedDonorInfo.donorName,
+          donorEmail: piFailed.receipt_email || piFailedDonorInfo.donorEmail,
           eventId: piFailed.metadata?.event_id || null,
           purpose: piFailed.metadata?.purpose || null,
           metadata: piFailed.metadata || null,
