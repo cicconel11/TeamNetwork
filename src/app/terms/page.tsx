@@ -15,7 +15,7 @@ const termsSections: TermsSection[] = [
     number: "1",
     title: "Acceptance of Terms",
     paragraphs: [
-      "By accessing or using TeamNetwork (\"the Service\"), operated by McKillop LLC, you agree to comply with and be bound by these Terms of Service (\"Terms\"). If you do not agree, you may not use the Service.",
+      "By accessing or using TeamNetwork (\"the Service\"), operated by MAC Connect LLC, you agree to comply with and be bound by these Terms of Service (\"Terms\"). If you do not agree, you may not use the Service.",
     ],
   },
   {
@@ -120,7 +120,7 @@ const termsSections: TermsSection[] = [
     number: "11",
     title: "Indemnification",
     paragraphs: [
-      "You agree to indemnify, defend, and hold harmless TeamNetwork, McKillop LLC, and their affiliates from any claims, damages, or expenses arising from:",
+      "You agree to indemnify, defend, and hold harmless TeamNetwork, MAC Connect LLC, and their affiliates from any claims, damages, or expenses arising from:",
     ],
     bullets: [
       "Your use of the Service.",

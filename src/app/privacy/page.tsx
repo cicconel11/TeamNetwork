@@ -15,7 +15,7 @@ const privacySections: PrivacySection[] = [
     number: "1",
     title: "Introduction",
     paragraphs: [
-      "TeamNetwork (\"the Service\"), operated by McKillop LLC, is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.",
+      "TeamNetwork (\"the Service\"), operated by MAC Connect LLC, is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.",
       "By using TeamNetwork, you consent to the data practices described in this policy. If you do not agree with this policy, please do not use the Service.",
     ],
   },
