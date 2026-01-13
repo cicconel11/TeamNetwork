@@ -10,11 +10,6 @@ import { ORG_NAV_ITEMS, type NavConfig, type NavConfigEntry } from "@/lib/naviga
 import type { OrgRole } from "@/lib/auth/role-utils";
 
 const CONFIGURABLE_ITEMS = ORG_NAV_ITEMS.filter((item) => item.configurable !== false);
-const ROLE_LABELS: Record<OrgRole, string> = {
-  admin: "Admins",
-  active_member: "Active members",
-  alumni: "Alumni",
-};
 const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni"];
 
 function NavigationSettingsContent() {
