@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Badge } from "@/components/ui";
 
@@ -21,7 +20,6 @@ interface ChatGroupCardProps {
 }
 
 export function ChatGroupCard({ group, orgSlug, memberCount, pendingCount, isAdmin }: ChatGroupCardProps) {
-  const router = useRouter();
   const supabase = createClient();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
