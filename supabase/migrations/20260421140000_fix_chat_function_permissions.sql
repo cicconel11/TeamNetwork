@@ -6,10 +6,12 @@
 -- 2. The chat_messages INSERT and SELECT policies required group membership
 --    even for org admins, but the app allows org admins to access chats
 --    without being explicit members.
+-- 3. The has_active_role function was also missing GRANT EXECUTE.
 
 -- Grant execute permissions to authenticated users
 GRANT EXECUTE ON FUNCTION public.is_chat_group_member(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.has_active_role(uuid, text[]) TO authenticated;
 
 -- =====================================================
 -- Fix RLS Policies: chat_messages

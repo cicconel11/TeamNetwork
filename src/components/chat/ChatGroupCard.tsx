@@ -38,17 +38,25 @@ export function ChatGroupCard({ group, orgSlug, memberCount, pendingCount, isAdm
     setIsDeleting(true);
     
     // Soft delete the group
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("chat_groups")
       .update({ deleted_at: new Date().toISOString() })
-      .eq("id", group.id);
+      .eq("id", group.id)
+      .select();
 
     if (error) {
       console.error("Failed to delete group:", error);
+      alert("Failed to delete group: " + error.message);
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    } else if (!data || data.length === 0) {
+      console.error("No rows updated - permission denied or group not found");
+      alert("Failed to delete group: Permission denied");
       setIsDeleting(false);
       setShowDeleteConfirm(false);
     } else {
-      router.refresh();
+      // Force a hard refresh to ensure the page reloads
+      window.location.reload();
     }
   };
 
@@ -103,23 +111,26 @@ export function ChatGroupCard({ group, orgSlug, memberCount, pendingCount, isAdm
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-1" onClick={(e) => e.preventDefault()}>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={cancelDelete}
-                  disabled={isDeleting}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="bg-red-500 hover:bg-red-600 text-white"
-                >
-                  {isDeleting ? "..." : "Delete"}
-                </Button>
+              <div className="flex flex-col items-end gap-2" onClick={(e) => e.preventDefault()}>
+                <p className="text-xs text-red-500 font-medium">Delete &quot;{group.name}&quot;?</p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={cancelDelete}
+                    disabled={isDeleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="bg-red-500 hover:bg-red-600 text-white"
+                  >
+                    {isDeleting ? "..." : "Delete"}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
