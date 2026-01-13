@@ -41,7 +41,7 @@ const patchSchema = z
     name: z.string().max(100).optional(),
   })
   .strict();
-const ALLOWED_NAV_PATHS = new Set(ORG_NAV_ITEMS.map((item) => item.href));
+const ALLOWED_NAV_PATHS = new Set([...ORG_NAV_ITEMS.map((item) => item.href), "dashboard"]);
 
 function sanitizeNavConfig(payload: unknown): NavConfig {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -50,7 +50,8 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
 
   const config: NavConfig = {};
   for (const [href, value] of Object.entries(payload as Record<string, unknown>)) {
-    if (!href || !ALLOWED_NAV_PATHS.has(href) || typeof value !== "object" || value === null || Array.isArray(value)) continue;
+    // Accept "dashboard" as a valid key (Dashboard item has empty href in ORG_NAV_ITEMS)
+    if (!ALLOWED_NAV_PATHS.has(href) || typeof value !== "object" || value === null || Array.isArray(value)) continue;
 
     const entry = value as { label?: unknown; hidden?: unknown; hiddenForRoles?: unknown; editRoles?: unknown; order?: unknown };
     const clean: { label?: string; hidden?: boolean; hiddenForRoles?: OrgRole[]; editRoles?: OrgRole[]; order?: number } = {};
