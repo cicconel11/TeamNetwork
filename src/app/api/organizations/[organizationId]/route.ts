@@ -30,6 +30,7 @@ const navEntrySchema = z
     hidden: z.boolean().optional(),
     hiddenForRoles: z.array(z.enum(ALLOWED_ROLES)).optional(),
     editRoles: z.array(z.enum(ALLOWED_ROLES)).optional(),
+    order: z.number().int().min(0).max(100).optional(),
   })
   .strict();
 
@@ -51,8 +52,8 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
   for (const [href, value] of Object.entries(payload as Record<string, unknown>)) {
     if (!href || !ALLOWED_NAV_PATHS.has(href) || typeof value !== "object" || value === null || Array.isArray(value)) continue;
 
-    const entry = value as { label?: unknown; hidden?: unknown; hiddenForRoles?: unknown; editRoles?: unknown };
-    const clean: { label?: string; hidden?: boolean; hiddenForRoles?: OrgRole[]; editRoles?: OrgRole[] } = {};
+    const entry = value as { label?: unknown; hidden?: unknown; hiddenForRoles?: unknown; editRoles?: unknown; order?: unknown };
+    const clean: { label?: string; hidden?: boolean; hiddenForRoles?: OrgRole[]; editRoles?: OrgRole[]; order?: number } = {};
 
     if (typeof entry.label === "string" && entry.label.trim()) {
       clean.label = entry.label.trim();
@@ -71,6 +72,9 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
       if (roles.length) {
         clean.editRoles = Array.from(new Set([...roles, "admin"] as OrgRole[]));
       }
+    }
+    if (typeof entry.order === "number" && Number.isInteger(entry.order) && entry.order >= 0) {
+      clean.order = entry.order;
     }
 
     if (Object.keys(clean).length > 0) {
