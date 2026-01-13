@@ -79,6 +79,12 @@ export default function InvitesPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [orgName, setOrgName] = useState<string>("");
 
+  // Role change state
+  const [roleChangeUserId, setRoleChangeUserId] = useState<string | null>(null);
+  const [isChangingRole, setIsChangingRole] = useState(false);
+  const [showAdminConfirm, setShowAdminConfirm] = useState(false);
+  const [pendingAdminUserId, setPendingAdminUserId] = useState<string | null>(null);
+
   const loadQuota = useCallback(async (organizationId: string) => {
     setIsLoadingQuota(true);
     setPlanError(null);
@@ -427,6 +433,84 @@ export default function InvitesPage() {
     );
   };
 
+  const canChangeToAlumni = useCallback(() => {
+    // Be optimistic if quota hasn't loaded - database will enforce the constraint
+    if (!quota) return true;
+    if (quota.alumniLimit === null) return true; // unlimited plan
+    return quota.remaining !== null && quota.remaining > 0;
+  }, [quota]);
+
+  const updateRole = async (userId: string, newRole: "admin" | "active_member" | "alumni") => {
+    if (!orgId) return;
+
+    // Find current role to check if actually changing
+    const currentMember = memberships.find((m) => m.user_id === userId);
+    if (currentMember?.role === newRole) return;
+
+    // If promoting to admin, require confirmation
+    if (newRole === "admin") {
+      setPendingAdminUserId(userId);
+      setShowAdminConfirm(true);
+      return;
+    }
+
+    // Note: Alumni quota is enforced by database trigger - if exceeded, error will be returned
+
+    setIsChangingRole(true);
+    setRoleChangeUserId(userId);
+    setError(null);
+
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("user_organization_roles")
+      .update({ role: newRole })
+      .eq("organization_id", orgId)
+      .eq("user_id", userId);
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setMemberships((prev) =>
+        prev.map((m) => (m.user_id === userId ? { ...m, role: newRole } : m))
+      );
+      // Reload quota if changed to/from alumni
+      if (newRole === "alumni" || currentMember?.role === "alumni") {
+        loadQuota(orgId);
+      }
+    }
+
+    setIsChangingRole(false);
+    setRoleChangeUserId(null);
+  };
+
+  const confirmAdminPromotion = async () => {
+    if (!orgId || !pendingAdminUserId) return;
+
+    setIsChangingRole(true);
+    setRoleChangeUserId(pendingAdminUserId);
+    setError(null);
+
+    const supabase = createClient();
+    const { error: updateError } = await supabase
+      .from("user_organization_roles")
+      .update({ role: "admin" })
+      .eq("organization_id", orgId)
+      .eq("user_id", pendingAdminUserId);
+
+    if (updateError) {
+      setError(updateError.message);
+    } else {
+      setMemberships((prev) =>
+        prev.map((m) => (m.user_id === pendingAdminUserId ? { ...m, role: "admin" } : m))
+      );
+    }
+
+    setIsChangingRole(false);
+    setRoleChangeUserId(null);
+    setShowAdminConfirm(false);
+    setPendingAdminUserId(null);
+  };
+
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
       case "admin": return "warning";
@@ -756,7 +840,16 @@ export default function InvitesPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-foreground">Access control</h3>
-            <p className="text-sm text-muted-foreground">Revoke or restore access for members of this org.</p>
+            <p className="text-sm text-muted-foreground">
+              Manage roles and access for members of this org.
+            </p>
+            {quota && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Alumni slots: {quota.alumniLimit === null
+                  ? "Unlimited"
+                  : `${quota.remaining ?? 0} remaining (${quota.alumniCount}/${quota.alumniLimit} used)`}
+              </p>
+            )}
           </div>
         </div>
         {memberships.length === 0 ? (
@@ -764,21 +857,53 @@ export default function InvitesPage() {
         ) : (
           <div className="divide-y divide-border">
             {memberships.map((m) => (
-              <div key={m.user_id} className="py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-medium text-foreground">{m.users?.name || m.users?.email || "User"}</p>
-                  <p className="text-xs text-muted-foreground">{getRoleLabel(m.role)}</p>
+              <div key={m.user_id} className="py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-foreground truncate">
+                    {m.users?.name || m.users?.email || "User"}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{m.users?.email}</p>
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* Role dropdown - only show for active users */}
+                {m.status === "active" ? (
+                  <div className="w-36">
+                    <Select
+                      value={m.role === "member" ? "active_member" : m.role}
+                      onChange={(e) => updateRole(m.user_id, e.target.value as "admin" | "active_member" | "alumni")}
+                      disabled={isChangingRole && roleChangeUserId === m.user_id}
+                      options={[
+                        { value: "active_member", label: "Active Member" },
+                        { value: "alumni", label: "Alumni", disabled: m.role !== "alumni" && !canChangeToAlumni() },
+                        { value: "admin", label: "Admin" },
+                      ]}
+                    />
+                  </div>
+                ) : (
+                  <Badge variant={getRoleBadgeVariant(m.role)}>
+                    {getRoleLabel(m.role)}
+                  </Badge>
+                )}
+
+                <div className="flex items-center gap-2">
                   <Badge variant={m.status === "active" ? "success" : "error"}>
                     {m.status}
                   </Badge>
+
+                  {isChangingRole && roleChangeUserId === m.user_id && (
+                    <svg className="animate-spin h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                  )}
+
                   {m.status === "active" ? (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => updateAccess(m.user_id, "revoked")}
                       className="text-red-600 hover:text-red-700"
+                      disabled={isChangingRole && roleChangeUserId === m.user_id}
                     >
                       Remove access
                     </Button>
@@ -933,6 +1058,55 @@ export default function InvitesPage() {
                 className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
                 Delete Forever
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Admin Promotion Confirmation Modal */}
+      {showAdminConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="max-w-md w-full p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-amber-700 dark:text-amber-300">
+                Confirm Admin Promotion
+              </h3>
+              <p className="text-sm text-muted-foreground mt-2">
+                You are about to promote{" "}
+                <strong>
+                  {memberships.find((m) => m.user_id === pendingAdminUserId)?.users?.name ||
+                    memberships.find((m) => m.user_id === pendingAdminUserId)?.users?.email ||
+                    "this user"}
+                </strong>{" "}
+                to Admin.
+              </p>
+              <p className="text-sm text-muted-foreground mt-2">Admins have full access to:</p>
+              <ul className="text-sm text-muted-foreground mt-1 list-disc list-inside">
+                <li>Organization settings and billing</li>
+                <li>Member management and approvals</li>
+                <li>All content creation and editing</li>
+                <li>Navigation customization</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowAdminConfirm(false);
+                  setPendingAdminUserId(null);
+                }}
+                disabled={isChangingRole}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmAdminPromotion}
+                isLoading={isChangingRole}
+                className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
+              >
+                Promote to Admin
               </Button>
             </div>
           </Card>
