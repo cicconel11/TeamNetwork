@@ -26,10 +26,15 @@ function NavigationSettingsContent() {
   const [orderedItems, setOrderedItems] = useState<typeof CONFIGURABLE_ITEMS>([]);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
+  // Use a unique key for nav config - Dashboard has empty href, so use "dashboard" as key
+  const getConfigKey = (href: string) => href === "" ? "dashboard" : href;
+
   const sortItemsByOrder = useCallback((items: typeof CONFIGURABLE_ITEMS, config: NavConfig) => {
     return [...items].sort((a, b) => {
-      const orderA = config[a.href]?.order;
-      const orderB = config[b.href]?.order;
+      const keyA = a.href === "" ? "dashboard" : a.href;
+      const keyB = b.href === "" ? "dashboard" : b.href;
+      const orderA = config[keyA]?.order;
+      const orderB = config[keyB]?.order;
       if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
       if (orderA !== undefined) return -1;
       if (orderB !== undefined) return 1;
@@ -67,13 +72,14 @@ function NavigationSettingsContent() {
   }, [orgSlug, sortItemsByOrder]);
 
   const updateEntry = (href: string, updater: (entry?: NavConfigEntry) => NavConfigEntry | undefined) => {
+    const key = getConfigKey(href);
     setNavConfig((prev) => {
       const updated = { ...prev };
-      const nextValue = updater(prev[href]);
+      const nextValue = updater(prev[key]);
       if (nextValue && Object.keys(nextValue).length > 0) {
-        updated[href] = nextValue;
+        updated[key] = nextValue;
       } else {
-        delete updated[href];
+        delete updated[key];
       }
       return updated;
     });
@@ -142,8 +148,9 @@ function NavigationSettingsContent() {
     setNavConfig(prev => {
       const updated = { ...prev };
       newItems.forEach((item, index) => {
-        if (!updated[item.href]) updated[item.href] = {};
-        updated[item.href] = { ...updated[item.href], order: index };
+        const key = getConfigKey(item.href);
+        if (!updated[key]) updated[key] = {};
+        updated[key] = { ...updated[key], order: index };
       });
       return updated;
     });
@@ -153,7 +160,8 @@ function NavigationSettingsContent() {
   const preparePayload = (): NavConfig => {
     const payload: NavConfig = {};
     for (const item of ORG_NAV_ITEMS) {
-      const entry = navConfig[item.href];
+      const key = getConfigKey(item.href);
+      const entry = navConfig[key];
       if (!entry) continue;
       const clean: NavConfigEntry = {};
       if (typeof entry.label === "string" && entry.label.trim()) clean.label = entry.label.trim();
@@ -167,7 +175,7 @@ function NavigationSettingsContent() {
         if (roles.length) clean.editRoles = Array.from(new Set([...roles, "admin"] as OrgRole[]));
       }
       if (typeof entry.order === "number") clean.order = entry.order;
-      if (Object.keys(clean).length > 0) payload[item.href] = clean;
+      if (Object.keys(clean).length > 0) payload[key] = clean;
     }
     return payload;
   };
@@ -228,7 +236,8 @@ function NavigationSettingsContent() {
       )}
       <div className="space-y-2">
         {orderedItems.map((item, index) => {
-          const entry = navConfig[item.href];
+          const configKey = getConfigKey(item.href);
+          const entry = navConfig[configKey];
           const labelValue = typeof entry?.label === "string" ? entry.label : "";
           const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
           const isHiddenEverywhere = entry?.hidden === true;
@@ -238,7 +247,7 @@ function NavigationSettingsContent() {
           const isLast = index === orderedItems.length - 1;
 
           return (
-            <Card key={item.href} className={`p-3 transition-all duration-200 ${isHiddenEverywhere ? "border-red-200 dark:border-red-900/40 opacity-60" : ""}`}>
+            <Card key={configKey} className={`p-3 transition-all duration-200 ${isHiddenEverywhere ? "border-red-200 dark:border-red-900/40 opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
                 <div className="flex flex-col gap-0.5">
                   <button
