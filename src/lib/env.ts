@@ -62,6 +62,65 @@ export function validateCaptchaEnv(): void {
   }
 }
 
+/**
+ * Validates AUTH_TEST_MODE is never enabled in production.
+ * Throws error if test mode is enabled in production environment.
+ */
+export function validateAuthTestMode(): void {
+  const isTestMode = process.env.AUTH_TEST_MODE === "true";
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (isTestMode && isProduction) {
+    throw new Error(
+      "SECURITY ERROR: AUTH_TEST_MODE cannot be enabled in production. " +
+      "This would bypass all authentication and allow unauthorized access."
+    );
+  }
+
+  if (isTestMode) {
+    console.warn(
+      "[SECURITY WARNING] AUTH_TEST_MODE is enabled. " +
+      "All JWT validation is bypassed. This should only be used in local testing."
+    );
+  }
+}
+
+/**
+ * Hashes sensitive values for logging.
+ * Uses simple string manipulation to create a deterministic hash that works in Edge runtime.
+ * Returns a short hash string.
+ */
+export function hashForLogging(value: string | null | undefined): string {
+  if (!value) return "null";
+  // Simple deterministic hash compatible with Edge runtime (no crypto import)
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    const char = value.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16).padStart(8, "0");
+}
+
+/**
+ * Determines if verbose auth logging is enabled.
+ * Only enabled in development or when explicitly requested.
+ */
+export function shouldLogAuth(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return process.env.LOG_AUTH_VERBOSE === "true";
+  }
+  return process.env.NEXT_PUBLIC_LOG_AUTH !== "false";
+}
+
+/**
+ * Determines if auth failures should be logged.
+ * Always log failures for debugging, even in production.
+ */
+export function shouldLogAuthFailures(): boolean {
+  return process.env.LOG_AUTH_FAILURES !== "false";
+}
+
 
 
 

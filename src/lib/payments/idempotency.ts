@@ -168,6 +168,7 @@ export async function claimPaymentAttempt(params: {
     throw new IdempotencyConflictError("Idempotency key used for different request payload");
   }
 
+  // SECURITY FIX: Use optimistic locking with additional check for Stripe resources
   const { data, error } = await supabase
     .from("payment_attempts")
     .update({
@@ -190,11 +191,19 @@ export async function claimPaymentAttempt(params: {
   }
 
   if (!data) {
-    return { attempt, claimed: false };
+    // Failed to claim - someone else got it or it already has Stripe resources
+    // Refetch to get current state
+    const refetched = await fetchById(supabase, attempt.id);
+    if (!refetched) {
+      throw new Error("Payment attempt disappeared during claim");
+    }
+    return { attempt: refetched, claimed: false };
   }
 
   return { attempt: data, claimed: true };
 }
+
+export { fetchById };
 
 export async function updatePaymentAttempt(
   supabase: DbClient,

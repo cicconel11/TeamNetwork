@@ -1,6 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { requireEnv } from "./lib/env";
+import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
+
+// Validate AUTH_TEST_MODE at module load
+validateAuthTestMode();
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -14,7 +17,8 @@ const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const host = request.headers.get("host");
-  const shouldLog = process.env.NEXT_PUBLIC_LOG_AUTH === "true";
+  const shouldLog = shouldLogAuth();
+  const logFailures = shouldLogAuthFailures();
 
   // Bypass Stripe webhook so middleware does not block it
   if (pathname === "/api/stripe/webhook") {
@@ -97,9 +101,17 @@ export async function middleware(request: NextRequest) {
   // Use getUser() instead of getSession() - getUser() validates JWT and refreshes tokens
   // This is required for OAuth sessions to work correctly
   const isTestMode = process.env.AUTH_TEST_MODE === "true";
+  if (isTestMode && process.env.NODE_ENV === "production") {
+    throw new Error("AUTH_TEST_MODE cannot be enabled in production");
+  }
   let user = null;
   let authError: Error | null = null;
   if (isTestMode) {
+    console.warn("[SECURITY] AUTH_TEST_MODE active - bypassing JWT validation", {
+      pathname,
+      hasAuthCookies,
+      timestamp: new Date().toISOString(),
+    });
     user = hasAuthCookies ? { id: "test-user" } as { id: string } : null;
   } else {
     const res = await supabase.auth.getUser();
@@ -115,7 +127,7 @@ export async function middleware(request: NextRequest) {
 
   // Always log auth failures in production for debugging user-specific issues
   const isAuthFailure = !user && hasAuthCookies;
-  if (shouldLog || isAuthFailure) {
+  if (shouldLog || (isAuthFailure && logFailures)) {
     console.log("[AUTH-MW]", {
       host,
       pathname,
@@ -125,7 +137,7 @@ export async function middleware(request: NextRequest) {
       sbCookies,
       allCookieNames: cookiesAll.map((c) => c.name),
       hasAuthCookies,
-      sessionUser: user ? user.id : null,
+      sessionUserHash: user ? hashForLogging(user.id) : null,
       sessionNull: !session,
       authError: authError ? { message: authError.message, name: authError.name } : null,
       isAuthFailure,
@@ -135,6 +147,7 @@ export async function middleware(request: NextRequest) {
         pathname,
         sbCookies,
         sessionPresent: !!session,
+        userHash: user ? hashForLogging(user.id) : null,
         authError: authError?.message || null,
       });
     }
