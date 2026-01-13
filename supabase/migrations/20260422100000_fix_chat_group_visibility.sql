@@ -2,16 +2,17 @@
 -- Migration: Fix Chat Group Visibility for Non-Members
 -- =====================================================
 -- Issue: Users who are not members of a chat group can still see
--- the group on the chat page.
+-- the group on the chat page. This includes admins who should also
+-- only see groups they are explicitly members of.
 --
--- Root cause: The is_chat_group_member function may return NULL
--- in edge cases, and the RLS policy logic doesn't handle this properly.
--- Additionally, we need to ensure the function is properly secured.
+-- Root cause: The RLS policies had an exception allowing org admins
+-- to see all groups, and the is_chat_group_member function may return
+-- NULL in edge cases.
 --
 -- Fix: 
 -- 1. Update is_chat_group_member to use COALESCE to ensure boolean return
--- 2. Simplify the RLS policy logic for clarity
--- 3. Ensure proper function permissions
+-- 2. Remove admin exceptions - ALL users must be group members to see groups
+-- 3. Update all chat-related RLS policies consistently
 
 -- =====================================================
 -- Fix the is_chat_group_member function
@@ -63,31 +64,49 @@ GRANT EXECUTE ON FUNCTION public.is_chat_group_moderator(uuid) TO authenticated;
 -- =====================================================
 -- Recreate RLS policy for chat_groups with explicit logic
 -- =====================================================
+-- ALL users (including admins) can only see groups they are members of
 DROP POLICY IF EXISTS chat_groups_select ON public.chat_groups;
 CREATE POLICY chat_groups_select ON public.chat_groups
   FOR SELECT USING (
-    -- User must be an active org member
-    has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
-    AND (
-      -- Org admins can see all groups (including soft-deleted for management)
-      has_active_role(organization_id, array['admin'])
-      OR (
-        -- Non-admins can only see non-deleted groups they are explicitly members of
-        deleted_at IS NULL
-        AND is_chat_group_member(id) = TRUE
-      )
-    )
+    deleted_at IS NULL
+    AND has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
+    AND is_chat_group_member(id) = TRUE
   );
 
 -- =====================================================
 -- Also fix chat_group_members SELECT policy
 -- =====================================================
+-- Users can only see members of groups they belong to
 DROP POLICY IF EXISTS chat_group_members_select ON public.chat_group_members;
 CREATE POLICY chat_group_members_select ON public.chat_group_members
   FOR SELECT USING (
     has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
+    AND is_chat_group_member(chat_group_id) = TRUE
+  );
+
+-- =====================================================
+-- Fix chat_messages SELECT policy - remove admin exception
+-- =====================================================
+DROP POLICY IF EXISTS chat_messages_select ON public.chat_messages;
+CREATE POLICY chat_messages_select ON public.chat_messages
+  FOR SELECT USING (
+    deleted_at IS NULL
+    AND has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
+    AND is_chat_group_member(chat_group_id) = TRUE
     AND (
-      has_active_role(organization_id, array['admin'])
-      OR is_chat_group_member(chat_group_id) = TRUE
+      status = 'approved'
+      OR author_id = auth.uid()
+      OR is_chat_group_moderator(chat_group_id) = TRUE
     )
+  );
+
+-- =====================================================
+-- Fix chat_messages INSERT policy - remove admin exception
+-- =====================================================
+DROP POLICY IF EXISTS chat_messages_insert ON public.chat_messages;
+CREATE POLICY chat_messages_insert ON public.chat_messages
+  FOR INSERT WITH CHECK (
+    has_active_role(organization_id, array['admin', 'active_member', 'alumni'])
+    AND is_chat_group_member(chat_group_id) = TRUE
+    AND author_id = auth.uid()
   );
