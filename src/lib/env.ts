@@ -5,7 +5,8 @@ export function requireEnv(name: string): string {
     throw new Error(`Missing required environment variable: ${name}`);
   }
 
-  return value;
+  // Always trim to prevent trailing whitespace/newlines from breaking API keys
+  return value.trim();
 }
 
 /**

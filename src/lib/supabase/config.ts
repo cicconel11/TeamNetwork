@@ -4,7 +4,8 @@ function assertValue(name: string, value: string | undefined) {
   if (!value || value.trim() === "") {
     throw new Error(`Missing Supabase env: ${name}`);
   }
-  return value;
+  // Always trim to prevent trailing whitespace/newlines from breaking API keys
+  return value.trim();
 }
 
 export function getSupabaseBrowserEnv() {
