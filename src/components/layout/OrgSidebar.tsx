@@ -23,20 +23,25 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
     ? (organization.nav_config as NavConfig)
     : {}) || {};
 
+  // Helper to get config key - Dashboard has empty href, so use "dashboard" as key
+  const getConfigKey = (href: string) => href === "" ? "dashboard" : href;
+
   const visibleNav = ORG_NAV_ITEMS
     .filter((item) => {
       // Role check
       if (role && !item.roles.includes(role)) return false;
       
       // Config check (hide if hidden is true)
-      const config = navConfig[item.href];
+      const configKey = getConfigKey(item.href);
+      const config = navConfig[configKey];
       if (config?.hidden) return false;
       if (role && Array.isArray(config?.hiddenForRoles) && config.hiddenForRoles.includes(role)) return false;
       
       return true;
     })
     .map((item) => {
-      const config = navConfig[item.href];
+      const configKey = getConfigKey(item.href);
+      const config = navConfig[configKey];
       return {
         ...item,
         label: config?.label?.trim() || item.label,
