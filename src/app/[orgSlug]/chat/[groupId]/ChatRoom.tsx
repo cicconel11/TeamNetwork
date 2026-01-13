@@ -38,20 +38,56 @@ export function ChatRoom({
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showPendingQueue, setShowPendingQueue] = useState(false);
+  const [userCache, setUserCache] = useState<Map<string, User>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
-  // Build a map of user IDs to user info
+  // Build a map of user IDs to user info (combining members + cached users)
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
+    // Add members
     members.forEach((m) => {
       if (m.users) {
         map.set(m.user_id, m.users);
       }
     });
+    // Add current user
     map.set(currentUserId, currentUser);
+    // Add cached users (for non-members who sent messages)
+    userCache.forEach((user, id) => {
+      if (!map.has(id)) {
+        map.set(id, user);
+      }
+    });
     return map;
-  }, [members, currentUserId, currentUser]);
+  }, [members, currentUserId, currentUser, userCache]);
+
+  // Fetch user info for unknown authors
+  const fetchUnknownUsers = useCallback(async (authorIds: string[]) => {
+    const unknownIds = authorIds.filter(id => !userMap.has(id));
+    if (unknownIds.length === 0) return;
+
+    const { data } = await supabase
+      .from("users")
+      .select("id, name, email, avatar_url")
+      .in("id", unknownIds);
+
+    if (data && data.length > 0) {
+      setUserCache(prev => {
+        const newCache = new Map(prev);
+        data.forEach(user => newCache.set(user.id, user as User));
+        return newCache;
+      });
+    }
+  }, [supabase, userMap]);
+
+  // Update message authors when userMap changes (e.g., after fetching unknown users)
+  useEffect(() => {
+    setMessages(prev => prev.map(msg => ({
+      ...msg,
+      author: userMap.get(msg.author_id) || msg.author,
+    })));
+  }, [userMap]);
 
   // Scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -71,6 +107,10 @@ export function ChatRoom({
         .limit(100);
 
       if (!error && data) {
+        // Fetch user info for any unknown authors
+        const authorIds = [...new Set(data.map(msg => msg.author_id))];
+        await fetchUnknownUsers(authorIds);
+        
         const messagesWithAuthors = data.map((msg) => ({
           ...msg,
           author: userMap.get(msg.author_id),
@@ -81,7 +121,7 @@ export function ChatRoom({
       setTimeout(scrollToBottom, 100);
     }
     loadMessages();
-  }, [group.id, supabase, scrollToBottom, userMap]);
+  }, [group.id, supabase, scrollToBottom, userMap, fetchUnknownUsers]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -95,9 +135,13 @@ export function ChatRoom({
           table: "chat_messages",
           filter: `chat_group_id=eq.${group.id}`,
         },
-        (payload: RealtimePostgresChangesPayload<ChatMessage>) => {
+        async (payload: RealtimePostgresChangesPayload<ChatMessage>) => {
           if (payload.eventType === "INSERT") {
             const newMsg = payload.new as ChatMessage;
+            // Fetch user info if unknown
+            if (!userMap.has(newMsg.author_id)) {
+              await fetchUnknownUsers([newMsg.author_id]);
+            }
             // Only add if we should see it (approved, or our own, or we can moderate)
             if (
               newMsg.status === "approved" ||
@@ -152,7 +196,7 @@ export function ChatRoom({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [group.id, supabase, currentUserId, canModerate, scrollToBottom, userMap]);
+  }, [group.id, supabase, currentUserId, canModerate, scrollToBottom, userMap, fetchUnknownUsers]);
 
   // Send message with optimistic UI
   const handleSend = async (e: React.FormEvent) => {
