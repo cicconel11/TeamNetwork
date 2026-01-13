@@ -40,7 +40,13 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
       return {
         ...item,
         label: config?.label?.trim() || item.label,
+        order: config?.order ?? 999,
       };
+    })
+    .sort((a, b) => {
+      // Sort by order, then by default position
+      if (a.order !== b.order) return a.order - b.order;
+      return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
     });
 
   return (

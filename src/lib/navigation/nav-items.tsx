@@ -14,6 +14,7 @@ export type NavConfigEntry = {
   hidden?: boolean;
   hiddenForRoles?: OrgRole[];
   editRoles?: OrgRole[];
+  order?: number;
 };
 
 export type NavConfig = Record<string, NavConfigEntry>;
