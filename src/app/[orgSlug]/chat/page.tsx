@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { Card, Button, EmptyState, Badge } from "@/components/ui";
+import { Card, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { ChatGroupCard } from "@/components/chat/ChatGroupCard";
 import type { ChatGroup, ChatGroupMember } from "@/types/database";
 
 interface ChatPageProps {
@@ -88,39 +89,14 @@ export default async function ChatPage({ params }: ChatPageProps) {
             const memberCount = group.chat_group_members?.length || 0;
 
             return (
-              <Link key={group.id} href={`/${orgSlug}/chat/${group.id}`}>
-                <Card className="p-4 hover:border-[var(--color-org-secondary)] transition-colors cursor-pointer h-full">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground truncate">{group.name}</h3>
-                        {group.is_default && (
-                          <Badge variant="primary">Default</Badge>
-                        )}
-                      </div>
-                      {group.description && (
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          {group.description}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {memberCount} member{memberCount !== 1 ? "s" : ""}
-                        {group.require_approval && " | Approval required"}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      {pendingCount > 0 && (
-                        <Badge variant="warning">{pendingCount} pending</Badge>
-                      )}
-                      <div className="h-8 w-8 rounded-lg bg-[var(--color-org-secondary)]/20 flex items-center justify-center">
-                        <svg className="h-4 w-4 text-[var(--color-org-secondary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </Link>
+              <ChatGroupCard
+                key={group.id}
+                group={group}
+                orgSlug={orgSlug}
+                memberCount={memberCount}
+                pendingCount={pendingCount}
+                isAdmin={isAdmin}
+              />
             );
           })}
         </div>
