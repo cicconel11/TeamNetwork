@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button } from "@/components/ui";
-import type { FormDocumentSubmission, User } from "@/types/database";
+import type { FormDocumentSubmission, User } from "@teammeet/types";
 
 interface DocumentSubmissionsListProps {
   submissions: (FormDocumentSubmission & { users: Pick<User, "name" | "email"> | null })[];

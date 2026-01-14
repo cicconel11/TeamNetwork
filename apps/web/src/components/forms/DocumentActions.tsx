@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
-import type { FormDocument } from "@/types/database";
+import type { FormDocument } from "@teammeet/types";
 
 interface DocumentActionsProps {
   document: FormDocument;

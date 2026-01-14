@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui";
 import { ScheduleFileUpload } from "./ScheduleFileUpload";
 import { ScheduleFilesList } from "./ScheduleFilesList";
-import type { ScheduleFile, User } from "@/types/database";
+import type { ScheduleFile, User } from "@teammeet/types";
 
 interface ScheduleFilesSectionProps {
   orgId: string;

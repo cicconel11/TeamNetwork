@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import type { Form, FormSubmission, FormField, User } from "@/types/database";
+import type { Form, FormSubmission, FormField, User } from "@teammeet/types";
 
 interface ExportCSVButtonProps {
   form: Form;

@@ -10,7 +10,7 @@ import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { editWorkoutSchema, type EditWorkoutForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { Workout } from "@/types/database";
+import type { Workout } from "@teammeet/types";
 
 export default function EditWorkoutPage() {
   const router = useRouter();

@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeRole } from "@/lib/auth/role-utils";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import type { UserRole } from "@/types/database";
+import type { UserRole } from "@teammeet/types";
 
 interface AdminGuardProps {
   children: React.ReactNode;

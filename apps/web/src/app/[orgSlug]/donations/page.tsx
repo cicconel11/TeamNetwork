@@ -10,7 +10,7 @@ import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { ExportCsvButton } from "@/components/shared";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
+import type { OrganizationDonation, OrganizationDonationStat } from "@teammeet/types";
 
 interface DonationsPageProps {
   params: Promise<{ orgSlug: string }>;

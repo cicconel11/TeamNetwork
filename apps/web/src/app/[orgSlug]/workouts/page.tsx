@@ -6,7 +6,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { WorkoutLogEditor } from "@/components/workouts/WorkoutLogEditor";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { WorkoutLog } from "@/types/database";
+import type { WorkoutLog } from "@teammeet/types";
 
 interface WorkoutsPageProps {
   params: Promise<{ orgSlug: string }>;

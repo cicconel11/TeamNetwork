@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui";
-import type { ScheduleFile, User } from "@/types/database";
+import type { ScheduleFile, User } from "@teammeet/types";
 
 interface ScheduleFilesListProps {
   files: (ScheduleFile & { users?: Pick<User, "name" | "email"> | null })[];

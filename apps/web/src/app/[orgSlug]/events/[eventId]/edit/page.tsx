@@ -11,7 +11,7 @@ import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { editEventSchema, type EditEventForm } from "@/lib/schemas/content";
 import { updateFutureEvents } from "@/lib/events/recurring-operations";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { Event, EventType } from "@/types/database";
+import type { Event, EventType } from "@teammeet/types";
 
 type EditScope = "this_only" | "this_and_future";
 

@@ -10,7 +10,7 @@ import {
   getTotalPrice,
   formatPrice,
 } from "@/lib/pricing";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 const EnterprisePricingModal = dynamic(
   () =>

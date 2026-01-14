@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { Form, FormField, FormSubmission } from "@/types/database";
+import type { Form, FormField, FormSubmission } from "@teammeet/types";
 
 export default function FillFormPage() {
   const router = useRouter();

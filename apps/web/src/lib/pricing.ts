@@ -1,4 +1,4 @@
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 export const BASE_PRICES = {
   month: 15,

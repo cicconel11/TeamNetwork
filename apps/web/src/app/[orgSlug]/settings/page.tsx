@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
-import type { NotificationPreference, UserRole } from "@/types/database";
+import type { NotificationPreference, UserRole } from "@teammeet/types";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";

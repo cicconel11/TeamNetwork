@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Select, Textarea } from "@/components/ui";
-import type { WorkoutStatus } from "@/types/database";
+import type { WorkoutStatus } from "@teammeet/types";
 
 interface WorkoutLogEditorProps {
   orgId: string;

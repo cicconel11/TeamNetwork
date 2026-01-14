@@ -5,7 +5,7 @@ import { Card, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { DocumentSubmissionsList } from "@/components/forms/DocumentSubmissionsList";
 import { DocumentActions } from "@/components/forms/DocumentActions";
-import type { FormDocument, FormDocumentSubmission, User } from "@/types/database";
+import type { FormDocument, FormDocumentSubmission, User } from "@teammeet/types";
 
 interface DocumentSubmissionsPageProps {
   params: Promise<{ orgSlug: string; documentId: string }>;

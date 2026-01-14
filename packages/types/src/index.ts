@@ -1,2 +1,2 @@
-// Placeholder - will be populated in Task 2.1
-export {};
+// Re-export everything from the generated database types
+export * from "./database";
