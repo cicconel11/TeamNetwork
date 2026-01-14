@@ -1,18 +1,43 @@
 {
-  "extends": "expo/tsconfig",
   "compilerOptions": {
-    "strict": true,
-    "esModuleInterop": true,
+    "target": "ESNext",
+    "lib": [
+      "DOM",
+      "ESNext"
+    ],
+    "allowJs": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-native",
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ],
+      "@teammeet/core": [
+        "../../packages/core/src"
+      ],
+      "@teammeet/types": [
+        "../../packages/types/src"
+      ],
+      "@teammeet/validation": [
+        "../../packages/validation/src"
+      ]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+  "extends": "expo/tsconfig.base"
 }
