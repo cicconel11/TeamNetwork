@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+// Re-export shared validation schemas from the validation package
+export {
+  baseSchemas,
+  safeString,
+  optionalSafeString,
+  optionalEmail,
+  uuidArray,
+  orgNameSchema,
+  validateOrgName,
+} from "@teammeet/validation";
+
+/**
+ * Validation error class for API routes.
+ */
 export class ValidationError extends Error {
   details?: string[];
 
@@ -13,49 +27,10 @@ export class ValidationError extends Error {
 
 const DEFAULT_MAX_BODY_BYTES = 25_000;
 
-export const baseSchemas = {
-  uuid: z.string().uuid({ message: "Must be a valid UUID" }),
-  slug: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9-]{3,64}$/, { message: "Use 3-64 lowercase letters, numbers, or hyphens" }),
-  idempotencyKey: z
-    .string()
-    .trim()
-    .min(8, "Idempotency key must be at least 8 characters")
-    .max(120, "Idempotency key is too long"),
-  currency: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z]{3}$/, { message: "Currency must be a 3-letter code" }),
-  email: z.string().trim().email().max(320),
-  hexColor: z
-    .string()
-    .trim()
-    .regex(/^#[0-9a-fA-F]{6}$/, { message: "Color must be a 6 character hex code" }),
-};
-
-export const safeString = (max: number, min = 1) =>
-  z.string().trim().min(min, "Value is required").max(max, `Must be ${max} characters or fewer`);
-
-export const optionalSafeString = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max, `Must be ${max} characters or fewer`)
-    .transform((value) => (value === "" ? undefined : value))
-    .optional();
-
-export const optionalEmail = baseSchemas.email.optional().transform((value) => (value === "" ? undefined : value));
-
-export const uuidArray = (max = 200) =>
-  z
-    .array(baseSchemas.uuid)
-    .max(max, { message: `Provide ${max} recipients or fewer` })
-    .transform((values) => Array.from(new Set(values)));
-
+/**
+ * Validates JSON request body against a Zod schema.
+ * Next.js-specific - uses Request object.
+ */
 export async function validateJson<T>(
   request: Request,
   schema: z.ZodSchema<T>,
@@ -83,6 +58,10 @@ export async function validateJson<T>(
   return parsed.data;
 }
 
+/**
+ * Creates a NextResponse for validation errors.
+ * Next.js-specific.
+ */
 export function validationErrorResponse(error: ValidationError) {
   return NextResponse.json(
     {
