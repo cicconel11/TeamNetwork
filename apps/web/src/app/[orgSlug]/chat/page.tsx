@@ -4,7 +4,7 @@ import { Card, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { ChatGroupCard } from "@/components/chat/ChatGroupCard";
-import type { ChatGroup, ChatGroupMember } from "@/types/database";
+import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
 
 interface ChatPageProps {
   params: Promise<{ orgSlug: string }>;

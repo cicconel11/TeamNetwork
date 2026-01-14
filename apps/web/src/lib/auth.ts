@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { UserRole } from "@/types/database";
+import type { UserRole } from "@teammeet/types";
 import { normalizeRole } from "./auth/role-utils";
 
 export async function getCurrentUser() {

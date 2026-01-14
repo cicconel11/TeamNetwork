@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, Button } from "@/components/ui";
-import type { PhilanthropyEmbed } from "@/types/database";
+import type { PhilanthropyEmbed } from "@teammeet/types";
 
 interface EmbedViewerProps {
   embeds: PhilanthropyEmbed[];

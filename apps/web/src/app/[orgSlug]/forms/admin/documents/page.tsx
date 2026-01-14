@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
-import type { FormDocument } from "@/types/database";
+import type { FormDocument } from "@teammeet/types";
 
 interface AdminDocumentsPageProps {
   params: Promise<{ orgSlug: string }>;

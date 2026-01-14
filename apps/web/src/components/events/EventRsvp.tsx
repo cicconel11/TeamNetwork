@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { RsvpStatus } from "@/types/database";
+import type { RsvpStatus } from "@teammeet/types";
 
 interface EventRsvpProps {
   eventId: string;

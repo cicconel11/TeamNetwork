@@ -11,7 +11,7 @@ import {
   validationErrorResponse,
 } from "@/lib/security/validation";
 import { z } from "zod";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

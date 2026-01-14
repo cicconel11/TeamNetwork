@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import type { MembershipStatus, Organization, UserRole } from "@/types/database";
+import type { MembershipStatus, Organization, UserRole } from "@teammeet/types";
 import { normalizeRole, roleFlags, type OrgRole } from "./role-utils";
 import { getGracePeriodInfo, type GracePeriodInfo, type SubscriptionStatus } from "@/lib/subscription/grace-period";
 

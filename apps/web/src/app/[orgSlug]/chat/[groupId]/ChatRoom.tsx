@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Badge, Avatar } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@/types/database";
+import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@teammeet/types";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 
 interface ChatRoomProps {

@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import crypto from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 
 // Environment variable helpers
 function getGoogleClientId(): string {

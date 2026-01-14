@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { NotificationPreference } from "@/types/database";
+import type { NotificationPreference } from "@teammeet/types";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { CalendarConnectionCard } from "@/components/settings/CalendarConnectionCard";
 import { SyncPreferencesForm, type SyncPreferences } from "@/components/settings/SyncPreferencesForm";

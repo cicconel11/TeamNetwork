@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { MembershipStatus, UserRole } from "@/types/database";
+import type { MembershipStatus, UserRole } from "@teammeet/types";
 import { normalizeRole, roleFlags, type OrgRole } from "@/lib/auth/role-utils";
 
 type State = {

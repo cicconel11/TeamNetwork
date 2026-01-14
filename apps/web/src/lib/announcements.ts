@@ -1,4 +1,4 @@
-import type { Announcement, MembershipStatus } from "@/types/database";
+import type { Announcement, MembershipStatus } from "@teammeet/types";
 import type { OrgRole } from "./auth/role-utils";
 
 type ViewerContext = {

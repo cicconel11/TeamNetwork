@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "crypto";
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 
 type DbClient = SupabaseClient<Database, "public">;
 export type PaymentAttempt = Database["public"]["Tables"]["payment_attempts"]["Row"];

@@ -1,4 +1,4 @@
-import type { AlumniBucket } from "@/types/database";
+import type { AlumniBucket } from "@teammeet/types";
 
 export const ALUMNI_LIMITS: Record<AlumniBucket, number | null> = {
   none: 0,

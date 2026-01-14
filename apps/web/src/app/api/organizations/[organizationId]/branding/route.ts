@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { baseSchemas } from "@/lib/security/validation";
 import { normalizeRole } from "@/lib/auth/role-utils";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import type { UserRole } from "@/types/database";
+import type { UserRole } from "@teammeet/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

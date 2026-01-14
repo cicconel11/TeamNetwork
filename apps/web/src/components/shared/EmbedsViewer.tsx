@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, EmptyState } from "@/components/ui";
-import type { EmbedType } from "@/types/database";
+import type { EmbedType } from "@teammeet/types";
 
 export interface Embed {
   id: string;

@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireEnv } from "@/lib/env";
-import type { AlumniBucket, Database, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, Database, SubscriptionInterval } from "@teammeet/types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/stripe-events";
 import { checkWebhookRateLimit, getWebhookClientIp } from "@/lib/security/webhook-rate-limit";

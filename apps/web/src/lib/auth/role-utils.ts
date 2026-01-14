@@ -1,4 +1,4 @@
-import type { UserRole } from "@/types/database";
+import type { UserRole } from "@teammeet/types";
 
 export type OrgRole = "admin" | "active_member" | "alumni";
 

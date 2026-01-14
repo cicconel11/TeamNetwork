@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { Alumni } from "@/types/database";
+import type { Alumni } from "@teammeet/types";
 
 export default function EditAlumniPage() {
   const router = useRouter();

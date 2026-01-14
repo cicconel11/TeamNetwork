@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
-import type { PhilanthropyEmbed } from "@/types/database";
+import type { PhilanthropyEmbed } from "@teammeet/types";
 
 interface EmbedManagerProps {
   orgId: string;

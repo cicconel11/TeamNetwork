@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

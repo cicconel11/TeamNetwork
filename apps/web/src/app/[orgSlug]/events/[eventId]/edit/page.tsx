@@ -7,7 +7,7 @@ import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { Event, EventType } from "@/types/database";
+import type { Event, EventType } from "@teammeet/types";
 
 export default function EditEventPage() {
   const router = useRouter();

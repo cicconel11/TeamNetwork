@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
-import type { EmbedType } from "@/types/database";
+import type { EmbedType } from "@teammeet/types";
 
 export interface Embed {
   id: string;

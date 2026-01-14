@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import type { Organization } from "@/types/database";
+import type { Organization } from "@teammeet/types";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
 

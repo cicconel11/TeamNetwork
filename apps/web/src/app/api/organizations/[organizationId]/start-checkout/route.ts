@@ -10,7 +10,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

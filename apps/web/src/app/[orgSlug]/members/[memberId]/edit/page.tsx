@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { Member } from "@/types/database";
+import type { Member } from "@teammeet/types";
 
 export default function EditMemberPage() {
   const router = useRouter();

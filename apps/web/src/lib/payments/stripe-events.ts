@@ -1,5 +1,5 @@
 import type { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 
 type DbClient = SupabaseClient<Database, "public">;
 export type StripeEventRow = Database["public"]["Tables"]["stripe_events"]["Row"];

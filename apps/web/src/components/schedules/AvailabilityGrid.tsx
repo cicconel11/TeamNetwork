@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { AcademicSchedule, User } from "@/types/database";
+import type { AcademicSchedule, User } from "@teammeet/types";
 
 interface AvailabilityGridProps {
   schedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];

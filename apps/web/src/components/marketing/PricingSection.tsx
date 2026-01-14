@@ -9,7 +9,7 @@ import {
   getTotalPrice,
   formatPrice,
 } from "@/lib/pricing";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 const ALUMNI_TIERS: Exclude<AlumniBucket, "none">[] = [
   "0-250",

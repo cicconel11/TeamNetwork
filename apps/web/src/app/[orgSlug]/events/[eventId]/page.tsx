@@ -5,7 +5,7 @@ import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { EventRsvp, AttendanceList, EventDeleteButton } from "@/components/events";
-import type { RsvpStatus } from "@/types/database";
+import type { RsvpStatus } from "@teammeet/types";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;

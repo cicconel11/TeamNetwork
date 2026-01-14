@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input, Card, Textarea } from "@/components/ui";
 import { useIdempotencyKey } from "@/hooks";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 
 export default function CreateOrgPage() {
   const router = useRouter();

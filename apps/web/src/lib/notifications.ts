@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@/types/database";
+import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@teammeet/types";
 
 export type DeliveryChannel = "email" | "sms";
 

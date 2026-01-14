@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { isOrgAdmin, getCurrentUser } from "@/lib/auth";
 import { ChatRoom } from "./ChatRoom";
-import type { ChatGroup, ChatGroupMember, User } from "@/types/database";
+import type { ChatGroup, ChatGroupMember, User } from "@teammeet/types";
 
 interface ChatGroupPageProps {
   params: Promise<{ orgSlug: string; groupId: string }>;

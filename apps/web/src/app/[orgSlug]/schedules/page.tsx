@@ -7,7 +7,7 @@ import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
 import { ScheduleFilesSection } from "@/components/schedules/ScheduleFilesSection";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { AcademicSchedule, ScheduleFile, User } from "@/types/database";
+import type { AcademicSchedule, ScheduleFile, User } from "@teammeet/types";
 
 interface SchedulesPageProps {
   params: Promise<{ orgSlug: string }>;

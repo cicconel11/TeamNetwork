@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
-import type { Organization, Alumni } from "@/types/database";
+import type { Organization, Alumni } from "@teammeet/types";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;

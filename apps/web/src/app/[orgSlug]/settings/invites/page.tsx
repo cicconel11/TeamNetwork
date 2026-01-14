@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Input, Select, Badge } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
-import type { AlumniBucket } from "@/types/database";
+import type { AlumniBucket } from "@teammeet/types";
 import { ALUMNI_LIMITS } from "@/lib/alumni-quota";
 
 interface Invite {

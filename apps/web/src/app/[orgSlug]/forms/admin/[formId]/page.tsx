@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { ExportCSVButton } from "@/components/forms/ExportCSVButton";
-import type { Form, FormSubmission, FormField, User } from "@/types/database";
+import type { Form, FormSubmission, FormField, User } from "@teammeet/types";
 
 interface FormSubmissionsPageProps {
   params: Promise<{ orgSlug: string; formId: string }>;

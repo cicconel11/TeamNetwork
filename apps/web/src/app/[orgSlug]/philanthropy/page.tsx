@@ -8,7 +8,7 @@ import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { OrganizationDonationStat } from "@/types/database";
+import type { OrganizationDonationStat } from "@teammeet/types";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
 
 interface PhilanthropyPageProps {

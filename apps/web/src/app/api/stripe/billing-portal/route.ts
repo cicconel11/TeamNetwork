@@ -10,7 +10,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

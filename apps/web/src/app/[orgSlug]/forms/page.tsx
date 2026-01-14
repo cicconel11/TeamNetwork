@@ -5,7 +5,7 @@ import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { Form, FormDocument } from "@/types/database";
+import type { Form, FormDocument } from "@teammeet/types";
 
 interface FormsPageProps {
   params: Promise<{ orgSlug: string }>;

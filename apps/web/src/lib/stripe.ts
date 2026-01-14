@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
 import { requireEnv } from "./env";
 
 const stripeSecretKey = requireEnv("STRIPE_SECRET_KEY");

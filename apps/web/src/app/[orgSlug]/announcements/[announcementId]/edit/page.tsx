@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import type { Announcement, AnnouncementAudience } from "@/types/database";
+import type { Announcement, AnnouncementAudience } from "@teammeet/types";
 
 type TargetUser = {
   id: string;

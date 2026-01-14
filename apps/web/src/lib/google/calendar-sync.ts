@@ -1,6 +1,6 @@
 import { google, calendar_v3 } from "googleapis";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { Database } from "@teammeet/types";
 import {
     getValidAccessToken,
 } from "./oauth";

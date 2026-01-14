@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { OrgSidebar } from "./OrgSidebar";
-import type { Organization } from "@/types/database";
+import type { Organization } from "@teammeet/types";
 import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface MobileNavProps {
