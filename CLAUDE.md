@@ -2,14 +2,49 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Monorepo Structure
+
+This is an npm workspaces monorepo:
+
+```
+TeamMeet/
+├── apps/
+│   ├── web/                    # Next.js 14 web application
+│   │   ├── src/
+│   │   ├── public/
+│   │   ├── tests/
+│   │   └── package.json
+│   └── mobile/                 # Expo React Native application
+│       ├── app/                # Expo Router screens
+│       ├── src/                # Mobile-specific code
+│       └── package.json
+├── packages/
+│   ├── core/                   # Shared business logic (@teammeet/core)
+│   ├── types/                  # TypeScript types (@teammeet/types)
+│   └── validation/             # Zod schemas (@teammeet/validation)
+├── supabase/                   # Database migrations
+├── docs/                       # Documentation
+└── package.json                # Root workspace config
+```
+
 ## Commands
 
 ### Development
 ```bash
 npm run dev          # Start Next.js dev server at localhost:3000
+npm run dev:web      # Same as above
+npm run dev:mobile   # Start Expo dev server
 npm run build        # Build production application
 npm run start        # Start production server
 npm run lint         # Run ESLint
+```
+
+### Mobile Development
+```bash
+cd apps/mobile
+npx expo start        # Start Expo dev server
+npx expo run:ios      # Build and run on iOS simulator
+npx expo run:android  # Build and run on Android emulator
 ```
 
 ### Testing
@@ -112,13 +147,15 @@ Robust payment handling to prevent double charges:
 Files: `src/lib/payments/idempotency.ts`, `src/lib/payments/stripe-events.ts`
 
 ### Organization Subscription Tiers
-Alumni quota tiers determine pricing and storage limits:
-- 0-200 alumni
-- 201-600 alumni
-- 601-1500 alumni
-- 1500+ (requires custom setup)
+Alumni quota tiers determine pricing and add-on costs:
+- 0-250 alumni (+$10/mo or $100/yr)
+- 251-500 alumni (+$20/mo or $200/yr)
+- 501-1000 alumni (+$35/mo or $350/yr)
+- 1001-2500 alumni (+$60/mo or $600/yr)
+- 2500-5000 alumni (+$100/mo or $1000/yr)
+- 5000+ (requires custom setup - sales-led)
 
-File: `src/lib/alumni-quota.ts`
+File: `packages/core/src/pricing/index.ts`
 
 ### Soft Delete Pattern
 Most tables use `deleted_at` timestamp instead of hard deletes. Always filter: `.is("deleted_at", null)` when querying.
@@ -168,6 +205,62 @@ Required variables (validated at build time in `next.config.mjs`):
 Stored in `.env.local` (never commit this file).
 
 Use `SKIP_STRIPE_VALIDATION=true` in dev to skip Stripe price ID validation.
+
+### Mobile Environment Variables (apps/mobile/.env.local)
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+
+## Shared Packages
+
+Import shared code using package names:
+
+```typescript
+// In apps/web or apps/mobile
+import { normalizeRole, roleFlags } from "@teammeet/core";
+import type { Organization, UserRole } from "@teammeet/types";
+import { baseSchemas, validateOrgName, z } from "@teammeet/validation";
+```
+
+### @teammeet/core
+Shared business logic:
+- `normalizeRole()`, `roleFlags()` - Role normalization and checks
+- `filterAnnouncementsForUser()` - Announcement audience filtering
+- Pricing constants: `BASE_PRICES`, `ALUMNI_ADD_ON_PRICES`, `ALUMNI_LIMITS`
+
+### @teammeet/types
+Supabase-generated TypeScript types:
+- `Database`, `Tables<T>`, `Enums<T>` - Database type helpers
+- `Organization`, `UserRole`, `AlumniBucket`, etc.
+
+### @teammeet/validation
+Zod schemas for validation:
+- `baseSchemas` - Common validators (uuid, slug, email)
+- `safeString()`, `uuidArray()` - Schema builders
+
+## Mobile App Architecture
+
+- **Framework**: Expo SDK 54 with Expo Router
+- **Auth**: Supabase with AsyncStorage (not cookies)
+- **Styling**: React Native StyleSheet (not Tailwind)
+- **Navigation**: File-based routing via Expo Router
+
+### Mobile Supabase Client
+
+Mobile uses a different Supabase client configuration:
+
+```typescript
+// apps/mobile/src/lib/supabase.ts
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+export const supabase = createClient(url, key, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
+```
 
 ## Coding Conventions
 

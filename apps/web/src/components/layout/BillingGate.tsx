@@ -96,7 +96,7 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
           <p className="text-sm text-muted-foreground">{friendlyStatus}</p>
           {status === "pending_sales" && (
             <p className="text-amber-600 dark:text-amber-400 text-sm">
-              You selected the 1500+ alumni option. Our team will reach out to finalize pricing.
+              You selected the 5000+ alumni option. Our team will reach out to finalize pricing.
             </p>
           )}
         </div>
