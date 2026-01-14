@@ -1,40 +1,13 @@
-import type { AlumniBucket, SubscriptionInterval } from "@teammeet/types";
+// Re-export from shared core package
+export {
+  BASE_PRICES,
+  ALUMNI_ADD_ON_PRICES,
+  ALUMNI_BUCKET_LABELS,
+  getTotalPrice,
+  formatPrice,
+} from "@teammeet/core";
 
-export const BASE_PRICES = {
-  month: 15,
-  year: 150,
-} as const;
-
-export const ALUMNI_ADD_ON_PRICES: Record<Exclude<AlumniBucket, "none">, { month: number; year: number }> = {
-  "0-250": { month: 10, year: 100 },
-  "251-500": { month: 20, year: 200 },
-  "501-1000": { month: 35, year: 350 },
-  "1001-2500": { month: 60, year: 600 },
-  "2500-5000": { month: 100, year: 1000 },
-  "5000+": { month: 0, year: 0 },
-};
-
-export const ALUMNI_BUCKET_LABELS: Record<AlumniBucket, string> = {
-  none: "No alumni access",
-  "0-250": "0–250 alumni",
-  "251-500": "251–500 alumni",
-  "501-1000": "501–1,000 alumni",
-  "1001-2500": "1,001–2,500 alumni",
-  "2500-5000": "2,500–5,000 alumni",
-  "5000+": "5,000+ alumni (custom)",
-};
-
-export function getTotalPrice(interval: SubscriptionInterval, alumniBucket: AlumniBucket): number | null {
-  if (alumniBucket === "5000+") return null;
-  const base = BASE_PRICES[interval];
-  const addon = alumniBucket === "none" ? 0 : ALUMNI_ADD_ON_PRICES[alumniBucket][interval];
-  return base + addon;
-}
-
-export function formatPrice(amount: number, interval: SubscriptionInterval): string {
-  return interval === "month" ? `$${amount}/mo` : `$${amount}/yr`;
-}
-
+// Web-specific marketing content (not shared with mobile)
 export const FEATURES = [
   { title: "Roster Management", description: "Maintain a living history of every athlete, coach, and alumni who's ever worn the jersey." },
   { title: "Team Events", description: "Coordinate game days, banquets, alumni games, and fundraisers with RSVP tracking." },
