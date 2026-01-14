@@ -1,0 +1,55 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@teammeet/types";
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Missing Supabase credentials. Check EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env.local"
+  );
+}
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+  },
+});
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error("Sign out error:", error);
+  }
+}
+
+export async function getSession() {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session;
+}
+
+export async function getCurrentUser() {
+  const session = await getSession();
+  if (!session?.user) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error) {
+    console.error("Error fetching user:", error);
+    return null;
+  }
+
+  return data;
+}

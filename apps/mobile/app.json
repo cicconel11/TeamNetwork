@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "TeamMeet",
+    "slug": "teammeet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.myteamnetwork.teammeet"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.myteamnetwork.teammeet"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "teammeet",
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": false
+        }
+      ]
+    ]
+  }
+}
