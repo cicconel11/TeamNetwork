@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cec6099c-d863-4733-9477-1d682f1e0092"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.mleonard1616.teammeet",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
