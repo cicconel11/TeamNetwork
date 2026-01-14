@@ -1,6 +1,6 @@
 # TeamMeet Monorepo Migration Progress
 
-**Last Updated:** Phase 2.3 completed. Next: Phase 3.1 (Expo mobile app init)
+**Last Updated:** Phase 3.1 completed. Next: Phase 3.2 (Mobile auth screens)
 
 ## Quick Status
 
@@ -10,8 +10,8 @@
 | Phase 2.1 | @teammeet/types | DONE | `0927533` |
 | Phase 2.2 | @teammeet/validation | DONE | `06b3c1c` |
 | Phase 2.3 | @teammeet/core | DONE | `b167c74` |
-| Phase 3.1 | Expo App Init | **NEXT** | - |
-| Phase 3.2 | Mobile Auth Screens | Pending | - |
+| Phase 3.1 | Expo App Init | DONE | - |
+| Phase 3.2 | Mobile Auth Screens | **NEXT** | - |
 | Phase 4.1 | Org Selection Screen | Pending | - |
 | Phase 4.2 | Members Directory | Pending | - |
 | Phase 4.3 | Announcements Feed | Pending | - |
@@ -23,35 +23,31 @@
 
 ---
 
-## NEXT TASK: Phase 3.1 - Initialize Expo Mobile App
+## NEXT TASK: Phase 3.2 - Mobile Auth Screens
 
 ### What to do
 
-1. Create `apps/mobile/package.json` with Expo dependencies:
-   - expo, expo-router, expo-auth-session, expo-web-browser
-   - @react-native-async-storage/async-storage
-   - @supabase/supabase-js
-   - @teammeet/core, @teammeet/types, @teammeet/validation
+1. Create auth layout at `apps/mobile/app/(auth)/_layout.tsx`
+   - Simple stack layout without header
+   - No back button on first screen
 
-2. Create `apps/mobile/app.json` with Expo config:
-   - scheme: "teammeet" (for deep linking)
-   - bundleIdentifier: "com.myteamnetwork.teammeet"
+2. Create login screen at `apps/mobile/app/(auth)/login.tsx`
+   - Email/password input
+   - Sign up link
+   - Calls `supabase.auth.signInWithPassword()`
 
-3. Create `apps/mobile/tsconfig.json`
+3. Create sign up screen at `apps/mobile/app/(auth)/signup.tsx`
+   - Email/password input
+   - Login link
+   - Calls `supabase.auth.signUp()`
 
-4. Create Supabase client with AsyncStorage:
-   - File: `apps/mobile/src/lib/supabase.ts`
-   - Uses AsyncStorage instead of cookies
+4. Create app layout at `apps/mobile/app/(app)/_layout.tsx`
+   - Tab-based navigation (placeholder for Phase 4+)
+   - Protected route (user must be authenticated)
 
-5. Create root layout with auth redirect:
-   - File: `apps/mobile/app/_layout.tsx`
-   - Redirects to login if not authenticated
-
-### Key Difference from Web
-
-- Web uses `@supabase/ssr` with cookies
-- Mobile uses `@supabase/supabase-js` with AsyncStorage
-- RLS policies work unchanged (JWT-based)
+5. Create loading indicator during auth state check
+   - Show splash screen or loading spinner
+   - File: `apps/mobile/src/components/LoadingScreen.tsx`
 
 ---
 
@@ -116,6 +112,31 @@
 - Pricing: `BASE_PRICES`, `ALUMNI_ADD_ON_PRICES`, `ALUMNI_BUCKET_LABELS`, `ALUMNI_LIMITS`, `getTotalPrice`, `formatPrice`, `getAlumniLimit`, `normalizeBucket`
 - Announcements: `filterAnnouncementsForUser`, `ViewerContext`
 
+### Phase 3.1: Expo Mobile App Initialization
+
+**Package:** `apps/mobile/`
+```
+├── package.json         # Expo dependencies + shared packages
+├── app.json            # Expo config with deep linking
+├── tsconfig.json       # TypeScript config with path aliases
+├── .env.local          # Supabase env vars
+├── src/
+│   ├── lib/
+│   │   └── supabase.ts # Supabase client with AsyncStorage
+│   └── components/     # (for future screens)
+└── app/
+    ├── _layout.tsx     # Root layout with auth redirect
+    ├── (auth)/         # Auth screens group (Phase 3.2)
+    └── (app)/          # Protected app screens group (Phase 4+)
+```
+
+**Key Files:**
+- `apps/mobile/src/lib/supabase.ts` - Supabase client configured for mobile
+- `apps/mobile/app/_layout.tsx` - Root navigation with auth check
+- Uses AsyncStorage for session persistence (mobile requirement)
+- Integrates with `@supabase/supabase-js` (not SSR)
+- Ready for Phase 3.2 (login/signup screens)
+
 ---
 
 ## Directory Structure
@@ -128,8 +149,16 @@ TeamMeet/
 │   │   ├── tests/
 │   │   ├── .env.local
 │   │   └── package.json
-│   └── mobile/                 # Expo (to build in Phase 3)
-│       └── .env.local          # Has EXPO_PUBLIC_SUPABASE_* vars
+│   └── mobile/                 # Expo (Phases 3+)
+│       ├── package.json        # Expo + shared package deps
+│       ├── app.json            # Expo config
+│       ├── tsconfig.json       # TypeScript config
+│       ├── .env.local          # EXPO_PUBLIC_SUPABASE_* vars
+│       ├── src/
+│       │   └── lib/
+│       │       └── supabase.ts # Mobile Supabase client
+│       └── app/
+│           └── _layout.tsx     # Root layout
 ├── packages/
 │   ├── types/                  # @teammeet/types ✓
 │   ├── validation/             # @teammeet/validation ✓
