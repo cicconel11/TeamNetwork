@@ -4,11 +4,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -73,7 +73,7 @@ export default function SignupScreen() {
         <Text style={styles.title}>TeamMeet</Text>
         <Text style={styles.subtitle}>Create your account</Text>
 
-        <View style={styles.form}>
+        <View style={styles.formContainer}>
           <TextInput
             style={styles.input}
             placeholder="Email"
@@ -119,11 +119,11 @@ export default function SignupScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
+        <View style={styles.signinContainer}>
+          <Text style={styles.signinText}>Already have an account? </Text>
           <Link href="/(auth)/login" asChild>
             <TouchableOpacity disabled={loading}>
-              <Text style={styles.link}>Sign In</Text>
+              <Text style={styles.signinLink}>Sign In</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     color: "#666",
     marginBottom: 40,
   },
-  form: {
+  formContainer: {
     width: "100%",
     maxWidth: 340,
   },
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     borderColor: "#e0e0e0",
   },
   button: {
-    backgroundColor: "#2563eb",
+    backgroundColor: "#007AFF",
     borderRadius: 12,
     padding: 16,
     alignItems: "center",
@@ -182,16 +182,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
-  footer: {
+  signinContainer: {
     flexDirection: "row",
     marginTop: 32,
   },
-  footerText: {
+  signinText: {
     color: "#666",
     fontSize: 14,
   },
-  link: {
-    color: "#2563eb",
+  signinLink: {
+    color: "#007AFF",
     fontSize: 14,
     fontWeight: "600",
   },

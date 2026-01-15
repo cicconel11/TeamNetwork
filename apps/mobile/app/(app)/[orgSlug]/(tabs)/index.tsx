@@ -2,10 +2,10 @@ import { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
@@ -65,7 +65,7 @@ export default function DashboardScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
@@ -73,7 +73,7 @@ export default function DashboardScreen() {
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
@@ -88,8 +88,8 @@ export default function DashboardScreen() {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.orgName}>{organization?.name}</Text>
-        <Text style={styles.orgSlug}>@{organization?.slug}</Text>
+        <Text style={styles.title}>{organization?.name}</Text>
+        <Text style={styles.slug}>@{organization?.slug}</Text>
       </View>
 
       <View style={styles.card}>
@@ -110,26 +110,21 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
   },
-  center: {
+  centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-  },
   header: {
     marginBottom: 24,
   },
-  orgName: {
+  title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#1a1a1a",
   },
-  orgSlug: {
+  slug: {
     fontSize: 16,
     color: "#666",
     marginTop: 4,
@@ -154,5 +149,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     lineHeight: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#dc2626",
+    textAlign: "center",
   },
 });

@@ -4,9 +4,9 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { signOut } from "@/lib/supabase";
@@ -14,10 +14,8 @@ import { useOrganizations } from "@/hooks/useOrganizations";
 import type { Organization } from "@teammeet/types";
 
 export default function OrganizationsScreen() {
-  console.log("DEBUG: OrganizationsScreen rendering");
   const router = useRouter();
   const { organizations, loading, error, refetch } = useOrganizations();
-  console.log("DEBUG: useOrganizations returned:", { orgsCount: organizations.length, loading, error });
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -46,7 +44,7 @@ export default function OrganizationsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
@@ -54,10 +52,10 @@ export default function OrganizationsScreen() {
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={refetch}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
@@ -69,12 +67,12 @@ export default function OrganizationsScreen() {
         data={organizations}
         keyExtractor={(item) => item.id}
         renderItem={renderOrg}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
+          <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>No organizations</Text>
             <Text style={styles.emptyText}>
               You are not a member of any organizations yet.
@@ -87,21 +85,21 @@ export default function OrganizationsScreen() {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
     </View>
-    );
-  }
+  );
+}
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  center: {
+  centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
-  list: {
+  listContent: {
     padding: 16,
     paddingBottom: 80,
   },
@@ -136,7 +134,24 @@ const styles = StyleSheet.create({
     color: "#ccc",
     marginLeft: 8,
   },
-  empty: {
+  errorText: {
+    fontSize: 16,
+    color: "#dc2626",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: "#007AFF",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  emptyContainer: {
     alignItems: "center",
     paddingVertical: 48,
   },
@@ -150,23 +165,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     textAlign: "center",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: "#2563eb",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
   },
   signOutButton: {
     position: "absolute",

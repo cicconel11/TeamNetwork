@@ -6,6 +6,7 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
+// Monorepo support
 config.watchFolders = [workspaceRoot];
 
 config.resolver.nodeModulesPaths = [
