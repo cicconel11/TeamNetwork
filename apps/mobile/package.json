@@ -4,14 +4,17 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "EXPO_USE_WATCHMAN=1 expo start",
+    "dev:mobile": "EXPO_USE_WATCHMAN=1 expo start",
     "android": "EXPO_USE_WATCHMAN=1 expo start --android",
     "ios": "EXPO_USE_WATCHMAN=1 expo start --ios",
-    "web": "EXPO_USE_WATCHMAN=1 expo start --web"
+    "web": "EXPO_USE_WATCHMAN=1 expo start --web",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.39.6",
     "@teammeet/core": "*",
+    "@teammeet/supabase": "*",
     "@teammeet/types": "*",
     "@teammeet/validation": "*",
     "expo": "^54.0.31",
@@ -32,6 +35,7 @@
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@types/react": "~19.1.10",
+    "babel-preset-expo": "^54.0.9",
     "typescript": "~5.9.2"
   },
   "private": true

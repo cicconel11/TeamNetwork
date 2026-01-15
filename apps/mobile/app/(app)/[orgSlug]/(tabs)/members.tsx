@@ -2,10 +2,10 @@ import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   ActivityIndicator,
   RefreshControl,
   Image,
+  StyleSheet,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useMembers } from "@/hooks/useMembers";
@@ -18,7 +18,7 @@ export default function MembersScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
@@ -26,7 +26,7 @@ export default function MembersScreen() {
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
@@ -52,7 +52,7 @@ export default function MembersScreen() {
     <FlatList
       data={members}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={styles.listContent}
       refreshControl={
         <RefreshControl refreshing={false} onRefresh={refetch} />
       }
@@ -68,7 +68,7 @@ export default function MembersScreen() {
                 style={styles.avatar}
               />
             ) : (
-              <View style={styles.avatar}>
+              <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarText}>{getInitials(item)}</Text>
               </View>
             )}
@@ -82,7 +82,7 @@ export default function MembersScreen() {
         );
       }}
       ListEmptyComponent={
-        <View style={styles.empty}>
+        <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No members found</Text>
         </View>
       }
@@ -91,18 +91,13 @@ export default function MembersScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: {
+  centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-  },
-  list: {
+  listContent: {
     padding: 16,
   },
   memberCard: {
@@ -119,6 +114,12 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+  },
+  avatarPlaceholder: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -145,12 +146,17 @@ const styles = StyleSheet.create({
     color: "#666",
     marginTop: 2,
   },
-  empty: {
+  emptyContainer: {
     alignItems: "center",
     paddingVertical: 48,
   },
   emptyText: {
     fontSize: 14,
     color: "#666",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#dc2626",
+    textAlign: "center",
   },
 });

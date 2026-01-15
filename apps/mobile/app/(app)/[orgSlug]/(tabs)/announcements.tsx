@@ -2,9 +2,9 @@ import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  StyleSheet,
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
@@ -25,7 +25,7 @@ export default function AnnouncementsScreen() {
 
   if (loading && announcements.length === 0) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
@@ -33,7 +33,7 @@ export default function AnnouncementsScreen() {
 
   if (error) {
     return (
-      <View style={styles.center}>
+      <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
@@ -43,12 +43,12 @@ export default function AnnouncementsScreen() {
     <View style={styles.card}>
       {item.is_pinned && (
         <View style={styles.pinnedBadge}>
-          <Text style={styles.pinnedText}>Pinned</Text>
+          <Text style={styles.pinnedText}>PINNED</Text>
         </View>
       )}
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.date}>{formatDate(item.created_at ?? "")}</Text>
-      <Text style={styles.body} numberOfLines={4}>
+      <Text style={styles.cardTitle}>{item.title}</Text>
+      <Text style={styles.cardDate}>{formatDate(item.created_at ?? "")}</Text>
+      <Text style={styles.cardBody} numberOfLines={4}>
         {item.body}
       </Text>
     </View>
@@ -58,7 +58,7 @@ export default function AnnouncementsScreen() {
     <FlatList
       data={announcements}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={styles.listContent}
       renderItem={renderAnnouncement}
       refreshControl={
         <RefreshControl refreshing={loading} onRefresh={refetch} />
@@ -66,7 +66,7 @@ export default function AnnouncementsScreen() {
       ListEmptyComponent={
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>No Announcements</Text>
-          <Text style={styles.emptySubtitle}>
+          <Text style={styles.emptyText}>
             Check back later for news and updates.
           </Text>
         </View>
@@ -76,17 +76,13 @@ export default function AnnouncementsScreen() {
 }
 
 const styles = StyleSheet.create({
-  center: {
+  centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  errorText: {
-    color: "#dc2626",
-    fontSize: 14,
-  },
-  list: {
+  listContent: {
     padding: 16,
     flexGrow: 1,
   },
@@ -110,32 +106,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   pinnedText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
     color: "#d97706",
     textTransform: "uppercase",
   },
-  title: {
+  cardTitle: {
     fontSize: 18,
     fontWeight: "600",
     color: "#1a1a1a",
     marginBottom: 4,
   },
-  date: {
+  cardDate: {
     fontSize: 12,
-    color: "#999",
+    color: "#9ca3af",
     marginBottom: 8,
   },
-  body: {
+  cardBody: {
     fontSize: 14,
-    color: "#333",
+    color: "#374151",
     lineHeight: 20,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 60,
+    paddingVertical: 64,
   },
   emptyTitle: {
     fontSize: 18,
@@ -143,8 +139,12 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     marginBottom: 8,
   },
-  emptySubtitle: {
+  emptyText: {
     fontSize: 14,
     color: "#666",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#dc2626",
   },
 });

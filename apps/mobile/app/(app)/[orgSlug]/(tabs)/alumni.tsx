@@ -6,9 +6,9 @@ export default function AlumniScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.placeholder}>
+      <View style={styles.content}>
         <Text style={styles.title}>Alumni Directory</Text>
-        <Text style={styles.subtitle}>Coming soon</Text>
+        <Text style={styles.comingSoon}>Coming soon</Text>
         <Text style={styles.description}>
           View and connect with alumni from {orgSlug}.
         </Text>
@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 24,
   },
-  placeholder: {
+  content: {
     alignItems: "center",
   },
   title: {
@@ -34,9 +34,9 @@ const styles = StyleSheet.create({
     color: "#1a1a1a",
     marginBottom: 8,
   },
-  subtitle: {
+  comingSoon: {
     fontSize: 16,
-    color: "#2563eb",
+    color: "#007AFF",
     fontWeight: "500",
     marginBottom: 16,
   },
