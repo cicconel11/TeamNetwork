@@ -12,7 +12,7 @@ import type { Announcement } from "@teammeet/types";
 
 export default function AnnouncementsScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { announcements, loading, error, refetch } = useAnnouncements(orgSlug);
+  const { announcements, loading, error, refetch } = useAnnouncements(orgSlug || "");
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

@@ -1,0 +1,11 @@
+# Exclude mobile app from Vercel deployment
+apps/mobile
+
+# Exclude documentation
+*.md
+docs/
+
+# Exclude development files
+.turbo/
+playwright-report/
+scripts/

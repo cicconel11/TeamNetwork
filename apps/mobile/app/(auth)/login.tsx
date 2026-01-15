@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -17,11 +16,14 @@ import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
+import { showAlert } from "@/utils/alert";
 
 WebBrowser.maybeCompleteAuthSession();
 
 // Determine if running in Expo Go vs dev-client/standalone
 const isExpoGo = Constants.appOwnership === "expo";
+// Check if running in web browser (Expo web mode)
+const isWeb = Platform.OS === "web";
 
 export default function LoginScreen() {
   // Form state
@@ -34,32 +36,55 @@ export default function LoginScreen() {
 
   const isLoading = emailLoading || googleLoading;
 
+  // Dev login - bypasses auth for local development
+  const handleDevLogin = async () => {
+    setEmailLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: "mleonard1616@gmail.com",
+        password: "dev123",
+      });
+      if (error) {
+        showAlert("Dev Login Error", error.message);
+      }
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   // Email/Password sign in
   const handleEmailSignIn = async () => {
+    console.log("Sign in attempt:", email.trim().toLowerCase());
+
     if (!email.trim()) {
-      Alert.alert("Error", "Please enter your email");
+      showAlert("Error", "Please enter your email");
       return;
     }
     if (!password) {
-      Alert.alert("Error", "Please enter your password");
+      showAlert("Error", "Please enter your password");
       return;
     }
 
     setEmailLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
 
+      console.log("Sign in result:", { data, error });
+
       if (error) {
-        Alert.alert("Error", error.message);
+        console.error("Sign in error:", error);
+        showAlert("Error", error.message);
         return;
       }
 
+      console.log("Sign in successful, session:", data.session?.user?.email);
       // Navigation happens automatically via _layout.tsx onAuthStateChange
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      console.error("Sign in exception:", e);
+      showAlert("Error", (e as Error).message);
     } finally {
       setEmailLoading(false);
     }
@@ -67,13 +92,12 @@ export default function LoginScreen() {
 
   // Google OAuth sign in
   const signInWithGoogle = async () => {
-    // In Expo Go, Google OAuth has limitations due to redirect URI restrictions
-    // Show a helpful message for Expo Go users
-    if (isExpoGo) {
-      Alert.alert(
-        "Expo Go Limitation",
-        "Google Sign-In requires a development build. Please use email/password to sign in while testing in Expo Go, or create a development build for full OAuth support.",
-        [{ text: "OK" }]
+    // In Expo Go or Web mode, Google OAuth has limitations due to redirect URI restrictions
+    // OAuth redirects would go to the production web app, not back to this app
+    if (isExpoGo || isWeb) {
+      showAlert(
+        isWeb ? "Web Mode Limitation" : "Expo Go Limitation",
+        "Google Sign-In is not available in this mode. Please use email/password to sign in, or use the native mobile app for Google OAuth support."
       );
       return;
     }
@@ -81,9 +105,9 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       // For dev/prod builds, use the custom scheme
-      const redirectUri = makeRedirectUri({ 
-        scheme: "teammeet", 
-        path: "(auth)/callback" 
+      const redirectUri = makeRedirectUri({
+        scheme: "teammeet",
+        path: "(auth)/callback"
       });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -105,17 +129,17 @@ export default function LoginScreen() {
         if (result.type === "success") {
           // Extract tokens from the result URL
           const url = new URL(result.url);
-          
+
           // Check hash fragment first (standard OAuth implicit flow)
           let accessToken: string | null = null;
           let refreshToken: string | null = null;
-          
+
           if (url.hash) {
             const hashParams = new URLSearchParams(url.hash.substring(1));
             accessToken = hashParams.get("access_token");
             refreshToken = hashParams.get("refresh_token");
           }
-          
+
           // Fall back to query params
           if (!accessToken) {
             accessToken = url.searchParams.get("access_token");
@@ -137,14 +161,14 @@ export default function LoginScreen() {
           if (!verifyData.session) {
             throw new Error("Session failed to persist. Please try again.");
           }
-          
+
           // Session is set, navigation will happen automatically via _layout.tsx
         } else if (result.type === "cancel") {
           // User cancelled, do nothing
         }
       }
     } catch (error) {
-      Alert.alert("Error", (error as Error).message);
+      showAlert("Error", (error as Error).message);
     } finally {
       setGoogleLoading(false);
     }
@@ -157,77 +181,88 @@ export default function LoginScreen() {
         style={styles.container}
       >
         <View style={styles.content}>
-        <Text style={styles.title}>TeamMeet</Text>
-        <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.title}>TeamMeet</Text>
+          <Text style={styles.subtitle}>Sign in to continue</Text>
 
-        {/* Email/Password Form */}
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            editable={!isLoading}
-          />
+          {/* Email/Password Form */}
+          <View style={styles.formContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#999"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              editable={!isLoading}
+            />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!isLoading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              editable={!isLoading}
+            />
 
+            <TouchableOpacity
+              style={[styles.button, styles.primaryButton, isLoading && styles.buttonDisabled]}
+              onPress={handleEmailSignIn}
+              disabled={isLoading}
+            >
+              {emailLoading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.buttonText}>Sign In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google OAuth Button */}
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton, isLoading && styles.buttonDisabled]}
-            onPress={handleEmailSignIn}
+            style={[styles.button, styles.googleButton, isLoading && styles.buttonDisabled]}
+            onPress={signInWithGoogle}
             disabled={isLoading}
           >
-            {emailLoading ? (
+            {googleLoading ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={styles.buttonText}>Sign in with Google</Text>
             )}
           </TouchableOpacity>
-        </View>
 
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Google OAuth Button */}
-        <TouchableOpacity
-          style={[styles.button, styles.googleButton, isLoading && styles.buttonDisabled]}
-          onPress={signInWithGoogle}
-          disabled={isLoading}
-        >
-          {googleLoading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.buttonText}>Sign in with Google</Text>
-          )}
-        </TouchableOpacity>
-
-        {/* Sign Up Link */}
-        <View style={styles.signupContainer}>
-          <Text style={styles.signupText}>Don't have an account? </Text>
-          <Link href="/(auth)/signup" asChild>
-            <TouchableOpacity disabled={isLoading}>
-              <Text style={styles.signupLink}>Sign Up</Text>
+          {/* Dev Login - only in development */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={[styles.button, styles.devButton, isLoading && styles.buttonDisabled]}
+              onPress={handleDevLogin}
+              disabled={isLoading}
+            >
+              <Text style={styles.devButtonText}>Dev Login</Text>
             </TouchableOpacity>
-          </Link>
+          )}
+
+          {/* Sign Up Link */}
+          <View style={styles.signupContainer}>
+            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Link href="/(auth)/signup" asChild>
+              <TouchableOpacity disabled={isLoading}>
+                <Text style={styles.signupLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -319,6 +354,19 @@ const styles = StyleSheet.create({
   },
   signupLink: {
     color: "#007AFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  devButton: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: "#f97316",
+    width: "100%",
+    maxWidth: 340,
+    marginTop: 16,
+  },
+  devButtonText: {
+    color: "#f97316",
     fontSize: 14,
     fontWeight: "600",
   },

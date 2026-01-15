@@ -13,7 +13,7 @@ import { useAlumni } from "@/hooks/useAlumni";
 
 export default function AlumniScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { alumni, loading, error, refetch } = useAlumni(orgSlug);
+  const { alumni, loading, error, refetch } = useAlumni(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = async () => {

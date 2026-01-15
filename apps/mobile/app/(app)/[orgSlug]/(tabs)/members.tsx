@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -7,40 +7,103 @@ import {
   RefreshControl,
   Image,
   StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Dimensions,
+  SectionList,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams } from "expo-router";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+} from "react-native-reanimated";
+import { Search, SlidersHorizontal, Users, GraduationCap } from "lucide-react-native";
 import { useMembers } from "@/hooks/useMembers";
+import { useAlumni } from "@/hooks/useAlumni";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { UserRole } from "@teammeet/types";
 
+type TabType = "members" | "alumni";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
 export default function MembersScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { members, loading, error, refetch } = useMembers(orgSlug);
-  const [refreshing, setRefreshing] = useState(false);
+  const { members, loading: membersLoading, error: membersError, refetch: refetchMembers } = useMembers(orgSlug || "");
+  const { alumni, loading: alumniLoading, error: alumniError, refetch: refetchAlumni } = useAlumni(orgSlug || "");
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  };
+  const [activeTab, setActiveTab] = useState<TabType>("members");
+  const [searchQuery, setSearchQuery] = useState("");
+  const tabIndicatorPosition = useSharedValue(0);
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
-  }
+  const handleTabChange = useCallback((tab: TabType) => {
+    setActiveTab(tab);
+    tabIndicatorPosition.value = withTiming(tab === "members" ? 0 : 1, { duration: 200 });
+  }, [tabIndicatorPosition]);
 
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: interpolate(
+          tabIndicatorPosition.value,
+          [0, 1],
+          [0, SCREEN_WIDTH / 2 - 32]
+        ),
+      },
+    ],
+  }));
 
-  const getInitials = (member: (typeof members)[0]) => {
+  // Filter members by search
+  const filteredMembers = useMemo(() => {
+    if (!searchQuery.trim()) return members;
+    const query = searchQuery.toLowerCase();
+    return members.filter((member) => {
+      const name = member.user?.name?.toLowerCase() || "";
+      const email = member.user?.email?.toLowerCase() || "";
+      return name.includes(query) || email.includes(query);
+    });
+  }, [members, searchQuery]);
+
+  // Filter and group alumni by decade
+  const alumniSections = useMemo(() => {
+    let filtered = alumni;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = alumni.filter((a) => {
+        const name = `${a.first_name || ""} ${a.last_name || ""}`.toLowerCase();
+        const company = a.current_company?.toLowerCase() || "";
+        return name.includes(query) || company.includes(query);
+      });
+    }
+
+    // Group by decade
+    const decades = new Map<string, typeof filtered>();
+    filtered.forEach((a) => {
+      const year = a.graduation_year;
+      const decade = year ? `${Math.floor(year / 10) * 10}s` : "Unknown";
+      if (!decades.has(decade)) {
+        decades.set(decade, []);
+      }
+      decades.get(decade)!.push(a);
+    });
+
+    // Sort decades descending
+    return Array.from(decades.entries())
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([decade, data]) => ({ title: decade, data }));
+  }, [alumni, searchQuery]);
+
+  const loading = membersLoading || alumniLoading;
+  const error = membersError || alumniError;
+
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([refetchMembers(), refetchAlumni()]);
+  }, [refetchMembers, refetchAlumni]);
+
+  const getMemberInitials = (member: (typeof members)[0]) => {
     const name = member.user?.name;
     if (name) {
       const parts = name.split(" ");
@@ -52,66 +115,246 @@ export default function MembersScreen() {
     return member.user?.email?.[0]?.toUpperCase() || "?";
   };
 
-  const getDisplayName = (member: (typeof members)[0]) => {
-    return member.user?.name || member.user?.email || "Unknown";
+  const getAlumniInitials = (a: (typeof alumni)[0]) => {
+    const first = a.first_name?.[0] || "";
+    const last = a.last_name?.[0] || "";
+    return (first + last).toUpperCase() || "?";
   };
 
-  return (
-    <FlatList
-      data={members}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-      renderItem={({ item }) => {
-        const role = normalizeRole(item.role as UserRole | null);
-        const { isAdmin } = roleFlags(role);
+  const renderMemberItem = ({ item }: { item: (typeof members)[0] }) => {
+    const role = normalizeRole(item.role as UserRole | null);
+    const { isAdmin } = roleFlags(role);
 
-        return (
-          <View style={styles.memberCard}>
-            {item.user?.avatar_url ? (
-              <Image
-                source={{ uri: item.user.avatar_url }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>{getInitials(item)}</Text>
-              </View>
-            )}
-            <View style={styles.memberInfo}>
-              <Text style={styles.memberName}>{getDisplayName(item)}</Text>
-              <Text style={styles.memberRole}>
-                {isAdmin ? "Admin" : "Member"}
-              </Text>
-            </View>
+    return (
+      <TouchableOpacity style={styles.personCard} activeOpacity={0.7}>
+        {item.user?.avatar_url ? (
+          <Image source={{ uri: item.user.avatar_url }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>{getMemberInitials(item)}</Text>
           </View>
-        );
-      }}
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No members found</Text>
+        )}
+        <View style={styles.personInfo}>
+          <Text style={styles.personName} numberOfLines={1}>
+            {item.user?.name || item.user?.email || "Unknown"}
+          </Text>
+          <Text style={styles.personDetail}>{isAdmin ? "Admin" : "Member"}</Text>
         </View>
-      }
-    />
+      </TouchableOpacity>
+    );
+  };
+
+  const renderAlumniItem = ({ item }: { item: (typeof alumni)[0] }) => {
+    const name = [item.first_name, item.last_name].filter(Boolean).join(" ") || "Unknown";
+    const detail = [item.graduation_year, item.current_company].filter(Boolean).join(" · ");
+
+    return (
+      <TouchableOpacity style={styles.personCard} activeOpacity={0.7}>
+        {item.photo_url ? (
+          <Image source={{ uri: item.photo_url }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarPlaceholder}>
+            <Text style={styles.avatarText}>{getAlumniInitials(item)}</Text>
+          </View>
+        )}
+        <View style={styles.personInfo}>
+          <Text style={styles.personName} numberOfLines={1}>{name}</Text>
+          <Text style={styles.personDetail} numberOfLines={1}>{detail || "Alumni"}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionHeaderText}>{section.title}</Text>
+    </View>
+  );
+
+  const renderEmptyMembers = () => (
+    <View style={styles.emptyContainer}>
+      <Users size={48} color="#9ca3af" />
+      <Text style={styles.emptyTitle}>No members found</Text>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery ? "Try a different search" : "Members will appear here"}
+      </Text>
+    </View>
+  );
+
+  const renderEmptyAlumni = () => (
+    <View style={styles.emptyContainer}>
+      <GraduationCap size={48} color="#9ca3af" />
+      <Text style={styles.emptyTitle}>No alumni found</Text>
+      <Text style={styles.emptySubtitle}>
+        {searchQuery ? "Try a different search" : "Alumni will appear here"}
+      </Text>
+    </View>
+  );
+
+  if (loading && members.length === 0 && alumni.length === 0) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={20} color="#9ca3af" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name..."
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+        <TouchableOpacity style={styles.filterButton}>
+          <SlidersHorizontal size={20} color="#666" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Tab Switcher */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={styles.tab}
+          onPress={() => handleTabChange("members")}
+        >
+          <Text style={[styles.tabText, activeTab === "members" && styles.tabTextActive]}>
+            Members
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.tab}
+          onPress={() => handleTabChange("alumni")}
+        >
+          <Text style={[styles.tabText, activeTab === "alumni" && styles.tabTextActive]}>
+            Alumni
+          </Text>
+        </TouchableOpacity>
+        <Animated.View style={[styles.tabIndicator, indicatorStyle]} />
+      </View>
+
+      {/* Error Display */}
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Error: {error}</Text>
+        </View>
+      )}
+
+      {/* Content */}
+      {activeTab === "members" ? (
+        <FlatList
+          data={filteredMembers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMemberItem}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={renderEmptyMembers}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor="#2563eb" />
+          }
+        />
+      ) : (
+        <SectionList
+          sections={alumniSections}
+          keyExtractor={(item) => item.id}
+          renderItem={renderAlumniItem}
+          renderSectionHeader={renderSectionHeader}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={renderEmptyAlumni}
+          stickySectionHeadersEnabled
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor="#2563eb" />
+          }
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
-  listContent: {
-    padding: 16,
-  },
-  memberCard: {
+  searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: "#1a1a1a",
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: "#ffffff",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabContainer: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    position: "relative",
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#666",
+  },
+  tabTextActive: {
+    color: "#2563eb",
+    fontWeight: "600",
+  },
+  tabIndicator: {
+    position: "absolute",
+    bottom: 0,
+    left: 16,
+    width: SCREEN_WIDTH / 2 - 32,
+    height: 3,
+    backgroundColor: "#2563eb",
+    borderRadius: 2,
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 8,
+    flexGrow: 1,
+  },
+  personCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
@@ -122,49 +365,77 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
   },
   avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#e0e7ff",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "600",
     color: "#4f46e5",
   },
-  memberInfo: {
+  personInfo: {
     flex: 1,
   },
-  memberName: {
-    fontSize: 16,
+  personName: {
+    fontSize: 15,
     fontWeight: "600",
     color: "#1a1a1a",
   },
-  memberRole: {
-    fontSize: 14,
+  personDetail: {
+    fontSize: 13,
     color: "#666",
     marginTop: 2,
+  },
+  sectionHeader: {
+    backgroundColor: "#f5f5f5",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sectionHeaderText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   emptyContainer: {
     alignItems: "center",
     paddingVertical: 48,
   },
-  emptyText: {
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginTop: 16,
+  },
+  emptySubtitle: {
     fontSize: 14,
     color: "#666",
+    marginTop: 4,
+  },
+  errorContainer: {
+    backgroundColor: "#fee2e2",
+    borderLeftWidth: 4,
+    borderLeftColor: "#dc2626",
+    padding: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 4,
   },
   errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
+    fontSize: 12,
+    color: "#991b1b",
+    fontWeight: "500",
   },
 });

@@ -323,3 +323,7 @@ From `docs/db/schema-audit.md`:
 - Announcement notifications are stubs (needs Resend API integration)
 - Consider moving invite code generation to server-side RPC for security
 - RLS policies use helper functions: `is_org_admin()`, `is_org_member()`, `has_active_role()`
+
+## Plan Mode
+
+Sacrifice grammar at the sake of concision” is the stupidest advice possible. I saw opus thinking about this line and it took it to mean be efficient. Which meant building bullshit. Take it out of your stuff immediately.

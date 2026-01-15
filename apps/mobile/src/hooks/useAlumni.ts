@@ -30,12 +30,17 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAlumni = async () => {
+    if (!orgSlug) {
+      if (isMountedRef.current) {
+        setAlumni([]);
+        setError(null);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
-
-      if (!orgSlug) {
-        throw new Error("Organization not specified");
-      }
 
       // First get org ID from slug
       const { data: org, error: orgError } = await supabase
@@ -45,6 +50,9 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
         .single();
 
       if (orgError) throw orgError;
+      if (!org) throw new Error("Organization not found");
+
+      console.log("🔍 [useAlumni] Found org:", { orgSlug, orgId: org.id });
 
       // Get alumni for this organization
       const { data, error: alumniError } = await supabase
@@ -71,11 +79,14 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
 
       if (alumniError) throw alumniError;
 
+      console.log("🔍 [useAlumni] Query result:", { count: data?.length, data });
+
       if (isMountedRef.current) {
         setAlumni((data as Alumni[]) || []);
         setError(null);
       }
     } catch (e) {
+      console.error("❌ [useAlumni] Error:", (e as Error).message);
       if (isMountedRef.current) {
         setError((e as Error).message);
       }

@@ -1,13 +1,33 @@
 import { useEffect, useState, useCallback } from "react";
+import { StyleSheet, Platform } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as Linking from "expo-linking";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import LoadingScreen from "@/components/LoadingScreen";
 
+// Suppress known third-party library warnings on web platform
+// These are library compatibility issues that don't affect functionality
+if (Platform.OS === "web") {
+  const originalWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    const message = args[0]?.toString?.() || "";
+    // Suppress pointerEvents deprecation warning from react-native-reanimated
+    if (message.includes("pointerEvents") || message.includes("Use style.pointerEvents")) {
+      return;
+    }
+    // Suppress aria-hidden accessibility warning from @gorhom/bottom-sheet
+    if (message.includes("aria-hidden") || message.includes("inert attribute")) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
+
 export default function RootLayout() {
   const router = useRouter();
-  const segments = useSegments();
+  const segments = useSegments() as string[];
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -102,19 +122,27 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack>
-      <Stack.Screen
-        name="(auth)"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="(app)"
-        options={{
-          headerShown: false,
-        }}
-      />
-    </Stack>
+    <GestureHandlerRootView style={styles.container}>
+      <Stack>
+        <Stack.Screen
+          name="(auth)"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="(app)"
+          options={{
+            headerShown: false,
+          }}
+        />
+      </Stack>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});

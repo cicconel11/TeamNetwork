@@ -28,12 +28,17 @@ export function useMembers(orgSlug: string): UseMembersReturn {
   const [error, setError] = useState<string | null>(null);
 
   const fetchMembers = async () => {
+    if (!orgSlug) {
+      if (isMountedRef.current) {
+        setMembers([]);
+        setError(null);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
-
-      if (!orgSlug) {
-        throw new Error("Organization not specified");
-      }
 
       // First get org ID from slug
       const { data: org, error: orgError } = await supabase
@@ -43,6 +48,9 @@ export function useMembers(orgSlug: string): UseMembersReturn {
         .single();
 
       if (orgError) throw orgError;
+      if (!org) throw new Error("Organization not found");
+
+      console.log("🔍 [useMembers] Found org:", { orgSlug, orgId: org.id });
 
       // Get members joined to users table
       // users table has: id, email, name, avatar_url
@@ -64,11 +72,14 @@ export function useMembers(orgSlug: string): UseMembersReturn {
 
       if (membersError) throw membersError;
 
+      console.log("🔍 [useMembers] Query result:", { count: data?.length, data });
+
       if (isMountedRef.current) {
         setMembers((data as unknown as Member[]) || []);
         setError(null);
       }
     } catch (e) {
+      console.error("❌ [useMembers] Error:", (e as Error).message);
       if (isMountedRef.current) {
         setError((e as Error).message);
       }

@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -13,6 +12,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
+import { showAlert } from "@/utils/alert";
+
+// Check if running in web browser (Expo web mode)
+const isWeb = Platform.OS === "web";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -22,18 +25,28 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
+    // Block sign-up in Expo Web mode to avoid email confirmation links
+    // redirecting to the production website
+    if (isWeb) {
+      showAlert(
+        "Native App Required",
+        "Sign up is only available in the native mobile app. Expo Web mode is for development preview only. Please use the iOS or Android app to create an account."
+      );
+      return;
+    }
+
     if (!email || !password || !confirmPassword) {
-      Alert.alert("Error", "Please fill in all fields");
+      showAlert("Error", "Please fill in all fields");
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
+      showAlert("Error", "Passwords do not match");
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert("Error", "Password must be at least 6 characters");
+      showAlert("Error", "Password must be at least 6 characters");
       return;
     }
 
@@ -45,21 +58,16 @@ export default function SignupScreen() {
       });
 
       if (error) {
-        Alert.alert("Error", error.message);
+        showAlert("Error", error.message);
       } else {
-        Alert.alert(
+        showAlert(
           "Check your email",
           "We sent you a confirmation link. Please check your email to verify your account.",
-          [
-            {
-              text: "OK",
-              onPress: () => router.replace("/(auth)/login"),
-            },
-          ]
+          () => router.replace("/(auth)/login")
         );
       }
     } catch (e) {
-      Alert.alert("Error", (e as Error).message);
+      showAlert("Error", (e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -75,60 +83,68 @@ export default function SignupScreen() {
           <Text style={styles.title}>TeamMeet</Text>
           <Text style={styles.subtitle}>Create your account</Text>
 
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor="#999"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            editable={!loading}
-          />
+          <View style={styles.formContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#999"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              editable={!loading}
+            />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#999"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            editable={!loading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#999"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              editable={!loading}
+            />
 
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            placeholderTextColor="#999"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-            editable={!loading}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#999"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+              editable={!loading && !isWeb}
+            />
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleSignup}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
+            {isWeb && (
+              <View style={styles.webWarning}>
+                <Text style={styles.webWarningText}>
+                  ⚠️ Sign up requires the native mobile app. Use email/password login for existing accounts.
+                </Text>
+              </View>
             )}
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.signinContainer}>
-          <Text style={styles.signinText}>Already have an account? </Text>
-          <Link href="/(auth)/login" asChild>
-            <TouchableOpacity disabled={loading}>
-              <Text style={styles.signinLink}>Sign In</Text>
+            <TouchableOpacity
+              style={[styles.button, (loading || isWeb) && styles.buttonDisabled]}
+              onPress={handleSignup}
+              disabled={loading || isWeb}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" />
+              ) : (
+                <Text style={styles.buttonText}>{isWeb ? "Native App Only" : "Create Account"}</Text>
+              )}
             </TouchableOpacity>
-          </Link>
-        </View>
+          </View>
+
+          <View style={styles.signinContainer}>
+            <Text style={styles.signinText}>Already have an account? </Text>
+            <Link href="/(auth)/login" asChild>
+              <TouchableOpacity disabled={loading}>
+                <Text style={styles.signinLink}>Sign In</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -200,5 +216,17 @@ const styles = StyleSheet.create({
     color: "#007AFF",
     fontSize: 14,
     fontWeight: "600",
+  },
+  webWarning: {
+    backgroundColor: "#FEF3C7",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  webWarningText: {
+    color: "#92400E",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

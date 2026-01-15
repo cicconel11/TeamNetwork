@@ -37,30 +37,35 @@ const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
       },
     }));
 
-    const handleMessage = (event: string) => {
-      if (event === "cancel") {
+    const handleMessage = (event: any) => {
+      const data: string | undefined =
+        typeof event === "string" ? event : event?.nativeEvent?.data;
+
+      if (!data) return;
+
+      if (data === "cancel") {
         setVisible(false);
         onCancel?.();
         return;
       }
-      if (event === "error") {
+      if (data === "error") {
         setVisible(false);
         onError?.("CAPTCHA verification failed");
         return;
       }
-      if (event === "expired") {
+      if (data === "expired") {
         setVisible(false);
         onExpire?.();
         return;
       }
-      if (event === "open") {
+      if (data === "open") {
         setLoading(false);
         return;
       }
       // Event is the token
-      if (event && event.length > 20) {
+      if (data.length > 20) {
         setVisible(false);
-        onVerify(event);
+        onVerify(data);
       }
     };
 

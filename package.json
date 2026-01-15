@@ -12,15 +12,15 @@
     }
   },
   "scripts": {
-    "dev": "npm run dev --workspace=apps/web",
-    "dev:web": "npm run dev --workspace=apps/web",
-    "dev:mobile": "npm run start --workspace=apps/mobile",
-    "build": "npm run build --workspace=apps/web",
-    "build:web": "npm run build --workspace=apps/web",
-    "lint": "npm run lint --workspace=apps/web",
-    "test": "npm run test --workspace=apps/web",
-    "test:auth": "npm run test:auth --workspace=apps/web",
-    "test:payments": "npm run test:payments --workspace=apps/web",
-    "test:security": "npm run test:security --workspace=apps/web"
+    "dev": "bun run --filter apps/web dev",
+    "dev:web": "bun run --filter apps/web dev",
+    "dev:mobile": "bun run --filter apps/mobile start",
+    "build": "bun run --filter apps/web build",
+    "build:web": "bun run --filter apps/web build",
+    "lint": "bun run --filter apps/web lint",
+    "test": "bun run --filter apps/web test",
+    "test:auth": "bun run --filter apps/web test:auth",
+    "test:payments": "bun run --filter apps/web test:payments",
+    "test:security": "bun run --filter apps/web test:security"
   }
 }

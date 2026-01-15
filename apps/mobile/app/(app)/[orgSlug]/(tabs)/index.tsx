@@ -6,26 +6,61 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import {
+  Users,
+  Calendar,
+  Heart,
+  ChevronRight,
+  Pin,
+  Clock,
+  MapPin,
+} from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useEvents } from "@/hooks/useEvents";
+import { useAnnouncements } from "@/hooks/useAnnouncements";
+import { useMembers } from "@/hooks/useMembers";
+import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { Organization } from "@teammeet/types";
 
-export default function DashboardScreen() {
+export default function HomeScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
+  const router = useRouter();
+  const { user } = useAuth();
   const isMountedRef = useRef(true);
+
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [memberCount, setMemberCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  const fetchOrganization = async () => {
+  const { events, refetch: refetchEvents } = useEvents(orgSlug || "");
+  const { announcements, refetch: refetchAnnouncements } = useAnnouncements(orgSlug || "");
+  const { members, refetch: refetchMembers } = useMembers(orgSlug || "");
+
+  // Get upcoming events (next 2)
+  const upcomingEvents = events
+    .filter((e) => new Date(e.start_date) >= new Date())
+    .slice(0, 2);
+
+  // Get pinned announcement
+  const pinnedAnnouncement = announcements.find((a) => (a as any).is_pinned);
+
+  const fetchData = async () => {
+    if (!orgSlug || !user) {
+      return;
+    }
+
     try {
-      if (!orgSlug) {
-        throw new Error("Organization not specified");
-      }
-
-      const { data, error: fetchError } = await supabase
+      // Fetch organization
+      const { data: orgData, error: fetchError } = await supabase
         .from("organizations")
         .select("*")
         .eq("slug", orgSlug)
@@ -33,8 +68,27 @@ export default function DashboardScreen() {
 
       if (fetchError) throw fetchError;
 
+      // Fetch user profile and role
+      const { data: roleData } = await supabase
+        .from("user_organization_roles")
+        .select("role, user:users(name)")
+        .eq("user_id", user.id)
+        .eq("organization_id", orgData.id)
+        .eq("status", "active")
+        .single();
+
       if (isMountedRef.current) {
-        setOrganization(data);
+        setOrganization(orgData);
+        setMemberCount(members.length);
+
+        if (roleData) {
+          const normalized = normalizeRole(roleData.role);
+          const flags = roleFlags(normalized);
+          setIsAdmin(flags.isAdmin);
+
+          const userData = roleData.user as { name: string | null } | null;
+          setUserName(userData?.name || null);
+        }
         setError(null);
       }
     } catch (e) {
@@ -51,16 +105,55 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     isMountedRef.current = true;
-    fetchOrganization();
+    fetchData();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [orgSlug]);
+  }, [orgSlug, user]);
 
-  const handleRefresh = () => {
+  useEffect(() => {
+    setMemberCount(members.length);
+  }, [members]);
+
+  const handleRefresh = async () => {
     setRefreshing(true);
-    fetchOrganization();
+    try {
+      await Promise.all([
+        fetchData(),
+        refetchEvents(),
+        refetchAnnouncements(),
+        refetchMembers(),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  const formatDate = () => {
+    return new Date().toLocaleDateString([], {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  const formatEventTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
   if (loading) {
@@ -79,26 +172,133 @@ export default function DashboardScreen() {
     );
   }
 
-  return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>{organization?.name}</Text>
-        <Text style={styles.slug}>@{organization?.slug}</Text>
-      </View>
+  const firstName = userName?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Welcome!</Text>
-        <Text style={styles.cardText}>
-          Use the tabs below to view members, alumni, and announcements.
-        </Text>
-      </View>
-    </ScrollView>
+  return (
+    <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+        }
+      >
+        {/* Welcome Header */}
+        <View style={styles.header}>
+          <Text style={styles.greeting}>
+            {getGreeting()}, {firstName}
+          </Text>
+          <Text style={styles.orgName}>{organization?.name}</Text>
+          <Text style={styles.date}>{formatDate()}</Text>
+        </View>
+
+        {/* Quick Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statItem}>
+            <Users size={20} color="#2563eb" />
+            <Text style={styles.statValue}>{memberCount}</Text>
+            <Text style={styles.statLabel}>Members</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Calendar size={20} color="#2563eb" />
+            <Text style={styles.statValue}>{upcomingEvents.length}</Text>
+            <Text style={styles.statLabel}>Events</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Heart size={20} color="#2563eb" />
+            <Text style={styles.statValue}>0</Text>
+            <Text style={styles.statLabel}>Donations</Text>
+          </View>
+        </View>
+
+        {/* Upcoming Events */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Upcoming Events</Text>
+            <TouchableOpacity
+              style={styles.seeAllButton}
+              onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
+            >
+              <Text style={styles.seeAllText}>See all</Text>
+              <ChevronRight size={16} color="#2563eb" />
+            </TouchableOpacity>
+          </View>
+
+          {upcomingEvents.length > 0 ? (
+            upcomingEvents.map((event) => (
+              <TouchableOpacity key={event.id} style={styles.eventCard} activeOpacity={0.7}>
+                <Text style={styles.eventTitle} numberOfLines={1}>
+                  {event.title}
+                </Text>
+                <View style={styles.eventDetails}>
+                  <View style={styles.eventDetail}>
+                    <Clock size={14} color="#666" />
+                    <Text style={styles.eventDetailText}>
+                      {formatEventTime(event.start_date)}
+                    </Text>
+                  </View>
+                  {event.location && (
+                    <View style={styles.eventDetail}>
+                      <MapPin size={14} color="#666" />
+                      <Text style={styles.eventDetailText} numberOfLines={1}>
+                        {event.location}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity style={styles.rsvpButton}>
+                  <Text style={styles.rsvpButtonText}>RSVP</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={styles.emptyCard}>
+              <Calendar size={24} color="#9ca3af" />
+              <Text style={styles.emptyText}>No upcoming events</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Pinned Announcement */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Pinned</Text>
+          </View>
+
+          {pinnedAnnouncement ? (
+            <TouchableOpacity style={styles.announcementCard} activeOpacity={0.7}>
+              <View style={styles.pinnedBadge}>
+                <Pin size={12} color="#2563eb" />
+                <Text style={styles.pinnedText}>Pinned</Text>
+              </View>
+              <Text style={styles.announcementTitle} numberOfLines={1}>
+                {pinnedAnnouncement.title}
+              </Text>
+              <Text style={styles.announcementPreview} numberOfLines={3}>
+                {pinnedAnnouncement.body}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Pin size={24} color="#9ca3af" />
+              <Text style={styles.emptyText}>No pinned announcements</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Latest Activity */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Latest</Text>
+          </View>
+
+          <View style={styles.activityCard}>
+            <Text style={styles.activityEmpty}>
+              Activity feed coming soon
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -117,38 +317,177 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
+  greeting: {
+    fontSize: 24,
+    fontWeight: "700",
     color: "#1a1a1a",
   },
-  slug: {
-    fontSize: 16,
+  orgName: {
+    fontSize: 15,
     color: "#666",
     marginTop: 4,
   },
-  card: {
-    backgroundColor: "white",
-    padding: 20,
+  date: {
+    fontSize: 13,
+    color: "#9ca3af",
+    marginTop: 2,
+  },
+  statsRow: {
+    flexDirection: "row",
+    backgroundColor: "#ffffff",
     borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  cardTitle: {
-    fontSize: 18,
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1a1a1a",
+    marginTop: 8,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 2,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1a1a1a",
+  },
+  seeAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: "#2563eb",
+    fontWeight: "500",
+  },
+  eventCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  eventTitle: {
+    fontSize: 16,
     fontWeight: "600",
     color: "#1a1a1a",
     marginBottom: 8,
   },
-  cardText: {
+  eventDetails: {
+    gap: 4,
+  },
+  eventDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  eventDetailText: {
+    fontSize: 13,
+    color: "#666",
+    flex: 1,
+  },
+  rsvpButton: {
+    backgroundColor: "#2563eb",
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  rsvpButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  announcementCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  pinnedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 8,
+  },
+  pinnedText: {
+    fontSize: 12,
+    color: "#2563eb",
+    fontWeight: "500",
+  },
+  announcementTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1a1a1a",
+    marginBottom: 8,
+  },
+  announcementPreview: {
     fontSize: 14,
     color: "#666",
     lineHeight: 20,
+  },
+  emptyCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    marginTop: 8,
+  },
+  activityCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  activityEmpty: {
+    fontSize: 14,
+    color: "#9ca3af",
   },
   errorText: {
     fontSize: 16,

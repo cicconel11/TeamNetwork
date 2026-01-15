@@ -18,12 +18,17 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAnnouncements = async () => {
+    if (!orgSlug) {
+      if (isMountedRef.current) {
+        setAnnouncements([]);
+        setError(null);
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
-
-      if (!orgSlug) {
-        throw new Error("Organization not specified");
-      }
 
       // Get current user
       const {
