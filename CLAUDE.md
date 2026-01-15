@@ -31,20 +31,23 @@ TeamMeet/
 
 ### Development
 ```bash
-npm run dev          # Start Next.js dev server at localhost:3000
-npm run dev:web      # Same as above
-npm run dev:mobile   # Start Expo dev server
-npm run build        # Build production application
-npm run start        # Start production server
-npm run lint         # Run ESLint
+bun dev              # Start Next.js dev server at localhost:3000
+bun dev:web          # Same as above
+bun dev:mobile       # Start Expo dev server at localhost:8081
+bun build            # Build production application
+bun start            # Start production server
+bun lint             # Run ESLint
 ```
 
 ### Mobile Development
 ```bash
 cd apps/mobile
-npx expo start        # Start Expo dev server
-npx expo run:ios      # Build and run on iOS simulator
-npx expo run:android  # Build and run on Android emulator
+bun expo start                # Start Expo dev server (web at localhost:8081)
+bun expo start --ios          # Start and open in iOS simulator
+bun expo start --android      # Start and open in Android emulator
+# Or use native commands:
+bun run ios                   # Build and run on iOS simulator
+bun run android               # Build and run on Android emulator
 ```
 
 ### Testing
@@ -70,12 +73,15 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 ## Architecture
 
 ### Tech Stack
-- **Framework**: Next.js 14 with App Router (TypeScript, React 18)
+- **Web Framework**: Next.js 14 with App Router (TypeScript, React 18)
+- **Mobile Framework**: Expo SDK 54 with Expo Router (TypeScript, React Native)
 - **Database**: Supabase (PostgreSQL with RLS policies)
-- **Authentication**: Supabase Auth with SSR
+- **Authentication**: Supabase Auth (with SSR for web, AsyncStorage for mobile)
 - **Payments**: Stripe (subscriptions + Stripe Connect for donations)
 - **Email**: Resend
-- **Styling**: Tailwind CSS
+- **Package Manager**: Bun (replaces npm/yarn)
+- **Web Styling**: Tailwind CSS
+- **Mobile Styling**: React Native StyleSheet (not Tailwind)
 
 ### Multi-Tenant SaaS Architecture
 This is a multi-tenant application where organizations are first-class entities identified by slugs (e.g., `/[orgSlug]/members`). The middleware validates organization access on every request.
@@ -241,8 +247,28 @@ Zod schemas for validation:
 
 - **Framework**: Expo SDK 54 with Expo Router
 - **Auth**: Supabase with AsyncStorage (not cookies)
-- **Styling**: React Native StyleSheet (not Tailwind)
+- **Styling**: React Native `StyleSheet` API (not Tailwind or NativeWind)
 - **Navigation**: File-based routing via Expo Router
+- **Package Manager**: Bun (with local dependencies hoisted via Metro config)
+
+### Mobile Styling
+
+All mobile screens use React Native's native `StyleSheet` for styling:
+
+```typescript
+import { StyleSheet } from "react-native";
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f5f5f5" },
+  text: { fontSize: 16, color: "#1a1a1a" },
+});
+```
+
+**Why StyleSheet instead of Tailwind/NativeWind?**
+- Metro bundler + Bun's module hoisting creates compatibility issues with CSS-in-JS frameworks
+- StyleSheet is more performant and requires no additional transpilation
+- Simpler dependency management without Tailwind/PostCSS
+- All mobile screens have been migrated to this approach
 
 ### Mobile Supabase Client
 
@@ -274,11 +300,21 @@ From `AGENTS.md`:
 
 ## Key Files to Understand
 
-- `src/middleware.ts` - Request interception, auth, org validation
-- `src/app/[orgSlug]/layout.tsx` - Organization context provider
-- `src/lib/auth/roles.ts` - Role checking utilities
-- `src/lib/payments/idempotency.ts` - Payment deduplication logic
-- `src/lib/navigation/nav-items.tsx` - Navigation structure and role filtering
+### Web App
+- `apps/web/src/middleware.ts` - Request interception, auth, org validation
+- `apps/web/src/app/[orgSlug]/layout.tsx` - Organization context provider
+- `apps/web/src/lib/auth/roles.ts` - Role checking utilities
+- `apps/web/src/lib/payments/idempotency.ts` - Payment deduplication logic
+- `apps/web/src/lib/navigation/nav-items.tsx` - Navigation structure and role filtering
+
+### Mobile App
+- `apps/mobile/app/_layout.tsx` - Root layout with auth state management
+- `apps/mobile/app/(auth)/login.tsx` - Login screen (email/password + Google OAuth)
+- `apps/mobile/app/(app)/index.tsx` - Organizations list
+- `apps/mobile/app/(app)/[orgSlug]/(tabs)/` - Org-specific screens (members, alumni, announcements)
+- `apps/mobile/metro.config.js` - Metro bundler config with monorepo support
+
+### Documentation
 - `docs/db/schema-audit.md` - Database schema documentation and known issues
 
 ## Known Issues & Considerations
