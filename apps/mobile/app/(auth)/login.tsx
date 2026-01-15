@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
 import { makeRedirectUri } from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
@@ -46,7 +47,7 @@ export default function LoginScreen() {
 
     setEmailLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
@@ -66,11 +67,24 @@ export default function LoginScreen() {
 
   // Google OAuth sign in
   const signInWithGoogle = async () => {
+    // In Expo Go, Google OAuth has limitations due to redirect URI restrictions
+    // Show a helpful message for Expo Go users
+    if (isExpoGo) {
+      Alert.alert(
+        "Expo Go Limitation",
+        "Google Sign-In requires a development build. Please use email/password to sign in while testing in Expo Go, or create a development build for full OAuth support.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
     setGoogleLoading(true);
     try {
-      const redirectUri = isExpoGo
-        ? Linking.createURL("auth/callback")
-        : makeRedirectUri({ scheme: "teammeet" });
+      // For dev/prod builds, use the custom scheme
+      const redirectUri = makeRedirectUri({ 
+        scheme: "teammeet", 
+        path: "(auth)/callback" 
+      });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -89,10 +103,24 @@ export default function LoginScreen() {
         );
 
         if (result.type === "success") {
+          // Extract tokens from the result URL
           const url = new URL(result.url);
-          const hashParams = new URLSearchParams(url.hash.substring(1));
-          const accessToken = hashParams.get("access_token");
-          const refreshToken = hashParams.get("refresh_token");
+          
+          // Check hash fragment first (standard OAuth implicit flow)
+          let accessToken: string | null = null;
+          let refreshToken: string | null = null;
+          
+          if (url.hash) {
+            const hashParams = new URLSearchParams(url.hash.substring(1));
+            accessToken = hashParams.get("access_token");
+            refreshToken = hashParams.get("refresh_token");
+          }
+          
+          // Fall back to query params
+          if (!accessToken) {
+            accessToken = url.searchParams.get("access_token");
+            refreshToken = url.searchParams.get("refresh_token");
+          }
 
           if (!accessToken || !refreshToken) {
             throw new Error("Authentication failed: missing credentials");
@@ -109,6 +137,10 @@ export default function LoginScreen() {
           if (!verifyData.session) {
             throw new Error("Session failed to persist. Please try again.");
           }
+          
+          // Session is set, navigation will happen automatically via _layout.tsx
+        } else if (result.type === "cancel") {
+          // User cancelled, do nothing
         }
       }
     } catch (error) {
@@ -119,11 +151,12 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.content}>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.container}
+      >
+        <View style={styles.content}>
         <Text style={styles.title}>TeamMeet</Text>
         <Text style={styles.subtitle}>Sign in to continue</Text>
 
@@ -195,13 +228,17 @@ export default function LoginScreen() {
         </View>
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  container: {
+    flex: 1,
   },
   content: {
     flex: 1,

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   View,
   Text,
@@ -15,6 +16,13 @@ import type { UserRole } from "@teammeet/types";
 export default function MembersScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
   const { members, loading, error, refetch } = useMembers(orgSlug);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
 
   if (loading) {
     return (
@@ -54,7 +62,7 @@ export default function MembersScreen() {
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       refreshControl={
-        <RefreshControl refreshing={false} onRefresh={refetch} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
       renderItem={({ item }) => {
         const role = normalizeRole(item.role as UserRole | null);

@@ -5,6 +5,12 @@
     "apps/*",
     "packages/*"
   ],
+  "overrides": {
+    "@teammeet/mobile": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0"
+    }
+  },
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "dev:web": "npm run dev --workspace=apps/web",

@@ -52,29 +52,37 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
     setIsLoading(true);
     setError(null);
 
-    const supabase = createClient()!;
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
+    try {
+      // Use server-side API route for CAPTCHA validation
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-        emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
-        captchaToken,
-      },
-    });
+        body: JSON.stringify({
+          email,
+          password,
+          name,
+          captchaToken,
+        }),
+      });
 
-    if (error) {
-      setError(error.message);
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Signup failed");
+        captchaRef.current?.reset();
+        return;
+      }
+
+      setMessage(data.message || "Check your email to confirm your account!");
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+      captchaRef.current?.reset();
+    } finally {
       setIsLoading(false);
       captchaRef.current?.reset();
-      return;
     }
-
-    setMessage("Check your email to confirm your account!");
-    setIsLoading(false);
-    captchaRef.current?.reset();
   };
 
   return (

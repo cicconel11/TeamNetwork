@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "@/lib/supabase";
 
@@ -65,13 +66,14 @@ export default function SignupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.container}
-    >
-      <View style={styles.content}>
-        <Text style={styles.title}>TeamMeet</Text>
-        <Text style={styles.subtitle}>Create your account</Text>
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.container}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>TeamMeet</Text>
+          <Text style={styles.subtitle}>Create your account</Text>
 
         <View style={styles.formContainer}>
           <TextInput
@@ -127,15 +129,19 @@ export default function SignupScreen() {
             </TouchableOpacity>
           </Link>
         </View>
-      </View>
-    </KeyboardAvoidingView>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  container: {
+    flex: 1,
   },
   content: {
     flex: 1,

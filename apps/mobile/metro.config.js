@@ -14,10 +14,12 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
-// Ensure React singletons always resolve from this app.
+// Ensure React singletons always resolve from the root (hoisted in monorepo).
 config.resolver.extraNodeModules = {
-  react: path.resolve(projectRoot, "node_modules/react"),
-  "react-native": path.resolve(projectRoot, "node_modules/react-native"),
+  react: path.resolve(workspaceRoot, "node_modules/react"),
+  "react-dom": path.resolve(workspaceRoot, "node_modules/react-dom"),
+  "react-native": path.resolve(workspaceRoot, "node_modules/react-native"),
+  "react-native-web": path.resolve(workspaceRoot, "node_modules/react-native-web"),
 };
 
 module.exports = config;

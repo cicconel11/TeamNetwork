@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { supabase, debugAsyncStorage } from "@/lib/supabase";
+import * as Linking from "expo-linking";
+import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import LoadingScreen from "@/components/LoadingScreen";
 
@@ -10,47 +11,87 @@ export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Handle deep link URLs that contain OAuth tokens
+  const handleDeepLink = useCallback(async (event: { url: string }) => {
+    const url = event.url;
+    
+    // Check if this is an auth callback URL with tokens
+    if (url.includes("access_token") || url.includes("callback")) {
+      try {
+        const parsedUrl = new URL(url);
+        
+        // Extract tokens from hash fragment or query params
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+        
+        if (parsedUrl.hash) {
+          const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
+          accessToken = hashParams.get("access_token");
+          refreshToken = hashParams.get("refresh_token");
+        }
+        
+        if (!accessToken) {
+          accessToken = parsedUrl.searchParams.get("access_token");
+          refreshToken = parsedUrl.searchParams.get("refresh_token");
+        }
+        
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          // Session change will trigger navigation via onAuthStateChange
+        }
+      } catch (err) {
+        console.error("Error handling deep link:", err);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
 
-    // Debug: Check AsyncStorage on app start
-    if (__DEV__) {
-      debugAsyncStorage();
-    }
+    // Check for initial URL (app opened via deep link)
+    Linking.getInitialURL().then((url) => {
+      if (url && isMounted) {
+        handleDeepLink({ url });
+      }
+    });
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log("DEBUG: _layout getSession:", {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        email: session?.user?.email,
-        error,
-      });
+    // Listen for deep links while app is open
+    const subscription = Linking.addEventListener("url", handleDeepLink);
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isMounted) return;
       setSession(session);
       setIsLoading(false);
     });
 
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("DEBUG: _layout onAuthStateChange:", { event, hasSession: !!session });
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setIsLoading(false);
     });
 
     return () => {
       isMounted = false;
-      subscription?.unsubscribe();
+      subscription.remove();
+      authSubscription?.unsubscribe();
     };
-  }, []);
+  }, [handleDeepLink]);
 
   useEffect(() => {
     if (isLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
+    const isOnCallback = segments[1] === "callback";
+
+    // Don't redirect away from callback screen while it's processing
+    if (isOnCallback) return;
 
     if (!session && !inAuthGroup) {
-      router.replace("/(auth)/login");
+      router.replace("/(auth)");
     } else if (session && inAuthGroup) {
       router.replace("/(app)");
     }

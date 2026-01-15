@@ -1,4 +1,10 @@
+import { Text } from "react-native";
 import { Tabs, useLocalSearchParams } from "expo-router";
+
+// Simple icon component using unicode symbols
+function TabIcon({ icon, color }: { icon: string; color: string }) {
+  return <Text style={{ fontSize: 20, color }}>{icon}</Text>;
+}
 
 export default function OrgLayout() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
@@ -16,6 +22,7 @@ export default function OrgLayout() {
         options={{
           title: "Dashboard",
           tabBarLabel: "Home",
+          tabBarIcon: ({ color }) => <TabIcon icon="⌂" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -23,6 +30,7 @@ export default function OrgLayout() {
         options={{
           title: "Members",
           tabBarLabel: "Members",
+          tabBarIcon: ({ color }) => <TabIcon icon="👥" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -30,6 +38,7 @@ export default function OrgLayout() {
         options={{
           title: "Alumni",
           tabBarLabel: "Alumni",
+          tabBarIcon: ({ color }) => <TabIcon icon="🎓" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -37,6 +46,7 @@ export default function OrgLayout() {
         options={{
           title: "Announcements",
           tabBarLabel: "News",
+          tabBarIcon: ({ color }) => <TabIcon icon="📢" color={color} />,
         }}
       />
     </Tabs>
