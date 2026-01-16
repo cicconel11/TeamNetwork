@@ -6,9 +6,10 @@ interface GracePeriodBannerProps {
   daysRemaining: number;
   orgSlug: string;
   organizationId: string;
+  isAdmin?: boolean;
 }
 
-export function GracePeriodBanner({ daysRemaining, organizationId }: GracePeriodBannerProps) {
+export function GracePeriodBanner({ daysRemaining, organizationId, isAdmin }: GracePeriodBannerProps) {
   const [isResubscribing, setIsResubscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,13 +39,19 @@ export function GracePeriodBanner({ daysRemaining, organizationId }: GracePeriod
         <span>
           Your subscription ended. You have <strong>{daysRemaining} day{daysRemaining !== 1 ? "s" : ""}</strong> to resubscribe before this organization is deleted.
         </span>
-        <button
-          onClick={handleResubscribe}
-          disabled={isResubscribing}
-          className="bg-amber-950 text-amber-100 px-3 py-1 rounded-md text-xs font-semibold hover:bg-amber-900 transition-colors disabled:opacity-50"
-        >
-          {isResubscribing ? "Opening..." : "Resubscribe Now"}
-        </button>
+        {isAdmin ? (
+          <button
+            onClick={handleResubscribe}
+            disabled={isResubscribing}
+            className="bg-amber-950 text-amber-100 px-3 py-1 rounded-md text-xs font-semibold hover:bg-amber-900 transition-colors disabled:opacity-50"
+          >
+            {isResubscribing ? "Opening..." : "Resubscribe Now"}
+          </button>
+        ) : (
+          <span className="text-xs opacity-80">
+            Ask your admin to resubscribe.
+          </span>
+        )}
       </div>
       {error && (
         <p className="text-amber-950/80 text-xs mt-1">{error}</p>

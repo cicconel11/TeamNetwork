@@ -174,6 +174,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
             daysRemaining={orgContext.gracePeriod.daysRemaining} 
             orgSlug={orgSlug}
             organizationId={organization.id}
+            isAdmin={orgContext.role === "admin"}
           />
         </div>
       )}

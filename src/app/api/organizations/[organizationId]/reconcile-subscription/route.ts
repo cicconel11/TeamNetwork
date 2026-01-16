@@ -70,7 +70,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const { data: subscriptionRow } = await serviceSupabase
     .from("organization_subscriptions")
-    .select("status, stripe_subscription_id, stripe_customer_id")
+    .select("status, stripe_subscription_id, stripe_customer_id, current_period_end")
     .eq("organization_id", organizationId)
     .maybeSingle();
 
@@ -78,15 +78,20 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Subscription not found" }, 404);
   }
 
-  // Only skip reconciliation if Stripe IDs exist AND status is already valid
-  // Invalid statuses like "complete" or "pending" should trigger a full sync from Stripe
+  // Only skip reconciliation if:
+  // - Stripe IDs exist
+  // - Status is already valid
+  // - AND current_period_end is populated (not null)
+  // If current_period_end is null, we need to fetch from Stripe to backfill it
   const validStatuses = ["active", "trialing", "canceling", "past_due", "unpaid", "canceled", "incomplete", "incomplete_expired"];
   const hasValidStatus = validStatuses.includes(subscriptionRow.status || "");
+  const hasCurrentPeriodEnd = subscriptionRow.current_period_end !== null;
   
   if (
     subscriptionRow.stripe_subscription_id && 
     subscriptionRow.stripe_customer_id &&
-    hasValidStatus
+    hasValidStatus &&
+    hasCurrentPeriodEnd
   ) {
     return respond({ status: subscriptionRow.status || "active" });
   }
