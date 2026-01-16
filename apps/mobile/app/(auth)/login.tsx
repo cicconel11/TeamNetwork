@@ -166,16 +166,17 @@ export default function LoginScreen() {
 
       if (error) throw error;
       // Navigation happens automatically via _layout.tsx onAuthStateChange
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
       if (isErrorWithCode && statusCodes && isErrorWithCode(error)) {
-        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        if (err.code === statusCodes.SIGN_IN_CANCELLED) {
           return;
         }
-        if (error.code === statusCodes.IN_PROGRESS) {
+        if (err.code === statusCodes.IN_PROGRESS) {
           showAlert("Google Sign-In", "Sign-in is already in progress.");
           return;
         }
-        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
           showAlert(
             "Google Sign-In",
             "Google Play Services is not available on this device."
@@ -184,7 +185,7 @@ export default function LoginScreen() {
         }
       }
 
-      showAlert("Error", (error as Error).message);
+      showAlert("Error", err.message || "An unexpected error occurred");
     } finally {
       setGoogleLoading(false);
     }
