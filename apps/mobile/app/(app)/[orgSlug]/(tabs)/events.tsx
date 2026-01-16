@@ -19,17 +19,19 @@ export default function EventsScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
   const { events, loading, error, refetch } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
 
-  const now = new Date();
+  // Memoize 'now' to prevent unnecessary re-renders
+  const now = useMemo(() => new Date(), []);
 
   // Filter events by upcoming/past
   const filteredEvents = useMemo(() => {
+    const currentTime = new Date();
     return events.filter((event) => {
       const eventDate = new Date(event.start_date);
-      return viewMode === "upcoming" ? eventDate >= now : eventDate < now;
+      return viewMode === "upcoming" ? eventDate >= currentTime : eventDate < currentTime;
     });
-  }, [events, viewMode, now]);
+  }, [events, viewMode]);
 
   // Get next 7 days for the date strip
   const weekDates = useMemo(() => {
@@ -51,11 +53,15 @@ export default function EventsScreen() {
     });
   };
 
-  // Filter events for selected date
-  const eventsForSelectedDate = useMemo(() => {
+  // Filter events for selected date (or show all if no date selected)
+  const displayedEvents = useMemo(() => {
+    if (selectedDate === null) {
+      return filteredEvents; // Show all upcoming/past events
+    }
+    const selectedDateStr = selectedDate.toDateString();
     return filteredEvents.filter((event) => {
       const eventDate = new Date(event.start_date);
-      return eventDate.toDateString() === selectedDate.toDateString();
+      return eventDate.toDateString() === selectedDateStr;
     });
   }, [filteredEvents, selectedDate]);
 
@@ -96,9 +102,9 @@ export default function EventsScreen() {
 
       <View style={styles.eventDetails}>
         <View style={styles.detailRow}>
-          <Clock size={14} color="#666" />
+          <Calendar size={14} color="#666" />
           <Text style={styles.detailText}>
-            {formatTime(item.start_date)}
+            {formatDate(item.start_date)} at {formatTime(item.start_date)}
             {item.end_date && ` - ${formatTime(item.end_date)}`}
           </Text>
         </View>
@@ -176,51 +182,76 @@ export default function EventsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 7-Day Strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.dateStrip}
-        contentContainerStyle={styles.dateStripContent}
-      >
-        {weekDates.map((date, index) => {
-          const isSelected = date.toDateString() === selectedDate.toDateString();
-          const hasEvents = dateHasEvents(date);
-          const isToday = date.toDateString() === now.toDateString();
-
-          return (
-            <TouchableOpacity
-              key={index}
-              style={[styles.dateItem, isSelected && styles.dateItemSelected]}
-              onPress={() => setSelectedDate(date)}
+      {/* 7-Day Strip (only for upcoming view) */}
+      {viewMode === "upcoming" && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.dateStrip}
+          contentContainerStyle={styles.dateStripContent}
+        >
+          {/* All button */}
+          <TouchableOpacity
+            style={[styles.dateItem, selectedDate === null && styles.dateItemSelected]}
+            onPress={() => setSelectedDate(null)}
+          >
+            <Text
+              style={[
+                styles.dateDayName,
+                selectedDate === null && styles.dateTextSelected,
+              ]}
             >
-              <Text
-                style={[
-                  styles.dateDayName,
-                  isSelected && styles.dateTextSelected,
-                  isToday && styles.dateToday,
-                ]}
+              All
+            </Text>
+            <Text
+              style={[
+                styles.dateDay,
+                selectedDate === null && styles.dateTextSelected,
+              ]}
+            >
+              {filteredEvents.length}
+            </Text>
+          </TouchableOpacity>
+
+          {weekDates.map((date, index) => {
+            const isSelected = selectedDate?.toDateString() === date.toDateString();
+            const hasEvents = dateHasEvents(date);
+            const isToday = date.toDateString() === now.toDateString();
+
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                onPress={() => setSelectedDate(date)}
               >
-                {date.toLocaleDateString([], { weekday: "short" })}
-              </Text>
-              <Text
-                style={[
-                  styles.dateDay,
-                  isSelected && styles.dateTextSelected,
-                  isToday && styles.dateToday,
-                ]}
-              >
-                {date.getDate()}
-              </Text>
-              {hasEvents && <View style={styles.eventDot} />}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                <Text
+                  style={[
+                    styles.dateDayName,
+                    isSelected && styles.dateTextSelected,
+                    isToday && !isSelected && styles.dateToday,
+                  ]}
+                >
+                  {date.toLocaleDateString([], { weekday: "short" })}
+                </Text>
+                <Text
+                  style={[
+                    styles.dateDay,
+                    isSelected && styles.dateTextSelected,
+                    isToday && !isSelected && styles.dateToday,
+                  ]}
+                >
+                  {date.getDate()}
+                </Text>
+                {hasEvents && <View style={styles.eventDot} />}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Events List */}
       <FlatList
-        data={viewMode === "upcoming" ? eventsForSelectedDate : filteredEvents}
+        data={displayedEvents}
         renderItem={renderEventCard}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
