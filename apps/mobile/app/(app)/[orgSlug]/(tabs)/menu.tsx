@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -52,54 +53,65 @@ export default function MenuScreen() {
   const [userName, setUserName] = useState<string | null>(null);
   const [userAvatar, setUserAvatar] = useState<string | null>(null);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchData = useCallback(async () => {
+    if (!user || !orgSlug) return;
 
-    async function fetchData() {
-      if (!user || !orgSlug) return;
+    try {
+      setError(null);
 
       // Fetch organization
-      const { data: orgData } = await supabase
+      const { data: orgData, error: orgError } = await supabase
         .from("organizations")
         .select("id, name, slug, logo_url")
         .eq("slug", orgSlug)
         .single();
 
-      if (orgData && isMounted) {
-        setOrganization(orgData);
-      }
+      if (orgError) throw orgError;
+
+      setOrganization(orgData);
 
       // Fetch user role and profile
-      if (orgData) {
-        const { data: roleData } = await supabase
-          .from("user_organization_roles")
-          .select("role, user:users(name, avatar_url)")
-          .eq("user_id", user.id)
-          .eq("organization_id", orgData.id)
-          .eq("status", "active")
-          .single();
+      const { data: roleData, error: roleError } = await supabase
+        .from("user_organization_roles")
+        .select("role, user:users(name, avatar_url)")
+        .eq("user_id", user.id)
+        .eq("organization_id", orgData.id)
+        .eq("status", "active")
+        .single();
 
-        if (roleData && isMounted) {
-          const normalized = normalizeRole(roleData.role);
-          const flags = roleFlags(normalized);
-          setIsAdmin(flags.isAdmin);
+      if (roleError) throw roleError;
 
-          const userData = roleData.user as { name: string | null; avatar_url: string | null } | null;
-          if (userData) {
-            setUserName(userData.name);
-            setUserAvatar(userData.avatar_url);
-          }
+      if (roleData) {
+        const normalized = normalizeRole(roleData.role);
+        const flags = roleFlags(normalized);
+        setIsAdmin(flags.isAdmin);
+
+        const userData = roleData.user as { name: string | null; avatar_url: string | null } | null;
+        if (userData) {
+          setUserName(userData.name);
+          setUserAvatar(userData.avatar_url);
         }
       }
 
       // TODO: Fetch notification count when notifications are implemented
       setNotificationCount(0);
+    } catch (e) {
+      setError((e as Error).message);
     }
-
-    fetchData();
-    return () => { isMounted = false; };
   }, [user, orgSlug]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  }, [fetchData]);
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -227,7 +239,25 @@ export default function MenuScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#2563eb"
+          />
+        }
+      >
+        {/* Error Display */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>Error: {error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {/* Account Block */}
         <View style={styles.accountBlock}>
           {/* Organization */}
@@ -465,6 +495,32 @@ const styles = StyleSheet.create({
   badgeText: {
     color: "#ffffff",
     fontSize: 12,
+    fontWeight: "600",
+  },
+  errorContainer: {
+    backgroundColor: "#fee2e2",
+    borderLeftWidth: 4,
+    borderLeftColor: "#dc2626",
+    padding: 12,
+    marginBottom: 16,
+    borderRadius: 4,
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#991b1b",
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: "#dc2626",
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignSelf: "flex-start",
+  },
+  retryButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
     fontWeight: "600",
   },
 });
