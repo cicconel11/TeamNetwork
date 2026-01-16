@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -40,20 +40,23 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
 
   const { events, refetch: refetchEvents } = useEvents(orgSlug || "");
   const { announcements, refetch: refetchAnnouncements } = useAnnouncements(orgSlug || "");
   const { members, refetch: refetchMembers } = useMembers(orgSlug || "");
+  const userId = user?.id ?? null;
 
   // Get upcoming events (next 2)
+  const now = new Date();
   const upcomingEvents = events
-    .filter((e) => new Date(e.start_date) >= new Date())
+    .filter((e) => new Date(e.start_date) >= now)
     .slice(0, 2);
 
   // Get pinned announcement
   const pinnedAnnouncement = announcements.find((a) => (a as any).is_pinned);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!orgSlug || !user) {
       return;
     }
@@ -79,7 +82,7 @@ export default function HomeScreen() {
 
       if (isMountedRef.current) {
         setOrganization(orgData);
-        setMemberCount(members.length);
+        setOrgId(orgData.id);
 
         if (roleData) {
           const normalized = normalizeRole(roleData.role);
@@ -101,7 +104,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     }
-  };
+  }, [orgSlug, user]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -110,11 +113,67 @@ export default function HomeScreen() {
     return () => {
       isMountedRef.current = false;
     };
-  }, [orgSlug, user]);
+  }, [fetchData]);
+
+  useEffect(() => {
+    setOrgId(null);
+  }, [orgSlug]);
 
   useEffect(() => {
     setMemberCount(members.length);
   }, [members]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    const channel = supabase
+      .channel(`organization:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "organizations",
+          filter: `id=eq.${orgId}`,
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, fetchData]);
+
+  useEffect(() => {
+    if (!orgId || !userId) return;
+    const channel = supabase
+      .channel(`organization-role:${orgId}:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const nextOrgId = (payload.new as { organization_id?: string } | null)
+            ?.organization_id;
+          const previousOrgId = (payload.old as { organization_id?: string } | null)
+            ?.organization_id;
+          if (nextOrgId === orgId || previousOrgId === orgId) {
+            fetchData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, userId, fetchData]);
 
   const handleRefresh = async () => {
     setRefreshing(true);

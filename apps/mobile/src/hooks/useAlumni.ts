@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 interface Alumni {
@@ -25,16 +25,25 @@ interface UseAlumniReturn {
 
 export function useAlumni(orgSlug: string): UseAlumniReturn {
   const isMountedRef = useRef(true);
+  const orgIdRef = useRef<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [alumni, setAlumni] = useState<Alumni[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAlumni = async () => {
+  useEffect(() => {
+    orgIdRef.current = null;
+    setOrgId(null);
+  }, [orgSlug]);
+
+  const fetchAlumni = useCallback(async (overrideOrgId?: string) => {
     if (!orgSlug) {
       if (isMountedRef.current) {
         setAlumni([]);
         setError(null);
         setLoading(false);
+        orgIdRef.current = null;
+        setOrgId(null);
       }
       return;
     }
@@ -42,17 +51,25 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
     try {
       setLoading(true);
 
-      // First get org ID from slug
-      const { data: org, error: orgError } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("slug", orgSlug)
-        .single();
+      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
 
-      if (orgError) throw orgError;
-      if (!org) throw new Error("Organization not found");
+      if (!resolvedOrgId) {
+        // First get org ID from slug
+        const { data: org, error: orgError } = await supabase
+          .from("organizations")
+          .select("id")
+          .eq("slug", orgSlug)
+          .single();
 
-      console.log("🔍 [useAlumni] Found org:", { orgSlug, orgId: org.id });
+        if (orgError) throw orgError;
+        if (!org) throw new Error("Organization not found");
+
+        resolvedOrgId = org.id;
+        orgIdRef.current = resolvedOrgId;
+        if (isMountedRef.current) {
+          setOrgId(resolvedOrgId);
+        }
+      }
 
       // Get alumni for this organization
       const { data, error: alumniError } = await supabase
@@ -73,20 +90,17 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
           linkedin_url
         `
         )
-        .eq("organization_id", org.id)
+        .eq("organization_id", resolvedOrgId)
         .is("deleted_at", null)
         .order("graduation_year", { ascending: false });
 
       if (alumniError) throw alumniError;
-
-      console.log("🔍 [useAlumni] Query result:", { count: data?.length, data });
 
       if (isMountedRef.current) {
         setAlumni((data as Alumni[]) || []);
         setError(null);
       }
     } catch (e) {
-      console.error("❌ [useAlumni] Error:", (e as Error).message);
       if (isMountedRef.current) {
         setError((e as Error).message);
       }
@@ -95,7 +109,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
         setLoading(false);
       }
     }
-  };
+  }, [orgSlug]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -104,7 +118,30 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
     return () => {
       isMountedRef.current = false;
     };
-  }, [orgSlug]);
+  }, [fetchAlumni]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    const channel = supabase
+      .channel(`alumni:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "alumni",
+          filter: `organization_id=eq.${orgId}`,
+        },
+        () => {
+          fetchAlumni(orgId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, fetchAlumni]);
 
   return { alumni, loading, error, refetch: fetchAlumni };
 }

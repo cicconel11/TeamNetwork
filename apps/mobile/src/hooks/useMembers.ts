@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 interface Member {
@@ -23,16 +23,25 @@ interface UseMembersReturn {
 
 export function useMembers(orgSlug: string): UseMembersReturn {
   const isMountedRef = useRef(true);
+  const orgIdRef = useRef<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMembers = async () => {
+  useEffect(() => {
+    orgIdRef.current = null;
+    setOrgId(null);
+  }, [orgSlug]);
+
+  const fetchMembers = useCallback(async (overrideOrgId?: string) => {
     if (!orgSlug) {
       if (isMountedRef.current) {
         setMembers([]);
         setError(null);
         setLoading(false);
+        orgIdRef.current = null;
+        setOrgId(null);
       }
       return;
     }
@@ -40,17 +49,25 @@ export function useMembers(orgSlug: string): UseMembersReturn {
     try {
       setLoading(true);
 
-      // First get org ID from slug
-      const { data: org, error: orgError } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("slug", orgSlug)
-        .single();
+      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
 
-      if (orgError) throw orgError;
-      if (!org) throw new Error("Organization not found");
+      if (!resolvedOrgId) {
+        // First get org ID from slug
+        const { data: org, error: orgError } = await supabase
+          .from("organizations")
+          .select("id")
+          .eq("slug", orgSlug)
+          .single();
 
-      console.log("🔍 [useMembers] Found org:", { orgSlug, orgId: org.id });
+        if (orgError) throw orgError;
+        if (!org) throw new Error("Organization not found");
+
+        resolvedOrgId = org.id;
+        orgIdRef.current = resolvedOrgId;
+        if (isMountedRef.current) {
+          setOrgId(resolvedOrgId);
+        }
+      }
 
       // Get members joined to users table
       // users table has: id, email, name, avatar_url
@@ -65,21 +82,18 @@ export function useMembers(orgSlug: string): UseMembersReturn {
           user:users(id, email, name, avatar_url)
         `
         )
-        .eq("organization_id", org.id)
+        .eq("organization_id", resolvedOrgId)
         .eq("status", "active")
         .in("role", ["admin", "active_member", "member"])
         .order("role", { ascending: true });
 
       if (membersError) throw membersError;
 
-      console.log("🔍 [useMembers] Query result:", { count: data?.length, data });
-
       if (isMountedRef.current) {
         setMembers((data as unknown as Member[]) || []);
         setError(null);
       }
     } catch (e) {
-      console.error("❌ [useMembers] Error:", (e as Error).message);
       if (isMountedRef.current) {
         setError((e as Error).message);
       }
@@ -88,7 +102,7 @@ export function useMembers(orgSlug: string): UseMembersReturn {
         setLoading(false);
       }
     }
-  };
+  }, [orgSlug]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -97,7 +111,30 @@ export function useMembers(orgSlug: string): UseMembersReturn {
     return () => {
       isMountedRef.current = false;
     };
-  }, [orgSlug]);
+  }, [fetchMembers]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    const channel = supabase
+      .channel(`members:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: `organization_id=eq.${orgId}`,
+        },
+        () => {
+          fetchMembers(orgId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, fetchMembers]);
 
   return { members, loading, error, refetch: fetchMembers };
 }

@@ -14,6 +14,7 @@ export function useOrganizations(): UseOrganizationsReturn {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const fetchOrganizations = useCallback(async () => {
     try {
@@ -60,12 +61,20 @@ export function useOrganizations(): UseOrganizationsReturn {
 
   useEffect(() => {
     isMountedRef.current = true;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isMountedRef.current) {
+        setUserId(session?.user?.id ?? null);
+      }
+    });
     fetchOrganizations();
 
     // Listen for auth state changes and refetch when user signs in
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, _session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (isMountedRef.current) {
+        setUserId(session?.user?.id ?? null);
+      }
       if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
         fetchOrganizations();
       } else if (event === "SIGNED_OUT") {
@@ -81,6 +90,29 @@ export function useOrganizations(): UseOrganizationsReturn {
       subscription?.unsubscribe();
     };
   }, [fetchOrganizations]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`organizations:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          fetchOrganizations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, fetchOrganizations]);
 
   return { organizations, loading, error, refetch: fetchOrganizations };
 }

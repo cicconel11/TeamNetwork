@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
 import { normalizeRole } from "@teammeet/core";
@@ -13,16 +13,26 @@ interface UseAnnouncementsReturn {
 
 export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
   const isMountedRef = useRef(true);
+  const orgIdRef = useRef<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAnnouncements = async () => {
+  useEffect(() => {
+    orgIdRef.current = null;
+    setOrgId(null);
+  }, [orgSlug]);
+
+  const fetchAnnouncements = useCallback(async (overrideOrgId?: string) => {
     if (!orgSlug) {
       if (isMountedRef.current) {
         setAnnouncements([]);
         setError(null);
         setLoading(false);
+        orgIdRef.current = null;
+        setOrgId(null);
       }
       return;
     }
@@ -35,21 +45,33 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
+      if (isMountedRef.current) {
+        setUserId(user.id);
+      }
 
-      // Get org ID from slug
-      const { data: org, error: orgError } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("slug", orgSlug)
-        .single();
+      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
 
-      if (orgError) throw orgError;
+      if (!resolvedOrgId) {
+        // Get org ID from slug
+        const { data: org, error: orgError } = await supabase
+          .from("organizations")
+          .select("id")
+          .eq("slug", orgSlug)
+          .single();
+
+        if (orgError) throw orgError;
+        resolvedOrgId = org.id;
+        orgIdRef.current = resolvedOrgId;
+        if (isMountedRef.current) {
+          setOrgId(resolvedOrgId);
+        }
+      }
 
       // Get user's role in this org
       const { data: roleData } = await supabase
         .from("user_organization_roles")
         .select("role, status")
-        .eq("organization_id", org.id)
+        .eq("organization_id", resolvedOrgId)
         .eq("user_id", user.id)
         .eq("status", "active")
         .single();
@@ -58,7 +80,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
       const { data: announcementsData, error: announcementsError } = await supabase
         .from("announcements")
         .select("*")
-        .eq("organization_id", org.id)
+        .eq("organization_id", resolvedOrgId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
@@ -86,7 +108,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
         setLoading(false);
       }
     }
-  };
+  }, [orgSlug]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -95,7 +117,59 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
     return () => {
       isMountedRef.current = false;
     };
-  }, [orgSlug]);
+  }, [fetchAnnouncements]);
+
+  useEffect(() => {
+    if (!orgId) return;
+    const channel = supabase
+      .channel(`announcements:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "announcements",
+          filter: `organization_id=eq.${orgId}`,
+        },
+        () => {
+          fetchAnnouncements(orgId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, fetchAnnouncements]);
+
+  useEffect(() => {
+    if (!orgId || !userId) return;
+    const channel = supabase
+      .channel(`announcement-roles:${orgId}:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const nextOrgId = (payload.new as { organization_id?: string } | null)
+            ?.organization_id;
+          const previousOrgId = (payload.old as { organization_id?: string } | null)
+            ?.organization_id;
+          if (nextOrgId === orgId || previousOrgId === orgId) {
+            fetchAnnouncements(orgId);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, userId, fetchAnnouncements]);
 
   return { announcements, loading, error, refetch: fetchAnnouncements };
 }
