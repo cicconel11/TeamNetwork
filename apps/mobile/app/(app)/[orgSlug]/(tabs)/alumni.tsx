@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,19 +8,37 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAlumni } from "@/hooks/useAlumni";
 
 export default function AlumniScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
   const { alumni, loading, error, refetch } = useAlumni(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
+  const isRefetchingRef = useRef(false);
 
-  const handleRefresh = async () => {
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      Promise.resolve(refetch()).finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [refetch, refreshing])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefetchingRef.current) return;
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  };
+    isRefetchingRef.current = true;
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
+  }, [refetch]);
 
   if (loading && alumni.length === 0) {
     return (
@@ -81,7 +99,7 @@ export default function AlumniScreen() {
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
       }
       renderItem={({ item }) => (
         <View style={styles.alumniCard}>

@@ -13,7 +13,7 @@ import {
   SectionList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,6 +38,8 @@ export default function MembersScreen() {
   const [activeTab, setActiveTab] = useState<TabType>("members");
   const [searchQuery, setSearchQuery] = useState("");
   const tabIndicatorPosition = useSharedValue(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const isRefetchingRef = useRef(false);
 
   const handleTabChange = useCallback((tab: TabType) => {
     setActiveTab(tab);
@@ -99,8 +101,27 @@ export default function MembersScreen() {
   const loading = membersLoading || alumniLoading;
   const error = membersError || alumniError;
 
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      Promise.all([refetchMembers(), refetchAlumni()]).finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [refetchMembers, refetchAlumni, refreshing])
+  );
+
   const handleRefresh = useCallback(async () => {
-    await Promise.all([refetchMembers(), refetchAlumni()]);
+    if (isRefetchingRef.current) return;
+    setRefreshing(true);
+    isRefetchingRef.current = true;
+    try {
+      await Promise.all([refetchMembers(), refetchAlumni()]);
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
   }, [refetchMembers, refetchAlumni]);
 
   const getMemberInitials = (member: (typeof members)[0]) => {
@@ -255,7 +276,7 @@ export default function MembersScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyMembers}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor="#2563eb" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
           }
         />
       ) : (
@@ -268,7 +289,7 @@ export default function MembersScreen() {
           ListEmptyComponent={renderEmptyAlumni}
           stickySectionHeadersEnabled
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={handleRefresh} tintColor="#2563eb" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
           }
         />
       )}
