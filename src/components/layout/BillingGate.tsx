@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Card } from "@/components/ui";
 
 interface BillingGateProps {
@@ -18,6 +18,20 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isReconciling, setIsReconciling] = useState(false);
+  const [autoReconcileAttempted, setAutoReconcileAttempted] = useState(false);
+
+  const needsReconciliation = status === "complete" || status === "completed";
+  // Statuses that indicate no payment has ever been made - need checkout, not billing portal
+  const needsCheckout = status === "pending" || status === "incomplete" || status === "incomplete_expired";
+
+  // Auto-trigger reconciliation for admins when status needs it
+  useEffect(() => {
+    if (needsReconciliation && isAdmin && !autoReconcileAttempted && !isReconciling) {
+      setAutoReconcileAttempted(true);
+      reconcileSubscription();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsReconciliation, isAdmin, autoReconcileAttempted]);
 
   const reconcileSubscription = async () => {
     setIsReconciling(true);
@@ -35,6 +49,26 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to reconcile subscription");
       setIsReconciling(false);
+    }
+  };
+
+  const startCheckout = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/organizations/${organizationId}/start-checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || "Unable to start checkout");
+      }
+      window.location.href = data.url as string;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to start checkout");
+      setIsLoading(false);
     }
   };
 
@@ -79,21 +113,21 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
   };
 
   const statusCopy: Record<string, string> = {
-    pending: "Awaiting payment setup to activate your organization.",
+    pending: "This organization hasn't been activated yet. Complete payment to get started.",
     pending_sales: "A team member will reach out to finalize pricing. No payment is due yet.",
     past_due: "Payment issue detected. Please update billing to restore access.",
+    unpaid: "Your payment failed. Please update billing to restore access.",
     canceled: gracePeriodExpired 
       ? "Your grace period has expired. Resubscribe to restore access, or delete this organization." 
       : "Subscription canceled. Resubscribe to continue using this organization.",
-    incomplete: "Subscription is incomplete. Please finish checkout.",
-    incomplete_expired: "Checkout expired. Restart billing to continue.",
+    incomplete: "Your checkout wasn't completed. Click below to finish setting up your subscription.",
+    incomplete_expired: "Your previous checkout expired. Start a new checkout to activate your organization.",
     trialing: "Trial active. Ensure billing is set up before the trial ends.",
-    complete: "Payment completed but subscription status needs to be synced. Click 'Reconcile Subscription' to fix this.",
-    completed: "Payment completed but subscription status needs to be synced. Click 'Reconcile Subscription' to fix this.",
+    complete: "Payment completed but subscription status needs to be synced.",
+    completed: "Payment completed but subscription status needs to be synced.",
   };
 
   const friendlyStatus = statusCopy[status] || "Billing required to activate this organization.";
-  const needsReconciliation = status === "complete" || status === "completed";
 
   // Different title for grace period expired
   const title = gracePeriodExpired 
@@ -133,11 +167,25 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {needsReconciliation && isAdmin ? (
             <Button onClick={reconcileSubscription} isLoading={isReconciling}>
-              Reconcile Subscription
+              {isReconciling ? "Syncing..." : "Reconcile Subscription"}
             </Button>
+          ) : needsReconciliation && !isAdmin ? (
+            // Non-admin sees message instead of button for reconciliation status
+            <p className="text-sm text-muted-foreground">
+              Please ask your organization admin to fix this issue.
+            </p>
+          ) : needsCheckout ? (
+            // For pending/incomplete statuses - need to start checkout, not billing portal
+            <Button onClick={startCheckout} isLoading={isLoading}>
+              Complete Payment
+            </Button>
+          ) : status === "pending_sales" ? (
+            // Sales-led flow - no action button needed
+            null
           ) : (
+            // For other statuses (past_due, canceled, etc.) - billing portal works
             <Button onClick={openPortal} isLoading={isLoading}>
-              {status === "canceled" ? "Resubscribe" : "Open Billing Portal"}
+              {status === "canceled" ? "Resubscribe" : "Manage Billing"}
             </Button>
           )}
           <Button variant="secondary" onClick={() => (window.location.href = "/app")}>

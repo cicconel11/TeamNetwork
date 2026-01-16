@@ -78,15 +78,72 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Subscription not found" }, 404);
   }
 
-  if (subscriptionRow.stripe_subscription_id && subscriptionRow.stripe_customer_id) {
+  // Only skip reconciliation if Stripe IDs exist AND status is already valid
+  // Invalid statuses like "complete" or "pending" should trigger a full sync from Stripe
+  const validStatuses = ["active", "trialing", "canceling", "past_due", "unpaid", "canceled", "incomplete", "incomplete_expired"];
+  const hasValidStatus = validStatuses.includes(subscriptionRow.status || "");
+  
+  if (
+    subscriptionRow.stripe_subscription_id && 
+    subscriptionRow.stripe_customer_id &&
+    hasValidStatus
+  ) {
     return respond({ status: subscriptionRow.status || "active" });
   }
 
+  // If we have Stripe IDs but invalid status, fetch directly from Stripe to reconcile
+  if (subscriptionRow.stripe_subscription_id) {
+    try {
+      const subscription = (await stripe.subscriptions.retrieve(subscriptionRow.stripe_subscription_id)) as SubscriptionWithPeriod;
+      const customerId = typeof subscription.customer === "string"
+        ? subscription.customer
+        : (subscription.customer as { id?: string })?.id || subscriptionRow.stripe_customer_id;
+      const currentPeriodEnd = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : null;
+      const status = normalizeSubscriptionStatus({
+        status: subscription.status,
+        cancel_at_period_end: subscription.cancel_at_period_end,
+      });
+
+      const payload: Database["public"]["Tables"]["organization_subscriptions"]["Update"] = {
+        stripe_subscription_id: subscriptionRow.stripe_subscription_id,
+        stripe_customer_id: customerId,
+        status,
+        current_period_end: currentPeriodEnd,
+        updated_at: new Date().toISOString(),
+      };
+
+      await serviceSupabase
+        .from("organization_subscriptions")
+        .update(payload)
+        .eq("organization_id", organizationId);
+
+      return respond({ status, stripeSubscriptionId: subscriptionRow.stripe_subscription_id, stripeCustomerId: customerId });
+    } catch (error) {
+      console.error("[reconcile-subscription] Failed to fetch subscription from Stripe:", error);
+      // Fall through to payment_attempts lookup
+    }
+  }
+
+  // Search payment_attempts with any status that indicates a checkout happened
+  // This includes both payment-lifecycle statuses (succeeded, processing) and 
+  // subscription statuses (active, trialing, etc.) since webhook may store either
+  const recoverableStatuses = [
+    // Payment lifecycle statuses (legacy)
+    "succeeded", "processing",
+    // Subscription statuses (webhook may store these now)
+    "active", "trialing", "canceling", "past_due", "unpaid", "canceled",
+    "incomplete", "incomplete_expired",
+    // Also check "complete" which can be stored from checkout session
+    "complete", "completed",
+  ];
+  
   const { data: paymentAttempts } = await serviceSupabase
     .from("payment_attempts")
     .select("id, stripe_checkout_session_id, status, organization_id, metadata")
-    .in("status", ["succeeded", "processing"])
-    .or(`organization_id.eq.${organizationId},metadata->>pending_org_id.eq.${organizationId}`)
+    .in("status", recoverableStatuses)
+    .or(`organization_id.eq.${organizationId},metadata->pending_org_id.eq.${organizationId}`)
     .order("created_at", { ascending: false })
     .limit(1);
 

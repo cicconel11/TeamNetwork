@@ -90,7 +90,8 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       <BillingGate 
         orgSlug={orgSlug} 
         organizationId={orgContext.organization.id} 
-        status={subscriptionStatus} 
+        status={subscriptionStatus}
+        isAdmin={orgContext.role === "admin"}
       />
     );
   }
