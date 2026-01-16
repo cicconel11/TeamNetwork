@@ -128,13 +128,16 @@ export async function POST(req: Request) {
     }
 
     // If still no customer ID, try to find it from payment attempts
+    // Use flow_type + checkout session presence instead of status to be resilient
+    // to status semantics (we now sometimes store subscription statuses like 'active')
     if (!stripeCustomerId) {
       const serviceSupabase = createServiceClient();
       const { data: paymentAttempt } = await serviceSupabase
         .from("payment_attempts")
         .select("stripe_checkout_session_id, organization_id")
         .eq("organization_id", organization.id)
-        .in("status", ["succeeded", "processing"])
+        .eq("flow_type", "subscription_checkout")
+        .not("stripe_checkout_session_id", "is", null)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();

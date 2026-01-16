@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { baseSchemas } from "@/lib/security/validation";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,6 +15,11 @@ interface RouteParams {
  * 
  * Returns the organization ID for a given slug.
  * Used by CheckoutSuccessBanner to poll for org creation after checkout.
+ * 
+ * Security:
+ * - Rate-limited to prevent enumeration attacks
+ * - Returns only { id } to minimize data exposure
+ * - Requires authentication
  */
 export async function GET(req: Request, { params }: RouteParams) {
   const { slug } = await params;
@@ -27,24 +33,40 @@ export async function GET(req: Request, { params }: RouteParams) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // Rate limit based on user (if authed) or IP
+  const rateLimit = checkRateLimit(req, {
+    userId: user?.id ?? null,
+    feature: "org-by-slug",
+    limitPerIp: 30,
+    limitPerUser: 20,
+  });
+
+  if (!rateLimit.ok) {
+    return buildRateLimitResponse(rateLimit);
+  }
+
+  const respond = (payload: unknown, status = 200) =>
+    NextResponse.json(payload, { status, headers: rateLimit.headers });
+
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return respond({ error: "Unauthorized" }, 401);
   }
 
   const { data: org, error } = await supabase
     .from("organizations")
-    .select("id, name, slug")
+    .select("id")
     .eq("slug", slug)
     .maybeSingle();
 
   if (error) {
     console.error("[by-slug] Failed to lookup organization:", error);
-    return NextResponse.json({ error: "Failed to lookup organization" }, { status: 500 });
+    return respond({ error: "Failed to lookup organization" }, 500);
   }
 
   if (!org) {
-    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+    return respond({ error: "Organization not found" }, 404);
   }
 
-  return NextResponse.json({ id: org.id, name: org.name, slug: org.slug });
+  // Return only the ID to minimize data exposure
+  return respond({ id: org.id });
 }

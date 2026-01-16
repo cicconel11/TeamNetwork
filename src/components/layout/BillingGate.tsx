@@ -165,15 +165,15 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          {needsReconciliation && isAdmin ? (
+          {!isAdmin ? (
+            // Non-admins cannot perform any billing actions
+            <p className="text-sm text-muted-foreground">
+              Please ask your organization admin to manage billing.
+            </p>
+          ) : needsReconciliation ? (
             <Button onClick={reconcileSubscription} isLoading={isReconciling}>
               {isReconciling ? "Syncing..." : "Reconcile Subscription"}
             </Button>
-          ) : needsReconciliation && !isAdmin ? (
-            // Non-admin sees message instead of button for reconciliation status
-            <p className="text-sm text-muted-foreground">
-              Please ask your organization admin to fix this issue.
-            </p>
           ) : needsCheckout ? (
             // For pending/incomplete statuses - need to start checkout, not billing portal
             <Button onClick={startCheckout} isLoading={isLoading}>

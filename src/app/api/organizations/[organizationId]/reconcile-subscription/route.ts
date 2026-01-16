@@ -143,7 +143,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     .from("payment_attempts")
     .select("id, stripe_checkout_session_id, status, organization_id, metadata")
     .in("status", recoverableStatuses)
-    .or(`organization_id.eq.${organizationId},metadata->pending_org_id.eq.${organizationId}`)
+    .or(`organization_id.eq.${organizationId},metadata->>pending_org_id.eq.${organizationId}`)
     .order("created_at", { ascending: false })
     .limit(1);
 
