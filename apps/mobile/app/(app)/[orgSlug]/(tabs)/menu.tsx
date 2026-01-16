@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
   Bell,
   Heart,
@@ -55,6 +55,7 @@ export default function MenuScreen() {
   const [notificationCount, setNotificationCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isRefetchingRef = useRef(false);
 
   const fetchData = useCallback(async () => {
     if (!user || !orgSlug) return;
@@ -70,6 +71,7 @@ export default function MenuScreen() {
         .single();
 
       if (orgError) throw orgError;
+      if (!orgData) throw new Error("Organization not found");
 
       setOrganization(orgData);
 
@@ -107,10 +109,27 @@ export default function MenuScreen() {
     fetchData();
   }, [fetchData]);
 
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      fetchData().finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [fetchData, refreshing])
+  );
+
   const handleRefresh = useCallback(async () => {
+    if (isRefetchingRef.current) return;
     setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
+    isRefetchingRef.current = true;
+    try {
+      await fetchData();
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
   }, [fetchData]);
 
   const handleSignOut = async () => {

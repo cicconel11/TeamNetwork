@@ -1,3 +1,4 @@
+import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,13 +7,38 @@ import {
   RefreshControl,
   StyleSheet,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import type { Announcement } from "@teammeet/types";
 
 export default function AnnouncementsScreen() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
   const { announcements, loading, error, refetch } = useAnnouncements(orgSlug || "");
+  const [refreshing, setRefreshing] = useState(false);
+  const isRefetchingRef = useRef(false);
+
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      Promise.resolve(refetch()).finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [refetch, refreshing])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefetchingRef.current) return;
+    setRefreshing(true);
+    isRefetchingRef.current = true;
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
+  }, [refetch]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -61,7 +87,7 @@ export default function AnnouncementsScreen() {
       contentContainerStyle={styles.listContent}
       renderItem={renderAnnouncement}
       refreshControl={
-        <RefreshControl refreshing={loading} onRefresh={refetch} />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
       }
       ListEmptyComponent={
         <View style={styles.emptyContainer}>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useFocusEffect } from "expo-router";
 import { Calendar, MapPin, Users, Clock } from "lucide-react-native";
 import { useEvents, type Event } from "@/hooks/useEvents";
 
@@ -20,6 +20,31 @@ export default function EventsScreen() {
   const { events, loading, error, refetch } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
+  const [refreshing, setRefreshing] = useState(false);
+  const isRefetchingRef = useRef(false);
+
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      Promise.resolve(refetch()).finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [refetch, refreshing])
+  );
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefetchingRef.current) return;
+    setRefreshing(true);
+    isRefetchingRef.current = true;
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+      isRefetchingRef.current = false;
+    }
+  }, [refetch]);
 
   // Memoize 'now' to prevent unnecessary re-renders
   const now = useMemo(() => new Date(), []);
@@ -257,7 +282,7 @@ export default function EventsScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={refetch} tintColor="#2563eb" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
         }
       />
     </SafeAreaView>

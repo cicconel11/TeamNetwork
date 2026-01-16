@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
 import {
   Users,
   Calendar,
@@ -41,6 +41,7 @@ export default function HomeScreen() {
   const [memberCount, setMemberCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const isRefetchingRef = useRef(false);
 
   const { events, refetch: refetchEvents } = useEvents(orgSlug || "");
   const { announcements, refetch: refetchAnnouncements } = useAnnouncements(orgSlug || "");
@@ -123,6 +124,22 @@ export default function HomeScreen() {
     setMemberCount(members.length);
   }, [members]);
 
+  // Refetch on tab focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isRefetchingRef.current || refreshing) return;
+      isRefetchingRef.current = true;
+      Promise.all([
+        fetchData(),
+        refetchEvents(),
+        refetchAnnouncements(),
+        refetchMembers(),
+      ]).finally(() => {
+        isRefetchingRef.current = false;
+      });
+    }, [fetchData, refetchEvents, refetchAnnouncements, refetchMembers, refreshing])
+  );
+
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
@@ -176,7 +193,9 @@ export default function HomeScreen() {
   }, [orgId, userId, fetchData]);
 
   const handleRefresh = async () => {
+    if (isRefetchingRef.current) return;
     setRefreshing(true);
+    isRefetchingRef.current = true;
     try {
       await Promise.all([
         fetchData(),
@@ -186,6 +205,7 @@ export default function HomeScreen() {
       ]);
     } finally {
       setRefreshing(false);
+      isRefetchingRef.current = false;
     }
   };
 
