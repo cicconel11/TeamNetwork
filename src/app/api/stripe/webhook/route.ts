@@ -292,7 +292,7 @@ export async function POST(req: Request) {
     return org.id;
   };
 
-  const grantAdminRole = async (organizationId: string, paymentAttemptId: string | null) => {
+  const grantAdminRole = async (organizationId: string, paymentAttemptId: string | null): Promise<boolean> => {
     const createdBy = await resolveCreatorFromPaymentAttempt(paymentAttemptId);
     if (createdBy) {
       console.log("[SECURITY-AUDIT] Admin role granted via webhook", {
@@ -302,7 +302,7 @@ export async function POST(req: Request) {
         timestamp: new Date().toISOString(),
       });
 
-      await supabase
+      const { error } = await supabase
         .from("user_organization_roles")
         .upsert(
           {
@@ -313,11 +313,22 @@ export async function POST(req: Request) {
           },
           { onConflict: "organization_id,user_id" },
         );
+      
+      if (error) {
+        console.error("[stripe-webhook] Failed to grant admin role", {
+          organizationId,
+          userId: createdBy,
+          error: error.message,
+        });
+        return false;
+      }
+      return true;
     } else {
-      console.warn("[stripe-webhook] No creator found in payment_attempts", {
+      console.error("[stripe-webhook] CRITICAL: No creator found in payment_attempts - org has no admin", {
         organizationId,
         paymentAttemptId,
       });
+      return false;
     }
   };
 
@@ -359,17 +370,18 @@ export async function POST(req: Request) {
   const resolveOrgForSubscriptionFlow = async (
     metadata: Stripe.Metadata | null | undefined,
     paymentAttemptId?: string | null
-  ) => {
+  ): Promise<{ organizationId: string | null; parsed: OrgMetadata; adminGranted: boolean }> => {
     const parsed = parseOrgMetadata(metadata);
     const organizationId = await ensureOrganizationFromMetadata(parsed);
+    let adminGranted = false;
     if (organizationId) {
       await ensureSubscriptionSeed(organizationId, parsed);
       // Grant admin role from verified payment_attempts, not from untrusted metadata
       if (paymentAttemptId) {
-        await grantAdminRole(organizationId, paymentAttemptId);
+        adminGranted = await grantAdminRole(organizationId, paymentAttemptId);
       }
     }
-    return { organizationId, parsed };
+    return { organizationId, parsed, adminGranted };
   };
 
   /**
@@ -519,10 +531,29 @@ export async function POST(req: Request) {
           }
 
           const paymentAttemptId = (session.metadata?.payment_attempt_id as string | undefined) ?? null;
-          const { organizationId } = await resolveOrgForSubscriptionFlow(session.metadata, paymentAttemptId);
+          const { organizationId, adminGranted } = await resolveOrgForSubscriptionFlow(session.metadata, paymentAttemptId);
           if (!organizationId) {
-            console.warn("[stripe-webhook] Missing organization info for checkout.session.completed");
-            break;
+            // CRITICAL: Return 500 to force Stripe to retry - org provisioning failed
+            console.error("[stripe-webhook] Failed to provision organization - forcing retry", {
+              eventId: event.id,
+              sessionId: session.id,
+              metadata: session.metadata,
+            });
+            return NextResponse.json(
+              { error: "Organization provisioning failed - will retry" },
+              { status: 500 }
+            );
+          }
+
+          // Log warning if admin role wasn't granted, but don't fail the webhook
+          // The reconciliation endpoint can fix this, and user can contact support
+          if (paymentAttemptId && !adminGranted) {
+            console.error("[stripe-webhook] WARNING: Org created but admin role not granted", {
+              eventId: event.id,
+              organizationId,
+              paymentAttemptId,
+              sessionId: session.id,
+            });
           }
 
           // SECURITY FIX: Validate org owns this Stripe resource

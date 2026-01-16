@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { AppPageAnimations } from "@/components/app/AppPageAnimations";
 import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
+import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
 
 type Membership = {
   organization: {
@@ -20,11 +21,11 @@ type Membership = {
 };
 
 interface AppHomePageProps {
-  searchParams: Promise<{ error?: string; pending?: string }>;
+  searchParams: Promise<{ error?: string; pending?: string; checkout?: string; org?: string }>;
 }
 
 export default async function AppHomePage({ searchParams }: AppHomePageProps) {
-  const { error: errorParam, pending: pendingOrg } = await searchParams;
+  const { error: errorParam, pending: pendingOrg, checkout, org: orgSlug } = await searchParams;
   const supabase = await createClient();
   // Use getUser() instead of getSession() - validates JWT and refreshes tokens for OAuth
   const { data: { user } } = await supabase.auth.getUser();
@@ -58,6 +59,25 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
       role: m.role ?? "member",
     })) ?? [];
 
+  // If checkout=success, find the org by slug to get its ID for reconciliation
+  let checkoutOrgId: string | undefined;
+  if (checkout === "success" && orgSlug) {
+    const targetOrg = (memberships as Membership[] | null)?.find(
+      (m) => m.organization?.slug === orgSlug
+    );
+    checkoutOrgId = targetOrg?.organization?.id;
+    
+    // If org not in memberships yet (webhook may not have fired), look it up directly
+    if (!checkoutOrgId) {
+      const { data: orgData } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("slug", orgSlug)
+        .maybeSingle();
+      checkoutOrgId = orgData?.id;
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <AppBackgroundEffects />
@@ -82,6 +102,11 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
       </header>
 
       <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+        {/* Checkout success banner with auto-sync */}
+        {checkout === "success" && orgSlug && (
+          <CheckoutSuccessBanner orgSlug={orgSlug} organizationId={checkoutOrgId} />
+        )}
+
         {/* Error banner for revoked access */}
         {errorParam === "access_revoked" && (
           <Card className="p-4 mb-6 border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20">

@@ -90,7 +90,8 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       <BillingGate 
         orgSlug={orgSlug} 
         organizationId={orgContext.organization.id} 
-        status={subscriptionStatus} 
+        status={subscriptionStatus}
+        isAdmin={orgContext.role === "admin"}
       />
     );
   }
@@ -173,6 +174,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
             daysRemaining={orgContext.gracePeriod.daysRemaining} 
             orgSlug={orgSlug}
             organizationId={organization.id}
+            isAdmin={orgContext.role === "admin"}
           />
         </div>
       )}
