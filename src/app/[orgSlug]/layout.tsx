@@ -68,8 +68,18 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   }
 
   // Show BillingGate for non-active subscriptions (except during grace period)
+  // Normalize invalid statuses: "complete" or "completed" should be treated as "active"
+  // (these can occur if webhook stored checkout session status instead of subscription status)
+  let subscriptionStatus = orgContext.subscription?.status || "";
+  if (subscriptionStatus === "complete" || subscriptionStatus === "completed") {
+    // If we have a subscription with a period end, it's likely active
+    // Otherwise, we'll show billing gate to let them reconcile
+    if (orgContext.subscription?.currentPeriodEnd) {
+      subscriptionStatus = "active";
+    }
+  }
+  
   const activeStatuses = ["active", "trialing", "canceling"];
-  const subscriptionStatus = orgContext.subscription?.status || "";
   const shouldShowBillingGate = 
     subscriptionStatus && 
     !activeStatuses.includes(subscriptionStatus) && 

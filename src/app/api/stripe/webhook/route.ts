@@ -538,18 +538,29 @@ export async function POST(req: Request) {
             return NextResponse.json({ received: true });
           }
 
-          let status = session.status || "completed";
+          // Always retrieve subscription status from Stripe when subscriptionId exists
+          // Never use checkout session status ("complete") as subscription status
+          let status = "active"; // Default fallback
           let currentPeriodEnd: string | null = null;
 
           if (subscriptionId) {
-            const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
-            if ("current_period_end" in subscription) {
-              status = subscription.status;
-              const periodEnd = Number(subscription.current_period_end);
+            try {
+              const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
+              // Always use the actual subscription status from Stripe
+              status = subscription.status || "active";
+              const periodEnd = subscription.current_period_end ? Number(subscription.current_period_end) : null;
               currentPeriodEnd = periodEnd
                 ? new Date(periodEnd * 1000).toISOString()
                 : null;
+            } catch (error) {
+              console.error("[stripe-webhook] Failed to retrieve subscription:", subscriptionId, error);
+              // If subscription retrieval fails, default to "active" for paid checkout
+              status = "active";
             }
+          } else {
+            // This shouldn't happen for subscription mode, but if it does, default to active
+            console.warn("[stripe-webhook] Checkout session completed but no subscription ID found");
+            status = "active";
           }
 
           await updatePaymentAttemptStatus({

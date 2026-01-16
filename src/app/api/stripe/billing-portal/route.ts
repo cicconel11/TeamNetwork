@@ -127,10 +127,42 @@ export async function POST(req: Request) {
       }
     }
 
+    // If still no customer ID, try to find it from payment attempts
+    if (!stripeCustomerId) {
+      const serviceSupabase = createServiceClient();
+      const { data: paymentAttempt } = await serviceSupabase
+        .from("payment_attempts")
+        .select("stripe_checkout_session_id, organization_id")
+        .eq("organization_id", organization.id)
+        .in("status", ["succeeded", "processing"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (paymentAttempt?.stripe_checkout_session_id) {
+        try {
+          const session = await stripe.checkout.sessions.retrieve(paymentAttempt.stripe_checkout_session_id, {
+            expand: ["subscription", "customer"],
+          });
+          const customerId =
+            typeof session.customer === "string" ? session.customer : session.customer?.id || null;
+          if (customerId) {
+            stripeCustomerId = customerId;
+            await serviceSupabase
+              .from("organization_subscriptions")
+              .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
+              .eq("organization_id", organization.id);
+          }
+        } catch (error) {
+          console.error("[billing-portal] Failed to retrieve customer from checkout session", error);
+        }
+      }
+    }
+
     if (!stripeCustomerId) {
       return respond(
         {
-          error: "No active billing subscription. Please set up billing by selecting a plan and clicking 'Update plan'.",
+          error: "No active billing subscription found. If you recently completed payment, try refreshing the page or contact support. You can also try the 'Reconcile Subscription' option in settings.",
           stripe_subscription_id: stripeSubId,
         },
         400,

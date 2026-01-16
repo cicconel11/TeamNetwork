@@ -17,6 +17,26 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isReconciling, setIsReconciling] = useState(false);
+
+  const reconcileSubscription = async () => {
+    setIsReconciling(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/organizations/${organizationId}/reconcile-subscription`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Unable to reconcile subscription");
+      }
+      // Reload the page to refresh subscription status
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to reconcile subscription");
+      setIsReconciling(false);
+    }
+  };
 
   const openPortal = async () => {
     setIsLoading(true);
@@ -68,9 +88,12 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
     incomplete: "Subscription is incomplete. Please finish checkout.",
     incomplete_expired: "Checkout expired. Restart billing to continue.",
     trialing: "Trial active. Ensure billing is set up before the trial ends.",
+    complete: "Payment completed but subscription status needs to be synced. Click 'Reconcile Subscription' to fix this.",
+    completed: "Payment completed but subscription status needs to be synced. Click 'Reconcile Subscription' to fix this.",
   };
 
   const friendlyStatus = statusCopy[status] || "Billing required to activate this organization.";
+  const needsReconciliation = status === "complete" || status === "completed";
 
   // Different title for grace period expired
   const title = gracePeriodExpired 
@@ -108,9 +131,15 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
         )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Button onClick={openPortal} isLoading={isLoading}>
-            {status === "canceled" ? "Resubscribe" : "Open Billing Portal"}
-          </Button>
+          {needsReconciliation && isAdmin ? (
+            <Button onClick={reconcileSubscription} isLoading={isReconciling}>
+              Reconcile Subscription
+            </Button>
+          ) : (
+            <Button onClick={openPortal} isLoading={isLoading}>
+              {status === "canceled" ? "Resubscribe" : "Open Billing Portal"}
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => (window.location.href = "/app")}>
             Back to Organizations
           </Button>
