@@ -13,7 +13,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.myteamnetwork.teammeet",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.156976073490-1iejhf7pnad636bdih1gh3tnbu26hvkn"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -26,7 +33,8 @@
         {
           "origin": false
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "extra": {
       "router": {

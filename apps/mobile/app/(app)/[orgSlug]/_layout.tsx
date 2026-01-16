@@ -1,16 +1,32 @@
 import { useRef, useCallback, useState, useEffect } from "react";
+import { Alert } from "react-native";
 import { Tabs, useLocalSearchParams, useRouter } from "expo-router";
-import BottomSheet from "@gorhom/bottom-sheet";
+import Constants from "expo-constants";
 import { TabBar } from "@/components/TabBar";
-import { ActionSheet } from "@/components/ActionSheet";
 import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
+// Determine if running in Expo Go
+const isExpoGo = Constants.appOwnership === "expo";
+
+// Conditionally import BottomSheet to avoid Reanimated issues in Expo Go
+let BottomSheet: any = null;
+let ActionSheet: any = null;
+
+if (!isExpoGo) {
+  try {
+    BottomSheet = require("@gorhom/bottom-sheet").default;
+    ActionSheet = require("@/components/ActionSheet").ActionSheet;
+  } catch (e) {
+    console.warn("BottomSheet not available:", e);
+  }
+}
+
 export default function OrgLayout() {
   const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
   const router = useRouter();
-  const bottomSheetRef = useRef<BottomSheet>(null);
+  const bottomSheetRef = useRef<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Fetch user role for this org
@@ -52,6 +68,15 @@ export default function OrgLayout() {
   }, [orgSlug]);
 
   const handleActionPress = useCallback(() => {
+    if (isExpoGo || !BottomSheet) {
+      // Show simple alert in Expo Go since BottomSheet requires native modules
+      Alert.alert(
+        "Quick Actions",
+        "Action sheet is not available in Expo Go. Use a development build for full functionality.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     bottomSheetRef.current?.expand();
   }, []);
 
@@ -149,18 +174,20 @@ export default function OrgLayout() {
         />
       </Tabs>
 
-      <ActionSheet
-        ref={bottomSheetRef}
-        isAdmin={isAdmin}
-        onClose={handleCloseSheet}
-        onCreateEvent={handleCreateEvent}
-        onPostAnnouncement={handlePostAnnouncement}
-        onInviteMember={handleInviteMember}
-        onRecordDonation={handleRecordDonation}
-        onRsvpEvent={handleRsvpEvent}
-        onCheckIn={handleCheckIn}
-        onShareOrg={handleShareOrg}
-      />
+      {!isExpoGo && ActionSheet && (
+        <ActionSheet
+          ref={bottomSheetRef}
+          isAdmin={isAdmin}
+          onClose={handleCloseSheet}
+          onCreateEvent={handleCreateEvent}
+          onPostAnnouncement={handlePostAnnouncement}
+          onInviteMember={handleInviteMember}
+          onRecordDonation={handleRecordDonation}
+          onRsvpEvent={handleRsvpEvent}
+          onCheckIn={handleCheckIn}
+          onShareOrg={handleShareOrg}
+        />
+      )}
     </>
   );
 }

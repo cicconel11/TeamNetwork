@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -11,19 +11,33 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Link } from "expo-router";
-import { makeRedirectUri } from "expo-auth-session";
-import * as WebBrowser from "expo-web-browser";
-import * as Linking from "expo-linking";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/utils/alert";
-
-WebBrowser.maybeCompleteAuthSession();
 
 // Determine if running in Expo Go vs dev-client/standalone
 const isExpoGo = Constants.appOwnership === "expo";
 // Check if running in web browser (Expo web mode)
 const isWeb = Platform.OS === "web";
+const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+// Conditionally import Google Sign-In only when not in Expo Go
+// This prevents crashes since the native module doesn't exist in Expo Go
+let GoogleSignin: any = null;
+let isErrorWithCode: any = null;
+let statusCodes: any = null;
+
+if (!isExpoGo && !isWeb) {
+  try {
+    const googleSignIn = require("@react-native-google-signin/google-signin");
+    GoogleSignin = googleSignIn.GoogleSignin;
+    isErrorWithCode = googleSignIn.isErrorWithCode;
+    statusCodes = googleSignIn.statusCodes;
+  } catch (e) {
+    console.warn("Google Sign-In module not available:", e);
+  }
+}
 
 export default function LoginScreen() {
   // Form state
@@ -35,6 +49,19 @@ export default function LoginScreen() {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const isLoading = emailLoading || googleLoading;
+
+  useEffect(() => {
+    if (isExpoGo || isWeb || !GoogleSignin) return;
+    if (!googleWebClientId) {
+      console.warn("Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for Google Sign-In.");
+      return;
+    }
+
+    GoogleSignin.configure({
+      iosClientId: googleIosClientId,
+      webClientId: googleWebClientId,
+    });
+  }, []);
 
   // Dev login - bypasses auth for local development
   const handleDevLogin = async () => {
@@ -94,7 +121,7 @@ export default function LoginScreen() {
   const signInWithGoogle = async () => {
     // In Expo Go or Web mode, Google OAuth has limitations due to redirect URI restrictions
     // OAuth redirects would go to the production web app, not back to this app
-    if (isExpoGo || isWeb) {
+    if (isExpoGo || isWeb || !GoogleSignin) {
       showAlert(
         isWeb ? "Web Mode Limitation" : "Expo Go Limitation",
         "Google Sign-In is not available in this mode. Please use email/password to sign in, or use the native mobile app for Google OAuth support."
@@ -102,72 +129,61 @@ export default function LoginScreen() {
       return;
     }
 
+    if (!googleWebClientId) {
+      showAlert(
+        "Google Sign-In Error",
+        "Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID. Please add it to apps/mobile/.env.local."
+      );
+      return;
+    }
+
+    if (Platform.OS === "ios" && !googleIosClientId) {
+      showAlert(
+        "Google Sign-In Error",
+        "Missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID. Please add it to apps/mobile/.env.local."
+      );
+      return;
+    }
+
     setGoogleLoading(true);
     try {
-      // For dev/prod builds, use the custom scheme
-      const redirectUri = makeRedirectUri({
-        scheme: "teammeet",
-        path: "(auth)/callback"
-      });
+      if (Platform.OS === "android") {
+        await GoogleSignin.hasPlayServices({
+          showPlayServicesUpdateDialog: true,
+        });
+      }
 
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const userInfo = await GoogleSignin.signIn();
+
+      if (!userInfo.data?.idToken) {
+        throw new Error("Google Sign-In did not return an ID token.");
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: "google",
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true,
-        },
+        token: userInfo.data.idToken,
       });
 
       if (error) throw error;
-
-      if (data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUri
-        );
-
-        if (result.type === "success") {
-          // Extract tokens from the result URL
-          const url = new URL(result.url);
-
-          // Check hash fragment first (standard OAuth implicit flow)
-          let accessToken: string | null = null;
-          let refreshToken: string | null = null;
-
-          if (url.hash) {
-            const hashParams = new URLSearchParams(url.hash.substring(1));
-            accessToken = hashParams.get("access_token");
-            refreshToken = hashParams.get("refresh_token");
-          }
-
-          // Fall back to query params
-          if (!accessToken) {
-            accessToken = url.searchParams.get("access_token");
-            refreshToken = url.searchParams.get("refresh_token");
-          }
-
-          if (!accessToken || !refreshToken) {
-            throw new Error("Authentication failed: missing credentials");
-          }
-
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (sessionError) throw sessionError;
-
-          const { data: verifyData } = await supabase.auth.getSession();
-          if (!verifyData.session) {
-            throw new Error("Session failed to persist. Please try again.");
-          }
-
-          // Session is set, navigation will happen automatically via _layout.tsx
-        } else if (result.type === "cancel") {
-          // User cancelled, do nothing
+      // Navigation happens automatically via _layout.tsx onAuthStateChange
+    } catch (error) {
+      if (isErrorWithCode && statusCodes && isErrorWithCode(error)) {
+        if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+          return;
+        }
+        if (error.code === statusCodes.IN_PROGRESS) {
+          showAlert("Google Sign-In", "Sign-in is already in progress.");
+          return;
+        }
+        if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+          showAlert(
+            "Google Sign-In",
+            "Google Play Services is not available on this device."
+          );
+          return;
         }
       }
-    } catch (error) {
+
       showAlert("Error", (error as Error).message);
     } finally {
       setGoogleLoading(false);
