@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MembersPageProps {
@@ -31,11 +32,14 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const isAdmin = await isOrgAdmin(org.id);
 
   // Build query with filters
+  const devAdminEmails = getDevAdminEmails();
+
   let query = supabase
     .from("members")
     .select("*")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
+    .not("email", "in", `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`)
     .order("last_name");
 
   // Apply filters
@@ -57,7 +61,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     .from("members")
     .select("role")
     .eq("organization_id", org.id)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .not("email", "in", `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`);
   
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 

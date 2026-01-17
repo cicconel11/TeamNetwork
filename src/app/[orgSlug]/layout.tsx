@@ -1,11 +1,14 @@
-import { notFound } from "next/navigation";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
 import { BillingGate } from "@/components/layout/BillingGate";
+import { DevPanel } from "@/components/layout/DevPanel";
 import { getOrgContext } from "@/lib/auth/roles";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -18,6 +21,11 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   if (!orgContext.organization) notFound();
 
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_org");
+  const isAdmin = orgContext.role === "admin" || isDevAdmin;
+
   if (!orgContext.userId) {
     const cookieStore = await cookies();
     const hasSbCookies = cookieStore.getAll().some((c) => c.name.startsWith("sb-"));
@@ -27,7 +35,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     // Allow render to continue to avoid redirect loop while session refreshes
   }
 
-  if (orgContext.status === "revoked") {
+  if (orgContext.status === "revoked" && !isDevAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="max-w-lg text-center space-y-4">
@@ -40,7 +48,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     );
   }
 
-  if (!orgContext.role) {
+  if (!orgContext.role && !isDevAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="max-w-lg text-center space-y-4">
@@ -56,15 +64,30 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   // Handle grace period expiration - block access but don't auto-delete
   // Deletion should only happen via explicit admin action (DELETE API call)
   if (orgContext.gracePeriod.isGracePeriodExpired) {
-    return (
-      <BillingGate 
-        orgSlug={orgSlug} 
-        organizationId={orgContext.organization.id} 
-        status="canceled"
-        gracePeriodExpired={true}
-        isAdmin={orgContext.role === "admin"}
-      />
-    );
+    if (isDevAdmin) {
+      if (!orgContext.subscription) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-background px-6">
+            <div className="max-w-lg text-center space-y-4">
+              <h1 className="text-2xl font-bold text-foreground">Billing issue detected</h1>
+              <p className="text-muted-foreground">
+                This organization has a canceled subscription with missing grace period data. Use the dev panel to reconcile or restore billing.
+              </p>
+            </div>
+          </div>
+        );
+      }
+    } else {
+      return (
+        <BillingGate 
+          orgSlug={orgSlug} 
+          organizationId={orgContext.organization.id} 
+          status="canceled"
+          gracePeriodExpired={true}
+          isAdmin={isAdmin}
+        />
+      );
+    }
   }
 
   // Show BillingGate for non-active subscriptions (except during grace period)
@@ -85,18 +108,44 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     !activeStatuses.includes(subscriptionStatus) && 
     !orgContext.gracePeriod.isInGracePeriod;
 
-  if (shouldShowBillingGate) {
+  if (shouldShowBillingGate && !isDevAdmin) {
     return (
       <BillingGate 
         orgSlug={orgSlug} 
         organizationId={orgContext.organization.id} 
         status={subscriptionStatus}
-        isAdmin={orgContext.role === "admin"}
+        isAdmin={isAdmin}
       />
     );
   }
 
   const organization = orgContext.organization;
+
+  let serviceSupabase = null;
+  if (isDevAdmin) {
+    try {
+      serviceSupabase = createServiceClient();
+    } catch (e) {
+      console.warn("DevAdmin: Failed to create service client (missing key?)", e);
+    }
+  }
+
+  const memberStats = serviceSupabase
+    ? await serviceSupabase
+        .from("members")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .is("deleted_at", null)
+    : null;
+  const memberCount = memberStats?.count ?? undefined;
+
+  const { data: devSubscriptionDetails } = serviceSupabase
+    ? await serviceSupabase
+        .from("organization_subscriptions")
+        .select("stripe_customer_id, stripe_subscription_id")
+        .eq("organization_id", organization.id)
+        .maybeSingle()
+    : { data: null };
   const primary = organization.primary_color || "#1e3a5f";
   const secondary = organization.secondary_color || "#10b981";
   const primaryLight = organization.primary_color ? adjustColor(organization.primary_color, 20) : "#2d4a6f";
@@ -174,20 +223,35 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
             daysRemaining={orgContext.gracePeriod.daysRemaining} 
             orgSlug={orgSlug}
             organizationId={organization.id}
-            isAdmin={orgContext.role === "admin"}
+            isAdmin={isAdmin}
           />
         </div>
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
 
       <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod ? "mt-12" : ""}`}>
         {children}
       </main>
+
+      {isDevAdmin && (
+        <DevPanel
+          organizationId={organization.id}
+          orgSlug={orgSlug}
+          orgName={organization.name}
+          subscriptionStatus={orgContext.subscription?.status ?? null}
+          stripeCustomerId={devSubscriptionDetails?.stripe_customer_id ?? null}
+          stripeSubscriptionId={devSubscriptionDetails?.stripe_subscription_id ?? null}
+          currentPeriodEnd={orgContext.subscription?.currentPeriodEnd ?? null}
+          gracePeriodEndsAt={orgContext.subscription?.gracePeriodEndsAt ?? null}
+          userRole={orgContext.role}
+          memberCount={memberCount}
+        />
+      )}
     </div>
   );
 }

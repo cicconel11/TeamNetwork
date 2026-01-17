@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
+import { isDevAdminEmail } from "./lib/auth/dev-admin";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -199,42 +200,56 @@ export async function middleware(request: NextRequest) {
 
     // Only check if it looks like an org slug (not a system path)
     if (orgSlug && !["app", "auth", "api", "settings", "_next", "favicon.ico"].includes(orgSlug)) {
-      try {
-        // Get organization by slug
-        const { data: org } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .maybeSingle();
+      // Check if user is dev-admin - if so, skip membership checks entirely
+      const userEmail = "email" in user ? (user.email as string | null | undefined) : undefined;
+      const userIsDevAdmin = isDevAdminEmail(userEmail);
 
-        if (org) {
-          // Check user's membership status
-          const { data: membership } = await supabase
-            .from("user_organization_roles")
-            .select("status")
-            .eq("organization_id", org.id)
-            .eq("user_id", user.id)
+      if (!userIsDevAdmin) {
+        // Only check membership for non-dev-admins
+        try {
+          // Get organization by slug
+          const { data: org } = await supabase
+            .from("organizations")
+            .select("id")
+            .eq("slug", orgSlug)
             .maybeSingle();
 
-          if (membership?.status === "revoked") {
-            // User's access has been revoked - redirect to app with error
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("error", "access_revoked");
-            return NextResponse.redirect(redirectUrl);
-          }
+          if (org) {
+            // Check user's membership status
+            const { data: membership } = await supabase
+              .from("user_organization_roles")
+              .select("status")
+              .eq("organization_id", org.id)
+              .eq("user_id", user.id)
+              .maybeSingle();
 
-          if (membership?.status === "pending") {
-            // User's membership is pending approval - redirect to app with pending message
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("pending", orgSlug);
-            return NextResponse.redirect(redirectUrl);
+            if (membership?.status === "revoked") {
+              // User's access has been revoked - redirect to app with error
+              const redirectUrl = new URL("/app", request.url);
+              redirectUrl.searchParams.set("error", "access_revoked");
+              return NextResponse.redirect(redirectUrl);
+            }
+
+            if (membership?.status === "pending") {
+              // User's membership is pending approval - redirect to app with pending message
+              const redirectUrl = new URL("/app", request.url);
+              redirectUrl.searchParams.set("pending", orgSlug);
+              return NextResponse.redirect(redirectUrl);
+            }
+          }
+        } catch (e) {
+          // Log error but don't block the request
+          if (shouldLog) {
+            console.error("[AUTH-MW] Error checking membership status:", e);
           }
         }
-      } catch (e) {
-        // Log error but don't block the request
-        if (shouldLog) {
-          console.error("[AUTH-MW] Error checking membership status:", e);
-        }
+      } else if (shouldLog) {
+        // Log dev-admin access for debugging
+        console.log("[AUTH-MW] Dev-admin bypassing membership check", {
+          email: userEmail,
+          orgSlug,
+          pathname,
+        });
       }
     }
   }

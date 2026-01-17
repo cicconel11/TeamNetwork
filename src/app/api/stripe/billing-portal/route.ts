@@ -10,6 +10,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +77,8 @@ export async function POST(req: Request) {
       .eq("organization_id", organization.id)
       .maybeSingle();
 
-    if (role?.role !== "admin") {
+    const isDevAdminAllowed = canDevAdminPerform(user, "open_billing_portal");
+    if (role?.role !== "admin" && !isDevAdminAllowed) {
       return respond({ error: "Forbidden" }, 403);
     }
 

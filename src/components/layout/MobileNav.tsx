@@ -10,9 +10,10 @@ import type { OrgRole } from "@/lib/auth/role-utils";
 interface MobileNavProps {
   organization: Organization;
   role: OrgRole | null;
+  isDevAdmin?: boolean;
 }
 
-export function MobileNav({ organization, role }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const basePath = `/${organization.slug}`;
 
@@ -24,7 +25,7 @@ export function MobileNav({ organization, role }: MobileNavProps) {
     <>
       {/* Top Bar (Mobile Only) */}
       <header className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-card border-b border-border z-30 flex items-center justify-between px-4">
-        <Link href={basePath} className="flex items-center gap-3">
+        <Link href={basePath} className="flex items-center gap-3 min-w-0">
           {organization.logo_url ? (
             <div className="relative h-8 w-8 rounded-lg overflow-hidden">
               <Image
@@ -43,7 +44,12 @@ export function MobileNav({ organization, role }: MobileNavProps) {
               {organization.name.charAt(0)}
             </div>
           )}
-          <span className="font-semibold text-foreground truncate max-w-[200px]">{organization.name}</span>
+          <div className="min-w-0">
+            <span className="font-semibold text-foreground truncate max-w-[200px] block">{organization.name}</span>
+            {isDevAdmin && (
+              <span className="text-[10px] uppercase tracking-wide text-purple-400 block">Dev Admin</span>
+            )}
+          </div>
         </Link>
 
         <button
@@ -81,6 +87,7 @@ export function MobileNav({ organization, role }: MobileNavProps) {
         <OrgSidebar 
           organization={organization} 
           role={role} 
+          isDevAdmin={isDevAdmin}
           className="h-full border-r border-border" 
           onClose={closeMenu}
         />
