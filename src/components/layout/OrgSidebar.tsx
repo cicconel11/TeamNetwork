@@ -10,11 +10,12 @@ import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navig
 interface OrgSidebarProps {
   organization: Organization;
   role: OrgRole | null;
+  isDevAdmin?: boolean;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   
@@ -86,6 +87,9 @@ export function OrgSidebar({ organization, role, className = "", onClose }: OrgS
           <div className="flex-1 min-w-0">
             <h2 className="font-semibold text-foreground truncate">{organization.name}</h2>
             <p className="text-xs text-muted-foreground">TeamNetwork</p>
+            {isDevAdmin && (
+              <p className="text-[10px] uppercase tracking-wide text-purple-300 mt-1">Dev Admin</p>
+            )}
           </div>
         </Link>
       </div>

@@ -14,6 +14,7 @@ import {
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -241,7 +242,8 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     .eq("organization_id", organizationId)
     .maybeSingle();
 
-  if (role?.role !== "admin") {
+  const isDevAdminAllowed = canDevAdminPerform(user, "delete_org");
+  if (role?.role !== "admin" && !isDevAdminAllowed) {
     return respond({ error: "Forbidden" }, 403);
   }
 
