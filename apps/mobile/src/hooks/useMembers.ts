@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 interface Member {
   id: string;
   user_id: string;
@@ -19,11 +21,13 @@ interface UseMembersReturn {
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  refetchIfStale: () => void;
 }
 
 export function useMembers(orgSlug: string): UseMembersReturn {
   const isMountedRef = useRef(true);
   const orgIdRef = useRef<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +36,7 @@ export function useMembers(orgSlug: string): UseMembersReturn {
   useEffect(() => {
     orgIdRef.current = null;
     setOrgId(null);
+    lastFetchTimeRef.current = 0;
   }, [orgSlug]);
 
   const fetchMembers = useCallback(async (overrideOrgId?: string) => {
@@ -92,6 +97,7 @@ export function useMembers(orgSlug: string): UseMembersReturn {
       if (isMountedRef.current) {
         setMembers((data as unknown as Member[]) || []);
         setError(null);
+        lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
       if (isMountedRef.current) {
@@ -136,5 +142,12 @@ export function useMembers(orgSlug: string): UseMembersReturn {
     };
   }, [orgId, fetchMembers]);
 
-  return { members, loading, error, refetch: fetchMembers };
+  const refetchIfStale = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current > STALE_TIME_MS) {
+      fetchMembers();
+    }
+  }, [fetchMembers]);
+
+  return { members, loading, error, refetch: fetchMembers, refetchIfStale };
 }

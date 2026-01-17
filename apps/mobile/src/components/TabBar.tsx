@@ -1,12 +1,7 @@
 import React from "react";
-import {
-  View,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-} from "react-native";
+import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Home, Calendar, Users, Menu, Plus, GraduationCap, Megaphone } from "lucide-react-native";
+import { Home, Calendar, Users, Menu as MenuIcon, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
 const ICON_SIZE = 24;
@@ -15,6 +10,20 @@ const ACTIVE_COLOR = "#2563eb";
 const INACTIVE_COLOR = "#94a3b8";
 const CENTER_BUTTON_COLOR = "#2563eb";
 
+// Deterministic tab configuration: ensures symmetric layout
+// Pattern: Home, Events, [+], Members, Menu
+const TAB_CONFIG = [
+  { route: "(tabs)/index", icon: Home, label: "Home" },
+  { route: "(tabs)/events", icon: Calendar, label: "Events" },
+  // Center action button is rendered separately (not a tab)
+  { route: "(tabs)/members", icon: Users, label: "Members" },
+  { route: "(tabs)/menu", icon: MenuIcon, label: "Menu" },
+] as const;
+
+// Split into left/right groups around center button
+const LEFT_TABS = TAB_CONFIG.slice(0, 2);
+const RIGHT_TABS = TAB_CONFIG.slice(2);
+
 interface TabBarProps extends BottomTabBarProps {
   onActionPress: () => void;
 }
@@ -22,66 +31,15 @@ interface TabBarProps extends BottomTabBarProps {
 export function TabBar({ state, descriptors, navigation, onActionPress }: TabBarProps) {
   const insets = useSafeAreaInsets();
 
-  // Tab configuration: maps route name to icon
-  const getIcon = (routeName: string, focused: boolean) => {
-    const color = focused ? ACTIVE_COLOR : INACTIVE_COLOR;
+  const renderTab = (tabConfig: (typeof TAB_CONFIG)[number]) => {
+    const route = state.routes.find((r) => r.name === tabConfig.route);
+    if (!route) return null;
 
-    switch (routeName) {
-      case "(tabs)/index":
-        return <Home size={ICON_SIZE} color={color} />;
-      case "(tabs)/events":
-        return <Calendar size={ICON_SIZE} color={color} />;
-      case "(tabs)/members":
-        return <Users size={ICON_SIZE} color={color} />;
-      case "(tabs)/menu":
-        return <Menu size={ICON_SIZE} color={color} />;
-      case "(tabs)/alumni":
-        return <GraduationCap size={ICON_SIZE} color={color} />;
-      case "(tabs)/announcements":
-        return <Megaphone size={ICON_SIZE} color={color} />;
-      default:
-        // Return null for unrecognized routes instead of a fallback icon
-        return null;
-    }
-  };
-
-  const getLabel = (routeName: string) => {
-    switch (routeName) {
-      case "(tabs)/index":
-        return "Home";
-      case "(tabs)/events":
-        return "Events";
-      case "(tabs)/members":
-        return "Members";
-      case "(tabs)/menu":
-        return "Menu";
-      case "(tabs)/alumni":
-        return "Alumni";
-      case "(tabs)/announcements":
-        return "News";
-      default:
-        return "";
-    }
-  };
-
-  // Filter out hidden routes (those with href: null) before splitting
-  // href is an Expo Router option to hide tabs from navigation
-  const visibleRoutes = state.routes.filter((route) => {
-    const { options } = descriptors[route.key];
-    // Cast to access Expo Router's href option
-    const expoOptions = options as { href?: string | null };
-    return expoOptions.href !== null;
-  });
-
-  // Split visible routes into left (before center) and right (after center)
-  const leftRoutes = visibleRoutes.slice(0, 2);
-  const rightRoutes = visibleRoutes.slice(2);
-
-  const renderTab = (route: typeof state.routes[0]) => {
-    // Find actual index in original state for focus tracking
     const actualIndex = state.routes.findIndex((r) => r.key === route.key);
     const { options } = descriptors[route.key];
     const isFocused = state.index === actualIndex;
+    const color = isFocused ? ACTIVE_COLOR : INACTIVE_COLOR;
+    const IconComponent = tabConfig.icon;
 
     const onPress = () => {
       const event = navigation.emit({
@@ -100,11 +58,11 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
         key={route.key}
         accessibilityRole="button"
         accessibilityState={isFocused ? { selected: true } : {}}
-        accessibilityLabel={options.tabBarAccessibilityLabel}
+        accessibilityLabel={options.tabBarAccessibilityLabel || tabConfig.label}
         onPress={onPress}
         style={styles.tab}
       >
-        {getIcon(route.name, isFocused)}
+        <IconComponent size={ICON_SIZE} color={color} />
       </TouchableOpacity>
     );
   };
@@ -112,25 +70,27 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
-        {/* Left tabs */}
+        {/* Left tabs: Home, Events */}
         <View style={styles.tabGroup}>
-          {leftRoutes.map((route) => renderTab(route))}
+          {LEFT_TABS.map((tab) => renderTab(tab))}
         </View>
 
-        {/* Center action button */}
+        {/* Center action button - opens Quick Actions sheet */}
         <View style={styles.centerContainer}>
           <TouchableOpacity
             style={styles.centerButton}
             onPress={onActionPress}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Quick Actions"
           >
             <Plus size={28} color="#ffffff" strokeWidth={2.5} />
           </TouchableOpacity>
         </View>
 
-        {/* Right tabs */}
+        {/* Right tabs: Members, Menu */}
         <View style={styles.tabGroup}>
-          {rightRoutes.map((route) => renderTab(route))}
+          {RIGHT_TABS.map((tab) => renderTab(tab))}
         </View>
       </View>
     </View>
@@ -160,6 +120,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 8,
     paddingHorizontal: 16,
+    minWidth: 44,
+    minHeight: 44,
   },
   centerContainer: {
     alignItems: "center",
@@ -173,16 +135,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: -20,
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
+    boxShadow: "0 4px 12px rgba(37, 99, 235, 0.35)",
   },
 });

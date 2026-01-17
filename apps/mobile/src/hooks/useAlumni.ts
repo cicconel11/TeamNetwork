@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 interface Alumni {
   id: string;
   first_name: string | null;
@@ -21,11 +23,13 @@ interface UseAlumniReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  refetchIfStale: () => void;
 }
 
 export function useAlumni(orgSlug: string): UseAlumniReturn {
   const isMountedRef = useRef(true);
   const orgIdRef = useRef<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [alumni, setAlumni] = useState<Alumni[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +38,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
   useEffect(() => {
     orgIdRef.current = null;
     setOrgId(null);
+    lastFetchTimeRef.current = 0;
   }, [orgSlug]);
 
   const fetchAlumni = useCallback(async (overrideOrgId?: string) => {
@@ -99,6 +104,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
       if (isMountedRef.current) {
         setAlumni((data as Alumni[]) || []);
         setError(null);
+        lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
       if (isMountedRef.current) {
@@ -143,5 +149,12 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
     };
   }, [orgId, fetchAlumni]);
 
-  return { alumni, loading, error, refetch: fetchAlumni };
+  const refetchIfStale = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current > STALE_TIME_MS) {
+      fetchAlumni();
+    }
+  }, [fetchAlumni]);
+
+  return { alumni, loading, error, refetch: fetchAlumni, refetchIfStale };
 }

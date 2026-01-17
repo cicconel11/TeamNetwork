@@ -9,8 +9,8 @@ import {
   Alert,
   RefreshControl,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
+import { useOrg } from "@/contexts/OrgContext";
 import {
   Bell,
   Heart,
@@ -44,8 +44,10 @@ interface MenuItem {
   showChevron?: boolean;
 }
 
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 export default function MenuScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
+  const { orgSlug } = useOrg();
   const router = useRouter();
   const { user } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -56,6 +58,7 @@ export default function MenuScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isRefetchingRef = useRef(false);
+  const lastFetchTimeRef = useRef<number>(0);
 
   const fetchData = useCallback(async () => {
     if (!user || !orgSlug) return;
@@ -100,6 +103,7 @@ export default function MenuScreen() {
 
       // TODO: Fetch notification count when notifications are implemented
       setNotificationCount(0);
+      lastFetchTimeRef.current = Date.now();
     } catch (e) {
       setError((e as Error).message);
     }
@@ -109,15 +113,14 @@ export default function MenuScreen() {
     fetchData();
   }, [fetchData]);
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      fetchData().finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [fetchData, refreshing])
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current > STALE_TIME_MS) {
+        fetchData();
+      }
+    }, [fetchData])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -257,7 +260,7 @@ export default function MenuScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -353,7 +356,7 @@ export default function MenuScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -364,17 +367,15 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
+    paddingBottom: 40,
   },
   accountBlock: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 16,
     marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   orgRow: {
     flexDirection: "row",
@@ -473,11 +474,8 @@ const styles = StyleSheet.create({
   menuCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderCurve: "continuous",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   menuItem: {
     flexDirection: "row",

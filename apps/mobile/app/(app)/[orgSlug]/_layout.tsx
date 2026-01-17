@@ -1,10 +1,11 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { Alert } from "react-native";
-import { Tabs, useLocalSearchParams, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { TabBar } from "@/components/TabBar";
 import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
+import { OrgProvider, useOrg } from "@/contexts/OrgContext";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
 // Determine if running in Expo Go
@@ -23,8 +24,8 @@ if (!isExpoGo) {
   }
 }
 
-export default function OrgLayout() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
+function OrgLayoutInner() {
+  const { orgSlug, orgId } = useOrg();
   const router = useRouter();
   const bottomSheetRef = useRef<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -34,25 +35,15 @@ export default function OrgLayout() {
     let isMounted = true;
 
     async function fetchRole() {
-      if (!orgSlug) return;
+      if (!orgId) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !isMounted) return;
 
-      // First get organization ID from slug
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("slug", orgSlug)
-        .single();
-
-      if (!org) return;
-
-      // Then get user role for that organization
       const { data: roleData } = await supabase
         .from("user_organization_roles")
         .select("role")
         .eq("user_id", user.id)
-        .eq("organization_id", org.id)
+        .eq("organization_id", orgId)
         .eq("status", "active")
         .single();
 
@@ -65,7 +56,7 @@ export default function OrgLayout() {
 
     fetchRole();
     return () => { isMounted = false; };
-  }, [orgSlug]);
+  }, [orgId]);
 
   const handleActionPress = useCallback(() => {
     if (isExpoGo || !BottomSheet) {
@@ -189,5 +180,13 @@ export default function OrgLayout() {
         />
       )}
     </>
+  );
+}
+
+export default function OrgLayout() {
+  return (
+    <OrgProvider>
+      <OrgLayoutInner />
+    </OrgProvider>
   );
 }

@@ -4,16 +4,20 @@ import { filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
 import { normalizeRole } from "@teammeet/core";
 import type { Announcement } from "@teammeet/types";
 
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 interface UseAnnouncementsReturn {
   announcements: Announcement[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  refetchIfStale: () => void;
 }
 
 export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
   const isMountedRef = useRef(true);
   const orgIdRef = useRef<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -23,6 +27,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
   useEffect(() => {
     orgIdRef.current = null;
     setOrgId(null);
+    lastFetchTimeRef.current = 0;
   }, [orgSlug]);
 
   const fetchAnnouncements = useCallback(async (overrideOrgId?: string) => {
@@ -98,6 +103,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
       if (isMountedRef.current) {
         setAnnouncements(filtered);
         setError(null);
+        lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
       if (isMountedRef.current) {
@@ -171,5 +177,12 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
     };
   }, [orgId, userId, fetchAnnouncements]);
 
-  return { announcements, loading, error, refetch: fetchAnnouncements };
+  const refetchIfStale = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current > STALE_TIME_MS) {
+      fetchAnnouncements();
+    }
+  }, [fetchAnnouncements]);
+
+  return { announcements, loading, error, refetch: fetchAnnouncements, refetchIfStale };
 }

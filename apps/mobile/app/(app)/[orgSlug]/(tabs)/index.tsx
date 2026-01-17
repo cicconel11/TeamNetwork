@@ -8,8 +8,8 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useRouter, useFocusEffect } from "expo-router";
+
+import { useRouter, useFocusEffect } from "expo-router";
 import {
   Users,
   Calendar,
@@ -24,11 +24,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEvents } from "@/hooks/useEvents";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
+import { useOrg } from "@/contexts/OrgContext";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { Organization } from "@teammeet/types";
 
 export default function HomeScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
+  const { orgSlug } = useOrg();
   const router = useRouter();
   const { user } = useAuth();
   const isMountedRef = useRef(true);
@@ -43,9 +44,9 @@ export default function HomeScreen() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const isRefetchingRef = useRef(false);
 
-  const { events, refetch: refetchEvents } = useEvents(orgSlug || "");
-  const { announcements, refetch: refetchAnnouncements } = useAnnouncements(orgSlug || "");
-  const { members, refetch: refetchMembers } = useMembers(orgSlug || "");
+  const { events, refetch: refetchEvents, refetchIfStale: refetchEventsIfStale } = useEvents(orgSlug || "");
+  const { announcements, refetch: refetchAnnouncements, refetchIfStale: refetchAnnouncementsIfStale } = useAnnouncements(orgSlug || "");
+  const { members, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgSlug || "");
   const userId = user?.id ?? null;
 
   // Get upcoming events (next 2)
@@ -124,20 +125,13 @@ export default function HomeScreen() {
     setMemberCount(members.length);
   }, [members]);
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      Promise.all([
-        fetchData(),
-        refetchEvents(),
-        refetchAnnouncements(),
-        refetchMembers(),
-      ]).finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [fetchData, refetchEvents, refetchAnnouncements, refetchMembers, refreshing])
+      refetchEventsIfStale();
+      refetchAnnouncementsIfStale();
+      refetchMembersIfStale();
+    }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale])
   );
 
   useEffect(() => {
@@ -254,7 +248,7 @@ export default function HomeScreen() {
   const firstName = userName?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -377,7 +371,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -388,6 +382,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 40,
   },
   centered: {
     flex: 1,
@@ -417,13 +412,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 16,
     marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   statItem: {
     flex: 1,
@@ -466,13 +458,10 @@ const styles = StyleSheet.create({
   eventCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   eventTitle: {
     fontSize: 16,
@@ -508,12 +497,9 @@ const styles = StyleSheet.create({
   announcementCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 16,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   pinnedBadge: {
     flexDirection: "row",
@@ -540,13 +526,10 @@ const styles = StyleSheet.create({
   emptyCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   emptyText: {
     fontSize: 14,
@@ -556,13 +539,10 @@ const styles = StyleSheet.create({
   activityCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 24,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   activityEmpty: {
     fontSize: 14,

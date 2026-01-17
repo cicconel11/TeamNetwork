@@ -8,24 +8,21 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useAlumni } from "@/hooks/useAlumni";
+import { useOrg } from "@/contexts/OrgContext";
 
 export default function AlumniScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { alumni, loading, error, refetch } = useAlumni(orgSlug || "");
+  const { orgSlug } = useOrg();
+  const { alumni, loading, error, refetch, refetchIfStale } = useAlumni(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      Promise.resolve(refetch()).finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [refetch, refreshing])
+      refetchIfStale();
+    }, [refetchIfStale])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -160,6 +157,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 40,
     flexGrow: 1,
   },
   alumniCard: {
@@ -168,12 +166,9 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     padding: 12,
     borderRadius: 12,
+    borderCurve: "continuous",
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   avatar: {
     width: 56,

@@ -8,30 +8,27 @@ import {
   RefreshControl,
   ScrollView,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+
+import { useFocusEffect } from "expo-router";
 import { Calendar, MapPin, Users, Clock } from "lucide-react-native";
+import { useOrg } from "@/contexts/OrgContext";
 import { useEvents, type Event } from "@/hooks/useEvents";
 
 type ViewMode = "upcoming" | "past";
 
 export default function EventsScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { events, loading, error, refetch } = useEvents(orgSlug || "");
+  const { orgSlug } = useOrg();
+  const { events, loading, error, refetch, refetchIfStale } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      Promise.resolve(refetch()).finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [refetch, refreshing])
+      refetchIfStale();
+    }, [refetchIfStale])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -175,16 +172,16 @@ export default function EventsScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container} edges={["bottom"]}>
+      <View style={styles.container}>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Error loading events: {error}</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <View style={styles.container}>
       {/* Toggle */}
       <View style={styles.toggleContainer}>
         <TouchableOpacity
@@ -285,7 +282,7 @@ export default function EventsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
         }
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -361,18 +358,16 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 40,
     flexGrow: 1,
   },
   eventCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    borderCurve: "continuous",
     padding: 16,
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   eventHeader: {
     flexDirection: "row",

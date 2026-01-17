@@ -7,25 +7,22 @@ import {
   RefreshControl,
   StyleSheet,
 } from "react-native";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
+import { useOrg } from "@/contexts/OrgContext";
 import type { Announcement } from "@teammeet/types";
 
 export default function AnnouncementsScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { announcements, loading, error, refetch } = useAnnouncements(orgSlug || "");
+  const { orgSlug } = useOrg();
+  const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      Promise.resolve(refetch()).finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [refetch, refreshing])
+      refetchIfStale();
+    }, [refetchIfStale])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -110,18 +107,16 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
+    paddingBottom: 40,
     flexGrow: 1,
   },
   card: {
     backgroundColor: "white",
     padding: 16,
     borderRadius: 12,
+    borderCurve: "continuous",
     marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   pinnedBadge: {
     backgroundColor: "#fef3c7",

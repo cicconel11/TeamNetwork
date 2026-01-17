@@ -12,8 +12,8 @@ import {
   Dimensions,
   SectionList,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useLocalSearchParams, useFocusEffect } from "expo-router";
+
+import { useFocusEffect } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,6 +23,7 @@ import Animated, {
 import { Search, SlidersHorizontal, Users, GraduationCap } from "lucide-react-native";
 import { useMembers } from "@/hooks/useMembers";
 import { useAlumni } from "@/hooks/useAlumni";
+import { useOrg } from "@/contexts/OrgContext";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { UserRole } from "@teammeet/types";
 
@@ -31,9 +32,9 @@ type TabType = "members" | "alumni";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function MembersScreen() {
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
-  const { members, loading: membersLoading, error: membersError, refetch: refetchMembers } = useMembers(orgSlug || "");
-  const { alumni, loading: alumniLoading, error: alumniError, refetch: refetchAlumni } = useAlumni(orgSlug || "");
+  const { orgSlug } = useOrg();
+  const { members, loading: membersLoading, error: membersError, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgSlug || "");
+  const { alumni, loading: alumniLoading, error: alumniError, refetch: refetchAlumni, refetchIfStale: refetchAlumniIfStale } = useAlumni(orgSlug || "");
 
   const [activeTab, setActiveTab] = useState<TabType>("members");
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,15 +102,12 @@ export default function MembersScreen() {
   const loading = membersLoading || alumniLoading;
   const error = membersError || alumniError;
 
-  // Refetch on tab focus
+  // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
-      if (isRefetchingRef.current || refreshing) return;
-      isRefetchingRef.current = true;
-      Promise.all([refetchMembers(), refetchAlumni()]).finally(() => {
-        isRefetchingRef.current = false;
-      });
-    }, [refetchMembers, refetchAlumni, refreshing])
+      refetchMembersIfStale();
+      refetchAlumniIfStale();
+    }, [refetchMembersIfStale, refetchAlumniIfStale])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -221,7 +219,7 @@ export default function MembersScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
+    <View style={styles.container}>
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
@@ -293,7 +291,7 @@ export default function MembersScreen() {
           }
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -370,6 +368,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 40,
     flexGrow: 1,
   },
   personCard: {
@@ -378,12 +377,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     padding: 12,
     borderRadius: 12,
+    borderCurve: "continuous",
     marginBottom: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   avatar: {
     width: 44,

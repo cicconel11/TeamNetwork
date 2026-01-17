@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
+const STALE_TIME_MS = 30_000; // 30 seconds
+
 export interface Event {
   id: string;
   title: string;
@@ -18,11 +20,13 @@ interface UseEventsReturn {
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  refetchIfStale: () => void;
 }
 
 export function useEvents(orgSlug: string): UseEventsReturn {
   const isMountedRef = useRef(true);
   const orgIdRef = useRef<string | null>(null);
+  const lastFetchTimeRef = useRef<number>(0);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +35,7 @@ export function useEvents(orgSlug: string): UseEventsReturn {
   useEffect(() => {
     orgIdRef.current = null;
     setOrgId(null);
+    lastFetchTimeRef.current = 0;
   }, [orgSlug]);
 
   const fetchEvents = useCallback(async (overrideOrgId?: string) => {
@@ -89,6 +94,7 @@ export function useEvents(orgSlug: string): UseEventsReturn {
       if (isMountedRef.current) {
         setEvents((data as Event[]) || []);
         setError(null);
+        lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
       if (isMountedRef.current) {
@@ -140,5 +146,12 @@ export function useEvents(orgSlug: string): UseEventsReturn {
     };
   }, [orgId, fetchEvents]);
 
-  return { events, loading, error, refetch: fetchEvents };
+  const refetchIfStale = useCallback(() => {
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current > STALE_TIME_MS) {
+      fetchEvents();
+    }
+  }, [fetchEvents]);
+
+  return { events, loading, error, refetch: fetchEvents, refetchIfStale };
 }
