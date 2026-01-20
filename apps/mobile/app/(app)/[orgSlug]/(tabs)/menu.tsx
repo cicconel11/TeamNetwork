@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import {
   Bell,
   Heart,
@@ -50,6 +51,7 @@ export default function MenuScreen() {
   const { orgSlug } = useOrg();
   const router = useRouter();
   const { user } = useAuth();
+  const { permissions, isAdmin: isAdminFromHook } = useOrgRole();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
@@ -192,23 +194,32 @@ export default function MenuScreen() {
     },
   ];
 
-  const communityItems: MenuItem[] = [
-    {
+  // Build community items based on feature flags
+  const communityItems: MenuItem[] = [];
+  
+  if (permissions.canViewDonations) {
+    communityItems.push({
       icon: <Heart size={20} color="#666" />,
       label: "Donations",
       onPress: () => console.log("Donations"),
-    },
-    {
+    });
+  }
+  
+  if (permissions.canViewRecords) {
+    communityItems.push({
       icon: <Trophy size={20} color="#666" />,
       label: "Records",
       onPress: () => console.log("Records"),
-    },
-    {
+    });
+  }
+  
+  if (permissions.canViewForms) {
+    communityItems.push({
       icon: <FileText size={20} color="#666" />,
       label: "Forms",
       onPress: () => console.log("Forms"),
-    },
-  ];
+    });
+  }
 
   const adminItems: MenuItem[] = [
     {
@@ -335,13 +346,15 @@ export default function MenuScreen() {
           </View>
         </View>
 
-        {/* Community Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Community</Text>
-          <View style={styles.menuCard}>
-            {communityItems.map(renderMenuItem)}
+        {/* Community Section - Only show if there are enabled features */}
+        {communityItems.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Community</Text>
+            <View style={styles.menuCard}>
+              {communityItems.map(renderMenuItem)}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Admin Section - Only show for admins */}
         {isAdmin && (

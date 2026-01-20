@@ -211,5 +211,16 @@ function flushQueue(): void {
   }
 }
 
-// Re-export Sentry functions for direct error tracking
-export { captureException, captureMessage } from "./sentry";
+export function captureException(
+  ...args: Parameters<typeof sentry.captureException>
+): void {
+  if (!enabled || !sdksInitialized) return;
+  sentry.captureException(...args);
+}
+
+export function captureMessage(
+  ...args: Parameters<typeof sentry.captureMessage>
+): void {
+  if (!enabled || !sdksInitialized) return;
+  sentry.captureMessage(...args);
+}

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -6,17 +6,43 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter, Stack } from "expo-router";
+import { ExternalLink } from "lucide-react-native";
+import * as Linking from "expo-linking";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Announcement } from "@teammeet/types";
+import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 export default function AnnouncementsScreen() {
   const { orgSlug } = useOrg();
+  const router = useRouter();
+  const { permissions } = useOrgRole();
   const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
+
+  // Admin overflow menu items - only approved mobile-friendly actions
+  const adminMenuItems: OverflowMenuItem[] = useMemo(() => {
+    if (!permissions.canUseAdminActions) return [];
+    
+    return [
+      {
+        id: "open-in-web",
+        label: "Open in Web",
+        icon: <ExternalLink size={20} color={colors.primary} />,
+        onPress: () => {
+          // Open the announcements page in the web app for full admin capabilities
+          const webUrl = `https://app.teammeet.com/${orgSlug}/announcements`;
+          Linking.openURL(webUrl);
+        },
+      },
+    ];
+  }, [permissions.canUseAdminActions, orgSlug]);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
@@ -49,7 +75,7 @@ export default function AnnouncementsScreen() {
   if (loading && announcements.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -63,7 +89,11 @@ export default function AnnouncementsScreen() {
   }
 
   const renderAnnouncement = ({ item }: { item: Announcement }) => (
-    <View style={styles.card}>
+    <TouchableOpacity 
+      style={styles.card}
+      activeOpacity={0.7}
+      onPress={() => router.push(`/(app)/${orgSlug}/announcements/${item.id}`)}
+    >
       {item.is_pinned && (
         <View style={styles.pinnedBadge}>
           <Text style={styles.pinnedText}>PINNED</Text>
@@ -74,31 +104,47 @@ export default function AnnouncementsScreen() {
       <Text style={styles.cardBody} numberOfLines={4}>
         {item.body}
       </Text>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
-    <FlatList
-      data={announcements}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
-      renderItem={renderAnnouncement}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
-      }
-      ListEmptyComponent={
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>No Announcements</Text>
-          <Text style={styles.emptyText}>
-            Check back later for news and updates.
-          </Text>
-        </View>
-      }
-    />
+    <View style={styles.container}>
+      {/* Header with admin overflow menu */}
+      <Stack.Screen
+        options={{
+          headerRight: () =>
+            adminMenuItems.length > 0 ? (
+              <OverflowMenu items={adminMenuItems} accessibilityLabel="Announcement options" />
+            ) : null,
+        }}
+      />
+
+      <FlatList
+        data={announcements}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        renderItem={renderAnnouncement}
+        refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>No Announcements</Text>
+            <Text style={styles.emptyText}>
+              Check back later for news and updates.
+            </Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   centered: {
     flex: 1,
     justifyContent: "center",
@@ -106,14 +152,14 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   listContent: {
-    padding: 16,
+    padding: spacing.md,
     paddingBottom: 40,
     flexGrow: 1,
   },
   card: {
-    backgroundColor: "white",
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
     marginBottom: 12,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
@@ -128,23 +174,23 @@ const styles = StyleSheet.create({
   },
   pinnedText: {
     fontSize: 10,
-    fontWeight: "600",
+    fontWeight: fontWeight.semibold,
     color: "#d97706",
     textTransform: "uppercase",
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 4,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+    marginBottom: spacing.xs,
   },
   cardDate: {
-    fontSize: 12,
-    color: "#9ca3af",
-    marginBottom: 8,
+    fontSize: fontSize.xs,
+    color: colors.mutedForeground,
+    marginBottom: spacing.sm,
   },
   cardBody: {
-    fontSize: 14,
+    fontSize: fontSize.sm,
     color: "#374151",
     lineHeight: 20,
   },
@@ -155,17 +201,17 @@ const styles = StyleSheet.create({
     paddingVertical: 64,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+    marginBottom: spacing.sm,
   },
   emptyText: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: fontSize.sm,
+    color: colors.muted,
   },
   errorText: {
-    fontSize: 14,
-    color: "#dc2626",
+    fontSize: fontSize.sm,
+    color: colors.error,
   },
 });

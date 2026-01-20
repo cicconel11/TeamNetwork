@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+OUTFILE="typescript"
+CMD=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -c) CMD="${2:-}"; shift 2 ;;
+    -q|-a|-e|-F|-k|-p|-r) shift 1 ;;
+    -t|-T) shift 2 ;;
+    --) shift 1; break ;;
+    -*) shift 1 ;;
+    *) OUTFILE="$1"; shift 1 ;;
+  esac
+done
+
+if [[ -z "${CMD}" ]]; then
+  echo "shim script: missing -c <command>" >&2
+  exit 2
+fi
+
+bash -lc "$CMD" > "$OUTFILE" 2>&1
+exit 0

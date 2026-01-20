@@ -152,6 +152,21 @@ export default function NewAnnouncementPage() {
             body: JSON.stringify({ announcementId: announcement.id }),
           });
         }
+
+        // Send mobile push notification
+        await fetch("/api/mobile/push", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            organizationId: org.id,
+            title: formData.title,
+            body: formData.body || undefined,
+            type: "announcement",
+            resourceId: announcement.id,
+            audience: notifAudience,
+            targetUserIds: audienceUserIds || undefined,
+          }),
+        });
       } catch (notifError) {
         console.error("Failed to send notification:", notifError);
         // Don't block on notification failure - announcement was created successfully

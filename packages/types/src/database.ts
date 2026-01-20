@@ -950,6 +950,7 @@ export type Database = {
           id: string
           organization_id: string
           phone_number: string | null
+          push_enabled: boolean | null
           sms_enabled: boolean | null
           updated_at: string | null
           user_id: string
@@ -961,6 +962,7 @@ export type Database = {
           id?: string
           organization_id: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
@@ -972,6 +974,7 @@ export type Database = {
           id?: string
           organization_id?: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
@@ -982,6 +985,44 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_push_tokens: {
+        Row: {
+          id: string
+          user_id: string
+          expo_push_token: string
+          device_id: string | null
+          platform: "ios" | "android" | "web"
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          expo_push_token: string
+          device_id?: string | null
+          platform: "ios" | "android" | "web"
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          expo_push_token?: string
+          device_id?: string | null
+          platform?: "ios" | "android" | "web"
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -2470,6 +2511,7 @@ export type MentorshipLog = Tables<'mentorship_logs'>;
 export type MentorshipPair = Tables<'mentorship_pairs'>;
 export type Notification = Tables<'notifications'>;
 export type NotificationPreference = Tables<'notification_preferences'>;
+export type UserPushToken = Tables<'user_push_tokens'>;
 export type Organization = Tables<'organizations'>;
 export type OrganizationDonation = Tables<'organization_donations'>;
 export type OrganizationDonationStat = Tables<'organization_donation_stats'>;

@@ -20,11 +20,13 @@
               "com.googleusercontent.apps.156976073490-1iejhf7pnad636bdih1gh3tnbu26hvkn"
             ]
           }
-        ]
+        ],
+        "UIBackgroundModes": ["remote-notification"]
       }
     },
     "android": {
-      "package": "com.myteamnetwork.teammeet"
+      "package": "com.myteamnetwork.teammeet",
+      "googleServicesFile": "./google-services.json"
     },
     "scheme": "teammeet",
     "plugins": [
@@ -34,7 +36,16 @@
           "origin": false
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#2563eb",
+          "sounds": [],
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "extra": {
       "router": {

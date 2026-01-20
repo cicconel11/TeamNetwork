@@ -17,6 +17,27 @@ function OrgLayoutInner() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="events/[eventId]"
+        options={{
+          title: "Event",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="announcements/[announcementId]"
+        options={{
+          title: "Announcement",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="members/[memberId]"
+        options={{
+          title: "Member",
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }

@@ -7,22 +7,47 @@ import {
   StyleSheet,
   RefreshControl,
   ScrollView,
+  Alert,
 } from "react-native";
 
-import { useFocusEffect } from "expo-router";
-import { Calendar, MapPin, Users, Clock } from "lucide-react-native";
+import { useFocusEffect, useRouter, Stack } from "expo-router";
+import { Calendar, MapPin, Users, Clock, ExternalLink } from "lucide-react-native";
+import * as Linking from "expo-linking";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEvents, type Event } from "@/hooks/useEvents";
+import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 type ViewMode = "upcoming" | "past";
 
 export default function EventsScreen() {
   const { orgSlug } = useOrg();
+  const router = useRouter();
+  const { isAdmin, permissions } = useOrgRole();
   const { events, loading, error, refetch, refetchIfStale } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
+
+  // Admin overflow menu items - only approved mobile-friendly actions
+  const adminMenuItems: OverflowMenuItem[] = useMemo(() => {
+    if (!permissions.canUseAdminActions) return [];
+    
+    return [
+      {
+        id: "open-in-web",
+        label: "Open in Web",
+        icon: <ExternalLink size={20} color={colors.primary} />,
+        onPress: () => {
+          // Open the events page in the web app for full admin capabilities
+          const webUrl = `https://app.teammeet.com/${orgSlug}/events`;
+          Linking.openURL(webUrl);
+        },
+      },
+    ];
+  }, [permissions.canUseAdminActions, orgSlug]);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
@@ -98,7 +123,11 @@ export default function EventsScreen() {
   };
 
   const renderEventCard = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard} activeOpacity={0.7}>
+    <TouchableOpacity 
+      style={styles.eventCard} 
+      activeOpacity={0.7}
+      onPress={() => router.push(`/(app)/${orgSlug}/events/${item.id}`)}
+    >
       <View style={styles.eventHeader}>
         <Text style={styles.eventTitle} numberOfLines={1}>
           {item.title}
@@ -124,7 +153,7 @@ export default function EventsScreen() {
 
       <View style={styles.eventDetails}>
         <View style={styles.detailRow}>
-          <Calendar size={14} color="#666" />
+          <Calendar size={14} color={colors.muted} />
           <Text style={styles.detailText}>
             {formatDate(item.start_date)} at {formatTime(item.start_date)}
             {item.end_date && ` - ${formatTime(item.end_date)}`}
@@ -133,7 +162,7 @@ export default function EventsScreen() {
 
         {item.location && (
           <View style={styles.detailRow}>
-            <MapPin size={14} color="#666" />
+            <MapPin size={14} color={colors.muted} />
             <Text style={styles.detailText} numberOfLines={1}>
               {item.location}
             </Text>
@@ -142,7 +171,7 @@ export default function EventsScreen() {
 
         {item.rsvp_count !== undefined && (
           <View style={styles.detailRow}>
-            <Users size={14} color="#666" />
+            <Users size={14} color={colors.muted} />
             <Text style={styles.detailText}>{item.rsvp_count} attending</Text>
           </View>
         )}
@@ -158,7 +187,7 @@ export default function EventsScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Calendar size={48} color="#9ca3af" />
+      <Calendar size={48} color={colors.mutedForeground} />
       <Text style={styles.emptyTitle}>
         {viewMode === "upcoming" ? "No upcoming events" : "No past events"}
       </Text>
@@ -182,6 +211,16 @@ export default function EventsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header with admin overflow menu */}
+      <Stack.Screen
+        options={{
+          headerRight: () =>
+            adminMenuItems.length > 0 ? (
+              <OverflowMenu items={adminMenuItems} accessibilityLabel="Event options" />
+            ) : null,
+        }}
+      />
+
       {/* Toggle */}
       <View style={styles.toggleContainer}>
         <TouchableOpacity
@@ -279,7 +318,7 @@ export default function EventsScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       />
     </View>
@@ -289,31 +328,31 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   toggleContainer: {
     flexDirection: "row",
-    margin: 16,
-    backgroundColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 4,
+    margin: spacing.md,
+    backgroundColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.xs,
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     alignItems: "center",
-    borderRadius: 6,
+    borderRadius: borderRadius.sm,
   },
   toggleActive: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
   },
   toggleText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#666",
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.medium,
+    color: colors.muted,
   },
   toggleTextActive: {
-    color: "#1a1a1a",
+    color: colors.foreground,
   },
   dateStrip: {
     maxHeight: 80,
@@ -330,30 +369,30 @@ const styles = StyleSheet.create({
     minWidth: 48,
   },
   dateItemSelected: {
-    backgroundColor: "#2563eb",
+    backgroundColor: colors.primary,
   },
   dateDayName: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 4,
+    fontSize: fontSize.xs,
+    color: colors.muted,
+    marginBottom: spacing.xs,
   },
   dateDay: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
   },
   dateTextSelected: {
     color: "#ffffff",
   },
   dateToday: {
-    color: "#2563eb",
+    color: colors.primary,
   },
   eventDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#2563eb",
-    marginTop: 4,
+    backgroundColor: colors.primary,
+    marginTop: spacing.xs,
   },
   listContent: {
     padding: 16,
@@ -362,10 +401,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   eventCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
-    padding: 16,
+    padding: spacing.md,
     marginBottom: 12,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
@@ -376,17 +415,17 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   eventTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
     flex: 1,
   },
   rsvpBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    backgroundColor: "#e5e7eb",
-    marginLeft: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.border,
+    marginLeft: spacing.sm,
   },
   rsvpGoing: {
     backgroundColor: "#d1fae5",
@@ -395,9 +434,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fef3c7",
   },
   rsvpText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "#1a1a1a",
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.medium,
+    color: colors.foreground,
   },
   eventDetails: {
     gap: 6,
@@ -408,21 +447,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   detailText: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: fontSize.sm,
+    color: colors.muted,
     flex: 1,
   },
   rsvpButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
     paddingVertical: 10,
     alignItems: "center",
     marginTop: 12,
   },
   rsvpButtonText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   emptyState: {
     flex: 1,
@@ -431,24 +470,24 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginTop: 16,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+    marginTop: spacing.md,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
+    fontSize: fontSize.sm,
+    color: colors.muted,
+    marginTop: spacing.xs,
   },
   errorContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 16,
+    padding: spacing.md,
   },
   errorText: {
-    color: "#dc2626",
+    color: colors.error,
     textAlign: "center",
   },
 });

@@ -1,0 +1,81 @@
+{
+  "name": "Mobile tabs stability and data refresh investigation",
+  "branchName": "debug/mobile-tabs-refresh-and-stability",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Stabilize app and eliminate Worklets / Reanimated crashes",
+      "description": "Ensure the mobile app loads without runtime crashes, especially related to Reanimated or Worklets, before deeper investigation.",
+      "acceptanceCriteria": [
+        "App launches without Worklets or Reanimated runtime errors.",
+        "Bottom tab navigator renders with all expected tabs visible.",
+        "No crashes when navigating between tabs.",
+        "If Reanimated is causing crashes, apply minimal fixes or guards (do not refactor unrelated code).",
+        "Changes limited to apps/mobile/**."
+      ],
+      "priority": 1,
+      "passes": true,
+      "dependsOn": [],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-002",
+      "title": "Verify Members tab rendering and animation stability",
+      "description": "Ensure members.tsx renders correctly. If animation-related crashes or layout issues persist, simplify the tab indicator animation.",
+      "acceptanceCriteria": [
+        "Members tab renders without crashes or blank states.",
+        "If Reanimated causes issues, replace it with a simpler React Native Animated API implementation.",
+        "No unnecessary animation refactors if Members tab is already stable.",
+        "Changes limited to members.tsx and closely related files only."
+      ],
+      "priority": 2,
+      "passes": true,
+      "dependsOn": [
+        "US-001"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-003",
+      "title": "Investigate tab data sync and refresh-on-focus behavior",
+      "description": "Verify that tab focus triggers data refresh and Supabase data stays in sync across navigation.",
+      "acceptanceCriteria": [
+        "Add temporary console logging inside useFocusEffect callbacks to verify they fire on tab focus.",
+        "Verify Supabase realtime subscriptions connect successfully (log subscription status and errors).",
+        "Manually test each tab by navigating away, mutating data, and returning to confirm fresh data appears.",
+        "If data does not refresh, investigate and fix issues related to isMountedRef, isRefetchingRef, caching, or network behavior.",
+        "Remove or reduce debug logging once behavior is confirmed."
+      ],
+      "priority": 3,
+      "passes": true,
+      "dependsOn": [
+        "US-001",
+        "US-002"
+      ],
+      "completionNotes": "Completed by agent"
+    },
+    {
+      "id": "US-004",
+      "title": "Run full mobile refresh and stability validation checklist",
+      "description": "Validate that all tabs behave correctly after fixes and no regressions remain.",
+      "acceptanceCriteria": [
+        "App loads without Worklets or runtime errors.",
+        "All 6 tabs are visible in the bottom navigation.",
+        "Members tab renders correctly.",
+        "Pull-to-refresh works on each tab.",
+        "Tab focus reliably triggers data refetch.",
+        "Supabase realtime updates work or fail gracefully with logged errors.",
+        "No new crashes introduced by prior changes."
+      ],
+      "priority": 4,
+      "passes": true,
+      "dependsOn": [
+        "US-003"
+      ],
+      "completionNotes": "Completed by agent"
+    }
+  ],
+  "metadata": {
+    "updatedAt": "2026-01-16T07:56:51.561Z"
+  }
+}

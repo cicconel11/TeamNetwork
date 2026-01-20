@@ -1,34 +1,27 @@
 import React from "react";
 import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Home, Calendar, Users, Menu as MenuIcon, Plus } from "lucide-react-native";
+import { Home, Calendar, Users, Menu as MenuIcon, Megaphone } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { colors } from "@/lib/theme";
 
 const ICON_SIZE = 24;
-const CENTER_BUTTON_SIZE = 56;
-const ACTIVE_COLOR = "#2563eb";
-const INACTIVE_COLOR = "#94a3b8";
-const CENTER_BUTTON_COLOR = "#2563eb";
+const ACTIVE_COLOR = colors.primary;
+const INACTIVE_COLOR = colors.mutedForeground;
 
-// Deterministic tab configuration: ensures symmetric layout
-// Pattern: Home, Events, [+], Members, Menu
+// Tab configuration: 4 content areas + More utility
+// Pattern: Home, Events, Announcements, Members, More
 const TAB_CONFIG = [
   { route: "index", icon: Home, label: "Home" },
   { route: "events", icon: Calendar, label: "Events" },
-  // Center action button is rendered separately (not a tab)
+  { route: "announcements", icon: Megaphone, label: "Announcements" },
   { route: "members", icon: Users, label: "Members" },
-  { route: "menu", icon: MenuIcon, label: "Menu" },
+  { route: "menu", icon: MenuIcon, label: "More" },
 ] as const;
 
-// Split into left/right groups around center button
-const LEFT_TABS = TAB_CONFIG.slice(0, 2);
-const RIGHT_TABS = TAB_CONFIG.slice(2);
+interface TabBarProps extends BottomTabBarProps {}
 
-interface TabBarProps extends BottomTabBarProps {
-  onActionPress: () => void;
-}
-
-export function TabBar({ state, descriptors, navigation, onActionPress }: TabBarProps) {
+export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
 
   const renderTab = (tabConfig: (typeof TAB_CONFIG)[number]) => {
@@ -70,28 +63,7 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
-        {/* Left tabs: Home, Events */}
-        <View style={styles.tabGroup}>
-          {LEFT_TABS.map((tab) => renderTab(tab))}
-        </View>
-
-        {/* Center action button - opens Quick Actions sheet */}
-        <View style={styles.centerContainer}>
-          <TouchableOpacity
-            style={styles.centerButton}
-            onPress={onActionPress}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Quick Actions"
-          >
-            <Plus size={28} color="#ffffff" strokeWidth={2.5} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Right tabs: Members, Menu */}
-        <View style={styles.tabGroup}>
-          {RIGHT_TABS.map((tab) => renderTab(tab))}
-        </View>
+        {TAB_CONFIG.map((tab) => renderTab(tab))}
       </View>
     </View>
   );
@@ -99,21 +71,16 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
+    borderTopColor: colors.border,
   },
   tabBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "space-around",
     height: 56,
     paddingHorizontal: 8,
-  },
-  tabGroup: {
-    flexDirection: "row",
-    flex: 1,
-    justifyContent: "space-evenly",
   },
   tab: {
     alignItems: "center",
@@ -122,19 +89,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     minWidth: 44,
     minHeight: 44,
-  },
-  centerContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  centerButton: {
-    width: CENTER_BUTTON_SIZE,
-    height: CENTER_BUTTON_SIZE,
-    borderRadius: CENTER_BUTTON_SIZE / 2,
-    backgroundColor: CENTER_BUTTON_COLOR,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: -20,
-    boxShadow: "0 4px 12px rgba(37, 99, 235, 0.35)",
   },
 });

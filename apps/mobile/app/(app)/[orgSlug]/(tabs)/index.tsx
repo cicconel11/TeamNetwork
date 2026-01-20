@@ -13,7 +13,6 @@ import { useRouter, useFocusEffect } from "expo-router";
 import {
   Users,
   Calendar,
-  Heart,
   ChevronRight,
   Pin,
   Clock,
@@ -25,8 +24,10 @@ import { useEvents } from "@/hooks/useEvents";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { Organization } from "@teammeet/types";
+import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 export default function HomeScreen() {
   const { orgSlug } = useOrg();
@@ -232,7 +233,7 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -252,7 +253,7 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
         }
       >
         {/* Welcome Header */}
@@ -267,19 +268,14 @@ export default function HomeScreen() {
         {/* Quick Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Users size={20} color="#2563eb" />
+            <Users size={20} color={colors.primary} />
             <Text style={styles.statValue}>{memberCount}</Text>
             <Text style={styles.statLabel}>Members</Text>
           </View>
           <View style={styles.statItem}>
-            <Calendar size={20} color="#2563eb" />
+            <Calendar size={20} color={colors.primary} />
             <Text style={styles.statValue}>{upcomingEvents.length}</Text>
             <Text style={styles.statLabel}>Events</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Heart size={20} color="#2563eb" />
-            <Text style={styles.statValue}>0</Text>
-            <Text style={styles.statLabel}>Donations</Text>
           </View>
         </View>
 
@@ -292,7 +288,7 @@ export default function HomeScreen() {
               onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
             >
               <Text style={styles.seeAllText}>See all</Text>
-              <ChevronRight size={16} color="#2563eb" />
+              <ChevronRight size={16} color={colors.primary} />
             </TouchableOpacity>
           </View>
 
@@ -340,7 +336,7 @@ export default function HomeScreen() {
           {pinnedAnnouncement ? (
             <TouchableOpacity style={styles.announcementCard} activeOpacity={0.7}>
               <View style={styles.pinnedBadge}>
-                <Pin size={12} color="#2563eb" />
+                <Pin size={12} color={colors.primary} />
                 <Text style={styles.pinnedText}>Pinned</Text>
               </View>
               <Text style={styles.announcementTitle} numberOfLines={1}>
@@ -378,10 +374,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   content: {
-    padding: 16,
+    padding: spacing.md,
     paddingBottom: 40,
   },
   centered: {
@@ -394,27 +390,27 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   greeting: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a1a1a",
+    fontSize: fontSize["2xl"],
+    fontWeight: fontWeight.bold,
+    color: colors.foreground,
   },
   orgName: {
-    fontSize: 15,
-    color: "#666",
-    marginTop: 4,
+    fontSize: fontSize.base,
+    color: colors.muted,
+    marginTop: spacing.xs,
   },
   date: {
-    fontSize: 13,
-    color: "#9ca3af",
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
     marginTop: 2,
   },
   statsRow: {
     flexDirection: "row",
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
-    padding: 16,
-    marginBottom: 24,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   statItem: {
@@ -478,27 +474,27 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   eventDetailText: {
-    fontSize: 13,
-    color: "#666",
+    fontSize: fontSize.sm,
+    color: colors.muted,
     flex: 1,
   },
   rsvpButton: {
-    backgroundColor: "#2563eb",
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
     paddingVertical: 10,
     alignItems: "center",
     marginTop: 12,
   },
   rsvpButtonText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
   },
   announcementCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
-    padding: 16,
+    padding: spacing.md,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   pinnedBadge: {
@@ -508,49 +504,49 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   pinnedText: {
-    fontSize: 12,
-    color: "#2563eb",
-    fontWeight: "500",
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.medium,
   },
   announcementTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: colors.foreground,
+    marginBottom: spacing.sm,
   },
   announcementPreview: {
-    fontSize: 14,
-    color: "#666",
+    fontSize: fontSize.sm,
+    color: colors.muted,
     lineHeight: 20,
   },
   emptyCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
-    padding: 24,
+    padding: spacing.lg,
     alignItems: "center",
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   emptyText: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginTop: 8,
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
+    marginTop: spacing.sm,
   },
   activityCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
     borderCurve: "continuous",
-    padding: 24,
+    padding: spacing.lg,
     alignItems: "center",
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
   },
   activityEmpty: {
-    fontSize: 14,
-    color: "#9ca3af",
+    fontSize: fontSize.sm,
+    color: colors.mutedForeground,
   },
   errorText: {
-    fontSize: 16,
-    color: "#dc2626",
+    fontSize: fontSize.base,
+    color: colors.error,
     textAlign: "center",
   },
 });
