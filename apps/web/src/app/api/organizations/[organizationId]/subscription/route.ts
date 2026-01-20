@@ -22,6 +22,16 @@ import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-perio
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": process.env.NODE_ENV === "development" ? "*" : "",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
@@ -211,7 +221,7 @@ async function requireAdmin(
   }
 
   const respond = (payload: unknown, status = 200) =>
-    NextResponse.json(payload, { status, headers: rateLimit.headers });
+    NextResponse.json(payload, { status, headers: { ...rateLimit.headers, ...corsHeaders } });
 
   if (!user) {
     return { error: respond({ error: "Unauthorized" }, 401) };
@@ -296,7 +306,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
-    return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid organization id" }, { status: 400, headers: corsHeaders });
   }
 
   const auth = await requireAdmin(req, organizationId, "subscription lookup", {
@@ -411,7 +421,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const { organizationId } = await params;
     const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
     if (!orgIdParsed.success) {
-      return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid organization id" }, { status: 400, headers: corsHeaders });
     }
 
     // POST is admin-only (no allowNavEditPath) -- billing changes require admin privileges
