@@ -10,7 +10,7 @@ const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 // Routes that don't require authentication
-const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
+const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
 
 // Routes that should redirect to /app if user is already authenticated
 const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
