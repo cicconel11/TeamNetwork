@@ -162,24 +162,11 @@ export default function NewEventPage() {
             organizationId: orgIdToUse,
             title: `New ${singularLabel}: ${formData.title}`,
             body: notificationBody || `${singularLabel} scheduled for ${formData.start_date} at ${formData.start_time}`,
-            channel: formData.channel,
+            channel: `${formData.channel},push`,
             audience: audienceValue,
             targetUserIds: targetIds,
-          }),
-        });
-
-        // Send mobile push notification
-        await fetch("/api/mobile/push", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            organizationId: orgIdToUse,
-            title: `New ${singularLabel}: ${formData.title}`,
-            body: notificationBody || `${singularLabel} scheduled for ${formData.start_date} at ${formData.start_time}`,
-            type: "event",
-            resourceId: event.id,
-            audience: audienceValue,
-            targetUserIds: targetIds || undefined,
+            pushType: "event",
+            pushResourceId: event.id,
           }),
         });
       } catch (notifError) {

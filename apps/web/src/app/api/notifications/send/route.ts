@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
 import type { EmailParams, NotificationResult } from "@/lib/notifications";
+import { sendExpoPushNotifications, buildPushMessage } from "@/lib/expo-push";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -15,7 +16,7 @@ import {
   validationErrorResponse,
 } from "@/lib/security/validation";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import type { NotificationAudience, NotificationChannel } from "@teammeet/types";
+import type { NotificationAudience, NotificationChannel, UserRole } from "@teammeet/types";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -23,10 +24,187 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 
-const validChannel = (value: string | undefined): NotificationChannel => {
-  if (value === "sms" || value === "both") return value;
-  return "email";
+const CHANNEL_PARTS = ["email", "sms", "both", "push"] as const;
+type ChannelPart = typeof CHANNEL_PARTS[number];
+
+type ParsedChannel = {
+  raw: string;
+  emailSmsChannel: NotificationChannel | null;
+  pushRequested: boolean;
+  isValid: boolean;
 };
+
+const parseChannel = (value: string | undefined): ParsedChannel => {
+  const raw = value?.trim() || "email";
+  const parts = raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length === 0) {
+    return { raw: "email", emailSmsChannel: "email", pushRequested: false, isValid: true };
+  }
+
+  const hasInvalid = parts.some((part) => !CHANNEL_PARTS.includes(part as ChannelPart));
+  if (hasInvalid) {
+    return { raw, emailSmsChannel: null, pushRequested: false, isValid: false };
+  }
+
+  const pushRequested = parts.includes("push");
+  const baseParts = parts.filter((part) => part !== "push");
+  let emailSmsChannel: NotificationChannel | null = null;
+
+  if (baseParts.length === 0) {
+    emailSmsChannel = null;
+  } else if (baseParts.includes("both")) {
+    emailSmsChannel = "both";
+  } else if (baseParts.includes("sms")) {
+    emailSmsChannel = "sms";
+  } else {
+    emailSmsChannel = "email";
+  }
+
+  return { raw, emailSmsChannel, pushRequested, isValid: true };
+};
+
+type PushNotificationType = "announcement" | "event";
+
+type PushSendResult = {
+  success: boolean;
+  sent: number;
+  failed: number;
+  totalTargets: number;
+  tokensFound: number;
+  errors: string[];
+  reason?: "no_recipients" | "no_tokens" | "all_disabled" | "org_missing";
+};
+
+async function sendMobilePushNotifications(params: {
+  service: ReturnType<typeof createServiceClient>;
+  organizationId: string;
+  title: string;
+  body: string;
+  type: PushNotificationType;
+  resourceId: string;
+  audience: NotificationAudience;
+  targetUserIds: string[] | null;
+}): Promise<PushSendResult> {
+  const { service, organizationId, title, body, type, resourceId, audience, targetUserIds } = params;
+
+  const { data: org } = await service
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single();
+
+  if (!org) {
+    return {
+      success: false,
+      sent: 0,
+      failed: 0,
+      totalTargets: 0,
+      tokensFound: 0,
+      errors: ["Organization not found"],
+      reason: "org_missing",
+    };
+  }
+
+  const audienceRoles: readonly UserRole[] =
+    audience === "members"
+      ? ["admin", "active_member", "member"]
+      : audience === "alumni"
+      ? ["alumni", "viewer"]
+      : ["admin", "active_member", "member", "alumni", "viewer"];
+
+  const membershipFilter = service
+    .from("user_organization_roles")
+    .select("user_id")
+    .eq("organization_id", organizationId)
+    .eq("status", "active")
+    .in("role", audienceRoles);
+
+  const membershipsRes = targetUserIds && targetUserIds.length > 0
+    ? await membershipFilter.in("user_id", targetUserIds)
+    : await membershipFilter;
+
+  const memberUserIds = (membershipsRes.data || []).map((m) => m.user_id);
+
+  if (memberUserIds.length === 0) {
+    return {
+      success: true,
+      sent: 0,
+      failed: 0,
+      totalTargets: 0,
+      tokensFound: 0,
+      errors: [],
+      reason: "no_recipients",
+    };
+  }
+
+  const { data: tokens } = await service
+    .from("user_push_tokens")
+    .select("expo_push_token, user_id")
+    .in("user_id", memberUserIds);
+
+  if (!tokens || tokens.length === 0) {
+    return {
+      success: true,
+      sent: 0,
+      failed: 0,
+      totalTargets: memberUserIds.length,
+      tokensFound: 0,
+      errors: [],
+      reason: "no_tokens",
+    };
+  }
+
+  const { data: prefs } = await service
+    .from("notification_preferences")
+    .select("user_id, push_enabled")
+    .eq("organization_id", organizationId)
+    .in("user_id", memberUserIds);
+
+  const prefsMap = new Map<string, boolean>();
+  (prefs || []).forEach((p) => {
+    if (p.user_id) prefsMap.set(p.user_id, p.push_enabled ?? true);
+  });
+
+  const enabledTokens = tokens.filter((t) => {
+    const pushEnabled = prefsMap.get(t.user_id) ?? true;
+    return pushEnabled;
+  });
+
+  if (enabledTokens.length === 0) {
+    return {
+      success: true,
+      sent: 0,
+      failed: 0,
+      totalTargets: memberUserIds.length,
+      tokensFound: tokens.length,
+      errors: [],
+      reason: "all_disabled",
+    };
+  }
+
+  const messages = enabledTokens.map((t) =>
+    buildPushMessage(t.expo_push_token, title, body, {
+      type,
+      orgSlug: org.slug,
+      id: resourceId,
+    })
+  );
+
+  const result = await sendExpoPushNotifications(messages);
+
+  return {
+    success: result.success,
+    sent: result.sent,
+    failed: result.failed,
+    totalTargets: memberUserIds.length,
+    tokensFound: tokens.length,
+    errors: result.errors,
+  };
+}
 
 const mapAnnouncementAudience = (audience: string): NotificationAudience => {
   if (audience === "active_members") return "members";
@@ -43,7 +221,9 @@ const notificationSchema = z
     title: optionalSafeString(200),
     body: optionalSafeString(8_000),
     audience: z.enum(["members", "alumni", "both"]).optional(),
-    channel: z.enum(["email", "sms", "both"]).optional(),
+    channel: z.string().optional(),
+    pushType: z.enum(["announcement", "event"]).optional(),
+    pushResourceId: baseSchemas.uuid.optional(),
     targetUserIds: uuidArray(500).optional(),
     persistNotification: z.boolean().optional(),
   })
@@ -61,6 +241,42 @@ const notificationSchema = z
         code: "custom",
         path: ["title"],
         message: "title is required when sending a new notification",
+      });
+    }
+    const parsedChannel = parseChannel(value.channel);
+    if (!parsedChannel.isValid) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["channel"],
+        message: "channel must be email, sms, both, push, or include push",
+      });
+    }
+    if (value.pushType && !value.pushResourceId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pushResourceId"],
+        message: "pushResourceId is required when pushType is provided",
+      });
+    }
+    if (value.pushResourceId && !value.pushType) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pushType"],
+        message: "pushType is required when pushResourceId is provided",
+      });
+    }
+    if (parsedChannel.pushRequested && !value.announcementId && !value.pushType) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pushType"],
+        message: "pushType is required when channel includes push",
+      });
+    }
+    if (parsedChannel.pushRequested && !value.announcementId && !value.pushResourceId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["pushResourceId"],
+        message: "pushResourceId is required when channel includes push",
       });
     }
   });
@@ -120,14 +336,20 @@ export async function POST(request: Request) {
       return respond({ error: "Unauthorized" }, 401);
     }
 
+    const parsedChannel = parseChannel(body.channel);
+    let rawChannel = parsedChannel.raw;
+    let emailSmsChannel = parsedChannel.emailSmsChannel;
+    let pushRequested = parsedChannel.pushRequested;
+
     let organizationId: string | null = null;
     let title: string | null = body.title ?? null;
     let bodyText = body.body ?? "";
     let audience: NotificationAudience = body.audience ?? "both";
-    let channel: NotificationChannel = body.channel ?? "email";
     let targetUserIds: string[] | null = body.targetUserIds ?? null;
     let resolvedNotificationId: string | null = notificationId ?? null;
     let persistNotification = body.persistNotification !== false;
+    let pushType: PushNotificationType | null = body.pushType ?? null;
+    let pushResourceId: string | null = body.pushResourceId ?? null;
 
     if (announcementId) {
       const { data: announcement, error: announcementError } = await service
@@ -148,6 +370,8 @@ export async function POST(request: Request) {
       bodyText = announcement.body || "";
       audience = mapAnnouncementAudience(announcement.audience as string);
       targetUserIds = announcement.audience_user_ids;
+      pushType = "announcement";
+      pushResourceId = announcementId;
 
       const { data: existingNotification } = await service
         .from("notifications")
@@ -161,7 +385,10 @@ export async function POST(request: Request) {
 
       if (existingNotification) {
         resolvedNotificationId = existingNotification.id;
-        channel = validChannel(existingNotification.channel);
+        const existingChannel = parseChannel(existingNotification.channel);
+        rawChannel = existingChannel.raw;
+        emailSmsChannel = existingChannel.emailSmsChannel;
+        pushRequested = existingChannel.pushRequested;
         audience = (existingNotification.audience as NotificationAudience) || audience;
         targetUserIds = existingNotification.target_user_ids || targetUserIds;
       }
@@ -183,7 +410,10 @@ export async function POST(request: Request) {
       title = notification.title;
       bodyText = notification.body || "";
       audience = (notification.audience as NotificationAudience) || "both";
-      channel = validChannel(notification.channel);
+      const existingChannel = parseChannel(notification.channel);
+      rawChannel = existingChannel.raw;
+      emailSmsChannel = existingChannel.emailSmsChannel;
+      pushRequested = existingChannel.pushRequested;
       targetUserIds = notification.target_user_ids;
     } else {
       organizationId = body.organizationId ?? null;
@@ -191,7 +421,6 @@ export async function POST(request: Request) {
       bodyText = body.body ?? "";
       const requestedAudience = body.audience as NotificationAudience | undefined;
       audience = requestedAudience || "both";
-      channel = body.channel ?? "email";
       targetUserIds = body.targetUserIds ?? null;
       resolvedNotificationId = body.notificationId ?? null;
       persistNotification = body.persistNotification !== false;
@@ -232,7 +461,7 @@ export async function POST(request: Request) {
           organization_id: organizationId,
           title,
           body: bodyText || null,
-          channel,
+          channel: rawChannel,
           audience,
           target_user_ids: targetUserIds,
           created_by_user_id: user.id,
@@ -245,29 +474,53 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check Resend config before doing any send work
-    if (!resend && process.env.NODE_ENV === "production") {
+    const shouldSendEmail = emailSmsChannel === "email" || emailSmsChannel === "both";
+    if (shouldSendEmail && !resend && process.env.NODE_ENV === "production") {
       return respond(
         { error: "Notifications not configured: set RESEND_API_KEY and FROM_EMAIL" },
         500,
       );
     }
 
-    // Use sendNotificationBlast which handles targeting, concurrency, and sending
-    const blastResult = await sendNotificationBlast({
-      supabase: service,
-      organizationId,
-      audience,
-      channel,
-      title,
-      body: bodyText,
-      targetUserIds: targetUserIds || undefined,
-      sendEmailFn: async (params: EmailParams): Promise<NotificationResult> => {
-        return sendEmailWithFallback(params.to, params.subject, params.body);
-      },
-    });
+    let blastResult = {
+      total: 0,
+      emailCount: 0,
+      smsCount: 0,
+      skippedMissingContact: 0,
+      errors: [] as string[],
+    };
 
-    if (blastResult.total === 0) {
+    if (emailSmsChannel) {
+      blastResult = await sendNotificationBlast({
+        supabase: service,
+        organizationId,
+        audience,
+        channel: emailSmsChannel,
+        title,
+        body: bodyText,
+        targetUserIds: targetUserIds || undefined,
+        sendEmailFn: async (params: EmailParams): Promise<NotificationResult> => {
+          return sendEmailWithFallback(params.to, params.subject, params.body);
+        },
+      });
+    }
+
+    let pushResult: PushSendResult | null = null;
+    if (pushRequested && pushType && pushResourceId) {
+      pushResult = await sendMobilePushNotifications({
+        service,
+        organizationId,
+        title,
+        body: bodyText,
+        type: pushType,
+        resourceId: pushResourceId,
+        audience,
+        targetUserIds,
+      });
+    }
+
+    const hasTargets = blastResult.total > 0 || (pushResult?.totalTargets ?? 0) > 0;
+    if (!hasTargets) {
       return respond(
         {
           error: "No recipients matched the selected audience",
@@ -278,24 +531,34 @@ export async function POST(request: Request) {
       );
     }
 
-    if (resolvedNotificationId) {
+    const pushSent = pushResult?.sent ?? 0;
+    const pushFailed = pushResult?.failed ?? 0;
+    const sent = blastResult.emailCount + blastResult.smsCount + pushSent;
+
+    if (resolvedNotificationId && sent > 0) {
       await service
         .from("notifications")
         .update({ sent_at: new Date().toISOString() })
         .eq("id", resolvedNotificationId);
     }
 
-    const sent = blastResult.emailCount + blastResult.smsCount;
-    const success = blastResult.errors.length === 0 && sent > 0;
+    const pushErrors = pushResult?.errors ?? [];
+    const errors = [...blastResult.errors, ...pushErrors];
+    const success = errors.length === 0 && sent > 0;
 
     const payload = {
       success,
       sent,
       emailSent: blastResult.emailCount,
       smsSent: blastResult.smsCount,
+      pushSent,
+      pushFailed,
       total: blastResult.total,
+      pushTargets: pushResult?.totalTargets,
+      pushTokensFound: pushResult?.tokensFound,
+      pushReason: pushResult?.reason,
       skipped: blastResult.skippedMissingContact,
-      errors: blastResult.errors.length > 0 ? blastResult.errors : undefined,
+      errors: errors.length > 0 ? errors : undefined,
     };
 
     const status = success ? 200 : 500;
@@ -324,4 +587,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
