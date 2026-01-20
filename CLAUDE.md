@@ -294,53 +294,61 @@ export const supabase = createClient(url, key, {
 
 The mobile app uses PostHog for product analytics and Sentry for error tracking.
 
-**Setup:**
-- PostHog: Screen tracking, user identification, custom events
-- Sentry: Crash reporting, error tracking with context
+**Stack:**
+- **PostHog**: Screen tracking, user identification, user properties
+- **Sentry**: Crash reporting, error tracking with context
 
-**Files:**
-- `apps/mobile/src/lib/analytics/index.ts` - Thin abstraction layer
+**Architecture:**
+- `apps/mobile/src/lib/analytics/index.ts` - Abstraction layer with event queue, lazy SDK init
 - `apps/mobile/src/lib/analytics/posthog.ts` - PostHog wrapper
 - `apps/mobile/src/lib/analytics/sentry.ts` - Sentry wrapper
-- `apps/mobile/src/hooks/useScreenTracking.ts` - Auto screen tracking
+- `apps/mobile/src/hooks/useScreenTracking.ts` - Automatic screen tracking via Expo Router
+- `apps/mobile/app/_layout.tsx` - Init analytics on app launch, identify on login/logout
 
-**Usage:**
+**Configuration:**
+- Keys stored in `apps/mobile/.env.local`: `EXPO_PUBLIC_POSTHOG_KEY`, `EXPO_PUBLIC_SENTRY_DSN`
+- Disabled by default in `__DEV__` mode (set `setEnabled(true)` to test locally)
+- Pre-init event queue buffers calls before SDKs initialize
+- Config validation warns if keys missing in production
+- Enabled state persisted to AsyncStorage across app restarts
 
-```typescript
-import { identify, track, screen, captureException } from "@/lib/analytics";
+#### What Gets Tracked
 
-// Identify user (called automatically on login)
-identify(userId, { email, authProvider });
+**App Launch:**
+- Analytics SDKs initialize if enabled and config valid
+- Queued events flush
 
-// Track custom events
-track("feature_used", { feature: "donation", amount: 50 });
+**User Login:**
+- `identify()` event with user ID, email, auth provider
+- Session tracking begins
 
-// Track screen (handled automatically by useScreenTracking)
-screen("Members", { pathname: "/org/members" });
+**Screen Navigation:**
+- `$screen` event for each route change (via `useScreenTracking` hook)
+- Properties: screen name, pathname
+- Derived from Expo Router segments
 
-// Capture errors in catch blocks
-try {
-  // ...
-} catch (error) {
-  captureException(error as Error, { screen: "Members", orgSlug });
-}
-```
+**Organization Context Change:**
+- `setUserProperties()` updates when org or role changes
+- Tracks: currentOrgSlug, currentOrgId, role (admin/member/alumni/unknown)
+- Role normalized via `normalizeRole()` from @teammeet/core
 
-**Key behaviors:**
-- Disabled in `__DEV__` mode by default
-- Pre-init event queue buffers calls before initialization completes
-- `reset()` clears user identity on logout
-- User properties (org, role) are set via OrgContext when org changes
+**Errors:**
+- Logged to console (dev visibility) and Sentry simultaneously
+- Captured via `captureException()` with context (screen name, org, etc.)
+- Full stack traces sent to Sentry with request/response data
 
-**Environment variables (apps/mobile/.env.local):**
-- `EXPO_PUBLIC_POSTHOG_KEY` - PostHog project API key
-- `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN
+**User Logout:**
+- `reset()` clears user identity, queued events, and analytics state
+- Next session appears as new anonymous user
 
-**Future work:**
+#### Future Work
+
 - [ ] Sentry performance monitoring (API response times, screen render times)
-- [ ] Custom event tracking for feature usage (events created, members invited)
-- [ ] Session replay via PostHog
+- [ ] Custom event tracking for feature usage (events created, members invited, donations made)
+- [ ] Session replay via PostHog (recording user sessions)
 - [ ] A/B testing via PostHog feature flags
+- [ ] In-app settings toggle for analytics opt-in/opt-out
+- [ ] Funnel analysis for key user flows (signup, first event, first donation)
 
 ## Coding Conventions
 

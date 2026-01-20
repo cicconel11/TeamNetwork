@@ -113,9 +113,9 @@ export default function TabsLayout() {
 
   const renderTabBar = useCallback(
     (props: BottomTabBarProps) => (
-      <TabBar {...props} onActionPress={handleActionPress} />
+      <TabBar {...props} />
     ),
-    [handleActionPress]
+    []
   );
 
   return (
@@ -139,6 +139,12 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
+          name="announcements"
+          options={{
+            title: "Announcements",
+          }}
+        />
+        <Tabs.Screen
           name="members"
           options={{
             title: "Members",
@@ -147,18 +153,12 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="menu"
           options={{
-            title: "Menu",
+            title: "More",
           }}
         />
-        {/* Hide old tabs from navigation */}
+        {/* Hide Alumni tab - not part of core loop */}
         <Tabs.Screen
           name="alumni"
-          options={{
-            href: null,
-          }}
-        />
-        <Tabs.Screen
-          name="announcements"
           options={{
             href: null,
           }}

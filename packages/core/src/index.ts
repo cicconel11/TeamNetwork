@@ -1,5 +1,18 @@
-// Auth - Role utilities
-export { normalizeRole, roleFlags, type OrgRole } from "./auth";
+// Auth - Role utilities and permissions
+export { normalizeRole, roleFlags, type OrgRole } from "./auth/index";
+export {
+  canViewAlumni,
+  canUseAdminActions,
+  canViewDonations,
+  canViewRecords,
+  canViewForms,
+  canAccessSettings,
+  canManageInvites,
+  canManageBilling,
+  getPermissions,
+  DEFAULT_FEATURE_FLAGS,
+  type FeatureFlags,
+} from "./auth/index";
 
 // Pricing - Subscription pricing and alumni quotas
 export {
@@ -11,7 +24,7 @@ export {
   formatPrice,
   getAlumniLimit,
   normalizeBucket,
-} from "./pricing";
+} from "./pricing/index";
 
 // Announcements - Audience filtering
-export { filterAnnouncementsForUser, type ViewerContext } from "./announcements";
+export { filterAnnouncementsForUser, type ViewerContext } from "./announcements/index";

@@ -6,13 +6,15 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import LoadingScreen from "@/components/LoadingScreen";
-import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled } from "@/lib/analytics";
+import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled, setEnabled } from "@/lib/analytics";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 
 // Suppress known third-party library warnings on web platform
 // These are library compatibility issues that don't affect functionality
 if (Platform.OS === "web") {
   const originalWarn = console.warn;
+  const originalError = console.error;
   console.warn = (...args: any[]) => {
     const message = args[0]?.toString?.() || "";
     // Suppress pointerEvents deprecation warning from react-native-reanimated
@@ -24,6 +26,14 @@ if (Platform.OS === "web") {
       return;
     }
     originalWarn(...args);
+  };
+  console.error = (...args: any[]) => {
+    const message = args[0]?.toString?.() || "";
+    // React 19 warning triggered by react-native-web using element.ref internally
+    if (message.includes("Accessing element.ref was removed in React 19")) {
+      return;
+    }
+    originalError(...args);
   };
 }
 
@@ -37,6 +47,12 @@ export default function RootLayout() {
   // Track screen views automatically
   useScreenTracking();
 
+  // Initialize push notifications
+  usePushNotifications({
+    userId: session?.user?.id ?? null,
+    enabled: true,
+  });
+
   // Initialize analytics on mount
   useEffect(() => {
     let isMounted = true;
@@ -49,6 +65,12 @@ export default function RootLayout() {
         posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || "",
         sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
       });
+
+      // Enable analytics in dev mode for testing
+      // TODO: Remove this line or add a dev settings toggle
+      if (__DEV__) {
+        setEnabled(true);
+      }
     };
 
     void bootstrapAnalytics();

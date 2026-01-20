@@ -13,7 +13,7 @@ import {
   SectionList,
 } from "react-native";
 
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,9 +23,11 @@ import Animated, {
 import { Search, SlidersHorizontal, Users, GraduationCap } from "lucide-react-native";
 import { useMembers } from "@/hooks/useMembers";
 import { useAlumni } from "@/hooks/useAlumni";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { useOrg } from "@/contexts/OrgContext";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { UserRole } from "@teammeet/types";
+import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 type TabType = "members" | "alumni";
 
@@ -33,8 +35,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function MembersScreen() {
   const { orgSlug } = useOrg();
+  const router = useRouter();
+  const { permissions, isLoading: roleLoading } = useOrgRole();
+  const canViewAlumni = permissions.canViewAlumni;
+  
   const { members, loading: membersLoading, error: membersError, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgSlug || "");
-  const { alumni, loading: alumniLoading, error: alumniError, refetch: refetchAlumni, refetchIfStale: refetchAlumniIfStale } = useAlumni(orgSlug || "");
+  // Only fetch alumni data if the user has permission to view it
+  const { alumni, loading: alumniLoading, error: alumniError, refetch: refetchAlumni, refetchIfStale: refetchAlumniIfStale } = useAlumni(canViewAlumni ? (orgSlug || "") : "");
 
   const [activeTab, setActiveTab] = useState<TabType>("members");
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,9 +50,11 @@ export default function MembersScreen() {
   const isRefetchingRef = useRef(false);
 
   const handleTabChange = useCallback((tab: TabType) => {
+    // Only allow switching to alumni tab if user has permission
+    if (tab === "alumni" && !canViewAlumni) return;
     setActiveTab(tab);
     tabIndicatorPosition.value = withTiming(tab === "members" ? 0 : 1, { duration: 200 });
-  }, [tabIndicatorPosition]);
+  }, [tabIndicatorPosition, canViewAlumni]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [
@@ -99,15 +108,17 @@ export default function MembersScreen() {
       .map(([decade, data]) => ({ title: decade, data }));
   }, [alumni, searchQuery]);
 
-  const loading = membersLoading || alumniLoading;
-  const error = membersError || alumniError;
+  const loading = membersLoading || (canViewAlumni && alumniLoading) || roleLoading;
+  const error = membersError || (canViewAlumni && alumniError);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
     useCallback(() => {
       refetchMembersIfStale();
-      refetchAlumniIfStale();
-    }, [refetchMembersIfStale, refetchAlumniIfStale])
+      if (canViewAlumni) {
+        refetchAlumniIfStale();
+      }
+    }, [refetchMembersIfStale, refetchAlumniIfStale, canViewAlumni])
   );
 
   const handleRefresh = useCallback(async () => {
@@ -115,12 +126,15 @@ export default function MembersScreen() {
     setRefreshing(true);
     isRefetchingRef.current = true;
     try {
-      await Promise.all([refetchMembers(), refetchAlumni()]);
+      refetchMembers();
+      if (canViewAlumni) {
+        await refetchAlumni();
+      }
     } finally {
       setRefreshing(false);
       isRefetchingRef.current = false;
     }
-  }, [refetchMembers, refetchAlumni]);
+  }, [refetchMembers, refetchAlumni, canViewAlumni]);
 
   const getMemberInitials = (member: (typeof members)[0]) => {
     const name = member.user?.name;
@@ -145,7 +159,11 @@ export default function MembersScreen() {
     const { isAdmin } = roleFlags(role);
 
     return (
-      <TouchableOpacity style={styles.personCard} activeOpacity={0.7}>
+      <TouchableOpacity 
+        style={styles.personCard} 
+        activeOpacity={0.7}
+        onPress={() => router.push(`/(app)/${orgSlug}/members/${item.id}`)}
+      >
         {item.user?.avatar_url ? (
           <Image source={{ uri: item.user.avatar_url }} style={styles.avatar} />
         ) : (
@@ -213,7 +231,7 @@ export default function MembersScreen() {
   if (loading && members.length === 0 && alumni.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -237,26 +255,28 @@ export default function MembersScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Tab Switcher */}
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => handleTabChange("members")}
-        >
-          <Text style={[styles.tabText, activeTab === "members" && styles.tabTextActive]}>
-            Members
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.tab}
-          onPress={() => handleTabChange("alumni")}
-        >
-          <Text style={[styles.tabText, activeTab === "alumni" && styles.tabTextActive]}>
-            Alumni
-          </Text>
-        </TouchableOpacity>
-        <Animated.View style={[styles.tabIndicator, indicatorStyle]} />
-      </View>
+      {/* Tab Switcher - Only show if alumni tab is accessible */}
+      {canViewAlumni && (
+        <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => handleTabChange("members")}
+          >
+            <Text style={[styles.tabText, activeTab === "members" && styles.tabTextActive]}>
+              Members
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.tab}
+            onPress={() => handleTabChange("alumni")}
+          >
+            <Text style={[styles.tabText, activeTab === "alumni" && styles.tabTextActive]}>
+              Alumni
+            </Text>
+          </TouchableOpacity>
+          <Animated.View style={[styles.tabIndicator, indicatorStyle]} />
+        </View>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -266,7 +286,7 @@ export default function MembersScreen() {
       )}
 
       {/* Content */}
-      {activeTab === "members" ? (
+      {activeTab === "members" || !canViewAlumni ? (
         <FlatList
           data={filteredMembers}
           keyExtractor={(item) => item.id}
@@ -274,7 +294,7 @@ export default function MembersScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyMembers}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         />
       ) : (
@@ -287,7 +307,7 @@ export default function MembersScreen() {
           ListEmptyComponent={renderEmptyAlumni}
           stickySectionHeadersEnabled
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
           }
         />
       )}
@@ -298,7 +318,7 @@ export default function MembersScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
@@ -348,13 +368,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   tabText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#666",
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    color: colors.muted,
   },
   tabTextActive: {
-    color: "#2563eb",
-    fontWeight: "600",
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
   },
   tabIndicator: {
     position: "absolute",
@@ -362,7 +382,7 @@ const styles = StyleSheet.create({
     left: 16,
     width: SCREEN_WIDTH / 2 - 32,
     height: 3,
-    backgroundColor: "#2563eb",
+    backgroundColor: colors.primary,
     borderRadius: 2,
   },
   listContent: {
