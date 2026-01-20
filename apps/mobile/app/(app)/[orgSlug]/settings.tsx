@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Switch,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useOrg } from "@/contexts/OrgContext";
@@ -23,6 +24,7 @@ import {
   User,
   Info,
   ExternalLink,
+  Bell,
 } from "lucide-react-native";
 import Constants from "expo-constants";
 
@@ -69,6 +71,11 @@ export default function SettingsScreen() {
   const [billingPortalUrl, setBillingPortalUrl] = useState<string | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [prefId, setPrefId] = useState<string | null>(null);
+  const [prefLoading, setPrefLoading] = useState(true);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [prefError, setPrefError] = useState<string | null>(null);
 
   // Fetch user role
   useEffect(() => {
@@ -110,11 +117,91 @@ export default function SettingsScreen() {
     };
   }, [orgId, user]);
 
+  const loadNotificationPreferences = useCallback(async () => {
+    if (!orgId || !user) {
+      setPrefLoading(false);
+      return;
+    }
+
+    setPrefLoading(true);
+    setPrefError(null);
+
+    try {
+      const { data: pref, error } = await supabase
+        .from("notification_preferences")
+        .select("id, push_enabled")
+        .eq("organization_id", orgId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setPrefId(pref?.id ?? null);
+      setPushEnabled(pref?.push_enabled ?? true);
+    } catch (e) {
+      console.error("Failed to load notification preferences:", e);
+      captureException(e as Error, { screen: "Settings", context: "loadNotificationPreferences", orgId });
+      setPrefError((e as Error).message || "Failed to load preferences");
+    } finally {
+      setPrefLoading(false);
+    }
+  }, [orgId, user]);
+
+  useEffect(() => {
+    loadNotificationPreferences();
+  }, [loadNotificationPreferences]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
+    await Promise.all([refetch(), loadNotificationPreferences()]);
     setRefreshing(false);
-  }, [refetch]);
+  }, [refetch, loadNotificationPreferences]);
+
+  const handlePushToggle = async (nextValue: boolean) => {
+    if (!orgId || !user) {
+      Alert.alert("Error", "Not authenticated");
+      return;
+    }
+
+    const previousValue = pushEnabled;
+    setPushEnabled(nextValue);
+    setPrefSaving(true);
+    setPrefError(null);
+
+    try {
+      if (prefId) {
+        const { error } = await supabase
+          .from("notification_preferences")
+          .update({ push_enabled: nextValue })
+          .eq("id", prefId);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("notification_preferences")
+          .insert({
+            organization_id: orgId,
+            user_id: user.id,
+            push_enabled: nextValue,
+            email_enabled: true,
+            email_address: user.email ?? null,
+            phone_number: null,
+            sms_enabled: false,
+          })
+          .select("id")
+          .maybeSingle();
+
+        if (error) throw error;
+        setPrefId(data?.id ?? null);
+      }
+    } catch (e) {
+      console.error("Failed to update notification preferences:", e);
+      captureException(e as Error, { screen: "Settings", context: "updateNotificationPreferences", orgId });
+      setPrefError((e as Error).message || "Failed to update preferences");
+      setPushEnabled(previousValue);
+    } finally {
+      setPrefSaving(false);
+    }
+  };
 
   const handleManageBilling = async () => {
     if (!orgId) return;
@@ -167,6 +254,7 @@ export default function SettingsScreen() {
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
+        contentInsetAdjustmentBehavior="automatic"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -186,6 +274,42 @@ export default function SettingsScreen() {
               </View>
               <ChevronRight size={20} color="#9ca3af" />
             </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Notifications Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Notifications</Text>
+          <View style={styles.card}>
+            <View style={styles.menuItem}>
+              <View style={styles.menuItemLeft}>
+                <Bell size={20} color="#666" />
+                <View style={styles.menuItemText}>
+                  <Text style={styles.menuItemLabel}>Push Notifications</Text>
+                  <Text style={styles.menuItemHint}>
+                    Announcements and events for this organization
+                  </Text>
+                </View>
+              </View>
+              {prefLoading ? (
+                <ActivityIndicator size="small" color="#2563eb" />
+              ) : (
+                <Switch
+                  value={pushEnabled}
+                  onValueChange={handlePushToggle}
+                  disabled={prefSaving}
+                  trackColor={{ false: "#e5e7eb", true: "#93c5fd" }}
+                  thumbColor={pushEnabled ? "#2563eb" : "#f4f4f5"}
+                />
+              )}
+            </View>
+            {prefError ? (
+              <View style={styles.preferenceError}>
+                <Text style={styles.preferenceErrorText} selectable>
+                  {prefError}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -360,9 +484,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
   },
+  menuItemText: {
+    flex: 1,
+    gap: 2,
+  },
   menuItemLabel: {
     fontSize: 16,
     color: "#1a1a1a",
+  },
+  menuItemHint: {
+    fontSize: 12,
+    color: "#6b7280",
   },
   loadingContainer: {
     padding: 24,
@@ -382,6 +514,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#dc2626",
     textAlign: "center",
+  },
+  preferenceError: {
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  preferenceErrorText: {
+    fontSize: 13,
+    color: "#dc2626",
   },
   retryButton: {
     backgroundColor: "#2563eb",

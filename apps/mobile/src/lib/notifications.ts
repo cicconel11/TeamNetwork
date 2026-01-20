@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
+import * as Application from "expo-application";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
@@ -24,6 +25,20 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 });
+
+async function getStableDeviceId(): Promise<string | null> {
+  try {
+    if (Platform.OS === "ios") {
+      return await Application.getIosIdForVendorAsync();
+    }
+    if (Platform.OS === "android") {
+      return Application.androidId ?? null;
+    }
+  } catch (error) {
+    console.warn("Failed to resolve device id:", error);
+  }
+  return null;
+}
 
 /**
  * Request permission for push notifications
@@ -91,13 +106,26 @@ export async function getExpoPushToken(): Promise<string | null> {
 /**
  * Register push token with the backend
  */
-export async function registerPushToken(userId: string): Promise<boolean> {
-  const token = await getExpoPushToken();
+export async function registerPushToken(
+  userId: string,
+  tokenOverride?: string
+): Promise<boolean> {
+  const token = tokenOverride ?? await getExpoPushToken();
   if (!token) return false;
 
   try {
-    const deviceId = Constants.deviceId || Device.modelName || "unknown";
+    const stableDeviceId = await getStableDeviceId();
+    const deviceId = stableDeviceId || Constants.deviceId || Device.modelName || "unknown";
     const platform = Platform.OS as "ios" | "android" | "web";
+
+    if (stableDeviceId) {
+      await supabase
+        .from("user_push_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("device_id", stableDeviceId)
+        .neq("expo_push_token", token);
+    }
 
     // Upsert the token (update if exists, insert if new)
     const { error } = await supabase
@@ -132,8 +160,8 @@ export async function registerPushToken(userId: string): Promise<boolean> {
 /**
  * Unregister push token (on logout)
  */
-export async function unregisterPushToken(): Promise<void> {
-  const token = await getExpoPushToken();
+export async function unregisterPushToken(tokenOverride?: string): Promise<void> {
+  const token = tokenOverride ?? await getExpoPushToken();
   if (!token) return;
 
   try {
