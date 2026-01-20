@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
-import { getDevAdminEmails } from "@/lib/auth/dev-admin";
+import { canDevAdminPerform, getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MembersPageProps {
@@ -17,9 +18,19 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const { orgSlug } = await params;
   const filters = await searchParams;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_members");
+  let dataClient = supabase;
+  if (isDevAdmin) {
+    try {
+      dataClient = createServiceClient();
+    } catch (error) {
+      console.warn("DevAdmin: Failed to create service client (missing key?)", error);
+    }
+  }
 
   // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
+  const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
@@ -34,7 +45,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Build query with filters
   const devAdminEmails = getDevAdminEmails();
 
-  let query = supabase
+  let query = dataClient
     .from("members")
     .select("*")
     .eq("organization_id", org.id)
@@ -57,7 +68,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const { data: members } = await query;
 
   // Get unique roles for filter
-  const { data: allMembers } = await supabase
+  const { data: allMembers } = await dataClient
     .from("members")
     .select("role")
     .eq("organization_id", org.id)

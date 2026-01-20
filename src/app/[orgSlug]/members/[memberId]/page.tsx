@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import type { Member } from "@/types/database";
 
 interface MemberDetailPageProps {
@@ -13,9 +15,19 @@ interface MemberDetailPageProps {
 export default async function MemberDetailPage({ params }: MemberDetailPageProps) {
   const { orgSlug, memberId } = await params;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_members");
+  let dataClient = supabase;
+  if (isDevAdmin) {
+    try {
+      dataClient = createServiceClient();
+    } catch (error) {
+      console.warn("DevAdmin: Failed to create service client (missing key?)", error);
+    }
+  }
 
   // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
+  const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
@@ -26,7 +38,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   if (!org || orgError) return notFound();
 
   // Fetch member
-  const { data: memberData } = await supabase
+  const { data: memberData } = await dataClient
     .from("members")
     .select("*")
     .eq("id", memberId)

@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import type { Organization, Alumni } from "@/types/database";
 
 interface AlumniDetailPageProps {
@@ -13,9 +15,19 @@ interface AlumniDetailPageProps {
 export default async function AlumniDetailPage({ params }: AlumniDetailPageProps) {
   const { orgSlug, alumniId } = await params;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_members");
+  let dataClient = supabase;
+  if (isDevAdmin) {
+    try {
+      dataClient = createServiceClient();
+    } catch (error) {
+      console.warn("DevAdmin: Failed to create service client (missing key?)", error);
+    }
+  }
 
   // Fetch organization
-  const { data: orgData, error: orgError } = await supabase
+  const { data: orgData, error: orgError } = await dataClient
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
@@ -29,7 +41,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const orgId = org.id;
 
   // Fetch alumni
-  const { data: alumData } = await supabase
+  const { data: alumData } = await dataClient
     .from("alumni")
     .select("*")
     .eq("id", alumniId)

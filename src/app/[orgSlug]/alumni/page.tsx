@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniFilters } from "@/components/alumni";
 import { isOrgAdmin } from "@/lib/auth";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface AlumniPageProps {
@@ -23,11 +25,21 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { orgSlug } = await params;
   const filters = await searchParams;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_members");
+  let dataClient = supabase;
+  if (isDevAdmin) {
+    try {
+      dataClient = createServiceClient();
+    } catch (error) {
+      console.warn("DevAdmin: Failed to create service client (missing key?)", error);
+    }
+  }
 
   const normalize = (value?: string) => value?.trim() || "";
 
   // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
+  const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
@@ -40,7 +52,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const isAdmin = await isOrgAdmin(org.id);
 
   // Build query with filters
-  let query = supabase
+  let query = dataClient
     .from("alumni")
     .select("*")
     .eq("organization_id", org.id)
@@ -71,7 +83,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { data: alumni } = await query;
 
   // Get unique values for filter dropdowns
-  const { data: allAlumni } = await supabase
+  const { data: allAlumni } = await dataClient
     .from("alumni")
     .select("graduation_year, industry, current_company, current_city, position_title")
     .eq("organization_id", org.id)
