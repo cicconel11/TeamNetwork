@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "test": "npm run test:unit && npm run test:security && npm run test:payments",
     "test:unit": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts tests/cancel-subscription.test.ts tests/grace-period.test.ts",
     "test:auth": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts",

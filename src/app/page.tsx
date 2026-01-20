@@ -38,6 +38,7 @@ export default async function LandingPage() {
           <nav className="hidden md:flex items-center gap-8 text-sm">
             <Link href="#features" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Features</Link>
             <Link href="#pricing" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Pricing</Link>
+            <Link href="/demos" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Demos</Link>
             <Link href="#faq" className="text-landing-cream/70 hover:text-landing-cream transition-colors">FAQ</Link>
             <Link href="/terms" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Terms</Link>
           </nav>
