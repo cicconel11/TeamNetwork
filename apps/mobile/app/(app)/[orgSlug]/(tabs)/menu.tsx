@@ -214,7 +214,7 @@ export default function MenuScreen() {
     {
       icon: <Settings size={20} color="#666" />,
       label: "Settings",
-      onPress: () => console.log("Settings"),
+      onPress: () => router.push(`/(app)/${orgSlug}/settings`),
     },
     {
       icon: <UserPlus size={20} color="#666" />,
@@ -238,6 +238,11 @@ export default function MenuScreen() {
       icon: <Info size={20} color="#666" />,
       label: "About TeamMeet",
       onPress: () => console.log("About"),
+    },
+    {
+      icon: <FileText size={20} color="#666" />,
+      label: "Terms of Service",
+      onPress: () => router.push("/(app)/terms"),
     },
     {
       icon: <LogOut size={20} color="#dc2626" />,

@@ -14,6 +14,7 @@ import { Link } from "expo-router";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { showAlert } from "@/utils/alert";
+import { captureException } from "@/lib/analytics";
 
 // Determine if running in Expo Go vs dev-client/standalone
 const isExpoGo = Constants.appOwnership === "expo";
@@ -103,6 +104,7 @@ export default function LoginScreen() {
 
       if (error) {
         console.error("Sign in error:", error);
+        captureException(new Error(error.message), { screen: "Login", email: email.trim().toLowerCase() });
         showAlert("Error", error.message);
         return;
       }
@@ -111,6 +113,7 @@ export default function LoginScreen() {
       // Navigation happens automatically via _layout.tsx onAuthStateChange
     } catch (e) {
       console.error("Sign in exception:", e);
+      captureException(e as Error, { screen: "Login", email: email.trim().toLowerCase() });
       showAlert("Error", (e as Error).message);
     } finally {
       setEmailLoading(false);

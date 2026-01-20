@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@teammeet/types";
+import { captureException } from "@/lib/analytics";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,6 +30,7 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) {
     console.error("Sign out error:", error);
+    captureException(new Error(error.message), { context: "signOut" });
   }
 }
 
@@ -53,6 +55,7 @@ export async function getCurrentUser() {
 
   if (error) {
     console.error("Error fetching user:", error);
+    captureException(new Error(error.message), { context: "getCurrentUser" });
     return null;
   }
 

@@ -15,6 +15,12 @@ export default function AppLayout() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="terms"
+        options={{
+          title: "Terms of Service",
+        }}
+      />
     </Stack>
   );
 }

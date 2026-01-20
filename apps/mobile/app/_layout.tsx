@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { StyleSheet, Platform } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as Linking from "expo-linking";
@@ -6,6 +6,8 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import LoadingScreen from "@/components/LoadingScreen";
+import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled } from "@/lib/analytics";
+import { useScreenTracking } from "@/hooks/useScreenTracking";
 
 // Suppress known third-party library warnings on web platform
 // These are library compatibility issues that don't affect functionality
@@ -30,6 +32,48 @@ export default function RootLayout() {
   const segments = useSegments() as string[];
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+
+  // Track screen views automatically
+  useScreenTracking();
+
+  // Initialize analytics on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrapAnalytics = async () => {
+      await hydrateEnabled();
+      if (!isMounted) return;
+
+      initAnalytics({
+        posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY || "",
+        sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
+      });
+    };
+
+    void bootstrapAnalytics();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Identify user when session changes
+  useEffect(() => {
+    const userId = session?.user?.id;
+
+    if (userId && userId !== prevUserIdRef.current) {
+      identify(userId, {
+        email: session.user.email,
+        authProvider: session.user.app_metadata?.provider || "email",
+      });
+      prevUserIdRef.current = userId;
+    } else if (!userId && prevUserIdRef.current) {
+      // User logged out
+      resetAnalytics();
+      prevUserIdRef.current = undefined;
+    }
+  }, [session?.user?.id, session?.user?.email, session?.user?.app_metadata?.provider]);
 
   // Handle deep link URLs that contain OAuth tokens
   const handleDeepLink = useCallback(async (event: { url: string }) => {
@@ -64,6 +108,7 @@ export default function RootLayout() {
         }
       } catch (err) {
         console.error("Error handling deep link:", err);
+        captureException(err as Error, { context: "handleDeepLink", url });
       }
     }
   }, []);

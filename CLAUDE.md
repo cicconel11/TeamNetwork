@@ -215,6 +215,8 @@ Use `SKIP_STRIPE_VALIDATION=true` in dev to skip Stripe price ID validation.
 ### Mobile Environment Variables (apps/mobile/.env.local)
 - `EXPO_PUBLIC_SUPABASE_URL`
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_POSTHOG_KEY` - PostHog project API key
+- `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking
 
 ## Shared Packages
 
@@ -287,6 +289,58 @@ export const supabase = createClient(url, key, {
   },
 });
 ```
+
+### Mobile Analytics & Observability
+
+The mobile app uses PostHog for product analytics and Sentry for error tracking.
+
+**Setup:**
+- PostHog: Screen tracking, user identification, custom events
+- Sentry: Crash reporting, error tracking with context
+
+**Files:**
+- `apps/mobile/src/lib/analytics/index.ts` - Thin abstraction layer
+- `apps/mobile/src/lib/analytics/posthog.ts` - PostHog wrapper
+- `apps/mobile/src/lib/analytics/sentry.ts` - Sentry wrapper
+- `apps/mobile/src/hooks/useScreenTracking.ts` - Auto screen tracking
+
+**Usage:**
+
+```typescript
+import { identify, track, screen, captureException } from "@/lib/analytics";
+
+// Identify user (called automatically on login)
+identify(userId, { email, authProvider });
+
+// Track custom events
+track("feature_used", { feature: "donation", amount: 50 });
+
+// Track screen (handled automatically by useScreenTracking)
+screen("Members", { pathname: "/org/members" });
+
+// Capture errors in catch blocks
+try {
+  // ...
+} catch (error) {
+  captureException(error as Error, { screen: "Members", orgSlug });
+}
+```
+
+**Key behaviors:**
+- Disabled in `__DEV__` mode by default
+- Pre-init event queue buffers calls before initialization completes
+- `reset()` clears user identity on logout
+- User properties (org, role) are set via OrgContext when org changes
+
+**Environment variables (apps/mobile/.env.local):**
+- `EXPO_PUBLIC_POSTHOG_KEY` - PostHog project API key
+- `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN
+
+**Future work:**
+- [ ] Sentry performance monitoring (API response times, screen render times)
+- [ ] Custom event tracking for feature usage (events created, members invited)
+- [ ] Session replay via PostHog
+- [ ] A/B testing via PostHog feature flags
 
 ## Coding Conventions
 

@@ -13,11 +13,11 @@ const CENTER_BUTTON_COLOR = "#2563eb";
 // Deterministic tab configuration: ensures symmetric layout
 // Pattern: Home, Events, [+], Members, Menu
 const TAB_CONFIG = [
-  { route: "(tabs)/index", icon: Home, label: "Home" },
-  { route: "(tabs)/events", icon: Calendar, label: "Events" },
+  { route: "index", icon: Home, label: "Home" },
+  { route: "events", icon: Calendar, label: "Events" },
   // Center action button is rendered separately (not a tab)
-  { route: "(tabs)/members", icon: Users, label: "Members" },
-  { route: "(tabs)/menu", icon: MenuIcon, label: "Menu" },
+  { route: "members", icon: Users, label: "Members" },
+  { route: "menu", icon: MenuIcon, label: "Menu" },
 ] as const;
 
 // Split into left/right groups around center button

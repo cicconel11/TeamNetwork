@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
+import { captureException } from "@/lib/analytics";
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
@@ -32,6 +33,7 @@ export default function AuthCallbackScreen() {
       }
     } catch (err) {
       console.error("Auth callback error:", err);
+      captureException(err as Error, { screen: "AuthCallback" });
       setError((err as Error).message);
       // Wait a moment then redirect to login
       setTimeout(() => {
