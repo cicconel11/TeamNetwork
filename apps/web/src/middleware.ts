@@ -25,6 +25,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow CORS preflight requests to pass through to route handlers
+  if (request.method === "OPTIONS") {
+    return NextResponse.next();
+  }
+
   // Canonical host redirect: ensure cookies stay scoped to www domain
   if (host === "myteamnetwork.com") {
     const url = request.nextUrl.clone();
@@ -106,6 +111,11 @@ export async function middleware(request: NextRequest) {
   }
   let user = null;
   let authError: Error | null = null;
+
+  // Check for Authorization header (for mobile/API clients)
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+
   if (isTestMode) {
     console.warn("[SECURITY] AUTH_TEST_MODE active - bypassing JWT validation", {
       pathname,
@@ -113,7 +123,13 @@ export async function middleware(request: NextRequest) {
       timestamp: new Date().toISOString(),
     });
     user = hasAuthCookies ? { id: "test-user" } as { id: string } : null;
+  } else if (bearerToken) {
+    // Validate bearer token for mobile/API clients
+    const res = await supabase.auth.getUser(bearerToken);
+    user = res.data.user;
+    authError = res.error;
   } else {
+    // Fall back to cookie-based auth for web clients
     const res = await supabase.auth.getUser();
     user = res.data.user;
     authError = res.error;
@@ -163,9 +179,12 @@ export async function middleware(request: NextRequest) {
   // API routes: keep JSON 401 instead of HTML redirect
   if (pathname.startsWith("/api/")) {
     if (!user) {
+      const corsHeaders = process.env.NODE_ENV === "development"
+        ? { "Access-Control-Allow-Origin": "*" }
+        : {};
       return NextResponse.json(
         { error: "Unauthorized", message: "Authentication required" },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       );
     }
     return response;
