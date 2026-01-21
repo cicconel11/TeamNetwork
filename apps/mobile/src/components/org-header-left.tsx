@@ -1,5 +1,6 @@
 import { Pressable, View } from "react-native";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
+import { DrawerActions } from "@react-navigation/native";
+import { useNavigation } from "expo-router";
 import { HeaderBackButton, type HeaderBackButtonProps } from "@react-navigation/elements";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { OrgHeaderLogo } from "@/components/org-header-logo";

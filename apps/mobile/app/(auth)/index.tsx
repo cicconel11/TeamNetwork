@@ -1,740 +1,239 @@
-import { useRef } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
-const { width } = Dimensions.get("window");
-
-// Feature data
-const FEATURES = [
-  {
-    icon: "👥",
-    title: "Member Directory",
-    description: "Manage active members and alumni with detailed profiles.",
-  },
-  {
-    icon: "📅",
-    title: "Events & Calendar",
-    description: "Schedule practices, games, and social events in one place.",
-  },
-  {
-    icon: "💰",
-    title: "Donations",
-    description: "Accept donations directly with Stripe Connect integration.",
-  },
-  {
-    icon: "🏆",
-    title: "Records & Awards",
-    description: "Track achievements, records, and team history.",
-  },
-  {
-    icon: "📢",
-    title: "Announcements",
-    description: "Keep everyone informed with targeted announcements.",
-  },
-  {
-    icon: "📄",
-    title: "Forms & Documents",
-    description: "Collect information and share important documents.",
-  },
-];
-
-// How it works steps
-const STEPS = [
-  {
-    number: "01",
-    title: "Create your org",
-    description: "Sign up and customize your team's profile and settings.",
-  },
-  {
-    number: "02",
-    title: "Invite members",
-    description: "Share your unique invite code or send email invitations.",
-  },
-  {
-    number: "03",
-    title: "Build your legacy",
-    description: "Track events, manage donations, and connect generations.",
-  },
-];
-
-// FAQ items
-const FAQ_ITEMS = [
-  {
-    question: "Who is TeamNetwork for?",
-    answer:
-      "Sports teams, Greek life organizations, clubs, volunteer groups, alumni associations, and any organization that wants to stay connected.",
-  },
-  {
-    question: "Is there a free trial?",
-    answer:
-      "Yes! You can explore the platform with a 14-day free trial. No credit card required to get started.",
-  },
-  {
-    question: "Can I invite alumni?",
-    answer:
-      "Absolutely. Our alumni network feature lets you maintain connections with past members and track their careers.",
-  },
-];
+const { width, height } = Dimensions.get("window");
 
 export default function LandingScreen() {
   const router = useRouter();
-  const scrollRef = useRef<ScrollView>(null);
+
+  const handleEmailPress = () => {
+    router.push("/(auth)/login");
+  };
+
+  const handleGooglePress = () => {
+    router.push("/(auth)/login");
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoText}>TN</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+
+      {/* Gradient Background - dark teal to navy matching web */}
+      <LinearGradient
+        colors={["#134e4a", "#0f172a", "#0f172a"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
+      />
+
+      {/* Decorative Circles */}
+      <View style={styles.circlesContainer}>
+        <View style={[styles.circle, styles.circle1]} />
+        <View style={[styles.circle, styles.circle2]} />
+        <View style={[styles.circle, styles.circle3]} />
+      </View>
+
+      {/* Bottom Card */}
+      <SafeAreaView style={styles.cardWrapper} edges={["bottom"]}>
+        <View style={styles.card}>
+          {/* Header with App Icon */}
+          <View style={styles.cardHeader}>
+            <View style={styles.appIcon}>
+              <Text style={styles.appIconText}>TN</Text>
             </View>
-            <Text style={styles.brandName}>
-              Team<Text style={styles.brandAccent}>Network</Text>
-            </Text>
-          </View>
-        </View>
-
-        {/* Hero Section */}
-        <View style={styles.hero}>
-          <View style={styles.badge}>
-            <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>Built for teams that go the distance</Text>
+            <View style={styles.headerSpacer} />
           </View>
 
-          <Text style={styles.heroTitle}>
-            Your Team's{"\n"}
-            <Text style={styles.heroTitleAccent}>Hub for Everything</Text>
+          {/* Title */}
+          <Text style={styles.title}>Get Started</Text>
+
+          {/* Subtitle */}
+          <Text style={styles.subtitle}>
+            Join your team's network or sign in to continue.
           </Text>
 
-          <Text style={styles.heroDescription}>
-            Member directories, events, donations, and records — all in one place.
-            Built for sports teams, clubs, and organizations of all kinds.
-          </Text>
-
-          <View style={styles.ctaContainer}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => router.push("/(auth)/signup")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryButtonText}>Get Started</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => router.push("/(auth)/login")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryButtonText}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-
+          {/* Primary Button: Continue with Email */}
           <TouchableOpacity
-            style={styles.inviteLink}
-            onPress={() => router.push("/(auth)/login")}
+            style={styles.primaryButton}
+            onPress={handleEmailPress}
+            activeOpacity={0.8}
+            accessibilityLabel="Continue with Email"
+            accessibilityRole="button"
           >
-            <Text style={styles.inviteLinkLabel}>Have an invite code?</Text>
-            <Text style={styles.inviteLinkText}>Join an Organization →</Text>
+            <Text style={styles.primaryButtonText}>Continue with Email</Text>
+          </TouchableOpacity>
+
+          {/* Secondary Button: Continue with Google */}
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={handleGooglePress}
+            activeOpacity={0.8}
+            accessibilityLabel="Continue with Google"
+            accessibilityRole="button"
+          >
+            <View style={styles.googleButtonContent}>
+              <View style={styles.googleIcon}>
+                <Text style={styles.googleIconText}>G</Text>
+              </View>
+              <Text style={styles.secondaryButtonText}>Continue with Google</Text>
+            </View>
           </TouchableOpacity>
         </View>
-
-        {/* Mock Organization Card */}
-        <View style={styles.mockCardContainer}>
-          <View style={styles.mockCard}>
-            <View style={styles.mockCardHeader}>
-              <View style={styles.mockOrgAvatar}>
-                <Text style={styles.mockOrgAvatarText}>SR</Text>
-              </View>
-              <View style={styles.mockOrgInfo}>
-                <Text style={styles.mockOrgName}>South Rock Ridge HS</Text>
-                <Text style={styles.mockOrgLocation}>Central Pennsylvania</Text>
-              </View>
-            </View>
-
-            <View style={styles.mockStats}>
-              <View style={styles.mockStat}>
-                <Text style={styles.mockStatValue}>127</Text>
-                <Text style={styles.mockStatLabel}>Members</Text>
-              </View>
-              <View style={styles.mockStatDivider} />
-              <View style={styles.mockStat}>
-                <Text style={styles.mockStatValue}>24</Text>
-                <Text style={styles.mockStatLabel}>Events</Text>
-              </View>
-              <View style={styles.mockStatDivider} />
-              <View style={styles.mockStat}>
-                <Text style={styles.mockStatValue}>$8.2k</Text>
-                <Text style={styles.mockStatLabel}>Donations</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Organization Types */}
-        <View style={styles.orgTypes}>
-          <Text style={styles.orgTypesText}>
-            Sports Teams • Greek Life • Clubs • Alumni Groups
-          </Text>
-        </View>
-
-        {/* Features Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>FEATURES</Text>
-          <Text style={styles.sectionTitle}>
-            Everything Your{"\n"}
-            <Text style={styles.sectionTitleAccent}>Team Needs</Text>
-          </Text>
-
-          <View style={styles.featuresGrid}>
-            {FEATURES.map((feature) => (
-              <View key={feature.title} style={styles.featureCard}>
-                <View style={styles.featureIcon}>
-                  <Text style={styles.featureIconText}>{feature.icon}</Text>
-                </View>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDescription}>{feature.description}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* How It Works */}
-        <View style={[styles.section, styles.sectionAlt]}>
-          <Text style={styles.sectionTitle}>
-            Get Started in <Text style={styles.sectionTitleAccent}>3 Steps</Text>
-          </Text>
-
-          <View style={styles.stepsContainer}>
-            {STEPS.map((step, index) => (
-              <View key={step.number} style={styles.step}>
-                <View style={styles.stepNumber}>
-                  <Text style={styles.stepNumberText}>{step.number}</Text>
-                </View>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepDescription}>{step.description}</Text>
-                {index < STEPS.length - 1 && <View style={styles.stepConnector} />}
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* FAQ Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>
-            Questions? <Text style={styles.sectionTitleAccent}>Answers.</Text>
-          </Text>
-
-          <View style={styles.faqContainer}>
-            {FAQ_ITEMS.map((item) => (
-              <View key={item.question} style={styles.faqItem}>
-                <Text style={styles.faqQuestion}>{item.question}</Text>
-                <Text style={styles.faqAnswer}>{item.answer}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Final CTA */}
-        <View style={styles.finalCta}>
-          <View style={styles.finalCtaBadge}>
-            <Text style={styles.finalCtaBadgeText}>READY TO START?</Text>
-          </View>
-
-          <Text style={styles.finalCtaTitle}>
-            Build Your Team's{"\n"}
-            <Text style={styles.finalCtaTitleAccent}>Legacy Today</Text>
-          </Text>
-
-          <Text style={styles.finalCtaDescription}>
-            Join today to create new opportunities for your organization and members.
-          </Text>
-
-          <View style={styles.finalCtaButtons}>
-            <TouchableOpacity
-              style={styles.primaryButton}
-              onPress={() => router.push("/(auth)/signup")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primaryButtonText}>Create Your Organization</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() => router.push("/(auth)/login")}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryButtonText}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <View style={styles.footerLogo}>
-            <View style={styles.logoBoxSmall}>
-              <Text style={styles.logoTextSmall}>TN</Text>
-            </View>
-            <Text style={styles.footerBrand}>TeamNetwork</Text>
-          </View>
-          <Text style={styles.footerCopyright}>© 2026 TeamNetwork</Text>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
-
-// Colors matching web landing page
-const colors = {
-  navy: "#0f172a",
-  navyLight: "#1e293b",
-  cream: "#fef3c7",
-  creamMuted: "rgba(254, 243, 199, 0.7)",
-  creamFaint: "rgba(254, 243, 199, 0.1)",
-  green: "#10b981",
-  greenDark: "#059669",
-};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.navy,
   },
-  scrollView: {
-    flex: 1,
+  gradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+
+  // Decorative Circles
+  circlesContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
+  circle: {
+    position: "absolute",
+    borderRadius: 9999,
+    backgroundColor: "rgba(20, 184, 166, 0.08)", // subtle teal tint
+  },
+  circle1: {
+    width: width * 0.8,
+    height: width * 0.8,
+    top: -width * 0.2,
+    right: -width * 0.3,
+  },
+  circle2: {
+    width: width * 0.6,
+    height: width * 0.6,
+    top: height * 0.25,
+    left: -width * 0.25,
+  },
+  circle3: {
+    width: width * 0.5,
+    height: width * 0.5,
+    top: height * 0.5,
+    right: -width * 0.15,
+  },
+
+  // Card
+  cardWrapper: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 10,
   },
 
   // Header
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.creamFaint,
-  },
-  logoContainer: {
+  cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    justifyContent: "space-between",
+    marginBottom: 20,
   },
-  logoBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: colors.greenDark,
+  appIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#059669", // green matching web branding
     alignItems: "center",
     justifyContent: "center",
   },
-  logoText: {
-    color: "white",
+  appIconText: {
+    color: "#ffffff",
+    fontSize: 16,
     fontWeight: "bold",
-    fontSize: 14,
   },
-  brandName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "white",
-  },
-  brandAccent: {
-    color: colors.cream,
+  headerSpacer: {
+    width: 44,
   },
 
-  // Hero
-  hero: {
-    paddingHorizontal: 20,
-    paddingTop: 40,
-    paddingBottom: 32,
-  },
-  badge: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.creamFaint,
-    borderWidth: 1,
-    borderColor: "rgba(254, 243, 199, 0.2)",
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 24,
-    gap: 8,
-  },
-  badgeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.creamMuted,
-  },
-  badgeText: {
-    color: colors.creamMuted,
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  heroTitle: {
-    fontSize: 40,
+  // Typography
+  title: {
+    fontSize: 28,
     fontWeight: "bold",
-    color: "white",
-    lineHeight: 46,
-    marginBottom: 16,
+    color: "#0f172a", // dark navy matching web
+    marginBottom: 8,
   },
-  heroTitleAccent: {
-    color: colors.cream,
+  subtitle: {
+    fontSize: 16,
+    color: "#64748b", // slate-500, muted gray matching web
+    lineHeight: 24,
+    marginBottom: 28,
   },
-  heroDescription: {
-    fontSize: 17,
-    color: colors.creamMuted,
-    lineHeight: 26,
-    marginBottom: 32,
-  },
-  ctaContainer: {
-    gap: 12,
-  },
+
+  // Buttons
   primaryButton: {
-    backgroundColor: colors.greenDark,
+    backgroundColor: "#059669", // green matching web CTA
     paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
+    marginBottom: 12,
   },
   primaryButtonText: {
-    color: "white",
+    color: "#ffffff",
     fontSize: 16,
     fontWeight: "600",
   },
   secondaryButton: {
-    backgroundColor: colors.creamFaint,
-    borderWidth: 1,
-    borderColor: "rgba(254, 243, 199, 0.2)",
+    backgroundColor: "transparent",
     paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#1e293b", // dark navy/slate border matching web
+  },
+  googleButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#cbd5e1", // slate-300 matching web palette
+  },
+  googleIconText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#4285F4",
   },
   secondaryButtonText: {
-    color: colors.cream,
+    color: "#0f172a", // dark navy matching web
     fontSize: 16,
     fontWeight: "600",
-  },
-  inviteLink: {
-    marginTop: 24,
-  },
-  inviteLinkLabel: {
-    color: "rgba(254, 243, 199, 0.5)",
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  inviteLinkText: {
-    color: colors.creamMuted,
-    fontSize: 15,
-    fontWeight: "500",
-  },
-
-  // Mock Card
-  mockCardContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  mockCard: {
-    backgroundColor: "rgba(30, 41, 59, 0.8)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.creamFaint,
-    overflow: "hidden",
-  },
-  mockCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "rgba(254, 243, 199, 0.05)",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.creamFaint,
-    gap: 12,
-  },
-  mockOrgAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "rgba(254, 243, 199, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(254, 243, 199, 0.2)",
-  },
-  mockOrgAvatarText: {
-    color: colors.cream,
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  mockOrgInfo: {
-    flex: 1,
-  },
-  mockOrgName: {
-    color: colors.cream,
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  mockOrgLocation: {
-    color: "rgba(254, 243, 199, 0.5)",
-    fontSize: 13,
-    marginTop: 2,
-  },
-  mockStats: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.creamFaint,
-  },
-  mockStat: {
-    flex: 1,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  mockStatValue: {
-    color: colors.cream,
-    fontSize: 22,
-    fontWeight: "bold",
-  },
-  mockStatLabel: {
-    color: "rgba(254, 243, 199, 0.5)",
-    fontSize: 11,
-    marginTop: 2,
-  },
-  mockStatDivider: {
-    width: 1,
-    backgroundColor: colors.creamFaint,
-  },
-
-  // Organization Types
-  orgTypes: {
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.creamFaint,
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
-  },
-  orgTypesText: {
-    color: "rgba(254, 243, 199, 0.4)",
-    fontSize: 12,
-    textAlign: "center",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-
-  // Sections
-  section: {
-    paddingHorizontal: 20,
-    paddingVertical: 48,
-  },
-  sectionAlt: {
-    backgroundColor: "rgba(30, 41, 59, 0.3)",
-  },
-  sectionLabel: {
-    color: "rgba(254, 243, 199, 0.6)",
-    fontSize: 11,
-    letterSpacing: 3,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "white",
-    textAlign: "center",
-    lineHeight: 40,
-    marginBottom: 32,
-  },
-  sectionTitleAccent: {
-    color: colors.cream,
-  },
-
-  // Features
-  featuresGrid: {
-    gap: 16,
-  },
-  featureCard: {
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
-    borderRadius: 16,
-    padding: 20,
-  },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: colors.creamFaint,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  featureIconText: {
-    fontSize: 24,
-  },
-  featureTitle: {
-    color: colors.cream,
-    fontSize: 17,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  featureDescription: {
-    color: "rgba(254, 243, 199, 0.5)",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-  // Steps
-  stepsContainer: {
-    gap: 24,
-  },
-  step: {
-    alignItems: "center",
-    position: "relative",
-  },
-  stepNumber: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.navy,
-    borderWidth: 2,
-    borderColor: "rgba(254, 243, 199, 0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  stepNumberText: {
-    color: colors.cream,
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-  stepTitle: {
-    color: colors.cream,
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 8,
-  },
-  stepDescription: {
-    color: "rgba(254, 243, 199, 0.5)",
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
-    maxWidth: 280,
-  },
-  stepConnector: {
-    width: 2,
-    height: 24,
-    backgroundColor: "rgba(254, 243, 199, 0.2)",
-    position: "absolute",
-    bottom: -24,
-  },
-
-  // FAQ
-  faqContainer: {
-    gap: 12,
-  },
-  faqItem: {
-    backgroundColor: "rgba(30, 41, 59, 0.5)",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.creamFaint,
-    padding: 20,
-  },
-  faqQuestion: {
-    color: colors.cream,
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 10,
-  },
-  faqAnswer: {
-    color: "rgba(254, 243, 199, 0.6)",
-    fontSize: 14,
-    lineHeight: 22,
-  },
-
-  // Final CTA
-  finalCta: {
-    paddingHorizontal: 20,
-    paddingVertical: 56,
-    alignItems: "center",
-  },
-  finalCtaBadge: {
-    backgroundColor: colors.greenDark,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4,
-    marginBottom: 24,
-  },
-  finalCtaBadgeText: {
-    color: "white",
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 1,
-  },
-  finalCtaTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "white",
-    textAlign: "center",
-    lineHeight: 40,
-    marginBottom: 16,
-  },
-  finalCtaTitleAccent: {
-    color: colors.green,
-  },
-  finalCtaDescription: {
-    color: "rgba(254, 243, 199, 0.6)",
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
-    marginBottom: 32,
-    maxWidth: 320,
-  },
-  finalCtaButtons: {
-    width: "100%",
-    gap: 12,
-  },
-
-  // Footer
-  footer: {
-    paddingHorizontal: 20,
-    paddingVertical: 32,
-    borderTopWidth: 1,
-    borderTopColor: colors.creamFaint,
-    alignItems: "center",
-    gap: 16,
-  },
-  footerLogo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  logoBoxSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: colors.greenDark,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoTextSmall: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 11,
-  },
-  footerBrand: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  footerCopyright: {
-    color: "rgba(254, 243, 199, 0.3)",
-    fontSize: 13,
   },
 });

@@ -8,13 +8,16 @@ import {
   Platform,
   ActivityIndicator,
   StyleSheet,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Link } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Link, useRouter } from "expo-router";
+import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
-import { showAlert } from "@/utils/alert";
 import { captureException } from "@/lib/analytics";
+import { borderRadius, spacing, fontSize } from "@/lib/theme";
 
 // Determine if running in Expo Go vs dev-client/standalone
 const isExpoGo = Constants.appOwnership === "expo";
@@ -24,7 +27,6 @@ const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
 const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 // Conditionally import Google Sign-In only when not in Expo Go
-// This prevents crashes since the native module doesn't exist in Expo Go
 let GoogleSignin: any = null;
 let isErrorWithCode: any = null;
 let statusCodes: any = null;
@@ -40,16 +42,74 @@ if (!isExpoGo && !isWeb) {
   }
 }
 
+// Color system matching landing page
+const colors = {
+  // Gradient header
+  gradientStart: "#134e4a",
+  gradientEnd: "#0f172a",
+
+  // Backgrounds
+  background: "#ffffff",
+  inputBackground: "#f8fafc",
+
+  // Text
+  title: "#0f172a",
+  subtitle: "#64748b",
+  inputText: "#0f172a",
+  placeholder: "#94a3b8",
+
+  // Buttons
+  primaryButton: "#059669",
+  primaryButtonText: "#ffffff",
+  secondaryBorder: "#1e293b",
+  secondaryText: "#0f172a",
+
+  // Input states
+  inputBorder: "#e2e8f0",
+  inputBorderFocus: "#059669",
+  inputBorderError: "#ef4444",
+  errorText: "#ef4444",
+
+  // Links
+  link: "#059669",
+
+  // Disabled
+  disabledButton: "#94a3b8",
+
+  // Divider
+  dividerLine: "#e2e8f0",
+  dividerText: "#64748b",
+};
+
+// Simple email validation (no regex)
+const isEmailValid = (email: string) => {
+  const trimmed = email.trim();
+  return trimmed.length >= 5 && trimmed.includes("@") && trimmed.includes(".");
+};
+
 export default function LoginScreen() {
+  const router = useRouter();
+
   // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Focus states
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+
+  // Error states
+  const [emailError, setEmailError] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [apiError, setApiError] = useState("");
 
   // Separate loading states
   const [emailLoading, setEmailLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const isLoading = emailLoading || googleLoading;
+  const isFormValid = isEmailValid(email) && password.length > 0;
 
   useEffect(() => {
     if (isExpoGo || isWeb || !GoogleSignin) return;
@@ -64,17 +124,33 @@ export default function LoginScreen() {
     });
   }, []);
 
+  // Clear errors on input change
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    setEmailError("");
+    setApiError("");
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setPasswordError("");
+    setApiError("");
+  };
+
   // Dev login - bypasses auth for local development
   const handleDevLogin = async () => {
     setEmailLoading(true);
+    setApiError("");
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: "mleonard1616@gmail.com",
         password: "dev123",
       });
       if (error) {
-        showAlert("Dev Login Error", error.message);
+        setApiError(error.message);
       }
+    } catch (e) {
+      setApiError((e as Error).message);
     } finally {
       setEmailLoading(false);
     }
@@ -82,39 +158,44 @@ export default function LoginScreen() {
 
   // Email/Password sign in
   const handleEmailSignIn = async () => {
-    console.log("Sign in attempt:", email.trim().toLowerCase());
+    // Clear previous errors
+    setEmailError("");
+    setPasswordError("");
+    setApiError("");
 
-    if (!email.trim()) {
-      showAlert("Error", "Please enter your email");
+    // Validate
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setEmailError("Please enter your email");
+      return;
+    }
+    if (!isEmailValid(trimmedEmail)) {
+      setEmailError("Please enter a valid email address");
       return;
     }
     if (!password) {
-      showAlert("Error", "Please enter your password");
+      setPasswordError("Please enter your password");
       return;
     }
 
     setEmailLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: trimmedEmail.toLowerCase(),
         password,
       });
 
-      console.log("Sign in result:", { data, error });
-
       if (error) {
-        console.error("Sign in error:", error);
-        captureException(new Error(error.message), { screen: "Login", email: email.trim().toLowerCase() });
-        showAlert("Error", error.message);
+        captureException(new Error(error.message), { screen: "Login", email: trimmedEmail.toLowerCase() });
+        setApiError(error.message);
         return;
       }
 
       console.log("Sign in successful, session:", data.session?.user?.email);
       // Navigation happens automatically via _layout.tsx onAuthStateChange
     } catch (e) {
-      console.error("Sign in exception:", e);
-      captureException(e as Error, { screen: "Login", email: email.trim().toLowerCase() });
-      showAlert("Error", (e as Error).message);
+      captureException(e as Error, { screen: "Login", email: trimmedEmail.toLowerCase() });
+      setApiError((e as Error).message);
     } finally {
       setEmailLoading(false);
     }
@@ -122,29 +203,25 @@ export default function LoginScreen() {
 
   // Google OAuth sign in
   const signInWithGoogle = async () => {
-    // In Expo Go or Web mode, Google OAuth has limitations due to redirect URI restrictions
-    // OAuth redirects would go to the production web app, not back to this app
+    setApiError("");
+
+    // In Expo Go or Web mode, Google OAuth has limitations
     if (isExpoGo || isWeb || !GoogleSignin) {
-      showAlert(
-        isWeb ? "Web Mode Limitation" : "Expo Go Limitation",
-        "Google Sign-In is not available in this mode. Please use email/password to sign in, or use the native mobile app for Google OAuth support."
+      setApiError(
+        isWeb
+          ? "Google Sign-In is not available in web mode. Please use email/password."
+          : "Google Sign-In is not available in Expo Go. Please use email/password or the native app."
       );
       return;
     }
 
     if (!googleWebClientId) {
-      showAlert(
-        "Google Sign-In Error",
-        "Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID. Please add it to apps/mobile/.env.local."
-      );
+      setApiError("Google Sign-In is not configured. Missing client ID.");
       return;
     }
 
     if (Platform.OS === "ios" && !googleIosClientId) {
-      showAlert(
-        "Google Sign-In Error",
-        "Missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID. Please add it to apps/mobile/.env.local."
-      );
+      setApiError("Google Sign-In is not configured for iOS. Missing client ID.");
       return;
     }
 
@@ -176,67 +253,146 @@ export default function LoginScreen() {
           return;
         }
         if (err.code === statusCodes.IN_PROGRESS) {
-          showAlert("Google Sign-In", "Sign-in is already in progress.");
+          setApiError("Sign-in is already in progress.");
           return;
         }
         if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          showAlert(
-            "Google Sign-In",
-            "Google Play Services is not available on this device."
-          );
+          setApiError("Google Play Services is not available on this device.");
           return;
         }
       }
-
-      showAlert("Error", err.message || "An unexpected error occurred");
+      setApiError(err.message || "An unexpected error occurred");
     } finally {
       setGoogleLoading(false);
     }
   };
 
+  const getInputStyle = (focused: boolean, hasError: boolean) => {
+    return [
+      styles.input,
+      focused && !hasError && styles.inputFocused,
+      hasError && styles.inputError,
+    ];
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <View style={styles.container}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[colors.gradientStart, colors.gradientEnd]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerContent}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ChevronLeft size={24} color="#ffffff" />
+          </TouchableOpacity>
+          <View style={styles.headerIcon}>
+            <Text style={styles.headerIconText}>TN</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* White Content Area */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.container}
+        style={styles.keyboardView}
       >
-        <View style={styles.content}>
-          <Text style={styles.title}>TeamMeet</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Title */}
+          <Text style={styles.title}>Sign In</Text>
+          <Text style={styles.subtitle}>
+            Welcome back! Enter your credentials to continue.
+          </Text>
 
-          {/* Email/Password Form */}
-          <View style={styles.formContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#999"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              editable={!isLoading}
-            />
+          {/* Form */}
+          <View style={styles.form}>
+            {/* Email Input */}
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={getInputStyle(emailFocused, !!emailError)}
+                placeholder="Email"
+                placeholderTextColor={colors.placeholder}
+                value={email}
+                onChangeText={handleEmailChange}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                editable={!isLoading}
+                accessibilityLabel="Email address"
+              />
+              {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+            </View>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              editable={!isLoading}
-            />
+            {/* Password Input */}
+            <View style={styles.inputWrapper}>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={[
+                    getInputStyle(passwordFocused, !!passwordError),
+                    styles.passwordInput,
+                  ]}
+                  placeholder="Password"
+                  placeholderTextColor={colors.placeholder}
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  secureTextEntry={!showPassword}
+                  editable={!isLoading}
+                  accessibilityLabel="Password"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                  disabled={isLoading}
+                  accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                  accessibilityRole="button"
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} color={colors.placeholder} />
+                  ) : (
+                    <Eye size={20} color={colors.placeholder} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+            </View>
 
+            {/* API Error */}
+            {apiError && (
+              <View style={styles.apiErrorBox}>
+                <Text style={styles.apiErrorText}>{apiError}</Text>
+              </View>
+            )}
+
+            {/* Primary CTA */}
             <TouchableOpacity
-              style={[styles.button, styles.primaryButton, isLoading && styles.buttonDisabled]}
+              style={[
+                styles.primaryButton,
+                (!isFormValid || isLoading) && styles.primaryButtonDisabled,
+              ]}
               onPress={handleEmailSignIn}
-              disabled={isLoading}
+              disabled={!isFormValid || isLoading}
+              accessibilityLabel="Sign in"
+              accessibilityRole="button"
             >
               {emailLoading ? (
-                <ActivityIndicator color="white" />
+                <ActivityIndicator color={colors.primaryButtonText} />
               ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
+                <Text style={styles.primaryButtonText}>Sign In</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -250,144 +406,269 @@ export default function LoginScreen() {
 
           {/* Google OAuth Button */}
           <TouchableOpacity
-            style={[styles.button, styles.googleButton, isLoading && styles.buttonDisabled]}
+            style={[styles.googleButton, isLoading && styles.googleButtonDisabled]}
             onPress={signInWithGoogle}
             disabled={isLoading}
+            accessibilityLabel="Continue with Google"
+            accessibilityRole="button"
           >
             {googleLoading ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={colors.secondaryText} />
             ) : (
-              <Text style={styles.buttonText}>Sign in with Google</Text>
+              <View style={styles.googleButtonContent}>
+                <View style={styles.googleIcon}>
+                  <Text style={styles.googleIconText}>G</Text>
+                </View>
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </View>
             )}
           </TouchableOpacity>
-
-          {/* Dev Login - only in development */}
-          {__DEV__ && (
-            <TouchableOpacity
-              style={[styles.button, styles.devButton, isLoading && styles.buttonDisabled]}
-              onPress={handleDevLogin}
-              disabled={isLoading}
-            >
-              <Text style={styles.devButtonText}>Dev Login</Text>
-            </TouchableOpacity>
-          )}
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>
             <Link href="/(auth)/signup" asChild>
-              <TouchableOpacity disabled={isLoading}>
+              <TouchableOpacity disabled={isLoading} accessibilityRole="link">
                 <Text style={styles.signupLink}>Sign Up</Text>
               </TouchableOpacity>
             </Link>
           </View>
-        </View>
+
+          {/* Dev Login - only in development */}
+          {__DEV__ && (
+            <TouchableOpacity
+              style={[styles.devButton, isLoading && styles.devButtonDisabled]}
+              onPress={handleDevLogin}
+              disabled={isLoading}
+              accessibilityLabel="Developer login"
+              accessibilityRole="button"
+            >
+              <Text style={styles.devButtonText}>Dev Login</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
+
+  // Header
+  header: {
+    paddingBottom: spacing.xs,
+  },
+  headerContent: {
+    flexDirection: "row",
     alignItems: "center",
-    padding: 24,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
   },
-  title: {
-    fontSize: 36,
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primaryButton,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerIconText: {
+    color: "#ffffff",
+    fontSize: 14,
     fontWeight: "bold",
-    color: "#1a1a1a",
-    marginBottom: 8,
+  },
+
+  // Content
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+
+  // Typography
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: colors.title,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 40,
+    fontSize: fontSize.base,
+    color: colors.subtitle,
+    lineHeight: 24,
+    marginBottom: spacing.xl,
   },
-  formContainer: {
+
+  // Form
+  form: {
     width: "100%",
-    maxWidth: 340,
+  },
+  inputWrapper: {
+    marginBottom: spacing.md,
   },
   input: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
+    backgroundColor: colors.inputBackground,
+    borderRadius: borderRadius.md,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.base,
+    color: colors.inputText,
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: colors.inputBorder,
   },
-  button: {
-    borderRadius: 12,
-    padding: 16,
+  inputFocused: {
+    borderColor: colors.inputBorderFocus,
+  },
+  inputError: {
+    borderColor: colors.inputBorderError,
+  },
+  passwordContainer: {
+    position: "relative",
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: "absolute",
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 8,
+    width: 32,
   },
+  errorText: {
+    color: colors.errorText,
+    fontSize: fontSize.sm,
+    marginTop: 4,
+  },
+  apiErrorBox: {
+    backgroundColor: "#fef2f2",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  apiErrorText: {
+    color: colors.errorText,
+    fontSize: fontSize.sm,
+  },
+
+  // Primary Button
   primaryButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primaryButton,
+    paddingVertical: 16,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    marginTop: spacing.sm,
   },
-  googleButton: {
-    backgroundColor: "#4285F4",
-    width: "100%",
-    maxWidth: 340,
+  primaryButtonDisabled: {
+    backgroundColor: colors.disabledButton,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "white",
-    fontSize: 16,
+  primaryButtonText: {
+    color: colors.primaryButtonText,
+    fontSize: fontSize.base,
     fontWeight: "600",
   },
+
+  // Divider
   divider: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
-    maxWidth: 340,
-    marginVertical: 24,
+    marginVertical: spacing.md,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: colors.dividerLine,
   },
   dividerText: {
-    marginHorizontal: 16,
-    color: "#666",
-    fontSize: 14,
+    marginHorizontal: spacing.md,
+    color: colors.dividerText,
+    fontSize: fontSize.sm,
   },
+
+  // Google Button
+  googleButton: {
+    backgroundColor: "transparent",
+    paddingVertical: 16,
+    borderRadius: borderRadius.lg,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+  },
+  googleButtonDisabled: {
+    opacity: 0.7,
+  },
+  googleButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  googleIconText: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#4285F4",
+  },
+  googleButtonText: {
+    color: colors.subtitle,
+    fontSize: fontSize.base,
+    fontWeight: "500",
+  },
+
+  // Sign Up Link
   signupContainer: {
     flexDirection: "row",
-    marginTop: 32,
+    justifyContent: "center",
+    marginTop: spacing.lg,
   },
   signupText: {
-    color: "#666",
-    fontSize: 14,
+    color: colors.subtitle,
+    fontSize: fontSize.sm,
   },
   signupLink: {
-    color: "#007AFF",
-    fontSize: 14,
+    color: colors.link,
+    fontSize: fontSize.sm,
     fontWeight: "600",
   },
+
+  // Dev Button
   devButton: {
     backgroundColor: "transparent",
-    borderWidth: 2,
-    borderColor: "#f97316",
-    width: "100%",
-    maxWidth: 340,
-    marginTop: 16,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: spacing.lg,
+  },
+  devButtonDisabled: {
+    opacity: 0.5,
   },
   devButtonText: {
-    color: "#f97316",
-    fontSize: 14,
-    fontWeight: "600",
+    color: colors.placeholder,
+    fontSize: fontSize.xs,
+    fontWeight: "500",
   },
 });

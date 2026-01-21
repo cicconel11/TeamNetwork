@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
-import { StyleSheet, useWindowDimensions } from "react-native";
+import { StyleSheet, useWindowDimensions, View, Text } from "react-native";
 import { Stack } from "expo-router";
 import { useDrawerProgress } from "@react-navigation/drawer";
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import type { ThemeColors } from "@/lib/theme";
 
@@ -38,7 +39,30 @@ export default function DrawerStackLayout() {
         <Stack.Screen
           name="index"
           options={{
-            title: "My Organizations",
+            headerTitle: () => (
+              <View style={{ alignItems: "center" }}>
+                <Text style={{ color: "#ffffff", fontSize: 18, fontWeight: "700" }}>
+                  My Organizations
+                </Text>
+                <Text style={{ color: "rgba(255, 255, 255, 0.75)", fontSize: 12, marginTop: 2 }}>
+                  Select an organization to continue
+                </Text>
+              </View>
+            ),
+            headerTitleAlign: "center",
+            headerTintColor: "#ffffff",
+            headerShadowVisible: false,
+            headerStyle: {
+              backgroundColor: "transparent",
+            },
+            headerBackground: () => (
+              <LinearGradient
+                colors={["#134e4a", "#0f172a"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ flex: 1 }}
+              />
+            ),
           }}
         />
         <Stack.Screen

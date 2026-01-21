@@ -21,6 +21,7 @@ import {
   Trophy,
 } from "lucide-react-native";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
@@ -37,6 +38,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
   const { user } = useAuth();
+  const { permissions } = useOrgRole();
   const { colors } = useOrgTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const slug = typeof orgSlug === "string" ? orgSlug : "";
@@ -57,19 +59,25 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       ];
     }
 
-    return [
+    const items: NavItem[] = [
       {
         label: "Chat",
         href: `/${slug}/chat`,
         icon: MessageCircle,
         openInWeb: true,
       },
-      {
+    ];
+
+    // Alumni: in-app navigation, gated by permission
+    if (permissions.canViewAlumni) {
+      items.push({
         label: "Alumni",
         href: `/${slug}/alumni`,
         icon: GraduationCap,
-        openInWeb: true,
-      },
+      });
+    }
+
+    items.push(
       {
         label: "Mentorship",
         href: `/${slug}/mentorship`,
@@ -141,8 +149,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         href: "/(app)",
         icon: Building2,
       },
-    ];
-  }, [slug]);
+    );
+
+    return items;
+  }, [slug, permissions.canViewAlumni]);
 
   const handleNavigate = (item: NavItem) => {
     props.navigation.closeDrawer();
