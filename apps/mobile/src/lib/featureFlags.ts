@@ -40,9 +40,12 @@ export const defaultFeatureFlags: FeatureFlags = {
  * @returns Feature flags with all features disabled by default
  */
 export function getFeatureFlags(_orgId?: string): FeatureFlags {
-  // All features disabled by default until org-specific settings are implemented.
-  // To enable alumni for a specific org, fetch from org.features_enabled in Supabase.
-  return { ...defaultFeatureFlags };
+  // Enable alumni in dev builds only for testing; prod stays off until validated
+  const flags = { ...defaultFeatureFlags };
+  if (__DEV__) {
+    flags.alumniEnabled = true;
+  }
+  return flags;
 }
 
 /**

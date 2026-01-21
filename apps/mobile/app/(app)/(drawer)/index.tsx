@@ -3,24 +3,37 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { ChevronRight } from "lucide-react-native";
 import { signOut } from "@/lib/supabase";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import type { Organization } from "@teammeet/types";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+
+const colors = {
+  background: "#ffffff",
+  listBackground: "#f8fafc",
+  title: "#0f172a",
+  subtitle: "#64748b",
+  chevron: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#ffffff",
+  avatarBg: "#eef2ff",
+  avatarText: "#0f172a",
+  pressed: "#f1f5f9",
+  spinner: "#059669",
+};
 
 export default function OrganizationsScreen() {
   const router = useRouter();
   const { organizations, loading, error, refetch } = useOrganizations();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -33,25 +46,51 @@ export default function OrganizationsScreen() {
     router.replace("/(auth)/login");
   };
 
-  const renderOrg = ({ item }: { item: Organization }) => (
-    <TouchableOpacity
-      style={styles.orgCard}
-      onPress={() => router.push(`/(app)/${item.slug}`)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.orgInfo}>
-        <Text style={styles.orgName}>{item.name}</Text>
-        <Text style={styles.orgSlug}>@{item.slug}</Text>
-      </View>
-      <Text style={styles.chevron}>›</Text>
-    </TouchableOpacity>
-  );
+  const getOrgInitials = (org: Organization) => {
+    const source = (org.name || org.slug || "").trim();
+    if (!source) return "O";
+    const parts = source.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+  };
+
+  const renderOrg = ({ item }: { item: Organization }) => {
+    const initials = getOrgInitials(item);
+
+    return (
+      <Pressable
+        onPress={() => router.push(`/(app)/${item.slug}`)}
+        style={({ pressed }) => [styles.orgCard, pressed && styles.orgCardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${item.name}`}
+      >
+        <View style={styles.avatar}>
+          {item.logo_url ? (
+            <Image source={{ uri: item.logo_url }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initials}</Text>
+          )}
+        </View>
+
+        <View style={styles.orgInfo}>
+          <Text style={styles.orgName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          <Text style={styles.orgSlug} numberOfLines={1}>
+            @{item.slug}
+          </Text>
+        </View>
+
+        <ChevronRight size={20} color={colors.chevron} />
+      </Pressable>
+    );
+  };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.spinner} />
         </View>
       </SafeAreaView>
     );
@@ -61,10 +100,11 @@ export default function OrganizationsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <View style={styles.centered}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <Pressable style={styles.retryButton} onPress={refetch} accessibilityRole="button">
             <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -77,27 +117,31 @@ export default function OrganizationsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderOrg}
         contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>No organizations</Text>
-            <Text style={styles.emptyText}>
-              You are not a member of any organizations yet.
-            </Text>
+            <Text style={styles.emptyText}>You are not a member of any organizations yet.</Text>
+          </View>
+        }
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <Pressable
+              style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed]}
+              onPress={handleSignOut}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+            >
+              <Text style={styles.signOutText}>Sign Out</Text>
+            </Pressable>
           </View>
         }
       />
-
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-        <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -111,80 +155,126 @@ const createStyles = (colors: ThemeColors) =>
     },
     listContent: {
       padding: 16,
-      paddingBottom: 80,
+      paddingTop: 20,
+      backgroundColor: colors.listBackground,
     },
+
     orgCard: {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: colors.card,
-      padding: 16,
-      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: colors.border,
       marginBottom: 12,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 1,
     },
+    orgCardPressed: {
+      backgroundColor: colors.pressed,
+    },
+
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.avatarBg,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      marginRight: 12,
+    },
+    avatarImage: {
+      width: 44,
+      height: 44,
+      resizeMode: "cover",
+    },
+    avatarText: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.avatarText,
+    },
+
     orgInfo: {
       flex: 1,
+      paddingRight: 8,
     },
     orgName: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.title,
     },
     orgSlug: {
-      fontSize: 14,
-      color: colors.muted,
-      marginTop: 4,
+      fontSize: 13,
+      color: colors.subtitle,
+      marginTop: 2,
     },
-    chevron: {
-      fontSize: 24,
-      color: colors.mutedForeground,
-      marginLeft: 8,
+
+    errorTitle: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: colors.title,
+      marginBottom: 8,
     },
     errorText: {
-      fontSize: 16,
-      color: colors.error,
+      fontSize: 14,
+      color: colors.subtitle,
       textAlign: "center",
       marginBottom: 16,
     },
     retryButton: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: 24,
+      backgroundColor: "#059669",
+      paddingHorizontal: 18,
       paddingVertical: 12,
-      borderRadius: 8,
+      borderRadius: 12,
     },
     retryButtonText: {
-      color: colors.primaryForeground,
+      color: "#ffffff",
       fontSize: 14,
       fontWeight: "600",
     },
+
     emptyContainer: {
       alignItems: "center",
-      paddingVertical: 48,
+      paddingVertical: 64,
+      paddingHorizontal: 24,
     },
     emptyTitle: {
       fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
+      fontWeight: "700",
+      color: colors.title,
       marginBottom: 8,
     },
     emptyText: {
       fontSize: 14,
-      color: colors.muted,
+      color: colors.subtitle,
       textAlign: "center",
+      lineHeight: 20,
+    },
+
+    footer: {
+      paddingTop: 12,
+      paddingBottom: 32,
     },
     signOutButton: {
-      position: "absolute",
-      bottom: 24,
-      left: 16,
-      right: 16,
-      backgroundColor: colors.border,
-      padding: 16,
-      borderRadius: 12,
+      backgroundColor: "transparent",
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      borderRadius: 16,
       alignItems: "center",
     },
+    signOutButtonPressed: {
+      backgroundColor: colors.pressed,
+    },
     signOutText: {
-      color: colors.muted,
-      fontSize: 16,
-      fontWeight: "500",
+      color: colors.subtitle,
+      fontSize: 15,
+      fontWeight: "600",
     },
   });
