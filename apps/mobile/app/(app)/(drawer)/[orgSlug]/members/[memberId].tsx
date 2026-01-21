@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity, Linking, Image, Share } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Mail, Share as ShareIcon } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 interface Member {
   id: string;
@@ -20,6 +22,8 @@ export default function MemberProfileScreen() {
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
   const { orgSlug } = useOrg();
   const router = useRouter();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +89,7 @@ export default function MemberProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -104,7 +108,7 @@ export default function MemberProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <ArrowLeft size={20} color="#2563eb" />
+        <ArrowLeft size={20} color={colors.primary} />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
@@ -126,7 +130,7 @@ export default function MemberProfileScreen() {
         {member.user?.email && (
           <>
             <TouchableOpacity style={styles.contactButton} onPress={handleEmail}>
-              <Mail size={20} color="#2563eb" />
+              <Mail size={20} color={colors.primary} />
               <View style={styles.contactInfo}>
                 <Text style={styles.contactLabel}>Email</Text>
                 <Text style={styles.contactValue} numberOfLines={1}>
@@ -136,7 +140,7 @@ export default function MemberProfileScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.contactButton} onPress={handleShareEmail}>
-              <ShareIcon size={20} color="#2563eb" />
+              <ShareIcon size={20} color={colors.primary} />
               <Text style={styles.contactButtonText}>Share email address</Text>
             </TouchableOpacity>
           </>
@@ -150,111 +154,112 @@ export default function MemberProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  content: {
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 24,
-    gap: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: "#2563eb",
-    fontWeight: "500",
-  },
-  profileHeader: {
-    alignItems: "center",
-    marginBottom: 32,
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 16,
-  },
-  avatarPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#e0e7ff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: "600",
-    color: "#4f46e5",
-  },
-  name: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 4,
-  },
-  role: {
-    fontSize: 16,
-    color: "#666",
-  },
-  contactSection: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 16,
-  },
-  contactButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  contactValue: {
-    fontSize: 16,
-    color: "#1a1a1a",
-    marginTop: 2,
-  },
-  contactButtonText: {
-    fontSize: 16,
-    color: "#2563eb",
-    fontWeight: "500",
-  },
-  noContactText: {
-    fontSize: 14,
-    color: "#9ca3af",
-    textAlign: "center",
-    paddingVertical: 16,
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 16,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    backButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 24,
+      gap: 8,
+    },
+    backButtonText: {
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: "500",
+    },
+    profileHeader: {
+      alignItems: "center",
+      marginBottom: 32,
+    },
+    avatarImage: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      marginBottom: 16,
+    },
+    avatarPlaceholder: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.primaryLight,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    avatarText: {
+      fontSize: 32,
+      fontWeight: "600",
+      color: colors.primaryDark,
+    },
+    name: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: colors.foreground,
+      marginBottom: 4,
+    },
+    role: {
+      fontSize: 16,
+      color: colors.muted,
+    },
+    contactSection: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+      marginBottom: 16,
+    },
+    contactButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 12,
+      gap: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    contactInfo: {
+      flex: 1,
+    },
+    contactLabel: {
+      fontSize: 14,
+      color: colors.muted,
+    },
+    contactValue: {
+      fontSize: 16,
+      color: colors.foreground,
+      marginTop: 2,
+    },
+    contactButtonText: {
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: "500",
+    },
+    noContactText: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      textAlign: "center",
+      paddingVertical: 16,
+    },
+    errorText: {
+      fontSize: 16,
+      color: colors.error,
+      textAlign: "center",
+      marginBottom: 16,
+    },
+  });

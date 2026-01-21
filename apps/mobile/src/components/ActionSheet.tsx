@@ -13,6 +13,8 @@ import {
   MapPin,
   Share2,
 } from "lucide-react-native";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 interface ActionSheetProps {
   isAdmin: boolean;
@@ -47,6 +49,8 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
     },
     ref
   ) => {
+    const { colors } = useOrgTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
     const snapPoints = useMemo(() => ["40%"], []);
 
     const renderBackdrop = useCallback(
@@ -63,7 +67,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
     const adminActions: ActionItem[] = [
       {
-        icon: <CalendarPlus size={24} color="#2563eb" />,
+        icon: <CalendarPlus size={24} color={colors.primaryForeground} />,
         label: "Create Event",
         onPress: () => {
           onCreateEvent?.();
@@ -71,7 +75,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <Megaphone size={24} color="#2563eb" />,
+        icon: <Megaphone size={24} color={colors.primaryForeground} />,
         label: "Post Announcement",
         onPress: () => {
           onPostAnnouncement?.();
@@ -79,7 +83,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <UserPlus size={24} color="#2563eb" />,
+        icon: <UserPlus size={24} color={colors.primaryForeground} />,
         label: "Invite Member",
         onPress: () => {
           onInviteMember?.();
@@ -87,7 +91,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <HandCoins size={24} color="#2563eb" />,
+        icon: <HandCoins size={24} color={colors.primaryForeground} />,
         label: "Record Donation",
         onPress: () => {
           onRecordDonation?.();
@@ -98,7 +102,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
     const memberActions: ActionItem[] = [
       {
-        icon: <CalendarCheck size={24} color="#2563eb" />,
+        icon: <CalendarCheck size={24} color={colors.primaryForeground} />,
         label: "RSVP to Event",
         onPress: () => {
           onRsvpEvent?.();
@@ -106,7 +110,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <MapPin size={24} color="#2563eb" />,
+        icon: <MapPin size={24} color={colors.primaryForeground} />,
         label: "Check In",
         onPress: () => {
           onCheckIn?.();
@@ -114,7 +118,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <Share2 size={24} color="#2563eb" />,
+        icon: <Share2 size={24} color={colors.primaryForeground} />,
         label: "Share Org",
         onPress: () => {
           onShareOrg?.();
@@ -158,54 +162,55 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
 ActionSheet.displayName = "ActionSheet";
 
-const styles = StyleSheet.create({
-  background: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-  indicator: {
-    backgroundColor: "#d1d5db",
-    width: 40,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-  actionTile: {
-    width: "48%",
-    backgroundColor: "#f5f5f5",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    alignItems: "center",
-  },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#e0e7ff",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
-  },
-  actionLabel: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#1a1a1a",
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    background: {
+      backgroundColor: colors.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+    },
+    indicator: {
+      backgroundColor: colors.border,
+      width: 40,
+    },
+    content: {
+      flex: 1,
+      paddingHorizontal: 24,
+      paddingTop: 8,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+      marginBottom: 20,
+      textAlign: "center",
+    },
+    grid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+    },
+    actionTile: {
+      width: "48%",
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      alignItems: "center",
+    },
+    iconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.primaryDark,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    actionLabel: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.primaryForeground,
+      textAlign: "center",
+    },
+  });

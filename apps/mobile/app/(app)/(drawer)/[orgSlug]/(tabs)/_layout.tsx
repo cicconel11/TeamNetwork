@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect } from "react";
 import { Alert } from "react-native";
 import { Tabs, useRouter } from "expo-router";
 import Constants from "expo-constants";
+import { OrgHeaderLeft } from "@/components/org-header-left";
 import { TabBar } from "@/components/TabBar";
 import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
@@ -77,24 +78,24 @@ export default function TabsLayout() {
 
   // Action handlers (navigate to respective screens)
   const handleCreateEvent = useCallback(() => {
-    // TODO: Navigate to create event screen
-    console.log("Create event");
-  }, []);
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/events/new`);
+  }, [orgSlug, router]);
 
   const handlePostAnnouncement = useCallback(() => {
-    // TODO: Navigate to post announcement screen
-    console.log("Post announcement");
-  }, []);
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/announcements/new`);
+  }, [orgSlug, router]);
 
   const handleInviteMember = useCallback(() => {
-    // TODO: Navigate to invite member screen
-    console.log("Invite member");
-  }, []);
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/members/new`);
+  }, [orgSlug, router]);
 
   const handleRecordDonation = useCallback(() => {
-    // TODO: Navigate to record donation screen
-    console.log("Record donation");
-  }, []);
+    if (!orgSlug) return;
+    router.push(`/(app)/${orgSlug}/donations/new`);
+  }, [orgSlug, router]);
 
   const handleRsvpEvent = useCallback(() => {
     router.push(`/(app)/${orgSlug}/(tabs)/events`);
@@ -113,9 +114,9 @@ export default function TabsLayout() {
 
   const renderTabBar = useCallback(
     (props: BottomTabBarProps) => (
-      <TabBar {...props} />
+      <TabBar {...props} onActionPress={handleActionPress} />
     ),
-    []
+    [handleActionPress]
   );
 
   return (
@@ -124,6 +125,8 @@ export default function TabsLayout() {
         tabBar={renderTabBar}
         screenOptions={{
           headerShown: true,
+          headerTitleAlign: "center",
+          headerLeft: (props) => <OrgHeaderLeft {...props} />,
         }}
       >
         <Tabs.Screen

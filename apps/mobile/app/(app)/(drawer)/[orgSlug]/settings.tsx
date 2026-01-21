@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import { StripeWebView } from "@/components/StripeWebView";
 import { captureException } from "@/lib/analytics";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 import {
   ChevronRight,
   CreditCard,
@@ -45,18 +47,18 @@ function formatBucket(bucket: string): string {
   return `Alumni ${bucket}`;
 }
 
-function formatStatus(status: string): { label: string; color: string } {
+function formatStatus(status: string, colors: ThemeColors): { label: string; color: string } {
   switch (status) {
     case "active":
-      return { label: "Active", color: "#10b981" };
+      return { label: "Active", color: colors.success };
     case "trialing":
-      return { label: "Trial", color: "#3b82f6" };
+      return { label: "Trial", color: colors.primary };
     case "past_due":
-      return { label: "Past Due", color: "#f59e0b" };
+      return { label: "Past Due", color: colors.warning };
     case "canceled":
-      return { label: "Canceled", color: "#ef4444" };
+      return { label: "Canceled", color: colors.error };
     default:
-      return { label: status, color: "#6b7280" };
+      return { label: status, color: colors.mutedForeground };
   }
 }
 
@@ -65,6 +67,8 @@ export default function SettingsScreen() {
   const { orgSlug, orgId } = useOrg();
   const { user } = useAuth();
   const { subscription, loading: subLoading, error: subError, refetch } = useSubscription(orgId);
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
@@ -248,7 +252,7 @@ export default function SettingsScreen() {
     refetch();
   };
 
-  const statusInfo = subscription ? formatStatus(subscription.status) : null;
+  const statusInfo = subscription ? formatStatus(subscription.status, colors) : null;
 
   return (
     <View style={styles.container}>
@@ -259,7 +263,7 @@ export default function SettingsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#2563eb"
+            tintColor={colors.primary}
           />
         }
       >
@@ -269,10 +273,10 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
               <View style={styles.menuItemLeft}>
-                <User size={20} color="#666" />
+                <User size={20} color={colors.muted} />
                 <Text style={styles.menuItemLabel}>Edit Profile</Text>
               </View>
-              <ChevronRight size={20} color="#9ca3af" />
+              <ChevronRight size={20} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -283,7 +287,7 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
-                <Bell size={20} color="#666" />
+                <Bell size={20} color={colors.muted} />
                 <View style={styles.menuItemText}>
                   <Text style={styles.menuItemLabel}>Push Notifications</Text>
                   <Text style={styles.menuItemHint}>
@@ -292,14 +296,14 @@ export default function SettingsScreen() {
                 </View>
               </View>
               {prefLoading ? (
-                <ActivityIndicator size="small" color="#2563eb" />
+                <ActivityIndicator size="small" color={colors.primary} />
               ) : (
                 <Switch
                   value={pushEnabled}
                   onValueChange={handlePushToggle}
                   disabled={prefSaving}
-                  trackColor={{ false: "#e5e7eb", true: "#93c5fd" }}
-                  thumbColor={pushEnabled ? "#2563eb" : "#f4f4f5"}
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={pushEnabled ? colors.primary : colors.card}
                 />
               )}
             </View>
@@ -320,7 +324,7 @@ export default function SettingsScreen() {
             <View style={styles.card}>
               {subLoading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color="#2563eb" />
+                  <ActivityIndicator size="small" color={colors.primary} />
                   <Text style={styles.loadingText}>Loading subscription...</Text>
                 </View>
               ) : subError ? (
@@ -387,12 +391,12 @@ export default function SettingsScreen() {
                     activeOpacity={0.7}
                   >
                     {billingLoading ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
+                      <ActivityIndicator size="small" color={colors.primaryForeground} />
                     ) : (
                       <>
-                        <CreditCard size={18} color="#ffffff" />
+                        <CreditCard size={18} color={colors.primaryForeground} />
                         <Text style={styles.billingButtonText}>Manage Billing</Text>
-                        <ExternalLink size={16} color="#ffffff" />
+                        <ExternalLink size={16} color={colors.primaryForeground} />
                       </>
                     )}
                   </TouchableOpacity>
@@ -417,7 +421,7 @@ export default function SettingsScreen() {
           <View style={styles.card}>
             <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
-                <Info size={20} color="#666" />
+                <Info size={20} color={colors.muted} />
                 <Text style={styles.menuItemLabel}>App Version</Text>
               </View>
               <Text style={styles.versionText}>
@@ -443,166 +447,167 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  card: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderCurve: "continuous",
-    overflow: "hidden",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
-  },
-  menuItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  menuItemText: {
-    flex: 1,
-    gap: 2,
-  },
-  menuItemLabel: {
-    fontSize: 16,
-    color: "#1a1a1a",
-  },
-  menuItemHint: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  loadingContainer: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  errorContainer: {
-    padding: 16,
-    alignItems: "center",
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 14,
-    color: "#dc2626",
-    textAlign: "center",
-  },
-  preferenceError: {
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-  },
-  preferenceErrorText: {
-    fontSize: 13,
-    color: "#dc2626",
-  },
-  retryButton: {
-    backgroundColor: "#2563eb",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-  },
-  retryButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  subscriptionCard: {
-    padding: 16,
-    gap: 12,
-  },
-  subscriptionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  subscriptionLabel: {
-    fontSize: 14,
-    color: "#666",
-  },
-  subscriptionValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  billingButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563eb",
-    marginHorizontal: 16,
-    marginBottom: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  billingButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  noSubscription: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  noSubscriptionText: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1a1a1a",
-    textAlign: "center",
-  },
-  noSubscriptionHint: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
-  versionText: {
-    fontSize: 14,
-    color: "#666",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 40,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginLeft: 4,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      overflow: "hidden",
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    menuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    menuItemLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    menuItemText: {
+      flex: 1,
+      gap: 2,
+    },
+    menuItemLabel: {
+      fontSize: 16,
+      color: colors.foreground,
+    },
+    menuItemHint: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+    },
+    loadingContainer: {
+      padding: 24,
+      alignItems: "center",
+      gap: 8,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: colors.muted,
+    },
+    errorContainer: {
+      padding: 16,
+      alignItems: "center",
+      gap: 12,
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.error,
+      textAlign: "center",
+    },
+    preferenceError: {
+      paddingHorizontal: 16,
+      paddingBottom: 12,
+    },
+    preferenceErrorText: {
+      fontSize: 13,
+      color: colors.error,
+    },
+    retryButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 6,
+    },
+    retryButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    subscriptionCard: {
+      padding: 16,
+      gap: 12,
+    },
+    subscriptionRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    subscriptionLabel: {
+      fontSize: 14,
+      color: colors.muted,
+    },
+    subscriptionValue: {
+      fontSize: 14,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    statusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+      gap: 6,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusText: {
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    billingButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+      marginHorizontal: 16,
+      marginBottom: 16,
+      paddingVertical: 12,
+      borderRadius: 8,
+      gap: 8,
+    },
+    billingButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 16,
+      fontWeight: "600",
+    },
+    noSubscription: {
+      padding: 24,
+      alignItems: "center",
+      gap: 8,
+    },
+    noSubscriptionText: {
+      fontSize: 15,
+      fontWeight: "500",
+      color: colors.foreground,
+      textAlign: "center",
+    },
+    noSubscriptionHint: {
+      fontSize: 14,
+      color: colors.muted,
+      textAlign: "center",
+    },
+    versionText: {
+      fontSize: 14,
+      color: colors.muted,
+    },
+  });

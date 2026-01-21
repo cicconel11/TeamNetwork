@@ -17,14 +17,16 @@ export interface NotificationData {
   body?: string;
 }
 
-// Configure how notifications appear when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Configure how notifications appear when app is in foreground (native only)
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 async function getStableDeviceId(): Promise<string | null> {
   try {
@@ -44,6 +46,7 @@ async function getStableDeviceId(): Promise<string | null> {
  * Request permission for push notifications
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
+  if (Platform.OS === "web") return false;
   if (!Device.isDevice) {
     console.log("Push notifications only work on physical devices");
     return false;
@@ -79,6 +82,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
  * Get the Expo push token for this device
  */
 export async function getExpoPushToken(): Promise<string | null> {
+  if (Platform.OS === "web") return null;
   if (!Device.isDevice) {
     console.log("Push tokens only available on physical devices");
     return null;
@@ -196,6 +200,7 @@ export function getNotificationRoute(data: NotificationData): string | null {
  * Get the current badge count
  */
 export async function getBadgeCount(): Promise<number> {
+  if (Platform.OS === "web") return 0;
   return Notifications.getBadgeCountAsync();
 }
 
@@ -203,6 +208,7 @@ export async function getBadgeCount(): Promise<number> {
  * Set the badge count
  */
 export async function setBadgeCount(count: number): Promise<void> {
+  if (Platform.OS === "web") return;
   await Notifications.setBadgeCountAsync(count);
 }
 
@@ -210,6 +216,7 @@ export async function setBadgeCount(count: number): Promise<void> {
  * Clear all notifications and reset badge
  */
 export async function clearAllNotifications(): Promise<void> {
+  if (Platform.OS === "web") return;
   await Notifications.dismissAllNotificationsAsync();
   await setBadgeCount(0);
 }
@@ -222,6 +229,7 @@ export async function scheduleLocalNotification(
   body: string,
   data?: NotificationData
 ): Promise<string> {
+  if (Platform.OS === "web") return "";
   return Notifications.scheduleNotificationAsync({
     content: {
       title,

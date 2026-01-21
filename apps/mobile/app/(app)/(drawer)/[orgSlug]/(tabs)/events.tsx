@@ -17,7 +17,8 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEvents, type Event } from "@/hooks/useEvents";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
 
 type ViewMode = "upcoming" | "past";
 
@@ -25,6 +26,8 @@ export default function EventsScreen() {
   const { orgSlug } = useOrg();
   const router = useRouter();
   const { isAdmin, permissions } = useOrgRole();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { events, loading, error, refetch, refetchIfStale } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
@@ -47,7 +50,7 @@ export default function EventsScreen() {
         },
       },
     ];
-  }, [permissions.canUseAdminActions, orgSlug]);
+  }, [permissions.canUseAdminActions, orgSlug, colors.primary]);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
@@ -325,169 +328,170 @@ export default function EventsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  toggleContainer: {
-    flexDirection: "row",
-    margin: spacing.md,
-    backgroundColor: colors.border,
-    borderRadius: borderRadius.md,
-    padding: spacing.xs,
-  },
-  toggleButton: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-    borderRadius: borderRadius.sm,
-  },
-  toggleActive: {
-    backgroundColor: colors.card,
-  },
-  toggleText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.muted,
-  },
-  toggleTextActive: {
-    color: colors.foreground,
-  },
-  dateStrip: {
-    maxHeight: 80,
-  },
-  dateStripContent: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  dateItem: {
-    alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    minWidth: 48,
-  },
-  dateItemSelected: {
-    backgroundColor: colors.primary,
-  },
-  dateDayName: {
-    fontSize: fontSize.xs,
-    color: colors.muted,
-    marginBottom: spacing.xs,
-  },
-  dateDay: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-  },
-  dateTextSelected: {
-    color: "#ffffff",
-  },
-  dateToday: {
-    color: colors.primary,
-  },
-  eventDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-    marginTop: spacing.xs,
-  },
-  listContent: {
-    padding: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
-    flexGrow: 1,
-  },
-  eventCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    padding: spacing.md,
-    marginBottom: 12,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  eventHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  eventTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    flex: 1,
-  },
-  rsvpBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.lg,
-    backgroundColor: colors.border,
-    marginLeft: spacing.sm,
-  },
-  rsvpGoing: {
-    backgroundColor: "#d1fae5",
-  },
-  rsvpMaybe: {
-    backgroundColor: "#fef3c7",
-  },
-  rsvpText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-  },
-  eventDetails: {
-    gap: 6,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  detailText: {
-    fontSize: fontSize.sm,
-    color: colors.muted,
-    flex: 1,
-  },
-  rsvpButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: 10,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  rsvpButtonText: {
-    color: "#ffffff",
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    marginTop: spacing.md,
-  },
-  emptySubtitle: {
-    fontSize: fontSize.sm,
-    color: colors.muted,
-    marginTop: spacing.xs,
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: spacing.md,
-  },
-  errorText: {
-    color: colors.error,
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    toggleContainer: {
+      flexDirection: "row",
+      margin: spacing.md,
+      backgroundColor: colors.border,
+      borderRadius: borderRadius.md,
+      padding: spacing.xs,
+    },
+    toggleButton: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      alignItems: "center",
+      borderRadius: borderRadius.sm,
+    },
+    toggleActive: {
+      backgroundColor: colors.card,
+    },
+    toggleText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: colors.muted,
+    },
+    toggleTextActive: {
+      color: colors.foreground,
+    },
+    dateStrip: {
+      maxHeight: 80,
+    },
+    dateStripContent: {
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    dateItem: {
+      alignItems: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      minWidth: 48,
+    },
+    dateItemSelected: {
+      backgroundColor: colors.primary,
+    },
+    dateDayName: {
+      fontSize: fontSize.xs,
+      color: colors.muted,
+      marginBottom: spacing.xs,
+    },
+    dateDay: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+    },
+    dateTextSelected: {
+      color: colors.primaryForeground,
+    },
+    dateToday: {
+      color: colors.primary,
+    },
+    eventDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.primary,
+      marginTop: spacing.xs,
+    },
+    listContent: {
+      padding: 16,
+      paddingTop: 8,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    eventCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      padding: spacing.md,
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    eventHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    eventTitle: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      flex: 1,
+    },
+    rsvpBadge: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderRadius: borderRadius.lg,
+      backgroundColor: colors.border,
+      marginLeft: spacing.sm,
+    },
+    rsvpGoing: {
+      backgroundColor: "#d1fae5",
+    },
+    rsvpMaybe: {
+      backgroundColor: "#fef3c7",
+    },
+    rsvpText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+    },
+    eventDetails: {
+      gap: 6,
+    },
+    detailRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    detailText: {
+      fontSize: fontSize.sm,
+      color: colors.muted,
+      flex: 1,
+    },
+    rsvpButton: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.md,
+      paddingVertical: 10,
+      alignItems: "center",
+      marginTop: 12,
+    },
+    rsvpButtonText: {
+      color: colors.primaryForeground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      marginTop: spacing.md,
+    },
+    emptySubtitle: {
+      fontSize: fontSize.sm,
+      color: colors.muted,
+      marginTop: spacing.xs,
+    },
+    errorContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: spacing.md,
+    },
+    errorText: {
+      color: colors.error,
+      textAlign: "center",
+    },
+  });

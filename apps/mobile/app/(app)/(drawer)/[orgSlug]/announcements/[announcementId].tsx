@@ -1,15 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet, TouchableOpacity } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Pin } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import type { Announcement } from "@teammeet/types";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 export default function AnnouncementDetailScreen() {
   const { announcementId } = useLocalSearchParams<{ announcementId: string }>();
   const { orgSlug } = useOrg();
   const router = useRouter();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export default function AnnouncementDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -80,13 +84,13 @@ export default function AnnouncementDetailScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <ArrowLeft size={20} color="#2563eb" />
+        <ArrowLeft size={20} color={colors.primary} />
         <Text style={styles.backButtonText}>Back</Text>
       </TouchableOpacity>
 
       {announcement.is_pinned && (
         <View style={styles.pinnedBadge}>
-          <Pin size={14} color="#d97706" />
+          <Pin size={14} color={colors.primaryDark} />
           <Text style={styles.pinnedText}>PINNED</Text>
         </View>
       )}
@@ -101,73 +105,74 @@ export default function AnnouncementDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  content: {
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-    gap: 8,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: "#2563eb",
-    fontWeight: "500",
-  },
-  pinnedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fef3c7",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    gap: 6,
-  },
-  pinnedText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#d97706",
-    textTransform: "uppercase",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  date: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginBottom: 24,
-  },
-  body: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    padding: 16,
-  },
-  bodyText: {
-    fontSize: 16,
-    color: "#374151",
-    lineHeight: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 16,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    backButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 16,
+      gap: 8,
+    },
+    backButtonText: {
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: "500",
+    },
+    pinnedBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.primaryLight,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+      alignSelf: "flex-start",
+      marginBottom: 12,
+      gap: 6,
+    },
+    pinnedText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.primaryDark,
+      textTransform: "uppercase",
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    date: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+      marginBottom: 24,
+    },
+    body: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+    },
+    bodyText: {
+      fontSize: 16,
+      color: colors.foreground,
+      lineHeight: 24,
+    },
+    errorText: {
+      fontSize: 16,
+      color: colors.error,
+      textAlign: "center",
+      marginBottom: 16,
+    },
+  });

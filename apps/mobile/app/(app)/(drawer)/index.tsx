@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,10 +13,14 @@ import { useRouter } from "expo-router";
 import { signOut } from "@/lib/supabase";
 import { useOrganizations } from "@/hooks/useOrganizations";
 import type { Organization } from "@teammeet/types";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 export default function OrganizationsScreen() {
   const router = useRouter();
   const { organizations, loading, error, refetch } = useOrganizations();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleRefresh = () => {
@@ -47,7 +51,7 @@ export default function OrganizationsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={["bottom"]}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -93,97 +97,94 @@ export default function OrganizationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 80,
-  },
-  orgCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "white",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  orgInfo: {
-    flex: 1,
-  },
-  orgName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  orgSlug: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  chevron: {
-    fontSize: 24,
-    color: "#ccc",
-    marginLeft: 8,
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  retryButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 48,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
-  signOutButton: {
-    position: "absolute",
-    bottom: 24,
-    left: 16,
-    right: 16,
-    backgroundColor: "#f1f5f9",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  signOutText: {
-    color: "#64748b",
-    fontSize: 16,
-    fontWeight: "500",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    listContent: {
+      padding: 16,
+      paddingBottom: 80,
+    },
+    orgCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.card,
+      padding: 16,
+      borderRadius: 12,
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    orgInfo: {
+      flex: 1,
+    },
+    orgName: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    orgSlug: {
+      fontSize: 14,
+      color: colors.muted,
+      marginTop: 4,
+    },
+    chevron: {
+      fontSize: 24,
+      color: colors.mutedForeground,
+      marginLeft: 8,
+    },
+    errorText: {
+      fontSize: 16,
+      color: colors.error,
+      textAlign: "center",
+      marginBottom: 16,
+    },
+    retryButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    retryButtonText: {
+      color: colors.primaryForeground,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    emptyContainer: {
+      alignItems: "center",
+      paddingVertical: 48,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.muted,
+      textAlign: "center",
+    },
+    signOutButton: {
+      position: "absolute",
+      bottom: 24,
+      left: 16,
+      right: 16,
+      backgroundColor: colors.border,
+      padding: 16,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    signOutText: {
+      color: colors.muted,
+      fontSize: 16,
+      fontWeight: "500",
+    },
+  });

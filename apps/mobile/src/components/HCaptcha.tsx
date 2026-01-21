@@ -1,9 +1,15 @@
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, Modal, ActivityIndicator, Text, TouchableOpacity } from "react-native";
 import ConfirmHcaptcha from "@hcaptcha/react-native-hcaptcha";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
-// Get site key from environment or use Supabase's default test key
+// Get site key from environment or use hCaptcha's test key
 const HCAPTCHA_SITE_KEY = process.env.EXPO_PUBLIC_HCAPTCHA_SITE_KEY || "10000000-ffff-ffff-ffff-000000000001";
+const HCAPTCHA_BASE_URL =
+  process.env.EXPO_PUBLIC_HCAPTCHA_BASE_URL ||
+  process.env.EXPO_PUBLIC_WEB_URL ||
+  "https://www.myteamnetwork.com";
 
 export interface HCaptchaRef {
   show: () => void;
@@ -22,6 +28,8 @@ const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
     const captchaRef = useRef<ConfirmHcaptcha>(null);
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(true);
+    const { colors } = useOrgTheme();
+    const styles = useMemo(() => createStyles(colors), [colors]);
 
     useImperativeHandle(ref, () => ({
       show: () => {
@@ -92,7 +100,7 @@ const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
             
             {loading && (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
+                <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={styles.loadingText}>Loading verification...</Text>
               </View>
             )}
@@ -105,7 +113,7 @@ const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
                 languageCode="en"
                 showLoading={false}
                 size="normal"
-                baseUrl="https://hcaptcha.com"
+                baseUrl={HCAPTCHA_BASE_URL}
               />
             </View>
           </View>
@@ -119,56 +127,57 @@ HCaptcha.displayName = "HCaptcha";
 
 export default HCaptcha;
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    width: "90%",
-    maxWidth: 400,
-    overflow: "hidden",
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e0e0e0",
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  closeButton: {
-    padding: 4,
-  },
-  closeText: {
-    fontSize: 20,
-    color: "#666",
-  },
-  loadingContainer: {
-    padding: 48,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: "#666",
-  },
-  captchaContainer: {
-    minHeight: 100,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  hidden: {
-    position: "absolute",
-    opacity: 0,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    container: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      width: "90%",
+      maxWidth: 400,
+      overflow: "hidden",
+    },
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    closeButton: {
+      padding: 4,
+    },
+    closeText: {
+      fontSize: 20,
+      color: colors.mutedForeground,
+    },
+    loadingContainer: {
+      padding: 48,
+      alignItems: "center",
+    },
+    loadingText: {
+      marginTop: 16,
+      fontSize: 14,
+      color: colors.mutedForeground,
+    },
+    captchaContainer: {
+      minHeight: 100,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    hidden: {
+      position: "absolute",
+      opacity: 0,
+    },
+  });

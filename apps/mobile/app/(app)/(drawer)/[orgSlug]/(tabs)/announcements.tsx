@@ -16,12 +16,15 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Announcement } from "@teammeet/types";
-import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
 
 export default function AnnouncementsScreen() {
   const { orgSlug } = useOrg();
   const router = useRouter();
   const { permissions } = useOrgRole();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
@@ -42,7 +45,7 @@ export default function AnnouncementsScreen() {
         },
       },
     ];
-  }, [permissions.canUseAdminActions, orgSlug]);
+  }, [permissions.canUseAdminActions, orgSlug, colors.primary]);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
@@ -140,78 +143,79 @@ export default function AnnouncementsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  listContent: {
-    padding: spacing.md,
-    paddingBottom: 40,
-    flexGrow: 1,
-  },
-  card: {
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    marginBottom: 12,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  pinnedBadge: {
-    backgroundColor: "#fef3c7",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    alignSelf: "flex-start",
-    marginBottom: 8,
-  },
-  pinnedText: {
-    fontSize: 10,
-    fontWeight: fontWeight.semibold,
-    color: "#d97706",
-    textTransform: "uppercase",
-  },
-  cardTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    marginBottom: spacing.xs,
-  },
-  cardDate: {
-    fontSize: fontSize.xs,
-    color: colors.mutedForeground,
-    marginBottom: spacing.sm,
-  },
-  cardBody: {
-    fontSize: fontSize.sm,
-    color: "#374151",
-    lineHeight: 20,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 64,
-  },
-  emptyTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
-    color: colors.muted,
-  },
-  errorText: {
-    fontSize: fontSize.sm,
-    color: colors.error,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    listContent: {
+      padding: spacing.md,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    card: {
+      backgroundColor: colors.card,
+      padding: spacing.md,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    pinnedBadge: {
+      backgroundColor: colors.primaryLight,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 4,
+      alignSelf: "flex-start",
+      marginBottom: 8,
+    },
+    pinnedText: {
+      fontSize: 10,
+      fontWeight: fontWeight.semibold,
+      color: colors.primaryDark,
+      textTransform: "uppercase",
+    },
+    cardTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      marginBottom: spacing.xs,
+    },
+    cardDate: {
+      fontSize: fontSize.xs,
+      color: colors.mutedForeground,
+      marginBottom: spacing.sm,
+    },
+    cardBody: {
+      fontSize: fontSize.sm,
+      color: colors.foreground,
+      lineHeight: 20,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 64,
+    },
+    emptyTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    emptyText: {
+      fontSize: fontSize.sm,
+      color: colors.muted,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: colors.error,
+    },
+  });

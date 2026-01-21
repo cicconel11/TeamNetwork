@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Modal,
@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { X } from "lucide-react-native";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 interface StripeWebViewProps {
   visible: boolean;
@@ -29,6 +31,8 @@ export function StripeWebView({
   cancelUrls = [],
 }: StripeWebViewProps) {
   const [loading, setLoading] = useState(true);
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleNavigationChange = (navState: { url: string }) => {
     const currentUrl = navState.url;
@@ -60,7 +64,7 @@ export function StripeWebView({
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <X size={24} color="#1a1a1a" />
+            <X size={24} color={colors.foreground} />
           </TouchableOpacity>
           <Text style={styles.title}>{title}</Text>
           <View style={styles.placeholder} />
@@ -68,7 +72,7 @@ export function StripeWebView({
 
         {loading && (
           <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="large" color="#2563eb" />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         )}
@@ -89,48 +93,49 @@ export function StripeWebView({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  closeButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  placeholder: {
-    width: 40,
-  },
-  webview: {
-    flex: 1,
-  },
-  loadingOverlay: {
-    position: "absolute",
-    top: 60,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#666",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    closeButton: {
+      padding: 8,
+    },
+    title: {
+      fontSize: 17,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    placeholder: {
+      width: 40,
+    },
+    webview: {
+      flex: 1,
+    },
+    loadingOverlay: {
+      position: "absolute",
+      top: 60,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: colors.background,
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: colors.mutedForeground,
+    },
+  });

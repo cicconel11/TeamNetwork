@@ -17,6 +17,10 @@ function toAnalyticsRole(role: OrgRole | null): AnalyticsRole {
 interface OrgContextValue {
   orgSlug: string;
   orgId: string | null;
+  orgName: string | null;
+  orgLogoUrl: string | null;
+  orgPrimaryColor: string | null;
+  orgSecondaryColor: string | null;
   userRole: NormalizedRole;
   isLoading: boolean;
 }
@@ -26,6 +30,10 @@ const OrgContext = createContext<OrgContextValue | null>(null);
 export function OrgProvider({ children }: { children: ReactNode }) {
   const { orgSlug } = useGlobalSearchParams<{ orgSlug: string }>();
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState<string | null>(null);
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [orgPrimaryColor, setOrgPrimaryColor] = useState<string | null>(null);
+  const [orgSecondaryColor, setOrgSecondaryColor] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<NormalizedRole>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -42,7 +50,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       const [orgResult, userResult] = await Promise.all([
         supabase
           .from("organizations")
-          .select("id")
+          .select("id, name, logo_url, primary_color, secondary_color")
           .eq("slug", orgSlug)
           .single(),
         supabase.auth.getUser(),
@@ -51,7 +59,16 @@ export function OrgProvider({ children }: { children: ReactNode }) {
       if (!isMounted) return;
 
       const fetchedOrgId = orgResult.data?.id ?? null;
+      const fetchedOrgName = orgResult.data?.name ?? null;
+      const fetchedOrgLogoUrl = orgResult.data?.logo_url ?? null;
+      const fetchedPrimaryColor = orgResult.data?.primary_color ?? null;
+      const fetchedSecondaryColor = orgResult.data?.secondary_color ?? null;
+
       setOrgId(fetchedOrgId);
+      setOrgName(fetchedOrgName);
+      setOrgLogoUrl(fetchedOrgLogoUrl);
+      setOrgPrimaryColor(fetchedPrimaryColor);
+      setOrgSecondaryColor(fetchedSecondaryColor);
 
       // Fetch user's role if we have both org and user
       if (fetchedOrgId && userResult.data?.user?.id) {
@@ -76,6 +93,11 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true);
     setUserRole(null);
+    setOrgId(null);
+    setOrgName(null);
+    setOrgLogoUrl(null);
+    setOrgPrimaryColor(null);
+    setOrgSecondaryColor(null);
     fetchOrgData();
 
     return () => {
@@ -95,7 +117,18 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   }, [orgSlug, orgId, userRole, isLoading]);
 
   return (
-    <OrgContext.Provider value={{ orgSlug: orgSlug ?? "", orgId, userRole, isLoading }}>
+    <OrgContext.Provider
+      value={{
+        orgSlug: orgSlug ?? "",
+        orgId,
+        orgName,
+        orgLogoUrl,
+        orgPrimaryColor,
+        orgSecondaryColor,
+        userRole,
+        isLoading,
+      }}
+    >
       {children}
     </OrgContext.Provider>
   );
