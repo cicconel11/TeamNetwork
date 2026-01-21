@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { Stack } from "expo-router";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 type TermsSection = {
   id: string;
@@ -169,6 +171,9 @@ const termsSections: TermsSection[] = [
 ];
 
 export default function TermsScreen() {
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ title: "Terms of Service" }} />
@@ -215,88 +220,89 @@ export default function TermsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  lastUpdated: {
-    fontSize: 14,
-    color: "#666",
-  },
-  sectionCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderCurve: "continuous",
-    padding: 16,
-    marginBottom: 12,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 12,
-    gap: 12,
-  },
-  numberBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#10b981",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  numberBadgeText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#ffffff",
-  },
-  sectionTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    lineHeight: 24,
-    paddingTop: 4,
-  },
-  sectionContent: {
-    gap: 12,
-  },
-  paragraph: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#4b5563",
-  },
-  bulletList: {
-    gap: 8,
-  },
-  bulletItem: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  bulletDot: {
-    fontSize: 15,
-    color: "#10b981",
-    lineHeight: 22,
-    marginTop: 1,
-  },
-  bulletText: {
-    flex: 1,
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#4b5563",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 40,
+    },
+    header: {
+      marginBottom: 24,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "700",
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    lastUpdated: {
+      fontSize: 14,
+      color: colors.mutedForeground,
+    },
+    sectionCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      padding: 16,
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 12,
+      gap: 12,
+    },
+    numberBadge: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    numberBadgeText: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: colors.primaryForeground,
+    },
+    sectionTitle: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+      lineHeight: 24,
+      paddingTop: 4,
+    },
+    sectionContent: {
+      gap: 12,
+    },
+    paragraph: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.mutedForeground,
+    },
+    bulletList: {
+      gap: 8,
+    },
+    bulletItem: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    bulletDot: {
+      fontSize: 15,
+      color: colors.primary,
+      lineHeight: 22,
+      marginTop: 1,
+    },
+    bulletText: {
+      flex: 1,
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.mutedForeground,
+    },
+  });

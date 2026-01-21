@@ -1,6 +1,4 @@
 import { Stack } from "expo-router";
-import { OrgProvider } from "@/contexts/OrgContext";
-
 function OrgLayoutInner() {
   return (
     <Stack>
@@ -25,9 +23,23 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
+        name="events/new"
+        options={{
+          title: "Create Event",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
         name="announcements/[announcementId]"
         options={{
           title: "Announcement",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="announcements/new"
+        options={{
+          title: "Post Announcement",
           presentation: "card",
         }}
       />
@@ -38,14 +50,24 @@ function OrgLayoutInner() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="members/new"
+        options={{
+          title: "Invite Member",
+          presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="donations/new"
+        options={{
+          title: "Record Donation",
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }
 
 export default function OrgLayout() {
-  return (
-    <OrgProvider>
-      <OrgLayoutInner />
-    </OrgProvider>
-  );
+  return <OrgLayoutInner />;
 }

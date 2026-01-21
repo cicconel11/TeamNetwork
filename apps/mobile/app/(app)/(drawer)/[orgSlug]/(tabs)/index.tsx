@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -27,12 +27,15 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { Organization } from "@teammeet/types";
-import { colors, spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
 
 export default function HomeScreen() {
   const { orgSlug } = useOrg();
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const isMountedRef = useRef(true);
 
   const [organization, setOrganization] = useState<Organization | null>(null);
@@ -300,14 +303,14 @@ export default function HomeScreen() {
                 </Text>
                 <View style={styles.eventDetails}>
                   <View style={styles.eventDetail}>
-                    <Clock size={14} color="#666" />
+                  <Clock size={14} color={colors.muted} />
                     <Text style={styles.eventDetailText}>
                       {formatEventTime(event.start_date)}
                     </Text>
                   </View>
                   {event.location && (
                     <View style={styles.eventDetail}>
-                      <MapPin size={14} color="#666" />
+                      <MapPin size={14} color={colors.muted} />
                       <Text style={styles.eventDetailText} numberOfLines={1}>
                         {event.location}
                       </Text>
@@ -321,7 +324,7 @@ export default function HomeScreen() {
             ))
           ) : (
             <View style={styles.emptyCard}>
-              <Calendar size={24} color="#9ca3af" />
+              <Calendar size={24} color={colors.mutedForeground} />
               <Text style={styles.emptyText}>No upcoming events</Text>
             </View>
           )}
@@ -348,7 +351,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           ) : (
             <View style={styles.emptyCard}>
-              <Pin size={24} color="#9ca3af" />
+              <Pin size={24} color={colors.mutedForeground} />
               <Text style={styles.emptyText}>No pinned announcements</Text>
             </View>
           )}
@@ -371,182 +374,183 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    padding: spacing.md,
-    paddingBottom: 40,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  header: {
-    marginBottom: 20,
-  },
-  greeting: {
-    fontSize: fontSize["2xl"],
-    fontWeight: fontWeight.bold,
-    color: colors.foreground,
-  },
-  orgName: {
-    fontSize: fontSize.base,
-    color: colors.muted,
-    marginTop: spacing.xs,
-  },
-  date: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-    marginTop: 2,
-  },
-  statsRow: {
-    flexDirection: "row",
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    marginTop: 8,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  seeAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  seeAllText: {
-    fontSize: 14,
-    color: "#2563eb",
-    fontWeight: "500",
-  },
-  eventCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderCurve: "continuous",
-    padding: 16,
-    marginBottom: 12,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  eventTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  eventDetails: {
-    gap: 4,
-  },
-  eventDetail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  eventDetailText: {
-    fontSize: fontSize.sm,
-    color: colors.muted,
-    flex: 1,
-  },
-  rsvpButton: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.md,
-    paddingVertical: 10,
-    alignItems: "center",
-    marginTop: 12,
-  },
-  rsvpButtonText: {
-    color: "#ffffff",
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  announcementCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    padding: spacing.md,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  pinnedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginBottom: 8,
-  },
-  pinnedText: {
-    fontSize: fontSize.xs,
-    color: colors.primary,
-    fontWeight: fontWeight.medium,
-  },
-  announcementTitle: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    marginBottom: spacing.sm,
-  },
-  announcementPreview: {
-    fontSize: fontSize.sm,
-    color: colors.muted,
-    lineHeight: 20,
-  },
-  emptyCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    padding: spacing.lg,
-    alignItems: "center",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-    marginTop: spacing.sm,
-  },
-  activityCard: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
-    padding: spacing.lg,
-    alignItems: "center",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  activityEmpty: {
-    fontSize: fontSize.sm,
-    color: colors.mutedForeground,
-  },
-  errorText: {
-    fontSize: fontSize.base,
-    color: colors.error,
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: spacing.md,
+      paddingBottom: 40,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    header: {
+      marginBottom: 20,
+    },
+    greeting: {
+      fontSize: fontSize["2xl"],
+      fontWeight: fontWeight.bold,
+      color: colors.foreground,
+    },
+    orgName: {
+      fontSize: fontSize.base,
+      color: colors.muted,
+      marginTop: spacing.xs,
+    },
+    date: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginTop: 2,
+    },
+    statsRow: {
+      flexDirection: "row",
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      padding: spacing.md,
+      marginBottom: spacing.lg,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    statItem: {
+      flex: 1,
+      alignItems: "center",
+    },
+    statValue: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: colors.foreground,
+      marginTop: 8,
+    },
+    statLabel: {
+      fontSize: 12,
+      color: colors.muted,
+      marginTop: 2,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 12,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    seeAllButton: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    seeAllText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: "500",
+    },
+    eventCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      padding: 16,
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    eventTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    eventDetails: {
+      gap: 4,
+    },
+    eventDetail: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+    },
+    eventDetailText: {
+      fontSize: fontSize.sm,
+      color: colors.muted,
+      flex: 1,
+    },
+    rsvpButton: {
+      backgroundColor: colors.primary,
+      borderRadius: borderRadius.md,
+      paddingVertical: 10,
+      alignItems: "center",
+      marginTop: 12,
+    },
+    rsvpButtonText: {
+      color: colors.primaryForeground,
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    announcementCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      padding: spacing.md,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    pinnedBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginBottom: 8,
+    },
+    pinnedText: {
+      fontSize: fontSize.xs,
+      color: colors.primary,
+      fontWeight: fontWeight.medium,
+    },
+    announcementTitle: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: colors.foreground,
+      marginBottom: spacing.sm,
+    },
+    announcementPreview: {
+      fontSize: fontSize.sm,
+      color: colors.muted,
+      lineHeight: 20,
+    },
+    emptyCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      padding: spacing.lg,
+      alignItems: "center",
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    emptyText: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+      marginTop: spacing.sm,
+    },
+    activityCard: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      borderCurve: "continuous",
+      padding: spacing.lg,
+      alignItems: "center",
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    activityEmpty: {
+      fontSize: fontSize.sm,
+      color: colors.mutedForeground,
+    },
+    errorText: {
+      fontSize: fontSize.base,
+      color: colors.error,
+      textAlign: "center",
+    },
+  });

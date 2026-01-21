@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -11,10 +11,14 @@ import {
 import { useFocusEffect } from "expo-router";
 import { useAlumni } from "@/hooks/useAlumni";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 export default function AlumniScreen() {
   const { orgSlug } = useOrg();
   const { alumni, loading, error, refetch, refetchIfStale } = useAlumni(orgSlug || "");
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
@@ -40,7 +44,7 @@ export default function AlumniScreen() {
   if (loading && alumni.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -96,7 +100,7 @@ export default function AlumniScreen() {
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.listContent}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#2563eb" />
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
       }
       renderItem={({ item }) => (
         <View style={styles.alumniCard}>
@@ -148,109 +152,110 @@ export default function AlumniScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  listContent: {
-    padding: 16,
-    paddingBottom: 40,
-    flexGrow: 1,
-  },
-  alumniCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "white",
-    padding: 12,
-    borderRadius: 12,
-    borderCurve: "continuous",
-    marginBottom: 12,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginRight: 12,
-  },
-  avatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#e0e7ff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  avatarText: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#4f46e5",
-  },
-  alumniInfo: {
-    flex: 1,
-  },
-  alumniName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  alumniSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 2,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 8,
-    gap: 6,
-  },
-  badge: {
-    backgroundColor: "#f1f5f9",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  badgeText: {
-    fontSize: 12,
-    color: "#64748b",
-    fontWeight: "500",
-  },
-  industryBadge: {
-    backgroundColor: "#dbeafe",
-  },
-  industryBadgeText: {
-    color: "#2563eb",
-  },
-  location: {
-    fontSize: 12,
-    color: "#9ca3af",
-    marginTop: 6,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 64,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#dc2626",
-    textAlign: "center",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    centered: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    listContent: {
+      padding: 16,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    alumniCard: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: colors.card,
+      padding: 12,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      marginBottom: 12,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    avatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      marginRight: 12,
+    },
+    avatarPlaceholder: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.primaryLight,
+      justifyContent: "center",
+      alignItems: "center",
+      marginRight: 12,
+    },
+    avatarText: {
+      fontSize: 20,
+      fontWeight: "600",
+      color: colors.primaryDark,
+    },
+    alumniInfo: {
+      flex: 1,
+    },
+    alumniName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    alumniSubtitle: {
+      fontSize: 14,
+      color: colors.muted,
+      marginTop: 2,
+    },
+    badgeRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginTop: 8,
+      gap: 6,
+    },
+    badge: {
+      backgroundColor: colors.border,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 4,
+    },
+    badgeText: {
+      fontSize: 12,
+      color: colors.muted,
+      fontWeight: "500",
+    },
+    industryBadge: {
+      backgroundColor: colors.primaryLight,
+    },
+    industryBadgeText: {
+      color: colors.primaryDark,
+    },
+    location: {
+      fontSize: 12,
+      color: colors.mutedForeground,
+      marginTop: 6,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingVertical: 64,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.foreground,
+      marginBottom: 8,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.muted,
+      textAlign: "center",
+    },
+    errorText: {
+      fontSize: 16,
+      color: colors.error,
+      textAlign: "center",
+    },
+  });

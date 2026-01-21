@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react";
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import * as Notifications from "expo-notifications";
 import {
@@ -101,9 +101,9 @@ export function usePushNotifications({
     }
   }, []);
 
-  // Set up notification listeners and register
+  // Set up notification listeners and register (native only; expo-notifications is not available on web)
   useEffect(() => {
-    if (!enabled) return;
+    if (Platform.OS === "web" || !enabled) return;
 
     // Register for push notifications when user is authenticated
     if (userId) {

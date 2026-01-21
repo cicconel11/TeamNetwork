@@ -88,10 +88,19 @@ export async function POST(req: Request) {
   const captchaResult = await verifyCaptcha(body.captchaToken, clientIp);
   if (!captchaResult.success) {
     const errorCode = captchaResult.error_codes?.[0];
+    const details = captchaResult.error_codes?.filter(Boolean) ?? [];
+
     if (errorCode === "missing-input-response") {
-      return respond({ error: "Captcha verification required" }, 400);
+      return respond(
+        { error: "Captcha verification required", details: details.length > 0 ? details : undefined },
+        400
+      );
     }
-    return respond({ error: "Captcha verification failed" }, 403);
+
+    return respond(
+      { error: "Captcha verification failed", details: details.length > 0 ? details : undefined },
+      403
+    );
   }
 
   const amountCents = Math.round(Number(body.amount || 0) * 100);

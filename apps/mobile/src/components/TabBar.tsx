@@ -1,37 +1,45 @@
-import React from "react";
-import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import React, { useMemo } from "react";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Home, Calendar, Users, Menu as MenuIcon, Megaphone } from "lucide-react-native";
+import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { colors } from "@/lib/theme";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 const ICON_SIZE = 24;
-const ACTIVE_COLOR = colors.primary;
-const INACTIVE_COLOR = colors.mutedForeground;
 
-// Tab configuration: 4 content areas + More utility
-// Pattern: Home, Events, Announcements, Members, More
-const TAB_CONFIG = [
+// Tab configuration with a centered action button
+const LEFT_TABS = [
   { route: "index", icon: Home, label: "Home" },
   { route: "events", icon: Calendar, label: "Events" },
-  { route: "announcements", icon: Megaphone, label: "Announcements" },
-  { route: "members", icon: Users, label: "Members" },
-  { route: "menu", icon: MenuIcon, label: "More" },
 ] as const;
 
-interface TabBarProps extends BottomTabBarProps {}
+const RIGHT_TABS = [
+  { route: "announcements", icon: Megaphone, label: "Announcements" },
+  { route: "members", icon: Users, label: "Members" },
+] as const;
 
-export function TabBar({ state, descriptors, navigation }: TabBarProps) {
+interface TabBarProps extends BottomTabBarProps {
+  onActionPress?: () => void;
+}
+
+export function TabBar({ state, descriptors, navigation, onActionPress }: TabBarProps) {
+  const { colors } = useOrgTheme();
   const insets = useSafeAreaInsets();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const activeColor = colors.primary;
+  const inactiveColor = colors.mutedForeground;
 
-  const renderTab = (tabConfig: (typeof TAB_CONFIG)[number]) => {
+  const renderTab = (
+    tabConfig: (typeof LEFT_TABS)[number] | (typeof RIGHT_TABS)[number]
+  ) => {
     const route = state.routes.find((r) => r.name === tabConfig.route);
     if (!route) return null;
 
     const actualIndex = state.routes.findIndex((r) => r.key === route.key);
     const { options } = descriptors[route.key];
     const isFocused = state.index === actualIndex;
-    const color = isFocused ? ACTIVE_COLOR : INACTIVE_COLOR;
+    const color = isFocused ? activeColor : inactiveColor;
     const IconComponent = tabConfig.icon;
 
     const onPress = () => {
@@ -63,31 +71,60 @@ export function TabBar({ state, descriptors, navigation }: TabBarProps) {
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
-        {TAB_CONFIG.map((tab) => renderTab(tab))}
+        <View style={styles.tabGroup}>
+          {LEFT_TABS.map((tab) => renderTab(tab))}
+        </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Quick actions"
+          onPress={onActionPress}
+          style={styles.actionButton}
+          disabled={!onActionPress}
+        >
+          <Plus size={22} color={colors.primaryForeground} />
+        </TouchableOpacity>
+        <View style={styles.tabGroup}>
+          {RIGHT_TABS.map((tab) => renderTab(tab))}
+        </View>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.card,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  tabBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-around",
-    height: 56,
-    paddingHorizontal: 8,
-  },
-  tab: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    minWidth: 44,
-    minHeight: 44,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      backgroundColor: colors.card,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    tabBar: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      height: 56,
+      paddingHorizontal: 8,
+    },
+    tabGroup: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-evenly",
+    },
+    tab: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      minWidth: 44,
+      minHeight: 44,
+    },
+    actionButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+  });

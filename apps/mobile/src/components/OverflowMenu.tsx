@@ -3,7 +3,7 @@
  * Displays a "..." button that opens a menu with admin-only quick actions.
  */
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,8 @@ import {
   Pressable,
 } from "react-native";
 import { MoreVertical } from "lucide-react-native";
-import { colors, fontSize, fontWeight, borderRadius, spacing } from "@/lib/theme";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import { fontSize, fontWeight, borderRadius, spacing, type ThemeColors } from "@/lib/theme";
 
 export interface OverflowMenuItem {
   id: string;
@@ -28,7 +29,7 @@ interface OverflowMenuProps {
   items: OverflowMenuItem[];
   /** Icon size (default 20) */
   iconSize?: number;
-  /** Icon color (default #666) */
+  /** Icon color (defaults to theme muted color) */
   iconColor?: string;
   /** Accessibility label */
   accessibilityLabel?: string;
@@ -37,10 +38,13 @@ interface OverflowMenuProps {
 export function OverflowMenu({
   items,
   iconSize = 20,
-  iconColor = "#666",
+  iconColor,
   accessibilityLabel = "More options",
 }: OverflowMenuProps) {
   const [visible, setVisible] = useState(false);
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const resolvedIconColor = iconColor ?? colors.mutedForeground;
 
   const handleOpen = () => setVisible(true);
   const handleClose = () => setVisible(false);
@@ -66,7 +70,7 @@ export function OverflowMenu({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
       >
-        <MoreVertical size={iconSize} color={iconColor} />
+        <MoreVertical size={iconSize} color={resolvedIconColor} />
       </TouchableOpacity>
 
       <Modal
@@ -115,57 +119,58 @@ export function OverflowMenu({
   );
 }
 
-const styles = StyleSheet.create({
-  triggerButton: {
-    padding: 8,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xl,
-  },
-  menuContainer: {
-    gap: spacing.sm,
-  },
-  menu: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    overflow: "hidden",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  menuItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  menuItemIcon: {
-    marginRight: 12,
-  },
-  menuItemText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-  },
-  menuItemTextDestructive: {
-    color: colors.error,
-  },
-  cancelButton: {
-    backgroundColor: colors.card,
-    borderRadius: borderRadius.lg,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: colors.primary,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    triggerButton: {
+      padding: 8,
+    },
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      justifyContent: "flex-end",
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.xl,
+    },
+    menuContainer: {
+      gap: spacing.sm,
+    },
+    menu: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      overflow: "hidden",
+    },
+    menuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+    },
+    menuItemBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    menuItemIcon: {
+      marginRight: 12,
+    },
+    menuItemText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.medium,
+      color: colors.foreground,
+    },
+    menuItemTextDestructive: {
+      color: colors.error,
+    },
+    cancelButton: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.lg,
+      paddingVertical: 16,
+      alignItems: "center",
+    },
+    cancelButtonText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: colors.primary,
+    },
+  });
 
 export default OverflowMenu;

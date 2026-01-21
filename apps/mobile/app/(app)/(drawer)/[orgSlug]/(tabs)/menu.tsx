@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -29,6 +29,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { normalizeRole, roleFlags } from "@teammeet/core";
+import { useOrgTheme } from "@/hooks/useOrgTheme";
+import type { ThemeColors } from "@/lib/theme";
 
 interface Organization {
   id: string;
@@ -52,6 +54,8 @@ export default function MenuScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { permissions, isAdmin: isAdminFromHook } = useOrgRole();
+  const { colors } = useOrgTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
@@ -179,7 +183,7 @@ export default function MenuScreen() {
           </View>
         )}
         {item.showChevron !== false && (
-          <ChevronRight size={20} color="#9ca3af" />
+          <ChevronRight size={20} color={colors.mutedForeground} />
         )}
       </View>
     </TouchableOpacity>
@@ -187,7 +191,7 @@ export default function MenuScreen() {
 
   const updatesItems: MenuItem[] = [
     {
-      icon: <Bell size={20} color="#666" />,
+      icon: <Bell size={20} color={colors.muted} />,
       label: "Notifications",
       onPress: () => console.log("Notifications"),
       badge: notificationCount,
@@ -199,7 +203,7 @@ export default function MenuScreen() {
   
   if (permissions.canViewDonations) {
     communityItems.push({
-      icon: <Heart size={20} color="#666" />,
+      icon: <Heart size={20} color={colors.muted} />,
       label: "Donations",
       onPress: () => console.log("Donations"),
     });
@@ -207,7 +211,7 @@ export default function MenuScreen() {
   
   if (permissions.canViewRecords) {
     communityItems.push({
-      icon: <Trophy size={20} color="#666" />,
+      icon: <Trophy size={20} color={colors.muted} />,
       label: "Records",
       onPress: () => console.log("Records"),
     });
@@ -215,7 +219,7 @@ export default function MenuScreen() {
   
   if (permissions.canViewForms) {
     communityItems.push({
-      icon: <FileText size={20} color="#666" />,
+      icon: <FileText size={20} color={colors.muted} />,
       label: "Forms",
       onPress: () => console.log("Forms"),
     });
@@ -223,17 +227,17 @@ export default function MenuScreen() {
 
   const adminItems: MenuItem[] = [
     {
-      icon: <Settings size={20} color="#666" />,
+      icon: <Settings size={20} color={colors.muted} />,
       label: "Settings",
       onPress: () => router.push(`/(app)/${orgSlug}/settings`),
     },
     {
-      icon: <UserPlus size={20} color="#666" />,
+      icon: <UserPlus size={20} color={colors.muted} />,
       label: "Invites",
       onPress: () => console.log("Invites"),
     },
     {
-      icon: <CreditCard size={20} color="#666" />,
+      icon: <CreditCard size={20} color={colors.muted} />,
       label: "Billing",
       onPress: () => console.log("Billing"),
     },
@@ -241,22 +245,22 @@ export default function MenuScreen() {
 
   const appItems: MenuItem[] = [
     {
-      icon: <HelpCircle size={20} color="#666" />,
+      icon: <HelpCircle size={20} color={colors.muted} />,
       label: "Help & Support",
       onPress: () => console.log("Help"),
     },
     {
-      icon: <Info size={20} color="#666" />,
+      icon: <Info size={20} color={colors.muted} />,
       label: "About TeamMeet",
       onPress: () => console.log("About"),
     },
     {
-      icon: <FileText size={20} color="#666" />,
+      icon: <FileText size={20} color={colors.muted} />,
       label: "Terms of Service",
       onPress: () => router.push("/(app)/terms"),
     },
     {
-      icon: <LogOut size={20} color="#dc2626" />,
+      icon: <LogOut size={20} color={colors.error} />,
       label: "Sign Out",
       onPress: handleSignOut,
       showChevron: false,
@@ -283,7 +287,7 @@ export default function MenuScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#2563eb"
+            tintColor={colors.primary}
           />
         }
       >
@@ -305,7 +309,7 @@ export default function MenuScreen() {
                 <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
               ) : (
                 <View style={styles.orgLogoPlaceholder}>
-                  <Building2 size={20} color="#666" />
+                  <Building2 size={20} color={colors.muted} />
                 </View>
               )}
               <Text style={styles.orgName} numberOfLines={1}>
@@ -334,7 +338,7 @@ export default function MenuScreen() {
               </Text>
               <Text style={styles.profileEdit}>Edit Profile</Text>
             </View>
-            <ChevronRight size={20} color="#9ca3af" />
+            <ChevronRight size={20} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
 
@@ -378,184 +382,185 @@ export default function MenuScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  accountBlock: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderCurve: "continuous",
-    padding: 16,
-    marginBottom: 24,
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  orgRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
-  orgInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  orgLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  orgLogoPlaceholder: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: "#e5e7eb",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  orgName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-    flex: 1,
-  },
-  switchButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 6,
-  },
-  switchButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#2563eb",
-  },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 16,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  avatarPlaceholder: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#e0e7ff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitials: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#2563eb",
-  },
-  profileInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  profileName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1a1a1a",
-  },
-  profileEdit: {
-    fontSize: 14,
-    color: "#2563eb",
-    marginTop: 2,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  menuCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 12,
-    borderCurve: "continuous",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f5f5f5",
-  },
-  menuItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  menuItemLabel: {
-    fontSize: 16,
-    color: "#1a1a1a",
-    marginLeft: 12,
-  },
-  menuItemRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  badge: {
-    backgroundColor: "#dc2626",
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  errorContainer: {
-    backgroundColor: "#fee2e2",
-    borderLeftWidth: 4,
-    borderLeftColor: "#dc2626",
-    padding: 12,
-    marginBottom: 16,
-    borderRadius: 4,
-  },
-  errorText: {
-    fontSize: 14,
-    color: "#991b1b",
-    fontWeight: "500",
-    marginBottom: 8,
-  },
-  retryButton: {
-    backgroundColor: "#dc2626",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignSelf: "flex-start",
-  },
-  retryButtonText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 40,
+    },
+    accountBlock: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      padding: 16,
+      marginBottom: 24,
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    orgRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    orgInfo: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    orgLogo: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      marginRight: 12,
+    },
+    orgLogoPlaceholder: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    orgName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+      flex: 1,
+    },
+    switchButton: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: colors.border,
+      borderRadius: 6,
+    },
+    switchButtonText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: colors.primary,
+    },
+    profileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingTop: 16,
+    },
+    avatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+    },
+    avatarPlaceholder: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.primaryLight,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarInitials: {
+      fontSize: 18,
+      fontWeight: "600",
+      color: colors.primaryDark,
+    },
+    profileInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    profileName: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: colors.foreground,
+    },
+    profileEdit: {
+      fontSize: 14,
+      color: colors.primary,
+      marginTop: 2,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.muted,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 8,
+      marginLeft: 4,
+    },
+    menuCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderCurve: "continuous",
+      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+    },
+    menuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    menuItemLeft: {
+      flexDirection: "row",
+      alignItems: "center",
+      flex: 1,
+    },
+    menuItemLabel: {
+      fontSize: 16,
+      color: colors.foreground,
+      marginLeft: 12,
+    },
+    menuItemRight: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    badge: {
+      backgroundColor: colors.error,
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: "#ffffff",
+      fontSize: 12,
+      fontWeight: "600",
+    },
+    errorContainer: {
+      backgroundColor: `${colors.error}20`,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.error,
+      padding: 12,
+      marginBottom: 16,
+      borderRadius: 4,
+    },
+    errorText: {
+      fontSize: 14,
+      color: colors.error,
+      fontWeight: "500",
+      marginBottom: 8,
+    },
+    retryButton: {
+      backgroundColor: colors.error,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 6,
+      alignSelf: "flex-start",
+    },
+    retryButtonText: {
+      color: "#ffffff",
+      fontSize: 14,
+      fontWeight: "600",
+    },
+  });
