@@ -7,31 +7,25 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
-import { ChevronRight } from "lucide-react-native";
-import { signOut } from "@/lib/supabase";
+import { useRouter, useGlobalSearchParams } from "expo-router";
 import { useOrganizations } from "@/hooks/useOrganizations";
+import { OrganizationRow } from "@/components/org-switcher/OrganizationRow";
+import { OrgSwitcherActions } from "@/components/org-switcher/OrgSwitcherActions";
 import type { Organization } from "@teammeet/types";
 
 const colors = {
   background: "#ffffff",
-  listBackground: "#f8fafc",
   title: "#0f172a",
   subtitle: "#64748b",
-  chevron: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#ffffff",
-  avatarBg: "#eef2ff",
-  avatarText: "#0f172a",
-  pressed: "#f1f5f9",
   spinner: "#059669",
 };
 
 export default function OrganizationsScreen() {
   const router = useRouter();
+  const params = useGlobalSearchParams<{ orgSlug?: string }>();
+  const currentSlug = params.orgSlug;
   const { organizations, loading, error, refetch } = useOrganizations();
   const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,48 +35,18 @@ export default function OrganizationsScreen() {
     Promise.resolve(refetch()).finally(() => setRefreshing(false));
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.replace("/(auth)/login");
-  };
-
-  const getOrgInitials = (org: Organization) => {
-    const source = (org.name || org.slug || "").trim();
-    if (!source) return "O";
-    const parts = source.split(/\s+/).filter(Boolean);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+  const handleOrgPress = (org: Organization) => {
+    router.replace(`/(app)/${org.slug}/(tabs)` as const);
   };
 
   const renderOrg = ({ item }: { item: Organization }) => {
-    const initials = getOrgInitials(item);
-
+    const isCurrent = currentSlug ? item.slug === currentSlug : undefined;
     return (
-      <Pressable
-        onPress={() => router.push(`/(app)/${item.slug}`)}
-        style={({ pressed }) => [styles.orgCard, pressed && styles.orgCardPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${item.name}`}
-      >
-        <View style={styles.avatar}>
-          {item.logo_url ? (
-            <Image source={{ uri: item.logo_url }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarText}>{initials}</Text>
-          )}
-        </View>
-
-        <View style={styles.orgInfo}>
-          <Text style={styles.orgName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.orgSlug} numberOfLines={1}>
-            @{item.slug}
-          </Text>
-        </View>
-
-        <ChevronRight size={20} color={colors.chevron} />
-      </Pressable>
+      <OrganizationRow
+        org={item}
+        isCurrent={isCurrent}
+        onPress={() => handleOrgPress(item)}
+      />
     );
   };
 
@@ -124,18 +88,7 @@ export default function OrganizationsScreen() {
             <Text style={styles.emptyText}>You are not a member of any organizations yet.</Text>
           </View>
         }
-        ListFooterComponent={
-          <View style={styles.footer}>
-            <Pressable
-              style={({ pressed }) => [styles.signOutButton, pressed && styles.signOutButtonPressed]}
-              onPress={handleSignOut}
-              accessibilityRole="button"
-              accessibilityLabel="Sign out"
-            >
-              <Text style={styles.signOutText}>Sign Out</Text>
-            </Pressable>
-          </View>
-        }
+        ListFooterComponent={<OrgSwitcherActions />}
       />
     </SafeAreaView>
   );
@@ -154,67 +107,9 @@ const createStyles = () =>
       padding: 24,
     },
     listContent: {
-      padding: 16,
-      paddingTop: 20,
-      backgroundColor: colors.listBackground,
+      paddingTop: 8,
+      backgroundColor: colors.background,
     },
-
-    orgCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: colors.card,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginBottom: 12,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    orgCardPressed: {
-      backgroundColor: colors.pressed,
-    },
-
-    avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: colors.avatarBg,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
-      marginRight: 12,
-    },
-    avatarImage: {
-      width: 44,
-      height: 44,
-      resizeMode: "cover",
-    },
-    avatarText: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: colors.avatarText,
-    },
-
-    orgInfo: {
-      flex: 1,
-      paddingRight: 8,
-    },
-    orgName: {
-      fontSize: 16,
-      fontWeight: "700",
-      color: colors.title,
-    },
-    orgSlug: {
-      fontSize: 13,
-      color: colors.subtitle,
-      marginTop: 2,
-    },
-
     errorTitle: {
       fontSize: 18,
       fontWeight: "700",
@@ -238,7 +133,6 @@ const createStyles = () =>
       fontSize: 14,
       fontWeight: "600",
     },
-
     emptyContainer: {
       alignItems: "center",
       paddingVertical: 64,
@@ -255,26 +149,5 @@ const createStyles = () =>
       color: colors.subtitle,
       textAlign: "center",
       lineHeight: 20,
-    },
-
-    footer: {
-      paddingTop: 12,
-      paddingBottom: 32,
-    },
-    signOutButton: {
-      backgroundColor: "transparent",
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: 14,
-      borderRadius: 16,
-      alignItems: "center",
-    },
-    signOutButtonPressed: {
-      backgroundColor: colors.pressed,
-    },
-    signOutText: {
-      color: colors.subtitle,
-      fontSize: 15,
-      fontWeight: "600",
     },
   });

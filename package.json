@@ -18,9 +18,14 @@
     "build": "bun run --filter apps/web build",
     "build:web": "bun run --filter apps/web build",
     "lint": "bun run --filter apps/web lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "bun run --filter apps/web test",
     "test:auth": "bun run --filter apps/web test:auth",
     "test:payments": "bun run --filter apps/web test:payments",
     "test:security": "bun run --filter apps/web test:security"
+  },
+  "devDependencies": {
+    "prettier": "^3.8.1"
   }
 }
