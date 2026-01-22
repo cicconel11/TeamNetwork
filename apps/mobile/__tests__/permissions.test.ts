@@ -9,29 +9,39 @@ import {
   canManageBilling,
   getPermissions,
   DEFAULT_FEATURE_FLAGS,
-} from "@teammeet/core";
+  type FeatureFlags,
+} from "@/lib/permissions";
+
+const enabledFlags: FeatureFlags = {
+  alumniEnabled: true,
+  donationsEnabled: true,
+  recordsEnabled: true,
+  formsEnabled: true,
+};
+
+const roles = ["admin", "active_member", "alumni"] as const;
 
 describe("Permission Helpers", () => {
   describe("canViewAlumni", () => {
-    it("should return false when role is null", () => {
+    it("returns false when role is null", () => {
       expect(canViewAlumni(null, { alumniEnabled: true })).toBe(false);
     });
 
-    it("should return false when alumniEnabled is false", () => {
-      expect(canViewAlumni("admin", { alumniEnabled: false })).toBe(false);
-      expect(canViewAlumni("active_member", { alumniEnabled: false })).toBe(false);
-      expect(canViewAlumni("alumni", { alumniEnabled: false })).toBe(false);
+    it("returns false when alumniEnabled is false", () => {
+      for (const role of roles) {
+        expect(canViewAlumni(role, { alumniEnabled: false })).toBe(false);
+      }
     });
 
-    it("should return true for all roles when alumniEnabled is true", () => {
-      expect(canViewAlumni("admin", { alumniEnabled: true })).toBe(true);
-      expect(canViewAlumni("active_member", { alumniEnabled: true })).toBe(true);
-      expect(canViewAlumni("alumni", { alumniEnabled: true })).toBe(true);
+    it("returns true for any role when alumniEnabled is true", () => {
+      for (const role of roles) {
+        expect(canViewAlumni(role, { alumniEnabled: true })).toBe(true);
+      }
     });
   });
 
   describe("canUseAdminActions", () => {
-    it("should return true only for admin role", () => {
+    it("returns true only for admin", () => {
       expect(canUseAdminActions("admin")).toBe(true);
       expect(canUseAdminActions("active_member")).toBe(false);
       expect(canUseAdminActions("alumni")).toBe(false);
@@ -40,124 +50,153 @@ describe("Permission Helpers", () => {
   });
 
   describe("canViewDonations", () => {
-    it("should return false when role is null", () => {
+    it("returns false when role is null", () => {
       expect(canViewDonations(null, { donationsEnabled: true })).toBe(false);
     });
 
-    it("should return false when donationsEnabled is false", () => {
-      expect(canViewDonations("admin", { donationsEnabled: false })).toBe(false);
+    it("returns false when donationsEnabled is false", () => {
+      for (const role of roles) {
+        expect(canViewDonations(role, { donationsEnabled: false })).toBe(false);
+      }
     });
 
-    it("should return true when donationsEnabled is true and has valid role", () => {
-      expect(canViewDonations("admin", { donationsEnabled: true })).toBe(true);
-      expect(canViewDonations("active_member", { donationsEnabled: true })).toBe(true);
+    it("returns true for any role when donationsEnabled is true", () => {
+      for (const role of roles) {
+        expect(canViewDonations(role, { donationsEnabled: true })).toBe(true);
+      }
     });
   });
 
   describe("canViewRecords", () => {
-    it("should return false when role is null", () => {
+    it("returns false when role is null", () => {
       expect(canViewRecords(null, { recordsEnabled: true })).toBe(false);
     });
 
-    it("should return false when recordsEnabled is false", () => {
-      expect(canViewRecords("admin", { recordsEnabled: false })).toBe(false);
+    it("returns false when recordsEnabled is false", () => {
+      for (const role of roles) {
+        expect(canViewRecords(role, { recordsEnabled: false })).toBe(false);
+      }
     });
 
-    it("should return true when recordsEnabled is true and has valid role", () => {
-      expect(canViewRecords("admin", { recordsEnabled: true })).toBe(true);
+    it("returns true for any role when recordsEnabled is true", () => {
+      for (const role of roles) {
+        expect(canViewRecords(role, { recordsEnabled: true })).toBe(true);
+      }
     });
   });
 
   describe("canViewForms", () => {
-    it("should return false when role is null", () => {
+    it("returns false when role is null", () => {
       expect(canViewForms(null, { formsEnabled: true })).toBe(false);
     });
 
-    it("should return false when formsEnabled is false", () => {
-      expect(canViewForms("admin", { formsEnabled: false })).toBe(false);
+    it("returns false when formsEnabled is false", () => {
+      for (const role of roles) {
+        expect(canViewForms(role, { formsEnabled: false })).toBe(false);
+      }
     });
 
-    it("should return true when formsEnabled is true and has valid role", () => {
-      expect(canViewForms("admin", { formsEnabled: true })).toBe(true);
+    it("returns true for any role when formsEnabled is true", () => {
+      for (const role of roles) {
+        expect(canViewForms(role, { formsEnabled: true })).toBe(true);
+      }
     });
   });
 
   describe("Admin-only permissions", () => {
-    it("canAccessSettings should return true only for admin", () => {
+    it("restricts admin settings and management actions", () => {
       expect(canAccessSettings("admin")).toBe(true);
-      expect(canAccessSettings("active_member")).toBe(false);
-      expect(canAccessSettings("alumni")).toBe(false);
-      expect(canAccessSettings(null)).toBe(false);
-    });
-
-    it("canManageInvites should return true only for admin", () => {
       expect(canManageInvites("admin")).toBe(true);
-      expect(canManageInvites("active_member")).toBe(false);
-      expect(canManageInvites("alumni")).toBe(false);
-      expect(canManageInvites(null)).toBe(false);
-    });
-
-    it("canManageBilling should return true only for admin", () => {
       expect(canManageBilling("admin")).toBe(true);
+
+      expect(canAccessSettings("active_member")).toBe(false);
+      expect(canManageInvites("active_member")).toBe(false);
       expect(canManageBilling("active_member")).toBe(false);
+
+      expect(canAccessSettings("alumni")).toBe(false);
+      expect(canManageInvites("alumni")).toBe(false);
       expect(canManageBilling("alumni")).toBe(false);
+
+      expect(canAccessSettings(null)).toBe(false);
+      expect(canManageInvites(null)).toBe(false);
       expect(canManageBilling(null)).toBe(false);
     });
   });
 
   describe("getPermissions", () => {
-    it("should return all permission values for admin", () => {
-      const permissions = getPermissions("admin", {
-        alumniEnabled: true,
-        donationsEnabled: true,
-        recordsEnabled: true,
-        formsEnabled: true,
+    it("returns all permissions for admin when features are enabled", () => {
+      const permissions = getPermissions("admin", enabledFlags);
+      expect(permissions).toEqual({
+        canViewAlumni: true,
+        canUseAdminActions: true,
+        canViewDonations: true,
+        canViewRecords: true,
+        canViewForms: true,
+        canAccessSettings: true,
+        canManageInvites: true,
+        canManageBilling: true,
       });
-
-      expect(permissions.canViewAlumni).toBe(true);
-      expect(permissions.canUseAdminActions).toBe(true);
-      expect(permissions.canViewDonations).toBe(true);
-      expect(permissions.canViewRecords).toBe(true);
-      expect(permissions.canViewForms).toBe(true);
-      expect(permissions.canAccessSettings).toBe(true);
-      expect(permissions.canManageInvites).toBe(true);
-      expect(permissions.canManageBilling).toBe(true);
     });
 
-    it("should return limited permissions for active_member", () => {
-      const permissions = getPermissions("active_member", {
-        alumniEnabled: true,
-        donationsEnabled: true,
+    it("returns feature permissions for active members", () => {
+      const permissions = getPermissions("active_member", enabledFlags);
+      expect(permissions).toEqual({
+        canViewAlumni: true,
+        canUseAdminActions: false,
+        canViewDonations: true,
+        canViewRecords: true,
+        canViewForms: true,
+        canAccessSettings: false,
+        canManageInvites: false,
+        canManageBilling: false,
       });
-
-      expect(permissions.canViewAlumni).toBe(true);
-      expect(permissions.canUseAdminActions).toBe(false);
-      expect(permissions.canViewDonations).toBe(true);
-      expect(permissions.canAccessSettings).toBe(false);
-      expect(permissions.canManageInvites).toBe(false);
-      expect(permissions.canManageBilling).toBe(false);
     });
 
-    it("should return no permissions for null role", () => {
-      const permissions = getPermissions(null);
+    it("returns feature permissions for alumni", () => {
+      const permissions = getPermissions("alumni", enabledFlags);
+      expect(permissions).toEqual({
+        canViewAlumni: true,
+        canUseAdminActions: false,
+        canViewDonations: true,
+        canViewRecords: true,
+        canViewForms: true,
+        canAccessSettings: false,
+        canManageInvites: false,
+        canManageBilling: false,
+      });
+    });
 
-      expect(permissions.canViewAlumni).toBe(false);
-      expect(permissions.canUseAdminActions).toBe(false);
+    it("returns no permissions for null role", () => {
+      const permissions = getPermissions(null, enabledFlags);
+      expect(permissions).toEqual({
+        canViewAlumni: false,
+        canUseAdminActions: false,
+        canViewDonations: false,
+        canViewRecords: false,
+        canViewForms: false,
+        canAccessSettings: false,
+        canManageInvites: false,
+        canManageBilling: false,
+      });
+    });
+
+    it("defaults missing flags to false", () => {
+      const permissions = getPermissions("admin", { alumniEnabled: true });
+      expect(permissions.canViewAlumni).toBe(true);
       expect(permissions.canViewDonations).toBe(false);
       expect(permissions.canViewRecords).toBe(false);
       expect(permissions.canViewForms).toBe(false);
-      expect(permissions.canAccessSettings).toBe(false);
-      expect(permissions.canManageInvites).toBe(false);
-      expect(permissions.canManageBilling).toBe(false);
     });
   });
 
   describe("DEFAULT_FEATURE_FLAGS", () => {
-    it("should have all features disabled by default", () => {
-      expect(DEFAULT_FEATURE_FLAGS.alumniEnabled).toBe(false);
-      expect(DEFAULT_FEATURE_FLAGS.donationsEnabled).toBe(false);
-      expect(DEFAULT_FEATURE_FLAGS.recordsEnabled).toBe(false);
-      expect(DEFAULT_FEATURE_FLAGS.formsEnabled).toBe(false);
+    it("has all features disabled by default", () => {
+      expect(DEFAULT_FEATURE_FLAGS).toEqual({
+        alumniEnabled: false,
+        donationsEnabled: false,
+        recordsEnabled: false,
+        formsEnabled: false,
+      });
     });
   });
 });

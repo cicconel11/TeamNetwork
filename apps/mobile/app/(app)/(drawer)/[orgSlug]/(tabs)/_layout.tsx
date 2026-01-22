@@ -140,6 +140,7 @@ export default function TabsLayout() {
           name="events"
           options={{
             title: "Events",
+            headerShown: false,
           }}
         />
         <Tabs.Screen
