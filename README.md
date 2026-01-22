@@ -2,7 +2,7 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Repository Overview
 
-- `apps/web`: Next.js web app (default `npm run dev`, `npm run build`).
+- `apps/web`: Next.js web app (default `bun dev`, `bun build`).
 - `apps/mobile`: Expo (React Native) mobile app.
 - `packages/*`: shared packages (types, UI, etc.).
 
@@ -51,13 +51,13 @@ Required environment variables:
 Run the web development server:
 
 ```bash
-npm run dev
+bun dev
 ```
 
 Run the mobile app with Expo:
 
 ```bash
-npm run dev:mobile
+bun dev:mobile
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the web result.
@@ -240,7 +240,7 @@ eas update --branch development --message "description"
 - Webhooks are deduped via `stripe_events(event_id unique)`. Each event is recorded once; retries skip if `processed_at` is set.
 - Clients keep a stable key in local storage per flow; server returns existing `checkout_url`/`session`/`payment_intent` if the same key is replayed.
 - Troubleshooting: look up the attempt by `idempotency_key` to see status and any `last_error`; confirm the matching Stripe IDs; check `stripe_events` to see if the webhook ran.
-- Tests: `npm run test:payments` runs idempotency + webhook dedupe unit tests (uses the lightweight TS loader in `tests/ts-loader.js`).
+- Tests: `bun run test:payments` runs idempotency + webhook dedupe unit tests (uses the lightweight TS loader in `tests/ts-loader.js`).
 
 ## Learn More
 
@@ -257,48 +257,3 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## Audit System
-
-This project includes a comprehensive automated audit system for QA and monitoring. The audit system crawls your application, analyzes the codebase, and audits the backend database schema.
-
-### Quick Start
-
-1. **Install Playwright browsers**:
-   ```bash
-   npm run audit:install
-   ```
-
-2. **Configure environment variables** (see `docs/audit-setup.md` for details):
-   ```bash
-   AUDIT_BASE_URL=https://www.myteamnetwork.com
-   AUDIT_START_PATH=/testing123
-   AUDIT_EMAIL=your-test-user@example.com
-   AUDIT_PASSWORD=your-test-password
-   AUDIT_SAFE_MODE=true
-   ```
-
-3. **Run complete audit**:
-   ```bash
-   npm run audit:all
-   ```
-
-### Audit Commands
-
-- `npm run audit:ui` - Crawl UI and validate all reachable pages
-- `npm run audit:static` - Analyze codebase for routes and hardcoded links
-- `npm run audit:backend` - Audit database schema and performance issues
-- `npm run audit:all` - Run all audits and generate combined report
-
-### Generated Reports
-
-Reports are saved to the `audit/` directory:
-- `combined_report.md` - Executive summary with action items
-- `report.md` - UI crawl results with screenshots of failures
-- `static-inventory.md` - Code analysis results
-- `backend_report.md` - Database audit findings
-
-### Safe Mode
-
-The UI crawler includes **SAFE MODE** by default, which prevents any destructive operations during audits by blocking POST/PUT/PATCH/DELETE requests.
-
-See `docs/audit-setup.md` for complete setup instructions and troubleshooting.

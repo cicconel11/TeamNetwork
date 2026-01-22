@@ -21,15 +21,11 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEvents, type Event } from "@/hooks/useEvents";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 // Hardcoded local colors matching Landing/Login palette (Uber-inspired)
 const EVENTS_COLORS = {
-  // Header gradient
-  gradientStart: "#134e4a",
-  gradientEnd: "#0f172a",
-
   // Backgrounds
   background: "#ffffff",
   sectionBackground: "#f8fafc",
@@ -59,8 +55,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const { events, loading, error, refetch, refetchIfStale } = useEvents(orgSlug || "");
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
@@ -89,7 +84,7 @@ export default function EventsScreen() {
         icon: <ExternalLink size={20} color={EVENTS_COLORS.primaryCTA} />,
         onPress: () => {
           // Open the events page in the web app for full admin capabilities
-          const webUrl = `https://app.teammeet.com/${orgSlug}/events`;
+          const webUrl = `https://www.myteamnetwork.com/${orgSlug}/events`;
           Linking.openURL(webUrl);
         },
       },
@@ -282,11 +277,12 @@ export default function EventsScreen() {
       <View style={styles.container}>
         {/* Custom Gradient Header */}
         <LinearGradient
-          colors={[EVENTS_COLORS.gradientStart, EVENTS_COLORS.gradientEnd]}
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
           style={styles.headerGradient}
         >
           <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
+              {/* Logo */}
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
                   <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
@@ -296,10 +292,11 @@ export default function EventsScreen() {
                   </View>
                 )}
               </Pressable>
+
+              {/* Text (left-aligned) */}
               <View style={styles.headerTextContainer}>
                 <Text style={styles.headerTitle}>Events</Text>
               </View>
-              <View style={styles.headerSpacer} />
             </View>
           </SafeAreaView>
         </LinearGradient>
@@ -316,12 +313,12 @@ export default function EventsScreen() {
     <View style={styles.container}>
       {/* Custom Gradient Header */}
       <LinearGradient
-        colors={[EVENTS_COLORS.gradientStart, EVENTS_COLORS.gradientEnd]}
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
         style={styles.headerGradient}
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            {/* Left: Drawer toggle */}
+            {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
                 <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
@@ -332,7 +329,7 @@ export default function EventsScreen() {
               )}
             </Pressable>
 
-            {/* Center: Title + subtitle */}
+            {/* Text (left-aligned) */}
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Events</Text>
               <Text style={styles.headerMeta}>
@@ -340,14 +337,10 @@ export default function EventsScreen() {
               </Text>
             </View>
 
-            {/* Right: Admin menu or spacer */}
-            <View style={styles.headerRight}>
-              {adminMenuItems.length > 0 ? (
-                <OverflowMenu items={adminMenuItems} accessibilityLabel="Event options" />
-              ) : (
-                <View style={styles.headerSpacer} />
-              )}
-            </View>
+            {/* Admin menu */}
+            {adminMenuItems.length > 0 && (
+              <OverflowMenu items={adminMenuItems} accessibilityLabel="Event options" />
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -456,7 +449,7 @@ export default function EventsScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -464,7 +457,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     // Gradient header styles
     headerGradient: {
-      paddingBottom: spacing.md,
+      paddingBottom: spacing.xs,
     },
     headerSafeArea: {
       // SafeAreaView handles top inset
@@ -473,52 +466,51 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.sm,
-      minHeight: 44,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
     },
     orgLogoButton: {
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
     },
     orgLogo: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
     },
     orgAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
       alignItems: "center",
       justifyContent: "center",
     },
     orgAvatarText: {
-      fontSize: fontSize.lg,
+      fontSize: fontSize.base,
       fontWeight: fontWeight.bold,
-      color: "#ffffff",
+      color: APP_CHROME.avatarText,
     },
     headerTextContainer: {
       flex: 1,
-      alignItems: "center",
-      marginHorizontal: spacing.sm,
     },
     headerTitle: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.semibold,
-      color: "#ffffff",
+      color: APP_CHROME.headerTitle,
     },
     headerMeta: {
       fontSize: fontSize.xs,
-      color: "rgba(255, 255, 255, 0.7)",
+      color: APP_CHROME.headerMeta,
       marginTop: 2,
     },
     headerRight: {
-      width: 40,
+      width: 36,
       alignItems: "flex-end",
     },
     headerSpacer: {
-      width: 40,
+      width: 36,
     },
     // Toggle styles (segmented control - neutral style, green only on active text)
     toggleContainer: {

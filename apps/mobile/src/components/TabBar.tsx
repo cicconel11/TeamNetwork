@@ -3,8 +3,7 @@ import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
 
 const ICON_SIZE = 24;
 
@@ -24,11 +23,10 @@ interface TabBarProps extends BottomTabBarProps {
 }
 
 export function TabBar({ state, descriptors, navigation, onActionPress }: TabBarProps) {
-  const { colors } = useOrgTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const activeColor = colors.primary;
-  const inactiveColor = colors.mutedForeground;
+  const styles = useMemo(() => createStyles(), []);
+  const activeColor = APP_CHROME.tabBarActive;
+  const inactiveColor = APP_CHROME.tabBarInactive;
 
   const renderTab = (
     tabConfig: (typeof LEFT_TABS)[number] | (typeof RIGHT_TABS)[number]
@@ -81,7 +79,7 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
           style={styles.actionButton}
           disabled={!onActionPress}
         >
-          <Plus size={22} color={colors.primaryForeground} />
+          <Plus size={22} color={APP_CHROME.actionButtonIcon} />
         </TouchableOpacity>
         <View style={styles.tabGroup}>
           {RIGHT_TABS.map((tab) => renderTab(tab))}
@@ -91,12 +89,12 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
-      backgroundColor: colors.card,
+      backgroundColor: APP_CHROME.tabBarBackground,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: APP_CHROME.tabBarBorder,
     },
     tabBar: {
       flexDirection: "row",
@@ -123,7 +121,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 52,
       height: 52,
       borderRadius: 26,
-      backgroundColor: colors.primary,
+      backgroundColor: APP_CHROME.actionButtonBackground,
       alignItems: "center",
       justifyContent: "center",
     },

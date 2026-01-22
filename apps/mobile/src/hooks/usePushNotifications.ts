@@ -162,15 +162,9 @@ export function usePushNotifications({
     });
 
     return () => {
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
-      }
-      if (pushTokenListener.current) {
-        Notifications.removeNotificationSubscription(pushTokenListener.current);
-      }
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+      pushTokenListener.current?.remove();
       appStateSubscription.remove();
     };
   }, [userId, enabled, register, handleNotificationResponse, incrementBadge]);

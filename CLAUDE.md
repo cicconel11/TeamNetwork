@@ -35,34 +35,21 @@ bun dev              # Start Next.js dev server at localhost:3000
 bun dev:web          # Same as above
 bun dev:mobile       # Start Expo dev server at localhost:8081
 bun build            # Build production application
-bun start            # Start production server
 bun lint             # Run ESLint
 ```
 
 ### Mobile Development
 ```bash
 cd apps/mobile
-bun expo start                # Start Expo dev server (web at localhost:8081)
-bun expo start --ios          # Start and open in iOS simulator
-bun expo start --android      # Start and open in Android emulator
-# Or use native commands:
-bun run ios                   # Build and run on iOS simulator
-bun run android               # Build and run on Android emulator
+bun run start            # Start Expo dev server (web at localhost:8081)
+bun run ios              # Start and open in iOS simulator
+bun run android          # Start and open in Android emulator
 ```
 
 ### Testing
 ```bash
-npm run test:auth      # Test authentication middleware
-npm run test:payments  # Test payment idempotency and Stripe webhooks
-```
-
-### Audit System
-```bash
-npm run audit:install  # Install Playwright browsers (first time only)
-npm run audit:ui       # Crawl UI and validate pages
-npm run audit:static   # Analyze codebase for routes
-npm run audit:backend  # Audit database schema
-npm run audit:all      # Run all audits
+bun run test:auth      # Test authentication middleware
+bun run test:payments  # Test payment idempotency and Stripe webhooks
 ```
 
 ### Stripe Webhook Testing (Local)
@@ -271,6 +258,58 @@ const styles = StyleSheet.create({
 - StyleSheet is more performant and requires no additional transpilation
 - Simpler dependency management without Tailwind/PostCSS
 - All mobile screens have been migrated to this approach
+
+### Mobile Tab Screen UI Pattern
+
+The main tab screens (Home, Events, Announcements) follow a consistent UI pattern:
+
+**APP_CHROME Colors** (`apps/mobile/src/lib/chrome.ts`):
+- Shared neutral slate palette for header gradient and tab bar
+- Colors are NOT derived from organization theme - they're fixed app chrome
+- Gradient: `#0f172a` (slate-900) → `#020617` (slate-950)
+- Tab bar: dark slate with white active icons
+
+**Screen Layout Structure:**
+```typescript
+<View style={styles.container}>
+  {/* Gradient Header */}
+  <LinearGradient colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}>
+    <SafeAreaView edges={["top"]}>
+      <View style={styles.headerContent}>
+        {/* Org logo (opens drawer on press) */}
+        <Pressable onPress={handleDrawerToggle}>
+          <Image source={{ uri: org.logo_url }} />
+        </Pressable>
+        {/* Title + optional metadata */}
+        <Text style={styles.headerTitle}>Screen Title</Text>
+        {/* Optional: OverflowMenu for admin actions */}
+      </View>
+    </SafeAreaView>
+  </LinearGradient>
+
+  {/* Content Sheet (overlaps gradient slightly with rounded corners) */}
+  <View style={styles.contentSheet}>
+    {/* Screen content */}
+  </View>
+</View>
+```
+
+**Key Requirements:**
+1. **`headerShown: false`** in `Tabs.Screen` options - prevents double headers (native header + custom gradient header)
+2. **Drawer toggle** - Org logo in header opens the drawer via `DrawerActions.toggleDrawer()`
+3. **Content sheet** - White/slate background with `borderTopLeftRadius: 24` overlapping gradient by ~16px
+4. **Screen-local colors** - Each screen defines its own `*_COLORS` constant for content (cards, text, borders)
+
+**Web URLs:**
+- "Open in Web" links must use `https://www.myteamnetwork.com/[orgSlug]/[screen]`
+- NOT `app.teammeet.com` (legacy domain)
+
+**Files:**
+- `apps/mobile/src/lib/chrome.ts` - APP_CHROME color constants
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/_layout.tsx` - Tab navigator with `headerShown` options
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/index.tsx` - Home screen (reference implementation)
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/events.tsx` - Events screen
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/announcements.tsx` - Announcements screen
 
 ### Mobile Supabase Client
 

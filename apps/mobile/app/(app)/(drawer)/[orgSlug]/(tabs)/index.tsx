@@ -21,6 +21,9 @@ import {
   Pin,
   Clock,
   MapPin,
+  Users,
+  Megaphone,
+  GraduationCap,
 } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,18 +34,13 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { Organization } from "@teammeet/types";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 // Hardcoded local colors matching Landing/Login palette (Uber-inspired)
 const HOME_COLORS = {
-  // Header gradient
-  gradientStart: "#134e4a",
-  gradientEnd: "#0f172a",
-
   // Backgrounds
-  background: "#ffffff",
-  sectionBackground: "#f8fafc",
+  background: "#f8fafc",  // slate-50 for 3-surface system
 
   // Text
   primaryText: "#0f172a",
@@ -70,8 +68,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
 
   // Safe drawer toggle - only dispatch if drawer is available
@@ -106,6 +103,9 @@ export default function HomeScreen() {
   const upcomingEvents = events
     .filter((e) => new Date(e.start_date) >= now)
     .slice(0, 2);
+
+  // Get the next upcoming event for the overview card
+  const nextEvent = upcomingEvents[0] || null;
 
   // Get pinned announcement
   const pinnedAnnouncement = announcements.find((a) => (a as any).is_pinned);
@@ -255,18 +255,20 @@ export default function HomeScreen() {
     }
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
+  const formatNextEventDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString([], {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
   };
 
-  const formatDate = () => {
-    return new Date().toLocaleDateString([], {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
+  const formatNextEventTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
     });
   };
 
@@ -305,12 +307,12 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {/* Custom Gradient Header */}
       <LinearGradient
-        colors={[HOME_COLORS.gradientStart, HOME_COLORS.gradientEnd]}
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
         style={styles.headerGradient}
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            {/* Left: Logo (40px width) */}
+            {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {organization?.logo_url ? (
                 <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
@@ -321,7 +323,7 @@ export default function HomeScreen() {
               )}
             </Pressable>
 
-            {/* Center: Org name + stats metadata */}
+            {/* Text (left-aligned) */}
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {organization?.name}
@@ -330,41 +332,69 @@ export default function HomeScreen() {
                 {memberCount} {memberCount === 1 ? "member" : "members"} · {upcomingEvents.length} {upcomingEvents.length === 1 ? "event" : "events"}
               </Text>
             </View>
-
-            {/* Right: Spacer (must match logo button width: 40px) */}
-            <View style={styles.headerSpacer} />
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={HOME_COLORS.primaryCTA} />
-        }
-      >
-        {/* Primary Action Card */}
-        <View style={styles.actionCard}>
-          <Text style={styles.actionCardTitle}>Quick actions</Text>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
-            >
-              <Calendar size={20} color={HOME_COLORS.primaryCTA} />
-              <Text style={styles.actionButtonText}>Events</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/announcements`)}
-            >
-              <Pin size={20} color={HOME_COLORS.primaryCTA} />
-              <Text style={styles.actionButtonText}>Announcements</Text>
-            </TouchableOpacity>
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={HOME_COLORS.primaryCTA} />
+          }
+        >
+        {/* Quick Access Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Quick Access</Text>
+          <View style={styles.quickActionsGrid}>
+          <TouchableOpacity
+            style={styles.actionTile}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionTileIcon}>
+              <Calendar size={22} color={HOME_COLORS.primaryText} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionTileLabel}>Events</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionTile}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/announcements`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionTileIcon}>
+              <Megaphone size={22} color={HOME_COLORS.primaryText} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionTileLabel}>Announcements</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionTile}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/members`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionTileIcon}>
+              <Users size={22} color={HOME_COLORS.primaryText} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionTileLabel}>Members</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionTile}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/alumni`)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.actionTileIcon}>
+              <GraduationCap size={22} color={HOME_COLORS.primaryText} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.actionTileLabel}>Alumni</Text>
+          </TouchableOpacity>
           </View>
         </View>
 
-        {/* Upcoming Events */}
+        {/* Upcoming Events (Feed-like) */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming Events</Text>
@@ -373,37 +403,46 @@ export default function HomeScreen() {
               onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
             >
               <Text style={styles.seeAllText}>See all</Text>
-              <ChevronRight size={16} color={HOME_COLORS.primaryCTA} />
+              <ChevronRight size={16} color={HOME_COLORS.secondaryText} />
             </TouchableOpacity>
           </View>
 
           {upcomingEvents.length > 0 ? (
-            upcomingEvents.map((event) => (
-              <TouchableOpacity key={event.id} style={styles.eventCard} activeOpacity={0.7}>
-                <Text style={styles.eventTitle} numberOfLines={1}>
-                  {event.title}
-                </Text>
-                <View style={styles.eventDetails}>
-                  <View style={styles.eventDetail}>
-                    <Clock size={14} color={HOME_COLORS.secondaryText} />
-                    <Text style={styles.eventDetailText}>
-                      {formatEventTime(event.start_date)}
-                    </Text>
-                  </View>
-                  {event.location && (
+            <View style={styles.eventsStack}>
+              {upcomingEvents.map((event, index) => (
+                <TouchableOpacity
+                  key={event.id}
+                  style={[
+                    styles.eventCard,
+                    index === 0 && upcomingEvents.length === 1 && styles.eventCardElevated,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.eventTitle} numberOfLines={1}>
+                    {event.title}
+                  </Text>
+                  <View style={styles.eventDetails}>
                     <View style={styles.eventDetail}>
-                      <MapPin size={14} color={HOME_COLORS.secondaryText} />
-                      <Text style={styles.eventDetailText} numberOfLines={1}>
-                        {event.location}
+                      <Clock size={14} color={HOME_COLORS.secondaryText} />
+                      <Text style={styles.eventDetailText}>
+                        {formatEventTime(event.start_date)}
                       </Text>
                     </View>
-                  )}
-                </View>
-                <TouchableOpacity style={styles.rsvpButton}>
-                  <Text style={styles.rsvpButtonText}>RSVP</Text>
+                    {event.location && (
+                      <View style={styles.eventDetail}>
+                        <MapPin size={14} color={HOME_COLORS.secondaryText} />
+                        <Text style={styles.eventDetailText} numberOfLines={1}>
+                          {event.location}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <TouchableOpacity style={styles.rsvpButton}>
+                    <Text style={styles.rsvpButtonText}>RSVP</Text>
+                  </TouchableOpacity>
                 </TouchableOpacity>
-              </TouchableOpacity>
-            ))
+              ))}
+            </View>
           ) : (
             <View style={styles.emptyCard}>
               <Calendar size={24} color={HOME_COLORS.mutedText} />
@@ -412,13 +451,13 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* Pinned Announcement */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Pinned</Text>
-          </View>
+        {/* Pinned Announcement (Conditional - hidden if empty) */}
+        {pinnedAnnouncement && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Pinned</Text>
+            </View>
 
-          {pinnedAnnouncement ? (
             <TouchableOpacity style={styles.announcementCard} activeOpacity={0.7}>
               <View style={styles.pinnedBadge}>
                 <Pin size={12} color={HOME_COLORS.primaryCTA} />
@@ -431,13 +470,8 @@ export default function HomeScreen() {
                 {pinnedAnnouncement.body}
               </Text>
             </TouchableOpacity>
-          ) : (
-            <View style={styles.emptyCard}>
-              <Pin size={24} color={HOME_COLORS.mutedText} />
-              <Text style={styles.emptyText}>No pinned announcements</Text>
-            </View>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Latest Activity (hidden until ready) */}
         {SHOW_ACTIVITY_FEED && (
@@ -453,12 +487,13 @@ export default function HomeScreen() {
             </View>
           </View>
         )}
-      </ScrollView>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -475,53 +510,58 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: spacing.md,
-      paddingTop: spacing.sm,
-      minHeight: 44,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
     },
     orgLogoButton: {
-      width: 40,
-      height: 40,
+      width: 36,
+      height: 36,
     },
     orgLogo: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
     },
     orgAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: "rgba(255, 255, 255, 0.2)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
       alignItems: "center",
       justifyContent: "center",
     },
     orgAvatarText: {
-      fontSize: fontSize.lg,
+      fontSize: fontSize.base,
       fontWeight: fontWeight.bold,
-      color: "#ffffff",
+      color: APP_CHROME.avatarText,
     },
     headerTextContainer: {
       flex: 1,
-      alignItems: "center",
-      marginHorizontal: spacing.sm,
     },
     headerTitle: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.semibold,
-      color: "#ffffff",
+      color: APP_CHROME.headerTitle,
     },
     headerMeta: {
       fontSize: fontSize.xs,
-      color: "rgba(255, 255, 255, 0.7)",
+      color: APP_CHROME.headerMeta,
       marginTop: 2,
     },
-    headerSpacer: {
-      width: 40,
+    contentSheet: {
+      flex: 1,
+      backgroundColor: HOME_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
     },
     content: {
       padding: spacing.md,
       paddingTop: spacing.sm,
       paddingBottom: 40,
+      gap: spacing.sm,
     },
     centered: {
       flex: 1,
@@ -530,54 +570,55 @@ const createStyles = (colors: ThemeColors) =>
       padding: 24,
       backgroundColor: HOME_COLORS.background,
     },
-    // Action card styles
-    actionCard: {
-      backgroundColor: HOME_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: HOME_COLORS.border,
-      padding: spacing.md,
-      marginBottom: spacing.md,
-    },
-    actionCardTitle: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: HOME_COLORS.secondaryText,
-      marginBottom: spacing.sm,
-    },
-    actionButtons: {
+    // Quick Actions (2x2 Grid)
+    quickActionsGrid: {
       flexDirection: "row",
-      gap: spacing.sm,
+      flexWrap: "wrap",
+      gap: spacing.xs,
     },
-    actionButton: {
+    actionTile: {
       flex: 1,
-      flexDirection: "row",
+      flexBasis: "45%",
+      minWidth: 140,
+      backgroundColor: "transparent",
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      alignItems: "center",
+      gap: spacing.xs,
+    },
+    actionTileIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: HOME_COLORS.background,
       alignItems: "center",
       justifyContent: "center",
-      gap: spacing.xs,
-      backgroundColor: HOME_COLORS.sectionBackground,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
     },
-    actionButtonText: {
-      fontSize: fontSize.sm,
+    actionTileLabel: {
+      fontSize: fontSize.xs,
       fontWeight: fontWeight.medium,
-      color: HOME_COLORS.primaryText,
+      color: HOME_COLORS.secondaryText,
     },
+    // Section styles
     section: {
-      marginBottom: 24,
+      gap: spacing.sm,
+    },
+    sectionLabel: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: HOME_COLORS.mutedText,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: spacing.sm,
     },
     sectionHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 12,
     },
     sectionTitle: {
-      fontSize: 16,
-      fontWeight: "600",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
       color: HOME_COLORS.primaryText,
     },
     seeAllButton: {
@@ -585,25 +626,31 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
     },
     seeAllText: {
-      fontSize: 14,
-      color: HOME_COLORS.primaryCTA,
-      fontWeight: "500",
+      fontSize: fontSize.sm,
+      color: HOME_COLORS.secondaryText,
+      fontWeight: fontWeight.medium,
+    },
+    // Events (stacked, feed-like)
+    eventsStack: {
+      gap: spacing.sm,
     },
     eventCard: {
       backgroundColor: HOME_COLORS.card,
-      borderRadius: 12,
+      borderRadius: borderRadius.md,
       borderCurve: "continuous",
       borderWidth: 1,
       borderColor: HOME_COLORS.border,
-      padding: 16,
-      marginBottom: 12,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      padding: spacing.md,
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+    },
+    eventCardElevated: {
+      boxShadow: "0 2px 6px rgba(0, 0, 0, 0.08)",
     },
     eventTitle: {
-      fontSize: 16,
-      fontWeight: "600",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
       color: HOME_COLORS.primaryText,
-      marginBottom: 8,
+      marginBottom: spacing.xs,
     },
     eventDetails: {
       gap: 4,
@@ -620,30 +667,31 @@ const createStyles = (colors: ThemeColors) =>
     },
     rsvpButton: {
       backgroundColor: HOME_COLORS.primaryCTA,
-      borderRadius: borderRadius.md,
-      paddingVertical: 10,
+      borderRadius: borderRadius.sm,
+      paddingVertical: spacing.sm,
       alignItems: "center",
-      marginTop: 12,
+      marginTop: spacing.sm,
     },
     rsvpButtonText: {
       color: HOME_COLORS.primaryCTAText,
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
     },
+    // Announcement card
     announcementCard: {
       backgroundColor: HOME_COLORS.card,
-      borderRadius: borderRadius.lg,
+      borderRadius: borderRadius.md,
       borderCurve: "continuous",
       borderWidth: 1,
       borderColor: HOME_COLORS.border,
       padding: spacing.md,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
     },
     pinnedBadge: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      marginBottom: 8,
+      marginBottom: spacing.xs,
     },
     pinnedText: {
       fontSize: fontSize.xs,
@@ -654,42 +702,45 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
       color: HOME_COLORS.primaryText,
-      marginBottom: spacing.sm,
+      marginBottom: spacing.xs,
     },
     announcementPreview: {
       fontSize: fontSize.sm,
       color: HOME_COLORS.secondaryText,
       lineHeight: 20,
     },
+    // Empty state
     emptyCard: {
       backgroundColor: HOME_COLORS.card,
-      borderRadius: borderRadius.lg,
+      borderRadius: borderRadius.md,
       borderCurve: "continuous",
       borderWidth: 1,
       borderColor: HOME_COLORS.border,
       padding: spacing.lg,
       alignItems: "center",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
     },
     emptyText: {
       fontSize: fontSize.sm,
       color: HOME_COLORS.mutedText,
       marginTop: spacing.sm,
     },
+    // Activity (future)
     activityCard: {
       backgroundColor: HOME_COLORS.card,
-      borderRadius: borderRadius.lg,
+      borderRadius: borderRadius.md,
       borderCurve: "continuous",
       borderWidth: 1,
       borderColor: HOME_COLORS.border,
       padding: spacing.lg,
       alignItems: "center",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
     },
     activityEmpty: {
       fontSize: fontSize.sm,
       color: HOME_COLORS.mutedText,
     },
+    // Error state
     errorCard: {
       backgroundColor: HOME_COLORS.errorBackground,
       borderRadius: borderRadius.lg,

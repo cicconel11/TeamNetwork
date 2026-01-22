@@ -147,6 +147,7 @@ export default function TabsLayout() {
           name="announcements"
           options={{
             title: "Announcements",
+            headerShown: false,
           }}
         />
         <Tabs.Screen
