@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
-import { isDevAdminEmail } from "./lib/auth/dev-admin";
+import { isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -177,13 +177,39 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    if (hasAuthCookies) {
-      // Likely refresh in-flight; allow pass-through to avoid loops
-      return response;
-    }
     const redirectUrl = new URL("/auth/login", request.url);
     redirectUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+
+    if (hasAuthCookies) {
+      // SECURITY FIX: Clear stale/invalid auth cookies instead of allowing pass-through
+      // This prevents unauthorized access while avoiding redirect loops (cookies cleared = no loop)
+      if (logFailures) {
+        console.log("[AUTH-MW] Clearing stale auth cookies and redirecting to login", {
+          pathname,
+          sbCookies,
+        });
+      }
+      // Clear all Supabase auth cookies
+      cookiesAll
+        .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth-token"))
+        .forEach((c) => {
+          redirectResponse.cookies.set(c.name, "", {
+            path: "/",
+            maxAge: 0,
+            expires: new Date(0),
+          });
+          // Also clear on root domain in production
+          if (process.env.NODE_ENV === "production") {
+            redirectResponse.headers.append(
+              "Set-Cookie",
+              `${c.name}=; Path=/; Domain=.myteamnetwork.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`
+            );
+          }
+        });
+    }
+
+    return redirectResponse;
   }
 
   // Check for revoked access on org routes
@@ -244,9 +270,9 @@ export async function middleware(request: NextRequest) {
           }
         }
       } else if (shouldLog) {
-        // Log dev-admin access for debugging
+        // Log dev-admin access for debugging (email redacted for privacy)
         console.log("[AUTH-MW] Dev-admin bypassing membership check", {
-          email: userEmail,
+          email: userEmail ? redactEmail(userEmail) : null,
           orgSlug,
           pathname,
         });

@@ -1,39 +1,61 @@
 /**
  * Dev-Admin System
- * 
+ *
  * Provides super-admin access for developers to debug and fix issues
  * across all organizations without appearing in member lists.
- * 
+ *
  * Dev-admins can:
  * - View all org data (members, events, billing, etc.)
  * - Trigger certain admin actions (reconcile, billing portal, delete orgs)
  * - See Stripe subscription details
- * 
+ *
  * Dev-admins cannot:
  * - Edit org data (for now)
  * - Start new checkouts on behalf of orgs
  * - Cancel subscriptions
- * 
+ *
  * Dev-admins are:
  * - Hidden from member lists
  * - Identified by a visual indicator in the nav
- * - Logged when taking admin actions (future enhancement)
+ * - Logged when taking admin actions (with redacted emails for privacy)
+ *
+ * Configuration:
+ * - Set DEV_ADMIN_EMAILS environment variable as comma-separated list
+ * - Example: DEV_ADMIN_EMAILS="admin1@example.com,admin2@example.com"
  */
 
-// Hardcoded allowlist of dev-admin emails
-// Add emails here to grant dev-admin access
-const DEV_ADMIN_EMAILS: string[] = [
-  "mleonard1616@gmail.com",
-  "lociccone11@gmail.com",
-];
+/**
+ * Get dev-admin emails from environment variable
+ * Emails are stored as comma-separated values in DEV_ADMIN_EMAILS
+ */
+function loadDevAdminEmails(): string[] {
+  const envValue = process.env.DEV_ADMIN_EMAILS;
+  if (!envValue) return [];
+  return envValue
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+}
+
+/**
+ * Redact email for logging (show first 2 chars + domain)
+ * e.g., "john@example.com" -> "jo***@example.com"
+ */
+export function redactEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  const redactedLocal = local.slice(0, 2) + "***";
+  return `${redactedLocal}@${domain}`;
+}
 
 /**
  * Check if an email belongs to a dev-admin
  */
 export function isDevAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-  return DEV_ADMIN_EMAILS.some(
-    (devEmail) => devEmail.toLowerCase() === email.toLowerCase()
+  const devAdminEmails = loadDevAdminEmails();
+  return devAdminEmails.some(
+    (devEmail) => devEmail === email.toLowerCase()
   );
 }
 
@@ -48,7 +70,7 @@ export function isDevAdmin(user: { email?: string | null } | null | undefined): 
  * Get list of dev-admin emails (for queries that need to exclude them)
  */
 export function getDevAdminEmails(): string[] {
-  return [...DEV_ADMIN_EMAILS];
+  return loadDevAdminEmails();
 }
 
 /**
@@ -96,11 +118,13 @@ export function canDevAdminPerform(
 /**
  * Log a dev-admin action (for audit purposes)
  * Currently just logs to console; can be extended to write to DB
+ * Email is redacted in logs for privacy
  */
 export function logDevAdminAction(
   userEmail: string,
   action: string,
   details?: Record<string, unknown>
 ): void {
-  console.log(`[DEV-ADMIN] ${userEmail} performed "${action}"`, details ?? {});
+  const redacted = redactEmail(userEmail);
+  console.log(`[DEV-ADMIN] ${redacted} performed "${action}"`, details ?? {});
 }

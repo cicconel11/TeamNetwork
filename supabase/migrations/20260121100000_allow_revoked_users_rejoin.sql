@@ -49,9 +49,9 @@ BEGIN
     SELECT * INTO v_org FROM public.organizations WHERE id = v_invite.organization_id;
 
     IF v_existing.status = 'revoked' THEN
-      -- Reactivate the revoked user with the role from the invite
+      -- Reactivate the revoked user, preserving their original role to prevent privilege escalation
       UPDATE public.user_organization_roles
-      SET status = 'active', role = v_invite.role::public.user_role
+      SET status = 'active'
       WHERE user_id = v_user_id AND organization_id = v_invite.organization_id;
 
       -- Decrement uses_remaining if it's set
@@ -66,7 +66,7 @@ BEGIN
         'organization_id', v_invite.organization_id,
         'slug', v_org.slug,
         'name', v_org.name,
-        'role', v_invite.role,
+        'role', v_existing.role,
         'pending_approval', false
       );
     END IF;
