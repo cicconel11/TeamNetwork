@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -8,24 +9,54 @@ import {
   Text,
   View,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
+import { useRouter, useNavigation } from "expo-router";
 import { Calendar, Clock, Heart, MapPin, Plus, Sparkles } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
-import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import type { Event, OrganizationDonationStat } from "@teammeet/types";
+
+// Fixed color palette
+const PHILANTHROPY_COLORS = {
+  background: "#f8fafc",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#ffffff",
+  primary: "#059669",
+  primaryForeground: "#ffffff",
+  error: "#ef4444",
+  success: "#22c55e",
+  warning: "#f59e0b",
+  secondary: "#8b5cf6",
+};
 
 type PhilanthropyView = "upcoming" | "past";
 
 export default function PhilanthropyScreen() {
   const router = useRouter();
-  const { orgId, orgSlug } = useOrg();
+  const navigation = useNavigation();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isActiveMember } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
+
+  // Safe drawer toggle - only dispatch if drawer is available
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [donationStats, setDonationStats] = useState<OrganizationDonationStat | null>(null);
   const [stripeConnected, setStripeConnected] = useState(false);
@@ -201,238 +232,257 @@ export default function PhilanthropyScreen() {
   }, [router, orgSlug]);
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
-        />
-      }
-    >
-      <Stack.Screen options={{ title: "Philanthropy" }} />
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Philanthropy</Text>
-          <Text style={styles.headerSubtitle}>
-            Community service and fundraising for your organization.
-          </Text>
-        </View>
-        {canEdit ? (
-          <Pressable
-            onPress={handleAddEvent}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.primaryButtonPressed,
-            ]}
-          >
-            <Plus size={16} color={colors.primaryForeground} />
-            <Text style={styles.primaryButtonText}>Add Event</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {error ? (
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            {error}
-          </Text>
-          <Pressable
-            onPress={handleRefresh}
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && styles.retryButtonPressed,
-            ]}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {loading && allEvents.length === 0 ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading philanthropy events...</Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.summaryGrid}>
-            <View style={styles.summaryCard}>
-              <View style={[styles.summaryIcon, { backgroundColor: `${colors.success}22` }]}>
-                <Heart size={18} color={colors.success} />
-              </View>
-              <Text style={styles.summaryValue}>{totalEvents}</Text>
-              <Text style={styles.summaryLabel}>Total Events</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <View style={[styles.summaryIcon, { backgroundColor: `${colors.primary}22` }]}>
-                <Calendar size={18} color={colors.primary} />
-              </View>
-              <Text style={styles.summaryValue}>{upcomingCount}</Text>
-              <Text style={styles.summaryLabel}>Upcoming</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <View style={[styles.summaryIcon, { backgroundColor: `${colors.secondary}22` }]}>
-                <Sparkles size={18} color={colors.secondary} />
-              </View>
-              <Text style={styles.summaryValue}>{pastCount}</Text>
-              <Text style={styles.summaryLabel}>Completed</Text>
-            </View>
-          </View>
-
-          <View style={styles.donationRow}>
-            <View style={styles.donationCard}>
-              <Text style={styles.donationLabel}>Stripe Donations</Text>
-              <Text style={styles.donationValue}>
-                ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <View style={styles.container}>
+      {/* Custom Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Philanthropy</Text>
+              <Text style={styles.headerMeta}>
+                {totalEvents} {totalEvents === 1 ? "event" : "events"}
               </Text>
-              <Text style={styles.donationSubtext}>
-                {donationCount} contributions recorded
-              </Text>
-              <View
-                style={[
-                  styles.statusBadge,
-                  stripeConnected ? styles.statusConnected : styles.statusPending,
+            </View>
+            {canEdit ? (
+              <Pressable
+                onPress={handleAddEvent}
+                style={({ pressed }) => [
+                  styles.addButton,
+                  pressed && styles.addButtonPressed,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    stripeConnected ? styles.statusConnectedText : styles.statusPendingText,
-                  ]}
-                >
-                  {stripeConnected ? "Connected" : "Connect Stripe to accept donations"}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.actionCard}>
-              <Text style={styles.actionTitle}>Donate</Text>
-              <Text style={styles.actionSubtitle}>
-                Record a contribution or share a donation link.
+                <Plus size={16} color={PHILANTHROPY_COLORS.primaryForeground} />
+                <Text style={styles.addButtonText}>Add</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={PHILANTHROPY_COLORS.primary}
+            />
+          }
+        >
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text selectable style={styles.errorText}>
+                {error}
               </Text>
               <Pressable
-                onPress={handleDonate}
+                onPress={handleRefresh}
                 style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
+                  styles.retryButton,
+                  pressed && styles.retryButtonPressed,
                 ]}
               >
-                <Text style={styles.secondaryButtonText}>Open Donations</Text>
+                <Text style={styles.retryButtonText}>Retry</Text>
               </Pressable>
             </View>
-          </View>
+          ) : null}
 
-          <View style={styles.filterRow}>
-            {(
-              [
-                { value: "upcoming", label: "Upcoming" },
-                { value: "past", label: "Past" },
-              ] as Array<{ value: PhilanthropyView; label: string }>
-            ).map((option) => {
-              const isSelected = view === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => setView(option.value)}
-                  style={({ pressed }) => [
-                    styles.filterChip,
-                    isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                    pressed && styles.filterChipPressed,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      isSelected && { color: colors.primaryForeground },
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {visibleEvents.length > 0 ? (
-            <View style={styles.list}>
-              {visibleEvents.map((event) => (
-                <Pressable
-                  key={event.id}
-                  onPress={() => handleOpenEvent(event.id)}
-                  style={({ pressed }) => [
-                    styles.eventCard,
-                    pressed && styles.eventCardPressed,
-                  ]}
-                >
-                  <View style={styles.eventDate}>
-                    <Text style={styles.eventMonth}>
-                      {formatMonth(event.start_date)}
-                    </Text>
-                    <Text style={styles.eventDay}>
-                      {new Date(event.start_date).getDate()}
-                    </Text>
-                  </View>
-                  <View style={styles.eventContent}>
-                    <View style={styles.eventHeader}>
-                      <Text style={styles.eventTitle}>{event.title}</Text>
-                      <View style={styles.eventBadge}>
-                        <Text style={styles.eventBadgeText}>Philanthropy</Text>
-                      </View>
-                    </View>
-                    {event.description ? (
-                      <Text style={styles.eventDescription} numberOfLines={2}>
-                        {event.description}
-                      </Text>
-                    ) : null}
-                    <View style={styles.eventMetaRow}>
-                      <View style={styles.eventMetaItem}>
-                        <Clock size={14} color={colors.mutedForeground} />
-                        <Text style={styles.eventMetaText}>
-                          {formatTime(event.start_date)}
-                        </Text>
-                      </View>
-                      {event.location ? (
-                        <View style={styles.eventMetaItem}>
-                          <MapPin size={14} color={colors.mutedForeground} />
-                          <Text style={styles.eventMetaText} numberOfLines={1}>
-                            {event.location}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
+          {loading && allEvents.length === 0 ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={PHILANTHROPY_COLORS.primary} />
+              <Text style={styles.loadingText}>Loading philanthropy events...</Text>
             </View>
           ) : (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyTitle}>
-                {view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                {view === "past"
-                  ? "Completed events will appear here."
-                  : "Add a new philanthropy event to get started."}
-              </Text>
-              {canEdit ? (
-                <Pressable
-                  onPress={handleAddEvent}
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>Add Event</Text>
-                </Pressable>
-              ) : null}
-            </View>
+            <>
+              <View style={styles.summaryGrid}>
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.success}22` }]}>
+                    <Heart size={18} color={PHILANTHROPY_COLORS.success} />
+                  </View>
+                  <Text style={styles.summaryValue}>{totalEvents}</Text>
+                  <Text style={styles.summaryLabel}>Total Events</Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.primary}22` }]}>
+                    <Calendar size={18} color={PHILANTHROPY_COLORS.primary} />
+                  </View>
+                  <Text style={styles.summaryValue}>{upcomingCount}</Text>
+                  <Text style={styles.summaryLabel}>Upcoming</Text>
+                </View>
+                <View style={styles.summaryCard}>
+                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.secondary}22` }]}>
+                    <Sparkles size={18} color={PHILANTHROPY_COLORS.secondary} />
+                  </View>
+                  <Text style={styles.summaryValue}>{pastCount}</Text>
+                  <Text style={styles.summaryLabel}>Completed</Text>
+                </View>
+              </View>
+
+              <View style={styles.donationRow}>
+                <View style={styles.donationCard}>
+                  <Text style={styles.donationLabel}>Stripe Donations</Text>
+                  <Text style={styles.donationValue}>
+                    ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                  <Text style={styles.donationSubtext}>
+                    {donationCount} contributions recorded
+                  </Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      stripeConnected ? styles.statusConnected : styles.statusPending,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.statusBadgeText,
+                        stripeConnected ? styles.statusConnectedText : styles.statusPendingText,
+                      ]}
+                    >
+                      {stripeConnected ? "Connected" : "Connect Stripe to accept donations"}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.actionCard}>
+                  <Text style={styles.actionTitle}>Donate</Text>
+                  <Text style={styles.actionSubtitle}>
+                    Record a contribution or share a donation link.
+                  </Text>
+                  <Pressable
+                    onPress={handleDonate}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      pressed && styles.secondaryButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.secondaryButtonText}>Open Donations</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.filterRow}>
+                {(
+                  [
+                    { value: "upcoming", label: "Upcoming" },
+                    { value: "past", label: "Past" },
+                  ] as Array<{ value: PhilanthropyView; label: string }>
+                ).map((option) => {
+                  const isSelected = view === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      onPress={() => setView(option.value)}
+                      style={({ pressed }) => [
+                        styles.filterChip,
+                        isSelected && { backgroundColor: PHILANTHROPY_COLORS.primary, borderColor: PHILANTHROPY_COLORS.primary },
+                        pressed && styles.filterChipPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          isSelected && { color: PHILANTHROPY_COLORS.primaryForeground },
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {visibleEvents.length > 0 ? (
+                <View style={styles.list}>
+                  {visibleEvents.map((event) => (
+                    <Pressable
+                      key={event.id}
+                      onPress={() => handleOpenEvent(event.id)}
+                      style={({ pressed }) => [
+                        styles.eventCard,
+                        pressed && styles.eventCardPressed,
+                      ]}
+                    >
+                      <View style={styles.eventDate}>
+                        <Text style={styles.eventMonth}>
+                          {formatMonth(event.start_date)}
+                        </Text>
+                        <Text style={styles.eventDay}>
+                          {new Date(event.start_date).getDate()}
+                        </Text>
+                      </View>
+                      <View style={styles.eventContent}>
+                        <View style={styles.eventHeader}>
+                          <Text style={styles.eventTitle}>{event.title}</Text>
+                          <View style={styles.eventBadge}>
+                            <Text style={styles.eventBadgeText}>Philanthropy</Text>
+                          </View>
+                        </View>
+                        {event.description ? (
+                          <Text style={styles.eventDescription} numberOfLines={2}>
+                            {event.description}
+                          </Text>
+                        ) : null}
+                        <View style={styles.eventMetaRow}>
+                          <View style={styles.eventMetaItem}>
+                            <Clock size={14} color={PHILANTHROPY_COLORS.mutedText} />
+                            <Text style={styles.eventMetaText}>
+                              {formatTime(event.start_date)}
+                            </Text>
+                          </View>
+                          {event.location ? (
+                            <View style={styles.eventMetaItem}>
+                              <MapPin size={14} color={PHILANTHROPY_COLORS.mutedText} />
+                              <Text style={styles.eventMetaText} numberOfLines={1}>
+                                {event.location}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyTitle}>
+                    {view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
+                  </Text>
+                  <Text style={styles.emptySubtitle}>
+                    {view === "past"
+                      ? "Completed events will appear here."
+                      : "Add a new philanthropy event to get started."}
+                  </Text>
+                  {canEdit ? (
+                    <Pressable
+                      onPress={handleAddEvent}
+                      style={({ pressed }) => [
+                        styles.primaryButton,
+                        pressed && styles.primaryButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.primaryButtonText}>Add Event</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              )}
+            </>
           )}
-        </>
-      )}
-    </ScrollView>
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
@@ -455,54 +505,110 @@ function formatTime(dateString: string) {
   });
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: PHILANTHROPY_COLORS.background,
+    },
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.bold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    addButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.xs,
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.sm,
+      borderRadius: borderRadius.md,
+      backgroundColor: PHILANTHROPY_COLORS.primary,
+    },
+    addButtonPressed: {
+      opacity: 0.9,
+    },
+    addButtonText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      color: PHILANTHROPY_COLORS.primaryForeground,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: PHILANTHROPY_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
     },
     scrollContent: {
       padding: spacing.md,
       paddingBottom: spacing.xl,
       gap: spacing.lg,
     },
-    header: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    headerText: {
-      flex: 1,
-      gap: spacing.xs,
-    },
-    headerTitle: {
-      fontSize: fontSize["2xl"],
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-    },
-    headerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
     errorCard: {
-      backgroundColor: `${colors.error}14`,
+      backgroundColor: `${PHILANTHROPY_COLORS.error}14`,
       borderRadius: borderRadius.md,
       padding: spacing.md,
       borderWidth: 1,
-      borderColor: `${colors.error}55`,
+      borderColor: `${PHILANTHROPY_COLORS.error}55`,
       gap: spacing.sm,
     },
     errorText: {
       fontSize: fontSize.sm,
-      color: colors.error,
+      color: PHILANTHROPY_COLORS.error,
     },
     retryButton: {
       alignSelf: "flex-start",
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs + 2,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.error,
+      backgroundColor: PHILANTHROPY_COLORS.error,
     },
     retryButtonPressed: {
       opacity: 0.85,
@@ -518,7 +624,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     loadingText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     summaryGrid: {
       flexDirection: "row",
@@ -526,11 +632,11 @@ const createStyles = (colors: ThemeColors) =>
     },
     summaryCard: {
       flex: 1,
-      backgroundColor: colors.card,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: PHILANTHROPY_COLORS.border,
       padding: spacing.md,
       gap: spacing.xs,
       alignItems: "flex-start",
@@ -546,12 +652,12 @@ const createStyles = (colors: ThemeColors) =>
     summaryValue: {
       fontSize: fontSize.xl,
       fontWeight: fontWeight.bold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
       fontVariant: ["tabular-nums"],
     },
     summaryLabel: {
       fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     donationRow: {
       flexDirection: "row",
@@ -561,28 +667,28 @@ const createStyles = (colors: ThemeColors) =>
     donationCard: {
       flex: 1,
       minWidth: 220,
-      backgroundColor: colors.card,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: PHILANTHROPY_COLORS.border,
       padding: spacing.md,
       gap: spacing.xs,
       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
     },
     donationLabel: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     donationValue: {
       fontSize: fontSize.xl,
       fontWeight: fontWeight.bold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
       fontVariant: ["tabular-nums"],
     },
     donationSubtext: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     statusBadge: {
       alignSelf: "flex-start",
@@ -596,25 +702,25 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: fontWeight.semibold,
     },
     statusConnected: {
-      backgroundColor: `${colors.success}22`,
+      backgroundColor: `${PHILANTHROPY_COLORS.success}22`,
     },
     statusConnectedText: {
-      color: colors.success,
+      color: PHILANTHROPY_COLORS.success,
     },
     statusPending: {
-      backgroundColor: `${colors.warning}22`,
+      backgroundColor: `${PHILANTHROPY_COLORS.warning}22`,
     },
     statusPendingText: {
-      color: colors.warning,
+      color: PHILANTHROPY_COLORS.warning,
     },
     actionCard: {
       flex: 1,
       minWidth: 200,
-      backgroundColor: colors.card,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: PHILANTHROPY_COLORS.border,
       padding: spacing.md,
       gap: spacing.xs,
       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
@@ -622,11 +728,11 @@ const createStyles = (colors: ThemeColors) =>
     actionTitle: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
     },
     actionSubtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     filterRow: {
       flexDirection: "row",
@@ -637,8 +743,8 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.xs + 2,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderColor: PHILANTHROPY_COLORS.border,
+      backgroundColor: PHILANTHROPY_COLORS.card,
     },
     filterChipPressed: {
       opacity: 0.85,
@@ -646,7 +752,7 @@ const createStyles = (colors: ThemeColors) =>
     filterChipText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
     },
     list: {
       gap: spacing.md,
@@ -654,11 +760,11 @@ const createStyles = (colors: ThemeColors) =>
     eventCard: {
       flexDirection: "row",
       gap: spacing.md,
-      backgroundColor: colors.card,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: PHILANTHROPY_COLORS.border,
       padding: spacing.md,
       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
     },
@@ -669,7 +775,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 64,
       height: 64,
       borderRadius: borderRadius.lg,
-      backgroundColor: `${colors.success}18`,
+      backgroundColor: `${PHILANTHROPY_COLORS.success}18`,
       alignItems: "center",
       justifyContent: "center",
       gap: spacing.xs,
@@ -677,13 +783,13 @@ const createStyles = (colors: ThemeColors) =>
     eventMonth: {
       fontSize: fontSize.xs,
       fontWeight: fontWeight.medium,
-      color: colors.success,
+      color: PHILANTHROPY_COLORS.success,
       textTransform: "uppercase",
     },
     eventDay: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.bold,
-      color: colors.success,
+      color: PHILANTHROPY_COLORS.success,
       fontVariant: ["tabular-nums"],
     },
     eventContent: {
@@ -700,22 +806,22 @@ const createStyles = (colors: ThemeColors) =>
       flex: 1,
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
     },
     eventBadge: {
       paddingHorizontal: spacing.sm,
       paddingVertical: spacing.xs,
       borderRadius: 999,
-      backgroundColor: `${colors.success}22`,
+      backgroundColor: `${PHILANTHROPY_COLORS.success}22`,
     },
     eventBadgeText: {
       fontSize: fontSize.xs,
       fontWeight: fontWeight.semibold,
-      color: colors.success,
+      color: PHILANTHROPY_COLORS.success,
     },
     eventDescription: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
     },
     eventMetaRow: {
       flexDirection: "row",
@@ -730,15 +836,15 @@ const createStyles = (colors: ThemeColors) =>
     },
     eventMetaText: {
       fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
       flexShrink: 1,
     },
     emptyCard: {
-      backgroundColor: colors.card,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: PHILANTHROPY_COLORS.border,
       padding: spacing.lg,
       gap: spacing.sm,
       alignItems: "center",
@@ -747,19 +853,19 @@ const createStyles = (colors: ThemeColors) =>
     emptyTitle: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
       textAlign: "center",
     },
     emptySubtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: PHILANTHROPY_COLORS.secondaryText,
       textAlign: "center",
     },
     primaryButton: {
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.xs,
-      backgroundColor: colors.primary,
+      backgroundColor: PHILANTHROPY_COLORS.primary,
       borderRadius: borderRadius.md,
       paddingVertical: spacing.xs + 2,
       paddingHorizontal: spacing.md,
@@ -771,15 +877,15 @@ const createStyles = (colors: ThemeColors) =>
     primaryButtonText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
+      color: PHILANTHROPY_COLORS.primaryForeground,
     },
     secondaryButton: {
       paddingVertical: spacing.xs + 2,
       paddingHorizontal: spacing.md,
       borderRadius: borderRadius.md,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderColor: PHILANTHROPY_COLORS.border,
+      backgroundColor: PHILANTHROPY_COLORS.card,
       alignSelf: "flex-start",
     },
     secondaryButtonPressed: {
@@ -788,6 +894,6 @@ const createStyles = (colors: ThemeColors) =>
     secondaryButtonText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: PHILANTHROPY_COLORS.primaryText,
     },
   });

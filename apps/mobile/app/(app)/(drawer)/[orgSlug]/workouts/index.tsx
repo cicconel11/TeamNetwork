@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   RefreshControl,
@@ -10,15 +11,33 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
+import { useRouter, useNavigation } from "expo-router";
 import { Calendar, ExternalLink, Pencil, Plus } from "lucide-react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
-import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import type { Workout, WorkoutLog, WorkoutStatus } from "@teammeet/types";
+
+// Fixed color palette
+const WORKOUTS_COLORS = {
+  background: "#f8fafc",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#ffffff",
+  primary: "#059669",
+  primaryForeground: "#ffffff",
+  error: "#ef4444",
+  success: "#22c55e",
+  warning: "#f59e0b",
+};
 
 const STATUS_OPTIONS: Array<{ value: WorkoutStatus; label: string }> = [
   { value: "not_started", label: "Not started" },
@@ -28,12 +47,23 @@ const STATUS_OPTIONS: Array<{ value: WorkoutStatus; label: string }> = [
 
 export default function WorkoutsScreen() {
   const router = useRouter();
-  const { orgId, orgSlug } = useOrg();
+  const navigation = useNavigation();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { user } = useAuth();
   const { isAdmin, isActiveMember } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
+
+  // Safe drawer toggle - only dispatch if drawer is available
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [logs, setLogs] = useState<WorkoutLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -181,14 +211,14 @@ export default function WorkoutsScreen() {
     [router, orgSlug]
   );
 
-  const renderStatusBadge = (status: WorkoutStatus, colors: ThemeColors) => {
+  const renderStatusBadge = (status: WorkoutStatus) => {
     const label = STATUS_OPTIONS.find((option) => option.value === status)?.label || status;
     const statusColor =
       status === "completed"
-        ? colors.success
+        ? WORKOUTS_COLORS.success
         : status === "in_progress"
-          ? colors.warning
-          : colors.mutedForeground;
+          ? WORKOUTS_COLORS.warning
+          : WORKOUTS_COLORS.mutedText;
 
     return (
       <View style={[styles.statusBadge, { backgroundColor: `${statusColor}22` }]}>
@@ -198,152 +228,171 @@ export default function WorkoutsScreen() {
   };
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.primary}
-        />
-      }
-    >
-      <Stack.Screen options={{ title: "Workouts" }} />
-      <View style={styles.header}>
-        <View style={styles.headerText}>
-          <Text style={styles.headerTitle}>Workouts</Text>
-          <Text style={styles.headerSubtitle}>
-            View assigned workouts and track your progress
-          </Text>
-        </View>
-        {isAdmin ? (
-          <Pressable
-            onPress={handleCreateWorkout}
-            style={({ pressed }) => [
-              styles.headerAction,
-              pressed && styles.headerActionPressed,
-            ]}
-          >
-            <Plus size={18} color={colors.primaryForeground} />
-            <Text style={styles.headerActionText}>Post</Text>
-          </Pressable>
-        ) : null}
-      </View>
-
-      {error ? (
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            {error}
-          </Text>
-          <Pressable
-            onPress={handleRefresh}
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && styles.retryButtonPressed,
-            ]}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {loading && workouts.length === 0 ? (
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading workouts...</Text>
-        </View>
-      ) : workouts.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.emptyTitle}>No workouts yet</Text>
-          <Text style={styles.emptySubtitle}>Workouts will appear here once posted.</Text>
-          {isAdmin ? (
-            <Pressable
-              onPress={handleCreateWorkout}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
-            >
-              <Text style={styles.primaryButtonText}>Post first workout</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : (
-        <View style={styles.list}>
-          {workouts.map((workout) => {
-            const log = logByWorkout.get(workout.id);
-            return (
-              <View key={workout.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeaderText}>
-                    <Text style={styles.cardTitle}>{workout.title}</Text>
-                    {workout.description ? (
-                      <Text style={styles.cardDescription}>{workout.description}</Text>
-                    ) : null}
-                    <View style={styles.metaRow}>
-                      {workout.workout_date ? (
-                        <View style={styles.metaItem}>
-                          <Calendar size={14} color={colors.mutedForeground} />
-                          <Text style={styles.metaText}>
-                            {formatDateLabel(workout.workout_date)}
-                          </Text>
-                        </View>
-                      ) : null}
-                      {workout.external_url ? (
-                        <Pressable
-                          onPress={() => Linking.openURL(workout.external_url || "")}
-                          style={({ pressed }) => [
-                            styles.linkButton,
-                            pressed && styles.linkButtonPressed,
-                          ]}
-                        >
-                          <ExternalLink size={14} color={colors.primary} />
-                          <Text style={styles.linkText}>External workout</Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </View>
-                  <View style={styles.cardHeaderActions}>
-                    {log ? renderStatusBadge(log.status as WorkoutStatus, colors) : null}
-                    {isAdmin ? (
-                      <Pressable
-                        onPress={() => handleEditWorkout(workout.id)}
-                        style={({ pressed }) => [
-                          styles.editButton,
-                          pressed && styles.editButtonPressed,
-                        ]}
-                      >
-                        <Pencil size={14} color={colors.primary} />
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
+    <View style={styles.container}>
+      {/* Custom Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
                 </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Workouts</Text>
+              <Text style={styles.headerMeta}>
+                {workouts.length} {workouts.length === 1 ? "workout" : "workouts"}
+              </Text>
+            </View>
+            {isAdmin ? (
+              <Pressable
+                onPress={handleCreateWorkout}
+                style={({ pressed }) => [
+                  styles.headerAction,
+                  pressed && styles.headerActionPressed,
+                ]}
+              >
+                <Plus size={18} color={WORKOUTS_COLORS.primaryForeground} />
+                <Text style={styles.headerActionText}>Post</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-                {isActiveMember ? (
-                  <WorkoutLogEditor
-                    orgId={orgId || ""}
-                    workoutId={workout.id}
-                    log={log}
-                    onSaved={handleLogSaved}
-                    colors={colors}
-                    styles={styles}
-                  />
-                ) : (
-                  <Text style={styles.readOnlyText}>
-                    {isAdmin
-                      ? "Admins can post workouts and view member progress."
-                      : "View-only access for alumni."}
-                  </Text>
-                )}
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </ScrollView>
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={WORKOUTS_COLORS.primary}
+            />
+          }
+        >
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text selectable style={styles.errorText}>
+                {error}
+              </Text>
+              <Pressable
+                onPress={handleRefresh}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.retryButtonPressed,
+                ]}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          {loading && workouts.length === 0 ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={WORKOUTS_COLORS.primary} />
+              <Text style={styles.loadingText}>Loading workouts...</Text>
+            </View>
+          ) : workouts.length === 0 ? (
+            <View style={styles.card}>
+              <Text style={styles.emptyTitle}>No workouts yet</Text>
+              <Text style={styles.emptySubtitle}>Workouts will appear here once posted.</Text>
+              {isAdmin ? (
+                <Pressable
+                  onPress={handleCreateWorkout}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>Post first workout</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : (
+            <View style={styles.list}>
+              {workouts.map((workout) => {
+                const log = logByWorkout.get(workout.id);
+                return (
+                  <View key={workout.id} style={styles.card}>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderText}>
+                        <Text style={styles.cardTitle}>{workout.title}</Text>
+                        {workout.description ? (
+                          <Text style={styles.cardDescription}>{workout.description}</Text>
+                        ) : null}
+                        <View style={styles.metaRow}>
+                          {workout.workout_date ? (
+                            <View style={styles.metaItem}>
+                              <Calendar size={14} color={WORKOUTS_COLORS.mutedText} />
+                              <Text style={styles.metaText}>
+                                {formatDateLabel(workout.workout_date)}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {workout.external_url ? (
+                            <Pressable
+                              onPress={() => Linking.openURL(workout.external_url || "")}
+                              style={({ pressed }) => [
+                                styles.linkButton,
+                                pressed && styles.linkButtonPressed,
+                              ]}
+                            >
+                              <ExternalLink size={14} color={WORKOUTS_COLORS.primary} />
+                              <Text style={styles.linkText}>External workout</Text>
+                            </Pressable>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View style={styles.cardHeaderActions}>
+                        {log ? renderStatusBadge(log.status as WorkoutStatus) : null}
+                        {isAdmin ? (
+                          <Pressable
+                            onPress={() => handleEditWorkout(workout.id)}
+                            style={({ pressed }) => [
+                              styles.editButton,
+                              pressed && styles.editButtonPressed,
+                            ]}
+                          >
+                            <Pencil size={14} color={WORKOUTS_COLORS.primary} />
+                            <Text style={styles.editButtonText}>Edit</Text>
+                          </Pressable>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    {isActiveMember ? (
+                      <WorkoutLogEditor
+                        orgId={orgId || ""}
+                        workoutId={workout.id}
+                        log={log}
+                        onSaved={handleLogSaved}
+                        styles={styles}
+                      />
+                    ) : (
+                      <Text style={styles.readOnlyText}>
+                        {isAdmin
+                          ? "Admins can post workouts and view member progress."
+                          : "View-only access for alumni."}
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
@@ -352,14 +401,12 @@ function WorkoutLogEditor({
   workoutId,
   log,
   onSaved,
-  colors,
   styles,
 }: {
   orgId: string;
   workoutId: string;
   log?: WorkoutLog;
   onSaved: (nextLog: WorkoutLog) => void;
-  colors: ThemeColors;
   styles: ReturnType<typeof createStyles>;
 }) {
   const { user } = useAuth();
@@ -431,14 +478,14 @@ function WorkoutLogEditor({
                 onPress={() => setStatus(option.value)}
                 style={({ pressed }) => [
                   styles.statusChip,
-                  isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  isSelected && { backgroundColor: WORKOUTS_COLORS.primary, borderColor: WORKOUTS_COLORS.primary },
                   pressed && styles.statusChipPressed,
                 ]}
               >
                 <Text
                   style={[
                     styles.statusChipText,
-                    isSelected && { color: colors.primaryForeground },
+                    isSelected && { color: WORKOUTS_COLORS.primaryForeground },
                   ]}
                 >
                   {option.label}
@@ -454,7 +501,7 @@ function WorkoutLogEditor({
           value={notes}
           onChangeText={setNotes}
           placeholder="Add time, reps, or other details"
-          placeholderTextColor={colors.mutedForeground}
+          placeholderTextColor={WORKOUTS_COLORS.mutedText}
           multiline
           textAlignVertical="top"
           style={[styles.input, styles.textArea]}
@@ -470,7 +517,7 @@ function WorkoutLogEditor({
         ]}
       >
         {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
+          <ActivityIndicator color={WORKOUTS_COLORS.primaryForeground} />
         ) : (
           <Text style={styles.primaryButtonText}>Save progress</Text>
         )}
@@ -487,35 +534,74 @@ function formatDateLabel(value: string) {
   return date.toLocaleDateString();
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: WORKOUTS_COLORS.background,
+    },
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.bold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: WORKOUTS_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
     },
     scrollContent: {
       padding: spacing.md,
       paddingBottom: spacing.xl,
       gap: spacing.lg,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.md,
-    },
-    headerText: {
-      flex: 1,
-      gap: spacing.xs,
-    },
-    headerTitle: {
-      fontSize: fontSize["2xl"],
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-    },
-    headerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
     },
     headerAction: {
       flexDirection: "row",
@@ -524,7 +610,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.xs + 2,
       paddingHorizontal: spacing.sm,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.primary,
+      backgroundColor: WORKOUTS_COLORS.primary,
       borderCurve: "continuous",
     },
     headerActionPressed: {
@@ -533,26 +619,26 @@ const createStyles = (colors: ThemeColors) =>
     headerActionText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
+      color: WORKOUTS_COLORS.primaryForeground,
     },
     errorCard: {
-      backgroundColor: `${colors.error}14`,
+      backgroundColor: `${WORKOUTS_COLORS.error}14`,
       borderRadius: borderRadius.md,
       padding: spacing.md,
       gap: spacing.sm,
       borderWidth: 1,
-      borderColor: `${colors.error}55`,
+      borderColor: `${WORKOUTS_COLORS.error}55`,
     },
     errorText: {
       fontSize: fontSize.sm,
-      color: colors.error,
+      color: WORKOUTS_COLORS.error,
     },
     retryButton: {
       alignSelf: "flex-start",
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs + 2,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.error,
+      backgroundColor: WORKOUTS_COLORS.error,
     },
     retryButtonPressed: {
       opacity: 0.85,
@@ -568,17 +654,17 @@ const createStyles = (colors: ThemeColors) =>
     },
     loadingText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.mutedText,
     },
     list: {
       gap: spacing.md,
     },
     card: {
-      backgroundColor: colors.card,
+      backgroundColor: WORKOUTS_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: WORKOUTS_COLORS.border,
       padding: spacing.md,
       gap: spacing.md,
       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
@@ -599,11 +685,11 @@ const createStyles = (colors: ThemeColors) =>
     cardTitle: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: WORKOUTS_COLORS.primaryText,
     },
     cardDescription: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.secondaryText,
     },
     metaRow: {
       flexDirection: "row",
@@ -618,7 +704,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     metaText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.secondaryText,
     },
     linkButton: {
       flexDirection: "row",
@@ -630,7 +716,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     linkText: {
       fontSize: fontSize.sm,
-      color: colors.primary,
+      color: WORKOUTS_COLORS.primary,
       fontWeight: fontWeight.medium,
     },
     statusBadge: {
@@ -650,28 +736,28 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.xs,
       borderRadius: borderRadius.md,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: WORKOUTS_COLORS.border,
     },
     editButtonPressed: {
       opacity: 0.8,
     },
     editButtonText: {
       fontSize: fontSize.xs,
-      color: colors.primary,
+      color: WORKOUTS_COLORS.primary,
       fontWeight: fontWeight.semibold,
     },
     readOnlyText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.secondaryText,
     },
     emptyTitle: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: WORKOUTS_COLORS.primaryText,
     },
     emptySubtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.secondaryText,
     },
     logEditor: {
       gap: spacing.sm,
@@ -682,7 +768,7 @@ const createStyles = (colors: ThemeColors) =>
     fieldLabel: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
-      color: colors.mutedForeground,
+      color: WORKOUTS_COLORS.secondaryText,
     },
     statusRow: {
       flexDirection: "row",
@@ -694,8 +780,8 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.xs,
       borderRadius: 999,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderColor: WORKOUTS_COLORS.border,
+      backgroundColor: WORKOUTS_COLORS.card,
     },
     statusChipPressed: {
       opacity: 0.85,
@@ -703,23 +789,23 @@ const createStyles = (colors: ThemeColors) =>
     statusChipText: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
-      color: colors.foreground,
+      color: WORKOUTS_COLORS.primaryText,
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: WORKOUTS_COLORS.border,
       borderRadius: borderRadius.md,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       fontSize: fontSize.base,
-      color: colors.foreground,
-      backgroundColor: colors.background,
+      color: WORKOUTS_COLORS.primaryText,
+      backgroundColor: WORKOUTS_COLORS.background,
     },
     textArea: {
       minHeight: 90,
     },
     primaryButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: WORKOUTS_COLORS.primary,
       borderRadius: borderRadius.md,
       paddingVertical: spacing.sm,
       alignItems: "center",
@@ -732,7 +818,7 @@ const createStyles = (colors: ThemeColors) =>
     primaryButtonText: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
+      color: WORKOUTS_COLORS.primaryForeground,
     },
     buttonDisabled: {
       opacity: 0.6,

@@ -15,7 +15,10 @@ import {
   Pressable,
   Clipboard,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
+import { DrawerActions } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgSettings } from "@/hooks/useOrgSettings";
@@ -27,9 +30,8 @@ import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import { StripeWebView } from "@/components/StripeWebView";
 import { captureException } from "@/lib/analytics";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
+import { APP_CHROME } from "@/lib/chrome";
 import { getWebAppUrl, fetchWithAuth } from "@/lib/web-api";
-import type { ThemeColors } from "@/lib/theme";
 import type { AlumniBucket } from "@teammeet/types";
 import {
   ChevronRight,
@@ -73,6 +75,48 @@ const BUCKET_OPTIONS: { value: AlumniBucket; label: string }[] = [
   { value: "5000+", label: "5,000+ (contact us)" },
 ];
 
+const SETTINGS_COLORS = {
+  background: "#f8fafc",
+  foreground: "#0f172a",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  muted: "#64748b",
+  mutedForeground: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#ffffff",
+  primary: "#059669",
+  primaryForeground: "#ffffff",
+  primaryLight: "#d1fae5",
+  secondary: "#f1f5f9",
+  error: "#ef4444",
+  success: "#22c55e",
+  warning: "#f59e0b",
+};
+
+const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+};
+
+const fontSize = {
+  xs: 12,
+  sm: 14,
+  base: 16,
+  lg: 18,
+  xl: 20,
+};
+
+const fontWeight = {
+  normal: "400" as const,
+  medium: "500" as const,
+  semibold: "600" as const,
+  bold: "700" as const,
+};
+
 function formatDate(dateString: string | null): string {
   if (!dateString) return "N/A";
   const date = new Date(dateString);
@@ -88,28 +132,28 @@ function formatBucket(bucket: string): string {
   return `Alumni ${bucket}`;
 }
 
-function formatStatus(status: string, colors: ThemeColors): { label: string; color: string } {
+function formatStatus(status: string): { label: string; color: string } {
   switch (status) {
     case "active":
-      return { label: "Active", color: colors.success };
+      return { label: "Active", color: SETTINGS_COLORS.success };
     case "trialing":
-      return { label: "Trial", color: colors.primary };
+      return { label: "Trial", color: SETTINGS_COLORS.primary };
     case "past_due":
-      return { label: "Past Due", color: colors.warning };
+      return { label: "Past Due", color: SETTINGS_COLORS.warning };
     case "canceled":
     case "canceling":
-      return { label: status === "canceling" ? "Canceling" : "Canceled", color: colors.error };
+      return { label: status === "canceling" ? "Canceling" : "Canceled", color: SETTINGS_COLORS.error };
     default:
-      return { label: status, color: colors.mutedForeground };
+      return { label: status, color: SETTINGS_COLORS.mutedForeground };
   }
 }
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { orgSlug, orgId } = useOrg();
+  const navigation = useNavigation();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const { user } = useAuth();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
 
   // Hooks with realtime sync
   const { org, loading: orgLoading, updateName, updateBranding } = useOrgSettings(orgSlug);
@@ -237,6 +281,16 @@ export default function SettingsScreen() {
     await refetchSubscription();
     setRefreshing(false);
   }, [refetchSubscription]);
+
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
 
   const toggleSection = (section: string) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -543,7 +597,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const statusInfo = subscription ? formatStatus(subscription.status, colors) : null;
+  const statusInfo = subscription ? formatStatus(subscription.status) : null;
   const activeMembers = memberships.filter((m) => m.status === "active");
   const revokedMembers = memberships.filter((m) => m.status === "revoked");
   const totalPending = pendingMembers.length + pendingAlumni.length;
@@ -565,7 +619,7 @@ export default function SettingsScreen() {
       </View>
       <ChevronDown
         size={20}
-        color={colors.mutedForeground}
+        color={SETTINGS_COLORS.mutedForeground}
         style={{ transform: [{ rotate: expandedSections[section] ? "180deg" : "0deg" }] }}
       />
     </TouchableOpacity>
@@ -573,26 +627,51 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        contentInsetAdjustmentBehavior="automatic"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-          />
-        }
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Settings</Text>
+              <Text style={styles.headerMeta}>{orgName}</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={SETTINGS_COLORS.primary}
+            />
+          }
+        >
         {/* Organization Section - Admin Only */}
         {isAdmin && !roleLoading && (
           <View style={styles.section}>
-            {renderSectionHeader("Organization", "organization", <Building2 size={20} color={colors.muted} />)}
+            {renderSectionHeader("Organization", "organization", <Building2 size={20} color={SETTINGS_COLORS.muted} />)}
             {expandedSections.organization && (
               <View style={styles.card}>
                 {orgLoading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                   </View>
                 ) : (
                   <>
@@ -604,7 +683,7 @@ export default function SettingsScreen() {
                         value={editedName}
                         onChangeText={setEditedName}
                         placeholder="Organization name"
-                        placeholderTextColor={colors.mutedForeground}
+                        placeholderTextColor={SETTINGS_COLORS.mutedForeground}
                       />
                       {nameError && <Text style={styles.errorText}>{nameError}</Text>}
                       <TouchableOpacity
@@ -613,7 +692,7 @@ export default function SettingsScreen() {
                         disabled={nameSaving || editedName === org?.name}
                       >
                         {nameSaving ? (
-                          <ActivityIndicator size="small" color={colors.primaryForeground} />
+                          <ActivityIndicator size="small" color={SETTINGS_COLORS.primaryForeground} />
                         ) : (
                           <Text style={styles.buttonText}>Save Name</Text>
                         )}
@@ -624,7 +703,7 @@ export default function SettingsScreen() {
                     <View style={styles.divider} />
                     <View style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>Branding</Text>
-                      <View style={[styles.brandingPreview, { backgroundColor: org?.primary_color || colors.primary }]}>
+                      <View style={[styles.brandingPreview, { backgroundColor: org?.primary_color || SETTINGS_COLORS.primary }]}>
                         {org?.logo_url ? (
                           <Image source={{ uri: org.logo_url }} style={styles.logoPreview} />
                         ) : (
@@ -639,11 +718,11 @@ export default function SettingsScreen() {
                       </View>
                       <View style={styles.colorRow}>
                         <View style={styles.colorItem}>
-                          <View style={[styles.colorSwatch, { backgroundColor: org?.primary_color || colors.primary }]} />
+                          <View style={[styles.colorSwatch, { backgroundColor: org?.primary_color || SETTINGS_COLORS.primary }]} />
                           <Text style={styles.colorLabel}>Primary</Text>
                         </View>
                         <View style={styles.colorItem}>
-                          <View style={[styles.colorSwatch, { backgroundColor: org?.secondary_color || colors.secondary }]} />
+                          <View style={[styles.colorSwatch, { backgroundColor: org?.secondary_color || SETTINGS_COLORS.secondary }]} />
                           <Text style={styles.colorLabel}>Secondary</Text>
                         </View>
                       </View>
@@ -660,12 +739,12 @@ export default function SettingsScreen() {
 
         {/* Notifications Section */}
         <View style={styles.section}>
-          {renderSectionHeader("Notifications", "notifications", <Bell size={20} color={colors.muted} />)}
+          {renderSectionHeader("Notifications", "notifications", <Bell size={20} color={SETTINGS_COLORS.muted} />)}
           {expandedSections.notifications && (
             <View style={styles.card}>
               {prefsLoading ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
+                  <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                 </View>
               ) : (
                 <>
@@ -676,7 +755,7 @@ export default function SettingsScreen() {
                       value={emailAddress}
                       onChangeText={setEmailAddress}
                       placeholder="you@example.com"
-                      placeholderTextColor={colors.mutedForeground}
+                      placeholderTextColor={SETTINGS_COLORS.mutedForeground}
                       keyboardType="email-address"
                       autoCapitalize="none"
                     />
@@ -690,8 +769,8 @@ export default function SettingsScreen() {
                     <Switch
                       value={emailEnabled}
                       onValueChange={setEmailEnabled}
-                      trackColor={{ false: colors.border, true: colors.primaryLight }}
-                      thumbColor={emailEnabled ? colors.primary : colors.card}
+                      trackColor={{ false: SETTINGS_COLORS.border, true: SETTINGS_COLORS.primaryLight }}
+                      thumbColor={emailEnabled ? SETTINGS_COLORS.primary : SETTINGS_COLORS.card}
                     />
                   </View>
 
@@ -703,8 +782,8 @@ export default function SettingsScreen() {
                     <Switch
                       value={pushEnabled}
                       onValueChange={setPushEnabled}
-                      trackColor={{ false: colors.border, true: colors.primaryLight }}
-                      thumbColor={pushEnabled ? colors.primary : colors.card}
+                      trackColor={{ false: SETTINGS_COLORS.border, true: SETTINGS_COLORS.primaryLight }}
+                      thumbColor={pushEnabled ? SETTINGS_COLORS.primary : SETTINGS_COLORS.card}
                     />
                   </View>
 
@@ -714,7 +793,7 @@ export default function SettingsScreen() {
                     disabled={prefsSaving}
                   >
                     {prefsSaving ? (
-                      <ActivityIndicator size="small" color={colors.primaryForeground} />
+                      <ActivityIndicator size="small" color={SETTINGS_COLORS.primaryForeground} />
                     ) : (
                       <Text style={styles.buttonText}>Save Preferences</Text>
                     )}
@@ -728,7 +807,7 @@ export default function SettingsScreen() {
         {/* Invites Section - Admin Only */}
         {isAdmin && !roleLoading && (
           <View style={styles.section}>
-            {renderSectionHeader("Invites", "invites", <LinkIcon size={20} color={colors.muted} />, invites.filter(isInviteValid).length)}
+            {renderSectionHeader("Invites", "invites", <LinkIcon size={20} color={SETTINGS_COLORS.muted} />, invites.filter(isInviteValid).length)}
             {expandedSections.invites && (
               <View style={styles.card}>
                 {/* Quota Display */}
@@ -761,7 +840,7 @@ export default function SettingsScreen() {
                     style={styles.createButton}
                     onPress={() => setShowInviteForm(true)}
                   >
-                    <Plus size={18} color={colors.primary} />
+                    <Plus size={18} color={SETTINGS_COLORS.primary} />
                     <Text style={styles.createButtonText}>Create Invite</Text>
                   </TouchableOpacity>
                 )}
@@ -790,7 +869,7 @@ export default function SettingsScreen() {
                       value={inviteUses}
                       onChangeText={setInviteUses}
                       placeholder="Unlimited"
-                      placeholderTextColor={colors.mutedForeground}
+                      placeholderTextColor={SETTINGS_COLORS.mutedForeground}
                       keyboardType="number-pad"
                     />
 
@@ -811,7 +890,7 @@ export default function SettingsScreen() {
                         disabled={inviteCreating}
                       >
                         {inviteCreating ? (
-                          <ActivityIndicator size="small" color={colors.primaryForeground} />
+                          <ActivityIndicator size="small" color={SETTINGS_COLORS.primaryForeground} />
                         ) : (
                           <Text style={styles.buttonText}>Create</Text>
                         )}
@@ -823,7 +902,7 @@ export default function SettingsScreen() {
                 {/* Invites List */}
                 {invitesLoading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                   </View>
                 ) : invites.length > 0 ? (
                   <View style={styles.invitesList}>
@@ -837,14 +916,14 @@ export default function SettingsScreen() {
                         <View key={invite.id} style={[styles.inviteItem, !valid && styles.inviteItemInvalid]}>
                           <View style={styles.inviteHeader}>
                             <Text style={styles.inviteCode}>{invite.code}</Text>
-                            <View style={[styles.roleBadge, { backgroundColor: invite.role === "admin" ? colors.warning + "20" : invite.role === "alumni" ? colors.muted + "20" : colors.primary + "20" }]}>
-                              <Text style={[styles.roleBadgeText, { color: invite.role === "admin" ? colors.warning : invite.role === "alumni" ? colors.foreground : colors.primary }]}>
+                            <View style={[styles.roleBadge, { backgroundColor: invite.role === "admin" ? SETTINGS_COLORS.warning + "20" : invite.role === "alumni" ? SETTINGS_COLORS.muted + "20" : SETTINGS_COLORS.primary + "20" }]}>
+                              <Text style={[styles.roleBadgeText, { color: invite.role === "admin" ? SETTINGS_COLORS.warning : invite.role === "alumni" ? SETTINGS_COLORS.foreground : SETTINGS_COLORS.primary }]}>
                                 {getRoleLabel(invite.role)}
                               </Text>
                             </View>
-                            {expired && <View style={[styles.statusBadge, { backgroundColor: colors.error + "20" }]}><Text style={[styles.statusBadgeText, { color: colors.error }]}>Expired</Text></View>}
-                            {revoked && <View style={[styles.statusBadge, { backgroundColor: colors.error + "20" }]}><Text style={[styles.statusBadgeText, { color: colors.error }]}>Revoked</Text></View>}
-                            {exhausted && <View style={[styles.statusBadge, { backgroundColor: colors.error + "20" }]}><Text style={[styles.statusBadgeText, { color: colors.error }]}>No uses left</Text></View>}
+                            {expired && <View style={[styles.statusBadge, { backgroundColor: SETTINGS_COLORS.error + "20" }]}><Text style={[styles.statusBadgeText, { color: SETTINGS_COLORS.error }]}>Expired</Text></View>}
+                            {revoked && <View style={[styles.statusBadge, { backgroundColor: SETTINGS_COLORS.error + "20" }]}><Text style={[styles.statusBadgeText, { color: SETTINGS_COLORS.error }]}>Revoked</Text></View>}
+                            {exhausted && <View style={[styles.statusBadge, { backgroundColor: SETTINGS_COLORS.error + "20" }]}><Text style={[styles.statusBadgeText, { color: SETTINGS_COLORS.error }]}>No uses left</Text></View>}
                           </View>
 
                           <Text style={styles.inviteMeta}>
@@ -858,9 +937,9 @@ export default function SettingsScreen() {
                               onPress={() => copyInviteLink(invite)}
                             >
                               {copiedInviteId === invite.id ? (
-                                <Check size={16} color={colors.success} />
+                                <Check size={16} color={SETTINGS_COLORS.success} />
                               ) : (
-                                <Copy size={16} color={colors.primary} />
+                                <Copy size={16} color={SETTINGS_COLORS.primary} />
                               )}
                               <Text style={styles.inviteActionText}>
                                 {copiedInviteId === invite.id ? "Copied!" : "Copy Link"}
@@ -871,7 +950,7 @@ export default function SettingsScreen() {
                               style={styles.inviteAction}
                               onPress={() => setShowQRCode(showQRCode === invite.id ? null : invite.id)}
                             >
-                              <QrCode size={16} color={colors.primary} />
+                              <QrCode size={16} color={SETTINGS_COLORS.primary} />
                               <Text style={styles.inviteActionText}>QR</Text>
                             </TouchableOpacity>
 
@@ -885,8 +964,8 @@ export default function SettingsScreen() {
                                   ]);
                                 }}
                               >
-                                <X size={16} color={colors.warning} />
-                                <Text style={[styles.inviteActionText, { color: colors.warning }]}>Revoke</Text>
+                                <X size={16} color={SETTINGS_COLORS.warning} />
+                                <Text style={[styles.inviteActionText, { color: SETTINGS_COLORS.warning }]}>Revoke</Text>
                               </TouchableOpacity>
                             )}
 
@@ -899,7 +978,7 @@ export default function SettingsScreen() {
                                 ]);
                               }}
                             >
-                              <Trash2 size={16} color={colors.error} />
+                              <Trash2 size={16} color={SETTINGS_COLORS.error} />
                             </TouchableOpacity>
                           </View>
 
@@ -908,8 +987,8 @@ export default function SettingsScreen() {
                               <QRCode
                                 value={getInviteLink(invite, getWebAppUrl())}
                                 size={180}
-                                backgroundColor={colors.card}
-                                color={colors.foreground}
+                                backgroundColor={SETTINGS_COLORS.card}
+                                color={SETTINGS_COLORS.foreground}
                               />
                             </View>
                           )}
@@ -928,12 +1007,12 @@ export default function SettingsScreen() {
         {/* Access Control Section - Admin Only */}
         {isAdmin && !roleLoading && (
           <View style={styles.section}>
-            {renderSectionHeader("Access Control", "access", <Users size={20} color={colors.muted} />, totalPending)}
+            {renderSectionHeader("Access Control", "access", <Users size={20} color={SETTINGS_COLORS.muted} />, totalPending)}
             {expandedSections.access && (
               <View style={styles.card}>
                 {membersLoading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                   </View>
                 ) : (
                   <>
@@ -961,10 +1040,10 @@ export default function SettingsScreen() {
                             </View>
                             <View style={styles.memberActions}>
                               <TouchableOpacity style={styles.approveButton} onPress={() => handleApproveMember(member.user_id)}>
-                                <Check size={16} color={colors.success} />
+                                <Check size={16} color={SETTINGS_COLORS.success} />
                               </TouchableOpacity>
                               <TouchableOpacity style={styles.rejectButton} onPress={() => handleRejectMember(member.user_id)}>
-                                <X size={16} color={colors.error} />
+                                <X size={16} color={SETTINGS_COLORS.error} />
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -1005,11 +1084,11 @@ export default function SettingsScreen() {
                             }}
                           >
                             {roleChanging === member.user_id ? (
-                              <ActivityIndicator size="small" color={colors.primary} />
+                              <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                             ) : (
                               <>
                                 <Text style={styles.roleSelectorText}>{getRoleLabel(member.role)}</Text>
-                                <ChevronDown size={14} color={colors.mutedForeground} />
+                                <ChevronDown size={14} color={SETTINGS_COLORS.mutedForeground} />
                               </>
                             )}
                           </TouchableOpacity>
@@ -1017,7 +1096,7 @@ export default function SettingsScreen() {
                             style={styles.removeButton}
                             onPress={() => handleRemoveAccess(member.user_id)}
                           >
-                            <X size={16} color={colors.error} />
+                            <X size={16} color={SETTINGS_COLORS.error} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1061,12 +1140,12 @@ export default function SettingsScreen() {
         {/* Billing Section - Admin Only */}
         {isAdmin && !roleLoading && (
           <View style={styles.section}>
-            {renderSectionHeader("Billing", "billing", <CreditCard size={20} color={colors.muted} />)}
+            {renderSectionHeader("Billing", "billing", <CreditCard size={20} color={SETTINGS_COLORS.muted} />)}
             {expandedSections.billing && (
               <View style={styles.card}>
                 {subLoading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={SETTINGS_COLORS.primary} />
                     <Text style={styles.loadingText}>Loading subscription...</Text>
                   </View>
                 ) : subError ? (
@@ -1110,7 +1189,7 @@ export default function SettingsScreen() {
                         <Text style={styles.pickerButtonText}>
                           {BUCKET_OPTIONS.find((o) => o.value === selectedBucket)?.label || selectedBucket}
                         </Text>
-                        <ChevronDown size={16} color={colors.mutedForeground} />
+                        <ChevronDown size={16} color={SETTINGS_COLORS.mutedForeground} />
                       </TouchableOpacity>
 
                       <View style={styles.intervalRow}>
@@ -1134,7 +1213,7 @@ export default function SettingsScreen() {
                         disabled={planUpdating || selectedBucket === subscription.bucket}
                       >
                         {planUpdating ? (
-                          <ActivityIndicator size="small" color={colors.primaryForeground} />
+                          <ActivityIndicator size="small" color={SETTINGS_COLORS.primaryForeground} />
                         ) : (
                           <Text style={styles.buttonText}>Update Plan</Text>
                         )}
@@ -1150,12 +1229,12 @@ export default function SettingsScreen() {
                       disabled={billingLoading || !subscription.stripeCustomerId}
                     >
                       {billingLoading ? (
-                        <ActivityIndicator size="small" color={colors.primaryForeground} />
+                        <ActivityIndicator size="small" color={SETTINGS_COLORS.primaryForeground} />
                       ) : (
                         <>
-                          <CreditCard size={18} color={colors.primaryForeground} />
+                          <CreditCard size={18} color={SETTINGS_COLORS.primaryForeground} />
                           <Text style={styles.billingButtonText}>Manage Billing</Text>
-                          <ExternalLink size={16} color={colors.primaryForeground} />
+                          <ExternalLink size={16} color={SETTINGS_COLORS.primaryForeground} />
                         </>
                       )}
                     </TouchableOpacity>
@@ -1174,7 +1253,7 @@ export default function SettingsScreen() {
         {/* Danger Zone - Admin Only */}
         {isAdmin && !roleLoading && (
           <View style={styles.section}>
-            {renderSectionHeader("Danger Zone", "danger", <AlertTriangle size={20} color={colors.warning} />)}
+            {renderSectionHeader("Danger Zone", "danger", <AlertTriangle size={20} color={SETTINGS_COLORS.warning} />)}
             {expandedSections.danger && (
               <View style={[styles.card, styles.dangerCard]}>
                 <View style={styles.dangerItem}>
@@ -1190,7 +1269,7 @@ export default function SettingsScreen() {
                     disabled={cancelling || subscription?.status === "canceling" || subscription?.status === "canceled"}
                   >
                     {cancelling ? (
-                      <ActivityIndicator size="small" color={colors.warning} />
+                      <ActivityIndicator size="small" color={SETTINGS_COLORS.warning} />
                     ) : (
                       <Text style={styles.dangerButtonText}>
                         {subscription?.status === "canceling" ? "Cancelling..." : "Cancel"}
@@ -1229,13 +1308,14 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <View style={styles.card}>
             <View style={styles.aboutRow}>
-              <Info size={20} color={colors.muted} />
+              <Info size={20} color={SETTINGS_COLORS.muted} />
               <Text style={styles.aboutLabel}>App Version</Text>
               <Text style={styles.aboutValue}>{Constants.expoConfig?.version || "1.0.0"}</Text>
             </View>
           </View>
         </View>
       </ScrollView>
+      </View>
 
       {/* Stripe Billing Portal WebView */}
       {billingPortalUrl && (
@@ -1288,7 +1368,7 @@ export default function SettingsScreen() {
               value={deleteConfirmText}
               onChangeText={setDeleteConfirmText}
               placeholder={`Type "${org?.name}" to confirm`}
-              placeholderTextColor={colors.mutedForeground}
+              placeholderTextColor={SETTINGS_COLORS.mutedForeground}
             />
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -1339,7 +1419,7 @@ export default function SettingsScreen() {
                   <Text style={[styles.pickerOptionText, disabled && styles.pickerOptionTextDisabled]}>
                     {option.label}
                   </Text>
-                  {selectedBucket === option.value && <Check size={18} color={colors.primary} />}
+                  {selectedBucket === option.value && <Check size={18} color={SETTINGS_COLORS.primary} />}
                 </TouchableOpacity>
               );
             })}
@@ -1350,11 +1430,69 @@ export default function SettingsScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {
+      flex: 0,
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      overflow: "hidden",
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: SETTINGS_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
+    },
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
     },
     scrollContent: {
       padding: 16,
@@ -1378,10 +1516,10 @@ const createStyles = (colors: ThemeColors) =>
     sectionTitle: {
       fontSize: 16,
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     badge: {
-      backgroundColor: colors.warning,
+      backgroundColor: SETTINGS_COLORS.warning,
       borderRadius: 10,
       minWidth: 20,
       height: 20,
@@ -1395,7 +1533,7 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "600",
     },
     card: {
-      backgroundColor: colors.card,
+      backgroundColor: SETTINGS_COLORS.card,
       borderRadius: 12,
       padding: 16,
       borderCurve: "continuous",
@@ -1407,7 +1545,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     loadingText: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     errorContainer: {
       padding: 16,
@@ -1416,17 +1554,17 @@ const createStyles = (colors: ThemeColors) =>
     },
     errorText: {
       fontSize: 14,
-      color: colors.error,
+      color: SETTINGS_COLORS.error,
       textAlign: "center",
     },
     retryButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: SETTINGS_COLORS.primary,
       paddingVertical: 8,
       paddingHorizontal: 16,
       borderRadius: 6,
     },
     retryButtonText: {
-      color: colors.primaryForeground,
+      color: SETTINGS_COLORS.primaryForeground,
       fontSize: 14,
       fontWeight: "600",
     },
@@ -1436,22 +1574,22 @@ const createStyles = (colors: ThemeColors) =>
     fieldLabel: {
       fontSize: 14,
       fontWeight: "500",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 8,
     },
     input: {
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       borderRadius: 8,
       paddingVertical: 12,
       paddingHorizontal: 16,
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 12,
     },
     button: {
-      backgroundColor: colors.primary,
+      backgroundColor: SETTINGS_COLORS.primary,
       paddingVertical: 12,
       paddingHorizontal: 20,
       borderRadius: 8,
@@ -1462,18 +1600,18 @@ const createStyles = (colors: ThemeColors) =>
       opacity: 0.5,
     },
     buttonText: {
-      color: colors.primaryForeground,
+      color: SETTINGS_COLORS.primaryForeground,
       fontSize: 16,
       fontWeight: "600",
     },
     divider: {
       height: 1,
-      backgroundColor: colors.border,
+      backgroundColor: SETTINGS_COLORS.border,
       marginVertical: 16,
     },
     hintText: {
       fontSize: 13,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
       marginTop: 8,
     },
     brandingPreview: {
@@ -1520,11 +1658,11 @@ const createStyles = (colors: ThemeColors) =>
       height: 24,
       borderRadius: 6,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
     },
     colorLabel: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     switchRow: {
       flexDirection: "row",
@@ -1532,18 +1670,18 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "space-between",
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: SETTINGS_COLORS.border,
     },
     switchInfo: {
       flex: 1,
     },
     switchLabel: {
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     switchHint: {
       fontSize: 13,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
       marginTop: 2,
     },
     quotaContainer: {
@@ -1555,12 +1693,12 @@ const createStyles = (colors: ThemeColors) =>
     },
     quotaLabel: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     quotaValue: {
       fontSize: 14,
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     createButton: {
       flexDirection: "row",
@@ -1570,13 +1708,13 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: SETTINGS_COLORS.primary,
       borderStyle: "dashed",
     },
     createButtonText: {
       fontSize: 16,
       fontWeight: "500",
-      color: colors.primary,
+      color: SETTINGS_COLORS.primary,
     },
     inviteForm: {
       marginTop: 16,
@@ -1591,19 +1729,19 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       alignItems: "center",
     },
     roleButtonActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primary + "10",
+      borderColor: SETTINGS_COLORS.primary,
+      backgroundColor: SETTINGS_COLORS.primary + "10",
     },
     roleButtonText: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     roleButtonTextActive: {
-      color: colors.primary,
+      color: SETTINGS_COLORS.primary,
       fontWeight: "600",
     },
     formActions: {
@@ -1616,19 +1754,19 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       alignItems: "center",
     },
     cancelButtonText: {
       fontSize: 16,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     invitesList: {
       marginTop: 16,
       gap: 12,
     },
     inviteItem: {
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
       padding: 12,
       borderRadius: 8,
     },
@@ -1645,7 +1783,7 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 18,
       fontWeight: "700",
       fontFamily: "monospace",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     roleBadge: {
       paddingVertical: 2,
@@ -1667,7 +1805,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     inviteMeta: {
       fontSize: 13,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
       marginTop: 8,
     },
     inviteActions: {
@@ -1682,25 +1820,25 @@ const createStyles = (colors: ThemeColors) =>
     },
     inviteActionText: {
       fontSize: 14,
-      color: colors.primary,
+      color: SETTINGS_COLORS.primary,
     },
     qrContainer: {
       alignItems: "center",
       paddingTop: 16,
       marginTop: 12,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: SETTINGS_COLORS.border,
     },
     emptyText: {
       fontSize: 14,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
       textAlign: "center",
       paddingVertical: 24,
     },
     subsectionTitle: {
       fontSize: 14,
       fontWeight: "600",
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
       textTransform: "uppercase",
       letterSpacing: 0.5,
       marginBottom: 12,
@@ -1711,7 +1849,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "space-between",
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: SETTINGS_COLORS.border,
     },
     memberItemRevoked: {
       opacity: 0.6,
@@ -1731,14 +1869,14 @@ const createStyles = (colors: ThemeColors) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.primaryLight,
+      backgroundColor: SETTINGS_COLORS.primaryLight,
       alignItems: "center",
       justifyContent: "center",
     },
     memberAvatarText: {
       fontSize: 16,
       fontWeight: "600",
-      color: colors.primary,
+      color: SETTINGS_COLORS.primary,
     },
     memberDetails: {
       flex: 1,
@@ -1746,15 +1884,15 @@ const createStyles = (colors: ThemeColors) =>
     memberName: {
       fontSize: 15,
       fontWeight: "500",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     memberEmail: {
       fontSize: 13,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
     },
     memberMeta: {
       fontSize: 12,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
       marginTop: 2,
     },
     memberActions: {
@@ -1766,7 +1904,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: colors.success + "20",
+      backgroundColor: SETTINGS_COLORS.success + "20",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1774,7 +1912,7 @@ const createStyles = (colors: ThemeColors) =>
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: colors.error + "20",
+      backgroundColor: SETTINGS_COLORS.error + "20",
       alignItems: "center",
       justifyContent: "center",
     },
@@ -1785,13 +1923,13 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 6,
       paddingHorizontal: 10,
       borderRadius: 6,
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
     },
     roleSelectorText: {
       fontSize: 13,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     removeButton: {
       width: 32,
@@ -1804,12 +1942,12 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 6,
       paddingHorizontal: 12,
       borderRadius: 6,
-      backgroundColor: colors.primary,
+      backgroundColor: SETTINGS_COLORS.primary,
     },
     restoreButtonText: {
       fontSize: 13,
       fontWeight: "500",
-      color: colors.primaryForeground,
+      color: SETTINGS_COLORS.primaryForeground,
     },
     subscriptionCard: {
       gap: 12,
@@ -1821,12 +1959,12 @@ const createStyles = (colors: ThemeColors) =>
     },
     subscriptionLabel: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     subscriptionValue: {
       fontSize: 14,
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     statusBadgeLarge: {
       flexDirection: "row",
@@ -1849,9 +1987,9 @@ const createStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       borderRadius: 8,
       paddingVertical: 12,
       paddingHorizontal: 16,
@@ -1859,7 +1997,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     pickerButtonText: {
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     intervalRow: {
       flexDirection: "row",
@@ -1871,32 +2009,32 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       alignItems: "center",
     },
     intervalButtonActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primary + "10",
+      borderColor: SETTINGS_COLORS.primary,
+      backgroundColor: SETTINGS_COLORS.primary + "10",
     },
     intervalButtonText: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     intervalButtonTextActive: {
-      color: colors.primary,
+      color: SETTINGS_COLORS.primary,
       fontWeight: "600",
     },
     billingButton: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: colors.primary,
+      backgroundColor: SETTINGS_COLORS.primary,
       paddingVertical: 12,
       borderRadius: 8,
       gap: 8,
     },
     billingButtonText: {
-      color: colors.primaryForeground,
+      color: SETTINGS_COLORS.primaryForeground,
       fontSize: 16,
       fontWeight: "600",
     },
@@ -1908,18 +2046,18 @@ const createStyles = (colors: ThemeColors) =>
     noSubscriptionText: {
       fontSize: 15,
       fontWeight: "500",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       textAlign: "center",
     },
     noSubscriptionHint: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
       textAlign: "center",
     },
     dangerCard: {
       borderWidth: 1,
-      borderColor: colors.warning + "50",
-      backgroundColor: colors.warning + "08",
+      borderColor: SETTINGS_COLORS.warning + "50",
+      backgroundColor: SETTINGS_COLORS.warning + "08",
     },
     dangerItem: {
       flexDirection: "row",
@@ -1933,28 +2071,28 @@ const createStyles = (colors: ThemeColors) =>
     dangerTitle: {
       fontSize: 15,
       fontWeight: "500",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 4,
     },
     dangerDescription: {
       fontSize: 13,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
     },
     dangerButton: {
       paddingVertical: 8,
       paddingHorizontal: 16,
       borderRadius: 6,
       borderWidth: 1,
-      borderColor: colors.warning,
+      borderColor: SETTINGS_COLORS.warning,
     },
     dangerButtonText: {
       fontSize: 14,
       fontWeight: "500",
-      color: colors.warning,
+      color: SETTINGS_COLORS.warning,
     },
     deleteButton: {
-      backgroundColor: colors.error,
-      borderColor: colors.error,
+      backgroundColor: SETTINGS_COLORS.error,
+      borderColor: SETTINGS_COLORS.error,
     },
     deleteButtonText: {
       fontSize: 14,
@@ -1969,11 +2107,11 @@ const createStyles = (colors: ThemeColors) =>
     aboutLabel: {
       flex: 1,
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     aboutValue: {
       fontSize: 14,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     modalOverlay: {
       flex: 1,
@@ -1983,7 +2121,7 @@ const createStyles = (colors: ThemeColors) =>
       padding: 24,
     },
     modalContent: {
-      backgroundColor: colors.card,
+      backgroundColor: SETTINGS_COLORS.card,
       borderRadius: 16,
       padding: 24,
       width: "100%",
@@ -1992,27 +2130,27 @@ const createStyles = (colors: ThemeColors) =>
     modalTitle: {
       fontSize: 18,
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 12,
     },
     modalDescription: {
       fontSize: 15,
-      color: colors.mutedForeground,
+      color: SETTINGS_COLORS.mutedForeground,
       marginBottom: 20,
     },
     modalBold: {
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     modalInput: {
-      backgroundColor: colors.background,
+      backgroundColor: SETTINGS_COLORS.background,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       borderRadius: 8,
       paddingVertical: 12,
       paddingHorizontal: 16,
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 20,
     },
     modalActions: {
@@ -2024,16 +2162,16 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: 12,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: SETTINGS_COLORS.border,
       alignItems: "center",
     },
     modalCancelText: {
       fontSize: 16,
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
     modalConfirmButton: {
       flex: 1,
-      backgroundColor: colors.warning,
+      backgroundColor: SETTINGS_COLORS.warning,
       paddingVertical: 12,
       borderRadius: 8,
       alignItems: "center",
@@ -2045,7 +2183,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     modalDeleteButton: {
       flex: 1,
-      backgroundColor: colors.error,
+      backgroundColor: SETTINGS_COLORS.error,
       paddingVertical: 12,
       borderRadius: 8,
       alignItems: "center",
@@ -2061,7 +2199,7 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "flex-end",
     },
     pickerContent: {
-      backgroundColor: colors.card,
+      backgroundColor: SETTINGS_COLORS.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       padding: 20,
@@ -2070,7 +2208,7 @@ const createStyles = (colors: ThemeColors) =>
     pickerTitle: {
       fontSize: 18,
       fontWeight: "600",
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
       marginBottom: 16,
       textAlign: "center",
     },
@@ -2080,16 +2218,16 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: "space-between",
       paddingVertical: 14,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: SETTINGS_COLORS.border,
     },
     pickerOptionDisabled: {
       opacity: 0.5,
     },
     pickerOptionText: {
       fontSize: 16,
-      color: colors.foreground,
+      color: SETTINGS_COLORS.foreground,
     },
     pickerOptionTextDisabled: {
-      color: colors.muted,
+      color: SETTINGS_COLORS.muted,
     },
   });

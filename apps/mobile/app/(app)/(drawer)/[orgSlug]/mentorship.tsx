@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
+  Image,
   ActivityIndicator,
   RefreshControl,
   TextInput,
@@ -15,17 +16,37 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Stack } from "expo-router";
+import { useNavigation } from "expo-router";
 import { ChevronDown, Trash2 } from "lucide-react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
-import { spacing, borderRadius, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import type { MentorshipLog, MentorshipPair, User } from "@teammeet/types";
+
+// Fixed color palette
+const MENTORSHIP_COLORS = {
+  background: "#f8fafc",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  mutedForeground: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#ffffff",
+  mutedSurface: "#f1f5f9",
+  primary: "#059669",
+  primaryForeground: "#ffffff",
+  primaryLight: "#10b981",
+  error: "#ef4444",
+  success: "#22c55e",
+  warning: "#f59e0b",
+};
 
 type SelectOption = { value: string; label: string };
 type MentorshipStatus = "active" | "paused" | "completed";
@@ -37,12 +58,23 @@ const STATUS_OPTIONS: SelectOption[] = [
 ];
 
 export default function MentorshipScreen() {
-  const { orgId } = useOrg();
+  const { orgId, orgName, orgLogoUrl } = useOrg();
   const { user } = useAuth();
   const { role, isAdmin, isActiveMember, isAlumni, isLoading: roleLoading } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const navigation = useNavigation();
+  const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
+
+  // Safe drawer toggle - only dispatch if drawer is available
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
   const [pairs, setPairs] = useState<MentorshipPair[]>([]);
   const [logs, setLogs] = useState<MentorshipLog[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -174,100 +206,143 @@ export default function MentorshipScreen() {
 
   if (showLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: "Mentorship" }} />
-        <View style={styles.stateContainer}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.stateText}>Loading mentorship...</Text>
+      <View style={styles.container}>
+        {/* Custom Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Mentorship</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        {/* Content Sheet */}
+        <View style={styles.contentSheet}>
+          <View style={styles.stateContainer}>
+            <ActivityIndicator color={MENTORSHIP_COLORS.primary} />
+            <Text style={styles.stateText}>Loading mentorship...</Text>
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <Stack.Screen options={{ title: "Mentorship" }} />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-          />
-        }
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.container}>
+      {/* Custom Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Mentorship</Text>
-          <Text style={styles.subtitle}>Manage and track mentorship pairs</Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable
-              onPress={handleRefresh}
-              style={({ pressed }) => [
-                styles.retryButton,
-                pressed && styles.retryButtonPressed,
-              ]}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                </View>
+              )}
             </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Mentorship</Text>
+              <Text style={styles.headerMeta}>
+                {filteredPairs.length} {filteredPairs.length === 1 ? "pair" : "pairs"}
+              </Text>
+            </View>
           </View>
-        ) : null}
+        </SafeAreaView>
+      </LinearGradient>
 
-        {isActiveMember && orgId ? (
-          <MenteeStatusToggle orgId={orgId} styles={styles} colors={colors} />
-        ) : null}
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={MENTORSHIP_COLORS.primary}
+            />
+          }
+          keyboardShouldPersistTaps="handled"
+        >
 
-        {isAdmin && orgId ? (
-          <MentorshipAdminPanel
-            orgId={orgId}
-            styles={styles}
-            colors={colors}
-            onRefresh={handleRefresh}
-          />
-        ) : null}
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+              <Pressable
+                onPress={handleRefresh}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.retryButtonPressed,
+                ]}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : null}
 
-        {!isAdmin && isAlumni && orgId ? (
-          <MentorPairManager
-            orgId={orgId}
-            styles={styles}
-            colors={colors}
-            onRefresh={handleRefresh}
-          />
-        ) : null}
+          {isActiveMember && orgId ? (
+            <MenteeStatusToggle orgId={orgId} styles={styles} />
+          ) : null}
 
-        {orgId ? (
-          <MentorshipPairsList
-            pairs={filteredPairs}
-            logsByPair={logsByPair}
-            userLabel={userLabel}
-            isAdmin={isAdmin}
-            canLogActivity={isAdmin || isActiveMember}
-            orgId={orgId}
-            userId={user?.id ?? null}
-            styles={styles}
-            colors={colors}
-            onRefresh={handleRefresh}
-          />
-        ) : null}
-      </ScrollView>
-    </SafeAreaView>
+          {isAdmin && orgId ? (
+            <MentorshipAdminPanel
+              orgId={orgId}
+              styles={styles}
+              onRefresh={handleRefresh}
+            />
+          ) : null}
+
+          {!isAdmin && isAlumni && orgId ? (
+            <MentorPairManager
+              orgId={orgId}
+              styles={styles}
+              onRefresh={handleRefresh}
+            />
+          ) : null}
+
+          {orgId ? (
+            <MentorshipPairsList
+              pairs={filteredPairs}
+              logsByPair={logsByPair}
+              userLabel={userLabel}
+              isAdmin={isAdmin}
+              canLogActivity={isAdmin || isActiveMember}
+              orgId={orgId}
+              userId={user?.id ?? null}
+              styles={styles}
+              onRefresh={handleRefresh}
+            />
+          ) : null}
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
 function MenteeStatusToggle({
   orgId,
   styles,
-  colors,
 }: {
   orgId: string;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
 }) {
   const { user } = useAuth();
   const [status, setStatus] = useState<"active" | "revoked" | null>(null);
@@ -355,7 +430,7 @@ function MenteeStatusToggle({
       </View>
       {loading ? (
         <View style={styles.inlineLoading}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={MENTORSHIP_COLORS.primary} />
           <Text style={styles.inlineLoadingText}>Checking availability...</Text>
         </View>
       ) : (
@@ -369,8 +444,8 @@ function MenteeStatusToggle({
               value={status === "active"}
               onValueChange={handleToggle}
               disabled={saving}
-              trackColor={{ false: colors.border, true: colors.primaryLight }}
-              thumbColor={status === "active" ? colors.primary : colors.card}
+              trackColor={{ false: MENTORSHIP_COLORS.border, true: MENTORSHIP_COLORS.primaryLight }}
+              thumbColor={status === "active" ? MENTORSHIP_COLORS.primary : MENTORSHIP_COLORS.card}
             />
           </View>
         </>
@@ -382,12 +457,10 @@ function MenteeStatusToggle({
 function MentorshipAdminPanel({
   orgId,
   styles,
-  colors,
   onRefresh,
 }: {
   orgId: string;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
   onRefresh: () => void;
 }) {
   const [mentors, setMentors] = useState<SelectOption[]>([]);
@@ -518,7 +591,7 @@ function MentorshipAdminPanel({
     return (
       <View style={styles.card}>
         <View style={styles.inlineLoading}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={MENTORSHIP_COLORS.primary} />
           <Text style={styles.inlineLoadingText}>Loading mentorship controls...</Text>
         </View>
       </View>
@@ -538,7 +611,6 @@ function MentorshipAdminPanel({
         placeholder="Select mentor"
         onPress={() => setActiveSelect("mentor")}
         styles={styles}
-        colors={colors}
       />
       <SelectField
         label="Mentee (active member)"
@@ -546,7 +618,6 @@ function MentorshipAdminPanel({
         placeholder="Select mentee"
         onPress={() => setActiveSelect("mentee")}
         styles={styles}
-        colors={colors}
       />
       <Pressable
         onPress={handleCreate}
@@ -558,7 +629,7 @@ function MentorshipAdminPanel({
         ]}
       >
         {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
+          <ActivityIndicator color={MENTORSHIP_COLORS.primaryForeground} />
         ) : (
           <Text style={styles.primaryButtonText}>Create pair</Text>
         )}
@@ -575,7 +646,6 @@ function MentorshipAdminPanel({
         }}
         onClose={() => setActiveSelect(null)}
         styles={styles}
-        colors={colors}
       />
       <SelectModal
         visible={activeSelect === "mentee"}
@@ -588,7 +658,6 @@ function MentorshipAdminPanel({
         }}
         onClose={() => setActiveSelect(null)}
         styles={styles}
-        colors={colors}
       />
     </View>
   );
@@ -597,12 +666,10 @@ function MentorshipAdminPanel({
 function MentorPairManager({
   orgId,
   styles,
-  colors,
   onRefresh,
 }: {
   orgId: string;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
   onRefresh: () => void;
 }) {
   const { user } = useAuth();
@@ -790,7 +857,7 @@ function MentorPairManager({
     return (
       <View style={styles.card}>
         <View style={styles.inlineLoading}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={MENTORSHIP_COLORS.primary} />
           <Text style={styles.inlineLoadingText}>Loading your mentorship controls...</Text>
         </View>
       </View>
@@ -812,16 +879,14 @@ function MentorPairManager({
         placeholder="Select mentee"
         onPress={() => setActiveSelect("mentee")}
         styles={styles}
-        colors={colors}
-      />
+              />
       <SelectField
         label="Status"
         value={STATUS_OPTIONS.find((opt) => opt.value === status)?.label || ""}
         placeholder="Select status"
         onPress={() => setActiveSelect("status")}
         styles={styles}
-        colors={colors}
-      />
+              />
       <View style={styles.buttonRow}>
         {pairId ? (
           <Pressable
@@ -846,7 +911,7 @@ function MentorPairManager({
           ]}
         >
           {isSaving ? (
-            <ActivityIndicator color={colors.primaryForeground} />
+            <ActivityIndicator color={MENTORSHIP_COLORS.primaryForeground} />
           ) : (
             <Text style={styles.primaryButtonText}>{pairId ? "Update mentee" : "Assign mentee"}</Text>
           )}
@@ -864,8 +929,7 @@ function MentorPairManager({
         }}
         onClose={() => setActiveSelect(null)}
         styles={styles}
-        colors={colors}
-      />
+              />
       <SelectModal
         visible={activeSelect === "status"}
         title="Select status"
@@ -877,8 +941,7 @@ function MentorPairManager({
         }}
         onClose={() => setActiveSelect(null)}
         styles={styles}
-        colors={colors}
-      />
+              />
     </View>
   );
 }
@@ -892,7 +955,6 @@ function MentorshipPairsList({
   orgId,
   userId,
   styles,
-  colors,
   onRefresh,
 }: {
   pairs: MentorshipPair[];
@@ -903,7 +965,6 @@ function MentorshipPairsList({
   orgId: string;
   userId: string | null;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
   onRefresh: () => void;
 }) {
   if (pairs.length === 0) {
@@ -930,8 +991,7 @@ function MentorshipPairsList({
           userId={userId}
           userLabel={userLabel}
           styles={styles}
-          colors={colors}
-          onRefresh={onRefresh}
+                    onRefresh={onRefresh}
         />
       ))}
     </View>
@@ -949,7 +1009,6 @@ function MentorshipPairCard({
   userId,
   userLabel,
   styles,
-  colors,
   onRefresh,
 }: {
   pair: MentorshipPair;
@@ -962,7 +1021,6 @@ function MentorshipPairCard({
   userId: string | null;
   userLabel: (id: string) => string;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
   onRefresh: () => void;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1013,10 +1071,10 @@ function MentorshipPairCard({
 
   const statusColor =
     pair.status === "completed"
-      ? colors.mutedForeground
+      ? MENTORSHIP_COLORS.secondaryText
       : pair.status === "paused"
-        ? colors.warning
-        : colors.success;
+        ? MENTORSHIP_COLORS.warning
+        : MENTORSHIP_COLORS.success;
 
   return (
     <View style={styles.card}>
@@ -1041,7 +1099,7 @@ function MentorshipPairCard({
                 isDeleting && styles.buttonDisabled,
               ]}
             >
-              <Trash2 size={14} color={colors.error} />
+              <Trash2 size={14} color={MENTORSHIP_COLORS.error} />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </Pressable>
           ) : null}
@@ -1082,8 +1140,7 @@ function MentorshipPairCard({
             pairId={pair.id}
             userId={userId}
             styles={styles}
-            colors={colors}
-            onSaved={onRefresh}
+                        onSaved={onRefresh}
           />
         </View>
       ) : null}
@@ -1096,14 +1153,12 @@ function MentorshipLogForm({
   pairId,
   userId,
   styles,
-  colors,
   onSaved,
 }: {
   orgId: string;
   pairId: string;
   userId: string;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
   onSaved: () => void;
 }) {
   const [entryDate, setEntryDate] = useState<Date>(new Date());
@@ -1172,7 +1227,7 @@ function MentorshipLogForm({
           <Text style={styles.selectFieldText}>
             {entryDate.toLocaleDateString()}
           </Text>
-          <ChevronDown size={16} color={colors.mutedForeground} />
+          <ChevronDown size={16} color={MENTORSHIP_COLORS.mutedForeground} />
         </Pressable>
         {showPicker ? (
           <View style={styles.pickerContainer}>
@@ -1202,7 +1257,7 @@ function MentorshipLogForm({
           value={notes}
           onChangeText={setNotes}
           placeholder="What did you work on?"
-          placeholderTextColor={colors.mutedForeground}
+          placeholderTextColor={MENTORSHIP_COLORS.secondaryText}
           multiline
           textAlignVertical="top"
           style={[styles.input, styles.textArea]}
@@ -1214,7 +1269,7 @@ function MentorshipLogForm({
           value={progressMetric}
           onChangeText={setProgressMetric}
           placeholder="e.g., 3 sessions"
-          placeholderTextColor={colors.mutedForeground}
+          placeholderTextColor={MENTORSHIP_COLORS.secondaryText}
           keyboardType="number-pad"
           style={styles.input}
         />
@@ -1229,7 +1284,7 @@ function MentorshipLogForm({
         ]}
       >
         {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
+          <ActivityIndicator color={MENTORSHIP_COLORS.primaryForeground} />
         ) : (
           <Text style={styles.primaryButtonText}>Save log</Text>
         )}
@@ -1244,14 +1299,12 @@ function SelectField({
   placeholder,
   onPress,
   styles,
-  colors,
 }: {
   label: string;
   value: string;
   placeholder: string;
   onPress: () => void;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
 }) {
   return (
     <View style={styles.fieldGroup}>
@@ -1266,12 +1319,12 @@ function SelectField({
         <Text
           style={[
             styles.selectFieldText,
-            !value && { color: colors.mutedForeground },
+            !value && { color: MENTORSHIP_COLORS.secondaryText },
           ]}
         >
           {value || placeholder}
         </Text>
-        <ChevronDown size={16} color={colors.mutedForeground} />
+        <ChevronDown size={16} color={MENTORSHIP_COLORS.mutedForeground} />
       </Pressable>
     </View>
   );
@@ -1285,7 +1338,6 @@ function SelectModal({
   onSelect,
   onClose,
   styles,
-  colors,
 }: {
   visible: boolean;
   title: string;
@@ -1294,7 +1346,6 @@ function SelectModal({
   onSelect: (option: SelectOption) => void;
   onClose: () => void;
   styles: ReturnType<typeof createStyles>;
-  colors: ThemeColors;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -1329,7 +1380,7 @@ function SelectModal({
                     <Text
                       style={[
                         styles.modalOptionText,
-                        isSelected && { color: colors.primary },
+                        isSelected && { color: MENTORSHIP_COLORS.primary },
                       ]}
                     >
                       {item.label}
@@ -1346,11 +1397,69 @@ function SelectModal({
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: MENTORSHIP_COLORS.background,
+    },
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.bold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: MENTORSHIP_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
     },
     scrollContent: {
       padding: spacing.md,
@@ -1363,18 +1472,18 @@ const createStyles = (colors: ThemeColors) =>
     title: {
       fontSize: fontSize["2xl"],
       fontWeight: fontWeight.bold,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     subtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     card: {
-      backgroundColor: colors.card,
+      backgroundColor: MENTORSHIP_COLORS.card,
       borderRadius: borderRadius.lg,
       borderCurve: "continuous",
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: MENTORSHIP_COLORS.border,
       padding: spacing.md,
       gap: spacing.md,
       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
@@ -1385,11 +1494,11 @@ const createStyles = (colors: ThemeColors) =>
     sectionTitle: {
       fontSize: fontSize.lg,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     sectionSubtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     stateContainer: {
       flex: 1,
@@ -1399,26 +1508,26 @@ const createStyles = (colors: ThemeColors) =>
     },
     stateText: {
       fontSize: fontSize.base,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     errorCard: {
-      backgroundColor: `${colors.error}14`,
+      backgroundColor: `${MENTORSHIP_COLORS.error}14`,
       borderRadius: borderRadius.md,
       padding: spacing.md,
       gap: spacing.sm,
       borderWidth: 1,
-      borderColor: `${colors.error}55`,
+      borderColor: `${MENTORSHIP_COLORS.error}55`,
     },
     errorText: {
       fontSize: fontSize.sm,
-      color: colors.error,
+      color: MENTORSHIP_COLORS.error,
     },
     retryButton: {
       alignSelf: "flex-start",
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs + 2,
       borderRadius: borderRadius.md,
-      backgroundColor: colors.error,
+      backgroundColor: MENTORSHIP_COLORS.error,
     },
     retryButtonPressed: {
       opacity: 0.85,
@@ -1435,7 +1544,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     inlineLoadingText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     toggleRow: {
       flexDirection: "row",
@@ -1444,7 +1553,7 @@ const createStyles = (colors: ThemeColors) =>
     },
     toggleLabel: {
       fontSize: fontSize.sm,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     fieldGroup: {
       gap: spacing.xs,
@@ -1452,7 +1561,7 @@ const createStyles = (colors: ThemeColors) =>
     fieldLabel: {
       fontSize: fontSize.sm,
       fontWeight: fontWeight.medium,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     selectField: {
       flexDirection: "row",
@@ -1462,31 +1571,31 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.sm,
       borderRadius: borderRadius.md,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.background,
+      borderColor: MENTORSHIP_COLORS.border,
+      backgroundColor: MENTORSHIP_COLORS.background,
     },
     selectFieldPressed: {
       opacity: 0.9,
     },
     selectFieldText: {
       fontSize: fontSize.base,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     input: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: MENTORSHIP_COLORS.border,
       borderRadius: borderRadius.md,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       fontSize: fontSize.base,
-      color: colors.foreground,
-      backgroundColor: colors.background,
+      color: MENTORSHIP_COLORS.primaryText,
+      backgroundColor: MENTORSHIP_COLORS.background,
     },
     textArea: {
       minHeight: 90,
     },
     primaryButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: MENTORSHIP_COLORS.primary,
       borderRadius: borderRadius.md,
       paddingVertical: spacing.sm,
       alignItems: "center",
@@ -1496,7 +1605,7 @@ const createStyles = (colors: ThemeColors) =>
       opacity: 0.9,
     },
     primaryButtonText: {
-      color: colors.primaryForeground,
+      color: MENTORSHIP_COLORS.primaryForeground,
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
     },
@@ -1505,8 +1614,8 @@ const createStyles = (colors: ThemeColors) =>
       paddingHorizontal: spacing.md,
       borderRadius: borderRadius.md,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
+      borderColor: MENTORSHIP_COLORS.border,
+      backgroundColor: MENTORSHIP_COLORS.card,
     },
     ghostButtonPressed: {
       opacity: 0.85,
@@ -1514,7 +1623,7 @@ const createStyles = (colors: ThemeColors) =>
     ghostButtonText: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.medium,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     buttonDisabled: {
       opacity: 0.6,
@@ -1548,11 +1657,11 @@ const createStyles = (colors: ThemeColors) =>
     pairName: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     pairRole: {
       fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     statusBadge: {
       paddingHorizontal: spacing.sm,
@@ -1571,7 +1680,7 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: spacing.xs,
       paddingHorizontal: spacing.sm,
       borderRadius: borderRadius.md,
-      backgroundColor: `${colors.error}14`,
+      backgroundColor: `${MENTORSHIP_COLORS.error}14`,
     },
     deleteButtonPressed: {
       opacity: 0.85,
@@ -1579,13 +1688,13 @@ const createStyles = (colors: ThemeColors) =>
     deleteButtonText: {
       fontSize: fontSize.xs,
       fontWeight: fontWeight.semibold,
-      color: colors.error,
+      color: MENTORSHIP_COLORS.error,
     },
     logList: {
       gap: spacing.sm,
     },
     logItem: {
-      backgroundColor: colors.mutedSurface,
+      backgroundColor: MENTORSHIP_COLORS.mutedSurface,
       borderRadius: borderRadius.md,
       padding: spacing.sm,
       gap: spacing.xs,
@@ -1597,39 +1706,39 @@ const createStyles = (colors: ThemeColors) =>
     },
     logMetaText: {
       fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     logNotes: {
       fontSize: fontSize.sm,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     logMetric: {
       fontSize: fontSize.xs,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     emptyTitle: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     emptySubtitle: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
     },
     logFormContainer: {
       paddingTop: spacing.sm,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: MENTORSHIP_COLORS.border,
     },
     logForm: {
       gap: spacing.sm,
     },
     pickerContainer: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: MENTORSHIP_COLORS.border,
       borderRadius: borderRadius.md,
       overflow: "hidden",
-      backgroundColor: colors.card,
+      backgroundColor: MENTORSHIP_COLORS.card,
     },
     modalBackdrop: {
       flex: 1,
@@ -1638,7 +1747,7 @@ const createStyles = (colors: ThemeColors) =>
       padding: spacing.md,
     },
     modalSheet: {
-      backgroundColor: colors.card,
+      backgroundColor: MENTORSHIP_COLORS.card,
       borderRadius: borderRadius.lg,
       padding: spacing.md,
       maxHeight: "70%",
@@ -1652,11 +1761,11 @@ const createStyles = (colors: ThemeColors) =>
     modalTitle: {
       fontSize: fontSize.base,
       fontWeight: fontWeight.semibold,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     modalCloseText: {
       fontSize: fontSize.sm,
-      color: colors.primary,
+      color: MENTORSHIP_COLORS.primary,
       fontWeight: fontWeight.semibold,
     },
     modalOption: {
@@ -1665,19 +1774,19 @@ const createStyles = (colors: ThemeColors) =>
       borderRadius: borderRadius.md,
     },
     modalOptionPressed: {
-      backgroundColor: colors.mutedSurface,
+      backgroundColor: MENTORSHIP_COLORS.mutedSurface,
     },
     modalOptionText: {
       fontSize: fontSize.base,
-      color: colors.foreground,
+      color: MENTORSHIP_COLORS.primaryText,
     },
     modalDivider: {
       height: 1,
-      backgroundColor: colors.border,
+      backgroundColor: MENTORSHIP_COLORS.border,
     },
     modalEmptyText: {
       fontSize: fontSize.sm,
-      color: colors.mutedForeground,
+      color: MENTORSHIP_COLORS.secondaryText,
       paddingVertical: spacing.sm,
       textAlign: "center",
     },

@@ -4,16 +4,20 @@ import {
   Text,
   FlatList,
   Pressable,
+  Image,
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack, useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
+import { useRouter, useNavigation } from "expo-router";
 import { MessageCircle } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
 
@@ -34,11 +38,23 @@ type ChatGroupWithMembers = ChatGroup & {
 };
 
 export default function ChatGroupsScreen() {
-  const { orgId, orgSlug } = useOrg();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin } = useOrgRole();
   const router = useRouter();
+  const navigation = useNavigation();
   const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
+
+  // Safe drawer toggle - only dispatch if drawer is available
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
   const [groups, setGroups] = useState<ChatGroupWithMembers[]>([]);
   const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -236,58 +252,134 @@ export default function ChatGroupsScreen() {
 
   if (loading && groups.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={["bottom"]}>
-        <Stack.Screen options={{ title: "Chat" }} />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={CHAT_COLORS.accent} />
+      <View style={styles.container}>
+        {/* Custom Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Chat</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        {/* Content Sheet */}
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={CHAT_COLORS.accent} />
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error && groups.length === 0) {
     return (
-      <SafeAreaView style={styles.container} edges={["bottom"]}>
-        <Stack.Screen options={{ title: "Chat" }} />
-        <View style={styles.centered}>
-          <Text style={styles.errorTitle}>Unable to load chat</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            style={styles.retryButton}
-            onPress={fetchGroups}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </Pressable>
+      <View style={styles.container}>
+        {/* Custom Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Chat</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        {/* Content Sheet */}
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <Text style={styles.errorTitle}>Unable to load chat</Text>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable
+              style={styles.retryButton}
+              onPress={fetchGroups}
+              accessibilityRole="button"
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Stack.Screen options={{ title: "Chat" }} />
-      <FlatList
-        data={groups}
-        keyExtractor={(item) => item.id}
-        renderItem={renderGroup}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={CHAT_COLORS.accent} />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <MessageCircle size={28} color={CHAT_COLORS.muted} />
+    <View style={styles.container}>
+      {/* Custom Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Chat</Text>
+              <Text style={styles.headerMeta}>{groups.length} {groups.length === 1 ? "group" : "groups"}</Text>
             </View>
-            <Text style={styles.emptyTitle}>No chat groups yet</Text>
-            <Text style={styles.emptyText}>
-              Chat groups will appear here once they are created.
-            </Text>
           </View>
-        }
-      />
-    </SafeAreaView>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <FlatList
+          data={groups}
+          keyExtractor={(item) => item.id}
+          renderItem={renderGroup}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={CHAT_COLORS.accent} />
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <MessageCircle size={28} color={CHAT_COLORS.muted} />
+              </View>
+              <Text style={styles.emptyTitle}>No chat groups yet</Text>
+              <Text style={styles.emptyText}>
+                Chat groups will appear here once they are created.
+              </Text>
+            </View>
+          }
+        />
+      </View>
+    </View>
   );
 }
 
@@ -296,6 +388,64 @@ const createStyles = () =>
     container: {
       flex: 1,
       backgroundColor: CHAT_COLORS.background,
+    },
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.bold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: CHAT_COLORS.card,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      marginTop: -16,
+      overflow: "hidden",
     },
     listContent: {
       padding: spacing.md,
