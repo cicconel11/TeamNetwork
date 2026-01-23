@@ -88,5 +88,60 @@ export function useSubscription(organizationId: string | null): UseSubscriptionR
     };
   }, [fetchSubscription]);
 
+  // Realtime subscription for organization_subscriptions changes
+  useEffect(() => {
+    if (!organizationId) return;
+
+    const channel = supabase
+      .channel(`subscription:${organizationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "organization_subscriptions",
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        () => {
+          fetchSubscription();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [organizationId, fetchSubscription]);
+
+  // Also listen to alumni count changes (user_organization_roles with alumni role)
+  useEffect(() => {
+    if (!organizationId) return;
+
+    const channel = supabase
+      .channel(`alumni-count:${organizationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        (payload) => {
+          // Only refetch if role involves alumni (for quota updates)
+          const newData = payload.new as { role?: string } | null;
+          const oldData = payload.old as { role?: string } | null;
+          if (newData?.role === "alumni" || oldData?.role === "alumni") {
+            fetchSubscription();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [organizationId, fetchSubscription]);
+
   return { subscription, loading, error, refetch: fetchSubscription };
 }
