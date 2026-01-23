@@ -2,7 +2,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@teammeet/types";
-import { captureException } from "@/lib/analytics";
+import { captureException, reset as resetAnalytics } from "@/lib/analytics";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,8 +27,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 });
 
 export async function signOut() {
+  // Reset analytics identity regardless of session state
+  resetAnalytics();
+
   const { error } = await supabase.auth.signOut();
   if (error) {
+    // AuthSessionMissingError is expected if session expired or doesn't exist
+    // We still want to proceed with sign out flow in this case
+    if (error.name === "AuthSessionMissingError") {
+      console.log("No active session to sign out from");
+      return;
+    }
     console.error("Sign out error:", error);
     captureException(new Error(error.message), { context: "signOut" });
   }

@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter } from "expo-router";
+import { Link, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
@@ -89,6 +89,15 @@ const isEmailValid = (email: string) => {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/(auth)");
+    }
+  };
 
   // Form state
   const [email, setEmail] = useState("");
@@ -286,7 +295,7 @@ export default function LoginScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerContent}>
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={handleBack}
             style={styles.backButton}
             accessibilityLabel="Go back"
             accessibilityRole="button"
