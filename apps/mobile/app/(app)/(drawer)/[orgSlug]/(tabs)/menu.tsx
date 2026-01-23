@@ -205,7 +205,7 @@ export default function MenuScreen() {
     communityItems.push({
       icon: <Heart size={20} color={colors.muted} />,
       label: "Donations",
-      onPress: () => console.log("Donations"),
+      onPress: () => router.push(`/(app)/${orgSlug}/donations`),
     });
   }
   
@@ -213,7 +213,7 @@ export default function MenuScreen() {
     communityItems.push({
       icon: <Trophy size={20} color={colors.muted} />,
       label: "Records",
-      onPress: () => console.log("Records"),
+      onPress: () => router.push(`/(app)/${orgSlug}/records`),
     });
   }
   
@@ -221,7 +221,7 @@ export default function MenuScreen() {
     communityItems.push({
       icon: <FileText size={20} color={colors.muted} />,
       label: "Forms",
-      onPress: () => console.log("Forms"),
+      onPress: () => router.push(`/(app)/${orgSlug}/forms`),
     });
   }
 

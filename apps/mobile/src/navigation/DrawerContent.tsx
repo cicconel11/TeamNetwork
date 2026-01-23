@@ -64,7 +64,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         label: "Chat",
         href: `/${slug}/chat`,
         icon: MessageCircle,
-        openInWeb: true,
       },
     ];
 
@@ -82,67 +81,56 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         label: "Mentorship",
         href: `/${slug}/mentorship`,
         icon: Handshake,
-        openInWeb: true,
       },
       {
         label: "Workouts",
         href: `/${slug}/workouts`,
         icon: Dumbbell,
-        openInWeb: true,
       },
       {
         label: "Competition",
         href: `/${slug}/competition`,
         icon: Award,
-        openInWeb: true,
       },
       {
         label: "Philanthropy",
         href: `/${slug}/philanthropy`,
         icon: Heart,
-        openInWeb: true,
       },
       {
         label: "Donations",
         href: `/${slug}/donations`,
         icon: DollarSign,
-        openInWeb: true,
       },
       {
         label: "Expenses",
         href: `/${slug}/expenses`,
         icon: Receipt,
-        openInWeb: true,
       },
       {
         label: "Records",
         href: `/${slug}/records`,
         icon: Trophy,
-        openInWeb: true,
       },
       {
         label: "Schedules",
         href: `/${slug}/schedules`,
         icon: BookOpen,
-        openInWeb: true,
       },
       {
         label: "Forms",
         href: `/${slug}/forms`,
         icon: ClipboardList,
-        openInWeb: true,
       },
       {
         label: "Settings",
         href: `/${slug}/settings`,
         icon: Settings,
-        openInWeb: true,
       },
       {
         label: "Navigation",
         href: `/${slug}/settings/navigation`,
         icon: SlidersHorizontal,
-        openInWeb: true,
       },
       {
         label: "Organizations",
