@@ -2,7 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
-import { LandingAnimations, FloatingParticles } from "@/components/marketing";
+import {
+  LandingAnimations,
+  FloatingParticles,
+  StadiumLightBeams,
+  Confetti,
+} from "@/components/marketing";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
 import { PricingSection } from "@/components/marketing/PricingSection";
 
@@ -53,15 +58,11 @@ export default async function LandingPage() {
         </div>
       </header>
 
-      {/* Hero */}
+      {/* Hero - "The Emergence" */}
       <section className="relative z-10 pt-20 lg:pt-32 pb-20 px-6">
-        {/* Animated Orbs */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none -z-10">
-          <div className="gradient-orb w-[500px] h-[500px] bg-landing-green/20 top-[-100px] left-[-100px]" style={{ animationDelay: '0s' }} />
-          <div className="gradient-orb w-[300px] h-[300px] bg-landing-green-dark/15 top-[40%] right-[-50px]" style={{ animationDelay: '-5s' }} />
-          <div className="gradient-orb w-[400px] h-[400px] bg-landing-cream/8 bottom-[-100px] left-[20%]" style={{ animationDelay: '-10s' }} />
-        </div>
-        
+        {/* Stadium Light Beams */}
+        <StadiumLightBeams />
+
         <FloatingParticles />
 
         <div className="max-w-6xl mx-auto">
@@ -69,14 +70,14 @@ export default async function LandingPage() {
             {/* Left - Copy */}
             <div>
               <div className="hero-animate inline-flex items-center gap-2 px-4 py-2 rounded-full bg-landing-cream/10 border border-landing-cream/20 mb-8">
-                <span className="w-2 h-2 rounded-full bg-landing-cream/60 gold-shimmer" />
+                <span className="w-2 h-2 rounded-full bg-landing-green gold-shimmer" />
                 <span className="text-landing-cream/80 text-sm font-medium">Built for teams that go the distance</span>
               </div>
 
-              <h1 className="hero-animate font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6">
+              <h1 className="hero-animate font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 jersey-text">
                 Your Team&apos;s
                 <br />
-                <span className="text-landing-cream">Hub for Everything</span>
+                <span className="text-landing-cream">Home Field Advantage</span>
               </h1>
 
               <p className="hero-animate text-xl text-landing-cream/70 max-w-lg mb-10 leading-relaxed">
@@ -84,7 +85,7 @@ export default async function LandingPage() {
               </p>
 
               <div className="hero-animate flex flex-col sm:flex-row gap-4">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-8 py-6 text-base green-glow">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-8 py-6 text-base cta-glow">
                   Create Your Organization
                 </ButtonLink>
                 <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-6 text-base">
@@ -104,9 +105,9 @@ export default async function LandingPage() {
               </div>
             </div>
 
-            {/* Right - Example Organization */}
+            {/* Right - Example Organization (Scoreboard Preview) */}
             <div className="hero-animate relative">
-              {/* Mock organization card */}
+              {/* Mock organization card with scoreboard styling */}
               <div className="bg-landing-navy-light/80 rounded-2xl border border-landing-cream/10 overflow-hidden">
                 {/* Org header */}
                 <div className="bg-landing-cream/5 border-b border-landing-cream/10 p-6">
@@ -120,19 +121,19 @@ export default async function LandingPage() {
                     </div>
                   </div>
                 </div>
-                {/* Quick stats */}
-                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10">
+                {/* Quick stats - Scoreboard style */}
+                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0f18]">
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold text-landing-cream">127</p>
-                    <p className="text-xs text-landing-cream/50">Members</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>127</p>
+                    <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Members</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold text-landing-cream">24</p>
-                    <p className="text-xs text-landing-cream/50">Events</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>24</p>
+                    <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Events</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold text-landing-cream">$8.2k</p>
-                    <p className="text-xs text-landing-cream/50">Donations</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>$8.2k</p>
+                    <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Donations</p>
                   </div>
                 </div>
                 {/* Feature preview */}
@@ -169,19 +170,26 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Organization types ribbon */}
+      {/* Organization types ribbon - Championship Banners */}
       <section className="relative z-10 py-12 overflow-hidden border-y border-landing-cream/10 bg-landing-navy-light/50">
-        <div className="flex items-center justify-center gap-12 text-landing-cream/40 text-sm uppercase tracking-[0.2em]">
-          {["Sports Teams", "Greek Life", "Clubs", "Volunteer Orgs", "Alumni Groups"].map((type, i) => (
-            <div key={type} className="flex items-center gap-12">
-              <span className="whitespace-nowrap">{type}</span>
-              {i < 4 && <span className="text-landing-cream/20">◆</span>}
-            </div>
-          ))}
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="flex flex-wrap items-stretch justify-center gap-4 md:gap-6">
+            {["Sports Teams", "Greek Life", "Clubs", "Volunteer Orgs", "Alumni Groups"].map((type, i) => (
+              <div
+                key={type}
+                className="banner px-6 py-4 text-center min-w-[140px]"
+                style={{ animationDelay: `${i * 100}ms` }}
+              >
+                <span className="text-landing-cream/70 text-sm uppercase tracking-[0.15em] font-medium whitespace-nowrap">
+                  {type}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Features */}
+      {/* Features - "Trophy Case" */}
       <section id="features" className="relative z-10 py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
@@ -202,8 +210,13 @@ export default async function LandingPage() {
             {FEATURES.map((feature, i) => (
               <div
                 key={feature.title}
-                className="feature-card bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-6"
+                className="trophy-card bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-6 overflow-hidden"
               >
+                {/* Trophy watermark */}
+                <svg className="trophy-watermark" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
+                </svg>
+
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-landing-cream/10 to-landing-cream/5 flex items-center justify-center mb-5">
                   <FeatureIcon index={i} />
                 </div>
@@ -215,27 +228,30 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className="relative z-10 py-24 px-6 bg-landing-navy-light/30">
-        <div className="max-w-5xl mx-auto">
+      {/* How It Works - "The Playbook" */}
+      <section className="relative z-10 py-24 px-6">
+        <div className="chalkboard max-w-5xl mx-auto rounded-2xl p-8 sm:p-12">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
-              Get Started in <span className="text-landing-cream">3 Steps</span>
+              The <span className="text-landing-cream">Playbook</span>
             </h2>
+            <p className="scroll-reveal text-landing-cream/50 mt-4">Your game plan to get started</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 relative">
-            {/* Connection line */}
-            <div className="hidden md:block absolute top-12 left-1/4 right-1/4 h-px bg-gradient-to-r from-landing-cream/20 via-landing-cream/30 to-landing-cream/20" />
+            {/* Connection line - play route */}
+            <div className="hidden md:block absolute top-[1.75rem] left-[calc(16.67%+1.75rem)] right-[calc(16.67%+1.75rem)]">
+              <div className="play-route w-full" />
+            </div>
 
             {[
-              { step: "01", title: "Create your org", desc: "Sign up and customize your team's profile, colors, and settings." },
-              { step: "02", title: "Invite members", desc: "Share your unique invite code or send email invitations." },
-              { step: "03", title: "Build your legacy", desc: "Track events, manage donations, and connect generations." },
+              { step: "1", title: "Create your org", desc: "Sign up and customize your team's profile, colors, and settings." },
+              { step: "2", title: "Invite members", desc: "Share your unique invite code or send email invitations." },
+              { step: "3", title: "Build your legacy", desc: "Track events, manage donations, and connect generations." },
             ].map((item) => (
               <div key={item.step} className="scroll-reveal text-center relative">
-                <div className="w-24 h-24 rounded-full bg-landing-navy border-2 border-landing-cream/20 flex items-center justify-center mx-auto mb-6 relative z-10">
-                  <span className="athletic-number text-3xl">{item.step}</span>
+                <div className="play-marker mx-auto mb-6 relative z-10">
+                  <span className="font-display font-bold text-xl text-landing-cream">{item.step}</span>
                 </div>
                 <h3 className="font-display font-semibold text-xl text-landing-cream mb-3">{item.title}</h3>
                 <p className="text-landing-cream/50 text-sm leading-relaxed max-w-xs mx-auto">{item.desc}</p>
@@ -248,13 +264,14 @@ export default async function LandingPage() {
       {/* Pricing */}
       <PricingSection />
 
-      {/* FAQ */}
+      {/* FAQ - "Press Conference" */}
       <section id="faq" className="relative z-10 py-24 px-6 bg-landing-navy-light/30">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
-              Questions? <span className="text-landing-cream">Answers.</span>
+              Press <span className="text-landing-cream">Conference</span>
             </h2>
+            <p className="scroll-reveal text-landing-cream/50 mt-4">Your questions, answered</p>
           </div>
 
           <div className="space-y-4">
@@ -263,10 +280,14 @@ export default async function LandingPage() {
                 key={item.question}
                 className="scroll-reveal group bg-landing-navy-light/50 rounded-xl border border-landing-cream/10 overflow-hidden"
               >
-                <summary className="px-6 py-5 cursor-pointer list-none flex items-center justify-between text-landing-cream font-medium hover:bg-landing-cream/5 transition-colors">
-                  {item.question}
+                <summary className="px-6 py-5 cursor-pointer list-none flex items-center gap-3 text-landing-cream font-medium hover:bg-landing-cream/5 transition-colors">
+                  {/* Microphone icon */}
+                  <svg className="mic-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                  </svg>
+                  <span className="flex-1">{item.question}</span>
                   <svg
-                    className="w-5 h-5 text-landing-cream/60 group-open:rotate-180 transition-transform duration-300"
+                    className="w-5 h-5 text-landing-cream/60 group-open:rotate-180 transition-transform duration-300 flex-shrink-0"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -275,7 +296,7 @@ export default async function LandingPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </summary>
-                <div className="px-6 pb-5 text-landing-cream/60 leading-relaxed">{item.answer}</div>
+                <div className="px-6 pb-5 text-landing-cream/60 leading-relaxed pl-12">{item.answer}</div>
               </details>
             ))}
           </div>
@@ -322,22 +343,30 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
+      {/* Final CTA - "Championship Moment" */}
       <section className="relative z-10 py-24 px-6 overflow-hidden">
-        {/* Animated Orbs */}
+        {/* Confetti burst */}
+        <Confetti />
+
+        {/* Background glow */}
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none -z-10">
-          <div className="gradient-orb w-[600px] h-[600px] bg-landing-green/10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ animationDelay: '-15s' }} />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-landing-green/10 blur-[100px]" />
         </div>
 
         <div className="max-w-4xl mx-auto text-center">
-          <div className="scroll-reveal inline-block banner-ribbon text-white text-sm font-semibold uppercase tracking-wider mb-8">
-            Ready to Start?
+          {/* Trophy icon with bounce */}
+          <div className="scroll-reveal inline-block mb-8">
+            <div className="w-20 h-20 mx-auto rounded-full bg-landing-green/10 border border-landing-green/20 flex items-center justify-center">
+              <svg className="w-10 h-10 text-landing-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
+              </svg>
+            </div>
           </div>
 
-          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6">
-            Build Your Team&apos;s
+          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 jersey-text">
+            Build Your
             <br />
-            <span className="text-landing-green">Legacy Today</span>
+            <span className="text-landing-green">Championship Legacy</span>
           </h2>
 
           <p className="scroll-reveal text-xl text-landing-cream/60 mb-10 max-w-2xl mx-auto">
@@ -345,7 +374,7 @@ export default async function LandingPage() {
           </p>
 
           <div className="scroll-reveal flex flex-col sm:flex-row gap-4 justify-center">
-            <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-10 py-6 text-lg green-glow">
+            <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-10 py-6 text-lg cta-glow">
               Create Your Organization
             </ButtonLink>
             <ButtonLink href="/auth/login" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-10 py-6 text-lg">
