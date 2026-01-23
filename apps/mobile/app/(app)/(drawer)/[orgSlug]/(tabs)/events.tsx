@@ -22,31 +22,8 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEvents, type Event } from "@/hooks/useEvents";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
-
-// Hardcoded local colors matching Landing/Login palette (Uber-inspired)
-const EVENTS_COLORS = {
-  // Backgrounds
-  background: "#ffffff",
-  sectionBackground: "#f8fafc",
-
-  // Text
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-
-  // Borders & surfaces
-  border: "#e2e8f0",
-  card: "#ffffff",
-
-  // CTAs
-  primaryCTA: "#059669",
-  primaryCTAText: "#ffffff",
-
-  // States
-  error: "#ef4444",
-  errorBackground: "#fef2f2",
-};
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS, RSVP_COLORS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type ViewMode = "upcoming" | "past";
 
@@ -81,7 +58,7 @@ export default function EventsScreen() {
       {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={EVENTS_COLORS.primaryCTA} />,
+        icon: <ExternalLink size={20} color={SEMANTIC.success} />,
         onPress: () => {
           // Open the events page in the web app for full admin capabilities
           const webUrl = `https://www.myteamnetwork.com/${orgSlug}/events`;
@@ -195,7 +172,7 @@ export default function EventsScreen() {
 
       <View style={styles.eventDetails}>
         <View style={styles.detailRow}>
-          <Calendar size={13} color={EVENTS_COLORS.secondaryText} />
+          <Calendar size={13} color={NEUTRAL.secondary} />
           <Text style={styles.detailText}>
             {formatDate(item.start_date)} at {formatTime(item.start_date)}
             {item.end_date && ` - ${formatTime(item.end_date)}`}
@@ -204,7 +181,7 @@ export default function EventsScreen() {
 
         {item.location && (
           <View style={styles.detailRow}>
-            <MapPin size={13} color={EVENTS_COLORS.mutedText} />
+            <MapPin size={13} color={NEUTRAL.muted} />
             <Text style={styles.locationText} numberOfLines={1}>
               {item.location}
             </Text>
@@ -213,7 +190,7 @@ export default function EventsScreen() {
 
         {item.rsvp_count !== undefined && (
           <View style={styles.detailRow}>
-            <Users size={13} color={EVENTS_COLORS.mutedText} />
+            <Users size={13} color={NEUTRAL.muted} />
             <Text style={styles.locationText}>{item.rsvp_count} attending</Text>
           </View>
         )}
@@ -235,7 +212,7 @@ export default function EventsScreen() {
       const dateStr = selectedDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
       return (
         <View style={styles.emptyStateInline}>
-          <Calendar size={32} color={EVENTS_COLORS.mutedText} />
+          <Calendar size={32} color={NEUTRAL.muted} />
           <Text style={styles.emptyTitleSmall}>No events on {dateStr}</Text>
           <Text style={styles.emptySubtitleSmall}>Select "All" to see all upcoming events</Text>
         </View>
@@ -246,7 +223,7 @@ export default function EventsScreen() {
     return (
       <View style={styles.emptyState}>
         <View style={styles.emptyCard}>
-          <Calendar size={40} color={EVENTS_COLORS.mutedText} />
+          <Calendar size={40} color={NEUTRAL.muted} />
           <Text style={styles.emptyTitle}>
             {viewMode === "upcoming" ? "No upcoming events" : "No past events"}
           </Text>
@@ -442,7 +419,7 @@ export default function EventsScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyState}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={EVENTS_COLORS.primaryCTA} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
         }
       />
     </View>
@@ -453,11 +430,11 @@ const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: EVENTS_COLORS.background,
+      backgroundColor: NEUTRAL.surface,
     },
     // Gradient header styles
     headerGradient: {
-      paddingBottom: spacing.xs,
+      paddingBottom: SPACING.xs,
     },
     headerSafeArea: {
       // SafeAreaView handles top inset
@@ -465,10 +442,10 @@ const createStyles = () =>
     headerContent: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
       minHeight: 40,
-      gap: spacing.sm,
+      gap: SPACING.sm,
     },
     orgLogoButton: {
       width: 36,
@@ -488,20 +465,19 @@ const createStyles = () =>
       justifyContent: "center",
     },
     orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700",
       color: APP_CHROME.avatarText,
     },
     headerTextContainer: {
       flex: 1,
     },
     headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
+      ...TYPOGRAPHY.titleLarge,
       color: APP_CHROME.headerTitle,
     },
     headerMeta: {
-      fontSize: fontSize.xs,
+      ...TYPOGRAPHY.caption,
       color: APP_CHROME.headerMeta,
       marginTop: 2,
     },
@@ -512,129 +488,122 @@ const createStyles = () =>
     headerSpacer: {
       width: 36,
     },
-    // Toggle styles (segmented control - neutral style, green only on active text)
+    // Toggle styles (segmented control)
     toggleContainer: {
       flexDirection: "row",
-      marginHorizontal: spacing.md,
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-      backgroundColor: EVENTS_COLORS.card,
-      borderRadius: borderRadius.md,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+      backgroundColor: NEUTRAL.surface,
+      borderRadius: RADIUS.md,
       borderWidth: 1,
-      borderColor: EVENTS_COLORS.border,
+      borderColor: NEUTRAL.border,
       padding: 2,
     },
     toggleButton: {
       flex: 1,
-      paddingVertical: spacing.sm,
+      paddingVertical: SPACING.sm,
       alignItems: "center",
-      borderRadius: borderRadius.sm - 1,
+      borderRadius: RADIUS.sm,
     },
     toggleActive: {
-      backgroundColor: EVENTS_COLORS.sectionBackground,
+      backgroundColor: NEUTRAL.background,
     },
     toggleText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: EVENTS_COLORS.mutedText,
+      ...TYPOGRAPHY.labelMedium,
+      color: NEUTRAL.muted,
     },
     toggleTextActive: {
-      color: EVENTS_COLORS.primaryText,
-      fontWeight: fontWeight.semibold,
+      color: NEUTRAL.foreground,
+      fontWeight: "600",
     },
-    // Date strip styles (calendar strip - minimal, green only on selected)
+    // Date strip styles
     dateStrip: {
-      maxHeight: 72,
-      marginBottom: spacing.xs,
+      maxHeight: 76,
+      marginBottom: SPACING.xs,
     },
     dateStripContent: {
-      paddingHorizontal: 16,
-      gap: 4,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.xs,
     },
     dateItem: {
       alignItems: "center",
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 8,
-      minWidth: 44,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: RADIUS.md,
+      minWidth: 48,
     },
     dateItemSelected: {
-      backgroundColor: EVENTS_COLORS.primaryCTA,
+      backgroundColor: SEMANTIC.success,
     },
     dateDayName: {
-      fontSize: 11,
-      color: EVENTS_COLORS.mutedText,
+      ...TYPOGRAPHY.overline,
+      fontSize: 10,
+      color: NEUTRAL.muted,
       marginBottom: 2,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
     },
     dateDay: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: EVENTS_COLORS.primaryText,
+      ...TYPOGRAPHY.titleMedium,
+      color: NEUTRAL.foreground,
     },
     dateTextSelected: {
-      color: EVENTS_COLORS.primaryCTAText,
+      color: "#ffffff",
     },
     dateToday: {
-      color: EVENTS_COLORS.primaryCTA,
-      fontWeight: fontWeight.bold,
+      color: SEMANTIC.success,
+      fontWeight: "700",
     },
     eventDot: {
-      width: 4,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: EVENTS_COLORS.primaryCTA,
-      marginTop: 3,
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: SEMANTIC.success,
+      marginTop: 4,
     },
     // List content
     listContent: {
-      padding: 16,
-      paddingTop: 12,
+      padding: SPACING.md,
+      paddingTop: SPACING.sm,
       paddingBottom: 40,
       flexGrow: 1,
     },
-    // Event card styles (improved hierarchy)
+    // Event card styles
     eventCard: {
-      backgroundColor: EVENTS_COLORS.card,
-      borderRadius: 12,
-      borderCurve: "continuous",
+      backgroundColor: NEUTRAL.surface,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: EVENTS_COLORS.border,
-      padding: 14,
-      marginBottom: 16,
-      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+      borderColor: NEUTRAL.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+      ...SHADOWS.sm,
     },
     eventHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 10,
+      marginBottom: SPACING.sm,
     },
     eventTitle: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: EVENTS_COLORS.primaryText,
+      ...TYPOGRAPHY.titleMedium,
+      color: NEUTRAL.foreground,
       flex: 1,
-      lineHeight: 22,
     },
     rsvpBadge: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: borderRadius.lg,
-      backgroundColor: EVENTS_COLORS.border,
-      marginLeft: spacing.sm,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.lg,
+      backgroundColor: NEUTRAL.border,
+      marginLeft: SPACING.sm,
     },
     rsvpGoing: {
-      backgroundColor: "#d1fae5",
+      backgroundColor: RSVP_COLORS.going.background,
     },
     rsvpMaybe: {
-      backgroundColor: "#fef3c7",
+      backgroundColor: RSVP_COLORS.maybe.background,
     },
     rsvpText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: EVENTS_COLORS.primaryText,
+      ...TYPOGRAPHY.labelSmall,
+      color: NEUTRAL.foreground,
     },
     eventDetails: {
       gap: 4,
@@ -645,32 +614,28 @@ const createStyles = () =>
       gap: 6,
     },
     detailText: {
-      fontSize: 13,
-      color: EVENTS_COLORS.secondaryText,
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.secondary,
       flex: 1,
-      lineHeight: 18,
     },
-    // Location uses lighter color for hierarchy
     locationText: {
-      fontSize: 13,
-      color: EVENTS_COLORS.mutedText,
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.muted,
       flex: 1,
-      lineHeight: 18,
     },
-    // RSVP button (outline style for reduced visual weight)
+    // RSVP button
     rsvpButton: {
       backgroundColor: "transparent",
       borderWidth: 1,
-      borderColor: EVENTS_COLORS.primaryCTA,
-      borderRadius: 8,
-      paddingVertical: 7,
+      borderColor: SEMANTIC.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: 8,
       alignItems: "center",
-      marginTop: 10,
+      marginTop: SPACING.sm,
     },
     rsvpButtonText: {
-      color: EVENTS_COLORS.primaryCTA,
-      fontSize: 13,
-      fontWeight: "500",
+      ...TYPOGRAPHY.labelMedium,
+      color: SEMANTIC.success,
     },
     // Empty state styles
     emptyState: {
@@ -678,47 +643,44 @@ const createStyles = () =>
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 48,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: SPACING.md,
     },
     emptyStateInline: {
       alignItems: "center",
       justifyContent: "center",
       paddingVertical: 32,
-      paddingHorizontal: spacing.md,
+      paddingHorizontal: SPACING.md,
     },
     emptyCard: {
-      backgroundColor: EVENTS_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
+      backgroundColor: NEUTRAL.surface,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: EVENTS_COLORS.border,
-      padding: spacing.lg,
+      borderColor: NEUTRAL.border,
+      padding: SPACING.lg,
       alignItems: "center",
       width: "100%",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+      ...SHADOWS.sm,
     },
     emptyTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: EVENTS_COLORS.primaryText,
-      marginTop: spacing.md,
+      ...TYPOGRAPHY.titleMedium,
+      color: NEUTRAL.foreground,
+      marginTop: SPACING.md,
     },
     emptyTitleSmall: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: EVENTS_COLORS.secondaryText,
-      marginTop: spacing.sm,
+      ...TYPOGRAPHY.titleSmall,
+      color: NEUTRAL.secondary,
+      marginTop: SPACING.sm,
     },
     emptySubtitle: {
-      fontSize: fontSize.sm,
-      color: EVENTS_COLORS.secondaryText,
-      marginTop: spacing.xs,
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.secondary,
+      marginTop: SPACING.xs,
       textAlign: "center",
     },
     emptySubtitleSmall: {
-      fontSize: fontSize.xs,
-      color: EVENTS_COLORS.mutedText,
-      marginTop: spacing.xs,
+      ...TYPOGRAPHY.caption,
+      color: NEUTRAL.muted,
+      marginTop: SPACING.xs,
       textAlign: "center",
     },
     // Error state styles
@@ -726,20 +688,19 @@ const createStyles = () =>
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      padding: spacing.md,
+      padding: SPACING.md,
     },
     errorCard: {
-      backgroundColor: EVENTS_COLORS.errorBackground,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
+      backgroundColor: SEMANTIC.errorLight,
+      borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: EVENTS_COLORS.error,
-      padding: spacing.lg,
+      borderColor: SEMANTIC.error,
+      padding: SPACING.lg,
     },
     errorText: {
-      color: EVENTS_COLORS.error,
+      ...TYPOGRAPHY.bodyMedium,
+      color: SEMANTIC.error,
       textAlign: "center",
-      fontSize: fontSize.base,
     },
     // Loading state
     centered: {
@@ -747,6 +708,6 @@ const createStyles = () =>
       justifyContent: "center",
       alignItems: "center",
       padding: 24,
-      backgroundColor: EVENTS_COLORS.background,
+      backgroundColor: NEUTRAL.background,
     },
   });

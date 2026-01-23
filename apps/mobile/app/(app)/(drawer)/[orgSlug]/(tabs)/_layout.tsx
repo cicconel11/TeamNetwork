@@ -154,12 +154,14 @@ export default function TabsLayout() {
           name="members"
           options={{
             title: "Members",
+            headerShown: false,
           }}
         />
         <Tabs.Screen
           name="menu"
           options={{
             title: "More",
+            headerShown: false,
           }}
         />
         {/* Hide Alumni tab - not part of core loop */}
@@ -167,6 +169,7 @@ export default function TabsLayout() {
           name="alumni"
           options={{
             href: null,
+            headerShown: false,
           }}
         />
       </Tabs>
