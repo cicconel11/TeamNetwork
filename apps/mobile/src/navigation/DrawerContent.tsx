@@ -13,6 +13,7 @@ import {
   GraduationCap,
   Heart,
   Handshake,
+  Home,
   LogOut,
   MessageCircle,
   Receipt,
@@ -60,6 +61,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     }
 
     const items: NavItem[] = [
+      {
+        label: "Home",
+        href: `/${slug}`,
+        icon: Home,
+      },
       {
         label: "Chat",
         href: `/${slug}/chat`,
@@ -149,7 +155,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       void Linking.openURL(`${baseUrl}${item.href}`);
       return;
     }
-    router.push(item.href);
+    // Use push for Home and Organizations to preserve back navigation
+    // Use replace for secondary screens to avoid stacking
+    if (item.href === `/${slug}` || item.href === "/(app)") {
+      router.push(item.href);
+    } else {
+      router.replace(item.href);
+    }
   };
 
   const handleSignOut = async () => {

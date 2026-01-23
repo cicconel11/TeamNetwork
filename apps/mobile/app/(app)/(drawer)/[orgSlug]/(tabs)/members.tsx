@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,19 @@ import {
   RefreshControl,
   Pressable,
   StyleSheet,
+  Image,
 } from "react-native";
-import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { DrawerActions } from "@react-navigation/native";
+import { useFocusEffect, useRouter, useNavigation } from "expo-router";
 import { ArrowUpDown, Users, Search } from "lucide-react-native";
 import { useMemberDirectory, type DirectoryMember } from "@/hooks/useMemberDirectory";
 import { useOrg } from "@/contexts/OrgContext";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { spacing, fontSize, fontWeight, borderRadius, type ThemeColors } from "@/lib/theme";
+import { supabase } from "@/lib/supabase";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import {
   DirectorySearchBar,
   DirectoryFilterChipsRow,
@@ -22,23 +28,70 @@ import {
   DirectoryErrorState,
 } from "@/components/directory";
 
+// Local colors for directory components (legacy compat)
+const DIRECTORY_COLORS = {
+  background: NEUTRAL.surface,
+  foreground: NEUTRAL.foreground,
+  card: NEUTRAL.surface,
+  border: NEUTRAL.border,
+  muted: NEUTRAL.muted,
+  mutedForeground: NEUTRAL.secondary,
+  primary: SEMANTIC.success,
+  primaryLight: SEMANTIC.successLight,
+  primaryDark: SEMANTIC.successDark,
+  error: SEMANTIC.error,
+};
+
 type RoleFilter = "all" | "admin" | "member";
 type SortOption = "name" | "year";
 
+interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+}
+
 export default function MembersScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { orgSlug } = useOrg();
   const { members, loading, error, refetch, refetchIfStale } = useMemberDirectory(orgSlug || "");
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<RoleFilter>("all");
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>("name");
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const isRefetchingRef = useRef(false);
 
   const hasActiveFilters = !!(searchQuery || selectedRole !== "all" || selectedYear);
+
+  // Safe drawer toggle
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {
+      // Drawer not available - no-op
+    }
+  }, [navigation]);
+
+  // Fetch organization data
+  useEffect(() => {
+    async function fetchOrg() {
+      if (!orgSlug) return;
+      const { data } = await supabase
+        .from("organizations")
+        .select("id, name, slug, logo_url")
+        .eq("slug", orgSlug)
+        .single();
+      if (data) setOrganization(data);
+    }
+    fetchOrg();
+  }, [orgSlug]);
 
   useFocusEffect(
     useCallback(() => {
@@ -141,7 +194,7 @@ export default function MembersScreen() {
         subtitle={item.email}
         chips={chips}
         onPress={() => handleMemberPress(item)}
-        colors={colors}
+        colors={DIRECTORY_COLORS}
       />
     );
   };
@@ -151,19 +204,19 @@ export default function MembersScreen() {
     { value: "member", label: "Member" },
   ];
 
-  const renderHeader = () => (
-    <View style={styles.header}>
+  const renderListHeader = () => (
+    <View style={styles.listHeader}>
       <DirectorySearchBar
         value={searchQuery}
         onChangeText={setSearchQuery}
         placeholder="Search members..."
-        colors={colors}
+        colors={DIRECTORY_COLORS}
         rightSlot={
           <Pressable
             onPress={toggleSort}
             style={({ pressed }) => [styles.sortButton, pressed && styles.sortButtonPressed]}
           >
-            <ArrowUpDown size={14} color={colors.muted} />
+            <ArrowUpDown size={14} color={NEUTRAL.muted} />
             <Text style={styles.sortButtonText}>{sortBy === "name" ? "A-Z" : "Year"}</Text>
           </Pressable>
         }
@@ -186,7 +239,7 @@ export default function MembersScreen() {
             labelExtractor: (y) => String(y),
           },
         ]}
-        colors={colors}
+        colors={DIRECTORY_COLORS}
         hasActiveFilters={hasActiveFilters}
         onClearAll={clearAllFilters}
       />
@@ -197,10 +250,10 @@ export default function MembersScreen() {
     if (hasActiveFilters) {
       return (
         <DirectoryEmptyState
-          icon={<Search size={40} color={colors.border} />}
+          icon={<Search size={40} color={NEUTRAL.border} />}
           title="No results found"
           subtitle="Try adjusting your search or filters"
-          colors={colors}
+          colors={DIRECTORY_COLORS}
           showClearButton
           onClear={clearAllFilters}
         />
@@ -208,89 +261,219 @@ export default function MembersScreen() {
     }
     return (
       <DirectoryEmptyState
-        icon={<Users size={40} color={colors.border} />}
+        icon={<Users size={40} color={NEUTRAL.border} />}
         title="No members yet"
         subtitle="Members will appear here once added to this organization"
-        colors={colors}
+        colors={DIRECTORY_COLORS}
       />
     );
   };
 
+  // Error state
   if (error && members.length === 0) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: "Members" }} />
-        <DirectoryErrorState
-          title="Unable to load members"
-          message={error}
-          colors={colors}
-          onRetry={handleRefresh}
-        />
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {organization?.logo_url ? (
+                  <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Members</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <DirectoryErrorState
+            title="Unable to load members"
+            message={error}
+            colors={DIRECTORY_COLORS}
+            onRetry={handleRefresh}
+          />
+        </View>
       </View>
     );
   }
 
+  // Loading state
   if (loading && members.length === 0) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: "Members" }} />
-        <DirectorySkeleton colors={colors} />
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {organization?.logo_url ? (
+                  <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Members</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <DirectorySkeleton colors={DIRECTORY_COLORS} />
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: "Members" }} />
-      <FlatList
-        data={filteredMembers}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMemberCard}
-        contentContainerStyle={styles.listContent}
-        stickyHeaderIndices={[0]}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmpty}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-        }
-        keyboardShouldPersistTaps="handled"
-      />
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {organization?.logo_url ? (
+                <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Members</Text>
+              <Text style={styles.headerMeta}>
+                {members.length} {members.length === 1 ? "member" : "members"}
+              </Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <FlatList
+          data={filteredMembers}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMemberCard}
+          contentContainerStyle={styles.listContent}
+          stickyHeaderIndices={[0]}
+          ListHeaderComponent={renderListHeader}
+          ListEmptyComponent={renderEmpty}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
+          }
+          keyboardShouldPersistTaps="handled"
+        />
+      </View>
     </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: NEUTRAL.background,
     },
-    header: {
-      backgroundColor: colors.background,
-      paddingTop: spacing.sm,
-      paddingBottom: spacing.md,
-      gap: spacing.md,
+    // Gradient header styles
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700",
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: NEUTRAL.surface,
+      borderTopLeftRadius: RADIUS.xxl,
+      borderTopRightRadius: RADIUS.xxl,
+      marginTop: -16,
+      overflow: "hidden",
+    },
+    listHeader: {
+      backgroundColor: NEUTRAL.surface,
+      paddingTop: SPACING.md,
+      paddingBottom: SPACING.sm,
+      gap: SPACING.md,
     },
     sortButton: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      paddingHorizontal: spacing.sm + 2,
-      paddingVertical: spacing.sm,
-      backgroundColor: colors.card,
-      borderRadius: borderRadius.md,
+      paddingHorizontal: SPACING.sm + 2,
+      paddingVertical: SPACING.sm,
+      backgroundColor: NEUTRAL.background,
+      borderRadius: RADIUS.md,
     },
     sortButtonPressed: {
       opacity: 0.7,
     },
     sortButtonText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: colors.muted,
+      ...TYPOGRAPHY.labelSmall,
+      color: NEUTRAL.muted,
     },
     listContent: {
-      paddingHorizontal: spacing.md,
-      paddingBottom: spacing.xl,
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.xl,
       flexGrow: 1,
     },
   });

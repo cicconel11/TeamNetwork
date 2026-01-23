@@ -11,6 +11,7 @@ function OrgLayoutInner() {
       <Stack.Screen
         name="settings"
         options={{
+          headerShown: false,
           title: "Settings",
           presentation: "card",
         }}
@@ -64,62 +65,56 @@ function OrgLayoutInner() {
           presentation: "card",
         }}
       />
+      {/* Folders with their own _layout.tsx - just register the folder name */}
       <Stack.Screen
         name="chat"
         options={{
-          title: "Chat",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="chat/[groupId]"
-        options={{
-          title: "Chat",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="workouts"
         options={{
-          title: "Workouts",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="workouts/new"
-        options={{
-          title: "Post Workout",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="workouts/[workoutId]/edit"
-        options={{
-          title: "Edit Workout",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="competition"
         options={{
-          title: "Competition",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen
-        name="competition/add-team"
+        name="philanthropy"
         options={{
-          title: "Add Team",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen
-        name="competition/add-points"
+        name="donations"
         options={{
-          title: "Add Points",
-          presentation: "card",
+          headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="expenses"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="schedules"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="forms"
+        options={{
+          headerShown: false,
+        }}
+      />
+      {/* Standalone screens and folders without their own _layout.tsx */}
       <Stack.Screen
         name="competitions/new"
         options={{
@@ -128,23 +123,26 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
-        name="philanthropy"
+        name="alumni"
         options={{
-          title: "Philanthropy",
+          headerShown: false,
+          title: "Alumni",
           presentation: "card",
         }}
       />
       <Stack.Screen
-        name="philanthropy/new"
+        name="mentorship"
         options={{
-          title: "New Philanthropy Event",
+          headerShown: false,
+          title: "Mentorship",
           presentation: "card",
         }}
       />
       <Stack.Screen
-        name="donations/new"
+        name="records/index"
         options={{
-          title: "Record Donation",
+          headerShown: false,
+          title: "Records",
           presentation: "card",
         }}
       />

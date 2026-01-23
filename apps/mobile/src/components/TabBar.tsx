@@ -1,11 +1,11 @@
 import React, { useMemo } from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { APP_CHROME } from "@/lib/chrome";
 
-const ICON_SIZE = 24;
+const ICON_SIZE = 22;
 
 // Tab configuration with a centered action button
 const LEFT_TABS = [
@@ -14,7 +14,7 @@ const LEFT_TABS = [
 ] as const;
 
 const RIGHT_TABS = [
-  { route: "announcements", icon: Megaphone, label: "Announcements" },
+  { route: "announcements", icon: Megaphone, label: "News" },
   { route: "members", icon: Users, label: "Members" },
 ] as const;
 
@@ -61,7 +61,11 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
         onPress={onPress}
         style={styles.tab}
       >
-        <IconComponent size={ICON_SIZE} color={color} />
+        <View style={styles.tabContent}>
+          <IconComponent size={ICON_SIZE} color={color} strokeWidth={isFocused ? 2.5 : 2} />
+          <Text style={[styles.tabLabel, { color }]}>{tabConfig.label}</Text>
+          {isFocused && <View style={styles.activeIndicator} />}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -79,7 +83,7 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
           style={styles.actionButton}
           disabled={!onActionPress}
         >
-          <Plus size={22} color={APP_CHROME.actionButtonIcon} />
+          <Plus size={22} color={APP_CHROME.actionButtonIcon} strokeWidth={2.5} />
         </TouchableOpacity>
         <View style={styles.tabGroup}>
           {RIGHT_TABS.map((tab) => renderTab(tab))}
@@ -100,8 +104,8 @@ const createStyles = () =>
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      height: 56,
-      paddingHorizontal: 8,
+      height: 60,
+      paddingHorizontal: 4,
     },
     tabGroup: {
       flex: 1,
@@ -112,10 +116,28 @@ const createStyles = () =>
     tab: {
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      minWidth: 44,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      minWidth: 56,
       minHeight: 44,
+    },
+    tabContent: {
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 3,
+    },
+    tabLabel: {
+      fontSize: 10,
+      fontWeight: "500",
+      letterSpacing: 0.1,
+    },
+    activeIndicator: {
+      position: "absolute",
+      bottom: -8,
+      width: 20,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: APP_CHROME.tabBarActive,
     },
     actionButton: {
       width: 52,
@@ -124,5 +146,11 @@ const createStyles = () =>
       backgroundColor: APP_CHROME.actionButtonBackground,
       alignItems: "center",
       justifyContent: "center",
+      // Shadow for elevation
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
     },
   });

@@ -27,7 +27,7 @@ export function OrgSwitcherActions() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace("/(auth)/login");
+    router.replace("/(auth)");
   };
 
   return (

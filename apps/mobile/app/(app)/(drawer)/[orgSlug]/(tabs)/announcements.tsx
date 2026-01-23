@@ -24,21 +24,10 @@ import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { supabase } from "@/lib/supabase";
 import type { Announcement, Organization } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
-
-// Neutral color palette (matching Home/Events)
-const ANNOUNCEMENTS_COLORS = {
-  background: "#f8fafc",      // slate-50 (sheet)
-  primaryText: "#0f172a",     // slate-900
-  secondaryText: "#64748b",   // slate-500
-  mutedText: "#94a3b8",       // slate-400
-  border: "#e2e8f0",          // slate-200
-  card: "#ffffff",            // white
-  pinnedBadge: "#f1f5f9",     // slate-100
-  pinnedText: "#475569",      // slate-600
-  primaryCTA: "#059669",      // emerald-600 (for refresh tint)
-  error: "#ef4444",
-};
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
+import { AnnouncementCard, type AnnouncementCardAnnouncement } from "@/components/cards/AnnouncementCard";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function AnnouncementsScreen() {
   const { orgSlug } = useOrg();
@@ -97,7 +86,7 @@ export default function AnnouncementsScreen() {
       {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={ANNOUNCEMENTS_COLORS.primaryText} />,
+        icon: <ExternalLink size={20} color={NEUTRAL.foreground} />,
         onPress: () => {
           const webUrl = `https://www.myteamnetwork.com/${orgSlug}/announcements`;
           Linking.openURL(webUrl);
@@ -134,29 +123,47 @@ export default function AnnouncementsScreen() {
     });
   };
 
-  const renderAnnouncement = ({ item }: { item: Announcement }) => (
-    <TouchableOpacity
-      style={styles.card}
-      activeOpacity={0.7}
-      onPress={() => router.push(`/(app)/${orgSlug}/announcements/${item.id}`)}
-    >
-      {item.is_pinned && (
-        <View style={styles.pinnedBadge}>
-          <Text style={styles.pinnedText}>PINNED</Text>
-        </View>
-      )}
-      <Text style={styles.cardTitle}>{item.title}</Text>
-      <Text style={styles.cardDate}>{formatDate(item.created_at ?? "")}</Text>
-      <Text style={styles.cardBody} numberOfLines={4}>
-        {item.body}
-      </Text>
-    </TouchableOpacity>
-  );
+  const renderAnnouncement = ({ item }: { item: Announcement }) => {
+    const cardAnnouncement: AnnouncementCardAnnouncement = {
+      id: item.id,
+      title: item.title,
+      body: item.body,
+      created_at: item.created_at,
+      is_pinned: item.is_pinned,
+    };
+
+    return (
+      <AnnouncementCard
+        announcement={cardAnnouncement}
+        onPress={() => router.push(`/(app)/${orgSlug}/announcements/${item.id}`)}
+        style={styles.card}
+        maxBodyLines={4}
+      />
+    );
+  };
 
   if (loading && announcements.length === 0) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={ANNOUNCEMENTS_COLORS.primaryCTA} />
+      <View style={styles.container}>
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <View style={styles.orgLogoButton} />
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Announcements</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.listContent}>
+            <SkeletonList type="announcement" count={4} />
+          </View>
+        </View>
       </View>
     );
   }
@@ -192,6 +199,9 @@ export default function AnnouncementsScreen() {
             {/* Title */}
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Announcements</Text>
+              <Text style={styles.headerMeta}>
+                {announcements.length} {announcements.length === 1 ? "announcement" : "announcements"}
+              </Text>
             </View>
 
             {/* Overflow Menu (admin only) */}
@@ -213,7 +223,7 @@ export default function AnnouncementsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={ANNOUNCEMENTS_COLORS.primaryCTA}
+              tintColor={SEMANTIC.success}
             />
           }
           ListEmptyComponent={
@@ -238,7 +248,7 @@ const createStyles = () =>
     },
     // Gradient header styles
     headerGradient: {
-      paddingBottom: spacing.xs,
+      paddingBottom: SPACING.xs,
     },
     headerSafeArea: {
       // SafeAreaView handles top inset
@@ -246,10 +256,10 @@ const createStyles = () =>
     headerContent: {
       flexDirection: "row",
       alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
       minHeight: 40,
-      gap: spacing.sm,
+      gap: SPACING.sm,
     },
     orgLogoButton: {
       width: 36,
@@ -269,73 +279,39 @@ const createStyles = () =>
       justifyContent: "center",
     },
     orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700",
       color: APP_CHROME.avatarText,
     },
     headerTextContainer: {
       flex: 1,
     },
     headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
+      ...TYPOGRAPHY.titleLarge,
       color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
     },
     // Content sheet
     contentSheet: {
       flex: 1,
-      backgroundColor: ANNOUNCEMENTS_COLORS.background,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
+      backgroundColor: NEUTRAL.background,
+      borderTopLeftRadius: RADIUS.xxl,
+      borderTopRightRadius: RADIUS.xxl,
       marginTop: -8,
       overflow: "hidden",
     },
     listContent: {
-      padding: spacing.md,
+      padding: SPACING.md,
       paddingBottom: 40,
       flexGrow: 1,
     },
     // Cards
     card: {
-      backgroundColor: ANNOUNCEMENTS_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: ANNOUNCEMENTS_COLORS.border,
-      padding: spacing.md,
-      marginBottom: 12,
-      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-    },
-    pinnedBadge: {
-      backgroundColor: ANNOUNCEMENTS_COLORS.pinnedBadge,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 4,
-      alignSelf: "flex-start",
-      marginBottom: 8,
-    },
-    pinnedText: {
-      fontSize: 10,
-      fontWeight: fontWeight.semibold,
-      color: ANNOUNCEMENTS_COLORS.pinnedText,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    cardTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: ANNOUNCEMENTS_COLORS.primaryText,
-      marginBottom: spacing.xs,
-    },
-    cardDate: {
-      fontSize: fontSize.xs,
-      color: ANNOUNCEMENTS_COLORS.mutedText,
-      marginBottom: spacing.sm,
-    },
-    cardBody: {
-      fontSize: fontSize.sm,
-      color: ANNOUNCEMENTS_COLORS.secondaryText,
-      lineHeight: 20,
+      marginBottom: SPACING.md,
     },
     // Empty state
     emptyContainer: {
@@ -345,14 +321,13 @@ const createStyles = () =>
       paddingVertical: 64,
     },
     emptyTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: ANNOUNCEMENTS_COLORS.primaryText,
-      marginBottom: spacing.sm,
+      ...TYPOGRAPHY.headlineMedium,
+      color: NEUTRAL.foreground,
+      marginBottom: SPACING.sm,
     },
     emptyText: {
-      fontSize: fontSize.sm,
-      color: ANNOUNCEMENTS_COLORS.mutedText,
+      ...TYPOGRAPHY.bodyMedium,
+      color: NEUTRAL.muted,
     },
     // Loading/Error states
     centered: {
@@ -360,10 +335,10 @@ const createStyles = () =>
       justifyContent: "center",
       alignItems: "center",
       padding: 20,
-      backgroundColor: ANNOUNCEMENTS_COLORS.background,
+      backgroundColor: NEUTRAL.background,
     },
     errorText: {
-      fontSize: fontSize.sm,
-      color: ANNOUNCEMENTS_COLORS.error,
+      ...TYPOGRAPHY.bodyMedium,
+      color: SEMANTIC.error,
     },
   });
