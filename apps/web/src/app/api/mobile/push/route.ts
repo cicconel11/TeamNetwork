@@ -6,6 +6,7 @@ import { sendExpoPushNotifications, buildPushMessage } from "@/lib/expo-push";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
+  safeString,
   optionalSafeString,
   uuidArray,
   validateJson,
@@ -18,7 +19,7 @@ import type { NotificationAudience, UserRole } from "@teammeet/types";
 const pushNotificationSchema = z
   .object({
     organizationId: baseSchemas.uuid,
-    title: baseSchemas.safeString(200),
+    title: safeString(200),
     body: optionalSafeString(2000),
     type: z.enum(["announcement", "event"]),
     resourceId: baseSchemas.uuid,
@@ -28,7 +29,9 @@ const pushNotificationSchema = z
   .strict();
 
 export async function POST(request: Request) {
-  let respond: ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) | null = null;
+  let respond:
+    | ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>)
+    | null = null;
 
   try {
     const supabase = await createClient();
@@ -95,8 +98,8 @@ export async function POST(request: Request) {
       audience === "members"
         ? ["admin", "active_member", "member"]
         : audience === "alumni"
-        ? ["alumni", "viewer"]
-        : ["admin", "active_member", "member", "alumni", "viewer"];
+          ? ["alumni", "viewer"]
+          : ["admin", "active_member", "member", "alumni", "viewer"];
 
     // Get users who should receive the notification
     const membershipFilter = service
@@ -106,9 +109,10 @@ export async function POST(request: Request) {
       .eq("status", "active")
       .in("role", audienceRoles);
 
-    const membershipsRes = targetUserIds && targetUserIds.length > 0
-      ? await membershipFilter.in("user_id", targetUserIds)
-      : await membershipFilter;
+    const membershipsRes =
+      targetUserIds && targetUserIds.length > 0
+        ? await membershipFilter.in("user_id", targetUserIds)
+        : await membershipFilter;
 
     const memberUserIds = (membershipsRes.data || []).map((m) => m.user_id);
 
@@ -123,10 +127,10 @@ export async function POST(request: Request) {
       .in("user_id", memberUserIds);
 
     if (!tokens || tokens.length === 0) {
-      return respond({ 
-        success: true, 
-        sent: 0, 
-        message: "No push tokens registered for target users" 
+      return respond({
+        success: true,
+        sent: 0,
+        message: "No push tokens registered for target users",
       });
     }
 
