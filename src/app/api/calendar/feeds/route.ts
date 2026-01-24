@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         provider,
         feed_url: normalizedUrl,
       })
-      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider")
+      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at")
       .single();
 
     if (error || !feed) {
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
 
     const { data: updatedFeed } = await serviceClient
       .from("calendar_feeds")
-      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider")
+      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at")
       .eq("id", feed.id)
       .single();
 

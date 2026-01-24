@@ -1,17 +1,27 @@
-const coreWebVitals = require("eslint-config-next/core-web-vitals");
-const typescript = require("eslint-config-next/typescript");
+const { FlatCompat } = require("@eslint/eslintrc");
 
-const tsFiles = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
-const typescriptOnly = typescript.map((config) => {
-  if (config.ignores || config.files) {
-    return config;
-  }
-  return { ...config, files: tsFiles };
+const compat = new FlatCompat({
+  baseDirectory: __dirname,
 });
 
 module.exports = [
-  ...coreWebVitals,
-  ...typescriptOnly,
+  {
+    ignores: [
+      "**/.next/**",
+      "**/node_modules/**",
+      "apps/**",
+      "packages/**",
+      "playwright-report/**",
+      "audit/**",
+    ],
+  },
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    files: ["**/*.js", "**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
   {
     rules: {
       "react-hooks/set-state-in-effect": "off",

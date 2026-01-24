@@ -41,7 +41,6 @@ function deleteMentorshipPairWithCascade(
     pairId: string
 ): { success: boolean; error?: string } {
     // First, delete all logs associated with the pair (cascade)
-    const logsToDelete = store.logs.filter((log) => log.pair_id === pairId);
     store.logs = store.logs.filter((log) => log.pair_id !== pairId);
 
     // Then, delete the pair itself
@@ -226,18 +225,6 @@ function attemptDeleteMentorshipPair(
     return deleteMentorshipPairWithCascade(store, pairId);
 }
 
-const authContextArb = (orgId: string) =>
-    fc.record({
-        userId: fc.uuid(),
-        organizationId: fc.constant(orgId),
-        role: fc.constantFrom<UserRole>("admin", "active_member", "alumni", "viewer"),
-        isAdmin: fc.boolean(),
-    }).map((ctx) => ({
-        ...ctx,
-        // Ensure isAdmin is consistent with role
-        isAdmin: ctx.role === "admin",
-    }));
-
 test("Property 6: Mentorship Deletion Authorization", async (t) => {
     await t.test("only admin users can delete mentorship pairs", () => {
         fc.assert(
@@ -308,11 +295,6 @@ test("Property 6: Mentorship Deletion Authorization", async (t) => {
     await t.test("authorization check is consistent with isAdmin flag", () => {
         fc.assert(
             fc.property(mentorshipPairArb, fc.boolean(), (pair, isAdmin) => {
-                const store: MentorshipStore = {
-                    pairs: [pair],
-                    logs: [],
-                };
-
                 const authContext: AuthContext = {
                     userId: randomUUID(),
                     organizationId: pair.organization_id,

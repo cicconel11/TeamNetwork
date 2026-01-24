@@ -32,7 +32,7 @@ export async function POST(
 
     const { data: feed, error } = await supabase
       .from("calendar_feeds")
-      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider")
+      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at")
       .eq("id", params.feedId)
       .eq("user_id", user.id)
       .single();

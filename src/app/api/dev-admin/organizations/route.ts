@@ -12,7 +12,7 @@ export const runtime = "nodejs";
  * Returns all organizations in the database with key details.
  * Only accessible by dev-admins.
  */
-export async function GET(_request: Request) {
+export async function GET() {
   try {
     // 1. Check authentication
     const supabase = await createClient();

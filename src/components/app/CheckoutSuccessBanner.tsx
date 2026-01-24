@@ -14,7 +14,6 @@ interface CheckoutSuccessBannerProps {
 export function CheckoutSuccessBanner({ orgSlug, organizationId: initialOrgId }: CheckoutSuccessBannerProps) {
   const router = useRouter();
   const [status, setStatus] = useState<BannerStatus>("syncing");
-  const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [resolvedOrgId, setResolvedOrgId] = useState<string | undefined>(initialOrgId);
   
@@ -132,7 +131,7 @@ export function CheckoutSuccessBanner({ orgSlug, organizationId: initialOrgId }:
       case "redirecting":
         return "Redirecting to your organization...";
       case "error":
-        return error || "Something went wrong. Please try again.";
+        return "Something went wrong. Please try again.";
     }
   };
 

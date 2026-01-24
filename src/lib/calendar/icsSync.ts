@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import ical from "node-ical";
-import type { Database } from "@/types/database";
+import type { Database, Json } from "@/types/database";
 
 const FETCH_TIMEOUT_MS = 12000;
 const FETCH_RETRIES = 2;
@@ -27,7 +27,7 @@ export type CalendarEventInstance = {
   startAt: string;
   endAt: string | null;
   allDay: boolean;
-  raw: Record<string, unknown> | null;
+  raw: Json | null;
 };
 
 type IcsEvent = {
@@ -320,7 +320,7 @@ function isAllDayEvent(event: IcsEvent, start: Date, end: Date | null) {
   return startsAtMidnight && endsAtMidnight;
 }
 
-function serializeRawEvent(event: IcsEvent, start: Date, end: Date | null) {
+function serializeRawEvent(event: IcsEvent, start: Date, end: Date | null): Json {
   return {
     uid: event.uid ?? null,
     summary: event.summary ?? null,
