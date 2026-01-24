@@ -1,6 +1,7 @@
 {
   "name": "teammeet",
   "private": true,
+  "packageManager": "bun@1.3.6",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -12,20 +13,22 @@
     }
   },
   "scripts": {
-    "dev": "bun run --filter apps/web dev",
-    "dev:web": "bun run --filter apps/web dev",
-    "dev:mobile": "bun run --filter apps/mobile start",
-    "build": "bun run --filter apps/web build",
-    "build:web": "bun run --filter apps/web build",
-    "lint": "bun run --filter apps/web lint",
+    "dev": "turbo run dev --filter=@teammeet/web",
+    "dev:web": "turbo run dev --filter=@teammeet/web",
+    "dev:mobile": "turbo run start --filter=@teammeet/mobile",
+    "build": "turbo run build",
+    "build:web": "turbo run build --filter=@teammeet/web",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "bun run --filter apps/web test",
-    "test:auth": "bun run --filter apps/web test:auth",
-    "test:payments": "bun run --filter apps/web test:payments",
-    "test:security": "bun run --filter apps/web test:security"
+    "test": "turbo run test --filter=@teammeet/web",
+    "test:auth": "turbo run test:auth --filter=@teammeet/web",
+    "test:payments": "turbo run test:payments --filter=@teammeet/web",
+    "test:security": "turbo run test:security --filter=@teammeet/web"
   },
   "devDependencies": {
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "turbo": "^2"
   }
 }

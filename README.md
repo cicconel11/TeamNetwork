@@ -4,7 +4,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 - `apps/web`: Next.js web app (default `bun dev`, `bun build`).
 - `apps/mobile`: Expo (React Native) mobile app.
-- `packages/*`: shared packages (types, UI, etc.).
+- `packages/*`: shared packages (types, validation, core logic).
+
+The monorepo uses **Turborepo** for task orchestration with caching and parallel execution.
 
 ## Getting Started
 

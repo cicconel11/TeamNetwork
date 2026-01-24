@@ -690,6 +690,8 @@ export type Database = {
           user_id: string
           organization_id: string
           status: "attending" | "not_attending" | "maybe"
+          checked_in_at: string | null
+          checked_in_by: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -699,6 +701,8 @@ export type Database = {
           user_id: string
           organization_id: string
           status: "attending" | "not_attending" | "maybe"
+          checked_in_at?: string | null
+          checked_in_by?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -708,6 +712,8 @@ export type Database = {
           user_id?: string
           organization_id?: string
           status?: "attending" | "not_attending" | "maybe"
+          checked_in_at?: string | null
+          checked_in_by?: string | null
           created_at?: string | null
           updated_at?: string | null
         }

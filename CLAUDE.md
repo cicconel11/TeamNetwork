@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Monorepo Structure
 
-This is an npm workspaces monorepo:
+This is an npm workspaces monorepo using Turborepo for task orchestration:
 
 ```
 TeamMeet/
@@ -34,8 +34,9 @@ TeamMeet/
 bun dev              # Start Next.js dev server at localhost:3000
 bun dev:web          # Same as above
 bun dev:mobile       # Start Expo dev server at localhost:8081
-bun build            # Build production application
-bun lint             # Run ESLint
+bun build            # Build all packages (uses Turborepo caching)
+bun lint             # Run ESLint across packages
+bun typecheck        # Type-check all packages in parallel
 ```
 
 ### Mobile Development
@@ -67,6 +68,7 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 - **Payments**: Stripe (subscriptions + Stripe Connect for donations)
 - **Email**: Resend
 - **Package Manager**: Bun (replaces npm/yarn)
+- **Build System**: Turborepo (task caching and parallel execution)
 - **Web Styling**: Tailwind CSS
 - **Mobile Styling**: React Native StyleSheet (not Tailwind)
 
@@ -259,15 +261,32 @@ const styles = StyleSheet.create({
 - Simpler dependency management without Tailwind/PostCSS
 - All mobile screens have been migrated to this approach
 
-### Mobile Tab Screen UI Pattern
+### Mobile Design Tokens
 
-The main tab screens (Home, Events, Announcements) follow a consistent UI pattern:
+All mobile screens use a unified design token system for consistent styling:
+
+**Design Tokens File** (`apps/mobile/src/lib/design-tokens.ts`):
+```typescript
+import { NEUTRAL, SEMANTIC, ENERGY } from "@/lib/design-tokens";
+
+// NEUTRAL - App chrome colors (backgrounds, text, borders)
+NEUTRAL.surface      // #ffffff - content sheet backgrounds
+NEUTRAL.background   // #f8fafc - main content areas
+NEUTRAL.foreground   // #0f172a - primary text
+NEUTRAL.border       // #e2e8f0 - borders and dividers
+
+// SEMANTIC - Status colors (success, warning, error, info)
+// ENERGY - Live indicators, achievements, online status
+```
 
 **APP_CHROME Colors** (`apps/mobile/src/lib/chrome.ts`):
-- Shared neutral slate palette for header gradient and tab bar
-- Colors are NOT derived from organization theme - they're fixed app chrome
+- Header gradient and tab bar colors (fixed, not org-themed)
 - Gradient: `#0f172a` (slate-900) → `#020617` (slate-950)
 - Tab bar: dark slate with white active icons
+
+### Mobile Screen UI Pattern
+
+All 15 org screens (6 tabs + 9 sidebar) follow a consistent layout pattern:
 
 **Screen Layout Structure:**
 ```typescript
@@ -287,29 +306,38 @@ The main tab screens (Home, Events, Announcements) follow a consistent UI patter
     </SafeAreaView>
   </LinearGradient>
 
-  {/* Content Sheet (overlaps gradient slightly with rounded corners) */}
+  {/* Content Sheet */}
   <View style={styles.contentSheet}>
     {/* Screen content */}
   </View>
 </View>
 ```
 
+**Content Sheet Styling (REQUIRED):**
+```typescript
+import { NEUTRAL } from "@/lib/design-tokens";
+
+contentSheet: {
+  flex: 1,
+  backgroundColor: NEUTRAL.surface,  // Always use NEUTRAL.surface (#ffffff)
+}
+```
+
 **Key Requirements:**
-1. **`headerShown: false`** in `Tabs.Screen` options - prevents double headers (native header + custom gradient header)
-2. **Drawer toggle** - Org logo in header opens the drawer via `DrawerActions.toggleDrawer()`
-3. **Content sheet** - White/slate background with `borderTopLeftRadius: 24` overlapping gradient by ~16px
-4. **Screen-local colors** - Each screen defines its own `*_COLORS` constant for content (cards, text, borders)
+1. **`headerShown: false`** in `Tabs.Screen` options - prevents double headers
+2. **Drawer toggle** - Org logo in header opens drawer via `DrawerActions.toggleDrawer()`
+3. **Content sheet** - Always use `NEUTRAL.surface` for backgroundColor (unified across all screens)
+4. **Screen-local colors** - Each screen can define `*_COLORS` for cards/text/borders, but contentSheet must use shared tokens
 
 **Web URLs:**
 - "Open in Web" links must use `https://www.myteamnetwork.com/[orgSlug]/[screen]`
 - NOT `app.teammeet.com` (legacy domain)
 
 **Files:**
-- `apps/mobile/src/lib/chrome.ts` - APP_CHROME color constants
-- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/_layout.tsx` - Tab navigator with `headerShown` options
+- `apps/mobile/src/lib/design-tokens.ts` - Unified design tokens (NEUTRAL, SEMANTIC, ENERGY)
+- `apps/mobile/src/lib/chrome.ts` - APP_CHROME header/tab bar colors
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/_layout.tsx` - Tab navigator
 - `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/index.tsx` - Home screen (reference implementation)
-- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/events.tsx` - Events screen
-- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/announcements.tsx` - Announcements screen
 
 ### Mobile Supabase Client
 
@@ -399,6 +427,73 @@ From `AGENTS.md`:
 - Commit prefixes: `feat:`, `fix:`, `chore:`
 - Test files: `*.test.ts` using Node's built-in test runner
 
+### Mobile TypeScript Patterns
+
+**Database Nullability:** Supabase returns nullable fields. Always handle nulls in interfaces:
+```typescript
+// Good - matches database reality
+interface Membership {
+  created_at: string | null;
+  role: string | null;
+}
+
+// When displaying, provide defaults
+{member.created_at ? formatDate(member.created_at) : ""}
+{getRoleLabel(invite.role || "active_member")}
+```
+
+**RPC Parameters:** Supabase RPC functions expect `undefined` (not `null`) for optional params:
+```typescript
+// Good
+await supabase.rpc("create_org_invite", {
+  p_uses: usesValue ?? undefined,
+  p_expires_at: expiresAt ?? undefined,
+});
+
+// Bad - will cause type errors
+p_uses: usesValue ?? null,
+```
+
+**React Navigation Types:** Expo Router and React Navigation have duplicate type definitions that conflict. Use `any` assertions for navigation props:
+```typescript
+// Tab bar render prop
+const renderTabBar = useCallback(
+  (props: any) => <TabBar {...props} onActionPress={handleActionPress} />,
+  [handleActionPress]
+);
+
+// Drawer content
+drawerContent={(props: any) => <DrawerContent {...props} />}
+```
+
+**Generic Filter Components:** When building filter components that accept mixed types, use `unknown`:
+```typescript
+interface FilterGroup {
+  options: unknown[];
+  selected: unknown | null;
+  onSelect: (value: unknown | null) => void;
+}
+
+// At call site, cast appropriately
+onSelect: (v) => setSelectedYear(v as number | null)
+```
+
+**Expo SDK 54 APIs:**
+- Notifications: Include `shouldShowBanner` and `shouldShowList` in handler
+- Application: Use `Application.getAndroidId()` (not `Application.androidId`)
+- FileSystem: Use string `"base64"` (not `FileSystem.EncodingType.Base64`)
+
+**ThemeColors Interface:** Screen-local color constants must include all ThemeColors properties:
+```typescript
+const SCREEN_COLORS = {
+  // Required base colors
+  background, foreground, card, border, muted, mutedForeground,
+  primary, primaryLight, primaryDark, primaryForeground,
+  secondary, secondaryLight, secondaryDark, secondaryForeground,
+  mutedSurface, success, warning, error,
+};
+```
+
 ## Key Files to Understand
 
 ### Web App
@@ -412,7 +507,7 @@ From `AGENTS.md`:
 - `apps/mobile/app/_layout.tsx` - Root layout with auth state management
 - `apps/mobile/app/(auth)/login.tsx` - Login screen (email/password + Google OAuth)
 - `apps/mobile/app/(app)/index.tsx` - Organizations list
-- `apps/mobile/app/(app)/[orgSlug]/(tabs)/` - Org-specific screens (members, alumni, announcements)
+- `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/` - Org-specific screens (members, alumni, announcements, events)
 - `apps/mobile/metro.config.js` - Metro bundler config with monorepo support
 
 ### Documentation

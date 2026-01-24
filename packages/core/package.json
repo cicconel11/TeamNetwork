@@ -9,7 +9,11 @@
     "./auth": "./src/auth/index.ts",
     "./pricing": "./src/pricing/index.ts",
     "./navigation": "./src/navigation/index.ts",
-    "./announcements": "./src/announcements/index.ts"
+    "./announcements": "./src/announcements/index.ts",
+    "./formatters": "./src/formatters/index.ts"
+  },
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
     "@teammeet/types": "*"

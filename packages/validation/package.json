@@ -7,6 +7,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "typecheck": "bunx tsc --noEmit"
+  },
   "dependencies": {
     "zod": "^4.3.5"
   }
