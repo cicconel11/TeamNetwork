@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "test": "npm run test:unit && npm run test:security && npm run test:payments",
-    "test:unit": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts tests/cancel-subscription.test.ts tests/grace-period.test.ts",
+    "test:unit": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts tests/cancel-subscription.test.ts tests/grace-period.test.ts tests/calendar-ics-sync.test.ts",
     "test:auth": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts",
     "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts tests/platform-fee.test.ts",
     "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts"
@@ -23,6 +23,7 @@
     "googleapis": "^170.0.0",
     "lucide-react": "^0.474.0",
     "next": "^14.2.35",
+    "node-ical": "^0.19.0",
     "react": "^18",
     "react-dom": "^18",
     "resend": "^6.6.0",

@@ -1091,6 +1091,116 @@ export type Database = {
           },
         ]
       }
+      calendar_feeds: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          feed_url: string
+          status: "active" | "error" | "disabled"
+          last_synced_at: string | null
+          last_error: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider?: string
+          feed_url: string
+          status?: "active" | "error" | "disabled"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          feed_url?: string
+          status?: "active" | "error" | "disabled"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_feeds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_events: {
+        Row: {
+          id: string
+          user_id: string
+          feed_id: string
+          external_uid: string
+          instance_key: string
+          title: string | null
+          description: string | null
+          location: string | null
+          start_at: string
+          end_at: string | null
+          all_day: boolean | null
+          raw: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          feed_id: string
+          external_uid: string
+          instance_key: string
+          title?: string | null
+          description?: string | null
+          location?: string | null
+          start_at: string
+          end_at?: string | null
+          all_day?: boolean | null
+          raw?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          feed_id?: string
+          external_uid?: string
+          instance_key?: string
+          title?: string | null
+          description?: string | null
+          location?: string | null
+          start_at?: string
+          end_at?: string | null
+          all_day?: boolean | null
+          raw?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_feed_id_fkey"
+            columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_sync_preferences: {
         Row: {
           id: string
@@ -2490,6 +2600,11 @@ export type EventCalendarEntry = Tables<'event_calendar_entries'>;
 export type CalendarSyncPreference = Tables<'calendar_sync_preferences'>;
 export type CalendarConnectionStatus = "connected" | "disconnected" | "error";
 export type CalendarSyncStatus = "pending" | "synced" | "failed" | "deleted";
+
+// ICS Calendar Feed types
+export type CalendarFeed = Tables<'calendar_feeds'>;
+export type CalendarEvent = Tables<'calendar_events'>;
+export type CalendarFeedStatus = "active" | "error" | "disabled";
 
 // Chat types
 export type ChatGroup = Tables<'chat_groups'>;

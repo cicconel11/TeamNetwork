@@ -4,10 +4,10 @@ import { PageHeader } from "@/components/layout";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
-import { ScheduleFilesSection } from "@/components/schedules/ScheduleFilesSection";
+import { CalendarSyncPanel } from "@/components/schedules/CalendarSyncPanel";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { AcademicSchedule, ScheduleFile, User } from "@/types/database";
+import type { AcademicSchedule, User } from "@/types/database";
 
 interface SchedulesPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -66,18 +66,8 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
     .is("deleted_at", null)
     .order("start_time", { ascending: true });
 
-  // Fetch user's uploaded files
-  const { data: myFiles } = await supabase
-    .from("schedule_files")
-    .select("*")
-    .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
   // For admins, fetch all schedules and files with user info
   let allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[] = [];
-  let allFiles: (ScheduleFile & { users: Pick<User, "name" | "email"> | null })[] = [];
   if (orgCtx.isAdmin) {
     const { data } = await supabase
       .from("academic_schedules")
@@ -86,14 +76,6 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
       .is("deleted_at", null)
       .order("start_time", { ascending: true });
     allSchedules = (data || []) as (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
-
-    const { data: filesData } = await supabase
-      .from("schedule_files")
-      .select("*, users(name, email)")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
-    allFiles = (filesData || []) as (ScheduleFile & { users: Pick<User, "name" | "email"> | null })[];
   }
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
@@ -116,6 +98,8 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
           </Link>
         }
       />
+
+      <CalendarSyncPanel />
 
       {/* My Schedules Section */}
       <section>
@@ -158,14 +142,6 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
           </Card>
         )}
       </section>
-
-      {/* My Uploaded Files Section */}
-      <ScheduleFilesSection
-        orgId={orgId}
-        myFiles={(myFiles || []) as ScheduleFile[]}
-        allFiles={allFiles}
-        isAdmin={orgCtx.isAdmin}
-      />
 
       {/* Team Availability Section (Admin Only) */}
       {orgCtx.isAdmin && (
