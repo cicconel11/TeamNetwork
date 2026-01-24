@@ -1,6 +1,9 @@
 import React, { useMemo } from "react";
 import { View, Text, Image, Pressable, StyleSheet } from "react-native";
-import { DrawerContentScrollView, type DrawerContentComponentProps } from "@react-navigation/drawer";
+import {
+  DrawerContentScrollView,
+  type DrawerContentComponentProps,
+} from "@react-navigation/drawer";
 import { useGlobalSearchParams, useRouter } from "expo-router";
 import * as Linking from "expo-linking";
 import {
@@ -26,7 +29,8 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
-import { spacing, fontSize, fontWeight, borderRadius, type ThemeColors } from "@/lib/theme";
+import { spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
+import { NEUTRAL, SEMANTIC } from "@/lib/design-tokens";
 
 interface NavItem {
   label: string;
@@ -41,7 +45,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const { user } = useAuth();
   const { permissions } = useOrgRole();
   const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const slug = typeof orgSlug === "string" ? orgSlug : "";
   const userMeta = (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string };
   const displayName = userMeta.name || user?.email || "Member";
@@ -142,7 +145,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         label: "Organizations",
         href: "/(app)",
         icon: Building2,
-      },
+      }
     );
 
     return items;
@@ -170,11 +173,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   };
 
   return (
-    <DrawerContentScrollView
-      {...props}
-      contentContainerStyle={styles.container}
-      scrollEnabled
-    >
+    <DrawerContentScrollView {...props} contentContainerStyle={styles.container} scrollEnabled>
       <View style={styles.profileCard}>
         <View style={styles.avatar}>
           {avatarUrl ? (
@@ -197,10 +196,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               key={item.label}
               accessibilityRole="button"
               onPress={() => handleNavigate(item)}
-              style={({ pressed }) => [
-                styles.navItem,
-                pressed ? styles.navItemPressed : null,
-              ]}
+              style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
             >
               <Icon size={20} color={colors.foreground} />
               <Text style={styles.navLabel}>{item.label}</Text>
@@ -213,10 +209,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         <Pressable
           accessibilityRole="button"
           onPress={handleSignOut}
-          style={({ pressed }) => [
-            styles.navItem,
-            pressed ? styles.navItemPressed : null,
-          ]}
+          style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
         >
           <LogOut size={20} color={colors.error} />
           <Text style={[styles.navLabel, styles.signOutLabel]}>Sign Out</Text>
@@ -226,75 +219,74 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      padding: spacing.lg,
-      gap: spacing.lg,
-    },
-    profileCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      padding: spacing.md,
-      backgroundColor: colors.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    avatar: {
-      width: 48,
-      height: 48,
-      borderRadius: 14,
-      borderCurve: "continuous",
-      backgroundColor: colors.mutedSurface,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
-    },
-    avatarImage: {
-      width: 48,
-      height: 48,
-    },
-    avatarFallback: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: colors.foreground,
-    },
-    profileMeta: {
-      flex: 1,
-    },
-    profileName: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: colors.foreground,
-    },
-    profileEmail: {
-      marginTop: 2,
-      fontSize: fontSize.sm,
-      color: colors.muted,
-    },
-    section: {
-      gap: spacing.sm,
-    },
-    navItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.md,
-      paddingVertical: 12,
-      paddingHorizontal: spacing.md,
-      borderRadius: borderRadius.md,
-      backgroundColor: colors.card,
-    },
-    navItemPressed: {
-      backgroundColor: colors.mutedSurface,
-    },
-    navLabel: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.medium,
-      color: colors.foreground,
-    },
-    signOutLabel: {
-      color: colors.error,
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+    backgroundColor: NEUTRAL.dark950,
+  },
+  profileCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    backgroundColor: NEUTRAL.dark800,
+    borderRadius: borderRadius.lg,
+    borderCurve: "continuous",
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderCurve: "continuous",
+    backgroundColor: NEUTRAL.dark900,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+  },
+  avatarFallback: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: NEUTRAL.surface,
+  },
+  profileMeta: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.semibold,
+    color: NEUTRAL.surface,
+  },
+  profileEmail: {
+    marginTop: 2,
+    fontSize: fontSize.sm,
+    color: NEUTRAL.placeholder,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: NEUTRAL.dark800,
+  },
+  navItemPressed: {
+    backgroundColor: NEUTRAL.dark900,
+  },
+  navLabel: {
+    fontSize: fontSize.base,
+    fontWeight: fontWeight.medium,
+    color: NEUTRAL.surface,
+  },
+  signOutLabel: {
+    color: SEMANTIC.error,
+  },
+});
