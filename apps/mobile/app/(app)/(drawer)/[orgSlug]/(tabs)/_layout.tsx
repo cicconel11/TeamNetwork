@@ -113,7 +113,7 @@ export default function TabsLayout() {
   }, []);
 
   const renderTabBar = useCallback(
-    (props: BottomTabBarProps) => (
+    (props: any) => (
       <TabBar {...props} onActionPress={handleActionPress} />
     ),
     [handleActionPress]

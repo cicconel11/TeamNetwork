@@ -24,17 +24,9 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
-        name="events/[eventId]"
+        name="events"
         options={{
-          title: "Event",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="events/new"
-        options={{
-          title: "Create Event",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen

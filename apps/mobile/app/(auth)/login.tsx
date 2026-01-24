@@ -380,6 +380,16 @@ export default function LoginScreen() {
               {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
             </View>
 
+            {/* Forgot Password Link */}
+            <TouchableOpacity
+              onPress={() => router.push("/(auth)/forgot-password")}
+              style={styles.forgotPassword}
+              disabled={isLoading}
+              accessibilityRole="link"
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
+
             {/* API Error */}
             {apiError && (
               <View style={styles.apiErrorBox}>
@@ -575,6 +585,18 @@ const styles = StyleSheet.create({
   apiErrorText: {
     color: colors.errorText,
     fontSize: fontSize.sm,
+  },
+
+  // Forgot Password Link
+  forgotPassword: {
+    alignSelf: "flex-end",
+    marginBottom: spacing.md,
+    marginTop: -spacing.xs,
+  },
+  forgotPasswordText: {
+    color: colors.link,
+    fontSize: fontSize.sm,
+    fontWeight: "500",
   },
 
   // Primary Button
