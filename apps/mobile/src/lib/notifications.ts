@@ -24,6 +24,8 @@ if (Platform.OS !== "web") {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 }
@@ -34,7 +36,7 @@ async function getStableDeviceId(): Promise<string | null> {
       return await Application.getIosIdForVendorAsync();
     }
     if (Platform.OS === "android") {
-      return Application.androidId ?? null;
+      return Application.getAndroidId() ?? null;
     }
   } catch (error) {
     console.warn("Failed to resolve device id:", error);

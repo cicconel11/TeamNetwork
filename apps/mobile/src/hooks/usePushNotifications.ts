@@ -48,7 +48,7 @@ export function usePushNotifications({
   const handleNotificationResponse = useCallback(
     (response: Notifications.NotificationResponse) => {
       try {
-        const data = response.notification.request.content.data as NotificationData;
+        const data = response.notification.request.content.data as unknown as NotificationData;
         const route = getNotificationRoute(data);
 
         if (route) {

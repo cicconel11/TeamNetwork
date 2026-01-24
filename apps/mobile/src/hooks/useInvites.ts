@@ -5,11 +5,11 @@ export interface Invite {
   id: string;
   code: string;
   token: string | null;
-  role: string;
+  role: string | null;
   uses_remaining: number | null;
   expires_at: string | null;
   revoked_at: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 interface CreateInviteParams {
@@ -123,8 +123,8 @@ export function useInvites(orgId: string | null): UseInvitesReturn {
         const { data, error: rpcError } = await supabase.rpc("create_org_invite", {
           p_organization_id: orgId,
           p_role: params.role,
-          p_uses: params.usesRemaining ?? null,
-          p_expires_at: params.expiresAt ?? null,
+          p_uses: params.usesRemaining ?? undefined,
+          p_expires_at: params.expiresAt ?? undefined,
         });
 
         if (rpcError) throw rpcError;

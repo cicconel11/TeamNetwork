@@ -185,7 +185,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         </View>
         <View style={styles.profileMeta}>
           <Text style={styles.profileName}>{displayName}</Text>
-          {displayEmail ? <Text style={styles.profileEmail}>{displayEmail}</Text> : null}
+          {displayEmail && <Text style={styles.profileEmail}>{displayEmail}</Text>}
         </View>
       </View>
 

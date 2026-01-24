@@ -3,17 +3,17 @@ import { View, Text, ScrollView, Pressable, Animated, StyleSheet } from "react-n
 import { X } from "lucide-react-native";
 import { spacing, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
 
-interface FilterGroup<T> {
+interface FilterGroup {
   label: string;
-  options: T[];
-  selected: T | null;
-  onSelect: (value: T | null) => void;
-  keyExtractor?: (item: T) => string;
-  labelExtractor?: (item: T) => string;
+  options: unknown[];
+  selected: unknown | null;
+  onSelect: (value: unknown | null) => void;
+  keyExtractor?: (item: unknown) => string;
+  labelExtractor?: (item: unknown) => string;
 }
 
-interface DirectoryFilterChipsRowProps<T> {
-  groups: FilterGroup<T>[];
+interface DirectoryFilterChipsRowProps {
+  groups: FilterGroup[];
   colors: ThemeColors;
   hasActiveFilters: boolean;
   onClearAll: () => void;
@@ -65,12 +65,12 @@ function FilterChip({
   );
 }
 
-export function DirectoryFilterChipsRow<T>({
+export function DirectoryFilterChipsRow({
   groups,
   colors,
   hasActiveFilters,
   onClearAll,
-}: DirectoryFilterChipsRowProps<T>) {
+}: DirectoryFilterChipsRowProps) {
   if (groups.every((g) => g.options.length === 0)) return null;
 
   return (
@@ -88,8 +88,8 @@ export function DirectoryFilterChipsRow<T>({
 
       {groups.map((group, groupIndex) => {
         if (group.options.length === 0) return null;
-        const keyFn = group.keyExtractor || ((item: T) => String(item));
-        const labelFn = group.labelExtractor || ((item: T) => String(item));
+        const keyFn = group.keyExtractor || ((item: unknown) => String(item));
+        const labelFn = group.labelExtractor || ((item: unknown) => String(item));
 
         return (
           <View key={group.label} style={styles.filterGroupWrapper}>

@@ -28,9 +28,9 @@ export function AppDrawer() {
             width: drawerWidth,
           },
         ],
-        sceneContainerStyle: styles.scene,
+        sceneStyle: styles.scene,
       }}
-      drawerContent={(props) => <DrawerContent {...props} />}
+      drawerContent={(props: any) => <DrawerContent {...props} />}
     >
       <Drawer.Screen
         name="(drawer)"

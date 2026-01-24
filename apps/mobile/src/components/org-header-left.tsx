@@ -32,7 +32,7 @@ export function OrgHeaderLeft(props: HeaderBackButtonProps) {
         gap: 8,
       }}
     >
-      {props.canGoBack ? <HeaderBackButton {...props} /> : null}
+      {navigation.canGoBack() && <HeaderBackButton {...props} />}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open menu"

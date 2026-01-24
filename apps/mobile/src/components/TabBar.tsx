@@ -74,7 +74,10 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
     <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       <View style={styles.tabBar}>
         <View style={styles.tabGroup}>
-          {LEFT_TABS.map((tab) => renderTab(tab))}
+          {LEFT_TABS.map((tab) => {
+            const rendered = renderTab(tab);
+            return rendered;
+          }).filter(Boolean)}
         </View>
         <TouchableOpacity
           accessibilityRole="button"
@@ -86,7 +89,10 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
           <Plus size={22} color={APP_CHROME.actionButtonIcon} strokeWidth={2.5} />
         </TouchableOpacity>
         <View style={styles.tabGroup}>
-          {RIGHT_TABS.map((tab) => renderTab(tab))}
+          {RIGHT_TABS.map((tab) => {
+            const rendered = renderTab(tab);
+            return rendered;
+          }).filter(Boolean)}
         </View>
       </View>
     </View>

@@ -6,7 +6,7 @@ export interface Membership {
   user_id: string;
   role: string;
   status: "active" | "revoked" | "pending";
-  created_at: string;
+  created_at: string | null;
   user: {
     id: string;
     email: string | null;

@@ -63,7 +63,12 @@ export function useNotificationPreferences(
 
       if (isMountedRef.current) {
         if (data) {
-          setPrefs(data);
+          setPrefs({
+            id: data.id,
+            email_address: data.email_address,
+            email_enabled: data.email_enabled ?? true,
+            push_enabled: data.push_enabled ?? true,
+          });
         } else {
           // Return defaults if no preferences exist yet
           setPrefs({
