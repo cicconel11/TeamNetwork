@@ -1,221 +1,90 @@
 # TeamMeet Monorepo Migration Progress
 
-**Last Updated:** All phases complete. Mobile app MVP is functional with announcements feed.
+> **Last Updated:** 2026-01-24 - Mobile app feature-complete with all screens implemented.
 
 ## Quick Status
 
-| Phase | Task | Status | Commit |
-|-------|------|--------|--------|
-| Phase 1 | Monorepo Setup | DONE | `a4ccedf` |
-| Phase 2.1 | @teammeet/types | DONE | `0927533` |
-| Phase 2.2 | @teammeet/validation | DONE | `06b3c1c` |
-| Phase 2.3 | @teammeet/core | DONE | `b167c74` |
-| Phase 3.1 | Expo App Init | DONE | - |
-| Phase 3.2 | Mobile Auth Screens | DONE | - |
-| Phase 4.1 | Org Selection Screen | DONE | - |
-| Phase 4.2 | Members Directory + Tabs | DONE | - |
-| Phase 4.3 | Announcements Feed | DONE | - |
-| Phase 5.1 | Update CLAUDE.md | DONE | - |
-
-## Full Plan Reference
-
-`abundant-fluttering-codd.md` (root directory)
+| Phase | Task | Status |
+|-------|------|--------|
+| Phase 1 | Monorepo Setup | DONE |
+| Phase 2 | Shared Packages | DONE |
+| Phase 3 | Mobile Auth | DONE |
+| Phase 4 | Mobile Core Screens | DONE |
+| Phase 5 | Mobile Feature Screens | DONE |
+| Phase 6 | Design System | DONE |
+| Phase 7 | Drawer Navigation | DONE |
 
 ---
 
-## Completed Work
+## Current Architecture
 
-### Phase 1: Monorepo Setup
-
-**Commit:** `a4ccedf`
-
-- Root `package.json` has workspaces: `["apps/*", "packages/*"]`
-- Web app moved to `apps/web/`
-- Scripts: `npm run dev`, `npm run build`
-
-### Phase 2.1: @teammeet/types
-
-**Commit:** `0927533`
-
-**Package:** `packages/types/`
-```
-├── package.json
-└── src/
-    ├── database.ts    # Supabase generated types
-    └── index.ts       # export * from "./database"
-```
-
-**Exports:** Database, Tables, Organization, UserRole, AnnouncementAudience, etc.
-
-### Phase 2.2: @teammeet/validation
-
-**Commit:** `06b3c1c`
-
-**Package:** `packages/validation/`
-```
-├── package.json       # Has zod dependency
-└── src/
-    ├── schemas.ts     # Zod schemas
-    └── index.ts       # Exports + re-exports z from zod
-```
-
-**Exports:** baseSchemas, safeString, optionalSafeString, uuidArray, validateOrgName, z
-
-### Phase 2.3: @teammeet/core
-
-**Commit:** `b167c74`
-
-**Package:** `packages/core/`
-```
-├── package.json       # Depends on @teammeet/types
-└── src/
-    ├── index.ts       # Main exports
-    ├── auth/
-    │   ├── index.ts
-    │   └── role-utils.ts
-    ├── pricing/
-    │   └── index.ts
-    └── announcements/
-        └── index.ts
-```
-
-**Exports:**
-- Auth: `normalizeRole`, `roleFlags`, `OrgRole`
-- Pricing: `BASE_PRICES`, `ALUMNI_ADD_ON_PRICES`, `ALUMNI_BUCKET_LABELS`, `ALUMNI_LIMITS`, `getTotalPrice`, `formatPrice`, `getAlumniLimit`, `normalizeBucket`
-- Announcements: `filterAnnouncementsForUser`, `ViewerContext`
-
-### Phase 3.1: Expo Mobile App Initialization
-
-**Package:** `apps/mobile/`
-```
-├── package.json         # Expo dependencies + shared packages
-├── app.json            # Expo config with deep linking
-├── tsconfig.json       # TypeScript config with path aliases
-├── .env.local          # Supabase env vars
-├── src/
-│   ├── lib/
-│   │   └── supabase.ts # Supabase client with AsyncStorage
-│   └── hooks/
-│       ├── useAuth.ts
-│       ├── useMembers.ts
-│       └── useOrganizations.ts
-└── app/
-    ├── _layout.tsx     # Root layout with auth redirect
-    ├── (auth)/
-    │   ├── _layout.tsx
-    │   ├── login.tsx
-    │   └── signup.tsx
-    └── (app)/
-        ├── _layout.tsx
-        ├── index.tsx    # Org selection
-        └── [orgSlug]/
-            ├── _layout.tsx   # Tab navigator
-            └── (tabs)/
-                ├── index.tsx        # Dashboard
-                ├── members.tsx      # Members directory
-                ├── alumni.tsx       # Alumni placeholder
-                └── announcements.tsx # Announcements placeholder
-```
-
-### Phase 3.2: Mobile Auth Screens
-
-**Files Created:**
-- `apps/mobile/app/(auth)/_layout.tsx` - Stack layout, no header
-- `apps/mobile/app/(auth)/login.tsx` - Google OAuth login with Supabase
-- `apps/mobile/app/(auth)/signup.tsx` - Email/password signup with email confirmation
-- `apps/mobile/src/hooks/useAuth.ts` - Auth state hook with unmount guard
-
-**Features:**
-- Google OAuth authentication (signInWithOAuth)
-- Email/password signup (signUp)
-- Loading states with ActivityIndicator
-- Error handling with Alerts
-
-### Phase 4.1: Organization Selection Screen
-
-**Files Created:**
-- `apps/mobile/app/(app)/_layout.tsx` - Stack with org routes
-- `apps/mobile/app/(app)/index.tsx` - FlatList of user's organizations
-
-**Features:**
-- Fetches organizations from `user_organization_roles` (status=active, no deleted_at column)
-- Pull-to-refresh
-- Sign out button
-- Empty state for no organizations
-- Navigates to org detail on tap
-
-### Phase 4.2: Members Directory + Tabs
-
-**Files Created:**
-- `apps/mobile/app/(app)/[orgSlug]/_layout.tsx` - Tab navigator with 4 tabs
-- `apps/mobile/app/(app)/[orgSlug]/(tabs)/index.tsx` - Dashboard placeholder
-- `apps/mobile/app/(app)/[orgSlug]/(tabs)/members.tsx` - Members list
-- `apps/mobile/app/(app)/[orgSlug]/(tabs)/alumni.tsx` - Alumni placeholder
-- `apps/mobile/app/(app)/[orgSlug]/(tabs)/announcements.tsx` - Announcements placeholder
-- `apps/mobile/src/hooks/useMembers.ts` - Members fetch hook
-
-**Features:**
-- Tab navigation: Home, Members, Alumni, News
-- Members list with avatars (or initials fallback)
-- Role badges (Admin/Member) using `@teammeet/core` normalizeRole
-- Announcements placeholder (Phase 4.3)
-- Pull-to-refresh on list screens
-- Unmount guards (isMountedRef) on all async hooks
-
-**Schema Notes:**
-- `user_organization_roles` has **NO `deleted_at` column** - filter by `status` only
-- `users` table has `name` (not `first_name`/`last_name`), `email`, `avatar_url`
-- Join `user_organization_roles` → `users` (not `profiles`)
-
----
-
-## Directory Structure
+### Directory Structure
 
 ```
 TeamMeet/
 ├── apps/
-│   ├── web/                    # Next.js 14 (complete)
+│   ├── web/                    # Next.js 14 web application
 │   │   ├── src/
 │   │   ├── tests/
-│   │   ├── .env.local
 │   │   └── package.json
-│   └── mobile/                 # Expo (MVP complete)
-│       ├── package.json        # Expo + shared package deps
-│       ├── app.json            # Expo config
-│       ├── tsconfig.json       # TypeScript config
-│       ├── .env.local          # EXPO_PUBLIC_SUPABASE_* vars
+│   └── mobile/                 # Expo SDK 54 mobile app
+│       ├── app/                # Expo Router screens (60+ files)
+│       │   ├── _layout.tsx     # Root layout
+│       │   ├── (auth)/         # Login, Signup, Forgot Password
+│       │   └── (app)/          # Protected screens
+│       │       └── (drawer)/   # Drawer navigator
+│       │           └── [orgSlug]/  # Org-scoped screens
+│       │               ├── (tabs)/     # 6 tab screens
+│       │               └── [feature]/  # Feature screens
 │       ├── src/
-│       │   ├── lib/
-│       │   │   └── supabase.ts # Mobile Supabase client
-│       │   └── hooks/
-│       │       ├── useAnnouncements.ts
-│       │       ├── useAuth.ts
-│       │       └── useMembers.ts
-│       └── app/
-│           ├── _layout.tsx     # Root layout
-│           ├── (auth)/         # Login, Signup
-│           └── (app)/          # Protected screens
-│               ├── index.tsx   # Org selection
-│               └── [orgSlug]/  # Org-scoped tabs
+│       │   ├── components/     # Shared UI components
+│       │   ├── hooks/          # Data fetching hooks
+│       │   ├── lib/            # Utilities, design tokens
+│       │   └── navigation/     # Drawer, AppDrawer
+│       └── package.json
 ├── packages/
-│   ├── types/                  # @teammeet/types ✓
-│   ├── validation/             # @teammeet/validation ✓
-│   └── core/                   # @teammeet/core ✓
-├── supabase/
-├── docs/
-│   └── MIGRATION.md
-└── package.json
+│   ├── core/                   # @teammeet/core - business logic
+│   ├── types/                  # @teammeet/types - TypeScript types
+│   └── validation/             # @teammeet/validation - Zod schemas
+├── supabase/                   # Database migrations
+└── docs/                       # Documentation
 ```
+
+### Mobile Screen Inventory
+
+**Tab Screens (6):**
+- Home, Events, Announcements, Members, Alumni, Menu
+
+**Feature Screens (via Drawer):**
+- Chat (list + room)
+- Workouts (list + create + edit)
+- Competition (standings + add team + add points)
+- Schedules (list + create + edit)
+- Records (list)
+- Philanthropy (list + create)
+- Donations (list + create)
+- Expenses (list + create)
+- Forms (list + detail + document viewer)
+- Mentorship (overview)
+- Settings + Navigation config
+
+**Detail/Action Screens:**
+- Event detail + edit + RSVPs + check-in
+- Announcement detail + edit + create
+- Member detail + invite
+- Alumni detail
 
 ---
 
 ## Commands
 
 ```bash
-npm install           # Install all workspace deps
-npm run dev           # Start web dev server
-npm run build         # Build web app
-npm run dev:mobile    # Start Expo dev server
+bun install         # Install all workspace deps
+bun dev             # Start web dev server (localhost:3000)
+bun dev:mobile      # Start Expo dev server (localhost:8081)
+bun build           # Build all packages
+bun typecheck       # Type-check all packages
+bun lint            # Lint all packages
 ```
 
 ---
@@ -224,33 +93,37 @@ npm run dev:mobile    # Start Expo dev server
 
 ```typescript
 // Types
-import type { Database, Organization, UserRole, MembershipStatus } from "@teammeet/types";
+import type { Database, Organization, UserRole } from "@teammeet/types";
 
 // Validation
-import { baseSchemas, safeString, validateOrgName, z } from "@teammeet/validation";
+import { baseSchemas, safeString, z } from "@teammeet/validation";
 
 // Core business logic
-import { normalizeRole, roleFlags, filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
+import { normalizeRole, roleFlags, filterAnnouncementsForUser } from "@teammeet/core";
+
+// Mobile design tokens
+import { NEUTRAL, SEMANTIC, ENERGY } from "@/lib/design-tokens";
+import { APP_CHROME } from "@/lib/chrome";
 ```
 
 ---
 
-## Future Enhancements (Post-MVP)
+## Key Files
 
-- Push notifications with Expo Notifications
-- Events calendar with RSVP
-- Offline support with Supabase realtime
-- Dark mode toggle
-- Alumni directory (currently placeholder)
-- Profile editing
-- Stripe subscription management in-app
-- OAuth providers (Google, Apple)
+| File | Purpose |
+|------|---------|
+| `apps/mobile/src/navigation/DrawerContent.tsx` | Drawer menu with grouped sections |
+| `apps/mobile/src/components/TabBar.tsx` | Custom tab bar component |
+| `apps/mobile/src/lib/design-tokens.ts` | NEUTRAL, SEMANTIC, ENERGY colors |
+| `apps/mobile/src/lib/chrome.ts` | APP_CHROME header/tab colors |
+| `apps/mobile/src/hooks/useOrgRole.ts` | Role-based permissions hook |
+| `packages/core/src/auth/role-utils.ts` | normalizeRole, roleFlags |
 
 ---
 
-## Rollback
+## Related Documentation
 
-```bash
-git checkout pre-monorepo-backup  # Full rollback
-git revert <commit>               # Revert specific commit
-```
+- `CLAUDE.md` - Development guidelines, mobile patterns
+- `docs/MOBILE-PARITY.md` - Feature parity matrix
+- `docs/MOBILE-TAP-VALIDATION.md` - Touch target requirements
+- `docs/db/schema-audit.md` - Database documentation

@@ -4,7 +4,8 @@ import {
   DrawerContentScrollView,
   type DrawerContentComponentProps,
 } from "@react-navigation/drawer";
-import { useGlobalSearchParams, useRouter } from "expo-router";
+import { useGlobalSearchParams, useRouter, usePathname } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
 import {
   Award,
@@ -28,7 +29,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
-import { spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
+import { spacing, fontSize, fontWeight } from "@/lib/theme";
 import { NEUTRAL, SEMANTIC } from "@/lib/design-tokens";
 
 interface NavItem {
@@ -38,8 +39,22 @@ interface NavItem {
   openInWeb?: boolean;
 }
 
+interface NavSection {
+  id: string;
+  title: string | null; // null = no header
+  items: NavItem[];
+}
+
+// Pinned footer items (Settings, Navigation, Organizations, Sign Out)
+const PINNED_ITEM_HEIGHT = 44;
+const PINNED_FOOTER_COUNT = 4;
+const FOOTER_PADDING = 16;
+const FOOTER_HEIGHT = PINNED_ITEM_HEIGHT * PINNED_FOOTER_COUNT + FOOTER_PADDING;
+
 export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
   const { user } = useAuth();
   const { permissions } = useOrgRole();
@@ -50,104 +65,68 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const avatarUrl = userMeta.avatar_url || "";
   const initial = displayName.trim().charAt(0).toUpperCase() || "M";
 
-  const navItems = useMemo<NavItem[]>(() => {
+  // Build sections for grouped navigation
+  const sections = useMemo<NavSection[]>(() => {
     if (!slug) {
+      // No org context - only show Organizations
       return [
         {
-          label: "Organizations",
-          href: "/(app)",
-          icon: Building2,
+          id: "main",
+          title: null,
+          items: [{ label: "Organizations", href: "/(app)", icon: Building2 }],
         },
       ];
     }
 
-    const items: NavItem[] = [
-      {
-        label: "Home",
-        href: `/${slug}`,
-        icon: Home,
-      },
-      {
-        label: "Chat",
-        href: `/${slug}/chat`,
-        icon: MessageCircle,
-      },
+    // Main section (no header): Home, Chat, Alumni*, Mentorship
+    const mainItems: NavItem[] = [
+      { label: "Home", href: `/${slug}`, icon: Home },
+      { label: "Chat", href: `/${slug}/chat`, icon: MessageCircle },
     ];
 
-    // Alumni: in-app navigation, gated by permission
     if (permissions.canViewAlumni) {
-      items.push({
-        label: "Alumni",
-        href: `/${slug}/alumni`,
-        icon: GraduationCap,
-      });
+      mainItems.push({ label: "Alumni", href: `/${slug}/alumni`, icon: GraduationCap });
     }
 
-    items.push(
-      {
-        label: "Mentorship",
-        href: `/${slug}/mentorship`,
-        icon: Handshake,
-      },
-      {
-        label: "Workouts",
-        href: `/${slug}/workouts`,
-        icon: Dumbbell,
-      },
-      {
-        label: "Competition",
-        href: `/${slug}/competition`,
-        icon: Award,
-      },
-      {
-        label: "Philanthropy",
-        href: `/${slug}/philanthropy`,
-        icon: Heart,
-      },
-      {
-        label: "Donations",
-        href: `/${slug}/donations`,
-        icon: DollarSign,
-      },
-      {
-        label: "Expenses",
-        href: `/${slug}/expenses`,
-        icon: Receipt,
-      },
-      {
-        label: "Records",
-        href: `/${slug}/records`,
-        icon: Trophy,
-      },
-      {
-        label: "Schedules",
-        href: `/${slug}/schedules`,
-        icon: BookOpen,
-      },
-      {
-        label: "Forms",
-        href: `/${slug}/forms`,
-        icon: ClipboardList,
-      },
-      {
-        label: "Settings",
-        href: `/${slug}/settings`,
-        icon: Settings,
-      },
-      {
-        label: "Navigation",
-        href: `/${slug}/settings/navigation`,
-        icon: SlidersHorizontal,
-      },
-      {
-        label: "Organizations",
-        href: "/(app)",
-        icon: Building2,
-      }
-    );
+    mainItems.push({ label: "Mentorship", href: `/${slug}/mentorship`, icon: Handshake });
 
-    return items;
+    // Training section
+    const trainingItems: NavItem[] = [
+      { label: "Workouts", href: `/${slug}/workouts`, icon: Dumbbell },
+      { label: "Competition", href: `/${slug}/competition`, icon: Award },
+      { label: "Schedules", href: `/${slug}/schedules`, icon: BookOpen },
+      { label: "Records", href: `/${slug}/records`, icon: Trophy },
+    ];
+
+    // Money section
+    const moneyItems: NavItem[] = [
+      { label: "Philanthropy", href: `/${slug}/philanthropy`, icon: Heart },
+      { label: "Donations", href: `/${slug}/donations`, icon: DollarSign },
+      { label: "Expenses", href: `/${slug}/expenses`, icon: Receipt },
+    ];
+
+    // Other section
+    const otherItems: NavItem[] = [
+      { label: "Forms", href: `/${slug}/forms`, icon: ClipboardList },
+    ];
+
+    return [
+      { id: "main", title: null, items: mainItems },
+      { id: "training", title: "Training", items: trainingItems },
+      { id: "money", title: "Money", items: moneyItems },
+      { id: "other", title: "Other", items: otherItems },
+    ];
   }, [slug, permissions.canViewAlumni]);
+
+  // Pinned footer items
+  const pinnedItems = useMemo<NavItem[]>(() => {
+    if (!slug) return [];
+    return [
+      { label: "Settings", href: `/${slug}/settings`, icon: Settings },
+      { label: "Navigation", href: `/${slug}/settings/navigation`, icon: SlidersHorizontal },
+      { label: "Organizations", href: "/(app)", icon: Building2 },
+    ];
+  }, [slug]);
 
   const handleNavigate = (item: NavItem) => {
     props.navigation.closeDrawer();
@@ -170,81 +149,114 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     await signOut();
   };
 
+  // Check if a route is active
+  const isRouteActive = (href: string) => {
+    // Normalize href for comparison (remove leading slash variations)
+    const normalizedHref = href.replace(/^\/(app)?/, "");
+    const normalizedPathname = pathname.replace(/^\/(app)?/, "");
+
+    if (normalizedHref === normalizedPathname) return true;
+    // Check if pathname starts with href (for nested routes)
+    if (normalizedHref && normalizedPathname.startsWith(normalizedHref + "/")) return true;
+    return false;
+  };
+
+  const renderNavItem = (item: NavItem, isSignOut = false) => {
+    const Icon = item.icon;
+    const isActive = !isSignOut && isRouteActive(item.href);
+
+    return (
+      <Pressable
+        key={item.label}
+        accessibilityRole="button"
+        onPress={isSignOut ? handleSignOut : () => handleNavigate(item)}
+        style={({ pressed }) => [
+          styles.navItem,
+          isActive && styles.navItemActive,
+          pressed && styles.navItemPressed,
+        ]}
+      >
+        <Icon size={18} color={isSignOut ? SEMANTIC.error : NEUTRAL.placeholder} />
+        <Text style={[styles.navLabel, isSignOut && styles.signOutLabel]}>{item.label}</Text>
+      </Pressable>
+    );
+  };
+
   return (
-    <DrawerContentScrollView {...props} contentContainerStyle={styles.container} scrollEnabled>
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.avatarFallback}>{initial}</Text>
-          )}
+    <View style={styles.container}>
+      {/* Scrollable content */}
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: FOOTER_HEIGHT + bottomInset },
+        ]}
+        scrollEnabled
+      >
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarFallback}>{initial}</Text>
+            )}
+          </View>
+          <View style={styles.profileMeta}>
+            <Text style={styles.profileName}>{displayName}</Text>
+            {displayEmail && <Text style={styles.profileEmail}>{displayEmail}</Text>}
+          </View>
         </View>
-        <View style={styles.profileMeta}>
-          <Text style={styles.profileName}>{displayName}</Text>
-          {displayEmail && <Text style={styles.profileEmail}>{displayEmail}</Text>}
+        <View style={styles.divider} />
+
+        {/* Sections */}
+        {sections.map((section) => (
+          <View key={section.id} style={styles.section}>
+            {section.title && <Text style={styles.sectionHeader}>{section.title}</Text>}
+            {section.items.map((item) => renderNavItem(item))}
+          </View>
+        ))}
+      </DrawerContentScrollView>
+
+      {/* Pinned Footer */}
+      {slug && (
+        <View style={[styles.pinnedFooter, { paddingBottom: bottomInset }]}>
+          <View style={styles.divider} />
+          {pinnedItems.map((item) => renderNavItem(item))}
+          {renderNavItem({ label: "Sign Out", href: "", icon: LogOut }, true)}
         </View>
-      </View>
-
-      <View style={styles.section}>
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Pressable
-              key={item.label}
-              accessibilityRole="button"
-              onPress={() => handleNavigate(item)}
-              style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
-            >
-              <Icon size={20} color={NEUTRAL.placeholder} />
-              <Text style={styles.navLabel}>{item.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.section}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={handleSignOut}
-          style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
-        >
-          <LogOut size={20} color={SEMANTIC.error} />
-          <Text style={[styles.navLabel, styles.signOutLabel]}>Sign Out</Text>
-        </Pressable>
-      </View>
-    </DrawerContentScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: spacing.lg,
-    gap: spacing.lg,
+    flex: 1,
     backgroundColor: NEUTRAL.dark950,
+  },
+  scrollContent: {
+    paddingTop: spacing.md,
   },
   profileCard: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    padding: spacing.md,
-    backgroundColor: NEUTRAL.dark800,
-    borderRadius: borderRadius.lg,
-    borderCurve: "continuous",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    borderCurve: "continuous",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: NEUTRAL.dark900,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
   avatarImage: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
   },
   avatarFallback: {
     fontSize: fontSize.base,
@@ -264,27 +276,52 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: NEUTRAL.placeholder,
   },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255, 255, 255, 0.1)",
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.sm,
+  },
   section: {
-    gap: spacing.sm,
+    gap: 2,
+  },
+  sectionHeader: {
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: NEUTRAL.placeholder,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   navItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: 12,
+    gap: 12,
+    height: 44,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    backgroundColor: NEUTRAL.dark800,
+  },
+  navItemActive: {
+    backgroundColor: "rgba(255, 255, 255, 0.06)",
   },
   navItemPressed: {
-    backgroundColor: NEUTRAL.dark900,
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   navLabel: {
-    fontSize: fontSize.base,
+    fontSize: 15,
     fontWeight: fontWeight.medium,
     color: NEUTRAL.surface,
   },
   signOutLabel: {
     color: SEMANTIC.error,
+  },
+  pinnedFooter: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: NEUTRAL.dark950,
+    paddingTop: spacing.xs,
   },
 });
