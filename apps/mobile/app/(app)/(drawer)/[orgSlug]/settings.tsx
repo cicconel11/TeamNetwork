@@ -23,7 +23,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgSettings } from "@/hooks/useOrgSettings";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
-import { useInvites, getInviteLink, isInviteValid, isInviteExpired, isInviteRevoked, isInviteExhausted } from "@/hooks/useInvites";
+import { useInvites, getInviteLink, isInviteValid, isInviteExpired, isInviteRevoked, isInviteExhausted, type Invite } from "@/hooks/useInvites";
 import { useMemberships, getRoleLabel, getStatusLabel } from "@/hooks/useMemberships";
 import { useSubscription } from "@/hooks/useSubscription";
 import { supabase } from "@/lib/supabase";
@@ -31,6 +31,7 @@ import { normalizeRole, roleFlags } from "@teammeet/core";
 import { StripeWebView } from "@/components/StripeWebView";
 import { captureException } from "@/lib/analytics";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { getWebAppUrl, fetchWithAuth } from "@/lib/web-api";
 import type { AlumniBucket } from "@teammeet/types";
 import {
@@ -58,6 +59,7 @@ import Constants from "expo-constants";
 import QRCode from "react-native-qrcode-svg";
 
 const ALUMNI_LIMITS: Record<AlumniBucket, number | null> = {
+  none: 0,
   "0-250": 250,
   "251-500": 500,
   "501-1000": 1000,
@@ -343,7 +345,7 @@ export default function SettingsScreen() {
   };
 
   // Copy invite link
-  const copyInviteLink = (invite: { id: string; code: string; token: string | null }) => {
+  const copyInviteLink = (invite: Invite) => {
     const link = getInviteLink(invite, getWebAppUrl());
     Clipboard.setString(link);
     setCopiedInviteId(invite.id);
@@ -918,7 +920,7 @@ export default function SettingsScreen() {
                             <Text style={styles.inviteCode}>{invite.code}</Text>
                             <View style={[styles.roleBadge, { backgroundColor: invite.role === "admin" ? SETTINGS_COLORS.warning + "20" : invite.role === "alumni" ? SETTINGS_COLORS.muted + "20" : SETTINGS_COLORS.primary + "20" }]}>
                               <Text style={[styles.roleBadgeText, { color: invite.role === "admin" ? SETTINGS_COLORS.warning : invite.role === "alumni" ? SETTINGS_COLORS.foreground : SETTINGS_COLORS.primary }]}>
-                                {getRoleLabel(invite.role)}
+                                {getRoleLabel(invite.role || "active_member")}
                               </Text>
                             </View>
                             {expired && <View style={[styles.statusBadge, { backgroundColor: SETTINGS_COLORS.error + "20" }]}><Text style={[styles.statusBadgeText, { color: SETTINGS_COLORS.error }]}>Expired</Text></View>}
@@ -1414,7 +1416,7 @@ export default function SettingsScreen() {
                       setShowBucketPicker(false);
                     }
                   }}
-                  disabled={disabled}
+                  disabled={disabled ?? false}
                 >
                   <Text style={[styles.pickerOptionText, disabled && styles.pickerOptionTextDisabled]}>
                     {option.label}
@@ -1484,11 +1486,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: SETTINGS_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     container: {
       flex: 1,

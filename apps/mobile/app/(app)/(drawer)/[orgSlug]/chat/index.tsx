@@ -18,6 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
 
@@ -441,11 +442,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: CHAT_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     listContent: {
       padding: spacing.md,

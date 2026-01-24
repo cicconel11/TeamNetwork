@@ -24,6 +24,7 @@ import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { supabase } from "@/lib/supabase";
 import type { Form, FormDocument, Organization } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 // Neutral color palette
@@ -412,11 +413,7 @@ const createStyles = () =>
     // Content sheet
     contentSheet: {
       flex: 1,
-      backgroundColor: FORMS_COLORS.background,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      marginTop: -8,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     listContent: {
       padding: spacing.md,

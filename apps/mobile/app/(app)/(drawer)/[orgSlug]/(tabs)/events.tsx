@@ -15,7 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 
 import { useFocusEffect, useRouter, useNavigation } from "expo-router";
-import { Calendar, MapPin, Users, ExternalLink } from "lucide-react-native";
+import { Calendar, MapPin, Users, ExternalLink, Plus } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
@@ -24,6 +24,7 @@ import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS, RSVP_COLORS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { getRsvpLabel, formatEventDate, formatEventTime } from "@teammeet/core";
 
 type ViewMode = "upcoming" | "past";
 
@@ -56,9 +57,17 @@ export default function EventsScreen() {
 
     return [
       {
+        id: "create-event",
+        label: "Create Event",
+        icon: <Plus size={20} color={SEMANTIC.success} />,
+        onPress: () => {
+          router.push(`/(app)/${orgSlug}/events/new`);
+        },
+      },
+      {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={SEMANTIC.success} />,
+        icon: <ExternalLink size={20} color={NEUTRAL.foreground} />,
         onPress: () => {
           // Open the events page in the web app for full admin capabilities
           const webUrl = `https://www.myteamnetwork.com/${orgSlug}/events`;
@@ -66,7 +75,7 @@ export default function EventsScreen() {
         },
       },
     ];
-  }, [permissions.canUseAdminActions, orgSlug]);
+  }, [permissions.canUseAdminActions, orgSlug, router]);
 
   // Refetch on tab focus if data is stale
   useFocusEffect(
@@ -131,15 +140,6 @@ export default function EventsScreen() {
     });
   }, [filteredEvents, selectedDate]);
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  };
 
   const renderEventCard = ({ item }: { item: Event }) => (
     <TouchableOpacity 
@@ -160,11 +160,7 @@ export default function EventsScreen() {
             ]}
           >
             <Text style={styles.rsvpText}>
-              {item.user_rsvp_status === "going"
-                ? "Going"
-                : item.user_rsvp_status === "maybe"
-                ? "Maybe"
-                : "Not Going"}
+              {getRsvpLabel(item.user_rsvp_status)}
             </Text>
           </View>
         )}
@@ -174,8 +170,8 @@ export default function EventsScreen() {
         <View style={styles.detailRow}>
           <Calendar size={13} color={NEUTRAL.secondary} />
           <Text style={styles.detailText}>
-            {formatDate(item.start_date)} at {formatTime(item.start_date)}
-            {item.end_date && ` - ${formatTime(item.end_date)}`}
+            {formatEventDate(item.start_date)} at {formatEventTime(item.start_date)}
+            {item.end_date && ` - ${formatEventTime(item.end_date)}`}
           </Text>
         </View>
 
@@ -322,106 +318,109 @@ export default function EventsScreen() {
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Toggle */}
-      <View style={styles.toggleContainer}>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === "upcoming" && styles.toggleActive]}
-          onPress={() => setViewMode("upcoming")}
-        >
-          <Text
-            style={[styles.toggleText, viewMode === "upcoming" && styles.toggleTextActive]}
-          >
-            Upcoming
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, viewMode === "past" && styles.toggleActive]}
-          onPress={() => setViewMode("past")}
-        >
-          <Text style={[styles.toggleText, viewMode === "past" && styles.toggleTextActive]}>
-            Past
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* 7-Day Strip (only for upcoming view) */}
-      {viewMode === "upcoming" && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.dateStrip}
-          contentContainerStyle={styles.dateStripContent}
-        >
-          {/* All button */}
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        {/* Toggle */}
+        <View style={styles.toggleContainer}>
           <TouchableOpacity
-            style={[styles.dateItem, selectedDate === null && styles.dateItemSelected]}
-            onPress={() => setSelectedDate(null)}
+            style={[styles.toggleButton, viewMode === "upcoming" && styles.toggleActive]}
+            onPress={() => setViewMode("upcoming")}
           >
             <Text
-              style={[
-                styles.dateDayName,
-                selectedDate === null && styles.dateTextSelected,
-              ]}
+              style={[styles.toggleText, viewMode === "upcoming" && styles.toggleTextActive]}
             >
-              All
-            </Text>
-            <Text
-              style={[
-                styles.dateDay,
-                selectedDate === null && styles.dateTextSelected,
-              ]}
-            >
-              {filteredEvents.length}
+              Upcoming
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === "past" && styles.toggleActive]}
+            onPress={() => setViewMode("past")}
+          >
+            <Text style={[styles.toggleText, viewMode === "past" && styles.toggleTextActive]}>
+              Past
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-          {weekDates.map((date, index) => {
-            const isSelected = selectedDate?.toDateString() === date.toDateString();
-            const hasEvents = dateHasEvents(date);
-            const isToday = date.toDateString() === now.toDateString();
-
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[styles.dateItem, isSelected && styles.dateItemSelected]}
-                onPress={() => setSelectedDate(date)}
+        {/* 7-Day Strip (only for upcoming view) */}
+        {viewMode === "upcoming" && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.dateStrip}
+            contentContainerStyle={styles.dateStripContent}
+          >
+            {/* All button */}
+            <TouchableOpacity
+              style={[styles.dateItem, selectedDate === null && styles.dateItemSelected]}
+              onPress={() => setSelectedDate(null)}
+            >
+              <Text
+                style={[
+                  styles.dateDayName,
+                  selectedDate === null && styles.dateTextSelected,
+                ]}
               >
-                <Text
-                  style={[
-                    styles.dateDayName,
-                    isSelected && styles.dateTextSelected,
-                    isToday && !isSelected && styles.dateToday,
-                  ]}
-                >
-                  {date.toLocaleDateString([], { weekday: "short" })}
-                </Text>
-                <Text
-                  style={[
-                    styles.dateDay,
-                    isSelected && styles.dateTextSelected,
-                    isToday && !isSelected && styles.dateToday,
-                  ]}
-                >
-                  {date.getDate()}
-                </Text>
-                {hasEvents && <View style={styles.eventDot} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      )}
+                All
+              </Text>
+              <Text
+                style={[
+                  styles.dateDay,
+                  selectedDate === null && styles.dateTextSelected,
+                ]}
+              >
+                {filteredEvents.length}
+              </Text>
+            </TouchableOpacity>
 
-      {/* Events List */}
-      <FlatList
-        data={displayedEvents}
-        renderItem={renderEventCard}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={renderEmptyState}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
-        }
-      />
+            {weekDates.map((date, index) => {
+              const isSelected = selectedDate?.toDateString() === date.toDateString();
+              const hasEvents = dateHasEvents(date);
+              const isToday = date.toDateString() === now.toDateString();
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                  onPress={() => setSelectedDate(date)}
+                >
+                  <Text
+                    style={[
+                      styles.dateDayName,
+                      isSelected && styles.dateTextSelected,
+                      isToday && !isSelected && styles.dateToday,
+                    ]}
+                  >
+                    {date.toLocaleDateString([], { weekday: "short" })}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.dateDay,
+                      isSelected && styles.dateTextSelected,
+                      isToday && !isSelected && styles.dateToday,
+                    ]}
+                  >
+                    {date.getDate()}
+                  </Text>
+                  {hasEvents && <View style={styles.eventDot} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* Events List */}
+        <FlatList
+          data={displayedEvents}
+          renderItem={renderEventCard}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
+          }
+        />
+      </View>
     </View>
   );
 }
@@ -434,7 +433,7 @@ const createStyles = () =>
     },
     // Gradient header styles
     headerGradient: {
-      paddingBottom: SPACING.xs,
+      paddingBottom: SPACING.md,
     },
     headerSafeArea: {
       // SafeAreaView handles top inset
@@ -487,6 +486,11 @@ const createStyles = () =>
     },
     headerSpacer: {
       width: 36,
+    },
+    // Content sheet
+    contentSheet: {
+      flex: 1,
+      backgroundColor: NEUTRAL.surface,
     },
     // Toggle styles (segmented control)
     toggleContainer: {

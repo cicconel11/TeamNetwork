@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import type { FormDocument, FormDocumentSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 const DOC_COLORS = {
@@ -193,7 +194,7 @@ export default function DocumentFormDetailScreen() {
       // Read file as base64
       const fileUri = selectedFile.uri;
       const base64 = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: "base64",
       });
 
       // Convert base64 to Uint8Array
@@ -476,11 +477,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: DOC_COLORS.background,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      marginTop: -8,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
       padding: spacing.md,

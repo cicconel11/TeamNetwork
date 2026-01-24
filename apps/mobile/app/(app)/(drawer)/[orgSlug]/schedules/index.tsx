@@ -382,9 +382,9 @@ export default function SchedulesScreen() {
                       </Text>
                       <Text style={styles.fileMeta}>
                         {formatFileSize(file.file_size)}
-                        {isAdmin && fileTab === "all" && "users" in file && file.users && (
-                          <Text> • {file.users.name || file.users.email}</Text>
-                        )}
+                        {isAdmin && fileTab === "all" && "users" in file && file.users ? (
+                          <Text> • {String((file.users as { name?: string | null; email?: string | null }).name || (file.users as { name?: string | null; email?: string | null }).email || "")}</Text>
+                        ) : null}
                         {file.created_at && (
                           <Text> • {new Date(file.created_at).toLocaleDateString()}</Text>
                         )}

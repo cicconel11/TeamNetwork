@@ -19,6 +19,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import type { Competition, CompetitionPoint, CompetitionTeam } from "@teammeet/types";
 
@@ -45,7 +46,7 @@ type PointHistoryEntry = {
   team_name: string;
   points: number;
   notes: string | null;
-  created_at: string;
+  created_at: string | null;
 };
 
 export default function CompetitionScreen() {
@@ -535,7 +536,7 @@ export default function CompetitionScreen() {
                           <Text style={styles.activityNotes}>{entry.notes}</Text>
                         ) : null}
                         <Text style={styles.activityDate}>
-                          {formatDate(entry.created_at)}
+                          {entry.created_at ? formatDate(entry.created_at) : ""}
                         </Text>
                       </View>
                     ))}
@@ -682,11 +683,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: COMPETITION_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
       padding: spacing.md,

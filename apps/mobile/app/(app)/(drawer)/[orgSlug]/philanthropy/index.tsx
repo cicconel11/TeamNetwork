@@ -18,6 +18,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import type { Event, OrganizationDonationStat } from "@teammeet/types";
 
@@ -580,11 +581,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
       padding: spacing.md,

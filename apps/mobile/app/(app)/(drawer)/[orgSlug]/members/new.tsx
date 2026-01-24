@@ -96,8 +96,8 @@ export default function NewMemberInviteScreen() {
       const { data, error: rpcError } = await supabase.rpc("create_org_invite", {
         p_organization_id: orgId,
         p_role: role,
-        p_uses: usesValue,
-        p_expires_at: expiresAt,
+        p_uses: usesValue ?? undefined,
+        p_expires_at: expiresAt ?? undefined,
       });
 
       if (rpcError || !data) {

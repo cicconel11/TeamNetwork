@@ -27,6 +27,7 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import type { MentorshipLog, MentorshipPair, User } from "@teammeet/types";
 
@@ -1455,11 +1456,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: MENTORSHIP_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
       padding: spacing.md,

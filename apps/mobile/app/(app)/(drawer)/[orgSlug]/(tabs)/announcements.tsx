@@ -42,6 +42,19 @@ export default function AnnouncementsScreen() {
   const isRefetchingRef = useRef(false);
   const isMountedRef = useRef(true);
 
+  // Sort announcements: pinned first, then by created_at descending
+  const sortedAnnouncements = useMemo(() => {
+    return [...announcements].sort((a, b) => {
+      // Pinned announcements come first
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      // Within same pin status, sort by created_at descending (newest first)
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [announcements]);
+
   // Fetch organization data for header
   const fetchOrg = useCallback(async () => {
     if (!orgSlug || !user) return;
@@ -113,15 +126,6 @@ export default function AnnouncementsScreen() {
       isRefetchingRef.current = false;
     }
   }, [refetch, fetchOrg]);
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
 
   const renderAnnouncement = ({ item }: { item: Announcement }) => {
     const cardAnnouncement: AnnouncementCardAnnouncement = {
@@ -200,7 +204,7 @@ export default function AnnouncementsScreen() {
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Announcements</Text>
               <Text style={styles.headerMeta}>
-                {announcements.length} {announcements.length === 1 ? "announcement" : "announcements"}
+                {sortedAnnouncements.length} {sortedAnnouncements.length === 1 ? "announcement" : "announcements"}
               </Text>
             </View>
 
@@ -215,7 +219,7 @@ export default function AnnouncementsScreen() {
       {/* Content Sheet */}
       <View style={styles.contentSheet}>
         <FlatList
-          data={announcements}
+          data={sortedAnnouncements}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           renderItem={renderAnnouncement}
@@ -248,7 +252,7 @@ const createStyles = () =>
     },
     // Gradient header styles
     headerGradient: {
-      paddingBottom: SPACING.xs,
+      paddingBottom: SPACING.md,
     },
     headerSafeArea: {
       // SafeAreaView handles top inset
@@ -298,11 +302,7 @@ const createStyles = () =>
     // Content sheet
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.background,
-      borderTopLeftRadius: RADIUS.xxl,
-      borderTopRightRadius: RADIUS.xxl,
-      marginTop: -8,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     listContent: {
       padding: SPACING.md,

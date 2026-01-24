@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import type { Form, FormField, FormSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 const FORM_COLORS = {
@@ -551,11 +552,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: FORM_COLORS.background,
-      borderTopLeftRadius: borderRadius.xl,
-      borderTopRightRadius: borderRadius.xl,
-      marginTop: -8,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollView: {
       flex: 1,

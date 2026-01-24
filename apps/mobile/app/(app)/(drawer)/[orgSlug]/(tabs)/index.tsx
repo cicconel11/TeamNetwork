@@ -514,10 +514,6 @@ const createStyles = () =>
     contentSheet: {
       flex: 1,
       backgroundColor: NEUTRAL.surface,
-      borderTopLeftRadius: RADIUS.xxl,
-      borderTopRightRadius: RADIUS.xxl,
-      marginTop: -8,
-      overflow: "hidden",
     },
     content: {
       padding: SPACING.md,

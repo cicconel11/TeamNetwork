@@ -154,7 +154,7 @@ export default function NewScheduleScreen() {
     const startDateStr = startDate.toISOString().split("T")[0];
     const endDateStr = endDate ? endDate.toISOString().split("T")[0] : null;
 
-    const insertData: Record<string, unknown> = {
+    const insertData = {
       organization_id: orgId,
       user_id: user.id,
       title: title.trim(),
@@ -164,8 +164,8 @@ export default function NewScheduleScreen() {
       start_date: startDateStr,
       end_date: endDateStr,
       notes: notes.trim() || null,
-      day_of_week: null,
-      day_of_month: null,
+      day_of_week: null as number[] | null,
+      day_of_month: null as number | null,
     };
 
     if (occurrenceType === "weekly") {

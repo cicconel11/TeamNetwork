@@ -21,6 +21,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import type { Workout, WorkoutLog, WorkoutStatus } from "@teammeet/types";
 
@@ -102,7 +103,7 @@ export default function WorkoutsScreen() {
               .select("*")
               .eq("organization_id", orgId)
               .eq("user_id", user.id)
-          : Promise.resolve({ data: [] as WorkoutLog[] });
+          : Promise.resolve({ data: [] as WorkoutLog[], error: null });
 
         const [{ data: workoutsData, error: workoutsError }, { data: logsData, error: logsError }] =
           await Promise.all([workoutsQuery, logsQuery]);
@@ -592,11 +593,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: WORKOUTS_COLORS.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      marginTop: -16,
-      overflow: "hidden",
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
       padding: spacing.md,

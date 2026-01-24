@@ -39,6 +39,14 @@ const DIRECTORY_COLORS = {
   primary: SEMANTIC.success,
   primaryLight: SEMANTIC.successLight,
   primaryDark: SEMANTIC.successDark,
+  primaryForeground: "#ffffff",
+  secondary: SEMANTIC.info,
+  secondaryLight: SEMANTIC.infoLight,
+  secondaryDark: SEMANTIC.infoDark,
+  secondaryForeground: "#ffffff",
+  mutedSurface: NEUTRAL.background,
+  success: SEMANTIC.success,
+  warning: SEMANTIC.warning,
   error: SEMANTIC.error,
 };
 
@@ -227,15 +235,15 @@ export default function MembersScreen() {
             label: "Role",
             options: roleOptions,
             selected: selectedRole !== "all" ? roleOptions.find((r) => r.value === selectedRole) || null : null,
-            onSelect: (opt) => setSelectedRole(opt?.value || "all"),
-            keyExtractor: (r) => r.value,
-            labelExtractor: (r) => r.label,
+            onSelect: (opt) => setSelectedRole(((opt as { value: string } | null)?.value || "all") as RoleFilter),
+            keyExtractor: (r) => (r as { value: string }).value,
+            labelExtractor: (r) => (r as { label: string }).label,
           },
           {
             label: "Class",
             options: years,
             selected: selectedYear,
-            onSelect: setSelectedYear,
+            onSelect: (v) => setSelectedYear(v as number | null),
             labelExtractor: (y) => String(y),
           },
         ]}
@@ -444,10 +452,6 @@ const createStyles = () =>
     contentSheet: {
       flex: 1,
       backgroundColor: NEUTRAL.surface,
-      borderTopLeftRadius: RADIUS.xxl,
-      borderTopRightRadius: RADIUS.xxl,
-      marginTop: -16,
-      overflow: "hidden",
     },
     listHeader: {
       backgroundColor: NEUTRAL.surface,
