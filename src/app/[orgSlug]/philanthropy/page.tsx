@@ -10,6 +10,7 @@ import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat } from "@/types/database";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
+import { ExportCsvButton } from "@/components/shared";
 
 interface PhilanthropyPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -66,6 +67,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
 
   const navConfig = org.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/philanthropy", navConfig);
+  const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="animate-fade-in">
@@ -73,16 +75,26 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         title={pageLabel}
         description="Community service and fundraising for your organization."
         actions={
-          canEdit && (
-            <Link href={`/${orgSlug}/philanthropy/new`}>
-              <Button>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Add Event
-              </Button>
-            </Link>
-          )
+          (orgCtx.isAdmin || canEdit) ? (
+            <div className="flex flex-wrap gap-2">
+              {orgCtx.isAdmin && (
+                <ExportCsvButton
+                  endpoint={`/api/organizations/${org.id}/exports/philanthropy`}
+                  fileName={`${org.slug}-philanthropy-${exportStamp}.csv`}
+                />
+              )}
+              {canEdit && (
+                <Link href={`/${orgSlug}/philanthropy/new`}>
+                  <Button>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Add Event
+                  </Button>
+                </Link>
+              )}
+            </div>
+          ) : undefined
         }
       />
 

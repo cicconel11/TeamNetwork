@@ -7,6 +7,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { ExportCsvButton } from "@/components/shared";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
 
@@ -63,6 +64,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
   const navConfig = org.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/donations", navConfig);
+  const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (
     <div className="animate-fade-in">
@@ -72,6 +74,14 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         })}`}
+        actions={
+          orgCtx.isAdmin ? (
+            <ExportCsvButton
+              endpoint={`/api/organizations/${org.id}/exports/donations`}
+              fileName={`${org.slug}-donations-${exportStamp}.csv`}
+            />
+          ) : undefined
+        }
       />
 
       {canEdit && !isConnected && (
