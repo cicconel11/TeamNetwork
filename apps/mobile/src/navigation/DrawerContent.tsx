@@ -26,7 +26,6 @@ import {
 } from "lucide-react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
 import { spacing, fontSize, fontWeight, borderRadius } from "@/lib/theme";
@@ -44,7 +43,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
   const { user } = useAuth();
   const { permissions } = useOrgRole();
-  const { colors } = useOrgTheme();
   const slug = typeof orgSlug === "string" ? orgSlug : "";
   const userMeta = (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string };
   const displayName = userMeta.name || user?.email || "Member";
@@ -198,7 +196,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               onPress={() => handleNavigate(item)}
               style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
             >
-              <Icon size={20} color={colors.foreground} />
+              <Icon size={20} color={NEUTRAL.placeholder} />
               <Text style={styles.navLabel}>{item.label}</Text>
             </Pressable>
           );
@@ -211,7 +209,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           onPress={handleSignOut}
           style={({ pressed }) => [styles.navItem, pressed ? styles.navItemPressed : null]}
         >
-          <LogOut size={20} color={colors.error} />
+          <LogOut size={20} color={SEMANTIC.error} />
           <Text style={[styles.navLabel, styles.signOutLabel]}>Sign Out</Text>
         </Pressable>
       </View>
