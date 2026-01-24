@@ -1,17 +1,14 @@
-import React, { useMemo } from "react";
-import { useWindowDimensions } from "react-native";
+import React from "react";
+import { StyleSheet, useWindowDimensions } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { DrawerContent } from "@/navigation/DrawerContent";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { NEUTRAL } from "@/lib/design-tokens";
 
 const DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_MAX_WIDTH = 320;
 
 export function AppDrawer() {
   const { width } = useWindowDimensions();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
   const drawerWidth = Math.min(width * DRAWER_WIDTH_RATIO, DRAWER_MAX_WIDTH);
 
   return (
@@ -42,11 +39,11 @@ export function AppDrawer() {
   );
 }
 
-const createStyles = (colors: ThemeColors) => ({
+const styles = StyleSheet.create({
   drawer: {
-    backgroundColor: colors.card,
+    backgroundColor: NEUTRAL.dark950,
   },
   scene: {
-    backgroundColor: colors.background,
+    backgroundColor: NEUTRAL.dark950,
   },
 });
