@@ -1,197 +1,116 @@
 # TeamMeet - Next Steps
 
-**Last Updated:** 2026-01-14
+> **Last Updated:** 2026-01-24
 
-The monorepo migration is complete. All planned phases have been implemented. This document outlines the recommended next steps.
-
----
-
-## Immediate Actions
-
-### 1. Commit Current Changes
-
-All migration work is complete but uncommitted. Create a commit for the final changes:
-
-```bash
-git add -A
-git commit -m "feat: complete mobile app MVP with announcements feed"
-```
-
-### 2. Regenerate Supabase TypeScript Types
-
-The TypeScript types in `packages/types/src/database.ts` may be out of sync with the production database schema. To regenerate:
-
-```bash
-# Login to Supabase CLI first
-npx supabase login
-
-# Generate types
-npx supabase gen types typescript --project-id <your-project-id> > packages/types/src/database.ts
-```
-
-This ensures the `AlumniBucket` enum and other database types are current.
-
-### 3. Test Mobile App
-
-After dependencies are installed, test the mobile app:
-
-```bash
-npm run dev:mobile
-```
-
-Verify:
-- [ ] Login with Google OAuth works
-- [ ] Organization selection screen shows user's orgs
-- [ ] Members tab displays org members with avatars
-- [ ] News tab shows announcements (filtered by audience)
-- [ ] Pull-to-refresh works on list screens
+The mobile app is feature-complete with all screens implemented. This document outlines remaining work for production readiness.
 
 ---
 
-## Mobile App Enhancements
+## Completed Work
 
-### Push Notifications
+### Mobile App
+- [x] All 60+ screens implemented (6 tabs + drawer navigation)
+- [x] Auth: Login, Signup, Forgot Password, Google OAuth
+- [x] Events: List, Detail, RSVP, Edit, Check-in
+- [x] Announcements: List, Detail, Create, Edit
+- [x] Members/Alumni: Directory with filters, Detail, Contact actions
+- [x] Chat: Group list, Chat room
+- [x] Training: Workouts, Competition, Schedules, Records
+- [x] Money: Philanthropy, Donations, Expenses
+- [x] Forms: List, Detail, Document viewer
+- [x] Settings: Org settings, Navigation config
+- [x] Design system: Unified tokens, APP_CHROME, drawer styling
+- [x] Analytics: PostHog + Sentry integration
 
-Implement push notifications for new announcements:
-
-1. Install `expo-notifications`
-2. Register device token with backend
-3. Store tokens in `user_notification_tokens` table
-4. Send notifications from web admin when creating announcements
-
-### Events Calendar
-
-Add events feature to mobile:
-
-1. Create `useEvents.ts` hook
-2. Build events list and detail screens
-3. Add RSVP functionality
-4. Consider calendar view with `react-native-calendars`
-
-### Offline Support
-
-Enable offline access:
-
-1. Cache organization data locally
-2. Use Supabase Realtime for live updates
-3. Implement optimistic UI updates
-4. Handle offline state gracefully
-
-### Profile Editing
-
-Allow users to update their profile:
-
-1. Create profile edit screen
-2. Upload avatar (via Supabase Storage)
-3. Update name and contact info
+### Shared Packages
+- [x] @teammeet/types - Supabase types
+- [x] @teammeet/validation - Zod schemas
+- [x] @teammeet/core - Role utils, pricing, date formatters
 
 ---
 
-## Web App Improvements
+## Remaining Work
 
-### ESLint Upgrade
+### 1. Production Build & Deployment
 
-The web app uses ESLint 8, but `eslint-config-next@16` requires ESLint 9+:
-
-```bash
-# In apps/web
-npm install eslint@^9 eslint-config-next@16 --save-dev
-```
-
-Update `.eslintrc.json` for flat config format if needed.
-
-### Update Next.js
-
-Consider upgrading to Next.js 15 for:
-- React 19 support (matches mobile)
-- Improved performance
-- New features
-
----
-
-## Production Deployment
-
-### Mobile: EAS Build Setup
-
-1. Install EAS CLI: `npm install -g eas-cli`
-2. Configure EAS: `cd apps/mobile && eas build:configure`
-3. Create development build: `eas build --profile development --platform ios`
-4. Submit to stores: `eas submit`
-
-### Environment Variables
-
-Ensure production environment variables are set:
-
-**Mobile (EAS Secrets):**
-```bash
-eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value <production-url>
-eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <production-key>
-```
-
-### App Store Preparation
-
-- [ ] Create App Store Connect account
-- [ ] Generate app icons (1024x1024)
-- [ ] Create screenshots for all device sizes
-- [ ] Write app description and keywords
-- [ ] Set up privacy policy URL
-
----
-
-## Code Quality
-
-### Add Mobile Tests
-
-Create tests for mobile hooks and screens:
-
+**EAS Build Setup:**
 ```bash
 cd apps/mobile
-npm install --save-dev jest @testing-library/react-native
+eas build:configure
+eas build --profile production --platform ios
+eas build --profile production --platform android
 ```
 
-### Shared Package Tests
-
-Add unit tests for shared packages:
-
+**Environment Secrets:**
 ```bash
-cd packages/core
-npm install --save-dev vitest
+eas secret:create --name EXPO_PUBLIC_SUPABASE_URL --value <url>
+eas secret:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value <key>
+eas secret:create --name EXPO_PUBLIC_POSTHOG_KEY --value <key>
+eas secret:create --name EXPO_PUBLIC_SENTRY_DSN --value <dsn>
 ```
 
-### CI/CD Pipeline
+### 2. App Store Preparation
 
-Set up GitHub Actions for:
-- [ ] Web build verification on PR
-- [ ] Mobile EAS build on merge to main
-- [ ] Shared package tests
-- [ ] Type checking across all workspaces
+- [ ] App icons (1024x1024)
+- [ ] Screenshots for all device sizes
+- [ ] App description and keywords
+- [ ] Privacy policy URL
+- [ ] App Store Connect account
+- [ ] Google Play Console account
+
+### 3. Push Notifications
+
+Push notification infrastructure is partially implemented:
+- [x] `expo-notifications` installed
+- [x] Device token registration hooks
+- [ ] Backend: Store tokens in database
+- [ ] Backend: Send notifications on announcement create
+- [ ] Backend: Send reminders for upcoming events
+
+### 4. Testing
+
+**Mobile Tests:**
+```bash
+cd apps/mobile
+bun add -D jest @testing-library/react-native
+```
+
+Priority test coverage:
+- [ ] Auth flow (login, signup, logout)
+- [ ] RSVP state management
+- [ ] Role-based permission filtering
+- [ ] Navigation between screens
+
+### 5. Performance Optimization
+
+- [ ] Image caching with `expo-image`
+- [ ] List virtualization for large directories
+- [ ] Offline support with optimistic updates
+- [ ] Reduce bundle size (tree-shaking unused icons)
+
+### 6. CI/CD Pipeline
+
+GitHub Actions workflow:
+- [ ] TypeScript check on PR
+- [ ] Lint on PR
+- [ ] EAS build on merge to main
+- [ ] Preview builds for feature branches
 
 ---
 
-## Architecture Decisions to Consider
+## Future Enhancements
 
-### State Management
+### Mobile
+- [ ] Dark mode toggle
+- [ ] Biometric authentication
+- [ ] Offline mode with sync
+- [ ] Deep linking for all routes
+- [ ] Widget for upcoming events (iOS)
 
-Currently using local state in hooks. Consider:
-- **Zustand** for global state (lightweight)
-- **TanStack Query** for server state caching
-- **Jotai** for atomic state
-
-### Navigation
-
-Current: Expo Router (file-based). Works well for MVP.
-
-For complex navigation patterns, consider:
-- Nested navigators for modals
-- Deep linking configuration
-- Navigation state persistence
-
-### Styling
-
-Current: React Native StyleSheet. Consider:
-- **NativeWind** (Tailwind for RN) for consistency with web
-- **Tamagui** for cross-platform components
-- **React Native Paper** for Material Design
+### Web
+- [ ] Upgrade to Next.js 15
+- [ ] Upgrade to ESLint 9
+- [ ] Mobile-responsive improvements
 
 ---
 
@@ -199,7 +118,7 @@ Current: React Native StyleSheet. Consider:
 
 | Document | Purpose |
 |----------|---------|
-| `docs/MIGRATION.md` | Migration status and structure |
-| `abundant-fluttering-codd.md` | Original migration plan |
 | `CLAUDE.md` | Development guidelines |
+| `docs/MIGRATION.md` | Migration status |
+| `docs/MOBILE-PARITY.md` | Feature parity matrix |
 | `docs/db/schema-audit.md` | Database documentation |

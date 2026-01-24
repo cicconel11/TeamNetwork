@@ -339,6 +339,37 @@ contentSheet: {
 - `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/_layout.tsx` - Tab navigator
 - `apps/mobile/app/(app)/(drawer)/[orgSlug]/(tabs)/index.tsx` - Home screen (reference implementation)
 
+### Mobile Drawer Navigation
+
+The mobile app uses a drawer navigator for secondary navigation. The drawer is accessible by tapping the org logo in any screen header.
+
+**File:** `apps/mobile/src/navigation/DrawerContent.tsx`
+
+**Drawer Structure:**
+- **Profile Card** - User avatar, name, email (transparent background)
+- **Grouped Sections** with uppercase headers:
+  - **Main** (no header): Home, Chat, Alumni*, Mentorship
+  - **Training**: Workouts, Competition, Schedules, Records
+  - **Money**: Philanthropy, Donations, Expenses
+  - **Other**: Forms
+- **Pinned Footer** (always visible at bottom):
+  - Settings, Navigation, Organizations, Sign Out
+
+*Alumni appears conditionally based on `permissions.canViewAlumni`
+
+**Styling:**
+- Uber-style flat design (no pill backgrounds on items)
+- 44px row height, 18px icons, 15px font
+- Active route gets subtle highlight (`rgba(255,255,255,0.06)`)
+- Section headers: 11px uppercase, muted color, 0.5 letter-spacing
+- Hairline dividers between profile/content and content/footer
+- Safe area insets for bottom padding
+
+**Navigation Behavior:**
+- Home and Organizations use `router.push()` (preserves back navigation)
+- All other items use `router.replace()` (avoids stacking)
+- Web links open via `Linking.openURL()`
+
 ### Mobile Supabase Client
 
 Mobile uses a different Supabase client configuration:

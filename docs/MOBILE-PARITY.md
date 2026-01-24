@@ -1,96 +1,64 @@
 # Mobile Feature Parity Matrix
 
-> **Mobile is consumption-first with quick actions; web remains the place for creation and complex editing.**
+> **Last Updated:** 2026-01-24
 
 This document defines what features are available on mobile vs web, including permissions and visibility rules.
 
-## Core Structure: 4 Content Areas + More Utility Tab
+## Navigation Structure
 
-| Area | Type | Description |
-|------|------|-------------|
-| Home | Content | Dashboard overview |
-| Events | Content | Events list, detail, RSVP |
-| Announcements | Content | Announcements list, detail |
-| Members | Content | Member directory |
-| More | Utility | Org switcher, Profile, Settings, Sign out |
+### Tab Bar (6 tabs)
+| Tab | Screen | Description |
+|-----|--------|-------------|
+| Home | Dashboard | Activity feed, stats, pinned content |
+| Events | Events list | Upcoming/past events with RSVP |
+| Announcements | Announcements list | Org-wide communications |
+| Members | Member directory | Active member profiles |
+| Alumni | Alumni directory | Alumni profiles (if enabled) |
+| Menu | Quick actions | Overflow for less common actions |
+
+### Drawer Navigation (Grouped Sections)
+| Section | Items |
+|---------|-------|
+| Main (no header) | Home, Chat, Alumni*, Mentorship |
+| Training | Workouts, Competition, Schedules, Records |
+| Money | Philanthropy, Donations, Expenses |
+| Other | Forms |
+| Pinned Footer | Settings, Navigation, Organizations, Sign Out |
+
+*Alumni visible based on `permissions.canViewAlumni`
 
 ---
 
-## Feature Parity Matrix with Permissions
+## Feature Parity Matrix
 
-| Feature | Mobile Level | Admin Quick Actions | Non-Admin Visibility | Web-Only |
-|---------|--------------|---------------------|----------------------|----------|
-| **Home** | Full | - | Same as admin | Full analytics, custom widgets |
-| **Events** | Limited | See detailed list below | Actions hidden | Create, Edit details, Exports, Reporting |
-| **Announcements** | Limited | Publish/Unpublish, Pin/Unpin | Actions hidden | Create, Edit content |
-| **Members** | Read-only + contact | - | Same as admin | Bulk actions, Invites, Role changes |
-| **Profile** | Limited | - | Same as admin | Full settings, Role management |
-| **Notifications** | Full | - | Same as admin | Notification templates |
-| **Alumni** | Hidden | - | Hidden | Full management |
-| **Mentorship** | Hidden | - | Hidden | Full management |
-| **Chat** | Hidden | - | Hidden | Full messaging |
-| **Donations** | Hidden | - | Hidden | Full management |
-| **Expenses** | Hidden | - | Hidden | Full management |
-| **Schedules** | Hidden | - | Hidden | Full management |
-| **Forms** | Hidden | - | Hidden | Full management |
-| **Workouts** | Hidden | - | Hidden | Full management |
-| **Competition** | Hidden | - | Hidden | Full management |
-| **Philanthropy** | Hidden | - | Hidden | Full management |
-| **Records** | Hidden | - | Hidden | Full management |
+| Feature | Mobile Status | Admin Actions | Web-Only |
+|---------|---------------|---------------|----------|
+| **Home** | Full | - | Custom widgets, analytics dashboard |
+| **Events** | Full | Edit, RSVP mgmt, Check-in | Exports, reporting |
+| **Announcements** | Full | Create, Edit, Publish, Pin | Templates |
+| **Members** | Full + Contact | Invite, Edit role | Bulk actions, CSV export |
+| **Alumni** | Full | - | Bulk import |
+| **Chat** | Full | - | - |
+| **Mentorship** | View | - | Matching, assignments |
+| **Workouts** | Full | Create, Edit | Templates |
+| **Competition** | Full | Add teams, Add points | Historical data |
+| **Schedules** | Full | Create, Edit | Recurring patterns |
+| **Records** | View | - | Create, Edit |
+| **Philanthropy** | Full | Create events | Reporting |
+| **Donations** | Full | Record donation | Stripe dashboard |
+| **Expenses** | Full | Submit, Approve | Reporting, exports |
+| **Forms** | View + Submit | - | Create, Edit |
+| **Settings** | Limited | Nav config | Full org settings, billing |
 
 ### Legend
-- **Full**: Complete functionality available
-- **Limited**: View + specific quick actions (admin only)
-- **Read-only + contact**: View only, but includes contact actions (call/email/message)
-- **Hidden**: Not accessible on mobile
-- **Actions hidden**: Non-admins don't see admin action buttons (not disabled, just not rendered)
+- **Full**: View + Create/Edit capabilities
+- **Limited**: View + specific actions only
+- **View**: Read-only access
+- **View + Contact**: Read-only with call/email/message actions
 
 ---
 
-## Events Admin Quick Actions (Detailed)
-
-| Action | Who Can Do It | Non-Admin View | Description |
-|--------|---------------|----------------|-------------|
-| View RSVP list | Admin | Hidden | See list of RSVPs with status |
-| Mark attended | Admin | Hidden | Check off attendees at event |
-| Remove RSVP | Admin | Hidden | Remove a specific RSVP |
-| Open RSVPs | Admin | Hidden | Enable RSVP for event |
-| Close RSVPs | Admin | Hidden | Disable RSVP (cap reached or cutoff) |
-| Publish event | Admin | Hidden | Make draft event visible |
-| Unpublish event | Admin | Hidden | Hide event from members |
-| Update status | Admin | Hidden | Set to Cancelled/Postponed/Active |
-
-**Explicitly NOT on mobile (Events):**
-- Create new event
-- Edit event title
-- Edit event time/date
-- Edit event location
-- Edit event description
-- Export attendance list
-- View attendance analytics
-- Set RSVP limits/caps (web-only setting)
-
----
-
-## Announcements Admin Quick Actions (Detailed)
-
-| Action | Who Can Do It | Non-Admin View | Description |
-|--------|---------------|----------------|-------------|
-| Publish | Admin | Hidden | Make draft announcement visible |
-| Unpublish | Admin | Hidden | Hide announcement from members |
-| Pin | Admin | Hidden | Pin to top of list and Home |
-| Unpin | Admin | Hidden | Remove from pinned position |
-
-**Explicitly NOT on mobile (Announcements):**
-- Create new announcement
-- Edit announcement title
-- Edit announcement body/content
-
----
-
-## Feature Scope Details
-
-### Events (Limited - View + RSVP + Check-in + Admin Quick Actions)
+## Events (Full)
 
 **All Users:**
 - View upcoming/past events list
@@ -99,70 +67,122 @@ This document defines what features are available on mobile vs web, including pe
 - Check-in at events (QR or proximity)
 - Push notifications for reminders
 
-**Admin Quick Actions:**
-- View RSVP list (attendee names + status)
-- Mark attended (check off attendees)
-- Remove RSVP (remove a specific person's RSVP)
-- Open/Close RSVPs (enable/disable RSVP button)
-- Publish/Unpublish event (visibility toggle)
-- Update event status (Cancelled / Postponed / Active)
+**Admin Actions:**
+- Create new event
+- Edit event details
+- View RSVP list with status
+- Mark attendees as checked in
+- Open/Close RSVPs
+- Publish/Unpublish event
+- Update status (Cancelled/Postponed/Active)
 
-### Announcements (Limited - Read + Notifications + Admin Quick Actions)
+**Web-Only:**
+- Export attendance list (CSV)
+- View attendance analytics
+- Set RSVP limits/caps
+- Recurring event patterns
+
+---
+
+## Announcements (Full)
 
 **All Users:**
 - View announcements list
 - View announcement detail
-- Pinned announcement on Home
 - Push notifications for new announcements
 
-**Admin Quick Actions:**
-- Publish/Unpublish announcement
-- Pin/Unpin announcement
+**Admin Actions:**
+- Create new announcement
+- Edit announcement content
+- Publish/Unpublish
+- Pin/Unpin
 
-### Members (Read-only + Contact Actions)
+**Web-Only:**
+- Announcement templates
+- Scheduled publishing
+
+---
+
+## Members (Full + Contact)
 
 **All Users:**
 - Browse member directory
 - Search by name
 - View member profile (name, role, contact info)
-- Contact actions:
-  - Call (opens phone dialer)
-  - Email (opens mail app)
-  - Message (opens SMS/iMessage)
+- Contact actions: Call, Email, Message
+- Filter by class year, role
 
-**Explicitly NOT on Mobile:**
-- Add/invite new members
-- Bulk actions (select multiple, bulk email)
-- Edit member details
-- Role management
+**Admin Actions:**
+- Create invite links
+- Edit member roles
 - Remove members
 
-### Profile & More (Limited - Self-Management)
-
-**All Users:**
-- View own profile
-- Edit own profile (name, photo, contact info)
-- Notification preferences
-- Switch organization
-- Sign out
-- View org info
-
-**Explicitly NOT on Mobile:**
-- Full organization settings
-- Billing management
-- Navigation customization
-- Role/permission management
+**Web-Only:**
+- Bulk invite
+- CSV export
+- Bulk role changes
 
 ---
 
-## Non-Goals
+## Screen File Locations
 
-The following are explicitly **out of scope** for mobile:
+```
+apps/mobile/app/(app)/(drawer)/[orgSlug]/
+├── (tabs)/                    # Tab bar screens
+│   ├── index.tsx              # Home
+│   ├── events.tsx             # Events list
+│   ├── announcements.tsx      # Announcements list
+│   ├── members.tsx            # Members directory
+│   ├── alumni.tsx             # Alumni directory
+│   └── menu.tsx               # Quick actions menu
+├── chat/
+│   ├── index.tsx              # Chat groups list
+│   └── [groupId].tsx          # Chat room
+├── events/
+│   ├── [eventId]/index.tsx    # Event detail
+│   ├── [eventId]/edit.tsx     # Edit event
+│   ├── [eventId]/rsvps.tsx    # RSVP management
+│   ├── check-in.tsx           # Event check-in
+│   └── new.tsx                # Create event
+├── announcements/
+│   ├── [announcementId]/index.tsx  # Detail
+│   ├── [announcementId]/edit.tsx   # Edit
+│   └── new.tsx                     # Create
+├── workouts/
+│   ├── index.tsx              # Workouts list
+│   ├── [workoutId]/edit.tsx   # Edit workout
+│   └── new.tsx                # Create workout
+├── competition/
+│   ├── index.tsx              # Competition standings
+│   ├── add-team.tsx           # Add team
+│   └── add-points.tsx         # Add points
+├── schedules/
+│   ├── index.tsx              # Schedules list
+│   ├── [scheduleId]/edit.tsx  # Edit schedule
+│   └── new.tsx                # Create schedule
+├── records/
+│   └── index.tsx              # Records list
+├── philanthropy/
+│   ├── index.tsx              # Philanthropy events
+│   └── new.tsx                # Create event
+├── donations/
+│   ├── index.tsx              # Donations list
+│   └── new.tsx                # Record donation
+├── expenses/
+│   ├── index.tsx              # Expenses list
+│   └── new.tsx                # Submit expense
+├── forms/
+│   ├── index.tsx              # Forms list
+│   ├── [formId].tsx           # Form detail/submit
+│   └── documents/[documentId].tsx  # Document viewer
+├── mentorship.tsx             # Mentorship overview
+├── settings.tsx               # Org settings
+└── settings/navigation.tsx    # Navigation config
+```
 
-1. **Event/announcement creation** - Use web to create new events and announcements
-2. **Content editing** - Editing event title/time/location, announcement body
-3. **Exports and reporting** - Attendance exports, analytics, CSV downloads
-4. **Bulk member actions** - Select multiple members, bulk email, bulk role changes
-5. **Role management** - Changing user roles, permissions, access levels
-6. **Organization settings** - Billing, navigation customization, integrations
-7. **Hidden feature modules** - Alumni, Mentorship, Chat, Donations, Expenses, Schedules, Forms, Workouts, Competition, Philanthropy, Records
+---
+
+## Related Documentation
+
+- `CLAUDE.md` - Mobile design tokens, screen patterns, drawer navigation
+- `docs/MOBILE-TAP-VALIDATION.md` - Touch target requirements
