@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getAlumniLimit, normalizeBucket } from "@/lib/alumni-quota";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { getCorsHeaders } from "@/lib/security/cors";
 import {
   baseSchemas,
   validateJson,
@@ -22,11 +23,7 @@ import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-perio
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": process.env.NODE_ENV === "development" ? "*" : "",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
+const corsHeaders = getCorsHeaders({ includeAllMethods: true });
 
 export async function OPTIONS() {
   return NextResponse.json({}, { headers: corsHeaders });

@@ -44,17 +44,11 @@ export async function POST(request: NextRequest) {
 
     // Validate required fields
     if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email and password are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
 
     if (!captchaToken) {
-      return NextResponse.json(
-        { error: "CAPTCHA verification is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "CAPTCHA verification is required" }, { status: 400 });
     }
 
     // Verify hCaptcha token server-side
@@ -68,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Create user with Supabase service client (bypasses RLS)
     const supabase = createServiceClient();
-    
+
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -86,20 +80,18 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     // Send confirmation email
     if (data.user) {
       const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.myteamnetwork.com";
-      
+
       // Generate confirmation link
       const { error: linkError } = await supabase.auth.admin.generateLink({
         type: "signup",
         email,
+        password,
         options: {
           redirectTo: `${siteUrl}/auth/callback?redirect=/app`,
         },
@@ -116,9 +108,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Signup API error:", error);
-    return NextResponse.json(
-      { error: "An unexpected error occurred" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 });
   }
 }
