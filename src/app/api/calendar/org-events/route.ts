@@ -70,7 +70,12 @@ export async function GET(request: Request) {
 
     if (error) {
       // Check if error is due to missing scope column
-      if (error.message?.includes("scope")) {
+      const errorStr = JSON.stringify(error);
+      const isScopeError = errorStr.includes("scope") ||
+        error.message?.includes("scope") ||
+        error.code === "42703"; // PostgreSQL "column does not exist"
+
+      if (isScopeError) {
         console.warn("[calendar-org-events] scope column not found, returning empty array");
         // No org-scoped events can exist without the scope column
         return NextResponse.json({ events: [] });

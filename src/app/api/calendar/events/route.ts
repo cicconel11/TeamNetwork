@@ -60,49 +60,38 @@ export async function GET(request: Request) {
       );
     }
 
-    // Build the query - filter by user_id in personal mode to avoid counting
-    // other users' events as conflicts
-    let query = supabase
-      .from("calendar_events")
-      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
-      .eq("organization_id", organizationId)
-      .gte("start_at", start.toISOString())
-      .lte("start_at", end.toISOString())
-      .order("start_at", { ascending: true });
+    // Helper to build base query without scope filter
+    const buildBaseQuery = () => {
+      let q = supabase
+        .from("calendar_events")
+        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+        .eq("organization_id", organizationId)
+        .gte("start_at", start.toISOString())
+        .lte("start_at", end.toISOString())
+        .order("start_at", { ascending: true });
 
-    // Filter by scope if the column exists (graceful fallback for pre-migration DBs)
-    // In personal mode, only show current user's events
-    if (modeParam === "personal") {
-      query = query.eq("user_id", user.id);
-    }
+      // In personal mode, only show current user's events to avoid counting
+      // other users' events as conflicts
+      if (modeParam === "personal") {
+        q = q.eq("user_id", user.id);
+      }
 
-    // Try to filter by scope, but handle gracefully if column doesn't exist
-    try {
-      query = query.eq("scope", "personal");
-    } catch {
-      // scope column may not exist yet - continue without filter
-    }
+      return q;
+    };
 
-    const { data: events, error } = await query;
+    // First try with scope filter (for migrated DBs)
+    const { data: events, error } = await buildBaseQuery().eq("scope", "personal");
 
     if (error) {
-      // Check if error is due to missing scope column
-      if (error.message?.includes("scope")) {
+      const errorStr = JSON.stringify(error);
+      const isScopeError = errorStr.includes("scope") ||
+        error.message?.includes("scope") ||
+        error.code === "42703"; // PostgreSQL "column does not exist"
+
+      if (isScopeError) {
         console.warn("[calendar-events] scope column not found, retrying without scope filter");
-        // Retry without scope filter
-        let retryQuery = supabase
-          .from("calendar_events")
-          .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
-          .eq("organization_id", organizationId)
-          .gte("start_at", start.toISOString())
-          .lte("start_at", end.toISOString())
-          .order("start_at", { ascending: true });
-
-        if (modeParam === "personal") {
-          retryQuery = retryQuery.eq("user_id", user.id);
-        }
-
-        const { data: retryEvents, error: retryError } = await retryQuery;
+        // Retry without scope filter for pre-migration databases
+        const { data: retryEvents, error: retryError } = await buildBaseQuery();
 
         if (retryError) {
           console.error("[calendar-events] Retry failed:", retryError);
