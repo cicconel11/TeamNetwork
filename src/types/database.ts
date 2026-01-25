@@ -249,6 +249,72 @@ export type Database = {
           },
         ]
       }
+      schedule_domain_rules: {
+        Row: {
+          id: string
+          pattern: string
+          vendor_id: string
+          status: "active" | "blocked"
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          pattern: string
+          vendor_id: string
+          status?: "active" | "blocked"
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          pattern?: string
+          vendor_id?: string
+          status?: "active" | "blocked"
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      schedule_allowed_domains: {
+        Row: {
+          id: string
+          hostname: string
+          vendor_id: string
+          status: "pending" | "active" | "blocked"
+          verified_by_user_id: string | null
+          verified_by_org_id: string | null
+          verified_at: string | null
+          verification_method: string | null
+          fingerprint: Json
+          last_seen_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          hostname: string
+          vendor_id: string
+          status?: "pending" | "active" | "blocked"
+          verified_by_user_id?: string | null
+          verified_by_org_id?: string | null
+          verified_at?: string | null
+          verification_method?: string | null
+          fingerprint?: Json
+          last_seen_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          hostname?: string
+          vendor_id?: string
+          status?: "pending" | "active" | "blocked"
+          verified_by_user_id?: string | null
+          verified_by_org_id?: string | null
+          verified_at?: string | null
+          verification_method?: string | null
+          fingerprint?: Json
+          last_seen_at?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       academic_schedules: {
         Row: {
           id: string
@@ -2687,6 +2753,8 @@ export type AcademicSchedule = Tables<'academic_schedules'>;
 export type ScheduleFile = Tables<'schedule_files'>;
 export type ScheduleSource = Tables<'schedule_sources'>;
 export type ScheduleEvent = Tables<'schedule_events'>;
+export type ScheduleDomainRule = Tables<'schedule_domain_rules'>;
+export type ScheduleAllowedDomain = Tables<'schedule_allowed_domains'>;
 export type Form = Tables<'forms'>;
 export type FormSubmission = Tables<'form_submissions'>;
 export type FormDocument = Tables<'form_documents'>;

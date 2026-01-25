@@ -1,18 +1,18 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { fetchUrlSafe, getAllowlistFromEnv } from "./fetch";
+import { fetchUrlSafe } from "./fetch";
 import { extractJsonLdEvents, extractTableEvents, hashEventId, type ParsedEvent } from "./html-utils";
 import type { NormalizedEvent, ScheduleConnector } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
+import { isHostAllowed } from "@/lib/schedule-security/allowlist";
 
-const HOST_ENV = "SCHEDULE_VENDOR_A_HOSTS";
 const MARKERS = ["sectionxi", "vantage", "athletics"];
 
 export const vendorAConnector: ScheduleConnector = {
   id: "vendorA",
   async canHandle(input) {
-    const hostMatches = matchesHost(input.url, getHostAllowlist());
-    if (hostMatches) {
-      return { ok: true, confidence: 0.75, reason: "host match" };
+    const host = safeHost(input.url);
+    if (host && (await isHostAllowed(host, "vendorA"))) {
+      return { ok: true, confidence: 0.75, reason: "allowlist match" };
     }
 
     const haystack = `${input.url} ${input.html ?? ""}`.toLowerCase();
@@ -22,8 +22,8 @@ export const vendorAConnector: ScheduleConnector = {
 
     return { ok: false, confidence: 0 };
   },
-  async preview({ url }) {
-    const { text } = await fetchUrlSafe(url, { requireAllowlist: true, allowlist: resolveAllowlist() });
+  async preview({ url, orgId }) {
+    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "vendorA" });
     const events = normalizeEvents(extractVendorAEvents(text));
     return {
       vendor: "vendorA",
@@ -33,7 +33,7 @@ export const vendorAConnector: ScheduleConnector = {
     };
   },
   async sync({ sourceId, orgId, url, window }) {
-    const { text } = await fetchUrlSafe(url, { requireAllowlist: true, allowlist: resolveAllowlist() });
+    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "vendorA" });
     const events = normalizeEvents(extractVendorAEvents(text)).filter((event) => isWithinWindow(event, window));
     const supabase = createServiceClient();
     const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
@@ -114,26 +114,12 @@ function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   });
 }
 
-function matchesHost(rawUrl: string, allowed: string[]) {
+function safeHost(rawUrl: string) {
   try {
-    const host = new URL(rawUrl).hostname.toLowerCase();
-    return allowed.some((entry) => host === entry || host.endsWith(`.${entry}`));
+    return new URL(rawUrl).hostname.toLowerCase();
   } catch {
-    return false;
+    return null;
   }
-}
-
-function getHostAllowlist() {
-  const raw = process.env[HOST_ENV] || "";
-  return raw
-    .split(",")
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-function resolveAllowlist() {
-  const vendorAllowlist = getHostAllowlist();
-  return vendorAllowlist.length > 0 ? vendorAllowlist : getAllowlistFromEnv();
 }
 
 function isWithinWindow(event: NormalizedEvent, window: SyncWindow) {

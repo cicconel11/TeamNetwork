@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { detectConnector } from "@/lib/schedule-connectors/registry";
 import { maskUrl, normalizeUrl } from "@/lib/schedule-connectors/fetch";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { checkHostStatus } from "@/lib/schedule-security/allowlist";
+import { verifyAndEnroll } from "@/lib/schedule-security/verifyAndEnroll";
 import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 
 export const dynamic = "force-dynamic";
@@ -22,20 +25,32 @@ export async function POST(request: Request) {
       );
     }
 
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 15,
+      limitPerUser: 8,
+      windowMs: 60_000,
+      feature: "schedule connect",
+    });
+
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
     let body: { orgId?: string; url?: string; title?: string };
     try {
       body = await request.json();
     } catch {
       return NextResponse.json(
         { error: "Invalid request", message: "Request body must be valid JSON." },
-        { status: 400 }
+        { status: 400, headers: rateLimit.headers }
       );
     }
 
     if (!body.orgId || !body.url) {
       return NextResponse.json(
         { error: "Missing parameters", message: "orgId and url are required." },
-        { status: 400 }
+        { status: 400, headers: rateLimit.headers }
       );
     }
 
@@ -49,7 +64,7 @@ export async function POST(request: Request) {
     if (!membership || membership.status === "revoked" || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can connect schedules." },
-        { status: 403 }
+        { status: 403, headers: rateLimit.headers }
       );
     }
 
@@ -59,11 +74,58 @@ export async function POST(request: Request) {
     } catch (error) {
       return NextResponse.json(
         { error: "Invalid URL", message: error instanceof Error ? error.message : "Invalid URL." },
-        { status: 400 }
+        { status: 400, headers: rateLimit.headers }
       );
     }
 
-    const { connector } = await detectConnector(normalizedUrl);
+    const host = new URL(normalizedUrl).hostname;
+    const allowStatus = await checkHostStatus(host);
+    if (allowStatus.status === "blocked") {
+      return NextResponse.json(
+        { error: "Blocked", message: "This domain is blocked for schedule sources." },
+        { status: 403, headers: rateLimit.headers }
+      );
+    }
+
+    if (allowStatus.status === "pending") {
+      return NextResponse.json(
+        { error: "Pending approval", message: "This domain needs admin approval before importing." },
+        { status: 409, headers: rateLimit.headers }
+      );
+    }
+
+    if (allowStatus.status === "denied") {
+      const enrollment = await verifyAndEnroll({
+        url: normalizedUrl,
+        orgId: body.orgId,
+        userId: user.id,
+      });
+
+      if (enrollment.allowStatus === "pending") {
+        return NextResponse.json(
+          { error: "Pending approval", message: "This domain needs admin approval before importing." },
+          { status: 409, headers: rateLimit.headers }
+        );
+      }
+
+      if (enrollment.allowStatus !== "active") {
+        return NextResponse.json(
+          { error: "Not allowed", message: "This domain could not be verified for import." },
+          { status: 400, headers: rateLimit.headers }
+        );
+      }
+    }
+
+    let connectorResult;
+    try {
+      connectorResult = await detectConnector(normalizedUrl, { orgId: body.orgId });
+    } catch (error) {
+      return NextResponse.json(
+        { error: "Unsupported schedule", message: error instanceof Error ? error.message : "Unsupported schedule URL." },
+        { status: 400, headers: rateLimit.headers }
+      );
+    }
+    const { connector } = connectorResult;
 
     const { data: source, error } = await supabase
       .from("schedule_sources")
@@ -81,7 +143,7 @@ export async function POST(request: Request) {
       console.error("[schedule-connect] Failed to create source:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to create schedule source." },
-        { status: 500 }
+        { status: 500, headers: rateLimit.headers }
       );
     }
 
@@ -100,7 +162,7 @@ export async function POST(request: Request) {
         title: source.title,
       },
       sync: result,
-    });
+    }, { headers: rateLimit.headers });
   } catch (error) {
     console.error("[schedule-connect] Error:", error);
     return NextResponse.json(

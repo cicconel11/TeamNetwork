@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { connector } = await detectConnector(normalizedUrl);
+    const { connector } = await detectConnector(normalizedUrl, { orgId: body.orgId });
     const preview = await connector.preview({ url: normalizedUrl, orgId: body.orgId });
 
     return NextResponse.json({
@@ -87,12 +87,14 @@ function isPreviewClientError(message: string) {
   return [
     "no supported schedule connector",
     "url must start with http",
-    "source domain is not allowlisted",
-    "no allowlist configured",
+    "domain pending admin approval",
+    "domain is blocked",
+    "domain is not allowlisted",
     "fetch failed",
     "response exceeds size limit",
     "too many redirects",
     "localhost urls are not allowed",
     "private ips are not allowed",
+    "only ports 80 and 443 are allowed",
   ].some((snippet) => normalized.includes(snippet));
 }

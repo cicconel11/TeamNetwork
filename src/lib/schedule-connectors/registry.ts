@@ -12,7 +12,10 @@ export const connectors: ScheduleConnector[] = [
   genericHtmlConnector,
 ];
 
-export async function detectConnector(url: string): Promise<{ connector: ScheduleConnector; confidence: number }> {
+export async function detectConnector(
+  url: string,
+  context: { orgId?: string } = {}
+): Promise<{ connector: ScheduleConnector; confidence: number }> {
   const icsCheck = await icsConnector.canHandle({ url });
   if (icsCheck.ok && icsCheck.confidence >= 0.9) {
     return { connector: icsConnector, confidence: icsCheck.confidence };
@@ -22,10 +25,13 @@ export async function detectConnector(url: string): Promise<{ connector: Schedul
   let headers: Record<string, string> | undefined;
 
   try {
-    const result = await fetchUrlSafe(url, { maxBytes: 512 * 1024 });
+    const result = await fetchUrlSafe(url, { mode: "verify", orgId: context.orgId });
     html = result.text;
     headers = result.headers;
-  } catch {
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
     html = undefined;
   }
 

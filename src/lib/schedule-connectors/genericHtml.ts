@@ -1,14 +1,15 @@
-import { fetchUrlSafe, getAllowlistFromEnv } from "./fetch";
+import { fetchUrlSafe } from "./fetch";
 import { extractTableEvents, hashEventId, type ParsedEvent } from "./html-utils";
 import type { NormalizedEvent, ScheduleConnector } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isHostAllowed } from "@/lib/schedule-security/allowlist";
 
 export const genericHtmlConnector: ScheduleConnector = {
   id: "generic_html",
   async canHandle(input) {
-    const allowlist = getAllowlistFromEnv();
-    if (!isAllowlisted(input.url, allowlist)) {
+    const host = safeHost(input.url);
+    if (!host || !(await isHostAllowed(host))) {
       return { ok: false, confidence: 0, reason: "not allowlisted" };
     }
 
@@ -23,8 +24,8 @@ export const genericHtmlConnector: ScheduleConnector = {
 
     return { ok: true, confidence: 0.4, reason: "table match" };
   },
-  async preview({ url }) {
-    const { text } = await fetchUrlSafe(url, { requireAllowlist: true });
+  async preview({ url, orgId }) {
+    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "generic_html" });
     const events = normalizeEvents(extractTableEvents(text));
     return {
       vendor: "generic_html",
@@ -34,7 +35,7 @@ export const genericHtmlConnector: ScheduleConnector = {
     };
   },
   async sync({ sourceId, orgId, url, window }) {
-    const { text } = await fetchUrlSafe(url, { requireAllowlist: true });
+    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "generic_html" });
     const events = normalizeEvents(extractTableEvents(text)).filter((event) => isWithinWindow(event, window));
     const supabase = createServiceClient();
     const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
@@ -64,13 +65,11 @@ function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   });
 }
 
-function isAllowlisted(rawUrl: string, allowlist: string[]) {
-  if (allowlist.length === 0) return false;
+function safeHost(rawUrl: string) {
   try {
-    const host = new URL(rawUrl).hostname.toLowerCase();
-    return allowlist.some((entry) => host === entry || host.endsWith(`.${entry}`));
+    return new URL(rawUrl).hostname.toLowerCase();
   } catch {
-    return false;
+    return null;
   }
 }
 

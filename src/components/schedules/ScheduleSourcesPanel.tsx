@@ -19,6 +19,14 @@ type PreviewResponse = {
   maskedUrl: string;
 };
 
+type VerificationResponse = {
+  vendorId: string;
+  confidence: number;
+  allowStatus: "active" | "pending" | "blocked" | "denied";
+  evidenceSummary: string;
+  maskedUrl: string;
+};
+
 type SourceSummary = {
   id: string;
   vendor_id: PreviewResponse["vendor"];
@@ -71,6 +79,7 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
   const [url, setUrl] = useState("");
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [verification, setVerification] = useState<VerificationResponse | null>(null);
   const [title, setTitle] = useState("");
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
@@ -114,8 +123,41 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
     setPreviewLoading(true);
     setError(null);
     setNotice(null);
+    setVerification(null);
 
     try {
+      const verifyResponse = await fetch("/api/schedules/verify-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId, url: url.trim() }),
+      });
+      const verifyData = await verifyResponse.json();
+
+      if (!verifyResponse.ok) {
+        throw new Error(verifyData?.message || "Failed to verify schedule source.");
+      }
+
+      setVerification({
+        vendorId: verifyData.vendorId,
+        confidence: verifyData.confidence,
+        allowStatus: verifyData.allowStatus,
+        evidenceSummary: verifyData.evidenceSummary,
+        maskedUrl: verifyData.maskedUrl,
+      });
+
+      if (verifyData.allowStatus !== "active") {
+        if (verifyData.allowStatus === "pending") {
+          setError("This domain needs admin approval before previewing.");
+        } else if (verifyData.allowStatus === "blocked") {
+          setError("This domain is blocked for schedule imports.");
+        } else {
+          setError("We could not verify this schedule source.");
+        }
+        setPreview(null);
+        setPreviewUrl(null);
+        return;
+      }
+
       const response = await fetch("/api/schedules/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -279,7 +321,15 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
               <Input
                 label="Paste schedule link"
                 value={url}
-                onChange={(event) => setUrl(event.target.value)}
+                onChange={(event) => {
+                  setUrl(event.target.value);
+                  setPreview(null);
+                  setPreviewUrl(null);
+                  setVerification(null);
+                  setTitle("");
+                  setError(null);
+                  setNotice(null);
+                }}
                 placeholder="https://athletics.example.com/schedule"
                 helperText="Paste a public schedule link or iCal/ICS export (look for “Subscribe” or “iCal” on the athletics site)."
               />
@@ -288,6 +338,47 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
               Preview
             </Button>
           </div>
+          {verification && verification.allowStatus !== "active" && (
+            <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-foreground">
+              <p className="font-medium">
+                {verification.allowStatus === "pending"
+                  ? "Needs admin approval"
+                  : verification.allowStatus === "blocked"
+                  ? "Domain blocked"
+                  : "Domain not verified"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {verification.allowStatus === "pending"
+                  ? "An admin must approve this domain before importing."
+                  : verification.allowStatus === "blocked"
+                  ? "This domain is blocked for schedule imports. Try an iCal/ICS link or manual entry."
+                  : "This domain could not be verified. Try an iCal/ICS link or manual entry."}
+              </p>
+              {verification.allowStatus === "pending" && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {isAdmin ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        document.getElementById("schedule-domain-approvals")?.scrollIntoView({ behavior: "smooth" })
+                      }
+                    >
+                      Review approvals
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setNotice("Request recorded. Ask an admin to approve this domain.")}
+                    >
+                      Request approval
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {notice && <p className="text-sm text-foreground">{notice}</p>}
           {error && <p className="text-sm text-error">{error}</p>}
           {!isAdmin && (

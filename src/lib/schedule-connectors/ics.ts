@@ -40,9 +40,9 @@ export const icsConnector: ScheduleConnector = {
 
     return { ok: false, confidence: 0 };
   },
-  async preview({ url }) {
+  async preview({ url, orgId }) {
     const window = buildPreviewWindow();
-    const icsText = await fetchUrlSafe(url, { timeoutMs: 10000 }).then((result) => result.text);
+    const icsText = await fetchUrlSafe(url, { orgId, vendorId: "ics" }).then((result) => result.text);
     const events = expandIcsEvents(icsText, window);
     const sorted = sortEvents(events).slice(0, 20);
 
@@ -62,7 +62,7 @@ export async function syncIcsToSource(
   supabase: SupabaseClient<Database>,
   input: { sourceId: string; orgId: string; url: string; window: SyncWindow }
 ): Promise<SyncResult> {
-  const icsText = await fetchUrlSafe(input.url, { timeoutMs: 10000 }).then((result) => result.text);
+  const icsText = await fetchUrlSafe(input.url, { orgId: input.orgId, vendorId: "ics" }).then((result) => result.text);
   const events = expandIcsEvents(icsText, input.window);
   const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
     orgId: input.orgId,
