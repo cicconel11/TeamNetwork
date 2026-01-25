@@ -61,10 +61,11 @@ export async function GET(request: Request) {
     }
 
     // Helper to build query with organization_id filter (for migrated DBs)
+    // Note: calendar_events.user_id references auth.users, not public.users, so we can't join
     const buildOrgQuery = () => {
       let q = supabase
         .from("calendar_events")
-        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
         .eq("organization_id", organizationId)
         .gte("start_at", start.toISOString())
         .lte("start_at", end.toISOString())
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
     const buildUserQuery = () => {
       return supabase
         .from("calendar_events")
-        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
         .eq("user_id", user.id)
         .gte("start_at", start.toISOString())
         .lte("start_at", end.toISOString())

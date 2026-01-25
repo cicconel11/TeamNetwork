@@ -67,10 +67,17 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventSummary[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Mark component as mounted to avoid hydration mismatch with dates
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const { weekStart, weekEnd, weekLabel, weekDays, rangeStart, rangeEnd } = useMemo(() => {
-    // Start from current week's Sunday
-    const today = new Date();
+    // Use a fixed date during SSR to avoid hydration mismatch
+    // After mount, use the actual current date
+    const today = mounted ? new Date() : new Date(2026, 0, 1); // fallback date for SSR
     const currentWeekStart = getWeekStart(today);
 
     // Apply week offset
@@ -109,7 +116,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       rangeStart: rangeStartDate,
       rangeEnd: rangeEndDate,
     };
-  }, [weekOffset]);
+  }, [weekOffset, mounted]);
 
   useEffect(() => {
     if (mode !== "team") {
@@ -303,6 +310,17 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
   };
 
+  // Show loading state until mounted to avoid hydration issues
+  if (!mounted) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center py-8">
+          <p className="text-sm text-muted-foreground">Loading availability...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -350,7 +368,9 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
             <tr>
               <th className="p-2 text-left text-muted-foreground font-medium w-16"></th>
               {weekDays.map((day) => {
-                const isToday = formatDateKey(day) === formatDateKey(new Date());
+                // Only check for "today" after mount to avoid hydration mismatch
+                const todayKey = mounted ? formatDateKey(new Date()) : "";
+                const isToday = mounted && formatDateKey(day) === todayKey;
                 return (
                   <th
                     key={formatDateKey(day)}
