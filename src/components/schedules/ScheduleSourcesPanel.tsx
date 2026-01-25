@@ -334,7 +334,7 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
                 helperText="Paste a public schedule link or iCal/ICS export (look for “Subscribe” or “iCal” on the athletics site)."
               />
             </div>
-            <Button onClick={handlePreview} isLoading={previewLoading} disabled={previewDisabled}>
+            <Button onClick={handlePreview} isLoading={previewLoading} disabled={previewDisabled || !isAdmin}>
               Preview
             </Button>
           </div>
@@ -382,7 +382,7 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
           {notice && <p className="text-sm text-foreground">{notice}</p>}
           {error && <p className="text-sm text-error">{error}</p>}
           {!isAdmin && (
-            <p className="text-xs text-muted-foreground">Only admins can connect schedule sources for the team.</p>
+            <p className="text-xs text-muted-foreground">Only admins can preview and connect schedule sources.</p>
           )}
         </Card>
       </section>
