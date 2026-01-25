@@ -249,6 +249,7 @@ function inferVendorFromHost(host: string) {
   if (host.endsWith("sidearmsports.com")) return "sidearmsports";
   if (host.endsWith("prestosports.com")) return "prestosports";
   if (host.endsWith("vantagesportz.com")) return "vantage";
+  if (host.endsWith("digitalsports.com")) return "digitalsports";
   if (host.endsWith("sportsengine.com") || host.endsWith("sportngin.com")) return "sportsengine";
   if (host.endsWith("teamsnap.com")) return "teamsnap";
   if (host.endsWith("leagueapps.com")) return "leagueapps";
@@ -263,6 +264,7 @@ function inferVendorFromMarkers(lowerText: string) {
   if (lowerText.includes("sidearmsports") || lowerText.includes("sidearm sports")) return "sidearmsports";
   if (lowerText.includes("prestosports") || lowerText.includes("presto sports")) return "prestosports";
   if (lowerText.includes("vantagesportz") || lowerText.includes("vantage")) return "vantage";
+  if (lowerText.includes("digitalsports")) return "digitalsports";
   if (lowerText.includes("sportngin") || lowerText.includes("sportsengine")) return "sportsengine";
   if (lowerText.includes("teamsnap")) return "teamsnap";
   if (lowerText.includes("leagueapps")) return "leagueapps";

@@ -23,7 +23,7 @@ export const vendorAConnector: ScheduleConnector = {
     return { ok: false, confidence: 0 };
   },
   async preview({ url, orgId }) {
-    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "vendorA" });
+    const { text } = await fetchScheduleHtml(url, orgId);
     const events = normalizeEvents(extractVendorAEvents(text));
     return {
       vendor: "vendorA",
@@ -33,7 +33,7 @@ export const vendorAConnector: ScheduleConnector = {
     };
   },
   async sync({ sourceId, orgId, url, window }) {
-    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "vendorA" });
+    const { text } = await fetchScheduleHtml(url, orgId);
     const events = normalizeEvents(extractVendorAEvents(text)).filter((event) => isWithinWindow(event, window));
     const supabase = createServiceClient();
     const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
@@ -41,10 +41,31 @@ export const vendorAConnector: ScheduleConnector = {
       sourceId,
       events,
       window,
-    });
-    return { imported, updated, cancelled, vendor: "vendorA" };
+  });
+  return { imported, updated, cancelled, vendor: "vendorA" };
   },
 };
+
+async function fetchScheduleHtml(url: string, orgId: string) {
+  const primary = await fetchUrlSafe(url, { orgId, vendorId: "vendorA" });
+  const embeddedUrl = findDigitalsportsScheduleUrl(primary.text, url);
+  if (!embeddedUrl) {
+    return { text: primary.text };
+  }
+
+  const embedded = await fetchUrlSafe(embeddedUrl, { orgId, vendorId: "digitalsports" });
+  return { text: embedded.text };
+}
+
+function findDigitalsportsScheduleUrl(html: string, baseUrl: string) {
+  const match = html.match(/https?:\/\/digitalsports\.com\/pages\/api\/schedule-list\.php\??/i);
+  if (!match) return null;
+
+  const base = new URL(baseUrl);
+  const query = base.searchParams.toString();
+  const baseLink = match[0].endsWith("?") ? match[0] : `${match[0]}?`;
+  return query ? `${baseLink}${query}` : baseLink.replace(/\?$/, "");
+}
 
 function extractVendorAEvents(html: string): ParsedEvent[] {
   const jsonLd = extractJsonLdEvents(html);
