@@ -14,11 +14,11 @@ function isAuthorized(request: Request) {
     return { ok: false, reason: "Missing CRON_SECRET" };
   }
 
+  // Only accept header-based authentication to prevent secret leakage in logs/referrers
   const authHeader = request.headers.get("authorization");
   const headerSecret = request.headers.get("x-cron-secret");
-  const urlSecret = new URL(request.url).searchParams.get("secret");
 
-  if (authHeader === `Bearer ${secret}` || headerSecret === secret || urlSecret === secret) {
+  if (authHeader === `Bearer ${secret}` || headerSecret === secret) {
     return { ok: true };
   }
 

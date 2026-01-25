@@ -25,7 +25,15 @@ const vendorAliasMap: Record<string, string[] | null> = {
 
 let allowlistOverride: string[] | null = null;
 
+/**
+ * Override the allowlist check for testing purposes.
+ * Only works in test/development environments to prevent production misuse.
+ */
 export function setAllowlistOverride(hosts: string[] | null) {
+  if (process.env.NODE_ENV === "production") {
+    console.error("[schedule-allowlist] setAllowlistOverride called in production - ignored");
+    return;
+  }
   allowlistOverride = hosts?.map(normalizeHost) ?? null;
 }
 

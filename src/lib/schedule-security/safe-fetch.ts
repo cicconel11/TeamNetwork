@@ -119,8 +119,13 @@ async function ensurePublicHost(hostname: string) {
 }
 
 function isPrivateIp(ip: string) {
+  // IPv6 loopback
   if (ip === "::1") return true;
 
+  // IPv6 unspecified address (compressed form)
+  if (ip === "::") return true;
+
+  // IPv4-mapped IPv6 addresses (::ffff:x.x.x.x)
   if (ip.startsWith("::ffff:")) {
     return isPrivateIp(ip.replace("::ffff:", ""));
   }
@@ -138,8 +143,16 @@ function isPrivateIp(ip: string) {
   }
 
   const lower = ip.toLowerCase();
+
+  // IPv6 Unique Local Addresses (fc00::/7 = fc00-fdff)
   if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  if (lower.startsWith("fe80")) return true;
+
+  // IPv6 Link-Local Addresses (fe80::/10 = fe80-febf)
+  if (lower.startsWith("fe8") || lower.startsWith("fe9") ||
+      lower.startsWith("fea") || lower.startsWith("feb")) return true;
+
+  // IPv6 Multicast (ff00::/8)
+  if (lower.startsWith("ff")) return true;
 
   return false;
 }

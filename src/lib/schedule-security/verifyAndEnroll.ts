@@ -48,6 +48,7 @@ export async function verifyAndEnroll(input: {
   const host = normalizeHost(new URL(normalizedUrl).hostname);
   const client = input.supabase ?? createServiceClient();
 
+  // Fast-path check for blocked/active domains (optimistic read)
   const { data: existing, error: existingError } = await client
     .from("schedule_allowed_domains")
     .select("id,hostname,vendor_id,status")
@@ -96,8 +97,9 @@ export async function verifyAndEnroll(input: {
   const now = new Date().toISOString();
   const nextStatus: "active" | "pending" = allowStatus === "active" ? "active" : "pending";
 
-  const upsertPayload = {
-    hostname: host,
+  // Use conditional update to prevent overwriting blocked domains (race condition protection).
+  // First, try to update existing non-blocked record, then insert if it doesn't exist.
+  const updatePayload = {
     vendor_id: verification.vendorId,
     status: nextStatus,
     verified_by_org_id: input.orgId,
@@ -112,26 +114,96 @@ export async function verifyAndEnroll(input: {
     last_seen_at: now,
   };
 
-  const { data: upserted, error: upsertError } = await client
+  // Attempt conditional update first (only if not blocked).
+  // Guard: if nextStatus is "pending", only update if current status is also "pending"
+  // to prevent downgrading an active domain to pending during a race condition.
+  // If nextStatus is "active", allow updating both pending->active and active->active (refresh).
+  const { data: updated, error: updateError } = await client
     .from("schedule_allowed_domains")
-    .upsert(upsertPayload, { onConflict: "hostname" })
-    .select("id,status")
+    .update(updatePayload)
+    .eq("hostname", host)
+    .neq("status", "blocked")
+    .in("status", nextStatus === "pending" ? ["pending"] : ["pending", "active"])
+    .select("id,status,vendor_id")
     .maybeSingle();
 
-  if (upsertError) {
-    console.error("[schedule-verify] Failed to upsert domain:", upsertError);
-    throw new ScheduleSecurityError("fetch_failed", "Unable to enroll schedule domain.");
+  if (updateError) {
+    console.error("[schedule-verify] Failed to update domain:", updateError);
   }
 
-  if (existing?.status === "pending" && nextStatus === "active") {
-    await client
+  // If update found and updated a row, we're done
+  if (updated) {
+    return {
+      allowStatus: updated.status === "active" ? "active" : "pending",
+      vendorId: verification.vendorId,
+      confidence: verification.confidence,
+      evidence: verification.evidence,
+    };
+  }
+
+  // No row was updated - either doesn't exist or is blocked
+  // Re-check to distinguish between the two cases (handles race where domain became blocked)
+  const { data: recheckDomain } = await client
+    .from("schedule_allowed_domains")
+    .select("id,status,vendor_id")
+    .eq("hostname", host)
+    .maybeSingle();
+
+  if (recheckDomain?.status === "blocked") {
+    // Domain was blocked between our initial check and now
+    return { allowStatus: "blocked", vendorId: recheckDomain.vendor_id };
+  }
+
+  // Domain doesn't exist yet, insert it
+  if (!recheckDomain) {
+    const insertPayload = {
+      hostname: host,
+      ...updatePayload,
+    };
+
+    const { data: inserted, error: insertError } = await client
       .from("schedule_allowed_domains")
-      .update({ verified_at: now, status: "active" })
-      .eq("hostname", host);
+      .insert(insertPayload)
+      .select("id,status,vendor_id")
+      .maybeSingle();
+
+    if (insertError) {
+      // Handle race condition: another request may have inserted first
+      if (insertError.code === "23505") {
+        // Unique constraint violation - row was inserted by another request
+        const { data: finalCheck } = await client
+          .from("schedule_allowed_domains")
+          .select("id,status,vendor_id")
+          .eq("hostname", host)
+          .maybeSingle();
+
+        if (finalCheck?.status === "blocked") {
+          return { allowStatus: "blocked", vendorId: finalCheck.vendor_id };
+        }
+
+        return {
+          allowStatus: finalCheck?.status === "active" ? "active" : "pending",
+          vendorId: verification.vendorId,
+          confidence: verification.confidence,
+          evidence: verification.evidence,
+        };
+      }
+
+      console.error("[schedule-verify] Failed to insert domain:", insertError);
+      throw new ScheduleSecurityError("fetch_failed", "Unable to enroll schedule domain.");
+    }
+
+    return {
+      allowStatus: inserted?.status === "active" ? "active" : "pending",
+      vendorId: verification.vendorId,
+      confidence: verification.confidence,
+      evidence: verification.evidence,
+    };
   }
 
+  // Domain exists with different status (shouldn't reach here, but handle gracefully)
   return {
-    allowStatus: upserted?.status === "active" ? "active" : "pending",
+    allowStatus: recheckDomain.status === "active" ? "active" : "pending",
     vendorId: verification.vendorId,
     confidence: verification.confidence,
     evidence: verification.evidence,
