@@ -212,7 +212,8 @@ async function upsertInstances(
   feed: CalendarFeedRow,
   instances: CalendarEventInstance[]
 ) {
-  const rows: CalendarEventInsert[] = instances.map((instance) => ({
+  // Build base row data without optional columns that may not exist
+  const baseRows = instances.map((instance) => ({
     user_id: feed.user_id,
     feed_id: feed.id,
     external_uid: instance.externalUid,
@@ -224,16 +225,53 @@ async function upsertInstances(
     end_at: instance.endAt,
     all_day: instance.allDay,
     raw: instance.raw,
+  }));
+
+  // Try with organization_id and scope first (for migrated DBs)
+  const fullRows: CalendarEventInsert[] = baseRows.map((row) => ({
+    ...row,
     organization_id: feed.organization_id ?? null,
     scope: feed.scope ?? "personal",
   }));
 
-  for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) {
+  let useFallback = false;
+
+  for (let i = 0; i < fullRows.length; i += UPSERT_CHUNK_SIZE) {
+    const fullChunk = fullRows.slice(i, i + UPSERT_CHUNK_SIZE);
+    const baseChunk = baseRows.slice(i, i + UPSERT_CHUNK_SIZE);
+
+    if (useFallback) {
+      // Already know we need fallback, use base rows directly
+      const { error } = await supabase
+        .from("calendar_events")
+        .upsert(baseChunk as CalendarEventInsert[], { onConflict: "feed_id,instance_key" });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      continue;
+    }
+
     const { error } = await supabase
       .from("calendar_events")
-      .upsert(chunk, { onConflict: "feed_id,instance_key" });
+      .upsert(fullChunk, { onConflict: "feed_id,instance_key" });
 
     if (error) {
+      // If error mentions organization_id or scope column, retry without those fields
+      const errorStr = error.message || "";
+      if (errorStr.includes("organization_id") || errorStr.includes("scope") || error.code === "42703") {
+        console.warn("[icsSync] Falling back to upsert without organization_id/scope columns");
+        useFallback = true;
+
+        const { error: retryError } = await supabase
+          .from("calendar_events")
+          .upsert(baseChunk as CalendarEventInsert[], { onConflict: "feed_id,instance_key" });
+
+        if (retryError) {
+          throw new Error(retryError.message);
+        }
+        continue;
+      }
       throw new Error(error.message);
     }
   }
