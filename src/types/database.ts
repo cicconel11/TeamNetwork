@@ -1097,6 +1097,8 @@ export type Database = {
           user_id: string
           provider: string
           feed_url: string
+          organization_id: string | null
+          scope: "personal" | "org"
           status: "active" | "error" | "disabled"
           last_synced_at: string | null
           last_error: string | null
@@ -1108,6 +1110,8 @@ export type Database = {
           user_id: string
           provider?: string
           feed_url: string
+          organization_id?: string | null
+          scope?: "personal" | "org"
           status?: "active" | "error" | "disabled"
           last_synced_at?: string | null
           last_error?: string | null
@@ -1119,6 +1123,8 @@ export type Database = {
           user_id?: string
           provider?: string
           feed_url?: string
+          organization_id?: string | null
+          scope?: "personal" | "org"
           status?: "active" | "error" | "disabled"
           last_synced_at?: string | null
           last_error?: string | null
@@ -1131,6 +1137,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_feeds_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1149,6 +1162,8 @@ export type Database = {
           end_at: string | null
           all_day: boolean | null
           raw: Json | null
+          organization_id: string | null
+          scope: "personal" | "org"
           created_at: string | null
           updated_at: string | null
         }
@@ -1165,6 +1180,8 @@ export type Database = {
           end_at?: string | null
           all_day?: boolean | null
           raw?: Json | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
           created_at?: string | null
           updated_at?: string | null
         }
@@ -1181,6 +1198,8 @@ export type Database = {
           end_at?: string | null
           all_day?: boolean | null
           raw?: Json | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
           created_at?: string | null
           updated_at?: string | null
         }
@@ -1197,6 +1216,13 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]

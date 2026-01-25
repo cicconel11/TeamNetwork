@@ -224,6 +224,8 @@ async function upsertInstances(
     end_at: instance.endAt,
     all_day: instance.allDay,
     raw: instance.raw,
+    organization_id: feed.organization_id ?? null,
+    scope: feed.scope ?? "personal",
   }));
 
   for (const chunk of chunkArray(rows, UPSERT_CHUNK_SIZE)) {

@@ -60,15 +60,15 @@ export async function GET(request: Request) {
 
     const { data: events, error } = await supabase
       .from("calendar_events")
-      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+      .select("id, title, start_at, end_at, all_day, location, feed_id")
       .eq("organization_id", organizationId)
-      .eq("scope", "personal")
+      .eq("scope", "org")
       .gte("start_at", start.toISOString())
       .lte("start_at", end.toISOString())
       .order("start_at", { ascending: true });
 
     if (error) {
-      console.error("[calendar-events] Failed to fetch events:", error);
+      console.error("[calendar-org-events] Failed to fetch events:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ events: events || [] });
   } catch (error) {
-    console.error("[calendar-events] Error fetching events:", error);
+    console.error("[calendar-org-events] Error fetching events:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to fetch events." },
       { status: 500 }

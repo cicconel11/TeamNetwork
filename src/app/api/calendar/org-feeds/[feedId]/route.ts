@@ -20,10 +20,9 @@ export async function DELETE(
 
     const { data: feed, error } = await supabase
       .from("calendar_feeds")
-      .select("id")
+      .select("id, organization_id")
       .eq("id", params.feedId)
-      .eq("user_id", user.id)
-      .eq("scope", "personal")
+      .eq("scope", "org")
       .single();
 
     if (error || !feed) {
@@ -33,13 +32,27 @@ export async function DELETE(
       );
     }
 
+    const { data: membership } = await supabase
+      .from("user_organization_roles")
+      .select("role,status")
+      .eq("user_id", user.id)
+      .eq("organization_id", feed.organization_id)
+      .maybeSingle();
+
+    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Only admins can manage org feeds." },
+        { status: 403 }
+      );
+    }
+
     const { error: deleteError } = await supabase
       .from("calendar_feeds")
       .delete()
       .eq("id", feed.id);
 
     if (deleteError) {
-      console.error("[calendar-feeds] Failed to delete feed:", deleteError);
+      console.error("[calendar-org-feeds] Failed to delete feed:", deleteError);
       return NextResponse.json(
         { error: "Database error", message: "Failed to delete feed." },
         { status: 500 }
@@ -48,7 +61,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[calendar-feeds] Error deleting feed:", error);
+    console.error("[calendar-org-feeds] Error deleting feed:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to delete feed." },
       { status: 500 }

@@ -34,14 +34,27 @@ export async function POST(
       .from("calendar_feeds")
       .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
       .eq("id", params.feedId)
-      .eq("user_id", user.id)
-      .eq("scope", "personal")
+      .eq("scope", "org")
       .single();
 
     if (error || !feed) {
       return NextResponse.json(
         { error: "Not found", message: "Feed not found." },
         { status: 404 }
+      );
+    }
+
+    const { data: membership } = await supabase
+      .from("user_organization_roles")
+      .select("role,status")
+      .eq("user_id", user.id)
+      .eq("organization_id", feed.organization_id)
+      .maybeSingle();
+
+    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden", message: "Only admins can sync org feeds." },
+        { status: 403 }
       );
     }
 
@@ -65,7 +78,7 @@ export async function POST(
       provider: responseFeed.provider,
     });
   } catch (error) {
-    console.error("[calendar-feeds-sync] Error syncing feed:", error);
+    console.error("[calendar-org-feeds-sync] Error syncing feed:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to sync feed." },
       { status: 500 }

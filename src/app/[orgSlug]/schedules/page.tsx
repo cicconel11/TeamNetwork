@@ -99,7 +99,14 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         }
       />
 
-      <CalendarSyncPanel />
+      <CalendarSyncPanel organizationId={orgId} isAdmin={orgCtx.isAdmin} />
+
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">My Availability</h2>
+        <Card className="p-6">
+          <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" />
+        </Card>
+      </section>
 
       {/* My Schedules Section */}
       <section>
@@ -148,7 +155,7 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4">Team Availability</h2>
           <Card className="p-6">
-            <AvailabilityGrid schedules={allSchedules} orgId={orgId} />
+            <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" />
           </Card>
         </section>
       )}

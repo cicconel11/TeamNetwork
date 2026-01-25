@@ -81,9 +81,9 @@ export async function GET(request: Request) {
       .eq("organization_id", organizationId)
       .maybeSingle();
 
-    if (!membership || membership.status === "revoked") {
+    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
       return NextResponse.json(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
         { status: 403 }
       );
     }
@@ -91,13 +91,12 @@ export async function GET(request: Request) {
     const { data: feeds, error } = await supabase
       .from("calendar_feeds")
       .select("id, feed_url, status, last_synced_at, last_error, provider")
-      .eq("user_id", user.id)
       .eq("organization_id", organizationId)
-      .eq("scope", "personal")
+      .eq("scope", "org")
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("[calendar-feeds] Failed to fetch feeds:", error);
+      console.error("[calendar-org-feeds] Failed to fetch feeds:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch feeds." },
         { status: 500 }
@@ -108,7 +107,7 @@ export async function GET(request: Request) {
       feeds: (feeds || []).map(formatFeedResponse),
     });
   } catch (error) {
-    console.error("[calendar-feeds] Error fetching feeds:", error);
+    console.error("[calendar-org-feeds] Error fetching feeds:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to fetch feeds." },
       { status: 500 }
@@ -160,9 +159,9 @@ export async function POST(request: Request) {
       .eq("organization_id", body.organizationId)
       .maybeSingle();
 
-    if (!membership || membership.status === "revoked") {
+    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
       return NextResponse.json(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
         { status: 403 }
       );
     }
@@ -193,13 +192,13 @@ export async function POST(request: Request) {
         provider,
         feed_url: normalizedUrl,
         organization_id: body.organizationId,
-        scope: "personal",
+        scope: "org",
       })
       .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
       .single();
 
     if (error || !feed) {
-      console.error("[calendar-feeds] Failed to insert feed:", error);
+      console.error("[calendar-org-feeds] Failed to insert feed:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to save feed." },
         { status: 500 }
@@ -211,7 +210,7 @@ export async function POST(request: Request) {
 
     const { data: updatedFeed } = await serviceClient
       .from("calendar_feeds")
-      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
+      .select("id, feed_url, status, last_synced_at, last_error, provider")
       .eq("id", feed.id)
       .single();
 
@@ -220,7 +219,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("[calendar-feeds] Error adding feed:", error);
+    console.error("[calendar-org-feeds] Error adding feed:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to add feed." },
       { status: 500 }

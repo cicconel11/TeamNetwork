@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
   const { data: feeds, error } = await serviceClient
     .from("calendar_feeds")
-    .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at")
+    .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
     .eq("status", "active")
     .or(`last_synced_at.is.null,last_synced_at.lt.${cutoff}`);
 
