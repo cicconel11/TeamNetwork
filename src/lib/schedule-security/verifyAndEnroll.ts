@@ -7,7 +7,7 @@ import { safeFetch } from "./safe-fetch";
 import { normalizeUrl } from "./url";
 
 const VERIFY_TIMEOUT_MS = 8000;
-const VERIFY_MAX_BYTES = 200 * 1024;
+const VERIFY_MAX_BYTES = 256 * 1024;
 
 export type VerificationResult = {
   vendorId: string;

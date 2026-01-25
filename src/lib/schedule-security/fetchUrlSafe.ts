@@ -8,7 +8,7 @@ import { verifyAndEnroll } from "./verifyAndEnroll";
 
 const VERIFY_TIMEOUT_MS = 8000;
 const FULL_TIMEOUT_MS = 12000;
-const VERIFY_MAX_BYTES = 200 * 1024;
+const VERIFY_MAX_BYTES = 256 * 1024;
 const FULL_MAX_BYTES = 5 * 1024 * 1024;
 
 export type SafeFetchMode = "verify" | "full";

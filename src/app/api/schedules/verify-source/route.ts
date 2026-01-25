@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { checkHostStatus } from "@/lib/schedule-security/allowlist";
+import { ScheduleSecurityError } from "@/lib/schedule-security/errors";
 import { verifyAndEnroll } from "@/lib/schedule-security/verifyAndEnroll";
 import { normalizeUrl, maskUrl } from "@/lib/schedule-security/url";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  let rateLimitHeaders: Record<string, string> | undefined;
   try {
     const supabase = await createClient();
     const {
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
     if (!rateLimit.ok) {
       return buildRateLimitResponse(rateLimit);
     }
+    rateLimitHeaders = rateLimit.headers;
 
     let body: { orgId?: string; url?: string };
     try {
@@ -133,10 +136,35 @@ export async function POST(request: Request) {
       { headers: rateLimit.headers }
     );
   } catch (error) {
+    if (error instanceof ScheduleSecurityError) {
+      const details = mapScheduleVerificationError(error);
+      return NextResponse.json(
+        { error: "Verification failed", message: details.message },
+        { status: details.status, headers: rateLimitHeaders }
+      );
+    }
     console.error("[schedule-verify] Error:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to verify schedule source." },
       { status: 500 }
     );
+  }
+}
+
+function mapScheduleVerificationError(error: ScheduleSecurityError) {
+  switch (error.code) {
+    case "fetch_failed":
+      return { status: 400, message: "Schedule source could not be reached. Please try again." };
+    case "response_too_large":
+      return { status: 400, message: "Schedule page is too large to verify. Try a more specific schedule link." };
+    case "too_many_redirects":
+      return { status: 400, message: "Too many redirects while verifying this schedule URL." };
+    case "invalid_url":
+    case "invalid_port":
+    case "private_ip":
+    case "localhost":
+      return { status: 400, message: error.message };
+    default:
+      return { status: 400, message: error.message || "Failed to verify schedule source." };
   }
 }
