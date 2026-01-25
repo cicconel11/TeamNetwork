@@ -5,6 +5,7 @@ import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
 import { CalendarSyncPanel } from "@/components/schedules/CalendarSyncPanel";
+import { ScheduleSourcesPanel } from "@/components/schedules/ScheduleSourcesPanel";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { AcademicSchedule, User } from "@/types/database";
@@ -98,6 +99,8 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
           </Link>
         }
       />
+
+      <ScheduleSourcesPanel orgId={orgId} isAdmin={orgCtx.isAdmin} />
 
       <CalendarSyncPanel organizationId={orgId} isAdmin={orgCtx.isAdmin} />
 

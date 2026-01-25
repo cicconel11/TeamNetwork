@@ -139,6 +139,116 @@ export type Database = {
           },
         ]
       }
+      schedule_sources: {
+        Row: {
+          id: string
+          org_id: string
+          created_by: string | null
+          vendor_id: string
+          source_url: string
+          title: string | null
+          status: "active" | "paused" | "error"
+          last_synced_at: string | null
+          last_error: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          created_by?: string | null
+          vendor_id: string
+          source_url: string
+          title?: string | null
+          status?: "active" | "paused" | "error"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          created_by?: string | null
+          vendor_id?: string
+          source_url?: string
+          title?: string | null
+          status?: "active" | "paused" | "error"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_sources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_events: {
+        Row: {
+          id: string
+          org_id: string
+          source_id: string
+          external_uid: string
+          title: string
+          start_at: string
+          end_at: string
+          location: string | null
+          status: "confirmed" | "cancelled" | "tentative"
+          raw: Json
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          source_id: string
+          external_uid: string
+          title: string
+          start_at: string
+          end_at: string
+          location?: string | null
+          status?: "confirmed" | "cancelled" | "tentative"
+          raw?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          source_id?: string
+          external_uid?: string
+          title?: string
+          start_at?: string
+          end_at?: string
+          location?: string | null
+          status?: "confirmed" | "cancelled" | "tentative"
+          raw?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_events_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       academic_schedules: {
         Row: {
           id: string
@@ -2575,6 +2685,8 @@ export type CompositeTypes<
 // Table type exports
 export type AcademicSchedule = Tables<'academic_schedules'>;
 export type ScheduleFile = Tables<'schedule_files'>;
+export type ScheduleSource = Tables<'schedule_sources'>;
+export type ScheduleEvent = Tables<'schedule_events'>;
 export type Form = Tables<'forms'>;
 export type FormSubmission = Tables<'form_submissions'>;
 export type FormDocument = Tables<'form_documents'>;

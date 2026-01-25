@@ -161,7 +161,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     } finally {
       setLoadingEvents(false);
     }
-  }, [orgId, rangeStart, rangeEnd, mode, mounted]);
+  }, [orgId, rangeStart, rangeEnd, mode]);
 
   useEffect(() => {
     fetchEvents();
