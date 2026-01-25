@@ -333,10 +333,14 @@ async function deleteStaleInstances(
 }
 
 function resolveEventEnd(instanceEvent: IcsEvent, baseEvent: IcsEvent, start: Date) {
-  if (instanceEvent.end) {
+  // For recurrence overrides with their own explicit end time, use it directly
+  // (instanceEvent !== baseEvent indicates this is a recurrence override)
+  if (instanceEvent !== baseEvent && instanceEvent.end) {
     return instanceEvent.end;
   }
 
+  // Calculate end based on duration from base event's start/end
+  // This correctly handles recurring events by applying the duration to the expanded start
   if (baseEvent.start && baseEvent.end) {
     const durationMs = baseEvent.end.getTime() - baseEvent.start.getTime();
     return new Date(start.getTime() + durationMs);
