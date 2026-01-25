@@ -66,6 +66,10 @@ export async function GET(request: Request) {
     // that might start before but overlap with the requested range
     const expandedStart = new Date(start);
     expandedStart.setDate(expandedStart.getDate() - 7); // Look 7 days before
+
+    // #region agent log
+    console.log("[DEBUG-B] Events API query params:", { userId: user.id, expandedStart: expandedStart.toISOString(), end: end.toISOString(), originalStart: start.toISOString() });
+    // #endregion
     
     const { data: events, error } = await supabase
       .from("calendar_events")
@@ -76,15 +80,19 @@ export async function GET(request: Request) {
       .order("start_at", { ascending: true });
 
     if (error) {
-      console.error("[calendar-events] Failed to fetch events:", error);
-      console.error("[calendar-events] Query params - user_id:", user.id, "start:", expandedStart.toISOString(), "end:", end.toISOString());
+      // #region agent log
+      console.log("[DEBUG-B] Events query FAILED:", { error: error.message, code: error.code });
+      // #endregion
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
     }
 
-    console.log("[calendar-events] Found", events?.length || 0, "events for user", user.id);
+    // #region agent log
+    console.log("[DEBUG-B] Events query SUCCESS:", { count: events?.length || 0, firstEvent: events?.[0] || null, allDayCount: events?.filter((e) => e.all_day)?.length || 0 });
+    // #endregion
+
     return NextResponse.json({ events: events || [] });
   } catch (error) {
     console.error("[calendar-events] Error fetching events:", error);

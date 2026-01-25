@@ -139,6 +139,10 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     setLoadingEvents(true);
     setEventsError(null);
 
+    // #region agent log
+    console.log("[DEBUG-C] Client fetchEvents called:", { orgId, rangeStart: rangeStart.toISOString(), rangeEnd: rangeEnd.toISOString(), mode, mounted });
+    // #endregion
+
     try {
       const params = new URLSearchParams({
         organizationId: orgId,
@@ -151,17 +155,24 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       const response = await fetch(`/api/calendar/events?${params.toString()}`);
       const data = await response.json();
 
+      // #region agent log
+      console.log("[DEBUG-C] Client received response:", { ok: response.ok, status: response.status, eventCount: data?.events?.length || 0, firstEvent: data?.events?.[0] || null });
+      // #endregion
+
       if (!response.ok) {
         throw new Error(data?.message || "Failed to load availability events.");
       }
 
       setCalendarEvents(data.events || []);
     } catch (err) {
+      // #region agent log
+      console.log("[DEBUG-C] Client fetch FAILED:", { error: err instanceof Error ? err.message : String(err) });
+      // #endregion
       setEventsError(err instanceof Error ? err.message : "Failed to load availability events.");
     } finally {
       setLoadingEvents(false);
     }
-  }, [orgId, rangeStart, rangeEnd, mode]);
+  }, [orgId, rangeStart, rangeEnd, mode, mounted]);
 
   useEffect(() => {
     fetchEvents();
@@ -254,9 +265,18 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       });
     });
 
-    calendarEvents.forEach((event) => {
+    // #region agent log
+    console.log("[DEBUG-D] Processing calendar events into grid:", { calendarEventsCount: calendarEvents.length, weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() });
+    // #endregion
+
+    calendarEvents.forEach((event, idx) => {
       const start = new Date(event.start_at);
-      if (Number.isNaN(start.getTime())) return;
+      if (Number.isNaN(start.getTime())) {
+        // #region agent log
+        console.log("[DEBUG-E] Event has invalid start_at:", { eventIdx: idx, start_at: event.start_at });
+        // #endregion
+        return;
+      }
 
       const end = event.end_at ? new Date(event.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
       const userId = event.user_id;
@@ -272,6 +292,10 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         const inclusiveEnd = endIsMidnight && endDay > startDay
           ? new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 1)
           : endDay;
+
+        // #region agent log
+        if (idx === 0) console.log("[DEBUG-E] Processing all-day event:", { title: event.title, startDay: startDay.toISOString(), inclusiveEnd: inclusiveEnd.toISOString(), weekStart: weekStart.toISOString(), weekEnd: weekEnd.toISOString() });
+        // #endregion
 
         for (let day = new Date(startDay); day <= inclusiveEnd; day.setDate(day.getDate() + 1)) {
           if (day < weekStart || day > weekEnd) continue;
