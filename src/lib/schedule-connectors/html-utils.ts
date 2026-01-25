@@ -98,7 +98,9 @@ export function extractTableEvents(html: string): ParsedEvent[] {
 }
 
 export function parseDateTime(dateText: string, timeText?: string) {
-  const normalizedDate = dateText.replace(/\s+/g, " ").trim();
+  let normalizedDate = dateText.replace(/\s+/g, " ").trim();
+  normalizedDate = normalizedDate.replace(/(\d{4})(\d{1,2}:\d{2}\s*(?:am|pm)?)/i, "$1 $2");
+  normalizedDate = normalizedDate.replace(/(\d{1,2}:\d{2})(am|pm)\b/i, "$1 $2");
   const normalizedTime = timeText?.replace(/\s+/g, " ").trim();
   const dateHasTime = /\d{1,2}:\d{2}\s*(am|pm)?/i.test(normalizedDate);
   const sameText = normalizedTime && normalizedTime === normalizedDate;
