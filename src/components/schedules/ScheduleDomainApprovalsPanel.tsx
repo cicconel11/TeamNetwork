@@ -50,6 +50,8 @@ function vendorLabel(vendor: string) {
       return "Vantage";
     case "vendorB":
       return "Sidearm";
+    case "digitalsports":
+      return "Digital Sports";
     default:
       return "Schedule";
   }
@@ -85,6 +87,17 @@ export function ScheduleDomainApprovalsPanel({ orgId, isAdmin }: ScheduleDomainA
 
   useEffect(() => {
     loadDomains();
+  }, [loadDomains]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      loadDomains();
+    };
+    window.addEventListener("schedule:sources:refresh", handler);
+    return () => {
+      window.removeEventListener("schedule:sources:refresh", handler);
+    };
   }, [loadDomains]);
 
   const handleAction = async (domainId: string, action: "approve" | "block") => {

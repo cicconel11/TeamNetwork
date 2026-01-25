@@ -232,7 +232,11 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
         }
 
         setFeedUrls((prev) => ({ ...prev, org: "" }));
-        setOrgNotice("Org schedule connected and syncing.");
+        if (data?.sync && data.sync.ok === false) {
+          setOrgError(data.sync.error || "Schedule connected but failed to sync.");
+        } else {
+          setOrgNotice("Org schedule connected and syncing.");
+        }
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("schedule:sources:refresh"));
         }
