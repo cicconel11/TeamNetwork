@@ -133,6 +133,9 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         organizationId: orgId,
         start: rangeStart.toISOString(),
         end: rangeEnd.toISOString(),
+        // Pass mode so API filters to current user's events in personal mode
+        // This prevents other users' events from counting as conflicts
+        mode,
       });
       const response = await fetch(`/api/calendar/events?${params.toString()}`);
       const data = await response.json();
@@ -147,7 +150,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     } finally {
       setLoadingEvents(false);
     }
-  }, [orgId, rangeStart, rangeEnd]);
+  }, [orgId, rangeStart, rangeEnd, mode]);
 
   useEffect(() => {
     fetchEvents();

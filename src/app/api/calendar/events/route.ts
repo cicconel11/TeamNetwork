@@ -19,6 +19,8 @@ export async function GET(request: Request) {
     const organizationId = url.searchParams.get("organizationId");
     const startParam = url.searchParams.get("start");
     const endParam = url.searchParams.get("end");
+    // When mode=personal, only fetch the current user's events
+    const modeParam = url.searchParams.get("mode");
 
     if (!organizationId || !startParam || !endParam) {
       return NextResponse.json(
@@ -58,16 +60,61 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: events, error } = await supabase
+    // Build the query - filter by user_id in personal mode to avoid counting
+    // other users' events as conflicts
+    let query = supabase
       .from("calendar_events")
       .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
       .eq("organization_id", organizationId)
-      .eq("scope", "personal")
       .gte("start_at", start.toISOString())
       .lte("start_at", end.toISOString())
       .order("start_at", { ascending: true });
 
+    // Filter by scope if the column exists (graceful fallback for pre-migration DBs)
+    // In personal mode, only show current user's events
+    if (modeParam === "personal") {
+      query = query.eq("user_id", user.id);
+    }
+
+    // Try to filter by scope, but handle gracefully if column doesn't exist
+    try {
+      query = query.eq("scope", "personal");
+    } catch {
+      // scope column may not exist yet - continue without filter
+    }
+
+    const { data: events, error } = await query;
+
     if (error) {
+      // Check if error is due to missing scope column
+      if (error.message?.includes("scope")) {
+        console.warn("[calendar-events] scope column not found, retrying without scope filter");
+        // Retry without scope filter
+        let retryQuery = supabase
+          .from("calendar_events")
+          .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+          .eq("organization_id", organizationId)
+          .gte("start_at", start.toISOString())
+          .lte("start_at", end.toISOString())
+          .order("start_at", { ascending: true });
+
+        if (modeParam === "personal") {
+          retryQuery = retryQuery.eq("user_id", user.id);
+        }
+
+        const { data: retryEvents, error: retryError } = await retryQuery;
+
+        if (retryError) {
+          console.error("[calendar-events] Retry failed:", retryError);
+          return NextResponse.json(
+            { error: "Database error", message: "Failed to fetch events." },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ events: retryEvents || [] });
+      }
+
       console.error("[calendar-events] Failed to fetch events:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },

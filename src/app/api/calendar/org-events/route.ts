@@ -58,6 +58,7 @@ export async function GET(request: Request) {
       );
     }
 
+    // Try with scope filter first, fall back if column doesn't exist
     const { data: events, error } = await supabase
       .from("calendar_events")
       .select("id, title, start_at, end_at, all_day, location, feed_id")
@@ -68,6 +69,13 @@ export async function GET(request: Request) {
       .order("start_at", { ascending: true });
 
     if (error) {
+      // Check if error is due to missing scope column
+      if (error.message?.includes("scope")) {
+        console.warn("[calendar-org-events] scope column not found, returning empty array");
+        // No org-scoped events can exist without the scope column
+        return NextResponse.json({ events: [] });
+      }
+
       console.error("[calendar-org-events] Failed to fetch events:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
