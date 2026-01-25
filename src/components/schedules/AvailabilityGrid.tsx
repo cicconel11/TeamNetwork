@@ -53,59 +53,63 @@ function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// Get start of week (Sunday) for a given date
+function getWeekStart(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() - d.getDay());
+  return d;
+}
+
 export function AvailabilityGrid({ schedules, orgId, mode = "team" }: AvailabilityGridProps) {
-  const [monthOffset, setMonthOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedCell, setSelectedCell] = useState<{ dateKey: string; hour: number } | null>(null);
   const [totalMembers, setTotalMembers] = useState<number>(mode === "team" ? 0 : 1);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventSummary[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
-  const { monthStart, monthEnd, monthLabel, weeks, daysInMonth, rangeStart, rangeEnd } = useMemo(() => {
-    const base = new Date();
-    base.setDate(1);
-    base.setMonth(base.getMonth() + monthOffset);
+  const { weekStart, weekEnd, weekLabel, weekDays, rangeStart, rangeEnd } = useMemo(() => {
+    // Start from current week's Sunday
+    const today = new Date();
+    const currentWeekStart = getWeekStart(today);
 
-    const monthStartDate = new Date(base.getFullYear(), base.getMonth(), 1);
-    const monthEndDate = new Date(base.getFullYear(), base.getMonth() + 1, 0);
-    const label = monthStartDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    // Apply week offset
+    const targetWeekStart = new Date(currentWeekStart);
+    targetWeekStart.setDate(currentWeekStart.getDate() + weekOffset * 7);
 
-    const rangeStartDate = new Date(monthStartDate);
+    const targetWeekEnd = new Date(targetWeekStart);
+    targetWeekEnd.setDate(targetWeekStart.getDate() + 6);
+
+    // Format label: "Jan 19 - 25, 2026" or "Jan 26 - Feb 1, 2026"
+    const startMonth = targetWeekStart.toLocaleDateString("en-US", { month: "short" });
+    const endMonth = targetWeekEnd.toLocaleDateString("en-US", { month: "short" });
+    const sameMonth = targetWeekStart.getMonth() === targetWeekEnd.getMonth();
+    const label = sameMonth
+      ? `${startMonth} ${targetWeekStart.getDate()} - ${targetWeekEnd.getDate()}, ${targetWeekEnd.getFullYear()}`
+      : `${startMonth} ${targetWeekStart.getDate()} - ${endMonth} ${targetWeekEnd.getDate()}, ${targetWeekEnd.getFullYear()}`;
+
+    const rangeStartDate = new Date(targetWeekStart);
     rangeStartDate.setHours(0, 0, 0, 0);
-    const rangeEndDate = new Date(monthEndDate);
+    const rangeEndDate = new Date(targetWeekEnd);
     rangeEndDate.setHours(23, 59, 59, 999);
 
+    // Build array of 7 days for the week
     const days: Date[] = [];
-    for (let day = new Date(monthStartDate); day <= monthEndDate; day.setDate(day.getDate() + 1)) {
-      days.push(new Date(day));
-    }
-
-    const calendarStart = new Date(monthStartDate);
-    calendarStart.setDate(monthStartDate.getDate() - monthStartDate.getDay());
-    const calendarEnd = new Date(monthEndDate);
-    calendarEnd.setDate(monthEndDate.getDate() + (6 - monthEndDate.getDay()));
-
-    const weekRows: Date[][] = [];
-    for (let weekStart = new Date(calendarStart); weekStart <= calendarEnd; weekStart.setDate(weekStart.getDate() + 7)) {
-      const weekDays: Date[] = [];
-      for (let i = 0; i < 7; i += 1) {
-        const day = new Date(weekStart);
-        day.setDate(weekStart.getDate() + i);
-        weekDays.push(day);
-      }
-      weekRows.push(weekDays);
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(targetWeekStart);
+      day.setDate(targetWeekStart.getDate() + i);
+      days.push(day);
     }
 
     return {
-      monthStart: monthStartDate,
-      monthEnd: monthEndDate,
-      monthLabel: label,
-      weeks: weekRows,
-      daysInMonth: days,
+      weekStart: targetWeekStart,
+      weekEnd: targetWeekEnd,
+      weekLabel: label,
+      weekDays: days,
       rangeStart: rangeStartDate,
       rangeEnd: rangeEndDate,
     };
-  }, [monthOffset]);
+  }, [weekOffset]);
 
   useEffect(() => {
     if (mode !== "team") {
@@ -205,7 +209,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       const [startHour] = schedule.start_time.split(":").map(Number);
       const [endHour] = schedule.end_time.split(":").map(Number);
 
-      daysInMonth.forEach((dayDate) => {
+      weekDays.forEach((dayDate) => {
         const dayOnly = startOfDay(dayDate);
         const startOnly = startOfDay(scheduleStart);
         const endOnly = scheduleEnd ? startOfDay(scheduleEnd) : null;
@@ -263,7 +267,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
           : endDay;
 
         for (let day = new Date(startDay); day <= inclusiveEnd; day.setDate(day.getDate() + 1)) {
-          if (day < monthStart || day > monthEnd) continue;
+          if (day < weekStart || day > weekEnd) continue;
           addHoursForDay(day, GRID_START_HOUR, GRID_END_HOUR, conflict);
         }
         return;
@@ -273,7 +277,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       const endDay = startOfDay(end);
 
       for (let day = new Date(startDay); day <= endDay; day.setDate(day.getDate() + 1)) {
-        if (day < monthStart || day > monthEnd) continue;
+        if (day < weekStart || day > weekEnd) continue;
 
         const isFirstDay = day.getTime() === startDay.getTime();
         const isLastDay = day.getTime() === endDay.getTime();
@@ -287,7 +291,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     });
 
     return grid;
-  }, [calendarEvents, daysInMonth, monthEnd, monthStart, mode, schedules]);
+  }, [calendarEvents, weekDays, weekEnd, weekStart, mode, schedules]);
 
   const getConflicts = (dateKey: string, hour: number): ConflictInfo[] => {
     return conflictGrid.get(`${dateKey}-${hour}`) || [];
@@ -304,29 +308,31 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setMonthOffset((m) => m - 1)}
+            onClick={() => setWeekOffset((w) => w - 1)}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
+            aria-label="Previous week"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
           </button>
-          <span className="font-medium text-foreground min-w-[200px] text-center">{monthLabel}</span>
+          <span className="font-medium text-foreground min-w-[200px] text-center">{weekLabel}</span>
           <button
-            onClick={() => setMonthOffset((m) => m + 1)}
+            onClick={() => setWeekOffset((w) => w + 1)}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
+            aria-label="Next week"
           >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
             </svg>
           </button>
         </div>
-        {monthOffset !== 0 && (
+        {weekOffset !== 0 && (
           <button
-            onClick={() => setMonthOffset(0)}
+            onClick={() => setWeekOffset(0)}
             className="text-sm text-org-primary hover:underline"
           >
-            This Month
+            This Week
           </button>
         )}
       </div>
@@ -338,59 +344,56 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         <p className="text-xs text-error">{eventsError}</p>
       )}
 
-      <div className="space-y-6">
-        {weeks.map((weekDays, weekIndex) => (
-          <div key={`week-${weekIndex}`} className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr>
-                  <th className="p-2 text-left text-muted-foreground font-medium w-16"></th>
-                  {weekDays.map((day) => {
-                    const isOutside = day.getMonth() !== monthStart.getMonth();
-                    return (
-                      <th
-                        key={formatDateKey(day)}
-                        className={`p-2 text-center text-muted-foreground font-medium ${isOutside ? "opacity-60" : ""}`}
-                      >
-                        <div>{DAYS[day.getDay()]}</div>
-                        <div className="text-xs text-muted-foreground">{day.getDate()}</div>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody>
-                {HOURS.map((hour) => (
-                  <tr key={`${weekIndex}-${hour}`}>
-                    <td className="p-1 text-right text-muted-foreground text-xs pr-2">
-                      {hour % 12 || 12}{hour < 12 ? "a" : "p"}
-                    </td>
-                    {weekDays.map((dayDate) => {
-                      const dateKey = formatDateKey(dayDate);
-                      const conflicts = getConflicts(dateKey, hour);
-                      const available = totalMembers - conflicts.length;
-                      const isSelected = selectedCell?.dateKey === dateKey && selectedCell?.hour === hour;
-                      const isOutside = dayDate.getMonth() !== monthStart.getMonth();
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className="p-2 text-left text-muted-foreground font-medium w-16"></th>
+              {weekDays.map((day) => {
+                const isToday = formatDateKey(day) === formatDateKey(new Date());
+                return (
+                  <th
+                    key={formatDateKey(day)}
+                    className={`p-2 text-center font-medium ${isToday ? "text-org-primary" : "text-muted-foreground"}`}
+                  >
+                    <div>{DAYS[day.getDay()]}</div>
+                    <div className={`text-xs ${isToday ? "text-org-primary font-semibold" : "text-muted-foreground"}`}>
+                      {day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {HOURS.map((hour) => (
+              <tr key={hour}>
+                <td className="p-1 text-right text-muted-foreground text-xs pr-2">
+                  {hour % 12 || 12}{hour < 12 ? "a" : "p"}
+                </td>
+                {weekDays.map((dayDate) => {
+                  const dateKey = formatDateKey(dayDate);
+                  const conflicts = getConflicts(dateKey, hour);
+                  const available = totalMembers - conflicts.length;
+                  const isSelected = selectedCell?.dateKey === dateKey && selectedCell?.hour === hour;
 
-                      return (
-                        <td key={`${dateKey}-${hour}`} className="p-0.5">
-                          <button
-                            onClick={() => setSelectedCell(isSelected ? null : { dateKey, hour })}
-                            className={`w-full h-8 rounded text-xs font-medium transition-all ${getCellColor(conflicts.length)} ${
-                              isSelected ? "ring-2 ring-org-primary" : ""
-                            } ${isOutside ? "opacity-60" : ""} hover:opacity-80`}
-                          >
-                            {available}/{totalMembers}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
+                  return (
+                    <td key={`${dateKey}-${hour}`} className="p-0.5">
+                      <button
+                        onClick={() => setSelectedCell(isSelected ? null : { dateKey, hour })}
+                        className={`w-full h-8 rounded text-xs font-medium transition-all ${getCellColor(conflicts.length)} ${
+                          isSelected ? "ring-2 ring-org-primary" : ""
+                        } hover:opacity-80`}
+                      >
+                        {available}/{totalMembers}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {selectedCell && (
