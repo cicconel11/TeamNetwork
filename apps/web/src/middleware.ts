@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
-import { getCorsHeaders } from "./lib/security/cors";
+import { getCorsHeadersForOrigin } from "./lib/security/cors";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -180,9 +180,10 @@ export async function middleware(request: NextRequest) {
   // API routes: keep JSON 401 instead of HTML redirect
   if (pathname.startsWith("/api/")) {
     if (!user) {
+      const requestOrigin = request.headers.get("origin");
       return NextResponse.json(
         { error: "Unauthorized", message: "Authentication required" },
-        { status: 401, headers: getCorsHeaders() }
+        { status: 401, headers: getCorsHeadersForOrigin(requestOrigin) }
       );
     }
     return response;

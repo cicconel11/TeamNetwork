@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter, useNavigation } from "expo-router";
-import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
+import { Link, useRouter, useNavigation, useLocalSearchParams } from "expo-router";
+import { ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react-native";
 import Constants from "expo-constants";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
@@ -90,6 +90,7 @@ const isEmailValid = (email: string) => {
 export default function LoginScreen() {
   const router = useRouter();
   const navigation = useNavigation();
+  const params = useLocalSearchParams<{ message?: string }>();
 
   const handleBack = () => {
     if (navigation.canGoBack()) {
@@ -323,6 +324,14 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>
             Welcome back! Enter your credentials to continue.
           </Text>
+
+          {/* Success Message from Signup */}
+          {params.message && (
+            <View style={styles.successBox}>
+              <CheckCircle size={20} color="#166534" />
+              <Text style={styles.successText}>{params.message}</Text>
+            </View>
+          )}
 
           {/* Form */}
           <View style={styles.form}>
@@ -701,5 +710,21 @@ const styles = StyleSheet.create({
     color: colors.placeholder,
     fontSize: fontSize.xs,
     fontWeight: "500",
+  },
+
+  // Success Message Box
+  successBox: {
+    backgroundColor: "#f0fdf4",
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  successText: {
+    color: "#166534",
+    fontSize: fontSize.sm,
+    flex: 1,
   },
 });

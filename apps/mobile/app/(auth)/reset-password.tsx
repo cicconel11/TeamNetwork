@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { Link, useRouter, useNavigation } from "expo-router";
-import { ChevronLeft, CheckCircle } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Eye, EyeOff, CheckCircle } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
@@ -53,90 +53,97 @@ const colors = {
   disabledButton: "#94a3b8",
 };
 
-// Simple email validation
-const isEmailValid = (email: string) => {
-  const trimmed = email.trim();
-  return trimmed.length >= 5 && trimmed.includes("@") && trimmed.includes(".");
-};
-
-export default function ForgotPasswordScreen() {
+export default function ResetPasswordScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
-
-  const handleBack = () => {
-    if (navigation.canGoBack()) {
-      router.back();
-    } else {
-      router.replace("/(auth)/login");
-    }
-  };
 
   // Form state
-  const [email, setEmail] = useState("");
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [emailError, setEmailError] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Focus states
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
+
+  // Error states
+  const [passwordError, setPasswordError] = useState("");
+  const [confirmPasswordError, setConfirmPasswordError] = useState("");
   const [apiError, setApiError] = useState("");
+
+  // Loading and success states
   const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+  const [passwordUpdated, setPasswordUpdated] = useState(false);
 
-  const isFormValid = isEmailValid(email);
+  const isFormValid =
+    password.length >= 6 &&
+    confirmPassword.length > 0 &&
+    password === confirmPassword;
 
-  const handleEmailChange = (text: string) => {
-    setEmail(text);
-    setEmailError("");
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    setPasswordError("");
     setApiError("");
   };
 
-  const handleResetPassword = async () => {
-    setEmailError("");
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    setConfirmPasswordError("");
+    setApiError("");
+  };
+
+  const handleUpdatePassword = async () => {
+    setPasswordError("");
+    setConfirmPasswordError("");
     setApiError("");
 
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail) {
-      setEmailError("Please enter your email");
+    if (!password) {
+      setPasswordError("Please enter a new password");
       return;
     }
-    if (!isEmailValid(trimmedEmail)) {
-      setEmailError("Please enter a valid email address");
+    if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters");
+      return;
+    }
+    if (!confirmPassword) {
+      setConfirmPasswordError("Please confirm your password");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setConfirmPasswordError("Passwords do not match");
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        trimmedEmail.toLowerCase(),
-        {
-          redirectTo: "teammeet://auth/reset-password",
-        }
-      );
+      const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
         captureException(new Error(error.message), {
-          screen: "ForgotPassword",
-          email: trimmedEmail.toLowerCase(),
+          screen: "ResetPassword",
         });
         // Provide user-friendly error messages
-        if (error.message.includes("rate limit")) {
-          setApiError("Too many requests. Please wait a few minutes and try again.");
-        } else if (error.message.includes("not found") || error.message.includes("Invalid")) {
-          // Don't reveal if email exists for security
-          setEmailSent(true);
+        if (error.message.includes("same as")) {
+          setApiError("New password must be different from your current password.");
+        } else if (error.message.includes("weak")) {
+          setApiError("Password is too weak. Please choose a stronger password.");
         } else {
           setApiError(error.message);
         }
         return;
       }
 
-      setEmailSent(true);
+      setPasswordUpdated(true);
     } catch (e) {
-      captureException(e as Error, {
-        screen: "ForgotPassword",
-        email: trimmedEmail.toLowerCase(),
-      });
+      captureException(e as Error, { screen: "ResetPassword" });
       setApiError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContinue = () => {
+    router.replace("/(app)");
   };
 
   const getInputStyle = (focused: boolean, hasError: boolean) => {
@@ -157,14 +164,7 @@ export default function ForgotPasswordScreen() {
         style={styles.header}
       >
         <SafeAreaView edges={["top"]} style={styles.headerContent}>
-          <TouchableOpacity
-            onPress={handleBack}
-            style={styles.backButton}
-            accessibilityLabel="Go back"
-            accessibilityRole="button"
-          >
-            <ChevronLeft size={24} color="#ffffff" />
-          </TouchableOpacity>
+          <View style={styles.headerSpacer} />
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>TN</Text>
           </View>
@@ -182,54 +182,104 @@ export default function ForgotPasswordScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Title */}
-          <Text style={styles.title}>Reset Password</Text>
+          <Text style={styles.title}>Set New Password</Text>
           <Text style={styles.subtitle}>
-            Enter your email and we'll send you a reset link.
+            {passwordUpdated
+              ? "Your password has been updated successfully."
+              : "Enter your new password below."}
           </Text>
 
-          {emailSent ? (
+          {passwordUpdated ? (
             <View style={styles.successContainer}>
               <View style={styles.successIconContainer}>
                 <CheckCircle size={48} color={colors.successText} />
               </View>
-              <Text style={styles.successTitle}>Check your email</Text>
+              <Text style={styles.successTitle}>Password Updated</Text>
               <Text style={styles.successMessage}>
-                {"We've sent a password reset link to "}
-                <Text style={styles.successEmail}>{email.trim().toLowerCase()}</Text>
+                You can now use your new password to sign in.
               </Text>
-              <Text style={styles.successHint}>
-                {"If you don't see the email, check your spam folder. The link will let you set a new password."}
-              </Text>
-              <Link href="/(auth)/login" asChild>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  accessibilityLabel="Return to sign in"
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.primaryButtonText}>Return to Sign In</Text>
-                </TouchableOpacity>
-              </Link>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={handleContinue}
+                accessibilityLabel="Continue to app"
+                accessibilityRole="button"
+              >
+                <Text style={styles.primaryButtonText}>Continue</Text>
+              </TouchableOpacity>
             </View>
           ) : (
             /* Form State */
             <View style={styles.form}>
-              {/* Email Input */}
+              {/* Password Input */}
               <View style={styles.inputWrapper}>
-                <TextInput
-                  style={getInputStyle(emailFocused, !!emailError)}
-                  placeholder="Email"
-                  placeholderTextColor={colors.placeholder}
-                  value={email}
-                  onChangeText={handleEmailChange}
-                  onFocus={() => setEmailFocused(true)}
-                  onBlur={() => setEmailFocused(false)}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="email-address"
-                  editable={!loading}
-                  accessibilityLabel="Email address"
-                />
-                {emailError && <Text style={styles.errorText}>{emailError}</Text>}
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[
+                      getInputStyle(passwordFocused, !!passwordError),
+                      styles.passwordInput,
+                    ]}
+                    placeholder="New Password"
+                    placeholderTextColor={colors.placeholder}
+                    value={password}
+                    onChangeText={handlePasswordChange}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
+                    secureTextEntry={!showPassword}
+                    editable={!loading}
+                    accessibilityLabel="New password"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeButton}
+                    disabled={loading}
+                    accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    accessibilityRole="button"
+                  >
+                    {showPassword ? (
+                      <EyeOff size={20} color={colors.placeholder} />
+                    ) : (
+                      <Eye size={20} color={colors.placeholder} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+              </View>
+
+              {/* Confirm Password Input */}
+              <View style={styles.inputWrapper}>
+                <View style={styles.passwordContainer}>
+                  <TextInput
+                    style={[
+                      getInputStyle(confirmPasswordFocused, !!confirmPasswordError),
+                      styles.passwordInput,
+                    ]}
+                    placeholder="Confirm New Password"
+                    placeholderTextColor={colors.placeholder}
+                    value={confirmPassword}
+                    onChangeText={handleConfirmPasswordChange}
+                    onFocus={() => setConfirmPasswordFocused(true)}
+                    onBlur={() => setConfirmPasswordFocused(false)}
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                    accessibilityLabel="Confirm new password"
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    style={styles.eyeButton}
+                    disabled={loading}
+                    accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
+                    accessibilityRole="button"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff size={20} color={colors.placeholder} />
+                    ) : (
+                      <Eye size={20} color={colors.placeholder} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                {confirmPasswordError && (
+                  <Text style={styles.errorText}>{confirmPasswordError}</Text>
+                )}
               </View>
 
               {/* API Error */}
@@ -245,27 +295,17 @@ export default function ForgotPasswordScreen() {
                   styles.primaryButton,
                   (!isFormValid || loading) && styles.primaryButtonDisabled,
                 ]}
-                onPress={handleResetPassword}
+                onPress={handleUpdatePassword}
                 disabled={!isFormValid || loading}
-                accessibilityLabel="Send reset link"
+                accessibilityLabel="Update password"
                 accessibilityRole="button"
               >
                 {loading ? (
                   <ActivityIndicator color={colors.primaryButtonText} />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                  <Text style={styles.primaryButtonText}>Update Password</Text>
                 )}
               </TouchableOpacity>
-
-              {/* Back to Sign In Link */}
-              <View style={styles.signinContainer}>
-                <Text style={styles.signinText}>Remember your password? </Text>
-                <Link href="/(auth)/login" asChild>
-                  <TouchableOpacity disabled={loading} accessibilityRole="link">
-                    <Text style={styles.signinLink}>Sign In</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
             </View>
           )}
         </ScrollView>
@@ -291,11 +331,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
   },
-  backButton: {
+  headerSpacer: {
     width: 40,
     height: 40,
-    alignItems: "center",
-    justifyContent: "center",
   },
   headerIcon: {
     width: 40,
@@ -359,6 +397,21 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: colors.inputBorderError,
   },
+  passwordContainer: {
+    position: "relative",
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  eyeButton: {
+    position: "absolute",
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 32,
+  },
   errorText: {
     color: colors.errorText,
     fontSize: fontSize.sm,
@@ -392,22 +445,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Sign In Link
-  signinContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: spacing.lg,
-  },
-  signinText: {
-    color: colors.subtitle,
-    fontSize: fontSize.sm,
-  },
-  signinLink: {
-    color: colors.link,
-    fontSize: fontSize.sm,
-    fontWeight: "600",
-  },
-
   // Success State
   successContainer: {
     alignItems: "center",
@@ -427,16 +464,6 @@ const styles = StyleSheet.create({
     color: colors.subtitle,
     textAlign: "center",
     lineHeight: 24,
-    marginBottom: spacing.xs,
-  },
-  successEmail: {
-    fontWeight: "600",
-    color: colors.title,
-  },
-  successHint: {
-    fontSize: fontSize.sm,
-    color: colors.placeholder,
-    textAlign: "center",
     marginBottom: spacing.xl,
   },
 });

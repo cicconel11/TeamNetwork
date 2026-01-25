@@ -148,16 +148,20 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
           return { success: false, error: "Not authenticated" };
         }
 
-        const { error: updateError } = await supabase
-          .from("event_rsvps")
-          .update({
-            checked_in_at: new Date().toISOString(),
-            checked_in_by: currentUserId,
-          })
-          .eq("id", rsvpId);
+        // Use admin-only RPC for check-in (enforces RLS properly)
+        // Type assertion needed until Supabase types are regenerated after migration
+        const { data, error: rpcError } = await (supabase.rpc as any)("check_in_event_attendee", {
+          p_rsvp_id: rsvpId,
+          p_undo: false,
+        });
 
-        if (updateError) {
-          return { success: false, error: updateError.message };
+        if (rpcError) {
+          return { success: false, error: rpcError.message };
+        }
+
+        const result = data as { success: boolean; error?: string };
+        if (!result.success) {
+          return { success: false, error: result.error || "Check-in failed" };
         }
 
         // Update local state optimistically
@@ -186,16 +190,20 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
   const undoCheckIn = useCallback(
     async (rsvpId: string): Promise<{ success: boolean; error?: string }> => {
       try {
-        const { error: updateError } = await supabase
-          .from("event_rsvps")
-          .update({
-            checked_in_at: null,
-            checked_in_by: null,
-          })
-          .eq("id", rsvpId);
+        // Use admin-only RPC for undo check-in (enforces RLS properly)
+        // Type assertion needed until Supabase types are regenerated after migration
+        const { data, error: rpcError } = await (supabase.rpc as any)("check_in_event_attendee", {
+          p_rsvp_id: rsvpId,
+          p_undo: true,
+        });
 
-        if (updateError) {
-          return { success: false, error: updateError.message };
+        if (rpcError) {
+          return { success: false, error: rpcError.message };
+        }
+
+        const result = data as { success: boolean; error?: string };
+        if (!result.success) {
+          return { success: false, error: result.error || "Undo check-in failed" };
         }
 
         // Update local state optimistically

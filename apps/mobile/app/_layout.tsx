@@ -97,30 +97,67 @@ export default function RootLayout() {
     }
   }, [session?.user?.id, session?.user?.email, session?.user?.app_metadata?.provider]);
 
-  // Handle deep link URLs that contain OAuth tokens
+  // Handle deep link URLs that contain OAuth tokens or recovery links
   const handleDeepLink = useCallback(async (event: { url: string }) => {
     const url = event.url;
-    
-    // Check if this is an auth callback URL with tokens
-    if (url.includes("access_token") || url.includes("callback")) {
+
+    // Check if this is a password recovery deep link
+    if (url.includes("type=recovery") || url.includes("reset-password")) {
       try {
         const parsedUrl = new URL(url);
-        
+
         // Extract tokens from hash fragment or query params
         let accessToken: string | null = null;
         let refreshToken: string | null = null;
-        
+
         if (parsedUrl.hash) {
           const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
           accessToken = hashParams.get("access_token");
           refreshToken = hashParams.get("refresh_token");
         }
-        
+
         if (!accessToken) {
           accessToken = parsedUrl.searchParams.get("access_token");
           refreshToken = parsedUrl.searchParams.get("refresh_token");
         }
-        
+
+        // Set the session if we have tokens (needed for updateUser to work)
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+
+        // Navigate to reset-password screen
+        router.replace("/(auth)/reset-password");
+        return;
+      } catch (err) {
+        console.error("Error handling recovery deep link:", err);
+        captureException(err as Error, { context: "handleDeepLink-recovery", url });
+      }
+    }
+
+    // Check if this is an auth callback URL with tokens
+    if (url.includes("access_token") || url.includes("callback")) {
+      try {
+        const parsedUrl = new URL(url);
+
+        // Extract tokens from hash fragment or query params
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+
+        if (parsedUrl.hash) {
+          const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
+          accessToken = hashParams.get("access_token");
+          refreshToken = hashParams.get("refresh_token");
+        }
+
+        if (!accessToken) {
+          accessToken = parsedUrl.searchParams.get("access_token");
+          refreshToken = parsedUrl.searchParams.get("refresh_token");
+        }
+
         if (accessToken && refreshToken) {
           await supabase.auth.setSession({
             access_token: accessToken,
@@ -133,7 +170,7 @@ export default function RootLayout() {
         captureException(err as Error, { context: "handleDeepLink", url });
       }
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let isMounted = true;
@@ -173,9 +210,10 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === "(auth)";
     const isOnCallback = segments[1] === "callback";
+    const isOnResetPassword = segments[1] === "reset-password";
 
-    // Don't redirect away from callback screen while it's processing
-    if (isOnCallback) return;
+    // Don't redirect away from callback or reset-password screens while processing
+    if (isOnCallback || isOnResetPassword) return;
 
     if (!session && !inAuthGroup) {
       router.replace("/(auth)");

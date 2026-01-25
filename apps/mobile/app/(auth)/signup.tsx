@@ -165,6 +165,9 @@ export default function SignupScreen() {
       const { error } = await supabase.auth.signUp({
         email: trimmedEmail.toLowerCase(),
         password,
+        options: {
+          emailRedirectTo: "teammeet://auth/callback",
+        },
       });
 
       if (error) {
