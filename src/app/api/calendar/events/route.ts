@@ -19,8 +19,6 @@ export async function GET(request: Request) {
     const organizationId = url.searchParams.get("organizationId");
     const startParam = url.searchParams.get("start");
     const endParam = url.searchParams.get("end");
-    // When mode=personal, only fetch the current user's events
-    const modeParam = url.searchParams.get("mode");
 
     if (!organizationId || !startParam || !endParam) {
       return NextResponse.json(
@@ -60,57 +58,33 @@ export async function GET(request: Request) {
       );
     }
 
-    // For personal calendar events, query by user_id directly
-    // This is more reliable as it works regardless of migration state
-    // In team mode, we need all users' events; in personal mode, just current user
+    // Query current user's calendar events
+    // Note: RLS policy only allows users to see their own events (auth.uid() = user_id),
+    // so we can only fetch the current user's events regardless of mode
     
-    if (modeParam === "personal") {
-      // Personal mode: only current user's events
-      const { data: events, error } = await supabase
-        .from("calendar_events")
-        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
-        .eq("user_id", user.id)
-        .gte("start_at", start.toISOString())
-        .lte("start_at", end.toISOString())
-        .order("start_at", { ascending: true });
-
-      if (error) {
-        console.error("[calendar-events] Failed to fetch personal events:", error);
-        return NextResponse.json(
-          { error: "Database error", message: "Failed to fetch events." },
-          { status: 500 }
-        );
-      }
-
-      return NextResponse.json({ events: events || [] });
-    }
-
-    // Team mode: try to get all org members' events
-    // First, get all active member user IDs for this org
-    const { data: members } = await supabase
-      .from("user_organization_roles")
-      .select("user_id")
-      .eq("organization_id", organizationId)
-      .eq("status", "active");
-
-    const memberIds = members?.map((m) => m.user_id) || [user.id];
-
+    // Expand the date range to catch all-day events and multi-day events
+    // that might start before but overlap with the requested range
+    const expandedStart = new Date(start);
+    expandedStart.setDate(expandedStart.getDate() - 7); // Look 7 days before
+    
     const { data: events, error } = await supabase
       .from("calendar_events")
       .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
-      .in("user_id", memberIds)
-      .gte("start_at", start.toISOString())
+      .eq("user_id", user.id)
+      .gte("start_at", expandedStart.toISOString())
       .lte("start_at", end.toISOString())
       .order("start_at", { ascending: true });
 
     if (error) {
-      console.error("[calendar-events] Failed to fetch team events:", error);
+      console.error("[calendar-events] Failed to fetch events:", error);
+      console.error("[calendar-events] Query params - user_id:", user.id, "start:", expandedStart.toISOString(), "end:", end.toISOString());
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
     }
 
+    console.log("[calendar-events] Found", events?.length || 0, "events for user", user.id);
     return NextResponse.json({ events: events || [] });
   } catch (error) {
     console.error("[calendar-events] Error fetching events:", error);
