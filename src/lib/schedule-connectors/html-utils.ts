@@ -48,7 +48,12 @@ export function extractTableEvents(html: string): ParsedEvent[] {
     const dateIndex = headers.findIndex((h) => h.includes("date"));
     const timeIndex = headers.findIndex((h) => h.includes("time"));
     const titleIndex = headers.findIndex((h) => h.includes("opponent") || h.includes("event") || h.includes("match"));
-    const locationIndex = headers.findIndex((h) => h.includes("location") || h.includes("site"));
+    const locationIndex = headers.findIndex((h) => h.includes("location") || h.includes("site") || h.includes("facility") || h.includes("venue"));
+    const homeIndex = headers.findIndex((h) => h.includes("home"));
+    const awayIndex = headers.findIndex((h) => h.includes("away"));
+    const sportIndex = headers.findIndex((h) => h.includes("sport"));
+    const genderIndex = headers.findIndex((h) => h.includes("gender"));
+    const eventTypeIndex = headers.findIndex((h) => h.includes("event type"));
 
     $(table)
       .find("tbody tr")
@@ -62,15 +67,25 @@ export function extractTableEvents(html: string): ParsedEvent[] {
 
         const dateText = dateIndex >= 0 ? cells[dateIndex] : cells[0];
         const timeText = timeIndex >= 0 ? cells[timeIndex] : undefined;
-        const titleText = titleIndex >= 0 ? cells[titleIndex] : cells[1] || "Event";
+        const titleText = titleIndex >= 0 ? cells[titleIndex] : cells[1] || "";
         const locationText = locationIndex >= 0 ? cells[locationIndex] : undefined;
+        const homeTeam = homeIndex >= 0 ? cells[homeIndex] : "";
+        const awayTeam = awayIndex >= 0 ? cells[awayIndex] : "";
+        const sportText = sportIndex >= 0 ? cells[sportIndex] : "";
+        const genderText = genderIndex >= 0 ? cells[genderIndex] : "";
+        const eventTypeText = eventTypeIndex >= 0 ? cells[eventTypeIndex] : "";
 
         const start = parseDateTime(dateText, timeText);
         if (!start) return;
 
+        const sportLabel = [genderText, sportText].filter(Boolean).join(" ");
+        const matchup = [awayTeam, homeTeam].filter(Boolean).join(" vs ");
+        const fallbackTitle = [sportLabel, matchup || eventTypeText].filter(Boolean).join(" - ");
+        const finalTitle = titleText || fallbackTitle || "Event";
+
         const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
         events.push({
-          title: titleText || "Event",
+          title: finalTitle,
           start_at: start.toISOString(),
           end_at: end.toISOString(),
           location: locationText,
@@ -83,7 +98,13 @@ export function extractTableEvents(html: string): ParsedEvent[] {
 }
 
 export function parseDateTime(dateText: string, timeText?: string) {
-  const combined = timeText ? `${dateText} ${timeText}` : dateText;
+  const normalizedDate = dateText.replace(/\s+/g, " ").trim();
+  const normalizedTime = timeText?.replace(/\s+/g, " ").trim();
+  const dateHasTime = /\d{1,2}:\d{2}\s*(am|pm)?/i.test(normalizedDate);
+  const sameText = normalizedTime && normalizedTime === normalizedDate;
+  const combined = normalizedTime && !dateHasTime && !sameText
+    ? `${normalizedDate} ${normalizedTime}`
+    : normalizedDate;
   const parsed = new Date(combined);
   if (Number.isNaN(parsed.getTime())) {
     return null;

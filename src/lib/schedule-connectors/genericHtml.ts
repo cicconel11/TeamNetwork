@@ -17,6 +17,11 @@ export const genericHtmlConnector: ScheduleConnector = {
       return { ok: false, confidence: 0, reason: "no html" };
     }
 
+    const embeddedUrl = findDigitalsportsScheduleUrl(input.html, input.url);
+    if (embeddedUrl) {
+      return { ok: true, confidence: 0.6, reason: "digitalsports embed" };
+    }
+
     const events = extractTableEvents(input.html);
     if (events.length === 0) {
       return { ok: false, confidence: 0, reason: "no table events" };
@@ -25,7 +30,7 @@ export const genericHtmlConnector: ScheduleConnector = {
     return { ok: true, confidence: 0.4, reason: "table match" };
   },
   async preview({ url, orgId }) {
-    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "generic_html" });
+    const { text } = await fetchScheduleHtml(url, orgId);
     const events = normalizeEvents(extractTableEvents(text));
     return {
       vendor: "generic_html",
@@ -35,7 +40,7 @@ export const genericHtmlConnector: ScheduleConnector = {
     };
   },
   async sync({ sourceId, orgId, url, window }) {
-    const { text } = await fetchUrlSafe(url, { orgId, vendorId: "generic_html" });
+    const { text } = await fetchScheduleHtml(url, orgId);
     const events = normalizeEvents(extractTableEvents(text)).filter((event) => isWithinWindow(event, window));
     const supabase = createServiceClient();
     const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
@@ -47,6 +52,27 @@ export const genericHtmlConnector: ScheduleConnector = {
     return { imported, updated, cancelled, vendor: "generic_html" };
   },
 };
+
+async function fetchScheduleHtml(url: string, orgId: string) {
+  const primary = await fetchUrlSafe(url, { orgId, vendorId: "generic_html" });
+  const embeddedUrl = findDigitalsportsScheduleUrl(primary.text, url);
+  if (!embeddedUrl) {
+    return { text: primary.text };
+  }
+
+  const embedded = await fetchUrlSafe(embeddedUrl, { orgId, vendorId: "generic_html" });
+  return { text: embedded.text };
+}
+
+function findDigitalsportsScheduleUrl(html: string, baseUrl: string) {
+  const match = html.match(/https?:\/\/digitalsports\.com\/pages\/api\/schedule-list\.php\??/i);
+  if (!match) return null;
+
+  const base = new URL(baseUrl);
+  const query = base.searchParams.toString();
+  const baseLink = match[0].endsWith("?") ? match[0] : `${match[0]}?`;
+  return query ? `${baseLink}${query}` : baseLink.replace(/\?$/, "");
+}
 
 function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   return events.map((event) => {
