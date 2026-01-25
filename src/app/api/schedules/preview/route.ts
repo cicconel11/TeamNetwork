@@ -69,10 +69,30 @@ export async function POST(request: Request) {
       maskedUrl: maskUrl(normalizedUrl),
     });
   } catch (error) {
-    console.error("[schedule-preview] Error:", error);
+    const message = error instanceof Error ? error.message : "Failed to preview schedule.";
+    const isClientError = isPreviewClientError(message);
+    if (!isClientError) {
+      console.error("[schedule-preview] Error:", error);
+    }
+
     return NextResponse.json(
-      { error: "Internal error", message: "Failed to preview schedule." },
-      { status: 500 }
+      { error: isClientError ? "Preview failed" : "Internal error", message },
+      { status: isClientError ? 400 : 500 }
     );
   }
+}
+
+function isPreviewClientError(message: string) {
+  const normalized = message.toLowerCase();
+  return [
+    "no supported schedule connector",
+    "url must start with http",
+    "source domain is not allowlisted",
+    "no allowlist configured",
+    "fetch failed",
+    "response exceeds size limit",
+    "too many redirects",
+    "localhost urls are not allowed",
+    "private ips are not allowed",
+  ].some((snippet) => normalized.includes(snippet));
 }

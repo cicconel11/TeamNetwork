@@ -1,7 +1,33 @@
 import ts from "typescript";
 import { readFile } from "fs/promises";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 export async function resolve(specifier, context, defaultResolve) {
+  if (typeof specifier === "string" && specifier.startsWith("@/")) {
+    const basePath = path.join(process.cwd(), "src", specifier.slice(2));
+    const candidates = [
+      basePath,
+      `${basePath}.ts`,
+      `${basePath}.tsx`,
+      `${basePath}.js`,
+      `${basePath}.jsx`,
+      path.join(basePath, "index.ts"),
+      path.join(basePath, "index.tsx"),
+      path.join(basePath, "index.js"),
+      path.join(basePath, "index.jsx"),
+    ];
+
+    for (const candidate of candidates) {
+      try {
+        const result = await defaultResolve(pathToFileURL(candidate).href, context, defaultResolve);
+        return { ...result, shortCircuit: true };
+      } catch {
+        // try next candidate
+      }
+    }
+  }
+
   try {
     const result = await defaultResolve(specifier, context, defaultResolve);
     // Node 20 requires shortCircuit to be explicitly set
