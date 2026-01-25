@@ -58,6 +58,16 @@ export async function GET(request: Request) {
       );
     }
 
+    let calendarEvents: {
+      id: string;
+      title: string | null;
+      start_at: string;
+      end_at: string | null;
+      all_day: boolean | null;
+      location: string | null;
+      feed_id: string;
+    }[] = [];
+
     // Try with scope filter first, fall back if column doesn't exist
     const { data: events, error } = await supabase
       .from("calendar_events")
@@ -76,19 +86,63 @@ export async function GET(request: Request) {
         error.code === "42703"; // PostgreSQL "column does not exist"
 
       if (isScopeError) {
-        console.warn("[calendar-org-events] scope column not found, returning empty array");
-        // No org-scoped events can exist without the scope column
-        return NextResponse.json({ events: [] });
+        console.warn("[calendar-org-events] scope column not found, returning schedule events only");
+      } else {
+        console.error("[calendar-org-events] Failed to fetch events:", error);
+        return NextResponse.json(
+          { error: "Database error", message: "Failed to fetch events." },
+          { status: 500 }
+        );
       }
-
-      console.error("[calendar-org-events] Failed to fetch events:", error);
-      return NextResponse.json(
-        { error: "Database error", message: "Failed to fetch events." },
-        { status: 500 }
-      );
+    } else {
+      calendarEvents = events || [];
     }
 
-    return NextResponse.json({ events: events || [] });
+    let scheduleEvents: {
+      id: string;
+      title: string;
+      start_at: string;
+      end_at: string;
+      location: string | null;
+      status: string;
+    }[] = [];
+
+    const { data: scheduleData, error: scheduleError } = await supabase
+      .from("schedule_events")
+      .select("id, title, start_at, end_at, location, status")
+      .eq("org_id", organizationId)
+      .neq("status", "cancelled")
+      .gte("start_at", start.toISOString())
+      .lte("start_at", end.toISOString())
+      .order("start_at", { ascending: true });
+
+    if (scheduleError) {
+      console.error("[calendar-org-events] Failed to fetch schedule events:", scheduleError);
+    } else {
+      scheduleEvents = scheduleData || [];
+    }
+
+    const normalizedCalendar = calendarEvents.map((event) => ({
+      ...event,
+      origin: "calendar" as const,
+    }));
+
+    const normalizedSchedule = scheduleEvents.map((event) => ({
+      id: `schedule:${event.id}`,
+      title: event.title,
+      start_at: event.start_at,
+      end_at: event.end_at,
+      all_day: false,
+      location: event.location,
+      feed_id: null,
+      origin: "schedule" as const,
+    }));
+
+    const combined = [...normalizedCalendar, ...normalizedSchedule].sort((a, b) => {
+      return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
+    });
+
+    return NextResponse.json({ events: combined });
   } catch (error) {
     console.error("[calendar-org-events] Error fetching events:", error);
     return NextResponse.json(

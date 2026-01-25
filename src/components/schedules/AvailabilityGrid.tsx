@@ -19,6 +19,7 @@ type ConflictInfo = {
   userId: string;
   memberName: string;
   title: string;
+  isOrg?: boolean;
 };
 
 type CalendarEventSummary = {
@@ -29,6 +30,7 @@ type CalendarEventSummary = {
   end_at: string | null;
   all_day: boolean | null;
   users?: { name: string | null; email: string | null } | null;
+  origin?: "calendar" | "schedule";
 };
 
 // Parse date string as local date (avoid timezone shifts)
@@ -261,11 +263,14 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       }
 
       const end = event.end_at ? new Date(event.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
-      const userId = event.user_id;
+      const isOrgEvent = event.origin === "schedule";
+      const userId = isOrgEvent ? `org:${event.id}` : event.user_id;
       const fallbackName = mode === "personal" ? "You" : "Unknown";
-      const memberName = event.users?.name || event.users?.email || fallbackName;
-      const title = event.title || "Calendar event";
-      const conflict = { userId, memberName, title };
+      const memberName = isOrgEvent
+        ? "Org schedule"
+        : event.users?.name || event.users?.email || fallbackName;
+      const title = event.title || (isOrgEvent ? "Org schedule" : "Calendar event");
+      const conflict = { userId, memberName, title, isOrg: isOrgEvent };
 
       if (event.all_day) {
         const startDay = startOfDay(start);
@@ -396,14 +401,16 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
                 {weekDays.map((dayDate) => {
                   const dateKey = formatDateKey(dayDate);
                   const conflicts = getConflicts(dateKey, hour);
-                  const available = totalMembers - conflicts.length;
+                  const orgBusy = conflicts.some((conflict) => conflict.isOrg);
+                  const busyCount = orgBusy ? totalMembers : conflicts.length;
+                  const available = Math.max(totalMembers - busyCount, 0);
                   const isSelected = selectedCell?.dateKey === dateKey && selectedCell?.hour === hour;
 
                   return (
                     <td key={`${dateKey}-${hour}`} className="p-0.5">
                       <button
                         onClick={() => setSelectedCell(isSelected ? null : { dateKey, hour })}
-                        className={`w-full h-8 rounded text-xs font-medium transition-all ${getCellColor(conflicts.length)} ${
+                        className={`w-full h-8 rounded text-xs font-medium transition-all ${getCellColor(busyCount)} ${
                           isSelected ? "ring-2 ring-org-primary" : ""
                         } hover:opacity-80`}
                       >

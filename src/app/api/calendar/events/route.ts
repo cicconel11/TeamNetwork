@@ -82,7 +82,52 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ events: events || [] });
+    let scheduleEvents: {
+      id: string;
+      title: string;
+      start_at: string;
+      end_at: string;
+      location: string | null;
+      status: string;
+    }[] = [];
+
+    const { data: scheduleData, error: scheduleError } = await supabase
+      .from("schedule_events")
+      .select("id, title, start_at, end_at, location, status")
+      .eq("org_id", organizationId)
+      .neq("status", "cancelled")
+      .gte("start_at", expandedStart.toISOString())
+      .lte("start_at", end.toISOString())
+      .order("start_at", { ascending: true });
+
+    if (scheduleError) {
+      console.error("[calendar-events] Failed to fetch schedule events:", scheduleError);
+    } else {
+      scheduleEvents = scheduleData || [];
+    }
+
+    const normalizedCalendar = (events || []).map((event) => ({
+      ...event,
+      origin: "calendar" as const,
+    }));
+
+    const normalizedSchedule = scheduleEvents.map((event) => ({
+      id: `schedule:${event.id}`,
+      title: event.title,
+      start_at: event.start_at,
+      end_at: event.end_at,
+      all_day: false,
+      location: event.location,
+      feed_id: null,
+      user_id: `org:${organizationId}`,
+      origin: "schedule" as const,
+    }));
+
+    const combined = [...normalizedCalendar, ...normalizedSchedule].sort((a, b) => {
+      return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
+    });
+
+    return NextResponse.json({ events: combined });
   } catch (error) {
     console.error("[calendar-events] Error fetching events:", error);
     return NextResponse.json(

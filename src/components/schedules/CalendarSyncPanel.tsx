@@ -21,7 +21,8 @@ type CalendarEventSummary = {
   end_at: string | null;
   all_day: boolean | null;
   location: string | null;
-  feed_id: string;
+  feed_id?: string | null;
+  origin?: "calendar" | "schedule";
 };
 
 type FeedScope = "personal" | "org";
@@ -235,6 +236,8 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
         if (typeof window !== "undefined") {
           window.dispatchEvent(new Event("schedule:sources:refresh"));
         }
+        await refreshOrgEvents();
+        notifyAvailabilityRefresh();
       };
 
       const endpoint = scope === "org" ? "/api/calendar/org-feeds" : "/api/calendar/feeds";
