@@ -67,10 +67,6 @@ export async function GET(request: Request) {
     const expandedStart = new Date(start);
     expandedStart.setDate(expandedStart.getDate() - 7); // Look 7 days before
 
-    // #region agent log
-    console.log("[DEBUG-B] Events API query params:", { userId: user.id, expandedStart: expandedStart.toISOString(), end: end.toISOString(), originalStart: start.toISOString() });
-    // #endregion
-    
     const { data: events, error } = await supabase
       .from("calendar_events")
       .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
@@ -80,18 +76,11 @@ export async function GET(request: Request) {
       .order("start_at", { ascending: true });
 
     if (error) {
-      // #region agent log
-      console.log("[DEBUG-B] Events query FAILED:", { error: error.message, code: error.code });
-      // #endregion
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
     }
-
-    // #region agent log
-    console.log("[DEBUG-B] Events query SUCCESS:", { count: events?.length || 0, firstEvent: events?.[0] || null, allDayCount: events?.filter((e) => e.all_day)?.length || 0 });
-    // #endregion
 
     return NextResponse.json({ events: events || [] });
   } catch (error) {

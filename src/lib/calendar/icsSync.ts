@@ -121,25 +121,13 @@ export async function syncCalendarFeed(
   const fetcher = options?.fetcher ?? fetch;
   const now = options?.now?.() ?? new Date();
 
-  // #region agent log
-  console.log("[DEBUG-A] Starting calendar sync:", { feedId: feed.id, userId: feed.user_id, windowStart: window.start.toISOString(), windowEnd: window.end.toISOString() });
-  // #endregion
-
   try {
     const icsText = await fetchIcsText(feed.feed_url, fetcher);
     const instances = expandIcsEvents(icsText, window);
     const instanceKeys = new Set(instances.map((instance) => instance.instanceKey));
 
-    // #region agent log
-    console.log("[DEBUG-A] Parsed ICS events:", { instanceCount: instances.length, firstInstance: instances[0] || null, allDayCount: instances.filter(i => i.allDay).length });
-    // #endregion
-
     await upsertInstances(supabase, feed, instances);
     const deletedCount = await deleteStaleInstances(supabase, feed, window, instanceKeys);
-
-    // #region agent log
-    console.log("[DEBUG-A] Sync completed successfully:", { upserted: instances.length, deleted: deletedCount });
-    // #endregion
 
     const lastSyncedAt = now.toISOString();
     await supabase
@@ -160,10 +148,6 @@ export async function syncCalendarFeed(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to sync calendar feed.";
-
-    // #region agent log
-    console.log("[DEBUG-A] Sync FAILED:", { error: message });
-    // #endregion
 
     await supabase
       .from("calendar_feeds")
