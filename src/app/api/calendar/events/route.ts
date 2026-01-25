@@ -60,8 +60,8 @@ export async function GET(request: Request) {
       );
     }
 
-    // Helper to build base query without scope filter
-    const buildBaseQuery = () => {
+    // Helper to build query with organization_id filter (for migrated DBs)
+    const buildOrgQuery = () => {
       let q = supabase
         .from("calendar_events")
         .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
@@ -70,8 +70,6 @@ export async function GET(request: Request) {
         .lte("start_at", end.toISOString())
         .order("start_at", { ascending: true });
 
-      // In personal mode, only show current user's events to avoid counting
-      // other users' events as conflicts
       if (modeParam === "personal") {
         q = q.eq("user_id", user.id);
       }
@@ -79,29 +77,42 @@ export async function GET(request: Request) {
       return q;
     };
 
-    // First try with scope filter (for migrated DBs)
-    const { data: events, error } = await buildBaseQuery().eq("scope", "personal");
+    // Helper to build query by user_id only (for pre-migration DBs without organization_id)
+    const buildUserQuery = () => {
+      return supabase
+        .from("calendar_events")
+        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id, users(name, email)")
+        .eq("user_id", user.id)
+        .gte("start_at", start.toISOString())
+        .lte("start_at", end.toISOString())
+        .order("start_at", { ascending: true });
+    };
+
+    // Try with organization_id and scope filter first (fully migrated DBs)
+    const { data: events, error } = await buildOrgQuery().eq("scope", "personal");
 
     if (error) {
       const errorStr = JSON.stringify(error);
-      const isScopeError = errorStr.includes("scope") ||
+      const isColumnError = errorStr.includes("scope") ||
+        errorStr.includes("organization_id") ||
         error.message?.includes("scope") ||
+        error.message?.includes("organization_id") ||
         error.code === "42703"; // PostgreSQL "column does not exist"
 
-      if (isScopeError) {
-        console.warn("[calendar-events] scope column not found, retrying without scope filter");
-        // Retry without scope filter for pre-migration databases
-        const { data: retryEvents, error: retryError } = await buildBaseQuery();
+      if (isColumnError) {
+        console.warn("[calendar-events] Column not found, falling back to user_id query");
+        // Fall back to querying by user_id only (for pre-migration databases)
+        const { data: fallbackEvents, error: fallbackError } = await buildUserQuery();
 
-        if (retryError) {
-          console.error("[calendar-events] Retry failed:", retryError);
+        if (fallbackError) {
+          console.error("[calendar-events] Fallback query failed:", fallbackError);
           return NextResponse.json(
             { error: "Database error", message: "Failed to fetch events." },
             { status: 500 }
           );
         }
 
-        return NextResponse.json({ events: retryEvents || [] });
+        return NextResponse.json({ events: fallbackEvents || [] });
       }
 
       console.error("[calendar-events] Failed to fetch events:", error);
@@ -109,6 +120,16 @@ export async function GET(request: Request) {
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
+    }
+
+    // If no events found with org filter, also try user_id fallback
+    // This handles events synced before the migration added organization_id
+    if (!events || events.length === 0) {
+      const { data: userEvents, error: userError } = await buildUserQuery();
+
+      if (!userError && userEvents && userEvents.length > 0) {
+        return NextResponse.json({ events: userEvents });
+      }
     }
 
     return NextResponse.json({ events: events || [] });
