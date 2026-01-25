@@ -9,6 +9,7 @@ export type AllowlistMatch = {
   source: "rule" | "domain" | "none";
   vendorId?: string;
   domainId?: string;
+  verifiedByOrgId?: string;
 };
 
 const vendorAliasMap: Record<string, string[] | null> = {
@@ -86,7 +87,7 @@ export async function checkHostStatus(
 
   let domainQuery = client
     .from("schedule_allowed_domains")
-    .select("id,hostname,vendor_id,status")
+    .select("id,hostname,vendor_id,status,verified_by_org_id")
     .eq("hostname", normalizedHost);
 
   if (vendorIds) {
@@ -109,7 +110,13 @@ export async function checkHostStatus(
   }
 
   if (domain.status === "pending") {
-    return { status: "pending", source: "domain", domainId: domain.id, vendorId: domain.vendor_id };
+    return {
+      status: "pending",
+      source: "domain",
+      domainId: domain.id,
+      vendorId: domain.vendor_id,
+      verifiedByOrgId: domain.verified_by_org_id ?? undefined,
+    };
   }
 
   return { status: "active", source: "domain", domainId: domain.id, vendorId: domain.vendor_id };

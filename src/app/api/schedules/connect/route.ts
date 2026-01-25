@@ -88,13 +88,18 @@ export async function POST(request: Request) {
     }
 
     if (allowStatus.status === "pending") {
-      return NextResponse.json(
-        { error: "Pending approval", message: "This domain needs admin approval before importing." },
-        { status: 409, headers: rateLimit.headers }
-      );
+      // Only block if this org created the pending request
+      if (allowStatus.verifiedByOrgId === body.orgId) {
+        return NextResponse.json(
+          { error: "Pending approval", message: "This domain needs admin approval before importing." },
+          { status: 409, headers: rateLimit.headers }
+        );
+      }
+      // Different org's pending domain - fall through to re-verify
     }
 
-    if (allowStatus.status === "denied") {
+    if (allowStatus.status === "denied" ||
+        (allowStatus.status === "pending" && allowStatus.verifiedByOrgId !== body.orgId)) {
       const enrollment = await verifyAndEnroll({
         url: normalizedUrl,
         orgId: body.orgId,
@@ -164,7 +169,11 @@ export async function POST(request: Request) {
       sync: result,
     }, { headers: rateLimit.headers });
   } catch (error) {
-    console.error("[schedule-connect] Error:", error);
+    console.error("[schedule-connect] Error:", {
+      message: error instanceof Error ? error.message : String(error),
+      name: error instanceof Error ? error.name : "Unknown",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return NextResponse.json(
       { error: "Internal error", message: "Failed to connect schedule." },
       { status: 500 }

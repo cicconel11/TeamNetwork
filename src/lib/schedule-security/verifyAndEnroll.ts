@@ -70,6 +70,9 @@ export async function verifyAndEnroll(input: {
         .eq("id", existing.id);
       return { allowStatus: "active", vendorId: existing.vendor_id };
     }
+
+    // If pending and belongs to different org, continue to re-verify
+    // (don't short-circuit, let verification run below)
   }
 
   const verification = await verifyHost(normalizedUrl);
