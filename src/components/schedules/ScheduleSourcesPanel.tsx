@@ -114,6 +114,17 @@ export function ScheduleSourcesPanel({ orgId, isAdmin }: ScheduleSourcesPanelPro
     refreshSources();
   }, [refreshSources]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      refreshSources();
+    };
+    window.addEventListener("schedule:sources:refresh", handler);
+    return () => {
+      window.removeEventListener("schedule:sources:refresh", handler);
+    };
+  }, [refreshSources]);
+
   const handlePreview = async () => {
     if (!url.trim()) {
       setError("Paste a schedule link to preview.");

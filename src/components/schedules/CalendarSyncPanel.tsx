@@ -24,6 +24,8 @@ type CalendarEventSummary = {
   feed_id: string;
 };
 
+type FeedScope = "personal" | "org";
+
 type CalendarSyncPanelProps = {
   organizationId: string;
   isAdmin: boolean;
@@ -66,17 +68,21 @@ function statusVariant(status: FeedSummary["status"]) {
   }
 }
 
+function isLikelyIcsUrl(feedUrl: string) {
+  const lower = feedUrl.toLowerCase();
+  return lower.includes(".ics") || lower.includes("ical") || lower.includes("calendar");
+}
+
 export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanelProps) {
-  const [personalFeedUrl, setPersonalFeedUrl] = useState("");
-  const [orgFeedUrl, setOrgFeedUrl] = useState("");
+  const [feedUrls, setFeedUrls] = useState<Record<FeedScope, string>>({ personal: "", org: "" });
+  const [feedScope, setFeedScope] = useState<FeedScope>(isAdmin ? "org" : "personal");
   const [personalFeeds, setPersonalFeeds] = useState<FeedSummary[]>([]);
   const [orgFeeds, setOrgFeeds] = useState<FeedSummary[]>([]);
   const [orgEvents, setOrgEvents] = useState<CalendarEventSummary[]>([]);
   const [loadingPersonalFeeds, setLoadingPersonalFeeds] = useState(true);
   const [loadingOrgFeeds, setLoadingOrgFeeds] = useState(isAdmin);
   const [loadingOrgEvents, setLoadingOrgEvents] = useState(true);
-  const [connectingPersonal, setConnectingPersonal] = useState(false);
-  const [connectingOrg, setConnectingOrg] = useState(false);
+  const [connectingFeed, setConnectingFeed] = useState(false);
   const [syncingFeedId, setSyncingFeedId] = useState<string | null>(null);
   const [disconnectingFeedId, setDisconnectingFeedId] = useState<string | null>(null);
   const [personalError, setPersonalError] = useState<string | null>(null);
@@ -84,6 +90,12 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
   const [orgError, setOrgError] = useState<string | null>(null);
   const [orgNotice, setOrgNotice] = useState<string | null>(null);
   const [orgEventsError, setOrgEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin && feedScope === "org") {
+      setFeedScope("personal");
+    }
+  }, [feedScope, isAdmin]);
 
   const dateRange = useMemo(() => {
     const start = new Date();
@@ -176,59 +188,66 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
     }
   };
 
-  const handleConnectPersonal = async () => {
-    if (!personalFeedUrl.trim()) {
-      setPersonalError("Paste a calendar link to connect.");
+  const handleConnect = async () => {
+    const scope = feedScope;
+    const rawUrl = feedUrls[scope]?.trim();
+
+    if (!rawUrl) {
+      if (scope === "org") {
+        setOrgError("Paste a calendar link to connect.");
+      } else {
+        setPersonalError("Paste a calendar link to connect.");
+      }
+      return;
+    }
+
+    if (scope === "org" && !isAdmin) {
+      setOrgError("Only admins can add org calendars.");
+      return;
+    }
+
+    if (scope === "personal" && !isLikelyIcsUrl(rawUrl)) {
+      setPersonalError("Personal calendars must be an iCal/ICS link.");
       return;
     }
 
     setPersonalError(null);
-    setPersonalNotice(null);
-    setConnectingPersonal(true);
-
-    try {
-      const response = await fetch("/api/calendar/feeds", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          feedUrl: personalFeedUrl.trim(),
-          provider: "ics",
-          organizationId,
-        }),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.message || "Failed to connect feed.");
-      }
-
-      setPersonalFeedUrl("");
-      setPersonalNotice("Schedule connected. We will keep it in sync.");
-      await refreshAll();
-      notifyAvailabilityRefresh();
-    } catch (err) {
-      setPersonalError(err instanceof Error ? err.message : "Failed to connect feed.");
-    } finally {
-      setConnectingPersonal(false);
-    }
-  };
-
-  const handleConnectOrg = async () => {
-    if (!orgFeedUrl.trim()) {
-      setOrgError("Paste a calendar link to connect.");
-      return;
-    }
-
     setOrgError(null);
+    setPersonalNotice(null);
     setOrgNotice(null);
-    setConnectingOrg(true);
+    setConnectingFeed(true);
 
     try {
-      const response = await fetch("/api/calendar/org-feeds", {
+      const connectScheduleSource = async () => {
+        const response = await fetch("/api/schedules/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgId: organizationId, url: rawUrl }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.message || "Failed to connect schedule.");
+        }
+
+        setFeedUrls((prev) => ({ ...prev, org: "" }));
+        setOrgNotice("Org schedule connected and syncing.");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("schedule:sources:refresh"));
+        }
+      };
+
+      const endpoint = scope === "org" ? "/api/calendar/org-feeds" : "/api/calendar/feeds";
+      if (scope === "org" && !isLikelyIcsUrl(rawUrl)) {
+        await connectScheduleSource();
+        return;
+      }
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          feedUrl: orgFeedUrl.trim(),
+          feedUrl: rawUrl,
           provider: "ics",
           organizationId,
         }),
@@ -236,21 +255,36 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data?.message || "Failed to connect org feed.");
+        const message = data?.message || "Failed to connect feed.";
+        if (scope === "org" && message.toLowerCase().includes("ics")) {
+          await connectScheduleSource();
+          return;
+        }
+        throw new Error(message);
       }
 
-      setOrgFeedUrl("");
-      setOrgNotice("Org calendar connected. Everyone will see upcoming events.");
+      setFeedUrls((prev) => ({ ...prev, [scope]: "" }));
+      if (scope === "org") {
+        setOrgNotice("Org calendar connected. Everyone will see upcoming events.");
+      } else {
+        setPersonalNotice("Schedule connected. We will keep it in sync.");
+      }
+
       await refreshAll();
       notifyAvailabilityRefresh();
     } catch (err) {
-      setOrgError(err instanceof Error ? err.message : "Failed to connect org feed.");
+      const message = err instanceof Error ? err.message : "Failed to connect feed.";
+      if (scope === "org") {
+        setOrgError(message);
+      } else {
+        setPersonalError(message);
+      }
     } finally {
-      setConnectingOrg(false);
+      setConnectingFeed(false);
     }
   };
 
-  const handleSyncNow = async (feedId: string, scope: "personal" | "org") => {
+  const handleSyncNow = async (feedId: string, scope: FeedScope) => {
     setPersonalError(null);
     setOrgError(null);
     setPersonalNotice(null);
@@ -288,7 +322,7 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
     }
   };
 
-  const handleDisconnect = async (feedId: string, scope: "personal" | "org") => {
+  const handleDisconnect = async (feedId: string, scope: FeedScope) => {
     if (!confirm("Disconnect this calendar feed?")) {
       return;
     }
@@ -335,47 +369,110 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">Sync Schedule</h2>
         <Card className="p-4 space-y-4">
+          {isAdmin ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex items-center rounded-lg border border-border bg-muted/30 p-1">
+                <button
+                  type="button"
+                  onClick={() => setFeedScope("personal")}
+                  aria-pressed={feedScope === "personal"}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                    feedScope === "personal"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Personal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFeedScope("org")}
+                  aria-pressed={feedScope === "org"}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                    feedScope === "org"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Organizational
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Org calendars are admin-only.</p>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <Input
-                label="Paste calendar link (ICS)"
-                value={personalFeedUrl}
-                onChange={(event) => setPersonalFeedUrl(event.target.value)}
-                placeholder="https://school.example.edu/calendar.ics"
-                helperText="Works with Canvas, Schoology, Brightspace, Blackboard, Moodle, Google Calendar (public links), and more."
+                label={feedScope === "org" ? "Paste org calendar link" : "Paste calendar link (ICS)"}
+                value={feedUrls[feedScope]}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setFeedUrls((prev) => ({ ...prev, [feedScope]: value }));
+                  if (feedScope === "org") {
+                    setOrgError(null);
+                    setOrgNotice(null);
+                  } else {
+                    setPersonalError(null);
+                    setPersonalNotice(null);
+                  }
+                }}
+                placeholder={feedScope === "org" ? "https://calendar.example.com/team.ics" : "https://school.example.edu/calendar.ics"}
+                helperText={
+                  feedScope === "org"
+                    ? "Use a shared org calendar link. If it's not iCal/ICS, we will try approved schedule sources."
+                    : "Works with Canvas, Schoology, Brightspace, Blackboard, Moodle, Google Calendar (public links), and more."
+                }
               />
             </div>
-            <Button onClick={handleConnectPersonal} isLoading={connectingPersonal}>
-              Add schedule via calendar link (ICS)
+            <Button onClick={handleConnect} isLoading={connectingFeed} disabled={feedScope === "org" && !isAdmin}>
+              {feedScope === "org" ? "Add org calendar link" : "Add calendar link"}
             </Button>
           </div>
-          {personalNotice && <p className="text-sm text-foreground">{personalNotice}</p>}
-          {personalError && <p className="text-sm text-error">{personalError}</p>}
+          {feedScope === "org"
+            ? orgNotice && <p className="text-sm text-foreground">{orgNotice}</p>
+            : personalNotice && <p className="text-sm text-foreground">{personalNotice}</p>}
+          {feedScope === "org"
+            ? orgError && <p className="text-sm text-error">{orgError}</p>
+            : personalError && <p className="text-sm text-error">{personalError}</p>}
         </Card>
       </section>
 
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-foreground">Manage My Schedules</h2>
+          <h2 className="text-lg font-semibold text-foreground">
+            {feedScope === "org" ? "Manage Org Calendars" : "Manage My Schedules"}
+          </h2>
         </div>
         <Card className="p-4">
-          {loadingPersonalFeeds ? (
-            <p className="text-sm text-muted-foreground">Loading schedules...</p>
-          ) : personalFeeds.length === 0 ? (
+          {!isAdmin && feedScope === "org" ? (
             <EmptyState
-              title="No connected schedules"
-              description="Connect a calendar feed to keep your availability in sync."
+              title="Org calendars are admin-only"
+              description="Ask an admin to connect a shared org calendar."
+            />
+          ) : (feedScope === "org" ? loadingOrgFeeds : loadingPersonalFeeds) ? (
+            <p className="text-sm text-muted-foreground">Loading schedules...</p>
+          ) : (feedScope === "org" ? orgFeeds : personalFeeds).length === 0 ? (
+            <EmptyState
+              title={`No connected ${feedScope === "org" ? "org calendars" : "schedules"}`}
+              description={
+                feedScope === "org"
+                  ? "Connect a shared calendar to show upcoming org events."
+                  : "Connect a calendar feed to keep your availability in sync."
+              }
             />
           ) : (
             <div className="space-y-3">
-              {personalFeeds.map((feed) => (
+              {(feedScope === "org" ? orgFeeds : personalFeeds).map((feed) => (
                 <div
                   key={feed.id}
                   className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">ICS Feed</p>
+                      <p className="font-medium text-foreground">
+                        {feedScope === "org" ? "Org ICS Feed" : "ICS Feed"}
+                      </p>
                       <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
@@ -391,7 +488,7 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
                       variant="secondary"
                       size="sm"
                       isLoading={syncingFeedId === feed.id}
-                      onClick={() => handleSyncNow(feed.id, "personal")}
+                      onClick={() => handleSyncNow(feed.id, feedScope)}
                     >
                       Sync now
                     </Button>
@@ -399,7 +496,7 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
                       variant="ghost"
                       size="sm"
                       isLoading={disconnectingFeedId === feed.id}
-                      onClick={() => handleDisconnect(feed.id, "personal")}
+                      onClick={() => handleDisconnect(feed.id, feedScope)}
                     >
                       Disconnect
                     </Button>
@@ -410,84 +507,6 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
           )}
         </Card>
       </section>
-
-      {isAdmin && (
-        <section>
-          <h2 className="text-lg font-semibold text-foreground mb-4">Org Events Calendar</h2>
-          <Card className="p-4 space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <Input
-                  label="Paste org calendar link (ICS)"
-                  value={orgFeedUrl}
-                  onChange={(event) => setOrgFeedUrl(event.target.value)}
-                  placeholder="https://calendar.example.com/team.ics"
-                  helperText="Use a shared org calendar link so everyone sees the same upcoming events."
-                />
-              </div>
-              <Button onClick={handleConnectOrg} isLoading={connectingOrg}>
-                Add org calendar via calendar link (ICS)
-              </Button>
-            </div>
-            {orgNotice && <p className="text-sm text-foreground">{orgNotice}</p>}
-            {orgError && <p className="text-sm text-error">{orgError}</p>}
-          </Card>
-
-          <div className="mt-4">
-            <Card className="p-4">
-              {loadingOrgFeeds ? (
-                <p className="text-sm text-muted-foreground">Loading org calendars...</p>
-              ) : orgFeeds.length === 0 ? (
-                <EmptyState
-                  title="No org calendars connected"
-                  description="Connect a shared calendar to show upcoming org events."
-                />
-              ) : (
-                <div className="space-y-3">
-                  {orgFeeds.map((feed) => (
-                    <div
-                      key={feed.id}
-                      className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">Org ICS Feed</p>
-                          <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Last sync: {feed.last_synced_at ? formatDateTime(feed.last_synced_at) : "Never"}
-                        </p>
-                        {feed.status === "error" && feed.last_error && (
-                          <p className="text-xs text-error">{feed.last_error}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          isLoading={syncingFeedId === feed.id}
-                          onClick={() => handleSyncNow(feed.id, "org")}
-                        >
-                          Sync now
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          isLoading={disconnectingFeedId === feed.id}
-                          onClick={() => handleDisconnect(feed.id, "org")}
-                        >
-                          Disconnect
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-        </section>
-      )}
 
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">Upcoming Org Events</h2>
