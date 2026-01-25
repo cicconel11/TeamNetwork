@@ -60,77 +60,55 @@ export async function GET(request: Request) {
       );
     }
 
-    // Helper to build query with organization_id filter (for migrated DBs)
-    // Note: calendar_events.user_id references auth.users, not public.users, so we can't join
-    const buildOrgQuery = () => {
-      let q = supabase
-        .from("calendar_events")
-        .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
-        .eq("organization_id", organizationId)
-        .gte("start_at", start.toISOString())
-        .lte("start_at", end.toISOString())
-        .order("start_at", { ascending: true });
-
-      if (modeParam === "personal") {
-        q = q.eq("user_id", user.id);
-      }
-
-      return q;
-    };
-
-    // Helper to build query by user_id only (for pre-migration DBs without organization_id)
-    const buildUserQuery = () => {
-      return supabase
+    // For personal calendar events, query by user_id directly
+    // This is more reliable as it works regardless of migration state
+    // In team mode, we need all users' events; in personal mode, just current user
+    
+    if (modeParam === "personal") {
+      // Personal mode: only current user's events
+      const { data: events, error } = await supabase
         .from("calendar_events")
         .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
         .eq("user_id", user.id)
         .gte("start_at", start.toISOString())
         .lte("start_at", end.toISOString())
         .order("start_at", { ascending: true });
-    };
 
-    // Try with organization_id and scope filter first (fully migrated DBs)
-    const { data: events, error } = await buildOrgQuery().eq("scope", "personal");
-
-    if (error) {
-      const errorStr = JSON.stringify(error);
-      const isColumnError = errorStr.includes("scope") ||
-        errorStr.includes("organization_id") ||
-        error.message?.includes("scope") ||
-        error.message?.includes("organization_id") ||
-        error.code === "42703"; // PostgreSQL "column does not exist"
-
-      if (isColumnError) {
-        console.warn("[calendar-events] Column not found, falling back to user_id query");
-        // Fall back to querying by user_id only (for pre-migration databases)
-        const { data: fallbackEvents, error: fallbackError } = await buildUserQuery();
-
-        if (fallbackError) {
-          console.error("[calendar-events] Fallback query failed:", fallbackError);
-          return NextResponse.json(
-            { error: "Database error", message: "Failed to fetch events." },
-            { status: 500 }
-          );
-        }
-
-        return NextResponse.json({ events: fallbackEvents || [] });
+      if (error) {
+        console.error("[calendar-events] Failed to fetch personal events:", error);
+        return NextResponse.json(
+          { error: "Database error", message: "Failed to fetch events." },
+          { status: 500 }
+        );
       }
 
-      console.error("[calendar-events] Failed to fetch events:", error);
+      return NextResponse.json({ events: events || [] });
+    }
+
+    // Team mode: try to get all org members' events
+    // First, get all active member user IDs for this org
+    const { data: members } = await supabase
+      .from("user_organization_roles")
+      .select("user_id")
+      .eq("organization_id", organizationId)
+      .eq("status", "active");
+
+    const memberIds = members?.map((m) => m.user_id) || [user.id];
+
+    const { data: events, error } = await supabase
+      .from("calendar_events")
+      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
+      .in("user_id", memberIds)
+      .gte("start_at", start.toISOString())
+      .lte("start_at", end.toISOString())
+      .order("start_at", { ascending: true });
+
+    if (error) {
+      console.error("[calendar-events] Failed to fetch team events:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
-    }
-
-    // If no events found with org filter, also try user_id fallback
-    // This handles events synced before the migration added organization_id
-    if (!events || events.length === 0) {
-      const { data: userEvents, error: userError } = await buildUserQuery();
-
-      if (!userError && userEvents && userEvents.length > 0) {
-        return NextResponse.json({ events: userEvents });
-      }
     }
 
     return NextResponse.json({ events: events || [] });
