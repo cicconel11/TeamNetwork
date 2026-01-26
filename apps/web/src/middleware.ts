@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
 import { getCorsHeadersForOrigin } from "./lib/security/cors";
+import { isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -10,7 +11,7 @@ const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 // Routes that don't require authentication
-const publicRoutes = ["/", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
+const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
 
 // Routes that should redirect to /app if user is already authenticated
 const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
@@ -194,13 +195,39 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user) {
-    if (hasAuthCookies) {
-      // Likely refresh in-flight; allow pass-through to avoid loops
-      return response;
-    }
     const redirectUrl = new URL("/auth/login", request.url);
     redirectUrl.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(redirectUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+
+    if (hasAuthCookies) {
+      // SECURITY FIX: Clear stale/invalid auth cookies instead of allowing pass-through
+      // This prevents unauthorized access while avoiding redirect loops (cookies cleared = no loop)
+      if (logFailures) {
+        console.log("[AUTH-MW] Clearing stale auth cookies and redirecting to login", {
+          pathname,
+          sbCookies,
+        });
+      }
+      // Clear all Supabase auth cookies
+      cookiesAll
+        .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth-token"))
+        .forEach((c) => {
+          redirectResponse.cookies.set(c.name, "", {
+            path: "/",
+            maxAge: 0,
+            expires: new Date(0),
+          });
+          // Also clear on root domain in production
+          if (process.env.NODE_ENV === "production") {
+            redirectResponse.headers.append(
+              "Set-Cookie",
+              `${c.name}=; Path=/; Domain=.myteamnetwork.com; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Lax`
+            );
+          }
+        });
+    }
+
+    return redirectResponse;
   }
 
   // Check for revoked access on org routes
@@ -217,42 +244,56 @@ export async function middleware(request: NextRequest) {
 
     // Only check if it looks like an org slug (not a system path)
     if (orgSlug && !["app", "auth", "api", "settings", "_next", "favicon.ico"].includes(orgSlug)) {
-      try {
-        // Get organization by slug
-        const { data: org } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .maybeSingle();
+      // Check if user is dev-admin - if so, skip membership checks entirely
+      const userEmail = "email" in user ? (user.email as string | null | undefined) : undefined;
+      const userIsDevAdmin = isDevAdminEmail(userEmail);
 
-        if (org) {
-          // Check user's membership status
-          const { data: membership } = await supabase
-            .from("user_organization_roles")
-            .select("status")
-            .eq("organization_id", org.id)
-            .eq("user_id", user.id)
+      if (!userIsDevAdmin) {
+        // Only check membership for non-dev-admins
+        try {
+          // Get organization by slug
+          const { data: org } = await supabase
+            .from("organizations")
+            .select("id")
+            .eq("slug", orgSlug)
             .maybeSingle();
 
-          if (membership?.status === "revoked") {
-            // User's access has been revoked - redirect to app with error
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("error", "access_revoked");
-            return NextResponse.redirect(redirectUrl);
-          }
+          if (org) {
+            // Check user's membership status
+            const { data: membership } = await supabase
+              .from("user_organization_roles")
+              .select("status")
+              .eq("organization_id", org.id)
+              .eq("user_id", user.id)
+              .maybeSingle();
 
-          if (membership?.status === "pending") {
-            // User's membership is pending approval - redirect to app with pending message
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("pending", orgSlug);
-            return NextResponse.redirect(redirectUrl);
+            if (membership?.status === "revoked") {
+              // User's access has been revoked - redirect to app with error
+              const redirectUrl = new URL("/app", request.url);
+              redirectUrl.searchParams.set("error", "access_revoked");
+              return NextResponse.redirect(redirectUrl);
+            }
+
+            if (membership?.status === "pending") {
+              // User's membership is pending approval - redirect to app with pending message
+              const redirectUrl = new URL("/app", request.url);
+              redirectUrl.searchParams.set("pending", orgSlug);
+              return NextResponse.redirect(redirectUrl);
+            }
+          }
+        } catch (e) {
+          // Log error but don't block the request
+          if (shouldLog) {
+            console.error("[AUTH-MW] Error checking membership status:", e);
           }
         }
-      } catch (e) {
-        // Log error but don't block the request
-        if (shouldLog) {
-          console.error("[AUTH-MW] Error checking membership status:", e);
-        }
+      } else if (shouldLog) {
+        // Log dev-admin access for debugging (email redacted for privacy)
+        console.log("[AUTH-MW] Dev-admin bypassing membership check", {
+          email: userEmail ? redactEmail(userEmail) : null,
+          orgSlug,
+          pathname,
+        });
       }
     }
   }

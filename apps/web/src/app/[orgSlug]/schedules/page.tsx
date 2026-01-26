@@ -4,13 +4,17 @@ import { PageHeader } from "@/components/layout";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
-import { ScheduleFilesSection } from "@/components/schedules/ScheduleFilesSection";
+import { CalendarSyncPanel } from "@/components/schedules/CalendarSyncPanel";
+import { ScheduleSourcesPanel } from "@/components/schedules/ScheduleSourcesPanel";
+import { ScheduleDomainApprovalsPanel } from "@/components/schedules/ScheduleDomainApprovalsPanel";
+import { SchedulesTabs } from "@/components/schedules/tabs";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-import type { AcademicSchedule, ScheduleFile, User } from "@teammeet/types";
+import type { AcademicSchedule, User } from "@teammeet/types";
 
 interface SchedulesPageProps {
   params: Promise<{ orgSlug: string }>;
+  searchParams: Promise<{ schedules_v2?: string }>;
 }
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -48,8 +52,11 @@ function formatTime(time: string): string {
   return `${h12}:${minutes} ${ampm}`;
 }
 
-export default async function SchedulesPage({ params }: SchedulesPageProps) {
+export default async function SchedulesPage({ params, searchParams }: SchedulesPageProps) {
   const { orgSlug } = await params;
+  const resolvedSearchParams = await searchParams;
+  const useNewUI = resolvedSearchParams?.schedules_v2 === "true";
+
   const orgCtx = await getOrgContext(orgSlug);
   const supabase = await createClient();
 
@@ -66,18 +73,8 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
     .is("deleted_at", null)
     .order("start_time", { ascending: true });
 
-  // Fetch user's uploaded files
-  const { data: myFiles } = await supabase
-    .from("schedule_files")
-    .select("*")
-    .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
   // For admins, fetch all schedules and files with user info
   let allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[] = [];
-  let allFiles: (ScheduleFile & { users: Pick<User, "name" | "email"> | null })[] = [];
   if (orgCtx.isAdmin) {
     const { data } = await supabase
       .from("academic_schedules")
@@ -86,20 +83,46 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
       .is("deleted_at", null)
       .order("start_time", { ascending: true });
     allSchedules = (data || []) as (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
-
-    const { data: filesData } = await supabase
-      .from("schedule_files")
-      .select("*, users(name, email)")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false });
-    allFiles = (filesData || []) as (ScheduleFile & { users: Pick<User, "name" | "email"> | null })[];
   }
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/schedules", navConfig);
   const actionLabel = resolveActionLabel("/schedules", navConfig);
 
+  if (useNewUI) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <PageHeader
+          title={pageLabel}
+          description={`Manage your class ${pageLabel.toLowerCase()} and academic commitments`}
+          actions={
+            <Link href={`/${orgSlug}/schedules/new`}>
+              <Button>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                {actionLabel}
+              </Button>
+            </Link>
+          }
+        />
+
+        <SchedulesTabs
+          orgId={orgId}
+          orgSlug={orgSlug}
+          isAdmin={orgCtx.isAdmin}
+          mySchedules={mySchedules || []}
+          allSchedules={allSchedules}
+          navConfig={navConfig}
+          pageLabel={pageLabel}
+        />
+
+        <ScheduleDomainApprovalsPanel orgId={orgId} isAdmin={orgCtx.isAdmin} />
+      </div>
+    );
+  }
+
+  // Legacy layout
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
@@ -116,6 +139,19 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
           </Link>
         }
       />
+
+      <ScheduleSourcesPanel orgId={orgId} isAdmin={orgCtx.isAdmin} />
+
+      <ScheduleDomainApprovalsPanel orgId={orgId} isAdmin={orgCtx.isAdmin} />
+
+      <CalendarSyncPanel organizationId={orgId} isAdmin={orgCtx.isAdmin} />
+
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">My Availability</h2>
+        <Card className="p-6">
+          <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" />
+        </Card>
+      </section>
 
       {/* My Schedules Section */}
       <section>
@@ -159,20 +195,12 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         )}
       </section>
 
-      {/* My Uploaded Files Section */}
-      <ScheduleFilesSection
-        orgId={orgId}
-        myFiles={(myFiles || []) as ScheduleFile[]}
-        allFiles={allFiles}
-        isAdmin={orgCtx.isAdmin}
-      />
-
       {/* Team Availability Section (Admin Only) */}
       {orgCtx.isAdmin && (
         <section>
           <h2 className="text-lg font-semibold text-foreground mb-4">Team Availability</h2>
           <Card className="p-6">
-            <AvailabilityGrid schedules={allSchedules} orgId={orgId} />
+            <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" />
           </Card>
         </section>
       )}

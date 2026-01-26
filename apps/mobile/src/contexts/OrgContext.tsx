@@ -4,11 +4,11 @@ import { supabase } from "@/lib/supabase";
 import { setUserProperties } from "@/lib/analytics";
 import { normalizeRole, type OrgRole } from "@teammeet/core";
 
-type AnalyticsRole = "admin" | "member" | "alumni" | "unknown";
+export type AnalyticsRole = "admin" | "member" | "alumni" | "unknown";
 // Normalized roles after applying normalizeRole()
 type NormalizedRole = OrgRole | null;
 
-function toAnalyticsRole(role: OrgRole | null): AnalyticsRole {
+export function toAnalyticsRole(role: OrgRole | null): AnalyticsRole {
   if (!role) return "unknown";
   if (role === "active_member") return "member";
   return role;
