@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,17 @@ export async function POST(
   { params }: { params: { domainId: string } }
 ) {
   try {
+    // IP-based rate limiting
+    const ipRateLimit = checkRateLimit(request, {
+      limitPerIp: 15,
+      limitPerUser: 0,
+      windowMs: 60_000,
+      feature: "schedule domains",
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
     const supabase = await createClient();
     const {
       data: { user },
@@ -20,6 +32,18 @@ export async function POST(
         { error: "Unauthorized", message: "You must be logged in to approve domains." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 10,
+      windowMs: 60_000,
+      feature: "schedule domains",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     let body: { orgId?: string };
@@ -95,7 +119,7 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ domain: updated });
+    return NextResponse.json({ domain: updated }, { headers: rateLimit.headers });
   } catch (error) {
     console.error("[schedule-domains] Error:", error);
     return NextResponse.json(

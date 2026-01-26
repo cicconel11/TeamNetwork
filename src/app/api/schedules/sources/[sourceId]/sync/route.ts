@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,10 +10,21 @@ const WINDOW_PAST_DAYS = 30;
 const WINDOW_FUTURE_DAYS = 366;
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: { sourceId: string } }
 ) {
   try {
+    // IP-based rate limiting (strictest limits for sync operations)
+    const ipRateLimit = checkRateLimit(request, {
+      limitPerIp: 5,
+      limitPerUser: 0,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -21,6 +33,18 @@ export async function POST(
         { error: "Unauthorized", message: "You must be logged in to sync sources." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 3,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     const { data: source, error } = await supabase
@@ -54,9 +78,12 @@ export async function POST(
     const window = buildSyncWindow();
     const result = await syncScheduleSource(serviceClient, { source, window });
 
-    return NextResponse.json({
-      sync: result,
-    });
+    return NextResponse.json(
+      {
+        sync: result,
+      },
+      { headers: rateLimit.headers }
+    );
   } catch (error) {
     console.error("[schedule-source-sync] Error:", error);
     return NextResponse.json(

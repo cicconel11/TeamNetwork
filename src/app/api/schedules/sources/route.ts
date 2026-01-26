@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { maskUrl } from "@/lib/schedule-connectors/fetch";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    // IP-based rate limiting
+    const ipRateLimit = checkRateLimit(request, {
+      limitPerIp: 30,
+      limitPerUser: 0,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -14,6 +26,18 @@ export async function GET(request: Request) {
         { error: "Unauthorized", message: "You must be logged in to view sources." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 20,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     const url = new URL(request.url);
@@ -54,17 +78,20 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({
-      sources: (sources || []).map((source) => ({
-        id: source.id,
-        vendor_id: source.vendor_id,
-        maskedUrl: maskUrl(source.source_url),
-        status: source.status,
-        last_synced_at: source.last_synced_at,
-        last_error: source.last_error,
-        title: source.title,
-      })),
-    });
+    return NextResponse.json(
+      {
+        sources: (sources || []).map((source) => ({
+          id: source.id,
+          vendor_id: source.vendor_id,
+          maskedUrl: maskUrl(source.source_url),
+          status: source.status,
+          last_synced_at: source.last_synced_at,
+          last_error: source.last_error,
+          title: source.title,
+        })),
+      },
+      { headers: rateLimit.headers }
+    );
   } catch (error) {
     console.error("[schedule-sources] Error:", error);
     return NextResponse.json(

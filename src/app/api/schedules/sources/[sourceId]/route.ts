@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { maskUrl } from "@/lib/schedule-connectors/fetch";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,17 @@ export async function PATCH(
   { params }: { params: { sourceId: string } }
 ) {
   try {
+    // IP-based rate limiting
+    const ipRateLimit = checkRateLimit(request, {
+      limitPerIp: 15,
+      limitPerUser: 0,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -17,6 +29,18 @@ export async function PATCH(
         { error: "Unauthorized", message: "You must be logged in to update sources." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 10,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     let body: { status?: "active" | "paused"; title?: string };
@@ -83,17 +107,20 @@ export async function PATCH(
       );
     }
 
-    return NextResponse.json({
-      source: {
-        id: updated.id,
-        vendor_id: updated.vendor_id,
-        maskedUrl: maskUrl(updated.source_url),
-        status: updated.status,
-        last_synced_at: updated.last_synced_at,
-        last_error: updated.last_error,
-        title: updated.title,
+    return NextResponse.json(
+      {
+        source: {
+          id: updated.id,
+          vendor_id: updated.vendor_id,
+          maskedUrl: maskUrl(updated.source_url),
+          status: updated.status,
+          last_synced_at: updated.last_synced_at,
+          last_error: updated.last_error,
+          title: updated.title,
+        },
       },
-    });
+      { headers: rateLimit.headers }
+    );
   } catch (error) {
     console.error("[schedule-source] Error updating source:", error);
     return NextResponse.json(
@@ -104,10 +131,21 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { sourceId: string } }
 ) {
   try {
+    // IP-based rate limiting
+    const ipRateLimit = checkRateLimit(request, {
+      limitPerIp: 15,
+      limitPerUser: 0,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
@@ -116,6 +154,18 @@ export async function DELETE(
         { error: "Unauthorized", message: "You must be logged in to remove sources." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 10,
+      windowMs: 60_000,
+      feature: "schedule sources",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     const { data: source, error } = await supabase
@@ -158,7 +208,7 @@ export async function DELETE(
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, { headers: rateLimit.headers });
   } catch (error) {
     console.error("[schedule-source] Error deleting source:", error);
     return NextResponse.json(
