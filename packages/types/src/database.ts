@@ -2292,6 +2292,318 @@ export type Database = {
           },
         ]
       }
+      schedule_domain_rules: {
+        Row: {
+          id: string
+          pattern: string
+          vendor_id: string
+          status: "active" | "blocked"
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          pattern: string
+          vendor_id: string
+          status?: "active" | "blocked"
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          pattern?: string
+          vendor_id?: string
+          status?: "active" | "blocked"
+          created_at?: string
+        }
+        Relationships: []
+      }
+      schedule_allowed_domains: {
+        Row: {
+          id: string
+          hostname: string
+          vendor_id: string
+          status: "pending" | "active" | "blocked"
+          verified_by_user_id: string | null
+          verified_by_org_id: string | null
+          verified_at: string | null
+          verification_method: string | null
+          fingerprint: Json
+          last_seen_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          hostname: string
+          vendor_id: string
+          status?: "pending" | "active" | "blocked"
+          verified_by_user_id?: string | null
+          verified_by_org_id?: string | null
+          verified_at?: string | null
+          verification_method?: string | null
+          fingerprint?: Json
+          last_seen_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          hostname?: string
+          vendor_id?: string
+          status?: "pending" | "active" | "blocked"
+          verified_by_user_id?: string | null
+          verified_by_org_id?: string | null
+          verified_at?: string | null
+          verification_method?: string | null
+          fingerprint?: Json
+          last_seen_at?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      calendar_feeds: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          feed_url: string
+          status: "active" | "error" | "disabled"
+          last_synced_at: string | null
+          last_error: string | null
+          created_at: string | null
+          updated_at: string | null
+          organization_id: string | null
+          scope: "personal" | "org"
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider?: string
+          feed_url: string
+          status?: "active" | "error" | "disabled"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          feed_url?: string
+          status?: "active" | "error" | "disabled"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_feeds_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_feeds_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_events: {
+        Row: {
+          id: string
+          user_id: string
+          feed_id: string
+          external_uid: string
+          instance_key: string
+          title: string | null
+          description: string | null
+          location: string | null
+          start_at: string
+          end_at: string | null
+          all_day: boolean | null
+          raw: Json | null
+          created_at: string | null
+          updated_at: string | null
+          organization_id: string | null
+          scope: "personal" | "org"
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          feed_id: string
+          external_uid: string
+          instance_key: string
+          title?: string | null
+          description?: string | null
+          location?: string | null
+          start_at: string
+          end_at?: string | null
+          all_day?: boolean | null
+          raw?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          feed_id?: string
+          external_uid?: string
+          instance_key?: string
+          title?: string | null
+          description?: string | null
+          location?: string | null
+          start_at?: string
+          end_at?: string | null
+          all_day?: boolean | null
+          raw?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          organization_id?: string | null
+          scope?: "personal" | "org"
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_feed_id_fkey"
+            columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "calendar_feeds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_sources: {
+        Row: {
+          id: string
+          org_id: string
+          created_by: string | null
+          vendor_id: string
+          source_url: string
+          title: string | null
+          status: "active" | "paused" | "error"
+          last_synced_at: string | null
+          last_error: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          created_by?: string | null
+          vendor_id: string
+          source_url: string
+          title?: string | null
+          status?: "active" | "paused" | "error"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          created_by?: string | null
+          vendor_id?: string
+          source_url?: string
+          title?: string | null
+          status?: "active" | "paused" | "error"
+          last_synced_at?: string | null
+          last_error?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_sources_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schedule_events: {
+        Row: {
+          id: string
+          org_id: string
+          source_id: string
+          external_uid: string
+          title: string
+          start_at: string
+          end_at: string
+          location: string | null
+          status: "confirmed" | "cancelled" | "tentative"
+          raw: Json
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          org_id: string
+          source_id: string
+          external_uid: string
+          title: string
+          start_at: string
+          end_at: string
+          location?: string | null
+          status?: "confirmed" | "cancelled" | "tentative"
+          raw?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          org_id?: string
+          source_id?: string
+          external_uid?: string
+          title?: string
+          start_at?: string
+          end_at?: string
+          location?: string | null
+          status?: "confirmed" | "cancelled" | "tentative"
+          raw?: Json
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "schedule_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "schedule_events_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "schedule_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2538,6 +2850,18 @@ export type EventCalendarEntry = Tables<'event_calendar_entries'>;
 export type CalendarSyncPreference = Tables<'calendar_sync_preferences'>;
 export type CalendarConnectionStatus = "connected" | "disconnected" | "error";
 export type CalendarSyncStatus = "pending" | "synced" | "failed" | "deleted";
+
+// Schedule connector types
+export type ScheduleDomainRule = Tables<'schedule_domain_rules'>;
+export type ScheduleAllowedDomain = Tables<'schedule_allowed_domains'>;
+export type CalendarFeed = Tables<'calendar_feeds'>;
+export type CalendarEvent = Tables<'calendar_events'>;
+export type ScheduleSource = Tables<'schedule_sources'>;
+export type ScheduleEvent = Tables<'schedule_events'>;
+export type ScheduleDomainStatus = "pending" | "active" | "blocked";
+export type CalendarFeedStatus = "active" | "error" | "disabled";
+export type ScheduleSourceStatus = "active" | "paused" | "error";
+export type ScheduleEventStatus = "confirmed" | "cancelled" | "tentative";
 
 // Chat types
 export type ChatGroup = Tables<'chat_groups'>;
