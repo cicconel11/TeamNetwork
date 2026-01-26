@@ -14,8 +14,9 @@ npm run lint         # Run ESLint
 
 ### Testing
 ```bash
-npm run test:auth      # Test authentication middleware
-npm run test:payments  # Test payment idempotency and Stripe webhooks
+npm run test:auth       # Test authentication middleware
+npm run test:payments   # Test payment idempotency and Stripe webhooks
+npm run test:schedules  # Test schedule domain verification and enrollment
 ```
 
 ### Audit System
@@ -153,6 +154,35 @@ Members progress through states:
 - **active**: Full access granted
 - **revoked**: Access removed, user redirected to `/app`
 
+### Schedule Domain Allowlist & Security
+External schedule URLs are validated before import to prevent SSRF and abuse:
+
+**Domain Status Flow:**
+- `denied` → Domain not recognized, cannot be imported
+- `pending` → Needs admin approval (confidence 80-95%)
+- `active` → Verified and allowed (confidence ≥95% or admin-approved)
+- `blocked` → Explicitly blocked, cannot be imported
+
+**Verification System:**
+- Vendor fingerprinting via host patterns and HTML markers (Sidearm, Presto, Vantage, etc.)
+- ICS/iCal content detection (auto-approved at 99% confidence)
+- Race condition protection: prevents `active → pending` downgrades during concurrent requests
+- Unique constraint handling for concurrent domain enrollment
+
+**SSRF Protection (`safe-fetch.ts`):**
+- Blocks localhost, private IPs (10.x, 172.16-31.x, 192.168.x, etc.)
+- IPv6 private ranges blocked (fc00::/7, fe80::/10, ::1)
+- Only HTTP/HTTPS on ports 80/443
+- Max 2 redirects, response size limits (200KB)
+- DNS resolution check to catch DNS rebinding
+
+**Rate Limiting:**
+- `/api/schedules/preview`: 15 req/min (IP), 8 req/min (user)
+- `/api/schedules/events`: 30 req/min (IP), 20 req/min (user)
+- IP-based limiting applied before auth to prevent unauthenticated abuse
+
+Files: `src/lib/schedule-security/allowlist.ts`, `src/lib/schedule-security/verifyAndEnroll.ts`, `src/lib/schedule-security/safe-fetch.ts`
+
 ## Environment Variables
 
 Required variables (validated at build time in `next.config.mjs`):
@@ -186,6 +216,8 @@ From `AGENTS.md`:
 - `src/lib/auth/roles.ts` - Role checking utilities
 - `src/lib/payments/idempotency.ts` - Payment deduplication logic
 - `src/lib/navigation/nav-items.tsx` - Navigation structure and role filtering
+- `src/lib/schedule-security/verifyAndEnroll.ts` - Domain verification and allowlist enrollment
+- `src/lib/schedule-security/safe-fetch.ts` - SSRF-protected HTTP fetching
 - `docs/db/schema-audit.md` - Database schema documentation and known issues
 
 ## Known Issues & Considerations
