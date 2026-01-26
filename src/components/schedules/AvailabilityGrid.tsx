@@ -311,10 +311,24 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     return conflictGrid.get(`${dateKey}-${hour}`) || [];
   };
 
-  const getCellColor = (conflicts: number): string => {
-    if (conflicts === 0) return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
-    if (conflicts <= 2) return "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300";
-    return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
+  // Get gradient color based on availability ratio (0-1)
+  const getGradientColor = (available: number, total: number): string => {
+    if (total === 0) return "bg-muted";
+    const ratio = available / total;
+
+    // Personal mode: binary colors (available or not)
+    if (mode === "personal") {
+      return ratio >= 1
+        ? "bg-emerald-400 dark:bg-emerald-500"
+        : "bg-red-400 dark:bg-red-500";
+    }
+
+    // Team mode: gradient spectrum based on availability percentage
+    if (ratio >= 1) return "bg-emerald-400 dark:bg-emerald-500";
+    if (ratio >= 0.75) return "bg-emerald-300 dark:bg-emerald-600";
+    if (ratio >= 0.5) return "bg-amber-300 dark:bg-amber-500";
+    if (ratio >= 0.25) return "bg-orange-400 dark:bg-orange-500";
+    return "bg-red-400 dark:bg-red-500";
   };
 
   // Show loading state until mounted to avoid hydration issues
@@ -405,17 +419,38 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
                   const busyCount = orgBusy ? totalMembers : conflicts.length;
                   const available = Math.max(totalMembers - busyCount, 0);
                   const isSelected = selectedCell?.dateKey === dateKey && selectedCell?.hour === hour;
+                  const availabilityPercent = totalMembers > 0 ? (available / totalMembers) * 100 : 0;
+
+                  const tooltipId = `tooltip-${dateKey}-${hour}`;
 
                   return (
-                    <td key={`${dateKey}-${hour}`} className="p-0.5">
+                    <td key={`${dateKey}-${hour}`} className="p-0.5 relative group">
                       <button
                         onClick={() => setSelectedCell(isSelected ? null : { dateKey, hour })}
-                        className={`w-full h-8 rounded text-xs font-medium transition-all ${getCellColor(busyCount)} ${
-                          isSelected ? "ring-2 ring-org-primary" : ""
-                        } hover:opacity-80`}
+                        className={`w-full h-8 rounded-md transition-all duration-150 ${getGradientColor(available, totalMembers)} ${
+                          isSelected ? "ring-2 ring-org-primary ring-offset-1" : ""
+                        } hover:ring-2 hover:ring-org-primary/50 hover:ring-offset-1 focus:ring-2 focus:ring-org-primary focus:ring-offset-1 focus:outline-none`}
+                        aria-label={`${available} of ${totalMembers} available`}
+                        aria-describedby={tooltipId}
+                      />
+                      {/* Hover/focus tooltip - accessible to keyboard users */}
+                      <div
+                        id={tooltipId}
+                        role="tooltip"
+                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5
+                          opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 pointer-events-none z-20
+                          bg-card border border-border rounded-lg shadow-lg px-2.5 py-1.5 text-xs whitespace-nowrap"
                       >
-                        {available}/{totalMembers}
-                      </button>
+                        <span className="font-medium text-foreground">{available}/{totalMembers}</span>
+                        <span className="text-muted-foreground ml-1">available</span>
+                        {/* Mini progress bar */}
+                        <div className="w-16 h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${getGradientColor(available, totalMembers)}`}
+                            style={{ width: `${availabilityPercent}%` }}
+                          />
+                        </div>
+                      </div>
                     </td>
                   );
                 })}
@@ -447,20 +482,31 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         </div>
       )}
 
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-green-100 dark:bg-green-900/30"></div>
-          <span>All available</span>
+      {/* Legend: adapts to mode (binary for personal, gradient for team) */}
+      {mode === "personal" ? (
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-3 rounded bg-emerald-400 dark:bg-emerald-500" />
+            <span className="font-medium text-foreground">Free</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-4 h-3 rounded bg-red-400 dark:bg-red-500" />
+            <span className="font-medium text-foreground">Busy</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-yellow-100 dark:bg-yellow-900/30"></div>
-          <span>1-2 busy</span>
+      ) : (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Available</span>
+          <div className="flex h-3 rounded-full overflow-hidden w-32 shadow-sm border border-border/50">
+            <div className="flex-1 bg-emerald-400 dark:bg-emerald-500" />
+            <div className="flex-1 bg-emerald-300 dark:bg-emerald-600" />
+            <div className="flex-1 bg-amber-300 dark:bg-amber-500" />
+            <div className="flex-1 bg-orange-400 dark:bg-orange-500" />
+            <div className="flex-1 bg-red-400 dark:bg-red-500" />
+          </div>
+          <span className="font-medium text-foreground">Busy</span>
         </div>
-        <div className="flex items-center gap-1">
-          <div className="w-3 h-3 rounded bg-red-100 dark:bg-red-900/30"></div>
-          <span>3+ busy</span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

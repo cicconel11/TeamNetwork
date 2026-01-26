@@ -64,7 +64,9 @@ src/
 │   ├── supabase/           # Supabase client wrappers (server, client, middleware, service)
 │   ├── payments/           # Payment idempotency & event handling
 │   ├── security/           # Rate limiting, validation
-│   └── navigation/         # Navigation configuration
+│   ├── navigation/         # Navigation configuration
+│   ├── schedule-connectors/ # External schedule importers (ICS, HTML parsers)
+│   └── schedule-security/  # Domain allowlist, SSRF protection
 ├── types/
 │   └── database.ts         # Generated Supabase types
 └── middleware.ts           # Global auth/routing middleware
@@ -183,6 +185,35 @@ External schedule URLs are validated before import to prevent SSRF and abuse:
 
 Files: `src/lib/schedule-security/allowlist.ts`, `src/lib/schedule-security/verifyAndEnroll.ts`, `src/lib/schedule-security/safe-fetch.ts`
 
+### Schedule Connectors
+Modular system for importing events from external schedule sources:
+
+**Connector Types:**
+- `ics` - ICS/iCal feed parser (highest confidence)
+- `vendorA` - Vantage/SectionXI athletics sites
+- `vendorB` - Sidearm/CHSAA athletics sites
+- `generic_html` - Fallback table-based HTML parser
+
+**Event Processing Pipeline:**
+1. Connector fetches HTML/ICS from allowlisted URL
+2. Events extracted via JSON-LD, embedded JS data, or HTML tables
+3. Titles sanitized (HTML stripped, entities decoded, XSS prevented)
+4. Deterministic `external_uid` hash generated for deduplication
+5. Events synced to database with upsert logic
+
+**Hash Stability (`sanitize.ts`):**
+- `rawTitle` (original text before sanitization) used for hashing to ensure stability
+- `getTitleForHash(rawTitle, title)` helper trims whitespace and falls back to sanitized title
+- Prevents hash changes when sanitization rules evolve
+- Whitespace-only raw titles correctly fall back to sanitized title
+
+**Title Sanitization:**
+- `sanitizeEventTitle()` - Strips HTML, decodes safe entities (&amp; → &), preserves &lt;/&gt; for XSS safety
+- `escapeHtml()` - Escapes for HTML output
+- `sanitizeEventTitleForEmail()` - Combines both for email-safe output
+
+Files: `src/lib/schedule-connectors/sanitize.ts`, `src/lib/schedule-connectors/html-utils.ts`, `src/lib/schedule-connectors/genericHtml.ts`, `src/lib/schedule-connectors/vendorA.ts`, `src/lib/schedule-connectors/vendorB.ts`, `src/lib/schedule-connectors/ics.ts`
+
 ## Environment Variables
 
 Required variables (validated at build time in `next.config.mjs`):
@@ -218,6 +249,7 @@ From `AGENTS.md`:
 - `src/lib/navigation/nav-items.tsx` - Navigation structure and role filtering
 - `src/lib/schedule-security/verifyAndEnroll.ts` - Domain verification and allowlist enrollment
 - `src/lib/schedule-security/safe-fetch.ts` - SSRF-protected HTTP fetching
+- `src/lib/schedule-connectors/sanitize.ts` - Event title sanitization and hash stability helpers
 - `docs/db/schema-audit.md` - Database schema documentation and known issues
 
 ## Known Issues & Considerations
