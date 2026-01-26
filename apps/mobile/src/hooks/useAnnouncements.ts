@@ -14,30 +14,28 @@ interface UseAnnouncementsReturn {
   refetchIfStale: () => void;
 }
 
-export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
+/**
+ * Hook to fetch announcements for an organization.
+ * @param orgId - The organization ID (from useOrg context)
+ */
+export function useAnnouncements(orgId: string | null): UseAnnouncementsReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId]);
 
-  const fetchAnnouncements = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchAnnouncements = useCallback(async () => {
+    if (!orgId) {
       if (isMountedRef.current) {
         setAnnouncements([]);
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
@@ -54,29 +52,11 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
         setUserId(user.id);
       }
 
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        // Get org ID from slug
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
-
       // Get user's role in this org
       const { data: roleData } = await supabase
         .from("user_organization_roles")
         .select("role, status")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .eq("user_id", user.id)
         .eq("status", "active")
         .single();
@@ -85,7 +65,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
       const { data: announcementsData, error: announcementsError } = await supabase
         .from("announcements")
         .select("*")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
@@ -114,7 +94,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -125,6 +105,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
     };
   }, [fetchAnnouncements]);
 
+  // Real-time subscription for announcement changes
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
@@ -138,7 +119,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchAnnouncements(orgId);
+          fetchAnnouncements();
         }
       )
       .subscribe();
@@ -148,6 +129,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
     };
   }, [orgId, fetchAnnouncements]);
 
+  // Re-fetch announcements if user's role changes (affects audience filtering)
   useEffect(() => {
     if (!orgId || !userId) return;
     const channel = supabase
@@ -166,7 +148,7 @@ export function useAnnouncements(orgSlug: string): UseAnnouncementsReturn {
           const previousOrgId = (payload.old as { organization_id?: string } | null)
             ?.organization_id;
           if (nextOrgId === orgId || previousOrgId === orgId) {
-            fetchAnnouncements(orgId);
+            fetchAnnouncements();
           }
         }
       )
