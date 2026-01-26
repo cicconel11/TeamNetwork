@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text, Image, Pressable, StyleSheet } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 import { spacing, fontSize, fontWeight, borderRadius, type ThemeColors } from "@/lib/theme";
@@ -19,7 +20,7 @@ interface DirectoryCardProps {
   colors: ThemeColors;
 }
 
-export function DirectoryCard({
+export const DirectoryCard = React.memo(function DirectoryCard({
   avatarUrl,
   initials,
   name,
@@ -80,7 +81,7 @@ export function DirectoryCard({
       </View>
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

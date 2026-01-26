@@ -21,8 +21,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useAuth } from "@/hooks/useAuth";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import { supabase } from "@/lib/supabase";
-import type { Announcement, Organization } from "@teammeet/types";
+import type { Announcement } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -30,17 +29,16 @@ import { AnnouncementCard, type AnnouncementCardAnnouncement } from "@/component
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 export default function AnnouncementsScreen() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
-  const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgSlug || "");
+  // Use orgId from context for data hook (eliminates redundant org fetch)
+  const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgId);
   const [refreshing, setRefreshing] = useState(false);
-  const [organization, setOrganization] = useState<Organization | null>(null);
   const isRefetchingRef = useRef(false);
-  const isMountedRef = useRef(true);
 
   // Sort announcements: pinned first, then by created_at descending
   const sortedAnnouncements = useMemo(() => {
@@ -54,31 +52,6 @@ export default function AnnouncementsScreen() {
       return dateB - dateA;
     });
   }, [announcements]);
-
-  // Fetch organization data for header
-  const fetchOrg = useCallback(async () => {
-    if (!orgSlug || !user) return;
-    try {
-      const { data } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("slug", orgSlug)
-        .single();
-      if (isMountedRef.current && data) {
-        setOrganization(data);
-      }
-    } catch {
-      // Silently fail - header will show fallback
-    }
-  }, [orgSlug, user]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    fetchOrg();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchOrg]);
 
   // Safe drawer toggle
   const handleDrawerToggle = useCallback(() => {
@@ -120,12 +93,12 @@ export default function AnnouncementsScreen() {
     setRefreshing(true);
     isRefetchingRef.current = true;
     try {
-      await Promise.all([refetch(), fetchOrg()]);
+      await refetch();
     } finally {
       setRefreshing(false);
       isRefetchingRef.current = false;
     }
-  }, [refetch, fetchOrg]);
+  }, [refetch]);
 
   const renderAnnouncement = ({ item }: { item: Announcement }) => {
     const cardAnnouncement: AnnouncementCardAnnouncement = {
@@ -191,11 +164,11 @@ export default function AnnouncementsScreen() {
           <View style={styles.headerContent}>
             {/* Org Logo (opens drawer) */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {organization?.logo_url ? (
-                <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
               ) : (
                 <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
                 </View>
               )}
             </Pressable>

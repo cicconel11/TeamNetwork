@@ -30,7 +30,6 @@ import { useMembers } from "@/hooks/useMembers";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { normalizeRole, roleFlags } from "@teammeet/core";
-import type { Organization } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -42,7 +41,7 @@ import { SkeletonEventCard, SkeletonAnnouncementCard } from "@/components/ui/Ske
 const SHOW_ACTIVITY_FEED = false;
 
 export default function HomeScreen() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -61,19 +60,18 @@ export default function HomeScreen() {
     }
   }, [navigation]);
 
-  const [organization, setOrganization] = useState<Organization | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState(0);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const isRefetchingRef = useRef(false);
 
-  const { events, refetch: refetchEvents, refetchIfStale: refetchEventsIfStale } = useEvents(orgSlug || "");
-  const { announcements, refetch: refetchAnnouncements, refetchIfStale: refetchAnnouncementsIfStale } = useAnnouncements(orgSlug || "");
-  const { members, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgSlug || "");
+  // Use orgId from context for all data hooks (eliminates redundant org fetches)
+  const { events, refetch: refetchEvents, refetchIfStale: refetchEventsIfStale } = useEvents(orgId);
+  const { announcements, refetch: refetchAnnouncements, refetchIfStale: refetchAnnouncementsIfStale } = useAnnouncements(orgId);
+  const { members, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgId);
   const userId = user?.id ?? null;
 
   // Get upcoming events (next 2)
@@ -89,33 +87,21 @@ export default function HomeScreen() {
   const pinnedAnnouncement = announcements.find((a) => (a as any).is_pinned);
 
   const fetchData = useCallback(async () => {
-    if (!orgSlug || !user) {
+    if (!orgId || !user) {
       return;
     }
 
     try {
-      // Fetch organization
-      const { data: orgData, error: fetchError } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("slug", orgSlug)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // Fetch user profile and role
+      // Fetch user profile and role (organization data comes from useOrg context)
       const { data: roleData } = await supabase
         .from("user_organization_roles")
         .select("role, user:users(name)")
         .eq("user_id", user.id)
-        .eq("organization_id", orgData.id)
+        .eq("organization_id", orgId)
         .eq("status", "active")
         .single();
 
       if (isMountedRef.current) {
-        setOrganization(orgData);
-        setOrgId(orgData.id);
-
         if (roleData) {
           const normalized = normalizeRole(roleData.role);
           const flags = roleFlags(normalized);
@@ -136,7 +122,7 @@ export default function HomeScreen() {
         setRefreshing(false);
       }
     }
-  }, [orgSlug, user]);
+  }, [orgId, user]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -146,10 +132,6 @@ export default function HomeScreen() {
       isMountedRef.current = false;
     };
   }, [fetchData]);
-
-  useEffect(() => {
-    setOrgId(null);
-  }, [orgSlug]);
 
   useEffect(() => {
     setMemberCount(members.length);
@@ -303,11 +285,11 @@ export default function HomeScreen() {
           <View style={styles.headerContent}>
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {organization?.logo_url ? (
-                <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
               ) : (
                 <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{organization?.name?.[0]}</Text>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
                 </View>
               )}
             </Pressable>
@@ -315,7 +297,7 @@ export default function HomeScreen() {
             {/* Text (left-aligned) */}
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1}>
-                {organization?.name}
+                {orgName}
               </Text>
               <Text style={styles.headerMeta}>
                 {memberCount} {memberCount === 1 ? "member" : "members"} · {upcomingEvents.length} {upcomingEvents.length === 1 ? "event" : "events"}

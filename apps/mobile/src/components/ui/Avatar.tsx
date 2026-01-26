@@ -68,7 +68,7 @@ function getPresenceColor(status: PresenceStatus): string {
   }
 }
 
-export function Avatar({
+export const Avatar = React.memo(function Avatar({
   uri,
   name,
   size = "md",
@@ -159,7 +159,7 @@ export function Avatar({
       {presence !== "none" && <View style={presenceStyle} />}
     </View>
   );
-}
+});
 
 // Avatar Group for showing multiple avatars stacked
 interface AvatarGroupProps {
@@ -169,7 +169,7 @@ interface AvatarGroupProps {
   overlap?: number; // overlap in pixels
 }
 
-export function AvatarGroup({
+export const AvatarGroup = React.memo(function AvatarGroup({
   avatars,
   size = "sm",
   max = 4,
@@ -232,7 +232,7 @@ export function AvatarGroup({
       )}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

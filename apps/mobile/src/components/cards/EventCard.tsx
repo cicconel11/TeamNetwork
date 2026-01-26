@@ -64,7 +64,7 @@ function formatDate(dateString: string): string {
   });
 }
 
-export function EventCard({
+export const EventCard = React.memo(function EventCard({
   event,
   onPress,
   onRSVP,
@@ -176,10 +176,10 @@ export function EventCard({
       </View>
     </AnimatedPressable>
   );
-}
+});
 
 // Compact event card for home screen
-export function EventCardCompact({
+export const EventCardCompact = React.memo(function EventCardCompact({
   event,
   onPress,
   style,
@@ -230,7 +230,7 @@ export function EventCardCompact({
       </View>
     </AnimatedPressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

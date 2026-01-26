@@ -64,7 +64,7 @@ function formatRelativeTime(dateString: string | null | undefined): string {
   });
 }
 
-export function AnnouncementCard({
+export const AnnouncementCard = React.memo(function AnnouncementCard({
   announcement,
   onPress,
   onReactionPress,
@@ -168,7 +168,7 @@ export function AnnouncementCard({
       )}
     </AnimatedPressable>
   );
-}
+});
 
 // Compact announcement card for home screen
 interface AnnouncementCardCompactProps {
@@ -177,7 +177,7 @@ interface AnnouncementCardCompactProps {
   style?: ViewStyle;
 }
 
-export function AnnouncementCardCompact({
+export const AnnouncementCardCompact = React.memo(function AnnouncementCardCompact({
   announcement,
   onPress,
   style,
@@ -222,7 +222,7 @@ export function AnnouncementCardCompact({
       </Text>
     </AnimatedPressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
