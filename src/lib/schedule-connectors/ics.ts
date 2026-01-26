@@ -5,6 +5,7 @@ import type { Database } from "@/types/database";
 import { fetchUrlSafe } from "./fetch";
 import type { NormalizedEvent, ScheduleConnector, SyncResult } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
+import { sanitizeEventTitle } from "./sanitize";
 
 const PREVIEW_DAYS_FORWARD = 180;
 const PREVIEW_DAYS_BACK = 30;
@@ -154,7 +155,7 @@ function buildInstance(event: IcsEvent, externalUid: string, start: Date, end: D
 
   return {
     external_uid: externalUid,
-    title: event.summary ?? "Untitled event",
+    title: sanitizeEventTitle(event.summary),
     start_at: start.toISOString(),
     end_at: safeEnd.toISOString(),
     location: event.location ?? undefined,

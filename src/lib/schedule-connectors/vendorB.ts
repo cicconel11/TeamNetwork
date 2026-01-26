@@ -5,6 +5,7 @@ import type { NormalizedEvent, ScheduleConnector } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { icsConnector, syncIcsToSource } from "./ics";
 import { isHostAllowed } from "@/lib/schedule-security/allowlist";
+import { sanitizeEventTitle, getTitleForHash } from "./sanitize";
 
 const MARKERS = ["chsaa", "sidearm", "sidearm sports", "athletics"];
 
@@ -94,7 +95,8 @@ function extractEmbeddedEvents(html: string): ParsedEvent[] {
 }
 
 function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | null {
-  const title = typeof event.title === "string" ? event.title : "Event";
+  const rawTitle = typeof event.title === "string" ? event.title : "";
+  const title = sanitizeEventTitle(rawTitle);
   const start = typeof event.start === "string" ? new Date(event.start) : null;
   const end = typeof event.end === "string" ? new Date(event.end) : null;
 
@@ -104,6 +106,7 @@ function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | n
 
   return {
     title,
+    rawTitle,
     start_at: start.toISOString(),
     end_at: end && !Number.isNaN(end.getTime()) ? end.toISOString() : null,
     location: typeof event.location === "string" ? event.location : undefined,
@@ -114,7 +117,7 @@ function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | n
 function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   return events.map((event) => {
     const endAt = event.end_at ?? new Date(new Date(event.start_at).getTime() + 2 * 60 * 60 * 1000).toISOString();
-    const hashInput = `${event.title}|${event.start_at}|${event.location ?? ""}`;
+    const hashInput = `${getTitleForHash(event.rawTitle, event.title)}|${event.start_at}|${event.location ?? ""}`;
 
     return {
       external_uid: hashEventId(hashInput),

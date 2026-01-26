@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { load } from "cheerio";
+import { sanitizeEventTitle } from "./sanitize";
 
 export type ParsedEvent = {
   title: string;
+  rawTitle?: string;  // Original title for hashing (before sanitization)
   start_at: string;
   end_at: string | null;
   location?: string;
@@ -81,11 +83,13 @@ export function extractTableEvents(html: string): ParsedEvent[] {
         const sportLabel = [genderText, sportText].filter(Boolean).join(" ");
         const matchup = [awayTeam, homeTeam].filter(Boolean).join(" vs ");
         const fallbackTitle = [sportLabel, matchup || eventTypeText].filter(Boolean).join(" - ");
-        const finalTitle = titleText || fallbackTitle || "Event";
+        const rawTitle = titleText || fallbackTitle;
+        const finalTitle = sanitizeEventTitle(rawTitle);
 
         const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
         events.push({
           title: finalTitle,
+          rawTitle,
           start_at: start.toISOString(),
           end_at: end.toISOString(),
           location: locationText,
@@ -155,7 +159,8 @@ function isEventType(obj: unknown): obj is Record<string, unknown> {
 }
 
 function jsonLdToEvent(obj: Record<string, unknown>): ParsedEvent | null {
-  const title = typeof obj.name === "string" ? obj.name : "Event";
+  const rawTitle = typeof obj.name === "string" ? obj.name : "";
+  const title = sanitizeEventTitle(rawTitle);
   const startDate = typeof obj.startDate === "string" ? obj.startDate : null;
   if (!startDate) return null;
 
@@ -165,6 +170,7 @@ function jsonLdToEvent(obj: Record<string, unknown>): ParsedEvent | null {
 
   return {
     title,
+    rawTitle,
     start_at: new Date(startDate).toISOString(),
     end_at: endDate ? new Date(endDate).toISOString() : null,
     location,
@@ -194,4 +200,42 @@ function resolveJsonLdStatus(status: unknown): ParsedEvent["status"] {
   if (lower.includes("cancel")) return "cancelled";
   if (lower.includes("tentative")) return "tentative";
   return "confirmed";
+}
+
+const DIGITALSPORTS_ALLOWED_PARAMS = new Set([
+  "school_id",
+  "sid",
+  "sport",
+  "season",
+  "team_id",
+  "team",
+  "year",
+  "gender",
+  "league",
+  "division",
+]);
+
+export function findDigitalsportsScheduleUrl(html: string, baseUrl: string): string | null {
+  const match = html.match(/https?:\/\/digitalsports\.com\/pages\/api\/schedule-list\.php\??/i);
+  if (!match) return null;
+
+  const baseLink = match[0].endsWith("?") ? match[0] : `${match[0]}?`;
+  const safeParams = extractAllowedParams(baseUrl, DIGITALSPORTS_ALLOWED_PARAMS);
+  return safeParams ? `${baseLink}${safeParams}` : baseLink.replace(/\?$/, "");
+}
+
+function extractAllowedParams(rawUrl: string, allowed: Set<string>): string {
+  try {
+    const url = new URL(rawUrl);
+    const filtered = new URLSearchParams();
+    for (const key of allowed) {
+      const value = url.searchParams.get(key);
+      if (value !== null) {
+        filtered.set(key, value);
+      }
+    }
+    return filtered.toString();
+  } catch {
+    return "";
+  }
 }

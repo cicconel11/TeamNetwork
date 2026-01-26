@@ -1,9 +1,10 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { fetchUrlSafe } from "./fetch";
-import { extractJsonLdEvents, extractTableEvents, hashEventId, type ParsedEvent } from "./html-utils";
+import { extractJsonLdEvents, extractTableEvents, findDigitalsportsScheduleUrl, hashEventId, type ParsedEvent } from "./html-utils";
 import type { NormalizedEvent, ScheduleConnector } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { isHostAllowed } from "@/lib/schedule-security/allowlist";
+import { sanitizeEventTitle, getTitleForHash } from "./sanitize";
 
 const MARKERS = ["sectionxi", "vantage", "athletics"];
 
@@ -57,16 +58,6 @@ async function fetchScheduleHtml(url: string, orgId: string) {
   return { text: embedded.text };
 }
 
-function findDigitalsportsScheduleUrl(html: string, baseUrl: string) {
-  const match = html.match(/https?:\/\/digitalsports\.com\/pages\/api\/schedule-list\.php\??/i);
-  if (!match) return null;
-
-  const base = new URL(baseUrl);
-  const query = base.searchParams.toString();
-  const baseLink = match[0].endsWith("?") ? match[0] : `${match[0]}?`;
-  return query ? `${baseLink}${query}` : baseLink.replace(/\?$/, "");
-}
-
 function extractVendorAEvents(html: string): ParsedEvent[] {
   const jsonLd = extractJsonLdEvents(html);
   if (jsonLd.length > 0) return jsonLd;
@@ -101,7 +92,8 @@ function extractEmbeddedEvents(html: string): ParsedEvent[] {
 }
 
 function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | null {
-  const title = typeof event.title === "string" ? event.title : "Event";
+  const rawTitle = typeof event.title === "string" ? event.title : "";
+  const title = sanitizeEventTitle(rawTitle);
   const start = typeof event.start === "string" ? new Date(event.start) : null;
   const end = typeof event.end === "string" ? new Date(event.end) : null;
 
@@ -111,6 +103,7 @@ function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | n
 
   return {
     title,
+    rawTitle,
     start_at: start.toISOString(),
     end_at: end && !Number.isNaN(end.getTime()) ? end.toISOString() : null,
     location: typeof event.location === "string" ? event.location : undefined,
@@ -121,7 +114,7 @@ function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | n
 function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   return events.map((event) => {
     const endAt = event.end_at ?? new Date(new Date(event.start_at).getTime() + 2 * 60 * 60 * 1000).toISOString();
-    const hashInput = `${event.title}|${event.start_at}|${event.location ?? ""}`;
+    const hashInput = `${getTitleForHash(event.rawTitle, event.title)}|${event.start_at}|${event.location ?? ""}`;
 
     return {
       external_uid: hashEventId(hashInput),

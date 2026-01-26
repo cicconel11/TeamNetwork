@@ -260,17 +260,20 @@ function inferVendorFromHost(host: string) {
   return null;
 }
 
-function inferVendorFromMarkers(lowerText: string) {
-  if (lowerText.includes("sidearmsports") || lowerText.includes("sidearm sports")) return "sidearmsports";
-  if (lowerText.includes("prestosports") || lowerText.includes("presto sports")) return "prestosports";
-  if (lowerText.includes("vantagesportz") || lowerText.includes("vantage")) return "vantage";
-  if (lowerText.includes("digitalsports")) return "digitalsports";
-  if (lowerText.includes("sportngin") || lowerText.includes("sportsengine")) return "sportsengine";
-  if (lowerText.includes("teamsnap")) return "teamsnap";
-  if (lowerText.includes("leagueapps")) return "leagueapps";
-  if (lowerText.includes("arbitersports")) return "arbiter";
-  if (lowerText.includes("bigteams") || lowerText.includes("schedulestar")) return "bigteams";
-  if (lowerText.includes("rank one") || lowerText.includes("rankone")) return "rankone";
-  if (lowerText.includes("rschooltoday") || lowerText.includes("activity scheduler")) return "rschooltoday";
+function inferVendorFromMarkers(lowerText: string): string | null {
+  // Use specific markers to avoid false positives
+  // "vantagesportz" instead of "vantage" (which matches "vantage point", "advantage", etc.)
+  // "rankonesport" / "rank one sport" instead of "rank one" (too generic)
+  if (lowerText.includes("sidearmsports.com") || lowerText.includes("sidearmsports") || lowerText.includes("sidearm sports")) return "sidearmsports";
+  if (lowerText.includes("prestosports.com") || lowerText.includes("prestosports") || lowerText.includes("presto sports")) return "prestosports";
+  if (lowerText.includes("vantagesportz.com") || lowerText.includes("vantagesportz")) return "vantage";
+  if (lowerText.includes("digitalsports.com") || lowerText.includes("digitalsports")) return "digitalsports";
+  if (lowerText.includes("sportsengine.com") || lowerText.includes("sportngin") || lowerText.includes("sportsengine")) return "sportsengine";
+  if (lowerText.includes("teamsnap.com") || lowerText.includes("teamsnap")) return "teamsnap";
+  if (lowerText.includes("leagueapps.com") || lowerText.includes("leagueapps")) return "leagueapps";
+  if (lowerText.includes("arbitersports.com") || lowerText.includes("arbitersports")) return "arbiter";
+  if (lowerText.includes("bigteams.com") || lowerText.includes("bigteams") || lowerText.includes("schedulestar")) return "bigteams";
+  if (lowerText.includes("rankonesport.com") || lowerText.includes("rankonesport") || lowerText.includes("rank one sport")) return "rankone";
+  if (lowerText.includes("rschooltoday.com") || lowerText.includes("rschooltoday") || lowerText.includes("activity scheduler")) return "rschooltoday";
   return null;
 }
