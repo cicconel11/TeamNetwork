@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+
+const MAX_EVENTS = 500;
+const MAX_DATE_RANGE_DAYS = 365;
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  // IP-based rate limiting (before auth to prevent unauthenticated abuse)
+  const ipRateLimit = checkRateLimit(request, {
+    limitPerIp: 30,
+    limitPerUser: 0,
+    windowMs: 60_000,
+    feature: "calendar events",
+  });
+  if (!ipRateLimit.ok) {
+    return buildRateLimitResponse(ipRateLimit);
+  }
+
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -13,6 +28,18 @@ export async function GET(request: Request) {
         { error: "Unauthorized", message: "You must be logged in to view events." },
         { status: 401 }
       );
+    }
+
+    // User-based rate limiting
+    const rateLimit = checkRateLimit(request, {
+      userId: user.id,
+      limitPerIp: 0,
+      limitPerUser: 20,
+      windowMs: 60_000,
+      feature: "calendar events",
+    });
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
     }
 
     const url = new URL(request.url);
@@ -58,6 +85,15 @@ export async function GET(request: Request) {
       );
     }
 
+    // Validate date range isn't too large
+    const rangeDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    if (rangeDays > MAX_DATE_RANGE_DAYS) {
+      return NextResponse.json(
+        { error: "Invalid parameters", message: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days.` },
+        { status: 400, headers: rateLimit.headers }
+      );
+    }
+
     let calendarEvents: {
       id: string;
       title: string | null;
@@ -76,6 +112,7 @@ export async function GET(request: Request) {
       .eq("scope", "org")
       .gte("start_at", start.toISOString())
       .lte("start_at", end.toISOString())
+      .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 
     if (error) {
@@ -114,6 +151,7 @@ export async function GET(request: Request) {
       .neq("status", "cancelled")
       .gte("start_at", start.toISOString())
       .lte("start_at", end.toISOString())
+      .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 
     if (scheduleError) {
@@ -142,7 +180,20 @@ export async function GET(request: Request) {
       return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
     });
 
-    return NextResponse.json({ events: combined });
+    const truncated = combined.length > MAX_EVENTS;
+    const limitedEvents = combined.slice(0, MAX_EVENTS);
+
+    return NextResponse.json(
+      {
+        events: limitedEvents,
+        meta: {
+          count: limitedEvents.length,
+          truncated,
+          limit: MAX_EVENTS,
+        },
+      },
+      { headers: rateLimit.headers }
+    );
   } catch (error) {
     console.error("[calendar-org-events] Error fetching events:", error);
     return NextResponse.json(
