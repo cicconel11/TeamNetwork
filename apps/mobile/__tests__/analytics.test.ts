@@ -1,9 +1,19 @@
-jest.mock("@react-native-async-storage/async-storage", () => ({
-  default: {
-    setItem: jest.fn(() => Promise.resolve()),
-    getItem: jest.fn(() => Promise.resolve(null)),
-  },
-}));
+/**
+ * Analytics Module Tests
+ * Tests event queueing, SDK initialization, and enabled state
+ */
+
+// Mock modules before importing
+jest.mock("@react-native-async-storage/async-storage", () => {
+  return {
+    __esModule: true,
+    default: {
+      setItem: jest.fn(() => Promise.resolve()),
+      getItem: jest.fn(() => Promise.resolve(null)),
+      removeItem: jest.fn(() => Promise.resolve()),
+    },
+  };
+});
 
 jest.mock("../src/lib/analytics/posthog", () => ({
   init: jest.fn(),
@@ -26,33 +36,38 @@ const VALID_CONFIG = {
   sentryDsn: "https://test@sentry.io/123",
 };
 
-function loadAnalytics() {
-  jest.resetModules();
-  jest.clearAllMocks();
-
-  const analytics = require("../src/lib/analytics");
-  const posthog = require("../src/lib/analytics/posthog");
-  const sentry = require("../src/lib/analytics/sentry");
-  const asyncStorage = require("@react-native-async-storage/async-storage").default;
-
-  return { analytics, posthog, sentry, asyncStorage };
-}
-
 describe("Analytics Module", () => {
+  let analytics: typeof import("../src/lib/analytics");
+  let posthog: typeof import("../src/lib/analytics/posthog");
+  let sentry: typeof import("../src/lib/analytics/sentry");
+  let asyncStorage: { setItem: jest.Mock; getItem: jest.Mock };
+
+  beforeEach(() => {
+    // Reset modules to get fresh state for each test
+    jest.resetModules();
+
+    // Re-import mocks after reset
+    asyncStorage =
+      require("@react-native-async-storage/async-storage").default;
+    posthog = require("../src/lib/analytics/posthog");
+    sentry = require("../src/lib/analytics/sentry");
+    analytics = require("../src/lib/analytics");
+
+    // Clear mock call history
+    jest.clearAllMocks();
+  });
+
   it("starts disabled in __DEV__", () => {
-    const { analytics } = loadAnalytics();
     expect(analytics.isEnabled()).toBe(false);
   });
 
   it("does not initialize SDKs while disabled", () => {
-    const { analytics, posthog, sentry } = loadAnalytics();
     analytics.init(VALID_CONFIG);
     expect(posthog.init).not.toHaveBeenCalled();
     expect(sentry.init).not.toHaveBeenCalled();
   });
 
   it("initializes SDKs when enabled with valid config", () => {
-    const { analytics, posthog, sentry } = loadAnalytics();
     analytics.setEnabled(true);
     analytics.init(VALID_CONFIG);
     expect(posthog.init).toHaveBeenCalledWith(VALID_CONFIG.posthogKey);
@@ -60,7 +75,6 @@ describe("Analytics Module", () => {
   });
 
   it("queues events before init and flushes after init", () => {
-    const { analytics, posthog, sentry } = loadAnalytics();
     analytics.setEnabled(true);
 
     analytics.identify("user-123", { email: "test@example.com" });
@@ -84,7 +98,6 @@ describe("Analytics Module", () => {
   });
 
   it("sends events immediately after init", () => {
-    const { analytics, posthog } = loadAnalytics();
     analytics.setEnabled(true);
     analytics.init(VALID_CONFIG);
 
@@ -106,7 +119,6 @@ describe("Analytics Module", () => {
   });
 
   it("resets SDKs when disabling after init", () => {
-    const { analytics, posthog, sentry } = loadAnalytics();
     analytics.setEnabled(true);
     analytics.init(VALID_CONFIG);
     analytics.setEnabled(false);
@@ -115,7 +127,6 @@ describe("Analytics Module", () => {
   });
 
   it("persists enabled state changes", () => {
-    const { analytics, asyncStorage } = loadAnalytics();
     analytics.setEnabled(true);
     expect(asyncStorage.setItem).toHaveBeenCalledWith(
       "analytics.enabled",
@@ -129,7 +140,6 @@ describe("Analytics Module", () => {
   });
 
   it("does not send errors before init", () => {
-    const { analytics, sentry } = loadAnalytics();
     analytics.setEnabled(true);
     analytics.captureException(new Error("Test error"));
     analytics.captureMessage("Test message");
@@ -138,7 +148,6 @@ describe("Analytics Module", () => {
   });
 
   it("sends errors after init", () => {
-    const { analytics, sentry } = loadAnalytics();
     analytics.setEnabled(true);
     analytics.init(VALID_CONFIG);
 
@@ -153,7 +162,6 @@ describe("Analytics Module", () => {
   });
 
   it("hydrates enabled state from storage", async () => {
-    const { analytics, asyncStorage } = loadAnalytics();
     asyncStorage.getItem.mockResolvedValueOnce("true");
     await analytics.hydrateEnabled();
     expect(analytics.isEnabled()).toBe(true);
