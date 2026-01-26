@@ -14,6 +14,7 @@ interface SoftDeleteButtonProps {
   label?: string;
   confirmMessage?: string;
   onAfterDelete?: () => Promise<void>;
+  itemName?: string;
 }
 
 export function SoftDeleteButton({
@@ -25,6 +26,7 @@ export function SoftDeleteButton({
   label = "Delete",
   confirmMessage = "Are you sure? This will remove the record from active lists.",
   onAfterDelete,
+  itemName,
 }: SoftDeleteButtonProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -67,7 +69,12 @@ export function SoftDeleteButton({
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <Button variant="danger" onClick={handleDelete} isLoading={isLoading}>
+      <Button
+        variant="danger"
+        onClick={handleDelete}
+        isLoading={isLoading}
+        aria-label={itemName ? `Delete ${itemName}` : undefined}
+      >
         {label}
       </Button>
       {error && <p className="text-xs text-red-500">{error}</p>}

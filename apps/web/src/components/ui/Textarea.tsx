@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, TextareaHTMLAttributes } from "react";
+import { forwardRef, TextareaHTMLAttributes, useId } from "react";
 
 interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
@@ -9,24 +9,45 @@ interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className = "", label, error, helperText, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+  ({ className = "", label, error, helperText, id, "aria-describedby": callerDescribedBy, ...props }, ref) => {
+    const generatedId = useId();
+    const textareaId = id || generatedId;
+    const errorId = `${textareaId}-error`;
+    const helperId = `${textareaId}-helper`;
+
+    const describedByIds = [
+      error ? errorId : null,
+      helperText && !error ? helperId : null,
+      callerDescribedBy,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={inputId} className="block text-sm font-medium text-foreground">
+          <label htmlFor={textareaId} className="block text-sm font-medium text-foreground">
             {label}
           </label>
         )}
         <textarea
           ref={ref}
-          id={inputId}
+          id={textareaId}
+          aria-invalid={!!error}
+          aria-describedby={describedByIds || undefined}
           className={`input min-h-[100px] resize-y ${error ? "border-error focus:ring-error" : ""} ${className}`}
           {...props}
         />
-        {error && <p className="text-sm text-error">{error}</p>}
-        {helperText && !error && <p className="text-sm text-muted-foreground">{helperText}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-sm text-error">
+            {error}
+          </p>
+        )}
+        {helperText && !error && (
+          <p id={helperId} className="text-sm text-muted-foreground">
+            {helperText}
+          </p>
+        )}
       </div>
     );
   }

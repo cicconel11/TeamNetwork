@@ -73,6 +73,10 @@ export function Skeleton({
 
   return (
     <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading content"
+      accessibilityState={{ busy: true }}
       style={[
         styles.skeleton,
         {
@@ -107,7 +111,13 @@ export function SkeletonText({
   style,
 }: SkeletonTextProps) {
   return (
-    <View style={[styles.textContainer, style]}>
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading text content"
+      accessibilityState={{ busy: true }}
+      style={[styles.textContainer, style]}
+    >
       {Array.from({ length: lines }).map((_, index) => (
         <Skeleton
           key={index}
@@ -122,19 +132,32 @@ export function SkeletonText({
 
 export function SkeletonAvatar({ size = 40, style }: SkeletonAvatarProps) {
   return (
-    <Skeleton
-      width={size}
-      height={size}
-      borderRadius={size / 2}
-      style={style}
-    />
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading avatar"
+      accessibilityState={{ busy: true }}
+    >
+      <Skeleton
+        width={size}
+        height={size}
+        borderRadius={size / 2}
+        style={style}
+      />
+    </View>
   );
 }
 
 // Event card skeleton
 export function SkeletonEventCard({ style }: SkeletonCardProps) {
   return (
-    <View style={[styles.card, style]}>
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading event"
+      accessibilityState={{ busy: true }}
+      style={[styles.card, style]}
+    >
       <View style={styles.eventCardContent}>
         {/* Date block */}
         <Skeleton width={52} height={52} borderRadius={RADIUS.md} />
@@ -161,7 +184,13 @@ export function SkeletonEventCard({ style }: SkeletonCardProps) {
 // Announcement card skeleton
 export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
   return (
-    <View style={[styles.card, style]}>
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading announcement"
+      accessibilityState={{ busy: true }}
+      style={[styles.card, style]}
+    >
       <View style={styles.announcementHeader}>
         <SkeletonAvatar size={36} />
         <View style={styles.announcementHeaderText}>
@@ -181,7 +210,13 @@ export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
 // Member card skeleton
 export function SkeletonMemberCard({ style }: SkeletonCardProps) {
   return (
-    <View style={[styles.memberCard, style]}>
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading member"
+      accessibilityState={{ busy: true }}
+      style={[styles.memberCard, style]}
+    >
       <SkeletonAvatar size={40} />
       <View style={styles.memberCardContent}>
         <Skeleton width={120} height={16} />
@@ -214,8 +249,21 @@ export function SkeletonList({
       ? SkeletonAnnouncementCard
       : SkeletonMemberCard;
 
+  const typeLabel =
+    type === "event"
+      ? "events"
+      : type === "announcement"
+      ? "announcements"
+      : "members";
+
   return (
-    <View style={style}>
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Loading ${typeLabel}`}
+      accessibilityState={{ busy: true }}
+      style={style}
+    >
       {Array.from({ length: count }).map((_, index) => (
         <CardComponent key={index} style={{ marginBottom: 12 }} />
       ))}

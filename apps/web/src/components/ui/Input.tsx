@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, InputHTMLAttributes } from "react";
+import { forwardRef, InputHTMLAttributes, useId } from "react";
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -9,8 +9,19 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className = "", label, error, helperText, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+  ({ className = "", label, error, helperText, id, "aria-describedby": callerDescribedBy, ...props }, ref) => {
+    const generatedId = useId();
+    const inputId = id || generatedId;
+    const errorId = `${inputId}-error`;
+    const helperId = `${inputId}-helper`;
+
+    const describedByIds = [
+      error ? errorId : null,
+      helperText && !error ? helperId : null,
+      callerDescribedBy,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
       <div className="space-y-1.5">
@@ -22,11 +33,21 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
+          aria-invalid={!!error}
+          aria-describedby={describedByIds || undefined}
           className={`input ${error ? "border-error focus:ring-error" : ""} ${className}`}
           {...props}
         />
-        {error && <p className="text-sm text-error">{error}</p>}
-        {helperText && !error && <p className="text-sm text-muted-foreground">{helperText}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-sm text-error">
+            {error}
+          </p>
+        )}
+        {helperText && !error && (
+          <p id={helperId} className="text-sm text-muted-foreground">
+            {helperText}
+          </p>
+        )}
       </div>
     );
   }

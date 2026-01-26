@@ -555,12 +555,128 @@ From `docs/db/schema-audit.md`:
 
 Sacrifice grammar at the sake of concision” is the stupidest advice possible. I saw opus thinking about this line and it took it to mean be efficient. Which meant building bullshit. Take it out of your stuff immediately.
 
-## Browser Automation
+## Browser Automation & Web Testing
 
-Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.
+Use `agent-browser` for web automation and testing. Run `agent-browser --help` for all commands.
 
-Core workflow:
-1. `agent-browser open <url>` - Navigate to page
-2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
-3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
-4. Re-snapshot after page changes
+### Core Workflow
+```bash
+agent-browser open <url>           # Navigate to page
+agent-browser snapshot -i          # Get interactive elements with refs (@e1, @e2)
+agent-browser click @e1            # Click element by ref
+agent-browser fill @e2 "text"      # Fill input by ref
+agent-browser screenshot /tmp/screenshot.png  # Capture screenshot
+agent-browser close                # Close browser
+```
+
+### Web Testing Workflow
+
+**Testing Next.js components:**
+
+1. **Start the dev server** (in background):
+```bash
+bun dev &
+sleep 5  # Wait for server to start
+```
+
+2. **Open page and capture screenshot:**
+```bash
+agent-browser open http://localhost:3000/auth/login
+agent-browser screenshot /tmp/login-page.png
+```
+
+3. **Verify HTML attributes** (for accessibility testing):
+```bash
+# Use curl to inspect raw HTML for aria-* attributes
+curl -s http://localhost:3000/auth/login | grep -o 'aria-describedby="[^"]*"'
+curl -s http://localhost:3000/auth/login | grep -o 'aria-invalid="[^"]*"'
+```
+
+4. **Clean up:**
+```bash
+agent-browser close
+```
+
+### Accessibility Testing Pattern
+
+For testing accessibility fixes (aria-describedby, keyboard navigation, etc.):
+
+**1. HTML Attribute Verification:**
+```bash
+# Check if aria-describedby merges correctly
+curl -s http://localhost:3000/page | grep 'aria-describedby'
+
+# Check role attributes
+curl -s http://localhost:3000/page | grep 'role="alert"'
+```
+
+**2. Unit Test Verification:**
+Write temporary test files to verify component logic:
+```typescript
+// tests/accessibility-fixes.test.tsx
+import { describe, it } from "node:test";
+import assert from "node:assert";
+
+describe("Input.tsx accessibility", () => {
+  it("merges caller aria-describedby with error ID", () => {
+    const describedByIds = [
+      "input-error",
+      "custom-hint",
+    ].filter(Boolean).join(" ");
+
+    assert.strictEqual(describedByIds, "input-error custom-hint");
+  });
+});
+```
+
+Run with: `npx tsx --test tests/accessibility-fixes.test.tsx`
+
+**3. Code Inspection:**
+```bash
+# Verify implementation patterns in source files
+grep -A5 "describedByIds" apps/web/src/components/ui/Input.tsx
+grep "currentTarget.click" apps/web/src/components/ui/Card.tsx
+grep -n "accessibilityRole" apps/mobile/src/components/ui/Toast.tsx
+```
+
+### Mobile Testing
+
+**iOS Simulator:**
+```bash
+# Check available simulators
+xcrun simctl list devices available | grep iPhone
+
+# Boot a simulator
+xcrun simctl boot "iPhone 15"
+
+# Run Expo on iOS
+cd apps/mobile && bun run ios
+```
+
+**VoiceOver Testing (Manual):**
+1. Open iOS Simulator
+2. Settings → Accessibility → VoiceOver → ON
+3. Swipe right to navigate between elements
+4. Verify focus order and announcements
+
+**Note:** iOS simulator runtimes may not be installed. Check with:
+```bash
+xcrun simctl list runtimes
+```
+
+### Common Testing Commands
+
+```bash
+# Web server health check
+curl -s http://localhost:3000/auth/login | head -50
+
+# Screenshot for visual verification
+agent-browser screenshot /tmp/page.png
+
+# Read screenshot in Claude (multimodal)
+# Use Read tool on /tmp/page.png
+
+# Port conflict resolution
+lsof -i :3000  # Check what's using port
+npx expo start --port 8082  # Use different port
+```

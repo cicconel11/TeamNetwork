@@ -51,6 +51,9 @@ interface ButtonProps {
   // For org-specific primary color
   primaryColor?: string;
   primaryForeground?: string;
+  // Accessibility
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 }
 
 interface RSVPButtonProps {
@@ -59,6 +62,8 @@ interface RSVPButtonProps {
   onPress?: () => void;
   size?: ButtonSize;
   style?: ViewStyle;
+  // Accessibility
+  accessibilityHint?: string;
 }
 
 export function Button({
@@ -76,6 +81,8 @@ export function Button({
   textStyle,
   primaryColor,
   primaryForeground,
+  accessibilityLabel,
+  accessibilityHint,
 }: ButtonProps) {
   const scale = useSharedValue(1);
 
@@ -114,6 +121,11 @@ export function Button({
     ? NEUTRAL.disabled
     : variantStyles.iconColor;
 
+  // Derive accessibility label from children if it's a string
+  const derivedAccessibilityLabel =
+    accessibilityLabel ||
+    (typeof children === "string" ? children : undefined);
+
   return (
     <AnimatedPressable
       onPress={onPress}
@@ -121,6 +133,10 @@ export function Button({
       onPressOut={handlePressOut}
       disabled={disabled || loading}
       style={[containerStyle, animatedStyle, style]}
+      accessibilityRole="button"
+      accessibilityLabel={derivedAccessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
       {loading ? (
         <ActivityIndicator
@@ -148,6 +164,7 @@ export function RSVPButton({
   onPress,
   size = "md",
   style,
+  accessibilityHint,
 }: RSVPButtonProps) {
   const scale = useSharedValue(1);
 
@@ -203,16 +220,23 @@ export function RSVPButton({
     color: selected ? colors.text : NEUTRAL.secondary,
   };
 
+  const rsvpLabel = getLabel();
+  const accessibilityLabel = `RSVP ${rsvpLabel}: ${selected ? "selected" : "not selected"}`;
+
   return (
     <AnimatedPressable
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[containerStyle, animatedStyle, style]}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
+      accessibilityState={{ selected }}
     >
       <View style={styles.content}>
         {getIcon()}
-        <Text style={[labelStyle, styles.rsvpLabel]}>{getLabel()}</Text>
+        <Text style={[labelStyle, styles.rsvpLabel]}>{rsvpLabel}</Text>
       </View>
     </AnimatedPressable>
   );

@@ -36,6 +36,7 @@ interface BadgeProps {
   dot?: boolean;
   style?: ViewStyle;
   textStyle?: TextStyle;
+  accessibilityLabel?: string;
 }
 
 interface LiveBadgeProps {
@@ -92,6 +93,7 @@ export function Badge({
   dot = false,
   style,
   textStyle,
+  accessibilityLabel,
 }: BadgeProps) {
   const colors = getVariantColors(variant);
   const sizeStyles = SIZE_STYLES[size];
@@ -107,8 +109,17 @@ export function Badge({
     color: colors.text,
   };
 
+  // Derive accessibility label from children if not provided
+  const derivedLabel =
+    accessibilityLabel ??
+    (typeof children === "string" ? children : undefined);
+
   return (
-    <View style={[containerStyle, style]}>
+    <View
+      accessibilityRole="text"
+      accessibilityLabel={derivedLabel}
+      style={[containerStyle, style]}
+    >
       {dot && (
         <View
           style={[
@@ -147,6 +158,8 @@ export function LiveBadge({ size = "md", style }: LiveBadgeProps) {
 
   return (
     <View
+      accessibilityRole="text"
+      accessibilityLabel="Live"
       style={[
         styles.container,
         sizeStyles.container,
@@ -192,9 +205,13 @@ export function CountBadge({
 
   const displayCount = count > max ? `${max}+` : count.toString();
   const isLarge = count > 9;
+  const accessibilityLabel =
+    count > max ? `${count} notifications` : `${count} notification${count === 1 ? "" : "s"}`;
 
   return (
     <View
+      accessibilityRole="text"
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.countBadge,
         { backgroundColor: color },
@@ -210,7 +227,11 @@ export function CountBadge({
 // Pinned badge for announcements
 export function PinnedBadge({ style }: { style?: ViewStyle }) {
   return (
-    <View style={[styles.pinnedBadge, style]}>
+    <View
+      accessibilityRole="text"
+      accessibilityLabel="Pinned"
+      style={[styles.pinnedBadge, style]}
+    >
       <Text style={styles.pinnedText}>PINNED</Text>
     </View>
   );
@@ -231,7 +252,12 @@ export function RoleBadge({ role, size = "sm", style }: RoleBadgeProps) {
   };
 
   return (
-    <Badge variant={role} size={size} style={style}>
+    <Badge
+      variant={role}
+      size={size}
+      style={style}
+      accessibilityLabel={`Role: ${labels[role]}`}
+    >
       {labels[role]}
     </Badge>
   );

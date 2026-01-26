@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, SelectHTMLAttributes } from "react";
+import { forwardRef, SelectHTMLAttributes, useId } from "react";
 
 interface SelectOption {
   value: string;
@@ -15,8 +15,18 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className = "", label, error, options, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+  ({ className = "", label, error, options, id, "aria-describedby": callerDescribedBy, ...props }, ref) => {
+    const generatedId = useId();
+    const selectId = id || generatedId;
+    const errorId = `${selectId}-error`;
+
+    const describedByIds = [
+      error ? errorId : null,
+      callerDescribedBy,
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     const isMultiple = props.multiple;
     const selectDecoration = isMultiple
       ? "min-h-[8rem]"
@@ -25,13 +35,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={inputId} className="block text-sm font-medium text-foreground">
+          <label htmlFor={selectId} className="block text-sm font-medium text-foreground">
             {label}
           </label>
         )}
         <select
           ref={ref}
-          id={inputId}
+          id={selectId}
+          aria-invalid={!!error}
+          aria-describedby={describedByIds || undefined}
           className={`input ${selectDecoration} ${error ? "border-error focus:ring-error" : ""} ${className}`}
           {...props}
         >
@@ -41,7 +53,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="text-sm text-error">{error}</p>}
+        {error && (
+          <p id={errorId} role="alert" className="text-sm text-error">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

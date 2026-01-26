@@ -47,12 +47,17 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
     );
   }
 
+  const initials = name ? getInitials(name) : "?";
+  const ariaLabel = name ? `${name} (${initials})` : "Unknown user";
+
   return (
     <div
       className={`${sizes[size]} rounded-full bg-org-primary text-white flex items-center justify-center font-medium flex-shrink-0 ${className}`}
+      aria-label={ariaLabel}
+      role="img"
       {...props}
     >
-      {name ? getInitials(name) : "?"}
+      {initials}
     </div>
   );
 }

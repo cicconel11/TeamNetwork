@@ -163,7 +163,13 @@ export function Toast({
         <Icon size={18} color={iconColor} />
       </View>
 
-      <Text style={[styles.message, { color: textColor }]} numberOfLines={2}>
+      <Text
+        accessible={true}
+        accessibilityRole={variant === "error" ? "alert" : "text"}
+        accessibilityLiveRegion="polite"
+        style={[styles.message, { color: textColor }]}
+        numberOfLines={2}
+      >
         {message}
       </Text>
 
@@ -173,6 +179,8 @@ export function Toast({
             action.onPress();
             onDismiss?.();
           }}
+          accessibilityRole="button"
+          accessibilityLabel={action.label}
           style={({ pressed }) => [
             styles.actionButton,
             pressed && styles.actionButtonPressed,
@@ -186,6 +194,8 @@ export function Toast({
 
       <Pressable
         onPress={onDismiss}
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss notification"
         style={({ pressed }) => [
           styles.dismissButton,
           pressed && styles.dismissButtonPressed,

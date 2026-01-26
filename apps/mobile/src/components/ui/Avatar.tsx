@@ -124,8 +124,16 @@ export function Avatar({
     borderColor: NEUTRAL.surface,
   };
 
+  const accessibilityLabel = name ? `${name}'s avatar` : "User avatar";
+  const presenceLabel = presence !== "none" ? `, ${presence}` : "";
+
   return (
-    <View style={[styles.container, containerStyle, style]}>
+    <View
+      accessible={true}
+      accessibilityRole="image"
+      accessibilityLabel={`${accessibilityLabel}${presenceLabel}`}
+      style={[styles.container, containerStyle, style]}
+    >
       {uri ? (
         <Image
           source={{ uri }}
@@ -171,8 +179,22 @@ export function AvatarGroup({
   const remaining = avatars.length - max;
   const avatarSize = AVATAR_SIZES[size];
 
+  const totalCount = avatars.length;
+  const displayedNames = displayAvatars
+    .map((a) => a.name || "Unknown user")
+    .join(", ");
+  const groupLabel =
+    remaining > 0
+      ? `${totalCount} people: ${displayedNames}, and ${remaining} more`
+      : `${totalCount} people: ${displayedNames}`;
+
   return (
-    <View style={styles.groupContainer}>
+    <View
+      accessible={true}
+      accessibilityRole="image"
+      accessibilityLabel={groupLabel}
+      style={styles.groupContainer}
+    >
       {displayAvatars.map((avatar, index) => (
         <View
           key={index}
