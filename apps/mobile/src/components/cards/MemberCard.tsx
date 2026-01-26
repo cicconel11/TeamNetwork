@@ -53,7 +53,7 @@ function getInitials(member: MemberCardMember): string {
   return member.first_name?.[0]?.toUpperCase() || "?";
 }
 
-export function MemberCard({
+export const MemberCard = React.memo(function MemberCard({
   member,
   onPress,
   style,
@@ -124,7 +124,7 @@ export function MemberCard({
       </View>
     </AnimatedPressable>
   );
-}
+});
 
 // Compact member card for lists with many items
 interface MemberCardCompactProps {
@@ -133,7 +133,7 @@ interface MemberCardCompactProps {
   style?: ViewStyle;
 }
 
-export function MemberCardCompact({
+export const MemberCardCompact = React.memo(function MemberCardCompact({
   member,
   onPress,
   style,
@@ -176,7 +176,7 @@ export function MemberCardCompact({
       )}
     </AnimatedPressable>
   );
-}
+});
 
 // Group header for member sections
 interface MemberGroupHeaderProps {
@@ -185,7 +185,7 @@ interface MemberGroupHeaderProps {
   style?: ViewStyle;
 }
 
-export function MemberGroupHeader({
+export const MemberGroupHeader = React.memo(function MemberGroupHeader({
   title,
   count,
   style,
@@ -196,7 +196,7 @@ export function MemberGroupHeader({
       <Text style={styles.groupCount}>({count})</Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

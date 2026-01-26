@@ -29,12 +29,13 @@ import { getRsvpLabel, formatEventDate, formatEventTime } from "@teammeet/core";
 type ViewMode = "upcoming" | "past";
 
 export default function EventsScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
-  const { events, loading, error, refetch, refetchIfStale } = useEvents(orgSlug || "");
+  // Use orgId from context for data hook (eliminates redundant org fetch)
+  const { events, loading, error, refetch, refetchIfStale } = useEvents(orgId);
   const [viewMode, setViewMode] = useState<ViewMode>("upcoming");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null); // null = show all
   const [refreshing, setRefreshing] = useState(false);
@@ -141,12 +142,13 @@ export default function EventsScreen() {
   }, [filteredEvents, selectedDate]);
 
 
-  const renderEventCard = ({ item }: { item: Event }) => (
-    <TouchableOpacity 
-      style={styles.eventCard} 
-      activeOpacity={0.7}
-      onPress={() => router.push(`/(app)/${orgSlug}/events/${item.id}`)}
-    >
+  const renderEventCard = useCallback(
+    ({ item }: { item: Event }) => (
+      <TouchableOpacity
+        style={styles.eventCard}
+        activeOpacity={0.7}
+        onPress={() => router.push(`/(app)/${orgSlug}/events/${item.id}`)}
+      >
       <View style={styles.eventHeader}>
         <Text style={styles.eventTitle} numberOfLines={1}>
           {item.title}
@@ -199,6 +201,8 @@ export default function EventsScreen() {
         </TouchableOpacity>
       )}
     </TouchableOpacity>
+    ),
+    [router, orgSlug, viewMode, styles]
   );
 
   const renderEmptyState = () => {
@@ -419,6 +423,11 @@ export default function EventsScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
           }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
         />
       </View>
     </View>
