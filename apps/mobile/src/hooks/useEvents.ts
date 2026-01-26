@@ -23,29 +23,27 @@ interface UseEventsReturn {
   refetchIfStale: () => void;
 }
 
-export function useEvents(orgSlug: string): UseEventsReturn {
+/**
+ * Hook to fetch events for an organization.
+ * @param orgId - The organization ID (from useOrg context)
+ */
+export function useEvents(orgId: string | null): UseEventsReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId]);
 
-  const fetchEvents = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchEvents = useCallback(async () => {
+    if (!orgId) {
       if (isMountedRef.current) {
         setEvents([]);
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
@@ -53,29 +51,11 @@ export function useEvents(orgSlug: string): UseEventsReturn {
     try {
       setLoading(true);
 
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        // First get org ID from slug
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
-
       // Get events for this organization
       const { data, error: eventsError } = await supabase
         .from("events")
         .select("*")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .is("deleted_at", null)
         .order("start_date", { ascending: true });
 
@@ -112,7 +92,7 @@ export function useEvents(orgSlug: string): UseEventsReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -123,6 +103,7 @@ export function useEvents(orgSlug: string): UseEventsReturn {
     };
   }, [fetchEvents]);
 
+  // Real-time subscription for event changes
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
@@ -136,7 +117,7 @@ export function useEvents(orgSlug: string): UseEventsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchEvents(orgId);
+          fetchEvents();
         }
       )
       .subscribe();

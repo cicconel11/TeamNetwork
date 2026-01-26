@@ -26,55 +26,33 @@ interface UseAlumniReturn {
   refetchIfStale: () => void;
 }
 
-export function useAlumni(orgSlug: string): UseAlumniReturn {
+/**
+ * Hook to fetch alumni for an organization.
+ * @param orgId - The organization ID (from useOrg context)
+ */
+export function useAlumni(orgId: string | null): UseAlumniReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [alumni, setAlumni] = useState<Alumni[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId]);
 
-  const fetchAlumni = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchAlumni = useCallback(async () => {
+    if (!orgId) {
       if (isMountedRef.current) {
         setAlumni([]);
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
 
     try {
       setLoading(true);
-
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        // First get org ID from slug
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        if (!org) throw new Error("Organization not found");
-
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
 
       // Get alumni for this organization
       const { data, error: alumniError } = await supabase
@@ -95,7 +73,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
           linkedin_url
         `
         )
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .is("deleted_at", null)
         .order("graduation_year", { ascending: false });
 
@@ -115,7 +93,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -126,6 +104,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
     };
   }, [fetchAlumni]);
 
+  // Real-time subscription for alumni changes
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
@@ -139,7 +118,7 @@ export function useAlumni(orgSlug: string): UseAlumniReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchAlumni(orgId);
+          fetchAlumni();
         }
       )
       .subscribe();

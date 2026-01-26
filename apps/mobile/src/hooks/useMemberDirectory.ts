@@ -22,54 +22,33 @@ interface UseMemberDirectoryReturn {
   refetchIfStale: () => void;
 }
 
-export function useMemberDirectory(orgSlug: string): UseMemberDirectoryReturn {
+/**
+ * Hook to fetch member directory for an organization.
+ * @param orgId - The organization ID (from useOrg context)
+ */
+export function useMemberDirectory(orgId: string | null): UseMemberDirectoryReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [members, setMembers] = useState<DirectoryMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId]);
 
-  const fetchMembers = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchMembers = useCallback(async () => {
+    if (!orgId) {
       if (isMountedRef.current) {
         setMembers([]);
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
 
     try {
       setLoading(true);
-
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        if (!org) throw new Error("Organization not found");
-
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
 
       const { data, error: membersError } = await supabase
         .from("members")
@@ -85,7 +64,7 @@ export function useMemberDirectory(orgSlug: string): UseMemberDirectoryReturn {
           linkedin_url
         `
         )
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .is("deleted_at", null)
         .eq("status", "active")
         .order("last_name", { ascending: true });
@@ -106,7 +85,7 @@ export function useMemberDirectory(orgSlug: string): UseMemberDirectoryReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -117,6 +96,7 @@ export function useMemberDirectory(orgSlug: string): UseMemberDirectoryReturn {
     };
   }, [fetchMembers]);
 
+  // Real-time subscription for member changes
   useEffect(() => {
     if (!orgId) return;
     const channel = supabase
@@ -130,7 +110,7 @@ export function useMemberDirectory(orgSlug: string): UseMemberDirectoryReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchMembers(orgId);
+          fetchMembers();
         }
       )
       .subscribe();

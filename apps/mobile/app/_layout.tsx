@@ -5,7 +5,8 @@ import * as Linking from "expo-linking";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import type { Session } from "@supabase/supabase-js";
-import LoadingScreen from "@/components/LoadingScreen";
+import { AuthProvider } from "@/contexts/AuthContext";
+import AuthLoadingScreen from "@/components/AuthLoadingScreen";
 import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled, setEnabled } from "@/lib/analytics";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
@@ -223,26 +224,28 @@ export default function RootLayout() {
   }, [session, isLoading, segments, router]);
 
   if (isLoading) {
-    return <LoadingScreen />;
+    return <AuthLoadingScreen />;
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <Stack>
-        <Stack.Screen
-          name="(auth)"
-          options={{
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="(app)"
-          options={{
-            headerShown: false,
-          }}
-        />
-      </Stack>
-    </GestureHandlerRootView>
+    <AuthProvider initialSession={session} initialLoading={isLoading}>
+      <GestureHandlerRootView style={styles.container}>
+        <Stack>
+          <Stack.Screen
+            name="(auth)"
+            options={{
+              headerShown: false,
+            }}
+          />
+          <Stack.Screen
+            name="(app)"
+            options={{
+              headerShown: false,
+            }}
+          />
+        </Stack>
+      </GestureHandlerRootView>
+    </AuthProvider>
   );
 }
 
