@@ -68,7 +68,10 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
 
         <div className="grid md:grid-cols-2 gap-8 mb-12">
           {/* Base Plan */}
-          <div className="pricing-card rounded-2xl p-8 relative overflow-hidden">
+          <div className="pricing-card rounded-2xl p-8 pt-10 relative overflow-hidden">
+            {/* Pick badge */}
+            <div className="pick-badge">Starter Pick</div>
+
             {/* Corner accent */}
             <div className="absolute top-0 right-0 w-24 h-24">
               <div className="absolute inset-0 bg-gradient-to-bl from-landing-green/10 to-transparent" />
@@ -119,9 +122,12 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           </div>
 
           {/* Alumni Add-on */}
-          <div className="pricing-card pricing-card-featured rounded-2xl p-8 relative overflow-hidden pulse-glow">
+          <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-8 pt-10 relative overflow-hidden pulse-glow">
+            {/* Pick badge */}
+            <div className="pick-badge" style={{ background: "linear-gradient(135deg, #059669 0%, #34d399 100%)" }}>Pro Pick</div>
+
             {/* Featured badge */}
-            <div className="absolute top-6 right-6">
+            <div className="absolute top-14 right-6">
               <span className="px-3 py-1 rounded-full bg-landing-green/20 text-landing-green text-xs font-semibold uppercase tracking-wider">
                 Popular Add-On
               </span>
