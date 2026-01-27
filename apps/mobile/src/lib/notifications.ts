@@ -125,12 +125,17 @@ export async function registerPushToken(
     const platform = Platform.OS as "ios" | "android" | "web";
 
     if (stableDeviceId) {
-      await supabase
+      const { error: deleteError } = await supabase
         .from("user_push_tokens")
         .delete()
         .eq("user_id", userId)
         .eq("device_id", stableDeviceId)
         .neq("expo_push_token", token);
+
+      // Ignore table-not-found errors (push notifications not set up yet)
+      if (deleteError && !isTableNotFoundError(deleteError)) {
+        console.warn("Failed to clean up old push tokens:", deleteError.message);
+      }
     }
 
     // Upsert the token (update if exists, insert if new)
@@ -149,6 +154,11 @@ export async function registerPushToken(
       );
 
     if (error) {
+      // Don't log errors for missing table - push notifications are optional
+      if (isTableNotFoundError(error)) {
+        console.log("Push notifications not configured (user_push_tokens table missing)");
+        return false;
+      }
       console.error("Failed to register push token:", error);
       captureException(new Error(error.message), { context: "registerPushToken" });
       return false;
@@ -164,6 +174,13 @@ export async function registerPushToken(
 }
 
 /**
+ * Check if a Supabase error is a table-not-found error
+ */
+function isTableNotFoundError(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST205" || (error.message?.includes("Could not find the table") ?? false);
+}
+
+/**
  * Unregister push token (on logout)
  */
 export async function unregisterPushToken(tokenOverride?: string): Promise<void> {
@@ -171,12 +188,17 @@ export async function unregisterPushToken(tokenOverride?: string): Promise<void>
   if (!token) return;
 
   try {
-    await supabase
+    const { error } = await supabase
       .from("user_push_tokens")
       .delete()
       .eq("expo_push_token", token);
+
+    // Ignore table-not-found errors silently
+    if (error && !isTableNotFoundError(error)) {
+      console.warn("Error unregistering push token:", error.message);
+    }
   } catch (error) {
-    console.error("Error unregistering push token:", error);
+    console.warn("Error unregistering push token:", error);
   }
 }
 

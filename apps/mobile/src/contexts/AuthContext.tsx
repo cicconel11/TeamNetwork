@@ -37,22 +37,46 @@ export function AuthProvider({
 
     // Only fetch session if not provided initially
     if (initialSession === null && initialLoading) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (isMountedRef.current) {
-          setSession(session);
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        if (!isMountedRef.current) return;
+
+        // Handle invalid/expired refresh token errors gracefully
+        if (error) {
+          console.warn("AuthContext: Session error, clearing session:", error.message);
+          supabase.auth.signOut().catch(() => {});
+          setSession(null);
           setIsLoading(false);
+          return;
         }
+
+        setSession(session);
+        setIsLoading(false);
+      }).catch((err) => {
+        console.warn("AuthContext: getSession failed:", err?.message || err);
+        if (!isMountedRef.current) return;
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+        setIsLoading(false);
       });
     }
 
     // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
-      if (isMountedRef.current) {
-        setSession(newSession);
+    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, newSession: Session | null) => {
+      if (!isMountedRef.current) return;
+
+      // Handle token refresh failures
+      if (event === "TOKEN_REFRESHED" && !newSession) {
+        console.warn("AuthContext: Token refresh failed, clearing session");
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
         setIsLoading(false);
+        return;
       }
+
+      setSession(newSession);
+      setIsLoading(false);
     });
 
     return () => {

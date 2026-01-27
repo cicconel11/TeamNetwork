@@ -16,6 +16,8 @@ PODS:
   - EXJSONUtils (0.15.0)
   - EXManifests (1.0.10):
     - ExpoModulesCore
+  - EXNotifications (0.32.16):
+    - ExpoModulesCore
   - Expo (54.0.31):
     - ExpoModulesCore
     - hermes-engine
@@ -220,6 +222,10 @@ PODS:
     - ExpoModulesCore
   - ExpoCrypto (15.0.8):
     - ExpoModulesCore
+  - ExpoDevice (8.0.10):
+    - ExpoModulesCore
+  - ExpoDocumentPicker (14.0.8):
+    - ExpoModulesCore
   - ExpoFileSystem (19.0.21):
     - ExpoModulesCore
   - ExpoFont (14.0.10):
@@ -228,6 +234,8 @@ PODS:
     - ExpoModulesCore
     - RNScreens
   - ExpoKeepAwake (15.0.8):
+    - ExpoModulesCore
+  - ExpoLinearGradient (15.0.8):
     - ExpoModulesCore
   - ExpoLinking (8.0.11):
     - ExpoModulesCore
@@ -1629,7 +1637,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - react-native-webview (13.16.0):
+  - react-native-webview (13.15.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2023,7 +2031,29 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNGestureHandler (2.30.0):
+  - RNDateTimePicker (8.6.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - RNGestureHandler (2.28.0):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2068,7 +2098,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNReanimated (4.2.1):
+  - RNReanimated (4.1.6):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2090,10 +2120,10 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNReanimated/reanimated (= 4.2.1)
+    - RNReanimated/reanimated (= 4.1.6)
     - RNWorklets
     - Yoga
-  - RNReanimated/reanimated (4.2.1):
+  - RNReanimated/reanimated (4.1.6):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2115,10 +2145,10 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNReanimated/reanimated/apple (= 4.2.1)
+    - RNReanimated/reanimated/apple (= 4.1.6)
     - RNWorklets
     - Yoga
-  - RNReanimated/reanimated/apple (4.2.1):
+  - RNReanimated/reanimated/apple (4.1.6):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2189,6 +2219,30 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNSentry (7.9.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Sentry/HybridSDK (= 8.58.0)
+    - Yoga
   - RNSVG (15.15.1):
     - hermes-engine
     - RCTRequired
@@ -2234,7 +2288,7 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
-  - RNWorklets (0.7.1):
+  - RNWorklets (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2256,9 +2310,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets (= 0.7.1)
+    - RNWorklets/worklets (= 0.5.1)
     - Yoga
-  - RNWorklets/worklets (0.7.1):
+  - RNWorklets/worklets (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2280,9 +2334,9 @@ PODS:
     - ReactCommon/turbomodule/bridging
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-    - RNWorklets/worklets/apple (= 0.7.1)
+    - RNWorklets/worklets/apple (= 0.5.1)
     - Yoga
-  - RNWorklets/worklets/apple (0.7.1):
+  - RNWorklets/worklets/apple (0.5.1):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2305,29 +2359,34 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - Sentry/HybridSDK (8.58.0)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
-  - "EXApplication (from `../../../node_modules/.bun/expo-application@7.0.8+1c084dd97bf1f31a/node_modules/expo-application/ios`)"
-  - "EXConstants (from `../../../node_modules/.bun/expo-constants@18.0.13+1c084dd97bf1f31a/node_modules/expo-constants/ios`)"
+  - "EXApplication (from `../../../node_modules/.bun/expo-application@7.0.8+0aa7a96d9fb94eb0/node_modules/expo-application/ios`)"
+  - "EXConstants (from `../../../node_modules/.bun/expo-constants@18.0.13+0aa7a96d9fb94eb0/node_modules/expo-constants/ios`)"
   - "EXJSONUtils (from `../../../node_modules/.bun/expo-json-utils@0.15.0/node_modules/expo-json-utils/ios`)"
-  - "EXManifests (from `../../../node_modules/.bun/expo-manifests@1.0.10+1c084dd97bf1f31a/node_modules/expo-manifests/ios`)"
-  - "Expo (from `../../../node_modules/.bun/expo@54.0.31+1c084dd97bf1f31a/node_modules/expo`)"
-  - "expo-dev-client (from `../../../node_modules/.bun/expo-dev-client@6.0.20+1c084dd97bf1f31a/node_modules/expo-dev-client/ios`)"
-  - "expo-dev-launcher (from `../../../node_modules/.bun/expo-dev-launcher@6.0.20+1c084dd97bf1f31a/node_modules/expo-dev-launcher`)"
-  - "expo-dev-menu (from `../../../node_modules/.bun/expo-dev-menu@7.0.18+1c084dd97bf1f31a/node_modules/expo-dev-menu`)"
-  - "expo-dev-menu-interface (from `../../../node_modules/.bun/expo-dev-menu-interface@2.0.0+1c084dd97bf1f31a/node_modules/expo-dev-menu-interface/ios`)"
-  - "ExpoAdapterGoogleSignIn (from `../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+1c084dd97bf1f31a/node_modules/@react-native-google-signin/google-signin/expo/ios`)"
+  - "EXManifests (from `../../../node_modules/.bun/expo-manifests@1.0.10+0aa7a96d9fb94eb0/node_modules/expo-manifests/ios`)"
+  - "EXNotifications (from `../../../node_modules/.bun/expo-notifications@0.32.16+0aa7a96d9fb94eb0/node_modules/expo-notifications/ios`)"
+  - "Expo (from `../../../node_modules/.bun/expo@54.0.31+0aa7a96d9fb94eb0/node_modules/expo`)"
+  - "expo-dev-client (from `../../../node_modules/.bun/expo-dev-client@6.0.20+0aa7a96d9fb94eb0/node_modules/expo-dev-client/ios`)"
+  - "expo-dev-launcher (from `../../../node_modules/.bun/expo-dev-launcher@6.0.20+0aa7a96d9fb94eb0/node_modules/expo-dev-launcher`)"
+  - "expo-dev-menu (from `../../../node_modules/.bun/expo-dev-menu@7.0.18+0aa7a96d9fb94eb0/node_modules/expo-dev-menu`)"
+  - "expo-dev-menu-interface (from `../../../node_modules/.bun/expo-dev-menu-interface@2.0.0+0aa7a96d9fb94eb0/node_modules/expo-dev-menu-interface/ios`)"
+  - "ExpoAdapterGoogleSignIn (from `../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+0aa7a96d9fb94eb0/node_modules/@react-native-google-signin/google-signin/expo/ios`)"
   - "ExpoAsset (from `../../../node_modules/.bun/expo-asset@12.0.12+e1a0cc412c37bc90/node_modules/expo-asset/ios`)"
-  - "ExpoCrypto (from `../../../node_modules/.bun/expo-crypto@15.0.8+1c084dd97bf1f31a/node_modules/expo-crypto/ios`)"
-  - "ExpoFileSystem (from `../../../node_modules/.bun/expo-file-system@19.0.21+e1a0cc412c37bc90/node_modules/expo-file-system/ios`)"
+  - "ExpoCrypto (from `../../../node_modules/.bun/expo-crypto@15.0.8+0aa7a96d9fb94eb0/node_modules/expo-crypto/ios`)"
+  - "ExpoDevice (from `../../../node_modules/.bun/expo-device@8.0.10+0aa7a96d9fb94eb0/node_modules/expo-device/ios`)"
+  - "ExpoDocumentPicker (from `../../../node_modules/.bun/expo-document-picker@14.0.8+0aa7a96d9fb94eb0/node_modules/expo-document-picker/ios`)"
+  - "ExpoFileSystem (from `../../../node_modules/.bun/expo-file-system@19.0.21+0aa7a96d9fb94eb0/node_modules/expo-file-system/ios`)"
   - "ExpoFont (from `../../../node_modules/.bun/expo-font@14.0.10+e1a0cc412c37bc90/node_modules/expo-font/ios`)"
-  - "ExpoHead (from `../../../node_modules/.bun/expo-router@6.0.21+496ab4adbe811d21/node_modules/expo-router/ios`)"
+  - "ExpoHead (from `../../../node_modules/.bun/expo-router@6.0.21+d4a8a3f3c5ecf237/node_modules/expo-router/ios`)"
   - "ExpoKeepAwake (from `../../../node_modules/.bun/expo-keep-awake@15.0.8+52f488f52b098308/node_modules/expo-keep-awake/ios`)"
-  - "ExpoLinking (from `../../../node_modules/.bun/expo-linking@8.0.11+1c084dd97bf1f31a/node_modules/expo-linking/ios`)"
+  - "ExpoLinearGradient (from `../../../node_modules/.bun/expo-linear-gradient@15.0.8+0aa7a96d9fb94eb0/node_modules/expo-linear-gradient/ios`)"
+  - "ExpoLinking (from `../../../node_modules/.bun/expo-linking@8.0.11+0aa7a96d9fb94eb0/node_modules/expo-linking/ios`)"
   - "ExpoModulesCore (from `../../../node_modules/.bun/expo-modules-core@3.0.29+ff07e88fd3a9db7d/node_modules/expo-modules-core`)"
-  - "ExpoWebBrowser (from `../../../node_modules/.bun/expo-web-browser@15.0.10+1c084dd97bf1f31a/node_modules/expo-web-browser/ios`)"
-  - "EXUpdatesInterface (from `../../../node_modules/.bun/expo-updates-interface@2.0.0+1c084dd97bf1f31a/node_modules/expo-updates-interface/ios`)"
+  - "ExpoWebBrowser (from `../../../node_modules/.bun/expo-web-browser@15.0.10+0aa7a96d9fb94eb0/node_modules/expo-web-browser/ios`)"
+  - "EXUpdatesInterface (from `../../../node_modules/.bun/expo-updates-interface@2.0.0+0aa7a96d9fb94eb0/node_modules/expo-updates-interface/ios`)"
   - "FBLazyVector (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/Libraries/FBLazyVector`)"
   - "hermes-engine (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)"
   - "RCTDeprecation (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)"
@@ -2365,7 +2424,7 @@ DEPENDENCIES:
   - "React-Mapbuffer (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon`)"
   - "React-microtasksnativemodule (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)"
   - "react-native-safe-area-context (from `../../../node_modules/.bun/react-native-safe-area-context@5.6.2+ff07e88fd3a9db7d/node_modules/react-native-safe-area-context`)"
-  - "react-native-webview (from `../../../node_modules/.bun/react-native-webview@13.16.0+ff07e88fd3a9db7d/node_modules/react-native-webview`)"
+  - "react-native-webview (from `../../../node_modules/.bun/react-native-webview@13.15.0+ff07e88fd3a9db7d/node_modules/react-native-webview`)"
   - "React-NativeModulesApple (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios`)"
   - "React-oscompat (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/oscompat`)"
   - "React-perflogger (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/reactperflogger`)"
@@ -2398,12 +2457,14 @@ DEPENDENCIES:
   - "ReactCommon/turbomodule/core (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon`)"
   - "ReactNativeDependencies (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)"
   - "RNCAsyncStorage (from `../../../node_modules/.bun/@react-native-async-storage+async-storage@2.2.0+ff07e88fd3a9db7d/node_modules/@react-native-async-storage/async-storage`)"
-  - "RNGestureHandler (from `../../../node_modules/.bun/react-native-gesture-handler@2.30.0+ff07e88fd3a9db7d/node_modules/react-native-gesture-handler`)"
-  - "RNGoogleSignin (from `../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+1c084dd97bf1f31a/node_modules/@react-native-google-signin/google-signin`)"
-  - "RNReanimated (from `../../../node_modules/.bun/react-native-reanimated@4.2.1+2d042552c33d14dd/node_modules/react-native-reanimated`)"
+  - "RNDateTimePicker (from `../../../node_modules/.bun/@react-native-community+datetimepicker@8.6.0+0aa7a96d9fb94eb0/node_modules/@react-native-community/datetimepicker`)"
+  - "RNGestureHandler (from `../../../node_modules/.bun/react-native-gesture-handler@2.28.0+ff07e88fd3a9db7d/node_modules/react-native-gesture-handler`)"
+  - "RNGoogleSignin (from `../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+0aa7a96d9fb94eb0/node_modules/@react-native-google-signin/google-signin`)"
+  - "RNReanimated (from `../../../node_modules/.bun/react-native-reanimated@4.1.6+fa69e7c6025435ca/node_modules/react-native-reanimated`)"
   - "RNScreens (from `../../../node_modules/.bun/react-native-screens@4.16.0+ff07e88fd3a9db7d/node_modules/react-native-screens`)"
+  - "RNSentry (from `../../../node_modules/.bun/@sentry+react-native@7.9.0+0aa7a96d9fb94eb0/node_modules/@sentry/react-native`)"
   - "RNSVG (from `../../../node_modules/.bun/react-native-svg@15.15.1+ff07e88fd3a9db7d/node_modules/react-native-svg`)"
-  - "RNWorklets (from `../../../node_modules/.bun/react-native-worklets@0.7.1+ff07e88fd3a9db7d/node_modules/react-native-worklets`)"
+  - "RNWorklets (from `../../../node_modules/.bun/react-native-worklets@0.5.1+ff07e88fd3a9db7d/node_modules/react-native-worklets`)"
   - "Yoga (from `../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/yoga`)"
 
 SPEC REPOS:
@@ -2415,48 +2476,57 @@ SPEC REPOS:
     - GTMAppAuth
     - GTMSessionFetcher
     - PromisesObjC
+    - Sentry
 
 EXTERNAL SOURCES:
   EXApplication:
-    :path: "../../../node_modules/.bun/expo-application@7.0.8+1c084dd97bf1f31a/node_modules/expo-application/ios"
+    :path: "../../../node_modules/.bun/expo-application@7.0.8+0aa7a96d9fb94eb0/node_modules/expo-application/ios"
   EXConstants:
-    :path: "../../../node_modules/.bun/expo-constants@18.0.13+1c084dd97bf1f31a/node_modules/expo-constants/ios"
+    :path: "../../../node_modules/.bun/expo-constants@18.0.13+0aa7a96d9fb94eb0/node_modules/expo-constants/ios"
   EXJSONUtils:
     :path: "../../../node_modules/.bun/expo-json-utils@0.15.0/node_modules/expo-json-utils/ios"
   EXManifests:
-    :path: "../../../node_modules/.bun/expo-manifests@1.0.10+1c084dd97bf1f31a/node_modules/expo-manifests/ios"
+    :path: "../../../node_modules/.bun/expo-manifests@1.0.10+0aa7a96d9fb94eb0/node_modules/expo-manifests/ios"
+  EXNotifications:
+    :path: "../../../node_modules/.bun/expo-notifications@0.32.16+0aa7a96d9fb94eb0/node_modules/expo-notifications/ios"
   Expo:
-    :path: "../../../node_modules/.bun/expo@54.0.31+1c084dd97bf1f31a/node_modules/expo"
+    :path: "../../../node_modules/.bun/expo@54.0.31+0aa7a96d9fb94eb0/node_modules/expo"
   expo-dev-client:
-    :path: "../../../node_modules/.bun/expo-dev-client@6.0.20+1c084dd97bf1f31a/node_modules/expo-dev-client/ios"
+    :path: "../../../node_modules/.bun/expo-dev-client@6.0.20+0aa7a96d9fb94eb0/node_modules/expo-dev-client/ios"
   expo-dev-launcher:
-    :path: "../../../node_modules/.bun/expo-dev-launcher@6.0.20+1c084dd97bf1f31a/node_modules/expo-dev-launcher"
+    :path: "../../../node_modules/.bun/expo-dev-launcher@6.0.20+0aa7a96d9fb94eb0/node_modules/expo-dev-launcher"
   expo-dev-menu:
-    :path: "../../../node_modules/.bun/expo-dev-menu@7.0.18+1c084dd97bf1f31a/node_modules/expo-dev-menu"
+    :path: "../../../node_modules/.bun/expo-dev-menu@7.0.18+0aa7a96d9fb94eb0/node_modules/expo-dev-menu"
   expo-dev-menu-interface:
-    :path: "../../../node_modules/.bun/expo-dev-menu-interface@2.0.0+1c084dd97bf1f31a/node_modules/expo-dev-menu-interface/ios"
+    :path: "../../../node_modules/.bun/expo-dev-menu-interface@2.0.0+0aa7a96d9fb94eb0/node_modules/expo-dev-menu-interface/ios"
   ExpoAdapterGoogleSignIn:
-    :path: "../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+1c084dd97bf1f31a/node_modules/@react-native-google-signin/google-signin/expo/ios"
+    :path: "../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+0aa7a96d9fb94eb0/node_modules/@react-native-google-signin/google-signin/expo/ios"
   ExpoAsset:
     :path: "../../../node_modules/.bun/expo-asset@12.0.12+e1a0cc412c37bc90/node_modules/expo-asset/ios"
   ExpoCrypto:
-    :path: "../../../node_modules/.bun/expo-crypto@15.0.8+1c084dd97bf1f31a/node_modules/expo-crypto/ios"
+    :path: "../../../node_modules/.bun/expo-crypto@15.0.8+0aa7a96d9fb94eb0/node_modules/expo-crypto/ios"
+  ExpoDevice:
+    :path: "../../../node_modules/.bun/expo-device@8.0.10+0aa7a96d9fb94eb0/node_modules/expo-device/ios"
+  ExpoDocumentPicker:
+    :path: "../../../node_modules/.bun/expo-document-picker@14.0.8+0aa7a96d9fb94eb0/node_modules/expo-document-picker/ios"
   ExpoFileSystem:
-    :path: "../../../node_modules/.bun/expo-file-system@19.0.21+e1a0cc412c37bc90/node_modules/expo-file-system/ios"
+    :path: "../../../node_modules/.bun/expo-file-system@19.0.21+0aa7a96d9fb94eb0/node_modules/expo-file-system/ios"
   ExpoFont:
     :path: "../../../node_modules/.bun/expo-font@14.0.10+e1a0cc412c37bc90/node_modules/expo-font/ios"
   ExpoHead:
-    :path: "../../../node_modules/.bun/expo-router@6.0.21+496ab4adbe811d21/node_modules/expo-router/ios"
+    :path: "../../../node_modules/.bun/expo-router@6.0.21+d4a8a3f3c5ecf237/node_modules/expo-router/ios"
   ExpoKeepAwake:
     :path: "../../../node_modules/.bun/expo-keep-awake@15.0.8+52f488f52b098308/node_modules/expo-keep-awake/ios"
+  ExpoLinearGradient:
+    :path: "../../../node_modules/.bun/expo-linear-gradient@15.0.8+0aa7a96d9fb94eb0/node_modules/expo-linear-gradient/ios"
   ExpoLinking:
-    :path: "../../../node_modules/.bun/expo-linking@8.0.11+1c084dd97bf1f31a/node_modules/expo-linking/ios"
+    :path: "../../../node_modules/.bun/expo-linking@8.0.11+0aa7a96d9fb94eb0/node_modules/expo-linking/ios"
   ExpoModulesCore:
     :path: "../../../node_modules/.bun/expo-modules-core@3.0.29+ff07e88fd3a9db7d/node_modules/expo-modules-core"
   ExpoWebBrowser:
-    :path: "../../../node_modules/.bun/expo-web-browser@15.0.10+1c084dd97bf1f31a/node_modules/expo-web-browser/ios"
+    :path: "../../../node_modules/.bun/expo-web-browser@15.0.10+0aa7a96d9fb94eb0/node_modules/expo-web-browser/ios"
   EXUpdatesInterface:
-    :path: "../../../node_modules/.bun/expo-updates-interface@2.0.0+1c084dd97bf1f31a/node_modules/expo-updates-interface/ios"
+    :path: "../../../node_modules/.bun/expo-updates-interface@2.0.0+0aa7a96d9fb94eb0/node_modules/expo-updates-interface/ios"
   FBLazyVector:
     :path: "../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/Libraries/FBLazyVector"
   hermes-engine:
@@ -2531,7 +2601,7 @@ EXTERNAL SOURCES:
   react-native-safe-area-context:
     :path: "../../../node_modules/.bun/react-native-safe-area-context@5.6.2+ff07e88fd3a9db7d/node_modules/react-native-safe-area-context"
   react-native-webview:
-    :path: "../../../node_modules/.bun/react-native-webview@13.16.0+ff07e88fd3a9db7d/node_modules/react-native-webview"
+    :path: "../../../node_modules/.bun/react-native-webview@13.15.0+ff07e88fd3a9db7d/node_modules/react-native-webview"
   React-NativeModulesApple:
     :path: "../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios"
   React-oscompat:
@@ -2596,18 +2666,22 @@ EXTERNAL SOURCES:
     :podspec: "../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec"
   RNCAsyncStorage:
     :path: "../../../node_modules/.bun/@react-native-async-storage+async-storage@2.2.0+ff07e88fd3a9db7d/node_modules/@react-native-async-storage/async-storage"
+  RNDateTimePicker:
+    :path: "../../../node_modules/.bun/@react-native-community+datetimepicker@8.6.0+0aa7a96d9fb94eb0/node_modules/@react-native-community/datetimepicker"
   RNGestureHandler:
-    :path: "../../../node_modules/.bun/react-native-gesture-handler@2.30.0+ff07e88fd3a9db7d/node_modules/react-native-gesture-handler"
+    :path: "../../../node_modules/.bun/react-native-gesture-handler@2.28.0+ff07e88fd3a9db7d/node_modules/react-native-gesture-handler"
   RNGoogleSignin:
-    :path: "../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+1c084dd97bf1f31a/node_modules/@react-native-google-signin/google-signin"
+    :path: "../../../node_modules/.bun/@react-native-google-signin+google-signin@16.1.1+0aa7a96d9fb94eb0/node_modules/@react-native-google-signin/google-signin"
   RNReanimated:
-    :path: "../../../node_modules/.bun/react-native-reanimated@4.2.1+2d042552c33d14dd/node_modules/react-native-reanimated"
+    :path: "../../../node_modules/.bun/react-native-reanimated@4.1.6+fa69e7c6025435ca/node_modules/react-native-reanimated"
   RNScreens:
     :path: "../../../node_modules/.bun/react-native-screens@4.16.0+ff07e88fd3a9db7d/node_modules/react-native-screens"
+  RNSentry:
+    :path: "../../../node_modules/.bun/@sentry+react-native@7.9.0+0aa7a96d9fb94eb0/node_modules/@sentry/react-native"
   RNSVG:
     :path: "../../../node_modules/.bun/react-native-svg@15.15.1+ff07e88fd3a9db7d/node_modules/react-native-svg"
   RNWorklets:
-    :path: "../../../node_modules/.bun/react-native-worklets@0.7.1+ff07e88fd3a9db7d/node_modules/react-native-worklets"
+    :path: "../../../node_modules/.bun/react-native-worklets@0.5.1+ff07e88fd3a9db7d/node_modules/react-native-worklets"
   Yoga:
     :path: "../../../node_modules/.bun/react-native@0.81.5+ff07e88fd3a9db7d/node_modules/react-native/ReactCommon/yoga"
 
@@ -2618,6 +2692,7 @@ SPEC CHECKSUMS:
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
   EXJSONUtils: 1d3e4590438c3ee593684186007028a14b3686cd
   EXManifests: a8d97683e5c7a3b026ffbd58559c64dc655b747b
+  EXNotifications: 9eec98712cc814ceff916d876cb53859003b0597
   Expo: 04993fbd7b06dc98ffac58da8847298470dc3db1
   expo-dev-client: 425ee077d6754a98cfe3a2e2410d29b440b24c9d
   expo-dev-launcher: a4f4cdef064ab1fb8621e5b8c7c457cd6e9568c3
@@ -2626,10 +2701,13 @@ SPEC CHECKSUMS:
   ExpoAdapterGoogleSignIn: 21ff1daeef3d21cb0b45772d8029102cc728d6b1
   ExpoAsset: f867e55ceb428aab99e1e8c082b5aee7c159ea18
   ExpoCrypto: b6105ebaa15d6b38a811e71e43b52cd934945322
+  ExpoDevice: 6327c3c200816795708885adf540d26ecab83d1a
+  ExpoDocumentPicker: 7cd9e71a0f66fb19eb0a586d6f26eee1284692e0
   ExpoFileSystem: 858a44267a3e6e9057e0888ad7c7cfbf55d52063
   ExpoFont: 35ac6191ed86bbf56b3ebd2d9154eda9fad5b509
   ExpoHead: 9719a74953454fac328e90f34eea55ebbb3bbbf9
   ExpoKeepAwake: 55f75eca6499bb9e4231ebad6f3e9cb8f99c0296
+  ExpoLinearGradient: 809102bdb979f590083af49f7fa4805cd931bd58
   ExpoLinking: 8f0aaf69aa56f832913030503b6263dc6f647f37
   ExpoModulesCore: f3da4f1ab5a8375d0beafab763739dbee8446583
   ExpoWebBrowser: 17b064c621789e41d4816c95c93f429b84971f52
@@ -2675,7 +2753,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 9050ee10c19f4f7fca8963d0211b2854d624973e
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
-  react-native-webview: 3e303e80cadb5f17118c8c1502aa398e9287e415
+  react-native-webview: b29007f4723bca10872028067b07abacfa1cb35a
   React-NativeModulesApple: 8969913947d5b576de4ed371a939455a8daf28aa
   React-oscompat: ce47230ed20185e91de62d8c6d139ae61763d09c
   React-perflogger: 02b010e665772c7dcb859d85d44c1bfc5ac7c0e4
@@ -2708,12 +2786,15 @@ SPEC CHECKSUMS:
   ReactCommon: 08810150b1206cc44aecf5f6ae19af32f29151a8
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
   RNCAsyncStorage: 3a4f5e2777dae1688b781a487923a08569e27fe4
-  RNGestureHandler: e0d0bce5599f6120b7adf90c38d2805e2935795f
+  RNDateTimePicker: 9c0a849bbe1c256f0854fea255734b715f5ea876
+  RNGestureHandler: 2914750df066d89bf9d8f48a10ad5f0051108ac3
   RNGoogleSignin: 2a2b0d17c0184d886d8e3066060ca5e6fe04249c
-  RNReanimated: 1a206f6490bcc0f25083b22a62207afa57d08e5b
+  RNReanimated: f99211b7adea41fbfb2913446c4793b7bd22b168
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
+  RNSentry: 9b1623e84e3fa443d89d93198b458f96be75a3fc
   RNSVG: cf9ae78f2edf2988242c71a6392d15ff7dd62522
-  RNWorklets: 5ded765277215c4b222ddc86cce77de3e9b23628
+  RNWorklets: dbf037ecd9631e06e2e80824d8e32e4e96368d34
+  Sentry: d587a8fe91ca13503ecd69a1905f3e8a0fcf61be
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
 PODFILE CHECKSUM: 03d4cee25e0d152841140382418ab9f51a04a3b3

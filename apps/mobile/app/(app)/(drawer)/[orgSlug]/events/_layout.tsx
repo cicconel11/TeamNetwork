@@ -6,6 +6,7 @@ export default function EventsLayout() {
       <Stack.Screen
         name="[eventId]/index"
         options={{
+          headerShown: false,
           title: "Event",
           presentation: "card",
         }}
@@ -13,6 +14,7 @@ export default function EventsLayout() {
       <Stack.Screen
         name="[eventId]/edit"
         options={{
+          headerShown: false,
           title: "Edit Event",
           presentation: "card",
         }}
@@ -20,6 +22,7 @@ export default function EventsLayout() {
       <Stack.Screen
         name="[eventId]/rsvps"
         options={{
+          headerShown: false,
           title: "RSVPs",
           presentation: "card",
         }}
@@ -27,6 +30,7 @@ export default function EventsLayout() {
       <Stack.Screen
         name="new"
         options={{
+          headerShown: false,
           title: "Create Event",
           presentation: "card",
         }}

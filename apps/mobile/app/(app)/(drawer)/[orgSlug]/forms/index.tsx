@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -14,15 +14,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useRouter, useNavigation } from "expo-router";
-import { ExternalLink, FileText, ClipboardList, ChevronLeft } from "lucide-react-native";
+import { ExternalLink, FileText, ClipboardList } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { useForms } from "@/hooks/useForms";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useAuth } from "@/hooks/useAuth";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import { supabase } from "@/lib/supabase";
-import type { Form, FormDocument, Organization } from "@teammeet/types";
+import type { Form, FormDocument } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
@@ -50,10 +48,9 @@ type ListItem =
   | { type: "empty" };
 
 export default function FormsScreen() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
-  const { user } = useAuth();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
   const {
@@ -67,43 +64,7 @@ export default function FormsScreen() {
     refetchIfStale,
   } = useForms(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
-  const [organization, setOrganization] = useState<Organization | null>(null);
   const isRefetchingRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  // Fetch organization data for header
-  const fetchOrg = useCallback(async () => {
-    if (!orgSlug || !user) return;
-    try {
-      const { data } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("slug", orgSlug)
-        .single();
-      if (isMountedRef.current && data) {
-        setOrganization(data);
-      }
-    } catch {
-      // Silently fail - header will show fallback
-    }
-  }, [orgSlug, user]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    fetchOrg();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchOrg]);
-
-  // Handle back navigation
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.push(`/(app)/${orgSlug}/(tabs)`);
-    }
-  }, [router, orgSlug]);
 
   // Safe drawer toggle
   const handleDrawerToggle = useCallback(() => {
@@ -145,12 +106,12 @@ export default function FormsScreen() {
     setRefreshing(true);
     isRefetchingRef.current = true;
     try {
-      await Promise.all([refetch(), fetchOrg()]);
+      await refetch();
     } finally {
       setRefreshing(false);
       isRefetchingRef.current = false;
     }
-  }, [refetch, fetchOrg]);
+  }, [refetch]);
 
   // Build list data with section headers
   const listData: ListItem[] = useMemo(() => {
@@ -299,18 +260,13 @@ export default function FormsScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            {/* Back button */}
-            <Pressable onPress={handleBack} style={styles.backButton}>
-              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
-            </Pressable>
-
             {/* Org Logo (opens drawer) */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {organization?.logo_url ? (
-                <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
               ) : (
                 <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
                 </View>
               )}
             </Pressable>
@@ -373,12 +329,6 @@ const createStyles = () =>
       paddingTop: spacing.xs,
       minHeight: 40,
       gap: spacing.sm,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
     },
     orgLogoButton: {
       width: 36,

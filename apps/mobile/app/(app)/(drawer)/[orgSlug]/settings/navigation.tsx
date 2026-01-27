@@ -9,17 +9,23 @@ import {
   Alert,
   RefreshControl,
   TextInput,
+  Pressable,
+  Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter, useNavigation } from "expo-router";
+import { DrawerActions } from "@react-navigation/native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavConfig, type NavConfig, type NavConfigEntry } from "@/hooks/useNavConfig";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { OrgRole } from "@teammeet/core";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
-import type { ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import {
   Home,
   Users,
@@ -63,17 +69,15 @@ const NAV_ITEMS = [
 ];
 
 const CONFIGURABLE_ITEMS = NAV_ITEMS.filter((item) => item.configurable !== false);
-const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni"];
 
 // Get config key for nav item (Dashboard has empty href)
 const getConfigKey = (href: string) => (href === "" ? "dashboard" : href);
 
 export default function NavigationSettingsScreen() {
   const router = useRouter();
-  const { orgSlug, orgId } = useOrg();
+  const navigation = useNavigation();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const { user } = useAuth();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const { navConfig, loading, saving, error, saveNavConfig, refetch } = useNavConfig(orgSlug);
 
@@ -85,6 +89,14 @@ export default function NavigationSettingsScreen() {
   const [orderedItems, setOrderedItems] = useState(CONFIGURABLE_ITEMS);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {}
+  }, [navigation]);
 
   // Fetch user role
   useEffect(() => {
@@ -260,9 +272,31 @@ export default function NavigationSettingsScreen() {
   if (roleLoading || loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Text style={styles.headerTitle}>Navigation</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator color={SEMANTIC.success} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
       </View>
     );
@@ -272,9 +306,31 @@ export default function NavigationSettingsScreen() {
   if (!isAdmin) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>Admin Access Required</Text>
-          <Text style={styles.emptyText}>You need admin permissions to manage navigation settings.</Text>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Text style={styles.headerTitle}>Navigation</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <Text style={styles.emptyTitle}>Admin Access Required</Text>
+            <Text style={styles.emptyText}>You need admin permissions to manage navigation settings.</Text>
+          </View>
         </View>
       </View>
     );
@@ -282,433 +338,497 @@ export default function NavigationSettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Navigation</Text>
-          <Text style={styles.headerDescription}>
-            Use arrows to reorder tabs, rename them, or hide them from members and alumni.
-          </Text>
-        </View>
-
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-
-        {/* Nav Items List */}
-        <View style={styles.itemsList}>
-          {orderedItems.map((item, index) => {
-            const configKey = getConfigKey(item.href);
-            const entry = localConfig[configKey];
-            const labelValue = typeof entry?.label === "string" ? entry.label : "";
-            const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
-            const isHiddenEverywhere = entry?.hidden === true;
-            const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
-            const isExpanded = expandedItem === item.href;
-            const isFirst = index === 0;
-            const isLast = index === orderedItems.length - 1;
-            const Icon = item.icon;
-
-            return (
-              <View
-                key={configKey}
-                style={[styles.itemCard, isHiddenEverywhere && styles.itemCardDisabled]}
-              >
-                {/* Item Header */}
-                <View style={styles.itemHeader}>
-                  {/* Reorder Buttons */}
-                  <View style={styles.reorderButtons}>
-                    <TouchableOpacity
-                      onPress={() => moveItem(item.href, "up")}
-                      disabled={isFirst}
-                      style={[styles.reorderButton, isFirst && styles.reorderButtonDisabled]}
-                    >
-                      <ChevronUp size={18} color={isFirst ? colors.border : colors.mutedForeground} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => moveItem(item.href, "down")}
-                      disabled={isLast}
-                      style={[styles.reorderButton, isLast && styles.reorderButtonDisabled]}
-                    >
-                      <ChevronDown size={18} color={isLast ? colors.border : colors.mutedForeground} />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Icon */}
-                  <Icon size={20} color={colors.mutedForeground} />
-
-                  {/* Label */}
-                  <View style={styles.itemLabelContainer}>
-                    <Text style={styles.itemLabel}>{labelValue || item.label}</Text>
-                    {labelValue && labelValue !== item.label && (
-                      <Text style={styles.itemLabelOriginal}>({item.label})</Text>
-                    )}
-                  </View>
-
-                  {/* Status Badges */}
-                  <View style={styles.badgesContainer}>
-                    {isHiddenEverywhere && (
-                      <View style={[styles.badge, styles.badgeError]}>
-                        <Text style={styles.badgeErrorText}>Disabled</Text>
-                      </View>
-                    )}
-                    {hiddenForRoles.length > 0 && !isHiddenEverywhere && (
-                      <View style={[styles.badge, styles.badgeWarning]}>
-                        <Text style={styles.badgeWarningText}>Partial</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Expand Button */}
-                  <TouchableOpacity
-                    onPress={() => setExpandedItem(isExpanded ? null : item.href)}
-                    style={styles.expandButton}
-                  >
-                    <ChevronDown
-                      size={20}
-                      color={colors.mutedForeground}
-                      style={{ transform: [{ rotate: isExpanded ? "180deg" : "0deg" }] }}
-                    />
-                  </TouchableOpacity>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
                 </View>
+              )}
+            </Pressable>
+            <Text style={styles.headerTitle}>Navigation</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-                {/* Expanded Content */}
-                {isExpanded && (
-                  <View style={styles.expandedContent}>
-                    {/* Display Name */}
-                    <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>Display name</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={labelValue}
-                        onChangeText={(text) => handleLabelChange(item.href, text)}
-                        placeholder={item.label}
-                        placeholderTextColor={colors.mutedForeground}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Customize Navigation</Text>
+            <Text style={styles.formSubtitle}>
+              Use arrows to reorder tabs, rename them, or hide them from members and alumni.
+            </Text>
+          </View>
+
+          {error && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {/* Nav Items List */}
+          <View style={styles.itemsList}>
+            {orderedItems.map((item, index) => {
+              const configKey = getConfigKey(item.href);
+              const entry = localConfig[configKey];
+              const labelValue = typeof entry?.label === "string" ? entry.label : "";
+              const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
+              const isHiddenEverywhere = entry?.hidden === true;
+              const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
+              const isExpanded = expandedItem === item.href;
+              const isFirst = index === 0;
+              const isLast = index === orderedItems.length - 1;
+              const Icon = item.icon;
+
+              return (
+                <View
+                  key={configKey}
+                  style={[styles.itemCard, isHiddenEverywhere && styles.itemCardDisabled]}
+                >
+                  {/* Item Header */}
+                  <View style={styles.itemHeader}>
+                    {/* Reorder Buttons */}
+                    <View style={styles.reorderButtons}>
+                      <TouchableOpacity
+                        onPress={() => moveItem(item.href, "up")}
+                        disabled={isFirst}
+                        style={[styles.reorderButton, isFirst && styles.reorderButtonDisabled]}
+                      >
+                        <ChevronUp size={18} color={isFirst ? NEUTRAL.disabled : NEUTRAL.muted} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => moveItem(item.href, "down")}
+                        disabled={isLast}
+                        style={[styles.reorderButton, isLast && styles.reorderButtonDisabled]}
+                      >
+                        <ChevronDown size={18} color={isLast ? NEUTRAL.disabled : NEUTRAL.muted} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Icon */}
+                    <Icon size={20} color={NEUTRAL.muted} />
+
+                    {/* Label */}
+                    <View style={styles.itemLabelContainer}>
+                      <Text style={styles.itemLabel}>{labelValue || item.label}</Text>
+                      {labelValue && labelValue !== item.label && (
+                        <Text style={styles.itemLabelOriginal}>({item.label})</Text>
+                      )}
+                    </View>
+
+                    {/* Status Badges */}
+                    <View style={styles.badgesContainer}>
+                      {isHiddenEverywhere && (
+                        <View style={[styles.badge, styles.badgeError]}>
+                          <Text style={styles.badgeErrorText}>Disabled</Text>
+                        </View>
+                      )}
+                      {hiddenForRoles.length > 0 && !isHiddenEverywhere && (
+                        <View style={[styles.badge, styles.badgeWarning]}>
+                          <Text style={styles.badgeWarningText}>Partial</Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Expand Button */}
+                    <TouchableOpacity
+                      onPress={() => setExpandedItem(isExpanded ? null : item.href)}
+                      style={styles.expandButton}
+                    >
+                      <ChevronDown
+                        size={20}
+                        color={NEUTRAL.muted}
+                        style={{ transform: [{ rotate: isExpanded ? "180deg" : "0deg" }] }}
                       />
-                    </View>
+                    </TouchableOpacity>
+                  </View>
 
-                    {/* Visibility */}
-                    <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>Visibility</Text>
-                      <TouchableOpacity
-                        style={styles.checkboxRow}
-                        onPress={() => toggleRoleHidden(item.href, "active_member")}
-                      >
-                        <View
-                          style={[
-                            styles.checkbox,
-                            hiddenForRoles.includes("active_member") && styles.checkboxChecked,
-                          ]}
-                        >
-                          {hiddenForRoles.includes("active_member") && (
-                            <Check size={14} color={colors.primaryForeground} />
-                          )}
-                        </View>
-                        <Text style={styles.checkboxLabel}>Hide from members</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.checkboxRow}
-                        onPress={() => toggleRoleHidden(item.href, "alumni")}
-                      >
-                        <View
-                          style={[styles.checkbox, hiddenForRoles.includes("alumni") && styles.checkboxChecked]}
-                        >
-                          {hiddenForRoles.includes("alumni") && (
-                            <Check size={14} color={colors.primaryForeground} />
-                          )}
-                        </View>
-                        <Text style={styles.checkboxLabel}>Hide from alumni</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.checkboxRow}
-                        onPress={() => toggleHiddenEverywhere(item.href)}
-                      >
-                        <View style={[styles.checkbox, isHiddenEverywhere && styles.checkboxChecked]}>
-                          {isHiddenEverywhere && <Check size={14} color={colors.primaryForeground} />}
-                        </View>
-                        <Text style={styles.checkboxLabel}>Disable for everyone</Text>
-                      </TouchableOpacity>
-                    </View>
+                  {/* Expanded Content */}
+                  {isExpanded && (
+                    <View style={styles.expandedContent}>
+                      {/* Display Name */}
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Display name</Text>
+                        <TextInput
+                          style={styles.input}
+                          value={labelValue}
+                          onChangeText={(text) => handleLabelChange(item.href, text)}
+                          placeholder={item.label}
+                          placeholderTextColor={NEUTRAL.placeholder}
+                        />
+                      </View>
 
-                    {/* Edit Roles */}
-                    <View style={styles.fieldGroup}>
-                      <Text style={styles.fieldLabel}>Who can edit?</Text>
-                      <View style={styles.editRolesRow}>
-                        <View style={[styles.checkboxRow, styles.checkboxRowInline]}>
-                          <View style={[styles.checkbox, styles.checkboxChecked, styles.checkboxDisabled]}>
-                            <Check size={14} color={colors.primaryForeground} />
-                          </View>
-                          <Text style={styles.checkboxLabel}>Admins</Text>
-                        </View>
+                      {/* Visibility */}
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Visibility</Text>
                         <TouchableOpacity
-                          style={[styles.checkboxRow, styles.checkboxRowInline]}
-                          onPress={() => toggleEditRole(item.href, "active_member")}
+                          style={styles.checkboxRow}
+                          onPress={() => toggleRoleHidden(item.href, "active_member")}
                         >
                           <View
                             style={[
                               styles.checkbox,
-                              editRoles.includes("active_member") && styles.checkboxChecked,
+                              hiddenForRoles.includes("active_member") && styles.checkboxChecked,
                             ]}
                           >
-                            {editRoles.includes("active_member") && (
-                              <Check size={14} color={colors.primaryForeground} />
+                            {hiddenForRoles.includes("active_member") && (
+                              <Check size={14} color="#ffffff" />
                             )}
                           </View>
-                          <Text style={styles.checkboxLabel}>Members</Text>
+                          <Text style={styles.checkboxLabel}>Hide from members</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.checkboxRow, styles.checkboxRowInline]}
-                          onPress={() => toggleEditRole(item.href, "alumni")}
+                          style={styles.checkboxRow}
+                          onPress={() => toggleRoleHidden(item.href, "alumni")}
                         >
                           <View
-                            style={[styles.checkbox, editRoles.includes("alumni") && styles.checkboxChecked]}
+                            style={[styles.checkbox, hiddenForRoles.includes("alumni") && styles.checkboxChecked]}
                           >
-                            {editRoles.includes("alumni") && (
-                              <Check size={14} color={colors.primaryForeground} />
+                            {hiddenForRoles.includes("alumni") && (
+                              <Check size={14} color="#ffffff" />
                             )}
                           </View>
-                          <Text style={styles.checkboxLabel}>Alumni</Text>
+                          <Text style={styles.checkboxLabel}>Hide from alumni</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.checkboxRow}
+                          onPress={() => toggleHiddenEverywhere(item.href)}
+                        >
+                          <View style={[styles.checkbox, isHiddenEverywhere && styles.checkboxChecked]}>
+                            {isHiddenEverywhere && <Check size={14} color="#ffffff" />}
+                          </View>
+                          <Text style={styles.checkboxLabel}>Disable for everyone</Text>
                         </TouchableOpacity>
                       </View>
-                    </View>
-                  </View>
-                )}
-              </View>
-            );
-          })}
-        </View>
 
-        {/* Save Button */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.saveButton, (!hasChanges || saving) && styles.saveButtonDisabled]}
+                      {/* Edit Roles */}
+                      <View style={styles.fieldGroup}>
+                        <Text style={styles.fieldLabel}>Who can edit?</Text>
+                        <View style={styles.editRolesRow}>
+                          <View style={[styles.checkboxRow, styles.checkboxRowInline]}>
+                            <View style={[styles.checkbox, styles.checkboxChecked, styles.checkboxDisabled]}>
+                              <Check size={14} color="#ffffff" />
+                            </View>
+                            <Text style={styles.checkboxLabel}>Admins</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[styles.checkboxRow, styles.checkboxRowInline]}
+                            onPress={() => toggleEditRole(item.href, "active_member")}
+                          >
+                            <View
+                              style={[
+                                styles.checkbox,
+                                editRoles.includes("active_member") && styles.checkboxChecked,
+                              ]}
+                            >
+                              {editRoles.includes("active_member") && (
+                                <Check size={14} color="#ffffff" />
+                              )}
+                            </View>
+                            <Text style={styles.checkboxLabel}>Members</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.checkboxRow, styles.checkboxRowInline]}
+                            onPress={() => toggleEditRole(item.href, "alumni")}
+                          >
+                            <View
+                              style={[styles.checkbox, editRoles.includes("alumni") && styles.checkboxChecked]}
+                            >
+                              {editRoles.includes("alumni") && (
+                                <Check size={14} color="#ffffff" />
+                              )}
+                            </View>
+                            <Text style={styles.checkboxLabel}>Alumni</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Save Button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              (!hasChanges || saving) && styles.buttonDisabled,
+            ]}
             onPress={handleSave}
             disabled={!hasChanges || saving}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={colors.primaryForeground} />
+              <ActivityIndicator size="small" color="#ffffff" />
             ) : (
-              <Text style={styles.saveButtonText}>Save changes</Text>
+              <Text style={styles.primaryButtonText}>Save Changes</Text>
             )}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          </Pressable>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: 16,
-      paddingBottom: 40,
-    },
-    loadingContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 12,
-    },
-    loadingText: {
-      fontSize: 14,
-      color: colors.muted,
-    },
-    emptyContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 24,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
-      marginBottom: 8,
-    },
-    emptyText: {
-      fontSize: 14,
-      color: colors.muted,
-      textAlign: "center",
-    },
-    header: {
-      marginBottom: 20,
-    },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: colors.foreground,
-      marginBottom: 8,
-    },
-    headerDescription: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-      lineHeight: 20,
-    },
-    errorBanner: {
-      backgroundColor: colors.error + "15",
-      borderRadius: 8,
-      padding: 12,
-      marginBottom: 16,
-    },
-    errorText: {
-      fontSize: 14,
-      color: colors.error,
-    },
-    itemsList: {
-      gap: 8,
-    },
-    itemCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      borderCurve: "continuous",
-      overflow: "hidden",
-    },
-    itemCardDisabled: {
-      opacity: 0.6,
-      borderWidth: 1,
-      borderColor: colors.error + "40",
-    },
-    itemHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: 12,
-      gap: 10,
-    },
-    reorderButtons: {
-      gap: 2,
-    },
-    reorderButton: {
-      padding: 4,
-    },
-    reorderButtonDisabled: {
-      opacity: 0.3,
-    },
-    itemLabelContainer: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    itemLabel: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: colors.foreground,
-    },
-    itemLabelOriginal: {
-      fontSize: 13,
-      color: colors.muted,
-    },
-    badgesContainer: {
-      flexDirection: "row",
-      gap: 6,
-    },
-    badge: {
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: 4,
-    },
-    badgeError: {
-      backgroundColor: colors.error + "15",
-    },
-    badgeErrorText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: colors.error,
-    },
-    badgeWarning: {
-      backgroundColor: colors.warning + "15",
-    },
-    badgeWarningText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: colors.warning,
-    },
-    expandButton: {
-      padding: 4,
-    },
-    expandedContent: {
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-      padding: 16,
-      gap: 16,
-    },
-    fieldGroup: {
-      gap: 8,
-    },
-    fieldLabel: {
-      fontSize: 14,
-      fontWeight: "500",
-      color: colors.foreground,
-    },
-    input: {
-      backgroundColor: colors.background,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      fontSize: 15,
-      color: colors.foreground,
-    },
-    checkboxRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingVertical: 6,
-    },
-    checkboxRowInline: {
-      paddingVertical: 0,
-    },
-    checkbox: {
-      width: 20,
-      height: 20,
-      borderRadius: 4,
-      borderWidth: 2,
-      borderColor: colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    checkboxChecked: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    checkboxDisabled: {
-      opacity: 0.6,
-    },
-    checkboxLabel: {
-      fontSize: 14,
-      color: colors.foreground,
-    },
-    editRolesRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 16,
-    },
-    footer: {
-      marginTop: 24,
-    },
-    saveButton: {
-      backgroundColor: colors.primary,
-      paddingVertical: 14,
-      borderRadius: 10,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    saveButtonDisabled: {
-      opacity: 0.5,
-    },
-    saveButtonText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: colors.primaryForeground,
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {
+    // Gradient fills this area
+  },
+  headerSafeArea: {
+    // SafeAreaView handles top inset
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  orgLogoButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  orgAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgAvatarText: {
+    ...TYPOGRAPHY.titleMedium,
+    color: APP_CHROME.headerTitle,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.lg,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  emptyTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: NEUTRAL.foreground,
+    marginBottom: SPACING.xs,
+  },
+  emptyText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.muted,
+    textAlign: "center",
+  },
+  formHeader: {
+    gap: SPACING.xs,
+  },
+  formTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  formSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.secondary,
+  },
+  errorCard: {
+    backgroundColor: SEMANTIC.errorLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: SEMANTIC.error,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.error,
+  },
+  itemsList: {
+    gap: SPACING.sm,
+  },
+  itemCard: {
+    backgroundColor: NEUTRAL.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    overflow: "hidden",
+  },
+  itemCardDisabled: {
+    opacity: 0.6,
+    borderColor: SEMANTIC.error,
+  },
+  itemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  reorderButtons: {
+    gap: SPACING.xxs,
+  },
+  reorderButton: {
+    padding: SPACING.xs,
+  },
+  reorderButtonDisabled: {
+    opacity: 0.3,
+  },
+  itemLabelContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.xs,
+  },
+  itemLabel: {
+    ...TYPOGRAPHY.titleSmall,
+    color: NEUTRAL.foreground,
+  },
+  itemLabelOriginal: {
+    ...TYPOGRAPHY.caption,
+    color: NEUTRAL.muted,
+  },
+  badgesContainer: {
+    flexDirection: "row",
+    gap: SPACING.xs,
+  },
+  badge: {
+    paddingVertical: SPACING.xxs,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.xs,
+  },
+  badgeError: {
+    backgroundColor: SEMANTIC.errorLight,
+  },
+  badgeErrorText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: SEMANTIC.error,
+  },
+  badgeWarning: {
+    backgroundColor: SEMANTIC.warningLight,
+  },
+  badgeWarningText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: SEMANTIC.warning,
+  },
+  expandButton: {
+    padding: SPACING.xs,
+  },
+  expandedContent: {
+    borderTopWidth: 1,
+    borderTopColor: NEUTRAL.border,
+    padding: SPACING.md,
+    gap: SPACING.md,
+  },
+  fieldGroup: {
+    gap: SPACING.sm,
+  },
+  fieldLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.foreground,
+  },
+  input: {
+    backgroundColor: NEUTRAL.background,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  checkboxRowInline: {
+    paddingVertical: 0,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: RADIUS.xs,
+    borderWidth: 2,
+    borderColor: NEUTRAL.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxChecked: {
+    backgroundColor: SEMANTIC.success,
+    borderColor: SEMANTIC.success,
+  },
+  checkboxDisabled: {
+    opacity: 0.6,
+  },
+  checkboxLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  editRolesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.md,
+  },
+  primaryButton: {
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+    marginTop: SPACING.sm,
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+});

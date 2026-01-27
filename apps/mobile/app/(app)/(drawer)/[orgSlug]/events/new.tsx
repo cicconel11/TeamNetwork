@@ -1,22 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { useRouter, useNavigation } from "expo-router";
+import { DrawerActions } from "@react-navigation/native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { fetchWithAuth } from "@/lib/web-api";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type Audience = "members" | "alumni" | "both" | "specific";
 type Channel = "email" | "sms" | "both";
@@ -75,8 +80,8 @@ function formatTimeLabel(value: Date | null) {
 
 export default function NewEventScreen() {
   const router = useRouter();
-  const { orgId, orgSlug } = useOrg();
-  const { colors } = useOrgTheme();
+  const navigation = useNavigation();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -95,6 +100,14 @@ export default function NewEventScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activePicker, setActivePicker] = useState<PickerTarget | null>(null);
+
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {}
+  }, [navigation]);
 
   useEffect(() => {
     let isMounted = true;
@@ -162,10 +175,6 @@ export default function NewEventScreen() {
         return new Date();
     }
   }, [activePicker, startDate, startTime, endDate, endTime]);
-
-  const openPicker = (target: PickerTarget) => {
-    setActivePicker(target);
-  };
 
   const handlePickerChange = (_event: unknown, selectedDate?: Date) => {
     if (!selectedDate) {
@@ -335,380 +344,510 @@ export default function NewEventScreen() {
     }
   };
 
-  const fieldStyle = {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.secondaryDark,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.secondary,
-    justifyContent: "center" as const,
-  };
-
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ backgroundColor: colors.primary }}
-      contentContainerStyle={{
-        padding: spacing.md,
-        gap: spacing.lg,
-      }}
-    >
-      {error && (
-        <View
-          style={{
-            backgroundColor: `${colors.error}20`,
-            borderRadius: borderRadius.md,
-            padding: spacing.sm,
-          }}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <Text style={styles.headerTitle}>Create Event</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text selectable style={{ color: colors.error, fontSize: fontSize.sm }}>
-            {error}
-          </Text>
-        </View>
-      )}
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Create Event</Text>
+            <Text style={styles.formSubtitle}>Schedule a new event for your organization</Text>
+          </View>
 
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Event title</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Team Meeting"
-          placeholderTextColor={colors.secondaryForeground}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            fontSize: fontSize.base,
-            color: colors.secondaryForeground,
-            backgroundColor: colors.secondary,
-          }}
-        />
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Add event details..."
-          placeholderTextColor={colors.secondaryForeground}
-          multiline
-          textAlignVertical="top"
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            fontSize: fontSize.base,
-            color: colors.secondaryForeground,
-            backgroundColor: colors.secondary,
-            minHeight: 120,
-          }}
-        />
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Start</Text>
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          <Pressable onPress={() => openPicker("start-date")} style={fieldStyle}>
-            <Text
-              style={{
-                fontSize: fontSize.base,
-                color: colors.secondaryForeground,
-                opacity: startDate ? 1 : 0.7,
-              }}
-            >
-              {formatDateLabel(startDate)}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => openPicker("start-time")} style={fieldStyle}>
-            <Text
-              style={{
-                fontSize: fontSize.base,
-                color: colors.secondaryForeground,
-                opacity: startTime ? 1 : 0.7,
-              }}
-            >
-              {formatTimeLabel(startTime)}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>End (optional)</Text>
-        <View style={{ flexDirection: "row", gap: spacing.sm }}>
-          <Pressable onPress={() => openPicker("end-date")} style={fieldStyle}>
-            <Text
-              style={{
-                fontSize: fontSize.base,
-                color: colors.secondaryForeground,
-                opacity: endDate ? 1 : 0.7,
-              }}
-            >
-              {formatDateLabel(endDate)}
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => openPicker("end-time")} style={fieldStyle}>
-            <Text
-              style={{
-                fontSize: fontSize.base,
-                color: colors.secondaryForeground,
-                opacity: endTime ? 1 : 0.7,
-              }}
-            >
-              {formatTimeLabel(endTime)}
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {activePicker && (
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            overflow: "hidden",
-            backgroundColor: colors.secondary,
-          }}
-        >
-          <DateTimePicker
-            value={pickerValue}
-            mode={pickerMode}
-            display={
-              Platform.OS === "ios"
-                ? pickerMode === "date"
-                  ? "inline"
-                  : "spinner"
-                : "default"
-            }
-            onChange={handlePickerChange}
-          />
-          {Platform.OS === "ios" && (
-            <TouchableOpacity
-              onPress={() => setActivePicker(null)}
-              style={{
-                paddingVertical: spacing.sm,
-                alignItems: "center",
-                borderTopWidth: 1,
-                borderTopColor: colors.secondaryDark,
-              }}
-            >
-              <Text style={{ fontSize: fontSize.base, color: colors.primary }}>
-                Done
-              </Text>
-            </TouchableOpacity>
+          {error && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
           )}
-        </View>
-      )}
 
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Location</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="Team facility or address"
-          placeholderTextColor={colors.secondaryForeground}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            fontSize: fontSize.base,
-            color: colors.secondaryForeground,
-            backgroundColor: colors.secondary,
-          }}
-        />
-      </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Event title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Team Meeting"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
 
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Event type</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {EVENT_TYPE_OPTIONS.map((option) => {
-            const selected = eventType === option.value;
-            return (
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Add event details..."
+              placeholderTextColor={NEUTRAL.placeholder}
+              multiline
+              textAlignVertical="top"
+              style={[styles.input, styles.textArea]}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Start</Text>
+            <View style={styles.inlineRow}>
               <Pressable
-                key={option.value}
-                onPress={() => setEventType(option.value)}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected ? colors.primaryLight : colors.card,
-                }}
+                onPress={() => setActivePicker("start-date")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
               >
-                <Text
-                  style={{
-                    fontSize: fontSize.sm,
-                    color: selected ? colors.primaryForeground : colors.foreground,
-                    fontWeight: selected ? fontWeight.semibold : fontWeight.normal,
-                  }}
-                >
-                  {option.label}
-                </Text>
+                <Text style={styles.selectFieldText}>{formatDateLabel(startDate)}</Text>
               </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Audience</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {AUDIENCE_OPTIONS.map((option) => {
-            const selected = audience === option.value;
-            return (
               <Pressable
-                key={option.value}
-                onPress={() => setAudience(option.value)}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected ? colors.primaryLight : colors.card,
-                }}
+                onPress={() => setActivePicker("start-time")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
               >
-                <Text
-                  style={{
-                    fontSize: fontSize.sm,
-                    color: selected ? colors.primaryForeground : colors.foreground,
-                    fontWeight: selected ? fontWeight.semibold : fontWeight.normal,
-                  }}
-                >
-                  {option.label}
-                </Text>
+                <Text style={styles.selectFieldText}>{formatTimeLabel(startTime)}</Text>
               </Pressable>
-            );
-          })}
-        </View>
-      </View>
+            </View>
+          </View>
 
-      {audience === "specific" && (
-        <View style={{ gap: spacing.sm }}>
-          <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Select recipients</Text>
-          {loadingUsers ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <View style={{ gap: spacing.sm }}>
-              {userOptions.map((user) => {
-                const selected = targetUserIds.includes(user.id);
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>End (optional)</Text>
+            <View style={styles.inlineRow}>
+              <Pressable
+                onPress={() => setActivePicker("end-date")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatDateLabel(endDate)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setActivePicker("end-time")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatTimeLabel(endTime)}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {activePicker && (
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={pickerValue}
+                mode={pickerMode}
+                display={
+                  Platform.OS === "ios"
+                    ? pickerMode === "date"
+                      ? "inline"
+                      : "spinner"
+                    : "default"
+                }
+                onChange={handlePickerChange}
+              />
+              {Platform.OS === "ios" && (
+                <Pressable
+                  onPress={() => setActivePicker(null)}
+                  style={({ pressed }) => [
+                    styles.ghostButton,
+                    pressed && styles.ghostButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.ghostButtonText}>Done</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Location</Text>
+            <TextInput
+              value={location}
+              onChangeText={setLocation}
+              placeholder="Team facility or address"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Event type</Text>
+            <View style={styles.chipRow}>
+              {EVENT_TYPE_OPTIONS.map((option) => {
+                const selected = eventType === option.value;
                 return (
                   <Pressable
-                    key={user.id}
-                    onPress={() => toggleTargetUser(user.id)}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: spacing.sm,
-                      padding: spacing.sm,
-                      borderRadius: borderRadius.md,
-                      borderWidth: 1,
-                      borderColor: selected ? colors.primary : colors.border,
-                      backgroundColor: selected ? colors.primaryLight : colors.card,
-                    }}
+                    key={option.value}
+                    onPress={() => setEventType(option.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
                   >
-                    <View
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        borderWidth: 2,
-                        borderColor: selected ? colors.primary : colors.mutedForeground,
-                        backgroundColor: selected ? colors.primary : "transparent",
-                      }}
-                    />
-                    <Text selectable style={{ fontSize: fontSize.base, color: colors.foreground }}>
-                      {user.label}
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {option.label}
                     </Text>
                   </Pressable>
                 );
               })}
             </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Audience</Text>
+            <View style={styles.chipRow}>
+              {AUDIENCE_OPTIONS.map((option) => {
+                const selected = audience === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setAudience(option.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {audience === "specific" && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Select recipients</Text>
+              {loadingUsers ? (
+                <ActivityIndicator color={SEMANTIC.success} />
+              ) : (
+                <View style={styles.optionList}>
+                  {userOptions.map((user) => {
+                    const selected = targetUserIds.includes(user.id);
+                    return (
+                      <Pressable
+                        key={user.id}
+                        onPress={() => toggleTargetUser(user.id)}
+                        style={[
+                          styles.optionRow,
+                          selected && styles.optionRowSelected,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.optionIndicator,
+                            selected && styles.optionIndicatorSelected,
+                          ]}
+                        />
+                        <Text style={styles.optionLabel}>{user.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           )}
-        </View>
-      )}
 
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Notification channel</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {CHANNEL_OPTIONS.map((option) => {
-            const selected = channel === option.value;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => setChannel(option.value)}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected ? colors.primaryLight : colors.card,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: fontSize.sm,
-                    color: selected ? colors.primaryForeground : colors.foreground,
-                    fontWeight: selected ? fontWeight.semibold : fontWeight.normal,
-                  }}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Notification channel</Text>
+            <View style={styles.chipRow}>
+              {CHANNEL_OPTIONS.map((option) => {
+                const selected = channel === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setChannel(option.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.switchGroup}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Send notifications</Text>
+              <Switch
+                value={sendNotification}
+                onValueChange={setSendNotification}
+                trackColor={{ false: NEUTRAL.border, true: SEMANTIC.successLight }}
+                thumbColor={sendNotification ? SEMANTIC.success : NEUTRAL.surface}
+              />
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={isSaving}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isSaving && styles.buttonDisabled,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create Event</Text>
+            )}
+          </Pressable>
+        </ScrollView>
       </View>
-
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text style={{ fontSize: fontSize.base, color: colors.foreground }}>
-          Send notifications
-        </Text>
-        <Switch
-          value={sendNotification}
-          onValueChange={setSendNotification}
-          trackColor={{ false: colors.border, true: colors.primaryLight }}
-          thumbColor={sendNotification ? colors.primary : colors.card}
-        />
-      </View>
-
-      <TouchableOpacity
-        onPress={handleSubmit}
-        disabled={isSaving}
-        style={{
-          backgroundColor: colors.primary,
-          borderRadius: borderRadius.md,
-          paddingVertical: spacing.sm,
-          alignItems: "center",
-          opacity: isSaving ? 0.7 : 1,
-        }}
-      >
-        {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
-        ) : (
-          <Text style={{ color: colors.primaryForeground, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
-            Create Event
-          </Text>
-        )}
-      </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {
+    // Gradient fills this area
+  },
+  headerSafeArea: {
+    // SafeAreaView handles top inset
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  orgLogoButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  orgAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgAvatarText: {
+    ...TYPOGRAPHY.titleMedium,
+    color: APP_CHROME.headerTitle,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  formHeader: {
+    gap: SPACING.xs,
+  },
+  formTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  formSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.secondary,
+  },
+  errorCard: {
+    backgroundColor: SEMANTIC.errorLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: SEMANTIC.error,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.error,
+  },
+  fieldGroup: {
+    gap: SPACING.xs,
+  },
+  fieldLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.secondary,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+    backgroundColor: NEUTRAL.surface,
+  },
+  textArea: {
+    minHeight: 120,
+  },
+  inlineRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  selectField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: NEUTRAL.surface,
+  },
+  selectFieldPressed: {
+    opacity: 0.9,
+  },
+  selectFieldText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    backgroundColor: NEUTRAL.surface,
+  },
+  ghostButton: {
+    alignItems: "center",
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: NEUTRAL.border,
+  },
+  ghostButtonPressed: {
+    opacity: 0.85,
+  },
+  ghostButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: SEMANTIC.success,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  chip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    backgroundColor: NEUTRAL.surface,
+  },
+  chipSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.successLight,
+  },
+  chipText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.foreground,
+  },
+  chipTextSelected: {
+    color: SEMANTIC.successDark,
+    fontWeight: "600",
+  },
+  optionList: {
+    gap: SPACING.sm,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    backgroundColor: NEUTRAL.surface,
+  },
+  optionRowSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.successLight,
+  },
+  optionIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: NEUTRAL.muted,
+    backgroundColor: "transparent",
+  },
+  optionIndicatorSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.success,
+  },
+  optionLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  switchGroup: {
+    gap: SPACING.md,
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  switchLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  primaryButton: {
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+});

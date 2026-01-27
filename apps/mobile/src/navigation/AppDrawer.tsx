@@ -15,8 +15,8 @@ export function AppDrawer() {
     <Drawer
       screenOptions={{
         headerShown: false,
-        drawerType: "slide",
-        overlayColor: "rgba(0, 0, 0, 0.35)",
+        drawerType: "front",
+        overlayColor: "rgba(0, 0, 0, 0.5)",
         swipeEnabled: true,
         swipeEdgeWidth: 40,
         drawerStyle: [

@@ -8,8 +8,9 @@ import { NEUTRAL } from "@/lib/design-tokens";
 
 const DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_MAX_WIDTH = 320;
-const DRAWER_SHIFT_RATIO = 0.6;
-const SCALE_END = 0.92;
+const DRAWER_SHIFT_RATIO = 0.15;
+const SCALE_START = 1.0;
+const SCALE_END = 0.88;
 const RADIUS_END = 18;
 
 export default function DrawerStackLayout() {
@@ -72,6 +73,13 @@ export default function DrawerStackLayout() {
           name="terms"
           options={{
             title: "Terms of Service",
+          }}
+        />
+        <Stack.Screen
+          name="profile"
+          options={{
+            headerShown: false,
+            title: "Edit Profile",
           }}
         />
       </Stack>
