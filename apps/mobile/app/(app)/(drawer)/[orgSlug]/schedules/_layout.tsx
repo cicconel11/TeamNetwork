@@ -6,7 +6,7 @@ export default function SchedulesLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen
         name="new"
-        options={{ headerShown: true, title: "New Schedule" }}
+        options={{ headerShown: false, title: "New Schedule" }}
       />
       <Stack.Screen
         name="[scheduleId]"

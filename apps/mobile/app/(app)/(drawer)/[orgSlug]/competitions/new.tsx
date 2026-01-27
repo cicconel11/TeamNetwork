@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,13 +10,17 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter, useNavigation } from "expo-router";
+import { DrawerActions } from "@react-navigation/native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
-import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type Audience = "members" | "alumni" | "both" | "specific";
 type Channel = "email" | "sms" | "both";
@@ -36,10 +41,10 @@ const CHANNEL_OPTIONS: Array<{ value: Channel; label: string }> = [
 
 export default function NewCompetitionScreen() {
   const router = useRouter();
-  const { orgId, orgSlug } = useOrg();
+  const navigation = useNavigation();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [name, setName] = useState("Intersquad Competition");
   const [description, setDescription] = useState("");
   const [season, setSeason] = useState(String(new Date().getFullYear()));
@@ -51,6 +56,14 @@ export default function NewCompetitionScreen() {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {}
+  }, [navigation]);
 
   useEffect(() => {
     let isMounted = true;
@@ -169,363 +182,455 @@ export default function NewCompetitionScreen() {
 
   if (roleLoading) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "Create Competition" }} />
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Text style={styles.headerTitle}>Create Competition</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator color={SEMANTIC.success} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   if (!isAdmin) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "Create Competition" }} />
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            You do not have access to create competitions.
-          </Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+                {orgLogoUrl ? (
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                ) : (
+                  <View style={styles.orgAvatar}>
+                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                  </View>
+                )}
+              </Pressable>
+              <Text style={styles.headerTitle}>Create Competition</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>You do not have access to create competitions.</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Stack.Screen options={{ title: "Create Competition" }} />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Create Competition</Text>
-        <Text style={styles.headerSubtitle}>Set up a new internal competition</Text>
-      </View>
-
-      {error ? (
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Competition name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g., Wagner Cup"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Describe the competition and how points are earned..."
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          textAlignVertical="top"
-          style={[styles.input, styles.textArea]}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Season</Text>
-        <TextInput
-          value={season}
-          onChangeText={setSeason}
-          placeholder="e.g., 2025, Fall 2025"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Audience</Text>
-        <View style={styles.chipRow}>
-          {AUDIENCE_OPTIONS.map((option) => {
-            const isSelected = audience === option.value;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => setAudience(option.value)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  pressed && styles.chipPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    isSelected && { color: colors.primaryForeground },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {audience === "specific" ? (
-        <View style={styles.fieldGroup}>
-          <Text style={styles.fieldLabel}>Select recipients</Text>
-          {loadingUsers ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <View style={styles.recipientList}>
-              {userOptions.length === 0 ? (
-                <Text style={styles.emptyText}>No users available.</Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
               ) : (
-                userOptions.map((userOption) => {
-                  const selected = targetUserIds.includes(userOption.id);
-                  return (
-                    <Pressable
-                      key={userOption.id}
-                      onPress={() => toggleTargetUser(userOption.id)}
-                      style={({ pressed }) => [
-                        styles.recipientRow,
-                        selected && {
-                          borderColor: colors.primary,
-                          backgroundColor: colors.primaryLight,
-                        },
-                        pressed && styles.recipientRowPressed,
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.recipientIndicator,
-                          selected && { borderColor: colors.primary, backgroundColor: colors.primary },
-                        ]}
-                      />
-                      <Text style={styles.recipientLabel}>{userOption.label}</Text>
-                    </Pressable>
-                  );
-                })
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                </View>
+              )}
+            </Pressable>
+            <Text style={styles.headerTitle}>Create Competition</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Create Competition</Text>
+            <Text style={styles.formSubtitle}>Set up a new internal competition</Text>
+          </View>
+
+          {error && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Competition name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g., Wagner Cup"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the competition and how points are earned..."
+              placeholderTextColor={NEUTRAL.placeholder}
+              multiline
+              textAlignVertical="top"
+              style={[styles.input, styles.textArea]}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Season</Text>
+            <TextInput
+              value={season}
+              onChangeText={setSeason}
+              placeholder="e.g., 2025, Fall 2025"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Audience</Text>
+            <View style={styles.chipRow}>
+              {AUDIENCE_OPTIONS.map((option) => {
+                const isSelected = audience === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setAudience(option.value)}
+                    style={[styles.chip, isSelected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {audience === "specific" && (
+            <View style={styles.fieldGroup}>
+              <Text style={styles.fieldLabel}>Select recipients</Text>
+              {loadingUsers ? (
+                <ActivityIndicator color={SEMANTIC.success} />
+              ) : (
+                <View style={styles.optionList}>
+                  {userOptions.length === 0 ? (
+                    <Text style={styles.emptyText}>No users available.</Text>
+                  ) : (
+                    userOptions.map((userOption) => {
+                      const selected = targetUserIds.includes(userOption.id);
+                      return (
+                        <Pressable
+                          key={userOption.id}
+                          onPress={() => toggleTargetUser(userOption.id)}
+                          style={[
+                            styles.optionRow,
+                            selected && styles.optionRowSelected,
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.optionIndicator,
+                              selected && styles.optionIndicatorSelected,
+                            ]}
+                          />
+                          <Text style={styles.optionLabel}>{userOption.label}</Text>
+                        </Pressable>
+                      );
+                    })
+                  )}
+                </View>
               )}
             </View>
           )}
-        </View>
-      ) : null}
 
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Notification channel</Text>
-        <View style={styles.chipRow}>
-          {CHANNEL_OPTIONS.map((option) => {
-            const isSelected = channel === option.value;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => setChannel(option.value)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  isSelected && { backgroundColor: colors.primary, borderColor: colors.primary },
-                  pressed && styles.chipPressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    isSelected && { color: colors.primaryForeground },
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Notification channel</Text>
+            <View style={styles.chipRow}>
+              {CHANNEL_OPTIONS.map((option) => {
+                const isSelected = channel === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setChannel(option.value)}
+                    style={[styles.chip, isSelected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.switchGroup}>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Send notifications</Text>
+              <Switch
+                value={sendNotification}
+                onValueChange={setSendNotification}
+                trackColor={{ false: NEUTRAL.border, true: SEMANTIC.successLight }}
+                thumbColor={sendNotification ? SEMANTIC.success : NEUTRAL.surface}
+              />
+            </View>
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={isSaving}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isSaving && styles.buttonDisabled,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create Competition</Text>
+            )}
+          </Pressable>
+        </ScrollView>
       </View>
-
-      <View style={styles.toggleRow}>
-        <Text style={styles.toggleLabel}>Send notifications</Text>
-        <Switch
-          value={sendNotification}
-          onValueChange={setSendNotification}
-          trackColor={{ false: colors.border, true: colors.primaryLight }}
-          thumbColor={sendNotification ? colors.primary : colors.card}
-        />
-      </View>
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={isSaving}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && styles.primaryButtonPressed,
-          isSaving && styles.buttonDisabled,
-        ]}
-      >
-        {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Create competition</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: spacing.md,
-      paddingBottom: spacing.xl,
-      gap: spacing.lg,
-    },
-    header: {
-      gap: spacing.xs,
-    },
-    headerTitle: {
-      fontSize: fontSize["2xl"],
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-    },
-    headerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    errorCard: {
-      backgroundColor: `${colors.error}14`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: `${colors.error}55`,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: colors.error,
-    },
-    loadingState: {
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    loadingText: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    fieldGroup: {
-      gap: spacing.xs,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: colors.mutedForeground,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      fontSize: fontSize.base,
-      color: colors.foreground,
-      backgroundColor: colors.background,
-    },
-    textArea: {
-      minHeight: 120,
-    },
-    chipRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
-    chip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-    },
-    chipPressed: {
-      opacity: 0.85,
-    },
-    chipText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: colors.foreground,
-    },
-    recipientList: {
-      gap: spacing.sm,
-    },
-    recipientRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      padding: spacing.sm,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-    },
-    recipientRowPressed: {
-      opacity: 0.85,
-    },
-    recipientIndicator: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      borderWidth: 2,
-      borderColor: colors.mutedForeground,
-      backgroundColor: "transparent",
-    },
-    recipientLabel: {
-      fontSize: fontSize.base,
-      color: colors.foreground,
-      flex: 1,
-    },
-    emptyText: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    toggleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    toggleLabel: {
-      fontSize: fontSize.base,
-      color: colors.foreground,
-    },
-    primaryButton: {
-      backgroundColor: colors.primary,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.sm,
-      alignItems: "center",
-      borderCurve: "continuous",
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {
+    // Gradient fills this area
+  },
+  headerSafeArea: {
+    // SafeAreaView handles top inset
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  orgLogoButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  orgAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  orgAvatarText: {
+    ...TYPOGRAPHY.titleMedium,
+    color: APP_CHROME.headerTitle,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  formHeader: {
+    gap: SPACING.xs,
+  },
+  formTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  formSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.secondary,
+  },
+  errorCard: {
+    backgroundColor: SEMANTIC.errorLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: SEMANTIC.error,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.error,
+  },
+  fieldGroup: {
+    gap: SPACING.xs,
+  },
+  fieldLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.secondary,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+    backgroundColor: NEUTRAL.surface,
+  },
+  textArea: {
+    minHeight: 120,
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
+  },
+  chip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    backgroundColor: NEUTRAL.surface,
+  },
+  chipSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.successLight,
+  },
+  chipText: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.foreground,
+  },
+  chipTextSelected: {
+    color: SEMANTIC.successDark,
+    fontWeight: "600",
+  },
+  optionList: {
+    gap: SPACING.sm,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    backgroundColor: NEUTRAL.surface,
+  },
+  optionRowSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.successLight,
+  },
+  optionIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: NEUTRAL.muted,
+    backgroundColor: "transparent",
+  },
+  optionIndicatorSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.success,
+  },
+  optionLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  emptyText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  switchGroup: {
+    gap: SPACING.md,
+  },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  switchLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  primaryButton: {
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+});

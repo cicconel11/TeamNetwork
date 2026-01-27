@@ -186,15 +186,49 @@ export default function RootLayout() {
     // Listen for deep links while app is open
     const subscription = Linking.addEventListener("url", handleDeepLink);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (!isMounted) return;
+
+      // Handle invalid/expired refresh token errors gracefully
+      if (error) {
+        console.warn("Session error, signing out:", error.message);
+        // Clear any corrupted session data
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+        setIsLoading(false);
+        return;
+      }
+
       setSession(session);
+      setIsLoading(false);
+    }).catch((err) => {
+      // Handle unexpected errors (e.g., network issues during token refresh)
+      console.warn("getSession failed:", err?.message || err);
+      if (!isMounted) return;
+      supabase.auth.signOut().catch(() => {});
+      setSession(null);
       setIsLoading(false);
     });
 
     const {
       data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      // Handle token refresh failures
+      if (event === "TOKEN_REFRESHED" && !session) {
+        console.warn("Token refresh failed, signing out");
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // Handle sign out event
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+        setIsLoading(false);
+        return;
+      }
+
       setSession(session);
       setIsLoading(false);
     });

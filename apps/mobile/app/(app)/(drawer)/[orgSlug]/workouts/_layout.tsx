@@ -6,11 +6,11 @@ export default function WorkoutsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen
         name="new"
-        options={{ headerShown: true, title: "Post Workout" }}
+        options={{ headerShown: false, title: "Post Workout" }}
       />
       <Stack.Screen
         name="[workoutId]"
-        options={{ headerShown: true, title: "Edit Workout" }}
+        options={{ headerShown: false, title: "Edit Workout" }}
       />
     </Stack>
   );

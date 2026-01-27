@@ -6,11 +6,11 @@ export default function CompetitionLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen
         name="add-team"
-        options={{ headerShown: true, title: "Add Team" }}
+        options={{ headerShown: false, title: "Add Team" }}
       />
       <Stack.Screen
         name="add-points"
-        options={{ headerShown: true, title: "Add Points" }}
+        options={{ headerShown: false, title: "Add Points" }}
       />
     </Stack>
   );

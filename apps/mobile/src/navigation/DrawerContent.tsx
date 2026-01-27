@@ -54,7 +54,7 @@ const FOOTER_HEIGHT = PINNED_ITEM_HEIGHT * PINNED_FOOTER_COUNT + FOOTER_PADDING;
 export function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const { bottom: bottomInset } = useSafeAreaInsets();
+  const { top: topInset, bottom: bottomInset } = useSafeAreaInsets();
   const { orgSlug } = useGlobalSearchParams<{ orgSlug?: string }>();
   const { user } = useAuth();
   const { permissions } = useOrgRole();
@@ -189,12 +189,18 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         {...props}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: FOOTER_HEIGHT + bottomInset },
+          { paddingTop: topInset + spacing.md, paddingBottom: FOOTER_HEIGHT + bottomInset },
         ]}
         scrollEnabled
       >
         {/* Profile Card */}
-        <View style={styles.profileCard}>
+        <Pressable
+          style={({ pressed }) => [styles.profileCard, pressed && styles.profileCardPressed]}
+          onPress={() => {
+            props.navigation.closeDrawer();
+            router.push("/(app)/(drawer)/profile");
+          }}
+        >
           <View style={styles.avatar}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
@@ -206,7 +212,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             <Text style={styles.profileName}>{displayName}</Text>
             {displayEmail && <Text style={styles.profileEmail}>{displayEmail}</Text>}
           </View>
-        </View>
+        </Pressable>
         <View style={styles.divider} />
 
         {/* Sections */}
@@ -236,7 +242,7 @@ const styles = StyleSheet.create({
     backgroundColor: NEUTRAL.dark950,
   },
   scrollContent: {
-    paddingTop: spacing.md,
+    // paddingTop is set dynamically with safe area inset
   },
   profileCard: {
     flexDirection: "row",
@@ -244,6 +250,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+  },
+  profileCardPressed: {
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
   },
   avatar: {
     width: 44,

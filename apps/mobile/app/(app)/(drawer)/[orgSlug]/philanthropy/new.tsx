@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -9,13 +9,17 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { Stack, useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
-import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type PickerTarget = "start-date" | "start-time" | "end-date" | "end-time";
 
@@ -44,10 +48,10 @@ function formatTimeLabel(value: Date | null) {
 
 export default function NewPhilanthropyEventScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { orgId, orgSlug } = useOrg();
   const { isAdmin, isActiveMember, isLoading: roleLoading } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -60,6 +64,14 @@ export default function NewPhilanthropyEventScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const canEdit = isAdmin || isActiveMember;
+
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/philanthropy`);
+    }
+  }, [navigation, router, orgSlug]);
 
   const pickerMode = useMemo(() => {
     if (!activePicker) return "date";
@@ -176,308 +188,372 @@ export default function NewPhilanthropyEventScreen() {
 
   if (roleLoading) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>New Event</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator color={SEMANTIC.success} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   if (!canEdit) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            You do not have access to add philanthropy events.
-          </Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>New Event</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>You do not have access to add philanthropy events.</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Stack.Screen options={{ title: "New Philanthropy Event" }} />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>New Philanthropy Event</Text>
-        <Text style={styles.headerSubtitle}>Add a volunteer or community service event</Text>
-      </View>
-
-      {error ? (
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Event title</Text>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="e.g., Charity 5K Run, Food Bank Volunteering"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Describe the philanthropy event, what volunteers will be doing, any requirements..."
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          textAlignVertical="top"
-          style={[styles.input, styles.textArea]}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Start</Text>
-        <View style={styles.inlineRow}>
-          <Pressable
-            onPress={() => setActivePicker("start-date")}
-            style={({ pressed }) => [
-              styles.selectField,
-              pressed && styles.selectFieldPressed,
-            ]}
-          >
-            <Text style={styles.selectFieldText}>{formatDateLabel(startDate)}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActivePicker("start-time")}
-            style={({ pressed }) => [
-              styles.selectField,
-              pressed && styles.selectFieldPressed,
-            ]}
-          >
-            <Text style={styles.selectFieldText}>{formatTimeLabel(startTime)}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>End (optional)</Text>
-        <View style={styles.inlineRow}>
-          <Pressable
-            onPress={() => setActivePicker("end-date")}
-            style={({ pressed }) => [
-              styles.selectField,
-              pressed && styles.selectFieldPressed,
-            ]}
-          >
-            <Text style={styles.selectFieldText}>{formatDateLabel(endDate)}</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setActivePicker("end-time")}
-            style={({ pressed }) => [
-              styles.selectField,
-              pressed && styles.selectFieldPressed,
-            ]}
-          >
-            <Text style={styles.selectFieldText}>{formatTimeLabel(endTime)}</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      {activePicker ? (
-        <View style={styles.pickerContainer}>
-          <DateTimePicker
-            value={pickerValue}
-            mode={pickerMode}
-            display={
-              Platform.OS === "ios"
-                ? pickerMode === "date"
-                  ? "inline"
-                  : "spinner"
-                : "default"
-            }
-            onChange={handlePickerChange}
-          />
-          {Platform.OS === "ios" ? (
-            <Pressable
-              onPress={() => setActivePicker(null)}
-              style={({ pressed }) => [
-                styles.ghostButton,
-                pressed && styles.ghostButtonPressed,
-              ]}
-            >
-              <Text style={styles.ghostButtonText}>Done</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Location</Text>
-        <TextInput
-          value={location}
-          onChangeText={setLocation}
-          placeholder="e.g., Philadelphia Food Bank, Schuylkill River Trail"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={isSaving}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && styles.primaryButtonPressed,
-          isSaving && styles.buttonDisabled,
-        ]}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Create event</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleBack} style={styles.backButton}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <Text style={styles.headerTitle}>New Event</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>New Philanthropy Event</Text>
+            <Text style={styles.formSubtitle}>Add a volunteer or community service event</Text>
+          </View>
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Event title</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g., Charity 5K Run, Food Bank Volunteering"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the philanthropy event, what volunteers will be doing, any requirements..."
+              placeholderTextColor={NEUTRAL.placeholder}
+              multiline
+              textAlignVertical="top"
+              style={[styles.input, styles.textArea]}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Start</Text>
+            <View style={styles.inlineRow}>
+              <Pressable
+                onPress={() => setActivePicker("start-date")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatDateLabel(startDate)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setActivePicker("start-time")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatTimeLabel(startTime)}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>End (optional)</Text>
+            <View style={styles.inlineRow}>
+              <Pressable
+                onPress={() => setActivePicker("end-date")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatDateLabel(endDate)}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setActivePicker("end-time")}
+                style={({ pressed }) => [
+                  styles.selectField,
+                  pressed && styles.selectFieldPressed,
+                ]}
+              >
+                <Text style={styles.selectFieldText}>{formatTimeLabel(endTime)}</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {activePicker ? (
+            <View style={styles.pickerContainer}>
+              <DateTimePicker
+                value={pickerValue}
+                mode={pickerMode}
+                display={
+                  Platform.OS === "ios"
+                    ? pickerMode === "date"
+                      ? "inline"
+                      : "spinner"
+                    : "default"
+                }
+                onChange={handlePickerChange}
+              />
+              {Platform.OS === "ios" ? (
+                <Pressable
+                  onPress={() => setActivePicker(null)}
+                  style={({ pressed }) => [
+                    styles.ghostButton,
+                    pressed && styles.ghostButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.ghostButtonText}>Done</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Location</Text>
+            <TextInput
+              value={location}
+              onChangeText={setLocation}
+              placeholder="e.g., Philadelphia Food Bank, Schuylkill River Trail"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={isSaving}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isSaving && styles.buttonDisabled,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create Event</Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: spacing.md,
-      paddingBottom: spacing.xl,
-      gap: spacing.lg,
-    },
-    header: {
-      gap: spacing.xs,
-    },
-    headerTitle: {
-      fontSize: fontSize["2xl"],
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-    },
-    headerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    errorCard: {
-      backgroundColor: `${colors.error}14`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: `${colors.error}55`,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: colors.error,
-    },
-    loadingState: {
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    loadingText: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    fieldGroup: {
-      gap: spacing.xs,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: colors.mutedForeground,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      fontSize: fontSize.base,
-      color: colors.foreground,
-      backgroundColor: colors.background,
-    },
-    textArea: {
-      minHeight: 140,
-    },
-    inlineRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    selectField: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      backgroundColor: colors.background,
-    },
-    selectFieldPressed: {
-      opacity: 0.9,
-    },
-    selectFieldText: {
-      fontSize: fontSize.base,
-      color: colors.foreground,
-    },
-    pickerContainer: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.md,
-      overflow: "hidden",
-      backgroundColor: colors.card,
-    },
-    ghostButton: {
-      alignItems: "center",
-      paddingVertical: spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: colors.border,
-    },
-    ghostButtonPressed: {
-      opacity: 0.85,
-    },
-    ghostButtonText: {
-      fontSize: fontSize.base,
-      color: colors.primary,
-      fontWeight: fontWeight.semibold,
-    },
-    primaryButton: {
-      backgroundColor: colors.primary,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.sm,
-      alignItems: "center",
-      borderCurve: "continuous",
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {
+    // Gradient fills this area
+  },
+  headerSafeArea: {
+    // SafeAreaView handles top inset
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -SPACING.sm,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  formHeader: {
+    gap: SPACING.xs,
+  },
+  formTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  formSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.secondary,
+  },
+  errorCard: {
+    backgroundColor: SEMANTIC.errorLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: SEMANTIC.error,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.error,
+  },
+  fieldGroup: {
+    gap: SPACING.xs,
+  },
+  fieldLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.secondary,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+    backgroundColor: NEUTRAL.surface,
+  },
+  textArea: {
+    minHeight: 140,
+  },
+  inlineRow: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+  },
+  selectField: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    backgroundColor: NEUTRAL.surface,
+  },
+  selectFieldPressed: {
+    opacity: 0.9,
+  },
+  selectFieldText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    backgroundColor: NEUTRAL.surface,
+  },
+  ghostButton: {
+    alignItems: "center",
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: NEUTRAL.border,
+  },
+  ghostButtonPressed: {
+    opacity: 0.85,
+  },
+  ghostButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: SEMANTIC.success,
+  },
+  primaryButton: {
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+});

@@ -19,6 +19,7 @@ function OrgLayoutInner() {
       <Stack.Screen
         name="settings/navigation"
         options={{
+          headerShown: false,
           title: "Navigation",
           presentation: "card",
         }}
@@ -30,22 +31,15 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
-        name="announcements/[announcementId]"
+        name="announcements"
         options={{
-          title: "Announcement",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="announcements/new"
-        options={{
-          title: "Post Announcement",
-          presentation: "card",
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="members/[memberId]"
         options={{
+          headerShown: false,
           title: "Member",
           presentation: "card",
         }}
@@ -53,6 +47,7 @@ function OrgLayoutInner() {
       <Stack.Screen
         name="members/new"
         options={{
+          headerShown: false,
           title: "Invite Member",
           presentation: "card",
         }}
@@ -110,6 +105,7 @@ function OrgLayoutInner() {
       <Stack.Screen
         name="competitions/new"
         options={{
+          headerShown: false,
           title: "Create Competition",
           presentation: "card",
         }}

@@ -6,7 +6,7 @@ export default function DonationsLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen
         name="new"
-        options={{ headerShown: true, title: "Record Donation" }}
+        options={{ headerShown: false, title: "Record Donation" }}
       />
     </Stack>
   );

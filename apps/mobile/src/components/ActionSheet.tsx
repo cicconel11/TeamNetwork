@@ -13,8 +13,8 @@ import {
   MapPin,
   Share2,
 } from "lucide-react-native";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 interface ActionSheetProps {
   isAdmin: boolean;
@@ -34,6 +34,8 @@ interface ActionItem {
   onPress: () => void;
 }
 
+const ICON_COLOR = "#ffffff";
+
 export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
   (
     {
@@ -49,8 +51,6 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
     },
     ref
   ) => {
-    const { colors } = useOrgTheme();
-    const styles = useMemo(() => createStyles(colors), [colors]);
     const snapPoints = useMemo(() => ["40%"], []);
 
     const renderBackdrop = useCallback(
@@ -67,7 +67,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
     const adminActions: ActionItem[] = [
       {
-        icon: <CalendarPlus size={24} color={colors.primaryForeground} />,
+        icon: <CalendarPlus size={24} color={ICON_COLOR} />,
         label: "Create Event",
         onPress: () => {
           onCreateEvent?.();
@@ -75,7 +75,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <Megaphone size={24} color={colors.primaryForeground} />,
+        icon: <Megaphone size={24} color={ICON_COLOR} />,
         label: "Post Announcement",
         onPress: () => {
           onPostAnnouncement?.();
@@ -83,7 +83,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <UserPlus size={24} color={colors.primaryForeground} />,
+        icon: <UserPlus size={24} color={ICON_COLOR} />,
         label: "Invite Member",
         onPress: () => {
           onInviteMember?.();
@@ -91,7 +91,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <HandCoins size={24} color={colors.primaryForeground} />,
+        icon: <HandCoins size={24} color={ICON_COLOR} />,
         label: "Record Donation",
         onPress: () => {
           onRecordDonation?.();
@@ -102,7 +102,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
     const memberActions: ActionItem[] = [
       {
-        icon: <CalendarCheck size={24} color={colors.primaryForeground} />,
+        icon: <CalendarCheck size={24} color={ICON_COLOR} />,
         label: "RSVP to Event",
         onPress: () => {
           onRsvpEvent?.();
@@ -110,7 +110,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <MapPin size={24} color={colors.primaryForeground} />,
+        icon: <MapPin size={24} color={ICON_COLOR} />,
         label: "Check In",
         onPress: () => {
           onCheckIn?.();
@@ -118,7 +118,7 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
         },
       },
       {
-        icon: <Share2 size={24} color={colors.primaryForeground} />,
+        icon: <Share2 size={24} color={ICON_COLOR} />,
         label: "Share Org",
         onPress: () => {
           onShareOrg?.();
@@ -162,55 +162,52 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
 
 ActionSheet.displayName = "ActionSheet";
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    background: {
-      backgroundColor: colors.card,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-    },
-    indicator: {
-      backgroundColor: colors.border,
-      width: 40,
-    },
-    content: {
-      flex: 1,
-      paddingHorizontal: 24,
-      paddingTop: 8,
-    },
-    title: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
-      marginBottom: 20,
-      textAlign: "center",
-    },
-    grid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      justifyContent: "space-between",
-    },
-    actionTile: {
-      width: "48%",
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      alignItems: "center",
-    },
-    iconContainer: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: colors.primaryDark,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 8,
-    },
-    actionLabel: {
-      fontSize: 14,
-      fontWeight: "500",
-      color: colors.primaryForeground,
-      textAlign: "center",
-    },
-  });
+const styles = StyleSheet.create({
+  background: {
+    backgroundColor: NEUTRAL.surface,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+  },
+  indicator: {
+    backgroundColor: NEUTRAL.border,
+    width: 40,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+  },
+  title: {
+    ...TYPOGRAPHY.titleMedium,
+    color: NEUTRAL.foreground,
+    marginBottom: SPACING.lg,
+    textAlign: "center",
+  },
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  actionTile: {
+    width: "48%",
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+    alignItems: "center",
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "rgba(0, 0, 0, 0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
+  },
+  actionLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: "#ffffff",
+    textAlign: "center",
+  },
+});

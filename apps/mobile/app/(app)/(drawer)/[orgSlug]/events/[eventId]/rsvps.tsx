@@ -5,16 +5,17 @@ import {
   FlatList,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, User, Check, HelpCircle, X } from "lucide-react-native";
+import { ChevronLeft, User, Check, HelpCircle, X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, RSVP_COLORS, SHADOWS } from "@/lib/design-tokens";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 
 type RSVPStatus = "attending" | "not_attending" | "maybe";
@@ -64,8 +65,6 @@ export default function RSVPsScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { orgId } = useOrg();
   const router = useRouter();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -73,6 +72,10 @@ export default function RSVPsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>("all");
+
+  const handleBack = () => {
+    router.back();
+  };
 
   const fetchRSVPs = useCallback(async () => {
     if (!eventId || !orgId) return;
@@ -179,249 +182,322 @@ export default function RSVPsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>RSVPs</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={SEMANTIC.success} />
+          </View>
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchRSVPs}>
-          <Text style={styles.retryButtonText}>Retry</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>RSVPs</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+              onPress={fetchRSVPs}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={20} color={colors.primary} />
-          <Text style={styles.backButtonText}>Back</Text>
-        </TouchableOpacity>
-      </View>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleBack} style={styles.backButton}>
+              <ChevronLeft size={28} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <Text style={styles.headerTitle}>RSVPs</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-      {/* Event Title */}
-      {eventInfo && (
-        <Text style={styles.eventTitle} numberOfLines={2}>
-          {eventInfo.title}
-        </Text>
-      )}
+      <View style={styles.contentSheet}>
+        {/* Event Title */}
+        {eventInfo && (
+          <View style={styles.eventTitleContainer}>
+            <Text style={styles.eventTitle} numberOfLines={2}>
+              {eventInfo.title}
+            </Text>
+          </View>
+        )}
 
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        {FILTER_OPTIONS.map((option) => {
-          const isSelected = filter === option.value;
-          const count = counts[option.value];
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.filterTab, isSelected && styles.filterTabSelected]}
-              onPress={() => setFilter(option.value)}
-            >
-              <Text style={[styles.filterText, isSelected && styles.filterTextSelected]}>
-                {option.label}
-              </Text>
-              <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
-                <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
-                  {count}
+        {/* Filter Tabs */}
+        <View style={styles.filterContainer}>
+          {FILTER_OPTIONS.map((option) => {
+            const isSelected = filter === option.value;
+            const count = counts[option.value];
+            return (
+              <Pressable
+                key={option.value}
+                style={({ pressed }) => [
+                  styles.filterTab,
+                  isSelected && styles.filterTabSelected,
+                  pressed && styles.filterTabPressed,
+                ]}
+                onPress={() => setFilter(option.value)}
+              >
+                <Text style={[styles.filterText, isSelected && styles.filterTextSelected]}>
+                  {option.label}
                 </Text>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                <View style={[styles.countBadge, isSelected && styles.countBadgeSelected]}>
+                  <Text style={[styles.countText, isSelected && styles.countTextSelected]}>
+                    {count}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
 
-      {/* RSVP List */}
-      <FlatList
-        data={filteredRsvps}
-        renderItem={renderRSVPItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={renderEmptyState}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={colors.primary}
-          />
-        }
-      />
+        {/* RSVP List */}
+        <FlatList
+          data={filteredRsvps}
+          renderItem={renderRSVPItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={renderEmptyState}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={SEMANTIC.success}
+            />
+          }
+        />
+      </View>
     </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.sm,
-    },
-    backButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    backButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: colors.primary,
-    },
-    eventTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      paddingHorizontal: SPACING.md,
-      marginBottom: SPACING.md,
-    },
-    filterContainer: {
-      flexDirection: "row",
-      paddingHorizontal: SPACING.md,
-      marginBottom: SPACING.md,
-      gap: SPACING.sm,
-    },
-    filterTab: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.xs,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: NEUTRAL.surface,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-    },
-    filterTabSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    filterText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: NEUTRAL.secondary,
-    },
-    filterTextSelected: {
-      color: colors.primaryForeground || "#ffffff",
-    },
-    countBadge: {
-      minWidth: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: NEUTRAL.border,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 6,
-    },
-    countBadgeSelected: {
-      backgroundColor: "rgba(255, 255, 255, 0.3)",
-    },
-    countText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontSize: 11,
-      color: NEUTRAL.secondary,
-    },
-    countTextSelected: {
-      color: colors.primaryForeground || "#ffffff",
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingTop: 0,
-      gap: SPACING.sm,
-      flexGrow: 1,
-    },
-    rsvpCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      ...SHADOWS.sm,
-    },
-    avatarContainer: {
-      marginRight: SPACING.sm,
-    },
-    avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: NEUTRAL.divider,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    rsvpInfo: {
-      flex: 1,
-      marginRight: SPACING.sm,
-    },
-    rsvpName: {
-      ...TYPOGRAPHY.titleSmall,
-      color: NEUTRAL.foreground,
-    },
-    rsvpEmail: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginTop: 2,
-    },
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.md,
-    },
-    statusText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "600",
-    },
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.xs,
-    },
-    emptySubtitle: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    retryButton: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: colors.primaryForeground || "#ffffff",
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {},
+  headerSafeArea: {},
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 36,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: SPACING.lg,
+  },
+  eventTitleContainer: {
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  eventTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  filterContainer: {
+    flexDirection: "row",
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: NEUTRAL.background,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+  },
+  filterTabSelected: {
+    backgroundColor: SEMANTIC.success,
+    borderColor: SEMANTIC.success,
+  },
+  filterTabPressed: {
+    opacity: 0.7,
+  },
+  filterText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: NEUTRAL.secondary,
+  },
+  filterTextSelected: {
+    color: "#ffffff",
+  },
+  countBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: NEUTRAL.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  countBadgeSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+  },
+  countText: {
+    ...TYPOGRAPHY.labelSmall,
+    fontSize: 11,
+    color: NEUTRAL.secondary,
+  },
+  countTextSelected: {
+    color: "#ffffff",
+  },
+  listContent: {
+    padding: SPACING.md,
+    paddingTop: 0,
+    gap: SPACING.sm,
+    flexGrow: 1,
+  },
+  rsvpCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: NEUTRAL.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+  },
+  avatarContainer: {
+    marginRight: SPACING.sm,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: NEUTRAL.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rsvpInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  rsvpName: {
+    ...TYPOGRAPHY.titleSmall,
+    color: NEUTRAL.foreground,
+  },
+  rsvpEmail: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+    marginTop: 2,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+  },
+  statusText: {
+    ...TYPOGRAPHY.labelSmall,
+    fontWeight: "600",
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: SPACING.xl,
+  },
+  emptyTitle: {
+    ...TYPOGRAPHY.titleMedium,
+    color: NEUTRAL.foreground,
+    marginBottom: SPACING.xs,
+  },
+  emptySubtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+    textAlign: "center",
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: SEMANTIC.error,
+    textAlign: "center",
+    marginBottom: SPACING.md,
+  },
+  retryButton: {
+    backgroundColor: SEMANTIC.success,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+  },
+  retryButtonPressed: {
+    opacity: 0.9,
+  },
+  retryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+});

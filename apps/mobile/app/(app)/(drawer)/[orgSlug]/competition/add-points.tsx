@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,22 +8,26 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter, useNavigation } from "expo-router";
+import { ChevronLeft } from "lucide-react-native";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { supabase } from "@/lib/supabase";
-import { borderRadius, fontSize, fontWeight, spacing, type ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import type { CompetitionTeam } from "@teammeet/types";
 
 export default function CompetitionAddPointsScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { orgId, orgSlug } = useOrg();
   const { user } = useAuth();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [competitionId, setCompetitionId] = useState<string | null>(null);
   const [teams, setTeams] = useState<CompetitionTeam[]>([]);
   const [teamId, setTeamId] = useState("");
@@ -34,6 +38,14 @@ export default function CompetitionAddPointsScreen() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleBack = useCallback(() => {
+    if (navigation.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(`/(app)/${orgSlug}/competition`);
+    }
+  }, [navigation, router, orgSlug]);
 
   useEffect(() => {
     let isMounted = true;
@@ -134,276 +146,344 @@ export default function CompetitionAddPointsScreen() {
 
   if (roleLoading || loading) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "Add Points" }} />
-        <View style={styles.loadingState}>
-          <ActivityIndicator color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Add Points</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.centered}>
+            <ActivityIndicator color={SEMANTIC.success} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   if (!isAdmin) {
     return (
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <Stack.Screen options={{ title: "Add Points" }} />
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            You do not have access to add points.
-          </Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={handleBack} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Add Points</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <View style={styles.errorCard}>
+            <Text style={styles.errorText}>You do not have access to add points.</Text>
+          </View>
         </View>
-      </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Stack.Screen options={{ title: "Add Points" }} />
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Add Points</Text>
-        <Text style={styles.headerSubtitle}>Award points to a team</Text>
-      </View>
-
-      {error ? (
-        <View style={styles.errorCard}>
-          <Text selectable style={styles.errorText}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Select team</Text>
-        {teams.length === 0 ? (
-          <Text style={styles.emptyText}>No teams available.</Text>
-        ) : (
-          <View style={styles.optionList}>
-            {teams.map((team) => {
-              const selected = teamId === team.id;
-              return (
-                <Pressable
-                  key={team.id}
-                  onPress={() => handleSelectTeam(team.id)}
-                  style={({ pressed }) => [
-                    styles.optionRow,
-                    selected && {
-                      borderColor: colors.primary,
-                      backgroundColor: colors.primaryLight,
-                    },
-                    pressed && styles.optionRowPressed,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.optionIndicator,
-                      selected && { borderColor: colors.primary, backgroundColor: colors.primary },
-                    ]}
-                  />
-                  <Text style={styles.optionLabel}>{team.name}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Or enter a new team name</Text>
-        <TextInput
-          value={teamName}
-          onChangeText={(value) => {
-            setTeamName(value);
-            if (value) {
-              setTeamId("");
-            }
-          }}
-          placeholder="e.g., Blue Squad"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Points</Text>
-        <TextInput
-          value={points}
-          onChangeText={setPoints}
-          placeholder="Enter points (can be negative)"
-          placeholderTextColor={colors.mutedForeground}
-          keyboardType="number-pad"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Reason</Text>
-        <TextInput
-          value={reason}
-          onChangeText={setReason}
-          placeholder="Why the points were awarded"
-          placeholderTextColor={colors.mutedForeground}
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.fieldGroup}>
-        <Text style={styles.fieldLabel}>Notes (optional)</Text>
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="e.g., Won the scrimmage, community service hours"
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          textAlignVertical="top"
-          style={[styles.input, styles.textArea]}
-        />
-      </View>
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={isSaving}
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && styles.primaryButtonPressed,
-          isSaving && styles.buttonDisabled,
-        ]}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
-        ) : (
-          <Text style={styles.primaryButtonText}>Add points</Text>
-        )}
-      </Pressable>
-    </ScrollView>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleBack} style={styles.backButton}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Add Points</Text>
+            <View style={styles.headerSpacer} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Award Points</Text>
+            <Text style={styles.formSubtitle}>Award points to a team in the competition</Text>
+          </View>
+
+          {error ? (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Select team</Text>
+            {teams.length === 0 ? (
+              <Text style={styles.emptyText}>No teams available.</Text>
+            ) : (
+              <View style={styles.optionList}>
+                {teams.map((team) => {
+                  const selected = teamId === team.id;
+                  return (
+                    <Pressable
+                      key={team.id}
+                      onPress={() => handleSelectTeam(team.id)}
+                      style={({ pressed }) => [
+                        styles.optionRow,
+                        selected && styles.optionRowSelected,
+                        pressed && styles.optionRowPressed,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.optionIndicator,
+                          selected && styles.optionIndicatorSelected,
+                        ]}
+                      />
+                      <Text style={styles.optionLabel}>{team.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Or enter a new team name</Text>
+            <TextInput
+              value={teamName}
+              onChangeText={(value) => {
+                setTeamName(value);
+                if (value) setTeamId("");
+              }}
+              placeholder="e.g., Blue Squad"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Points</Text>
+            <TextInput
+              value={points}
+              onChangeText={setPoints}
+              placeholder="Enter points (can be negative)"
+              placeholderTextColor={NEUTRAL.placeholder}
+              keyboardType="number-pad"
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Reason</Text>
+            <TextInput
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Why the points were awarded"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Notes (optional)</Text>
+            <TextInput
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="e.g., Won the scrimmage, community service hours"
+              placeholderTextColor={NEUTRAL.placeholder}
+              multiline
+              textAlignVertical="top"
+              style={[styles.input, styles.textArea]}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={isSaving}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isSaving && styles.buttonDisabled,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Add Points</Text>
+            )}
+          </Pressable>
+        </ScrollView>
+      </View>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      padding: spacing.md,
-      paddingBottom: spacing.xl,
-      gap: spacing.lg,
-    },
-    header: {
-      gap: spacing.xs,
-    },
-    headerTitle: {
-      fontSize: fontSize["2xl"],
-      fontWeight: fontWeight.bold,
-      color: colors.foreground,
-    },
-    headerSubtitle: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    errorCard: {
-      backgroundColor: `${colors.error}14`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: `${colors.error}55`,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: colors.error,
-    },
-    loadingState: {
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    loadingText: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    fieldGroup: {
-      gap: spacing.xs,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: colors.mutedForeground,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: borderRadius.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      fontSize: fontSize.base,
-      color: colors.foreground,
-      backgroundColor: colors.background,
-    },
-    textArea: {
-      minHeight: 120,
-    },
-    optionList: {
-      gap: spacing.sm,
-    },
-    optionRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      padding: spacing.sm,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-    },
-    optionRowPressed: {
-      opacity: 0.85,
-    },
-    optionIndicator: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      borderWidth: 2,
-      borderColor: colors.mutedForeground,
-      backgroundColor: "transparent",
-    },
-    optionLabel: {
-      fontSize: fontSize.base,
-      color: colors.foreground,
-      flex: 1,
-    },
-    emptyText: {
-      fontSize: fontSize.sm,
-      color: colors.mutedForeground,
-    },
-    primaryButton: {
-      backgroundColor: colors.primary,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.sm,
-      alignItems: "center",
-      borderCurve: "continuous",
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: colors.primaryForeground,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-  });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: NEUTRAL.background,
+  },
+  headerGradient: {
+    // Gradient fills this area
+  },
+  headerSafeArea: {
+    // SafeAreaView handles top inset
+  },
+  headerContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    minHeight: 44,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -SPACING.sm,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.titleLarge,
+    color: APP_CHROME.headerTitle,
+    flex: 1,
+    textAlign: "center",
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  contentSheet: {
+    flex: 1,
+    backgroundColor: NEUTRAL.surface,
+  },
+  scrollContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.xxl,
+    gap: SPACING.lg,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: SPACING.sm,
+  },
+  loadingText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  formHeader: {
+    gap: SPACING.xs,
+  },
+  formTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: NEUTRAL.foreground,
+  },
+  formSubtitle: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.secondary,
+  },
+  errorCard: {
+    backgroundColor: SEMANTIC.errorLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: SEMANTIC.error,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: SEMANTIC.error,
+  },
+  fieldGroup: {
+    gap: SPACING.xs,
+  },
+  fieldLabel: {
+    ...TYPOGRAPHY.labelMedium,
+    color: NEUTRAL.secondary,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+    backgroundColor: NEUTRAL.surface,
+  },
+  textArea: {
+    minHeight: 120,
+  },
+  optionList: {
+    gap: SPACING.sm,
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    backgroundColor: NEUTRAL.surface,
+  },
+  optionRowSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.successLight,
+  },
+  optionRowPressed: {
+    opacity: 0.85,
+  },
+  optionIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: NEUTRAL.muted,
+    backgroundColor: "transparent",
+  },
+  optionIndicatorSelected: {
+    borderColor: SEMANTIC.success,
+    backgroundColor: SEMANTIC.success,
+  },
+  optionLabel: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: NEUTRAL.foreground,
+    flex: 1,
+  },
+  emptyText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: NEUTRAL.muted,
+  },
+  primaryButton: {
+    backgroundColor: SEMANTIC.success,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.md,
+    alignItems: "center",
+  },
+  primaryButtonPressed: {
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: "#ffffff",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -14,33 +14,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter, useNavigation, useLocalSearchParams } from "expo-router";
 import { ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react-native";
-import Constants from "expo-constants";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
-
-// Determine if running in Expo Go vs dev-client/standalone
-const isExpoGo = Constants.appOwnership === "expo";
-// Check if running in web browser (Expo web mode)
-const isWeb = Platform.OS === "web";
-const googleIosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
-const googleWebClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-
-// Conditionally import Google Sign-In only when not in Expo Go
-let GoogleSignin: any = null;
-let isErrorWithCode: any = null;
-let statusCodes: any = null;
-
-if (!isExpoGo && !isWeb) {
-  try {
-    const googleSignIn = require("@react-native-google-signin/google-signin");
-    GoogleSignin = googleSignIn.GoogleSignin;
-    isErrorWithCode = googleSignIn.isErrorWithCode;
-    statusCodes = googleSignIn.statusCodes;
-  } catch (e) {
-    console.warn("Google Sign-In module not available:", e);
-  }
-}
 
 // Color system matching landing page
 const colors = {
@@ -121,19 +99,6 @@ export default function LoginScreen() {
   const isLoading = emailLoading || googleLoading;
   const isFormValid = isEmailValid(email) && password.length > 0;
 
-  useEffect(() => {
-    if (isExpoGo || isWeb || !GoogleSignin) return;
-    if (!googleWebClientId) {
-      console.warn("Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID for Google Sign-In.");
-      return;
-    }
-
-    GoogleSignin.configure({
-      iosClientId: googleIosClientId,
-      webClientId: googleWebClientId,
-    });
-  }, []);
-
   // Clear errors on input change
   const handleEmailChange = (text: string) => {
     setEmail(text);
@@ -196,81 +161,86 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        captureException(new Error(error.message), { screen: "Login", email: trimmedEmail.toLowerCase() });
+        captureException(new Error(error.message), { screen: "Login", method: "email" });
         setApiError(error.message);
         return;
       }
 
-      console.log("Sign in successful, session:", data.session?.user?.email);
       // Navigation happens automatically via _layout.tsx onAuthStateChange
     } catch (e) {
-      captureException(e as Error, { screen: "Login", email: trimmedEmail.toLowerCase() });
+      captureException(e as Error, { screen: "Login", method: "email" });
       setApiError((e as Error).message);
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Google OAuth sign in
+  // Google OAuth sign in using web-based flow with expo-web-browser
+  // Native Google Sign-In has nonce handling issues with Supabase, so we use the web OAuth flow
   const signInWithGoogle = async () => {
     setApiError("");
-
-    // In Expo Go or Web mode, Google OAuth has limitations
-    if (isExpoGo || isWeb || !GoogleSignin) {
-      setApiError(
-        isWeb
-          ? "Google Sign-In is not available in web mode. Please use email/password."
-          : "Google Sign-In is not available in Expo Go. Please use email/password or the native app."
-      );
-      return;
-    }
-
-    if (!googleWebClientId) {
-      setApiError("Google Sign-In is not configured. Missing client ID.");
-      return;
-    }
-
-    if (Platform.OS === "ios" && !googleIosClientId) {
-      setApiError("Google Sign-In is not configured for iOS. Missing client ID.");
-      return;
-    }
-
     setGoogleLoading(true);
+
     try {
-      if (Platform.OS === "android") {
-        await GoogleSignin.hasPlayServices({
-          showPlayServicesUpdateDialog: true,
-        });
-      }
+      // Create redirect URI for the OAuth callback
+      const redirectUri = makeRedirectUri({
+        scheme: "teammeet",
+        path: "auth/callback",
+      });
 
-      const userInfo = await GoogleSignin.signIn();
-
-      if (!userInfo.data?.idToken) {
-        throw new Error("Google Sign-In did not return an ID token.");
-      }
-
-      const { error } = await supabase.auth.signInWithIdToken({
+      // Get the OAuth URL from Supabase (don't auto-redirect)
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        token: userInfo.data.idToken,
+        options: {
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true,
+        },
       });
 
       if (error) throw error;
-      // Navigation happens automatically via _layout.tsx onAuthStateChange
-    } catch (error: unknown) {
-      const err = error as { code?: string; message?: string };
-      if (isErrorWithCode && statusCodes && isErrorWithCode(error)) {
-        if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-          return;
+      if (!data.url) throw new Error("No OAuth URL returned");
+
+      // Open the OAuth URL in an in-app browser
+      const result = await WebBrowser.openAuthSessionAsync(
+        data.url,
+        redirectUri
+      );
+
+      if (result.type === "success" && result.url) {
+        // Parse the URL to extract tokens
+        const url = new URL(result.url);
+
+        // Check for hash fragment (implicit flow) or query params (PKCE)
+        const hashParams = new URLSearchParams(url.hash.substring(1));
+        const queryParams = new URLSearchParams(url.search);
+
+        const accessToken = hashParams.get("access_token") || queryParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token") || queryParams.get("refresh_token");
+
+        if (accessToken && refreshToken) {
+          // Set the session in Supabase
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) throw sessionError;
+          // Session is now set, auth state listener will handle navigation
+        } else {
+          // Check for error in the callback
+          const errorMsg = hashParams.get("error_description") || queryParams.get("error_description");
+          if (errorMsg) {
+            throw new Error(decodeURIComponent(errorMsg));
+          }
+          throw new Error("Authentication failed - no tokens received");
         }
-        if (err.code === statusCodes.IN_PROGRESS) {
-          setApiError("Sign-in is already in progress.");
-          return;
-        }
-        if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-          setApiError("Google Play Services is not available on this device.");
-          return;
-        }
+      } else if (result.type === "cancel") {
+        // User cancelled, don't show error
+        console.log("OAuth cancelled by user");
       }
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      captureException(error as Error, { screen: "Login", provider: "google" });
       setApiError(err.message || "An unexpected error occurred");
     } finally {
       setGoogleLoading(false);

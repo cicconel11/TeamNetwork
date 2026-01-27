@@ -6,7 +6,7 @@ export default function PhilanthropyLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen
         name="new"
-        options={{ headerShown: true, title: "New Philanthropy Event" }}
+        options={{ headerShown: false, title: "New Philanthropy Event" }}
       />
     </Stack>
   );
