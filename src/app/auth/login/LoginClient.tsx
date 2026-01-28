@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
+import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 
 interface LoginFormProps {
   hcaptchaSiteKey: string;
@@ -25,7 +26,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/app";
+  const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"));
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
   const handleGoogleLogin = async () => {
@@ -197,14 +198,24 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
           />
 
           {mode === "password" && (
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+            <>
+              <Input
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+              <div className="text-right">
+                <Link
+                  href={`/auth/forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
+                  className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </>
           )}
 
           <div className="flex justify-center">
