@@ -21,7 +21,9 @@
             ]
           }
         ],
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -44,6 +46,12 @@
           "color": "#2563eb",
           "sounds": [],
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "enableGooglePay": true
         }
       ]
     ],

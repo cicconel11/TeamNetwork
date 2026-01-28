@@ -206,6 +206,9 @@ Use `SKIP_STRIPE_VALIDATION=true` in dev to skip Stripe price ID validation.
 - `EXPO_PUBLIC_SUPABASE_ANON_KEY`
 - `EXPO_PUBLIC_POSTHOG_KEY` - PostHog project API key
 - `EXPO_PUBLIC_SENTRY_DSN` - Sentry DSN for error tracking
+- `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` - Stripe publishable key (same as web's `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`)
+- `EXPO_PUBLIC_DEV_EMAIL` - Dev login email (development only)
+- `EXPO_PUBLIC_DEV_PASSWORD` - Dev login password (development only)
 
 ## Shared Packages
 
