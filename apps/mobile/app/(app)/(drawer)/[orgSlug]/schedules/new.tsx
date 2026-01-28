@@ -4,11 +4,9 @@ import {
   Text,
   ScrollView,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   Platform,
   Pressable,
-  Image,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +20,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatTimeFromDate, formatDateFromDate } from "@/lib/date-format";
 import type { OccurrenceType } from "@teammeet/types";
 
 const SCHEDULE_COLORS = {
@@ -106,11 +105,11 @@ export default function NewScheduleScreen() {
   }, [navigation]);
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return formatTimeFromDate(date);
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    return formatDateFromDate(date);
   };
 
   const toggleDayOfWeek = (day: number) => {
@@ -196,9 +195,9 @@ export default function NewScheduleScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.navHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
               <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Add Schedule</Text>
               <Text style={styles.headerMeta}>Add a class or academic commitment</Text>
@@ -231,7 +230,7 @@ export default function NewScheduleScreen() {
           <Text style={styles.label}>Occurrence</Text>
           <View style={styles.optionsGrid}>
             {OCCURRENCE_OPTIONS.map((option) => (
-              <TouchableOpacity
+              <Pressable
                 key={option.value}
                 style={[
                   styles.optionButton,
@@ -247,7 +246,7 @@ export default function NewScheduleScreen() {
                 >
                   {option.label}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
         </View>
@@ -258,7 +257,7 @@ export default function NewScheduleScreen() {
             <Text style={styles.label}>Days of Week</Text>
             <View style={styles.daysGrid}>
               {DAYS_OF_WEEK.map((day) => (
-                <TouchableOpacity
+                <Pressable
                   key={day.value}
                   style={[
                     styles.dayButton,
@@ -277,7 +276,7 @@ export default function NewScheduleScreen() {
                   >
                     {day.label}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             <Text style={styles.helperText}>Select all days this schedule repeats.</Text>
@@ -291,7 +290,7 @@ export default function NewScheduleScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.monthDaysRow}>
                 {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={day}
                     style={[
                       styles.monthDayButton,
@@ -307,7 +306,7 @@ export default function NewScheduleScreen() {
                     >
                       {day}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </ScrollView>
@@ -318,12 +317,12 @@ export default function NewScheduleScreen() {
         <View style={styles.row}>
           <View style={[styles.field, styles.halfField]}>
             <Text style={styles.label}>Start Time *</Text>
-            <TouchableOpacity
+            <Pressable
               style={styles.pickerButton}
               onPress={() => setShowStartTimePicker(true)}
             >
               <Text style={styles.pickerText}>{formatTime(startTime)}</Text>
-            </TouchableOpacity>
+            </Pressable>
             {showStartTimePicker && (
               <DateTimePicker
                 value={startTime}
@@ -338,12 +337,12 @@ export default function NewScheduleScreen() {
           </View>
           <View style={[styles.field, styles.halfField]}>
             <Text style={styles.label}>End Time *</Text>
-            <TouchableOpacity
+            <Pressable
               style={styles.pickerButton}
               onPress={() => setShowEndTimePicker(true)}
             >
               <Text style={styles.pickerText}>{formatTime(endTime)}</Text>
-            </TouchableOpacity>
+            </Pressable>
             {showEndTimePicker && (
               <DateTimePicker
                 value={endTime}
@@ -364,12 +363,12 @@ export default function NewScheduleScreen() {
             <Text style={styles.label}>
               {occurrenceType === "single" ? "Date *" : "Start Date *"}
             </Text>
-            <TouchableOpacity
+            <Pressable
               style={styles.pickerButton}
               onPress={() => setShowStartDatePicker(true)}
             >
               <Text style={styles.pickerText}>{formatDate(startDate)}</Text>
-            </TouchableOpacity>
+            </Pressable>
             {showStartDatePicker && (
               <DateTimePicker
                 value={startDate}
@@ -385,14 +384,14 @@ export default function NewScheduleScreen() {
           {occurrenceType !== "single" && (
             <View style={[styles.field, styles.halfField]}>
               <Text style={styles.label}>End Date (optional)</Text>
-              <TouchableOpacity
+              <Pressable
                 style={styles.pickerButton}
                 onPress={() => setShowEndDatePicker(true)}
               >
                 <Text style={[styles.pickerText, !endDate && styles.placeholderText]}>
                   {endDate ? formatDate(endDate) : "No end date"}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
               {showEndDatePicker && (
                 <DateTimePicker
                   value={endDate || new Date()}
@@ -425,10 +424,10 @@ export default function NewScheduleScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
+          <Pressable style={styles.cancelButton} onPress={() => router.back()}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </Pressable>
+          <Pressable
             style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
             onPress={handleSubmit}
             disabled={isLoading}
@@ -436,7 +435,7 @@ export default function NewScheduleScreen() {
             <Text style={styles.submitButtonText}>
               {isLoading ? "Adding..." : "Add Schedule"}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScrollView>
     </View>

@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
-  Image,
   ActivityIndicator,
   RefreshControl,
   TextInput,
@@ -15,6 +14,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -29,6 +29,7 @@ import { fetchWithAuth } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatDefaultDate, formatDefaultDateFromString } from "@/lib/date-format";
 import type { MentorshipLog, MentorshipPair, User } from "@teammeet/types";
 
 // Fixed color palette
@@ -217,7 +218,7 @@ export default function MentorshipScreen() {
             <View style={styles.headerContent}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -253,7 +254,7 @@ export default function MentorshipScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -1119,7 +1120,7 @@ function MentorshipPairCard({
             <View key={log.id} style={styles.logItem}>
               <View style={styles.logMeta}>
                 <Text style={styles.logMetaText}>
-                  {new Date(log.entry_date).toLocaleDateString()}
+                  {formatDefaultDateFromString(log.entry_date)}
                 </Text>
                 <Text style={styles.logMetaText}>by {userLabel(log.created_by)}</Text>
               </View>
@@ -1226,7 +1227,7 @@ function MentorshipLogForm({
           ]}
         >
           <Text style={styles.selectFieldText}>
-            {entryDate.toLocaleDateString()}
+            {formatDefaultDate(entryDate)}
           </Text>
           <ChevronDown size={16} color={MENTORSHIP_COLORS.mutedForeground} />
         </Pressable>
@@ -1390,6 +1391,10 @@ function SelectModal({
                 );
               }}
               keyboardShouldPersistTaps="handled"
+              initialNumToRender={10}
+              maxToRenderPerBatch={10}
+              windowSize={5}
+              removeClippedSubviews={true}
             />
           )}
         </View>

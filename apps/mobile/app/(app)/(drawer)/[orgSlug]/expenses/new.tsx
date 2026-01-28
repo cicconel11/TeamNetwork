@@ -3,15 +3,14 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -203,7 +202,7 @@ export default function NewExpenseScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "E"}</Text>
@@ -308,17 +307,18 @@ export default function NewExpenseScreen() {
 
           {/* Action Buttons */}
           <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={styles.cancelButton}
+            <Pressable
+              style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]}
               onPress={handleCancel}
               disabled={isLoading}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
                 styles.submitButton,
                 isLoading && styles.submitButtonDisabled,
+                pressed && { opacity: 0.7 },
               ]}
               onPress={handleSubmit}
               disabled={isLoading}
@@ -326,7 +326,7 @@ export default function NewExpenseScreen() {
               <Text style={styles.submitButtonText}>
                 {isLoading ? "Submitting..." : "Submit Expense"}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

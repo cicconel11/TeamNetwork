@@ -5,7 +5,7 @@ import {
   ScrollView,
   ActivityIndicator,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   Alert,
   Platform,
 } from "react-native";
@@ -21,6 +21,7 @@ import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatMonthDayYearSafe } from "@/lib/date-format";
 import type { Announcement } from "@teammeet/types";
 
 const DETAIL_COLORS = {
@@ -82,13 +83,7 @@ export default function AnnouncementDetailScreen() {
   }, [announcementId, orgSlug]);
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatMonthDayYearSafe(dateString, "");
   };
 
   const handleTogglePin = async () => {
@@ -253,9 +248,9 @@ export default function AnnouncementDetailScreen() {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>{error || "Announcement not found"}</Text>
-        <TouchableOpacity style={styles.backButtonAlt} onPress={() => router.back()}>
+        <Pressable style={({ pressed }) => [styles.backButtonAlt, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
           <Text style={styles.backButtonAltText}>Go Back</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }
@@ -269,9 +264,9 @@ export default function AnnouncementDetailScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.navHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
               <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1}>
                 Announcement

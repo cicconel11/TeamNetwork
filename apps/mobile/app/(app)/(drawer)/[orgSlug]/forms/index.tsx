@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,21 +6,22 @@ import {
   ActivityIndicator,
   RefreshControl,
   StyleSheet,
-  TouchableOpacity,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useRouter, useNavigation } from "expo-router";
-import { ExternalLink, FileText, ClipboardList } from "lucide-react-native";
+import { ExternalLink, FileText, ClipboardList, ChevronLeft } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { useForms } from "@/hooks/useForms";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useAuth } from "@/hooks/useAuth";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import type { Form, FormDocument } from "@teammeet/types";
+import { supabase } from "@/lib/supabase";
+import type { Form, FormDocument, Organization } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
@@ -48,9 +49,10 @@ type ListItem =
   | { type: "empty" };
 
 export default function FormsScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgSlug } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
+  const { user } = useAuth();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
   const {
@@ -64,7 +66,43 @@ export default function FormsScreen() {
     refetchIfStale,
   } = useForms(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
+  const [organization, setOrganization] = useState<Organization | null>(null);
   const isRefetchingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  // Fetch organization data for header
+  const fetchOrg = useCallback(async () => {
+    if (!orgSlug || !user) return;
+    try {
+      const { data } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("slug", orgSlug)
+        .single();
+      if (isMountedRef.current && data) {
+        setOrganization(data);
+      }
+    } catch {
+      // Silently fail - header will show fallback
+    }
+  }, [orgSlug, user]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    fetchOrg();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchOrg]);
+
+  // Handle back navigation
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.push(`/(app)/${orgSlug}/(tabs)`);
+    }
+  }, [router, orgSlug]);
 
   // Safe drawer toggle
   const handleDrawerToggle = useCallback(() => {
@@ -106,12 +144,12 @@ export default function FormsScreen() {
     setRefreshing(true);
     isRefetchingRef.current = true;
     try {
-      await refetch();
+      await Promise.all([refetch(), fetchOrg()]);
     } finally {
       setRefreshing(false);
       isRefetchingRef.current = false;
     }
-  }, [refetch]);
+  }, [refetch, fetchOrg]);
 
   // Build list data with section headers
   const listData: ListItem[] = useMemo(() => {
@@ -164,9 +202,8 @@ export default function FormsScreen() {
       const fieldCount = (form.fields as unknown[])?.length || 0;
 
       return (
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.7}
+        <Pressable
+          style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
           onPress={() => router.push(`/(app)/${orgSlug}/forms/${form.id}`)}
         >
           <View style={styles.cardHeader}>
@@ -190,7 +227,7 @@ export default function FormsScreen() {
               </Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       );
     }
 
@@ -199,9 +236,8 @@ export default function FormsScreen() {
       const isSubmitted = submittedDocIds.has(doc.id);
 
       return (
-        <TouchableOpacity
-          style={styles.card}
-          activeOpacity={0.7}
+        <Pressable
+          style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
           onPress={() => router.push(`/(app)/${orgSlug}/forms/documents/${doc.id}`)}
         >
           <View style={styles.cardHeader}>
@@ -228,7 +264,7 @@ export default function FormsScreen() {
               </Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </Pressable>
       );
     }
 
@@ -260,13 +296,18 @@ export default function FormsScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
+            {/* Back button */}
+            <Pressable onPress={handleBack} style={styles.backButton}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+
             {/* Org Logo (opens drawer) */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              {organization?.logo_url ? (
+                <Image source={organization.logo_url} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
+                  <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
                 </View>
               )}
             </Pressable>
@@ -303,6 +344,10 @@ export default function FormsScreen() {
               tintColor={FORMS_COLORS.primaryCTA}
             />
           }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
         />
       </View>
     </View>
@@ -329,6 +374,12 @@ const createStyles = () =>
       paddingTop: spacing.xs,
       minHeight: 40,
       gap: spacing.sm,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      alignItems: "center",
+      justifyContent: "center",
     },
     orgLogoButton: {
       width: 36,

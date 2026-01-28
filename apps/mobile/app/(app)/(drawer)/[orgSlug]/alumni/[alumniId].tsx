@@ -2,7 +2,6 @@ import { useMemo, useCallback, useState } from "react";
 import {
   View,
   Text,
-  Image,
   StyleSheet,
   ScrollView,
   Pressable,
@@ -10,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
+import { Image } from "expo-image";
 import { Stack, useLocalSearchParams } from "expo-router";
 import {
   MapPin,
@@ -106,7 +106,7 @@ export default function AlumniDetailScreen() {
         {/* Header */}
         <View style={styles.header}>
           {alumni.photo_url ? (
-            <Image source={{ uri: alumni.photo_url }} style={styles.avatar} />
+            <Image source={alumni.photo_url} style={styles.avatar} contentFit="cover" transition={200} />
           ) : (
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>{getInitials()}</Text>

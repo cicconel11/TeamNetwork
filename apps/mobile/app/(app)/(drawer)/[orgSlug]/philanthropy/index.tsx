@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { formatMonthShort, formatTime } from "@/lib/date-format";
 import type { Event, OrganizationDonationStat } from "@teammeet/types";
 
 // Fixed color palette
@@ -243,7 +244,7 @@ export default function PhilanthropyScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -496,14 +497,7 @@ function sortByStartDesc(a: Event, b: Event) {
 }
 
 function formatMonth(dateString: string) {
-  return new Date(dateString).toLocaleDateString("en-US", { month: "short" });
-}
-
-function formatTime(dateString: string) {
-  return new Date(dateString).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatMonthShort(dateString);
 }
 
 const createStyles = () =>

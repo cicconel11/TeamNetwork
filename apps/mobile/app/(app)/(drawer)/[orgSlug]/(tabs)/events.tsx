@@ -3,13 +3,12 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
   ScrollView,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -24,6 +23,7 @@ import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS, RSVP_COLORS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatLongWeekdayDate, formatWeekdayShort } from "@/lib/date-format";
 import { getRsvpLabel, formatEventDate, formatEventTime } from "@teammeet/core";
 
 type ViewMode = "upcoming" | "past";
@@ -144,9 +144,8 @@ export default function EventsScreen() {
 
   const renderEventCard = useCallback(
     ({ item }: { item: Event }) => (
-      <TouchableOpacity
-        style={styles.eventCard}
-        activeOpacity={0.7}
+      <Pressable
+        style={({ pressed }) => [styles.eventCard, pressed && { opacity: 0.7 }]}
         onPress={() => router.push(`/(app)/${orgSlug}/events/${item.id}`)}
       >
       <View style={styles.eventHeader}>
@@ -196,11 +195,11 @@ export default function EventsScreen() {
 
       {/* Only show RSVP button for upcoming events without an existing status */}
       {viewMode === "upcoming" && !item.user_rsvp_status && (
-        <TouchableOpacity style={styles.rsvpButton}>
+        <Pressable style={({ pressed }) => [styles.rsvpButton, pressed && { opacity: 0.7 }]}>
           <Text style={styles.rsvpButtonText}>RSVP</Text>
-        </TouchableOpacity>
+        </Pressable>
       )}
-    </TouchableOpacity>
+    </Pressable>
     ),
     [router, orgSlug, viewMode, styles]
   );
@@ -209,7 +208,7 @@ export default function EventsScreen() {
     // Different empty states for date-filtered vs all events
     if (selectedDate !== null && viewMode === "upcoming") {
       // Inline empty state for specific date with no events
-      const dateStr = selectedDate.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
+      const dateStr = formatLongWeekdayDate(selectedDate);
       return (
         <View style={styles.emptyStateInline}>
           <Calendar size={32} color={NEUTRAL.muted} />
@@ -262,7 +261,7 @@ export default function EventsScreen() {
               {/* Logo */}
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "E"}</Text>
@@ -298,7 +297,7 @@ export default function EventsScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "E"}</Text>
@@ -326,8 +325,8 @@ export default function EventsScreen() {
       <View style={styles.contentSheet}>
         {/* Toggle */}
         <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === "upcoming" && styles.toggleActive]}
+          <Pressable
+            style={({ pressed }) => [styles.toggleButton, viewMode === "upcoming" && styles.toggleActive, pressed && { opacity: 0.7 }]}
             onPress={() => setViewMode("upcoming")}
           >
             <Text
@@ -335,15 +334,15 @@ export default function EventsScreen() {
             >
               Upcoming
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === "past" && styles.toggleActive]}
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.toggleButton, viewMode === "past" && styles.toggleActive, pressed && { opacity: 0.7 }]}
             onPress={() => setViewMode("past")}
           >
             <Text style={[styles.toggleText, viewMode === "past" && styles.toggleTextActive]}>
               Past
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* 7-Day Strip (only for upcoming view) */}
@@ -355,8 +354,8 @@ export default function EventsScreen() {
             contentContainerStyle={styles.dateStripContent}
           >
             {/* All button */}
-            <TouchableOpacity
-              style={[styles.dateItem, selectedDate === null && styles.dateItemSelected]}
+            <Pressable
+              style={({ pressed }) => [styles.dateItem, selectedDate === null && styles.dateItemSelected, pressed && { opacity: 0.7 }]}
               onPress={() => setSelectedDate(null)}
             >
               <Text
@@ -375,7 +374,7 @@ export default function EventsScreen() {
               >
                 {filteredEvents.length}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {weekDates.map((date, index) => {
               const isSelected = selectedDate?.toDateString() === date.toDateString();
@@ -383,9 +382,9 @@ export default function EventsScreen() {
               const isToday = date.toDateString() === now.toDateString();
 
               return (
-                <TouchableOpacity
+                <Pressable
                   key={index}
-                  style={[styles.dateItem, isSelected && styles.dateItemSelected]}
+                  style={({ pressed }) => [styles.dateItem, isSelected && styles.dateItemSelected, pressed && { opacity: 0.7 }]}
                   onPress={() => setSelectedDate(date)}
                 >
                   <Text
@@ -395,7 +394,7 @@ export default function EventsScreen() {
                       isToday && !isSelected && styles.dateToday,
                     ]}
                   >
-                    {date.toLocaleDateString([], { weekday: "short" })}
+                    {formatWeekdayShort(date)}
                   </Text>
                   <Text
                     style={[
@@ -407,7 +406,7 @@ export default function EventsScreen() {
                     {date.getDate()}
                   </Text>
                   {hasEvents && <View style={styles.eventDot} />}
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </ScrollView>

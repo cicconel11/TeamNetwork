@@ -1,15 +1,27 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { StyleSheet, Platform } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as Linking from "expo-linking";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
-import type { Session } from "@supabase/supabase-js";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
 import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled, setEnabled } from "@/lib/analytics";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
+
+// Stripe React Native is a native module — not available on web.
+// Use conditional require to avoid crash when running in browser.
+const StripeProvider =
+  Platform.OS !== "web"
+    ? require("@stripe/stripe-react-native").StripeProvider
+    : null;
+
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
+
+if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
+  console.error("[Stripe] Missing EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY. Payment features will not work.");
+}
 
 // Suppress known third-party library warnings on web platform
 // These are library compatibility issues that don't affect functionality
@@ -38,11 +50,23 @@ if (Platform.OS === "web") {
   };
 }
 
+/**
+ * RootLayout renders AuthProvider as the single source of truth for auth state.
+ * RootLayoutInner consumes auth context for navigation, analytics, and deep links.
+ * This avoids duplicate onAuthStateChange subscriptions.
+ */
 export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootLayoutInner />
+    </AuthProvider>
+  );
+}
+
+function RootLayoutInner() {
   const router = useRouter();
   const segments = useSegments() as string[];
-  const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { session, isLoading } = useAuth();
   const prevUserIdRef = useRef<string | undefined>(undefined);
 
   // Track screen views automatically
@@ -102,6 +126,25 @@ export default function RootLayout() {
   const handleDeepLink = useCallback(async (event: { url: string }) => {
     const url = event.url;
 
+    // Validate the deep link URL hostname before processing tokens
+    const supabaseHost = process.env.EXPO_PUBLIC_SUPABASE_URL
+      ? new URL(process.env.EXPO_PUBLIC_SUPABASE_URL).hostname
+      : null;
+    const allowedHosts = [
+      supabaseHost,
+      "www.myteamnetwork.com",
+      "myteamnetwork.com",
+    ].filter(Boolean);
+
+    try {
+      const parsedHost = new URL(url).hostname;
+      if (!allowedHosts.includes(parsedHost)) {
+        return;
+      }
+    } catch {
+      return;
+    }
+
     // Check if this is a password recovery deep link
     if (url.includes("type=recovery") || url.includes("reset-password")) {
       try {
@@ -139,12 +182,37 @@ export default function RootLayout() {
       }
     }
 
-    // Check if this is an auth callback URL with tokens
-    if (url.includes("access_token") || url.includes("callback")) {
+    // Check if this is an auth callback URL with tokens or authorization code
+    if (url.includes("access_token") || url.includes("callback") || url.includes("code=")) {
       try {
         const parsedUrl = new URL(url);
 
-        // Extract tokens from hash fragment or query params
+        // Handle OAuth errors returned as query params
+        const errorParam = parsedUrl.searchParams.get("error");
+        const errorDescription = parsedUrl.searchParams.get("error_description");
+        if (errorParam) {
+          captureException(
+            new Error(errorDescription || errorParam),
+            { context: "handleDeepLink-oauth-error", url }
+          );
+          return;
+        }
+
+        // PKCE flow: exchange authorization code for session
+        const code = parsedUrl.searchParams.get("code");
+        if (code) {
+          const { error: exchangeError } =
+            await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            captureException(new Error(exchangeError.message), {
+              context: "handleDeepLink-pkce",
+              url,
+            });
+          }
+          return;
+        }
+
+        // Legacy/implicit flow fallback: extract tokens from hash or query params
         let accessToken: string | null = null;
         let refreshToken: string | null = null;
 
@@ -164,10 +232,8 @@ export default function RootLayout() {
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-          // Session change will trigger navigation via onAuthStateChange
         }
       } catch (err) {
-        console.error("Error handling deep link:", err);
         captureException(err as Error, { context: "handleDeepLink", url });
       }
     }
@@ -186,57 +252,9 @@ export default function RootLayout() {
     // Listen for deep links while app is open
     const subscription = Linking.addEventListener("url", handleDeepLink);
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (!isMounted) return;
-
-      // Handle invalid/expired refresh token errors gracefully
-      if (error) {
-        console.warn("Session error, signing out:", error.message);
-        // Clear any corrupted session data
-        supabase.auth.signOut().catch(() => {});
-        setSession(null);
-        setIsLoading(false);
-        return;
-      }
-
-      setSession(session);
-      setIsLoading(false);
-    }).catch((err) => {
-      // Handle unexpected errors (e.g., network issues during token refresh)
-      console.warn("getSession failed:", err?.message || err);
-      if (!isMounted) return;
-      supabase.auth.signOut().catch(() => {});
-      setSession(null);
-      setIsLoading(false);
-    });
-
-    const {
-      data: { subscription: authSubscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      // Handle token refresh failures
-      if (event === "TOKEN_REFRESHED" && !session) {
-        console.warn("Token refresh failed, signing out");
-        supabase.auth.signOut().catch(() => {});
-        setSession(null);
-        setIsLoading(false);
-        return;
-      }
-
-      // Handle sign out event
-      if (event === "SIGNED_OUT") {
-        setSession(null);
-        setIsLoading(false);
-        return;
-      }
-
-      setSession(session);
-      setIsLoading(false);
-    });
-
     return () => {
       isMounted = false;
       subscription.remove();
-      authSubscription?.unsubscribe();
     };
   }, [handleDeepLink]);
 
@@ -261,25 +279,36 @@ export default function RootLayout() {
     return <AuthLoadingScreen />;
   }
 
+  const navigation = (
+    <Stack>
+      <Stack.Screen
+        name="(auth)"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="(app)"
+        options={{
+          headerShown: false,
+        }}
+      />
+    </Stack>
+  );
+
   return (
-    <AuthProvider initialSession={session} initialLoading={isLoading}>
-      <GestureHandlerRootView style={styles.container}>
-        <Stack>
-          <Stack.Screen
-            name="(auth)"
-            options={{
-              headerShown: false,
-            }}
-          />
-          <Stack.Screen
-            name="(app)"
-            options={{
-              headerShown: false,
-            }}
-          />
-        </Stack>
-      </GestureHandlerRootView>
-    </AuthProvider>
+    <GestureHandlerRootView style={styles.container}>
+      {StripeProvider ? (
+        <StripeProvider
+          publishableKey={STRIPE_PUBLISHABLE_KEY}
+          urlScheme="teammeet"
+        >
+          {navigation}
+        </StripeProvider>
+      ) : (
+        navigation
+      )}
+    </GestureHandlerRootView>
   );
 }
 

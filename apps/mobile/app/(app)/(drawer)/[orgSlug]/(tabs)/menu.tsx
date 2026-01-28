@@ -3,13 +3,12 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
-  Image,
   Alert,
   RefreshControl,
   Pressable,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -180,11 +179,10 @@ export default function MenuScreen() {
   };
 
   const renderMenuItem = (item: MenuItem) => (
-    <TouchableOpacity
+    <Pressable
       key={item.label}
-      style={styles.menuItem}
+      style={({ pressed }) => [styles.menuItem, pressed && { opacity: 0.7 }]}
       onPress={item.onPress}
-      activeOpacity={0.7}
     >
       <View style={styles.menuItemLeft}>
         {item.icon}
@@ -202,7 +200,7 @@ export default function MenuScreen() {
           <ChevronRight size={20} color={NEUTRAL.secondary} />
         )}
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 
   const updatesItems: MenuItem[] = [
@@ -306,7 +304,7 @@ export default function MenuScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {organization?.logo_url ? (
-                <Image source={{ uri: organization.logo_url }} style={styles.orgLogo} />
+                <Image source={organization.logo_url} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
@@ -337,9 +335,9 @@ export default function MenuScreen() {
           {error && (
             <View style={styles.errorContainer}>
               <Text style={styles.errorText}>Error: {error}</Text>
-              <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
+              <Pressable style={({ pressed }) => [styles.retryButton, pressed && { opacity: 0.7 }]} onPress={handleRefresh}>
                 <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
 
@@ -349,7 +347,7 @@ export default function MenuScreen() {
             <View style={styles.orgRow}>
               <View style={styles.orgInfo}>
                 {organization?.logo_url ? (
-                  <Image source={{ uri: organization.logo_url }} style={styles.orgLogoSmall} />
+                  <Image source={organization.logo_url} style={styles.orgLogoSmall} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgLogoPlaceholder}>
                     <Building2 size={20} color={NEUTRAL.muted} />
@@ -359,15 +357,15 @@ export default function MenuScreen() {
                   {organization?.name || "Organization"}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.switchButton} onPress={handleSwitchOrg}>
+              <Pressable style={({ pressed }) => [styles.switchButton, pressed && { opacity: 0.7 }]} onPress={handleSwitchOrg}>
                 <Text style={styles.switchButtonText}>Switch</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* User Profile */}
-            <TouchableOpacity style={styles.profileRow} activeOpacity={0.7}>
+            <Pressable style={({ pressed }) => [styles.profileRow, pressed && { opacity: 0.7 }]}>
               {userAvatar ? (
-                <Image source={{ uri: userAvatar }} style={styles.avatar} />
+                <Image source={userAvatar} style={styles.avatar} contentFit="cover" transition={200} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarInitials}>
@@ -382,7 +380,7 @@ export default function MenuScreen() {
                 <Text style={styles.profileEdit}>Edit Profile</Text>
               </View>
               <ChevronRight size={20} color={NEUTRAL.secondary} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Updates Section */}

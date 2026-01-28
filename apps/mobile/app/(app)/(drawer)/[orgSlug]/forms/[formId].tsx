@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -23,6 +22,7 @@ import type { Form, FormField, FormSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatDefaultDate } from "@/lib/date-format";
 
 const FORM_COLORS = {
   background: "#f8fafc",
@@ -221,7 +221,7 @@ export default function FormDetailScreen() {
             <Text style={styles.fieldLabel}>{label}</Text>
             <View style={styles.optionsContainer}>
               {(field.options || []).map((opt) => (
-                <TouchableOpacity
+                <Pressable
                   key={opt}
                   style={[styles.selectOption, value === opt && styles.selectOptionSelected]}
                   onPress={() => updateResponse(field.name, opt)}
@@ -229,7 +229,7 @@ export default function FormDetailScreen() {
                   <Text style={[styles.selectOptionText, value === opt && styles.selectOptionTextSelected]}>
                     {opt}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -241,7 +241,7 @@ export default function FormDetailScreen() {
             <Text style={styles.fieldLabel}>{label}</Text>
             <View style={styles.radioContainer}>
               {(field.options || []).map((opt) => (
-                <TouchableOpacity
+                <Pressable
                   key={opt}
                   style={styles.radioOption}
                   onPress={() => updateResponse(field.name, opt)}
@@ -254,7 +254,7 @@ export default function FormDetailScreen() {
                     <View style={styles.radioUnselected} />
                   )}
                   <Text style={styles.radioLabel}>{opt}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </View>
@@ -269,7 +269,7 @@ export default function FormDetailScreen() {
               {(field.options || []).map((opt) => {
                 const isChecked = checkedValues.includes(opt);
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={opt}
                     style={styles.checkboxOption}
                     onPress={() => {
@@ -286,7 +286,7 @@ export default function FormDetailScreen() {
                       <Square size={20} color={FORM_COLORS.inputBorder} />
                     )}
                     <Text style={styles.checkboxLabel}>{opt}</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>
@@ -298,14 +298,14 @@ export default function FormDetailScreen() {
         return (
           <View style={styles.fieldContainer} key={field.name}>
             <Text style={styles.fieldLabel}>{label}</Text>
-            <TouchableOpacity
+            <Pressable
               style={styles.input}
               onPress={() => setShowDatePicker(field.name)}
             >
               <Text style={dateValue ? styles.inputText : styles.inputPlaceholder}>
-                {dateValue ? dateValue.toLocaleDateString() : "Select date"}
+                {dateValue ? formatDefaultDate(dateValue) : "Select date"}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
             {showDatePicker === field.name && (
               <DateTimePicker
                 value={dateValue || new Date()}
@@ -434,9 +434,9 @@ export default function FormDetailScreen() {
               {existingSubmission ? "Response Updated!" : "Form Submitted!"}
             </Text>
             <Text style={styles.successText}>Your response has been recorded.</Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleBack}>
+            <Pressable style={styles.primaryButton} onPress={handleBack}>
               <Text style={styles.primaryButtonText}>Back to Forms</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -492,13 +492,13 @@ export default function FormDetailScreen() {
           {fields.map(renderField)}
 
           <View style={styles.buttonContainer}>
-            <TouchableOpacity
+            <Pressable
               style={styles.secondaryButton}
               onPress={handleBack}
             >
               <Text style={styles.secondaryButtonText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
+            </Pressable>
+            <Pressable
               style={[styles.primaryButton, submitting && styles.buttonDisabled]}
               onPress={handleSubmit}
               disabled={submitting}
@@ -510,7 +510,7 @@ export default function FormDetailScreen() {
                   {existingSubmission ? "Update Response" : "Submit"}
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

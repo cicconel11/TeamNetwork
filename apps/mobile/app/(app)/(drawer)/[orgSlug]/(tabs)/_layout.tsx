@@ -1,12 +1,11 @@
-import { useRef, useCallback, useState, useEffect } from "react";
+import { useRef, useCallback } from "react";
 import { Alert } from "react-native";
 import { Tabs, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { OrgHeaderLeft } from "@/components/org-header-left";
 import { TabBar } from "@/components/TabBar";
-import { supabase } from "@/lib/supabase";
-import { normalizeRole, roleFlags } from "@teammeet/core";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
 // Determine if running in Expo Go
@@ -26,38 +25,10 @@ if (!isExpoGo) {
 }
 
 export default function TabsLayout() {
-  const { orgSlug, orgId } = useOrg();
+  const { orgSlug } = useOrg();
   const router = useRouter();
   const bottomSheetRef = useRef<any>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // Fetch user role for this org
-  useEffect(() => {
-    let isMounted = true;
-
-    async function fetchRole() {
-      if (!orgId) return;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !isMounted) return;
-
-      const { data: roleData } = await supabase
-        .from("user_organization_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .eq("organization_id", orgId)
-        .eq("status", "active")
-        .single();
-
-      if (roleData && isMounted) {
-        const normalized = normalizeRole(roleData.role);
-        const flags = roleFlags(normalized);
-        setIsAdmin(flags.isAdmin);
-      }
-    }
-
-    fetchRole();
-    return () => { isMounted = false; };
-  }, [orgId]);
+  const { isAdmin } = useOrgRole();
 
   const handleActionPress = useCallback(() => {
     if (isExpoGo || !BottomSheet) {
@@ -104,12 +75,10 @@ export default function TabsLayout() {
 
   const handleCheckIn = useCallback(() => {
     // TODO: Navigate to check-in screen
-    console.log("Check in");
   }, []);
 
   const handleShareOrg = useCallback(() => {
-    // TODO: Share org link
-    console.log("Share org");
+    // TODO: Implement share org link
   }, []);
 
   const renderTabBar = useCallback(

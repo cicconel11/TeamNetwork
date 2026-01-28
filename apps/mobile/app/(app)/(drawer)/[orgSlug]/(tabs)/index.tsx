@@ -6,10 +6,9 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
-  TouchableOpacity,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -29,10 +28,10 @@ import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { normalizeRole, roleFlags } from "@teammeet/core";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatShortWeekdayDate, formatTime, formatWeekdayDateTime } from "@/lib/date-format";
 import { EventCard, type EventCardEvent } from "@/components/cards/EventCard";
 import { AnnouncementCardCompact } from "@/components/cards/AnnouncementCard";
 import { SkeletonEventCard, SkeletonAnnouncementCard } from "@/components/ui/Skeleton";
@@ -45,6 +44,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { isAdmin } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
   const isMountedRef = useRef(true);
 
@@ -65,7 +65,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberCount, setMemberCount] = useState(0);
-  const [isAdmin, setIsAdmin] = useState(false);
   const isRefetchingRef = useRef(false);
 
   // Use orgId from context for all data hooks (eliminates redundant org fetches)
@@ -92,10 +91,10 @@ export default function HomeScreen() {
     }
 
     try {
-      // Fetch user profile and role (organization data comes from useOrg context)
+      // Fetch user profile name (role comes from useOrgRole hook)
       const { data: roleData } = await supabase
         .from("user_organization_roles")
-        .select("role, user:users(name)")
+        .select("user:users(name)")
         .eq("user_id", user.id)
         .eq("organization_id", orgId)
         .eq("status", "active")
@@ -103,10 +102,6 @@ export default function HomeScreen() {
 
       if (isMountedRef.current) {
         if (roleData) {
-          const normalized = normalizeRole(roleData.role);
-          const flags = roleFlags(normalized);
-          setIsAdmin(flags.isAdmin);
-
           const userData = roleData.user as { name: string | null } | null;
           setUserName(userData?.name || null);
         }
@@ -216,31 +211,15 @@ export default function HomeScreen() {
   };
 
   const formatNextEventDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
+    return formatShortWeekdayDate(dateString);
   };
 
   const formatNextEventTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatTime(dateString);
   };
 
   const formatEventTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatWeekdayDateTime(dateString);
   };
 
   if (loading) {
@@ -286,7 +265,7 @@ export default function HomeScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -319,49 +298,45 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Quick Access</Text>
           <View style={styles.quickActionsGrid}>
-          <TouchableOpacity
-            style={styles.actionTile}
+          <Pressable
+            style={({ pressed }) => [styles.actionTile, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
-            activeOpacity={0.7}
           >
             <View style={styles.actionTileIcon}>
               <Calendar size={22} color={NEUTRAL.foreground} strokeWidth={2} />
             </View>
             <Text style={styles.actionTileLabel}>Events</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
-            style={styles.actionTile}
+          <Pressable
+            style={({ pressed }) => [styles.actionTile, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/announcements`)}
-            activeOpacity={0.7}
           >
             <View style={styles.actionTileIcon}>
               <Megaphone size={22} color={NEUTRAL.foreground} strokeWidth={2} />
             </View>
             <Text style={styles.actionTileLabel}>News</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
-            style={styles.actionTile}
+          <Pressable
+            style={({ pressed }) => [styles.actionTile, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/members`)}
-            activeOpacity={0.7}
           >
             <View style={styles.actionTileIcon}>
               <Users size={22} color={NEUTRAL.foreground} strokeWidth={2} />
             </View>
             <Text style={styles.actionTileLabel}>Members</Text>
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
-            style={styles.actionTile}
+          <Pressable
+            style={({ pressed }) => [styles.actionTile, pressed && { opacity: 0.7 }]}
             onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/alumni`)}
-            activeOpacity={0.7}
           >
             <View style={styles.actionTileIcon}>
               <GraduationCap size={22} color={NEUTRAL.foreground} strokeWidth={2} />
             </View>
             <Text style={styles.actionTileLabel}>Alumni</Text>
-          </TouchableOpacity>
+          </Pressable>
           </View>
         </View>
 
@@ -369,13 +344,13 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Upcoming Events</Text>
-            <TouchableOpacity
-              style={styles.seeAllButton}
+            <Pressable
+              style={({ pressed }) => [styles.seeAllButton, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
             >
               <Text style={styles.seeAllText}>See all</Text>
               <ChevronRight size={16} color={NEUTRAL.secondary} />
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {transformedEvents.length > 0 ? (

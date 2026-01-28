@@ -8,7 +8,6 @@ import {
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
   StyleSheet,
 } from "react-native";
@@ -218,9 +217,9 @@ export default function EditAnnouncementScreen() {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>{error || "Announcement not found"}</Text>
-        <TouchableOpacity style={styles.backButtonAlt} onPress={() => router.back()}>
+        <Pressable style={({ pressed }) => [styles.backButtonAlt, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
           <Text style={styles.backButtonAltText}>Go Back</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }
@@ -234,9 +233,9 @@ export default function EditAnnouncementScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.navHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
               <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
-            </TouchableOpacity>
+            </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Edit Announcement</Text>
             </View>
@@ -370,11 +369,11 @@ export default function EditAnnouncementScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => router.back()}>
+          <Pressable style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.submitButton, isSaving && styles.submitButtonDisabled]}
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.submitButton, isSaving && styles.submitButtonDisabled, pressed && { opacity: 0.7 }]}
             onPress={handleSubmit}
             disabled={isSaving}
           >
@@ -383,7 +382,7 @@ export default function EditAnnouncementScreen() {
             ) : (
               <Text style={styles.submitButtonText}>Save Changes</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScrollView>
     </View>

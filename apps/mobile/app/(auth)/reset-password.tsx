@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -198,14 +198,14 @@ export default function ResetPasswordScreen() {
               <Text style={styles.successMessage}>
                 You can now use your new password to sign in.
               </Text>
-              <TouchableOpacity
-                style={styles.primaryButton}
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.7 }]}
                 onPress={handleContinue}
                 accessibilityLabel="Continue to app"
                 accessibilityRole="button"
               >
                 <Text style={styles.primaryButtonText}>Continue</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ) : (
             /* Form State */
@@ -228,9 +228,9 @@ export default function ResetPasswordScreen() {
                     editable={!loading}
                     accessibilityLabel="New password"
                   />
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => setShowPassword(!showPassword)}
-                    style={styles.eyeButton}
+                    style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.7 }]}
                     disabled={loading}
                     accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                     accessibilityRole="button"
@@ -240,7 +240,7 @@ export default function ResetPasswordScreen() {
                     ) : (
                       <Eye size={20} color={colors.placeholder} />
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
                 {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
               </View>
@@ -263,9 +263,9 @@ export default function ResetPasswordScreen() {
                     editable={!loading}
                     accessibilityLabel="Confirm new password"
                   />
-                  <TouchableOpacity
+                  <Pressable
                     onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                    style={styles.eyeButton}
+                    style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.7 }]}
                     disabled={loading}
                     accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
                     accessibilityRole="button"
@@ -275,7 +275,7 @@ export default function ResetPasswordScreen() {
                     ) : (
                       <Eye size={20} color={colors.placeholder} />
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
                 {confirmPasswordError && (
                   <Text style={styles.errorText}>{confirmPasswordError}</Text>
@@ -290,10 +290,11 @@ export default function ResetPasswordScreen() {
               )}
 
               {/* Primary CTA */}
-              <TouchableOpacity
-                style={[
+              <Pressable
+                style={({ pressed }) => [
                   styles.primaryButton,
                   (!isFormValid || loading) && styles.primaryButtonDisabled,
+                  pressed && { opacity: 0.7 },
                 ]}
                 onPress={handleUpdatePassword}
                 disabled={!isFormValid || loading}
@@ -305,7 +306,7 @@ export default function ResetPasswordScreen() {
                 ) : (
                   <Text style={styles.primaryButtonText}>Update Password</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         </ScrollView>

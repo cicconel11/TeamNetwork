@@ -3,13 +3,12 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
   Pressable,
-  Image,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -35,6 +34,7 @@ import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
 import { ScheduleFileUpload } from "@/components/schedules/ScheduleFileUpload";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatDefaultDateFromString } from "@/lib/date-format";
 import type { AcademicSchedule, ScheduleFile } from "@teammeet/types";
 
 // Local colors for schedules screen
@@ -217,7 +217,7 @@ export default function SchedulesScreen() {
             <View style={styles.navHeader}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "S"}</Text>
@@ -249,7 +249,7 @@ export default function SchedulesScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "S"}</Text>
@@ -287,10 +287,10 @@ export default function SchedulesScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Schedules</Text>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddSchedule}>
+            <Pressable style={styles.addButton} onPress={handleAddSchedule}>
               <Plus size={16} color={SCHEDULES_COLORS.primaryCTAText} />
               <Text style={styles.addButtonText}>Add</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {mySchedules.length > 0 ? (
@@ -313,12 +313,12 @@ export default function SchedulesScreen() {
                       </Text>
                     )}
                   </View>
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.editButton}
                     onPress={() => handleEditSchedule(schedule.id)}
                   >
                     <Text style={styles.editButtonText}>Edit</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               ))}
             </View>
@@ -329,9 +329,9 @@ export default function SchedulesScreen() {
               <Text style={styles.emptySubtitle}>
                 Add your class schedules so coaches can plan around your availability.
               </Text>
-              <TouchableOpacity style={styles.emptyButton} onPress={handleAddSchedule}>
+              <Pressable style={styles.emptyButton} onPress={handleAddSchedule}>
                 <Text style={styles.emptyButtonText}>Add Schedule</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         </View>
@@ -345,22 +345,22 @@ export default function SchedulesScreen() {
 
           {isAdmin && (
             <View style={styles.tabContainer}>
-              <TouchableOpacity
+              <Pressable
                 style={[styles.tab, fileTab === "my" && styles.tabActive]}
                 onPress={() => setFileTab("my")}
               >
                 <Text style={[styles.tabText, fileTab === "my" && styles.tabTextActive]}>
                   My Files
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 style={[styles.tab, fileTab === "all" && styles.tabActive]}
                 onPress={() => setFileTab("all")}
               >
                 <Text style={[styles.tabText, fileTab === "all" && styles.tabTextActive]}>
                   All Team Files
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
 
@@ -386,12 +386,12 @@ export default function SchedulesScreen() {
                           <Text> • {String((file.users as { name?: string | null; email?: string | null }).name || (file.users as { name?: string | null; email?: string | null }).email || "")}</Text>
                         ) : null}
                         {file.created_at && (
-                          <Text> • {new Date(file.created_at).toLocaleDateString()}</Text>
+                          <Text> • {formatDefaultDateFromString(file.created_at)}</Text>
                         )}
                       </Text>
                     </View>
                     <View style={styles.fileActions}>
-                      <TouchableOpacity
+                      <Pressable
                         style={styles.fileActionButton}
                         onPress={() => handleViewFile(file)}
                         disabled={viewingFileId === file.id}
@@ -404,9 +404,9 @@ export default function SchedulesScreen() {
                               : SCHEDULES_COLORS.primaryCTA
                           }
                         />
-                      </TouchableOpacity>
+                      </Pressable>
                       {(fileTab === "my" || !isAdmin) && (
-                        <TouchableOpacity
+                        <Pressable
                           style={styles.fileActionButton}
                           onPress={() => handleDeleteFile(file)}
                           disabled={deletingFileId === file.id}
@@ -419,7 +419,7 @@ export default function SchedulesScreen() {
                                 : SCHEDULES_COLORS.error
                             }
                           />
-                        </TouchableOpacity>
+                        </Pressable>
                       )}
                     </View>
                   </View>

@@ -3,14 +3,13 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   TextInput,
-  Image,
   Pressable,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
@@ -34,6 +33,7 @@ import type { Event } from "@/hooks/useEvents";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS, AVATAR_SIZES } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 
 type FilterMode = "all" | "attending" | "checked_in" | "not_checked_in";
 
@@ -161,18 +161,11 @@ export default function CheckInScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return formatShortWeekdayDate(dateString);
   };
 
   const formatCheckInTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    return formatTime(dateString);
   };
 
   const renderAttendeeCard = ({ item }: { item: EventRSVP }) => {
@@ -189,7 +182,7 @@ export default function CheckInScreen() {
       <View style={[styles.attendeeCard, isCheckedIn && styles.attendeeCardCheckedIn]}>
         <View style={styles.attendeeInfo}>
           {item.user?.avatar_url ? (
-            <Image source={{ uri: item.user.avatar_url }} style={styles.avatar} />
+            <Image source={item.user.avatar_url} style={styles.avatar} contentFit="cover" transition={200} recyclingKey={item.user.avatar_url} />
           ) : (
             <View style={[styles.avatarPlaceholder, isCheckedIn && styles.avatarCheckedIn]}>
               <Text style={styles.avatarText}>{initials}</Text>
@@ -215,7 +208,7 @@ export default function CheckInScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
+        <Pressable
           style={[styles.checkInButton, isCheckedIn && styles.undoButton]}
           onPress={() => (isCheckedIn ? handleUndoCheckIn(item) : handleCheckIn(item))}
         >
@@ -224,7 +217,7 @@ export default function CheckInScreen() {
           ) : (
             <UserCheck size={20} color="#ffffff" />
           )}
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   };
@@ -252,9 +245,9 @@ export default function CheckInScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>You don't have permission to check in attendees</Text>
-        <TouchableOpacity style={styles.backButtonLarge} onPress={() => router.back()}>
+        <Pressable style={styles.backButtonLarge} onPress={() => router.back()}>
           <Text style={styles.backButtonTextLarge}>Go Back</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }
@@ -275,9 +268,9 @@ export default function CheckInScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.backButtonLarge} onPress={() => router.back()}>
+        <Pressable style={styles.backButtonLarge} onPress={() => router.back()}>
           <Text style={styles.backButtonTextLarge}>Go Back</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     );
   }
@@ -292,9 +285,9 @@ export default function CheckInScreen() {
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
             {/* Back button */}
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
               <ArrowLeft size={24} color={APP_CHROME.headerTitle} />
-            </TouchableOpacity>
+            </Pressable>
 
             {/* Header text */}
             <View style={styles.headerTextContainer}>
@@ -307,7 +300,7 @@ export default function CheckInScreen() {
             {/* Logo for drawer toggle */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
@@ -358,9 +351,9 @@ export default function CheckInScreen() {
             autoCorrect={false}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
+            <Pressable onPress={() => setSearchQuery("")}>
               <X size={18} color={NEUTRAL.muted} />
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
 
@@ -374,7 +367,7 @@ export default function CheckInScreen() {
               { key: "all", label: "All" },
             ] as const
           ).map((filter) => (
-            <TouchableOpacity
+            <Pressable
               key={filter.key}
               style={[styles.filterTab, filterMode === filter.key && styles.filterTabActive]}
               onPress={() => setFilterMode(filter.key)}
@@ -387,7 +380,7 @@ export default function CheckInScreen() {
               >
                 {filter.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
 
@@ -399,6 +392,10 @@ export default function CheckInScreen() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
         />
       </View>
     </View>
