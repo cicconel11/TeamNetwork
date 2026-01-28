@@ -7,7 +7,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   Modal,
   StyleSheet,
   Pressable,
@@ -61,15 +60,15 @@ export function OverflowMenu({
 
   return (
     <>
-      <TouchableOpacity
+      <Pressable
         onPress={handleOpen}
-        style={styles.triggerButton}
+        style={({ pressed }) => [styles.triggerButton, pressed && { opacity: 0.7 }]}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
       >
         <MoreVertical size={iconSize} color={resolvedIconColor} />
-      </TouchableOpacity>
+      </Pressable>
 
       <Modal
         visible={visible}
@@ -81,14 +80,14 @@ export function OverflowMenu({
           <View style={styles.menuContainer}>
             <View style={styles.menu}>
               {items.map((item, index) => (
-                <TouchableOpacity
+                <Pressable
                   key={item.id}
-                  style={[
+                  style={({ pressed }) => [
                     styles.menuItem,
                     index < items.length - 1 && styles.menuItemBorder,
+                    pressed && { opacity: 0.7 },
                   ]}
                   onPress={() => handleItemPress(item)}
-                  activeOpacity={0.7}
                 >
                   {item.icon && <View style={styles.menuItemIcon}>{item.icon}</View>}
                   <Text
@@ -99,17 +98,16 @@ export function OverflowMenu({
                   >
                     {item.label}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
 
-            <TouchableOpacity
-              style={styles.cancelButton}
+            <Pressable
+              style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.7 }]}
               onPress={handleClose}
-              activeOpacity={0.7}
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </Pressable>
       </Modal>

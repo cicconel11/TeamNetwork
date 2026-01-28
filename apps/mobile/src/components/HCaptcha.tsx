@@ -1,5 +1,5 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { StyleSheet, View, Modal, ActivityIndicator, Text, TouchableOpacity } from "react-native";
+import { StyleSheet, View, Modal, ActivityIndicator, Text, Pressable } from "react-native";
 import ConfirmHcaptcha from "@hcaptcha/react-native-hcaptcha";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import type { ThemeColors } from "@/lib/theme";
@@ -93,9 +93,9 @@ const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
           <View style={styles.container}>
             <View style={styles.header}>
               <Text style={styles.title}>Security Check</Text>
-              <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+              <Pressable onPress={handleClose} style={({ pressed }) => [styles.closeButton, pressed && { opacity: 0.7 }]}>
                 <Text style={styles.closeText}>✕</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
             
             {loading && (

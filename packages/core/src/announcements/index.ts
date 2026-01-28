@@ -10,7 +10,7 @@ export type ViewerContext = {
   userId: string | null;
 };
 
-const isActive = (status: MembershipStatus | null) => status !== "revoked";
+const isActive = (status: MembershipStatus | null) => status === "active";
 
 const canViewAnnouncement = (announcement: Announcement, ctx: ViewerContext) => {
   if (!ctx.role || !isActive(ctx.status)) return false;

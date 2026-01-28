@@ -22,7 +22,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === "web", // Enable for web to handle OAuth redirects
-    flowType: "implicit",
+    flowType: "pkce",
   },
 });
 
@@ -35,7 +35,7 @@ export async function signOut() {
     // AuthSessionMissingError is expected if session expired or doesn't exist
     // We still want to proceed with sign out flow in this case
     if (error.name === "AuthSessionMissingError") {
-      console.log("No active session to sign out from");
+      // No active session — proceed silently
       return;
     }
     console.error("Sign out error:", error);

@@ -3,11 +3,12 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
 } from "react-native";
 import { ChevronLeft, ChevronRight } from "lucide-react-native";
 import type { ScheduleWithUser } from "@/hooks/useSchedules";
+import { formatWeekRange } from "@/lib/date-format";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 
 interface AvailabilityGridProps {
@@ -58,7 +59,7 @@ export function AvailabilityGrid({ schedules, totalMembers }: AvailabilityGridPr
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
 
-    const label = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    const label = formatWeekRange(start, end);
 
     return { startOfWeek: start, weekLabel: label };
   }, [weekOffset]);
@@ -151,24 +152,24 @@ export function AvailabilityGrid({ schedules, totalMembers }: AvailabilityGridPr
       {/* Week Navigation */}
       <View style={styles.navRow}>
         <View style={styles.navButtons}>
-          <TouchableOpacity
-            style={styles.navButton}
+          <Pressable
+            style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]}
             onPress={() => setWeekOffset((w) => w - 1)}
           >
             <ChevronLeft size={20} color={GRID_COLORS.primaryText} />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.weekLabel}>{weekLabel}</Text>
-          <TouchableOpacity
-            style={styles.navButton}
+          <Pressable
+            style={({ pressed }) => [styles.navButton, pressed && { opacity: 0.7 }]}
             onPress={() => setWeekOffset((w) => w + 1)}
           >
             <ChevronRight size={20} color={GRID_COLORS.primaryText} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
         {weekOffset !== 0 && (
-          <TouchableOpacity onPress={() => setWeekOffset(0)}>
+          <Pressable onPress={() => setWeekOffset(0)} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
             <Text style={styles.thisWeekLink}>This Week</Text>
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
 
@@ -198,12 +199,13 @@ export function AvailabilityGrid({ schedules, totalMembers }: AvailabilityGridPr
                 const isSelected = selectedCell?.day === dayIndex && selectedCell?.hour === hour;
 
                 return (
-                  <TouchableOpacity
+                  <Pressable
                     key={dayIndex}
-                    style={[
+                    style={({ pressed }) => [
                       styles.cell,
                       { backgroundColor: cellStyle.bg },
                       isSelected && styles.cellSelected,
+                      pressed && { opacity: 0.7 },
                     ]}
                     onPress={() =>
                       setSelectedCell(isSelected ? null : { day: dayIndex, hour })
@@ -212,7 +214,7 @@ export function AvailabilityGrid({ schedules, totalMembers }: AvailabilityGridPr
                     <Text style={[styles.cellText, { color: cellStyle.text }]}>
                       {available}/{totalMembers}
                     </Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </View>

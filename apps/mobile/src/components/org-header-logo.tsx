@@ -1,4 +1,5 @@
-import { Image, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { Image } from "expo-image";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 
@@ -23,9 +24,10 @@ export function OrgHeaderLogo() {
     return (
       <View style={containerStyle}>
         <Image
-          source={{ uri: orgLogoUrl }}
+          source={orgLogoUrl}
           style={{ width: size, height: size }}
-          resizeMode="cover"
+          contentFit="cover"
+          transition={200}
         />
       </View>
     );

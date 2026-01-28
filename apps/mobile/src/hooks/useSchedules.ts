@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { formatDefaultDateFromString } from "@/lib/date-format";
 import type { AcademicSchedule, User } from "@teammeet/types";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
@@ -29,7 +30,7 @@ function getOrdinalSuffix(n: number): string {
 export function formatOccurrence(schedule: AcademicSchedule): string {
   switch (schedule.occurrence_type) {
     case "single":
-      return new Date(schedule.start_date).toLocaleDateString();
+      return formatDefaultDateFromString(schedule.start_date);
     case "daily":
       return "Daily";
     case "weekly":

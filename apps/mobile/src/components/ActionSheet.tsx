@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, forwardRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -143,15 +143,14 @@ export const ActionSheet = forwardRef<BottomSheet, ActionSheetProps>(
           <Text style={styles.title}>Quick Actions</Text>
           <View style={styles.grid}>
             {actions.map((action, index) => (
-              <TouchableOpacity
+              <Pressable
                 key={index}
-                style={styles.actionTile}
+                style={({ pressed }) => [styles.actionTile, pressed && { opacity: 0.7 }]}
                 onPress={action.onPress}
-                activeOpacity={0.7}
               >
                 <View style={styles.iconContainer}>{action.icon}</View>
                 <Text style={styles.actionLabel}>{action.label}</Text>
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </View>
         </BottomSheetView>

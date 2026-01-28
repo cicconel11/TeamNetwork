@@ -19,71 +19,37 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 interface AuthProviderProps {
   children: ReactNode;
-  initialSession?: Session | null;
-  initialLoading?: boolean;
 }
 
-export function AuthProvider({
-  children,
-  initialSession = null,
-  initialLoading = true,
-}: AuthProviderProps) {
-  const [session, setSession] = useState<Session | null>(initialSession);
-  const [isLoading, setIsLoading] = useState(initialLoading);
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
 
-    // Only fetch session if not provided initially
-    if (initialSession === null && initialLoading) {
-      supabase.auth.getSession().then(({ data: { session }, error }) => {
-        if (!isMountedRef.current) return;
-
-        // Handle invalid/expired refresh token errors gracefully
-        if (error) {
-          console.warn("AuthContext: Session error, clearing session:", error.message);
-          supabase.auth.signOut().catch(() => {});
-          setSession(null);
-          setIsLoading(false);
-          return;
-        }
-
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isMountedRef.current) {
         setSession(session);
         setIsLoading(false);
-      }).catch((err) => {
-        console.warn("AuthContext: getSession failed:", err?.message || err);
-        if (!isMountedRef.current) return;
-        supabase.auth.signOut().catch(() => {});
-        setSession(null);
-        setIsLoading(false);
-      });
-    }
+      }
+    });
 
-    // Listen for auth state changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, newSession: Session | null) => {
-      if (!isMountedRef.current) return;
-
-      // Handle token refresh failures
-      if (event === "TOKEN_REFRESHED" && !newSession) {
-        console.warn("AuthContext: Token refresh failed, clearing session");
-        supabase.auth.signOut().catch(() => {});
-        setSession(null);
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
+      if (isMountedRef.current) {
+        setSession(newSession);
         setIsLoading(false);
-        return;
       }
-
-      setSession(newSession);
-      setIsLoading(false);
     });
 
     return () => {
       isMountedRef.current = false;
       subscription?.unsubscribe();
     };
-  }, [initialSession, initialLoading]);
+  }, []);
 
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();

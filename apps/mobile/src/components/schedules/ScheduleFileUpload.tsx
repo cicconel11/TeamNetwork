@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
 } from "react-native";
@@ -79,11 +79,10 @@ export function ScheduleFileUpload({ onUpload }: ScheduleFileUploadProps) {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.button}
+      <Pressable
+        style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]}
         onPress={handlePickDocument}
         disabled={isUploading}
-        activeOpacity={0.7}
       >
         {isUploading ? (
           <ActivityIndicator size="small" color={UPLOAD_COLORS.primaryText} />
@@ -93,7 +92,7 @@ export function ScheduleFileUpload({ onUpload }: ScheduleFileUploadProps) {
             <Text style={styles.buttonText}>Upload Schedule</Text>
           </>
         )}
-      </TouchableOpacity>
+      </Pressable>
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>

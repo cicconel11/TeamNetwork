@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { View, Text, Image, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import {
   DrawerContentScrollView,
   type DrawerContentComponentProps,
@@ -203,7 +204,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         >
           <View style={styles.avatar}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              <Image source={avatarUrl} style={styles.avatarImage} contentFit="cover" transition={200} />
             ) : (
               <Text style={styles.avatarFallback}>{initial}</Text>
             )}
