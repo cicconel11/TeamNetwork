@@ -13,7 +13,7 @@ const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
 
 // Routes that should redirect to /app if user is already authenticated
-const authOnlyRoutes = ["/", "/auth/login", "/auth/signup"];
+const authOnlyRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -154,6 +154,11 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Redirect authenticated users away from auth-only pages
+  if (user && authOnlyRoutes.includes(pathname)) {
+    return NextResponse.redirect(new URL("/app", request.url));
+  }
+
   const isPublicRoute =
     publicRoutes.some((route) => pathname === route) || pathname.startsWith("/auth/");
 
@@ -170,10 +175,6 @@ export async function middleware(request: NextRequest) {
       );
     }
     return response;
-  }
-
-  if (user && authOnlyRoutes.includes(pathname)) {
-    return NextResponse.redirect(new URL("/app", request.url));
   }
 
   if (!user) {
