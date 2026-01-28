@@ -4,10 +4,11 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniFilters } from "@/components/alumni";
-import { isOrgAdmin } from "@/lib/auth";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { getOrgRole } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface AlumniPageProps {
@@ -49,7 +50,9 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   if (!org || orgError) return null;
 
-  const isAdmin = await isOrgAdmin(org.id);
+  const navConfig = org.nav_config as NavConfig | null;
+  const { role } = await getOrgRole({ orgId: org.id });
+  const canEdit = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
 
   // Build query with filters
   let query = dataClient
@@ -106,7 +109,6 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const hasActiveFilters =
     filters.year || filters.industry || filters.company || filters.city || filters.position;
 
-  const navConfig = org.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/alumni", navConfig);
   const actionLabel = resolveActionLabel("/alumni", navConfig);
 
@@ -116,7 +118,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
         title={pageLabel}
         description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? " (filtered)" : " in our network"}`}
         actions={
-          isAdmin && (
+          canEdit && (
             <Link href={`/${orgSlug}/alumni/new`}>
               <Button>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -190,7 +192,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
             title={`No ${pageLabel.toLowerCase()} found`}
             description={hasActiveFilters ? "Try adjusting your filters" : `No ${pageLabel.toLowerCase()} in the directory yet`}
             action={
-              isAdmin && !hasActiveFilters && (
+              canEdit && !hasActiveFilters && (
                 <Link href={`/${orgSlug}/alumni/new`}>
                   <Button>{resolveActionLabel("/alumni", navConfig, "Add First")}</Button>
                 </Link>

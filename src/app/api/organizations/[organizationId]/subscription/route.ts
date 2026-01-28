@@ -12,6 +12,10 @@ import {
 } from "@/lib/security/validation";
 import { z } from "zod";
 import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import { canEditNavItem } from "@/lib/navigation/permissions";
+import { normalizeRole } from "@/lib/auth/role-utils";
+import type { NavConfig } from "@/lib/navigation/nav-items";
+import type { UserRole } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -171,7 +175,12 @@ const postSchema = z
   })
   .strict();
 
-async function requireAdmin(req: Request, orgId: string, rateLimitLabel: string) {
+async function requireAdmin(
+  req: Request,
+  orgId: string,
+  rateLimitLabel: string,
+  options?: { allowNavEditPath?: string }
+) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -193,18 +202,35 @@ async function requireAdmin(req: Request, orgId: string, rateLimitLabel: string)
     return { error: respond({ error: "Unauthorized" }, 401) };
   }
 
-  const { data: role } = await supabase
+  const { data: roleData } = await supabase
     .from("user_organization_roles")
     .select("role")
     .eq("organization_id", orgId)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (role?.role !== "admin") {
+  const isAdmin = roleData?.role === "admin";
+
+  if (!isAdmin) {
+    if (options?.allowNavEditPath) {
+      const serviceSupabase = createServiceClient();
+      const { data: org } = await serviceSupabase
+        .from("organizations")
+        .select("nav_config")
+        .eq("id", orgId)
+        .maybeSingle();
+
+      const navConfig = org?.nav_config as NavConfig | null;
+      const role = normalizeRole((roleData?.role as UserRole | null) ?? null);
+      if (canEditNavItem(navConfig, options.allowNavEditPath, role, ["admin"])) {
+        return { supabase, user, respond, rateLimit, isAdmin };
+      }
+    }
+
     return { error: respond({ error: "Forbidden" }, 403) };
   }
 
-  return { supabase, user, respond, rateLimit };
+  return { supabase, user, respond, rateLimit, isAdmin };
 }
 
 function buildQuotaResponse(params: {
@@ -215,18 +241,22 @@ function buildQuotaResponse(params: {
   stripeSubscriptionId: string | null;
   stripeCustomerId: string | null;
   currentPeriodEnd: string | null;
+  includeStripeDetails?: boolean;
 }, respond: (payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) {
   const remaining = params.alumniLimit === null ? null : Math.max(params.alumniLimit - params.alumniCount, 0);
-  return respond({
+  const payload: Record<string, unknown> = {
     bucket: params.bucket,
     alumniLimit: params.alumniLimit,
     alumniCount: params.alumniCount,
     remaining,
     status: params.status,
-    stripeSubscriptionId: params.stripeSubscriptionId,
-    stripeCustomerId: params.stripeCustomerId,
-    currentPeriodEnd: params.currentPeriodEnd,
-  });
+  };
+  if (params.includeStripeDetails === true) {
+    payload.stripeSubscriptionId = params.stripeSubscriptionId;
+    payload.stripeCustomerId = params.stripeCustomerId;
+    payload.currentPeriodEnd = params.currentPeriodEnd;
+  }
+  return respond(payload);
 }
 
 export async function GET(req: Request, { params }: RouteParams) {
@@ -236,10 +266,12 @@ export async function GET(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const auth = await requireAdmin(req, organizationId, "subscription lookup");
+  const auth = await requireAdmin(req, organizationId, "subscription lookup", {
+    allowNavEditPath: "/alumni",
+  });
   if ("error" in auth) return auth.error;
 
-  const { respond } = auth;
+  const { respond, isAdmin } = auth;
   const serviceSupabase = createServiceClient();
   const { data: sub, error: subError } = await serviceSupabase
     .from("organization_subscriptions")
@@ -266,6 +298,21 @@ export async function GET(req: Request, { params }: RouteParams) {
   const baseInterval: SubscriptionInterval =
     sub?.base_plan_interval === "year" ? "year" : "month";
 
+  // Non-admin callers: return cached DB state only (no Stripe API calls or backfill writes)
+  if (!isAdmin) {
+    const alumniLimit = getAlumniLimit(bucket);
+    return buildQuotaResponse({
+      bucket,
+      alumniLimit,
+      alumniCount,
+      status: (sub?.status as string | undefined) ?? "none",
+      stripeSubscriptionId: null,
+      stripeCustomerId: null,
+      currentPeriodEnd: null,
+      includeStripeDetails: false,
+    }, respond);
+  }
+
   const planDetails = await ensureStripePlan({
     stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
     currentBucket: bucket,
@@ -285,11 +332,12 @@ export async function GET(req: Request, { params }: RouteParams) {
       stripeSubscriptionId: null,
       stripeCustomerId: null,
       currentPeriodEnd: null,
+      includeStripeDetails: isAdmin,
     }, respond);
   }
 
   const alumniLimit = getAlumniLimit(planDetails.bucket);
-  const status = (sub?.status as string | undefined) ?? "pending";
+  const status = (sub?.status as string | undefined) ?? "none";
   const customerResult = await ensureStripeCustomerId({
     stripeSubscriptionId: sub?.stripe_subscription_id as string | null,
     stripeCustomerId: sub?.stripe_customer_id as string | null,
@@ -307,6 +355,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       stripeSubscriptionId: null,
       stripeCustomerId: null,
       currentPeriodEnd: null,
+      includeStripeDetails: isAdmin,
     }, respond);
   }
 
@@ -318,6 +367,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     stripeSubscriptionId: (sub?.stripe_subscription_id as string | null) ?? null,
     stripeCustomerId: customerResult.customerId,
     currentPeriodEnd: (sub?.current_period_end as string | null) ?? null,
+    includeStripeDetails: isAdmin,
   }, respond);
 }
 
@@ -329,6 +379,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
     }
 
+    // POST is admin-only (no allowNavEditPath) -- billing changes require admin privileges
     const auth = await requireAdmin(req, organizationId, "subscription update");
     if ("error" in auth) return auth.error;
 
@@ -421,6 +472,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         stripeSubscriptionId: sub.stripe_subscription_id as string,
         stripeCustomerId: customerResult.customerId,
         currentPeriodEnd: (sub?.current_period_end as string | null) ?? null,
+        includeStripeDetails: true,
       }, respond);
     }
 
@@ -501,6 +553,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         stripeSubscriptionId: sub.stripe_subscription_id as string,
         stripeCustomerId: sub.stripe_customer_id as string,
         currentPeriodEnd: (sub?.current_period_end as string | null) ?? null,
+        includeStripeDetails: true,
       }, respond);
     } catch (error) {
       console.error("[subscription-update] Failed to update subscription", error);

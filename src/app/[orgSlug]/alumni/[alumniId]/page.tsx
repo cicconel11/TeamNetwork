@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { getOrgRole } from "@/lib/auth/roles";
+import { canEditNavItem } from "@/lib/navigation/permissions";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Organization, Alumni } from "@/types/database";
 
 interface AlumniDetailPageProps {
@@ -55,13 +57,12 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
 
   const alum = alumData as Alumni;
 
-  const isAdmin = await isOrgAdmin(orgId);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const currentUserId = session?.user?.id ?? null;
+  const { role, userId: currentUserId } = await getOrgRole({ orgId: orgId });
+  const navConfig = org.nav_config as NavConfig | null;
+  const canEditPage = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
   const alumUserId = (alum as Alumni & { user_id?: string | null }).user_id || null;
-  const canEdit = isAdmin || (currentUserId && alumUserId === currentUserId);
+  const isSelf = Boolean(currentUserId && alumUserId === currentUserId);
+  const canEdit = canEditPage || isSelf;
 
   return (
     <div className="animate-fade-in">
@@ -79,7 +80,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
                   Edit
                 </Button>
               </Link>
-              {isAdmin && (
+              {canEditPage && (
                 <SoftDeleteButton
                   table="alumni"
                   id={alumniId}
