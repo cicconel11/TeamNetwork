@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Pressable,
@@ -22,6 +21,7 @@ import type { FormDocument, FormDocumentSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatDefaultDateFromString } from "@/lib/date-format";
 
 const DOC_COLORS = {
   background: "#f8fafc",
@@ -301,9 +301,9 @@ export default function DocumentFormDetailScreen() {
             </View>
             <Text style={styles.successTitle}>Document Submitted!</Text>
             <Text style={styles.successText}>Your completed form has been uploaded.</Text>
-            <TouchableOpacity style={styles.primaryButton} onPress={handleBack}>
+            <Pressable style={styles.primaryButton} onPress={handleBack}>
               <Text style={styles.primaryButtonText}>Back to Forms</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       </View>
@@ -353,7 +353,7 @@ export default function DocumentFormDetailScreen() {
           <Text style={styles.stepDescription}>
             Download the form template, print it, and fill it out.
           </Text>
-          <TouchableOpacity
+          <Pressable
             style={styles.downloadButton}
             onPress={handleDownloadTemplate}
             disabled={downloading}
@@ -368,7 +368,7 @@ export default function DocumentFormDetailScreen() {
                 </Text>
               </>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
 
         {/* Step 2: Upload */}
@@ -386,13 +386,13 @@ export default function DocumentFormDetailScreen() {
           {existingSubmission && (
             <View style={styles.infoBanner}>
               <Text style={styles.infoBannerText}>
-                You submitted this form on {new Date(existingSubmission.submitted_at!).toLocaleDateString()}.
+                You submitted this form on {formatDefaultDateFromString(existingSubmission.submitted_at!)}.
                 You can submit a new version below.
               </Text>
             </View>
           )}
 
-          <TouchableOpacity
+          <Pressable
             style={styles.uploadArea}
             onPress={handleSelectFile}
           >
@@ -421,9 +421,9 @@ export default function DocumentFormDetailScreen() {
                 </Text>
               </View>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
-          <TouchableOpacity
+          <Pressable
             style={[
               styles.primaryButton,
               (!selectedFile || uploading) && styles.buttonDisabled,
@@ -436,7 +436,7 @@ export default function DocumentFormDetailScreen() {
             ) : (
               <Text style={styles.primaryButtonText}>Submit Completed Form</Text>
             )}
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </ScrollView>
     </View>

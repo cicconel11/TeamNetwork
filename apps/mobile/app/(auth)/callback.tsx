@@ -21,6 +21,13 @@ export default function AuthCallbackScreen() {
       
       if (url) {
         await processAuthUrl(url);
+      } else if (params.code) {
+        const { error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(params.code as string);
+        if (exchangeError) {
+          throw exchangeError;
+        }
+        router.replace("/(app)");
       } else if (params.access_token && params.refresh_token) {
         // Tokens might be passed as query params
         await setSessionFromTokens(
@@ -32,7 +39,6 @@ export default function AuthCallbackScreen() {
         router.replace("/(auth)/login");
       }
     } catch (err) {
-      console.error("Auth callback error:", err);
       captureException(err as Error, { screen: "AuthCallback" });
       setError((err as Error).message);
       // Wait a moment then redirect to login
@@ -43,21 +49,39 @@ export default function AuthCallbackScreen() {
   };
 
   const processAuthUrl = async (url: string) => {
-    // Parse the URL to extract tokens from hash fragment
     const parsedUrl = new URL(url);
-    
-    // Tokens can be in hash fragment (after #) or query params
+
+    // Handle OAuth errors
+    const errorParam = parsedUrl.searchParams.get("error");
+    const errorDescription =
+      parsedUrl.searchParams.get("error_description") ||
+      new URLSearchParams(parsedUrl.hash?.substring(1) || "").get("error_description");
+    if (errorParam) {
+      throw new Error(errorDescription || errorParam);
+    }
+
+    // PKCE flow: exchange authorization code for session
+    const code = parsedUrl.searchParams.get("code");
+    if (code) {
+      const { error: exchangeError } =
+        await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) {
+        throw exchangeError;
+      }
+      router.replace("/(app)");
+      return;
+    }
+
+    // Legacy/implicit flow fallback: extract tokens from hash or query params
     let accessToken: string | null = null;
     let refreshToken: string | null = null;
 
-    // Check hash fragment first (standard OAuth flow)
     if (parsedUrl.hash) {
       const hashParams = new URLSearchParams(parsedUrl.hash.substring(1));
       accessToken = hashParams.get("access_token");
       refreshToken = hashParams.get("refresh_token");
     }
 
-    // Fall back to query params
     if (!accessToken) {
       accessToken = parsedUrl.searchParams.get("access_token");
       refreshToken = parsedUrl.searchParams.get("refresh_token");
@@ -66,15 +90,6 @@ export default function AuthCallbackScreen() {
     if (accessToken && refreshToken) {
       await setSessionFromTokens(accessToken, refreshToken);
     } else {
-      // Check for error in URL
-      const errorDescription = 
-        parsedUrl.searchParams.get("error_description") ||
-        new URLSearchParams(parsedUrl.hash?.substring(1) || "").get("error_description");
-      
-      if (errorDescription) {
-        throw new Error(errorDescription);
-      }
-      
       throw new Error("No authentication tokens found in callback URL");
     }
   };

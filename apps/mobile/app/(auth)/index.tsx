@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Dimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, StatusBar, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -55,21 +55,19 @@ export default function LandingScreen() {
           </Text>
 
           {/* Primary Button: Continue with Email */}
-          <TouchableOpacity
-            style={styles.primaryButton}
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
             onPress={handleEmailPress}
-            activeOpacity={0.8}
             accessibilityLabel="Continue with Email"
             accessibilityRole="button"
           >
             <Text style={styles.primaryButtonText}>Continue with Email</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Secondary Button: Continue with Google */}
-          <TouchableOpacity
-            style={styles.secondaryButton}
+          <Pressable
+            style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.8 }]}
             onPress={handleGooglePress}
-            activeOpacity={0.8}
             accessibilityLabel="Continue with Google"
             accessibilityRole="button"
           >
@@ -79,7 +77,7 @@ export default function LandingScreen() {
               </View>
               <Text style={styles.secondaryButtonText}>Continue with Google</Text>
             </View>
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </SafeAreaView>
     </View>

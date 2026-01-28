@@ -3,18 +3,17 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   Alert,
   RefreshControl,
   Switch,
   TextInput,
-  Image,
   Modal,
   Pressable,
   Clipboard,
 } from "react-native";
+import { Image } from "expo-image";
 import { useRouter, useNavigation } from "expo-router";
 import { DrawerActions } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,6 +31,7 @@ import { StripeWebView } from "@/components/StripeWebView";
 import { captureException } from "@/lib/analytics";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
+import { formatMonthDayYearSafe } from "@/lib/date-format";
 import { getWebAppUrl, fetchWithAuth } from "@/lib/web-api";
 import type { AlumniBucket } from "@teammeet/types";
 import {
@@ -120,13 +120,7 @@ const fontWeight = {
 };
 
 function formatDate(dateString: string | null): string {
-  if (!dateString) return "N/A";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatMonthDayYearSafe(dateString, "N/A");
 }
 
 function formatBucket(bucket: string): string {
@@ -605,10 +599,9 @@ export default function SettingsScreen() {
   const totalPending = pendingMembers.length + pendingAlumni.length;
 
   const renderSectionHeader = (title: string, section: string, icon: React.ReactNode, badge?: number) => (
-    <TouchableOpacity
-      style={styles.sectionHeader}
+    <Pressable
+      style={({ pressed }) => [styles.sectionHeader, pressed && { opacity: 0.7 }]}
       onPress={() => toggleSection(section)}
-      activeOpacity={0.7}
     >
       <View style={styles.sectionHeaderLeft}>
         {icon}
@@ -624,7 +617,7 @@ export default function SettingsScreen() {
         color={SETTINGS_COLORS.mutedForeground}
         style={{ transform: [{ rotate: expandedSections[section] ? "180deg" : "0deg" }] }}
       />
-    </TouchableOpacity>
+    </Pressable>
   );
 
   return (
@@ -638,7 +631,7 @@ export default function SettingsScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
@@ -688,7 +681,7 @@ export default function SettingsScreen() {
                         placeholderTextColor={SETTINGS_COLORS.mutedForeground}
                       />
                       {nameError && <Text style={styles.errorText}>{nameError}</Text>}
-                      <TouchableOpacity
+                      <Pressable
                         style={[styles.button, editedName === org?.name && styles.buttonDisabled]}
                         onPress={handleSaveName}
                         disabled={nameSaving || editedName === org?.name}
@@ -698,7 +691,7 @@ export default function SettingsScreen() {
                         ) : (
                           <Text style={styles.buttonText}>Save Name</Text>
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
 
                     {/* Branding Preview */}
@@ -707,7 +700,7 @@ export default function SettingsScreen() {
                       <Text style={styles.fieldLabel}>Branding</Text>
                       <View style={[styles.brandingPreview, { backgroundColor: org?.primary_color || SETTINGS_COLORS.primary }]}>
                         {org?.logo_url ? (
-                          <Image source={{ uri: org.logo_url }} style={styles.logoPreview} />
+                          <Image source={org.logo_url} style={styles.logoPreview} contentFit="contain" transition={200} />
                         ) : (
                           <View style={styles.logoPlaceholder}>
                             <Building2 size={24} color="#fff" />
@@ -789,7 +782,7 @@ export default function SettingsScreen() {
                     />
                   </View>
 
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.button}
                     onPress={handleSaveNotifications}
                     disabled={prefsSaving}
@@ -799,7 +792,7 @@ export default function SettingsScreen() {
                     ) : (
                       <Text style={styles.buttonText}>Save Preferences</Text>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </>
               )}
             </View>
@@ -838,13 +831,13 @@ export default function SettingsScreen() {
 
                 {/* Create Invite Button */}
                 {!showInviteForm && (
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.createButton}
                     onPress={() => setShowInviteForm(true)}
                   >
                     <Plus size={18} color={SETTINGS_COLORS.primary} />
                     <Text style={styles.createButtonText}>Create Invite</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 )}
 
                 {/* Create Invite Form */}
@@ -853,7 +846,7 @@ export default function SettingsScreen() {
                     <Text style={styles.fieldLabel}>Role</Text>
                     <View style={styles.roleButtons}>
                       {(["active_member", "alumni", "admin"] as const).map((role) => (
-                        <TouchableOpacity
+                        <Pressable
                           key={role}
                           style={[styles.roleButton, inviteRole === role && styles.roleButtonActive]}
                           onPress={() => setInviteRole(role)}
@@ -861,7 +854,7 @@ export default function SettingsScreen() {
                           <Text style={[styles.roleButtonText, inviteRole === role && styles.roleButtonTextActive]}>
                             {getRoleLabel(role)}
                           </Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       ))}
                     </View>
 
@@ -876,7 +869,7 @@ export default function SettingsScreen() {
                     />
 
                     <View style={styles.formActions}>
-                      <TouchableOpacity
+                      <Pressable
                         style={styles.cancelButton}
                         onPress={() => {
                           setShowInviteForm(false);
@@ -885,8 +878,8 @@ export default function SettingsScreen() {
                         }}
                       >
                         <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
+                      </Pressable>
+                      <Pressable
                         style={styles.button}
                         onPress={handleCreateInvite}
                         disabled={inviteCreating}
@@ -896,7 +889,7 @@ export default function SettingsScreen() {
                         ) : (
                           <Text style={styles.buttonText}>Create</Text>
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   </View>
                 )}
@@ -934,7 +927,7 @@ export default function SettingsScreen() {
                           </Text>
 
                           <View style={styles.inviteActions}>
-                            <TouchableOpacity
+                            <Pressable
                               style={styles.inviteAction}
                               onPress={() => copyInviteLink(invite)}
                             >
@@ -946,18 +939,18 @@ export default function SettingsScreen() {
                               <Text style={styles.inviteActionText}>
                                 {copiedInviteId === invite.id ? "Copied!" : "Copy Link"}
                               </Text>
-                            </TouchableOpacity>
+                            </Pressable>
 
-                            <TouchableOpacity
+                            <Pressable
                               style={styles.inviteAction}
                               onPress={() => setShowQRCode(showQRCode === invite.id ? null : invite.id)}
                             >
                               <QrCode size={16} color={SETTINGS_COLORS.primary} />
                               <Text style={styles.inviteActionText}>QR</Text>
-                            </TouchableOpacity>
+                            </Pressable>
 
                             {valid && (
-                              <TouchableOpacity
+                              <Pressable
                                 style={styles.inviteAction}
                                 onPress={() => {
                                   Alert.alert("Revoke Invite", "This invite will no longer be valid.", [
@@ -968,10 +961,10 @@ export default function SettingsScreen() {
                               >
                                 <X size={16} color={SETTINGS_COLORS.warning} />
                                 <Text style={[styles.inviteActionText, { color: SETTINGS_COLORS.warning }]}>Revoke</Text>
-                              </TouchableOpacity>
+                              </Pressable>
                             )}
 
-                            <TouchableOpacity
+                            <Pressable
                               style={styles.inviteAction}
                               onPress={() => {
                                 Alert.alert("Delete Invite", "This will permanently delete the invite.", [
@@ -981,7 +974,7 @@ export default function SettingsScreen() {
                               }}
                             >
                               <Trash2 size={16} color={SETTINGS_COLORS.error} />
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
 
                           {showQRCode === invite.id && (
@@ -1026,7 +1019,7 @@ export default function SettingsScreen() {
                           <View key={member.user_id} style={styles.memberItem}>
                             <View style={styles.memberInfo}>
                               {member.user?.avatar_url ? (
-                                <Image source={{ uri: member.user.avatar_url }} style={styles.memberAvatar} />
+                                <Image source={member.user.avatar_url} style={styles.memberAvatar} contentFit="cover" transition={200} />
                               ) : (
                                 <View style={styles.memberAvatarPlaceholder}>
                                   <Text style={styles.memberAvatarText}>
@@ -1041,12 +1034,12 @@ export default function SettingsScreen() {
                               </View>
                             </View>
                             <View style={styles.memberActions}>
-                              <TouchableOpacity style={styles.approveButton} onPress={() => handleApproveMember(member.user_id)}>
+                              <Pressable style={styles.approveButton} onPress={() => handleApproveMember(member.user_id)}>
                                 <Check size={16} color={SETTINGS_COLORS.success} />
-                              </TouchableOpacity>
-                              <TouchableOpacity style={styles.rejectButton} onPress={() => handleRejectMember(member.user_id)}>
+                              </Pressable>
+                              <Pressable style={styles.rejectButton} onPress={() => handleRejectMember(member.user_id)}>
                                 <X size={16} color={SETTINGS_COLORS.error} />
-                              </TouchableOpacity>
+                              </Pressable>
                             </View>
                           </View>
                         ))}
@@ -1060,7 +1053,7 @@ export default function SettingsScreen() {
                       <View key={member.user_id} style={styles.memberItem}>
                         <View style={styles.memberInfo}>
                           {member.user?.avatar_url ? (
-                            <Image source={{ uri: member.user.avatar_url }} style={styles.memberAvatar} />
+                            <Image source={member.user.avatar_url} style={styles.memberAvatar} contentFit="cover" transition={200} />
                           ) : (
                             <View style={styles.memberAvatarPlaceholder}>
                               <Text style={styles.memberAvatarText}>
@@ -1074,7 +1067,7 @@ export default function SettingsScreen() {
                           </View>
                         </View>
                         <View style={styles.memberActions}>
-                          <TouchableOpacity
+                          <Pressable
                             style={styles.roleSelector}
                             onPress={() => {
                               Alert.alert("Change Role", "Select a new role for this member", [
@@ -1093,13 +1086,13 @@ export default function SettingsScreen() {
                                 <ChevronDown size={14} color={SETTINGS_COLORS.mutedForeground} />
                               </>
                             )}
-                          </TouchableOpacity>
-                          <TouchableOpacity
+                          </Pressable>
+                          <Pressable
                             style={styles.removeButton}
                             onPress={() => handleRemoveAccess(member.user_id)}
                           >
                             <X size={16} color={SETTINGS_COLORS.error} />
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                       </View>
                     ))}
@@ -1122,12 +1115,12 @@ export default function SettingsScreen() {
                                 <Text style={styles.memberEmail}>{member.user?.email}</Text>
                               </View>
                             </View>
-                            <TouchableOpacity
+                            <Pressable
                               style={styles.restoreButton}
                               onPress={() => handleRestoreAccess(member.user_id)}
                             >
                               <Text style={styles.restoreButtonText}>Restore</Text>
-                            </TouchableOpacity>
+                            </Pressable>
                           </View>
                         ))}
                       </>
@@ -1153,9 +1146,9 @@ export default function SettingsScreen() {
                 ) : subError ? (
                   <View style={styles.errorContainer}>
                     <Text style={styles.errorText}>{subError}</Text>
-                    <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+                    <Pressable onPress={handleRefresh} style={styles.retryButton}>
                       <Text style={styles.retryButtonText}>Retry</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 ) : subscription ? (
                   <>
@@ -1184,7 +1177,7 @@ export default function SettingsScreen() {
                     {/* Plan Selector */}
                     <View style={styles.fieldGroup}>
                       <Text style={styles.fieldLabel}>Change Plan</Text>
-                      <TouchableOpacity
+                      <Pressable
                         style={styles.pickerButton}
                         onPress={() => setShowBucketPicker(true)}
                       >
@@ -1192,24 +1185,24 @@ export default function SettingsScreen() {
                           {BUCKET_OPTIONS.find((o) => o.value === selectedBucket)?.label || selectedBucket}
                         </Text>
                         <ChevronDown size={16} color={SETTINGS_COLORS.mutedForeground} />
-                      </TouchableOpacity>
+                      </Pressable>
 
                       <View style={styles.intervalRow}>
-                        <TouchableOpacity
+                        <Pressable
                           style={[styles.intervalButton, selectedInterval === "month" && styles.intervalButtonActive]}
                           onPress={() => setSelectedInterval("month")}
                         >
                           <Text style={[styles.intervalButtonText, selectedInterval === "month" && styles.intervalButtonTextActive]}>Monthly</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </Pressable>
+                        <Pressable
                           style={[styles.intervalButton, selectedInterval === "year" && styles.intervalButtonActive]}
                           onPress={() => setSelectedInterval("year")}
                         >
                           <Text style={[styles.intervalButtonText, selectedInterval === "year" && styles.intervalButtonTextActive]}>Yearly (save ~17%)</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
 
-                      <TouchableOpacity
+                      <Pressable
                         style={[styles.button, (planUpdating || selectedBucket === subscription.bucket) && styles.buttonDisabled]}
                         onPress={handleUpdatePlan}
                         disabled={planUpdating || selectedBucket === subscription.bucket}
@@ -1219,13 +1212,13 @@ export default function SettingsScreen() {
                         ) : (
                           <Text style={styles.buttonText}>Update Plan</Text>
                         )}
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
 
                     <View style={styles.divider} />
 
                     {/* Manage Billing */}
-                    <TouchableOpacity
+                    <Pressable
                       style={styles.billingButton}
                       onPress={handleManageBilling}
                       disabled={billingLoading || !subscription.stripeCustomerId}
@@ -1239,7 +1232,7 @@ export default function SettingsScreen() {
                           <ExternalLink size={16} color={SETTINGS_COLORS.primaryForeground} />
                         </>
                       )}
-                    </TouchableOpacity>
+                    </Pressable>
                   </>
                 ) : (
                   <View style={styles.noSubscription}>
@@ -1265,7 +1258,7 @@ export default function SettingsScreen() {
                       Your subscription will remain active until the end of your billing period.
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.dangerButton}
                     onPress={handleCancelSubscription}
                     disabled={cancelling || subscription?.status === "canceling" || subscription?.status === "canceled"}
@@ -1277,7 +1270,7 @@ export default function SettingsScreen() {
                         {subscription?.status === "canceling" ? "Cancelling..." : "Cancel"}
                       </Text>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
 
                 <View style={styles.divider} />
@@ -1289,7 +1282,7 @@ export default function SettingsScreen() {
                       Permanently delete this organization and all its data. This cannot be undone.
                     </Text>
                   </View>
-                  <TouchableOpacity
+                  <Pressable
                     style={[styles.dangerButton, styles.deleteButton]}
                     onPress={handleDeleteOrganization}
                     disabled={deleting}
@@ -1299,7 +1292,7 @@ export default function SettingsScreen() {
                     ) : (
                       <Text style={styles.deleteButtonText}>Delete</Text>
                     )}
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </View>
             )}
@@ -1340,7 +1333,7 @@ export default function SettingsScreen() {
               Admins have full access to organization settings, billing, and member management.
             </Text>
             <View style={styles.modalActions}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.modalCancelButton}
                 onPress={() => {
                   setShowAdminConfirm(false);
@@ -1348,10 +1341,10 @@ export default function SettingsScreen() {
                 }}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalConfirmButton} onPress={confirmAdminPromotion}>
+              </Pressable>
+              <Pressable style={styles.modalConfirmButton} onPress={confirmAdminPromotion}>
                 <Text style={styles.modalConfirmText}>Promote</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -1373,7 +1366,7 @@ export default function SettingsScreen() {
               placeholderTextColor={SETTINGS_COLORS.mutedForeground}
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity
+              <Pressable
                 style={styles.modalCancelButton}
                 onPress={() => {
                   setShowDeleteConfirm(false);
@@ -1381,8 +1374,8 @@ export default function SettingsScreen() {
                 }}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
+              </Pressable>
+              <Pressable
                 style={[styles.modalDeleteButton, (deleting || deleteConfirmText !== org?.name) && styles.buttonDisabled]}
                 onPress={confirmDeleteOrganization}
                 disabled={deleting || deleteConfirmText !== org?.name}
@@ -1392,7 +1385,7 @@ export default function SettingsScreen() {
                 ) : (
                   <Text style={styles.modalDeleteText}>Delete Forever</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
             </View>
           </View>
         </View>
@@ -1407,7 +1400,7 @@ export default function SettingsScreen() {
               const limit = ALUMNI_LIMITS[option.value];
               const disabled = subscription && limit !== null && subscription.alumniCount > limit;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={option.value}
                   style={[styles.pickerOption, disabled && styles.pickerOptionDisabled]}
                   onPress={() => {
@@ -1422,7 +1415,7 @@ export default function SettingsScreen() {
                     {option.label}
                   </Text>
                   {selectedBucket === option.value && <Check size={18} color={SETTINGS_COLORS.primary} />}
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </View>

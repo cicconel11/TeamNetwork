@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -157,14 +157,14 @@ export default function ForgotPasswordScreen() {
         style={styles.header}
       >
         <SafeAreaView edges={["top"]} style={styles.headerContent}>
-          <TouchableOpacity
+          <Pressable
             onPress={handleBack}
-            style={styles.backButton}
+            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ChevronLeft size={24} color="#ffffff" />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>TN</Text>
           </View>
@@ -201,13 +201,13 @@ export default function ForgotPasswordScreen() {
                 {"If you don't see the email, check your spam folder. The link will let you set a new password."}
               </Text>
               <Link href="/(auth)/login" asChild>
-                <TouchableOpacity
-                  style={styles.primaryButton}
+                <Pressable
+                  style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.7 }]}
                   accessibilityLabel="Return to sign in"
                   accessibilityRole="button"
                 >
                   <Text style={styles.primaryButtonText}>Return to Sign In</Text>
-                </TouchableOpacity>
+                </Pressable>
               </Link>
             </View>
           ) : (
@@ -240,10 +240,11 @@ export default function ForgotPasswordScreen() {
               )}
 
               {/* Primary CTA */}
-              <TouchableOpacity
-                style={[
+              <Pressable
+                style={({ pressed }) => [
                   styles.primaryButton,
                   (!isFormValid || loading) && styles.primaryButtonDisabled,
+                  pressed && { opacity: 0.7 },
                 ]}
                 onPress={handleResetPassword}
                 disabled={!isFormValid || loading}
@@ -255,15 +256,15 @@ export default function ForgotPasswordScreen() {
                 ) : (
                   <Text style={styles.primaryButtonText}>Send Reset Link</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
 
               {/* Back to Sign In Link */}
               <View style={styles.signinContainer}>
                 <Text style={styles.signinText}>Remember your password? </Text>
                 <Link href="/(auth)/login" asChild>
-                  <TouchableOpacity disabled={loading} accessibilityRole="link">
+                  <Pressable disabled={loading} accessibilityRole="link" style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
                     <Text style={styles.signinLink}>Sign In</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 </Link>
               </View>
             </View>

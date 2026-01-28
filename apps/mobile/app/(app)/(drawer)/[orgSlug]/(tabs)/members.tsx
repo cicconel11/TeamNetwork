@@ -6,8 +6,8 @@ import {
   RefreshControl,
   Pressable,
   StyleSheet,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -270,7 +270,7 @@ export default function MembersScreen() {
             <View style={styles.headerContent}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
@@ -307,7 +307,7 @@ export default function MembersScreen() {
             <View style={styles.headerContent}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
@@ -338,7 +338,7 @@ export default function MembersScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>

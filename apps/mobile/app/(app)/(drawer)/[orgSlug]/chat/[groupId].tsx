@@ -18,6 +18,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatTimestamp } from "@/lib/date-format";
 import type {
   ChatGroup,
   ChatGroupMember,
@@ -568,6 +569,10 @@ export default function ChatRoomScreen() {
               </Text>
             </View>
           }
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
         />
 
         {!showPendingQueue && (
@@ -618,11 +623,6 @@ function getInitials(name: string) {
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
-}
-
-function formatTimestamp(value: string) {
-  const date = new Date(value);
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 const createStyles = () =>

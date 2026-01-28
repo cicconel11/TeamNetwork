@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -21,6 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { formatLocalDateString } from "@/lib/date-format";
 import type { Competition, CompetitionPoint, CompetitionTeam } from "@teammeet/types";
 
 // Fixed color palette
@@ -315,7 +316,7 @@ export default function CompetitionScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -589,10 +590,7 @@ export default function CompetitionScreen() {
 }
 
 function formatDate(value: string) {
-  const datePart = value.split("T")[0];
-  const [year, month, day] = datePart.split("-").map(Number);
-  if (!year || !month || !day) return value;
-  return new Date(year, month - 1, day).toLocaleDateString();
+  return formatLocalDateString(value);
 }
 
 function rankBadgeStyle(index: number) {

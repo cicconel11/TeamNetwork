@@ -7,7 +7,6 @@ import {
   Switch,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
   StyleSheet,
   Alert,
@@ -19,6 +18,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatDatePickerLabel, formatTimePickerLabel } from "@/lib/date-format";
 import type { ThemeColors } from "@/lib/theme";
 
 type Audience = "members" | "alumni" | "both";
@@ -47,20 +47,11 @@ function mergeDateAndTime(date: Date, time: Date) {
 }
 
 function formatDateLabel(value: Date | null) {
-  if (!value) return "Select date";
-  return value.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatDatePickerLabel(value, "Select date");
 }
 
 function formatTimeLabel(value: Date | null) {
-  if (!value) return "Select time";
-  return value.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatTimePickerLabel(value, "Select time");
 }
 
 export default function EditEventScreen() {
@@ -357,12 +348,12 @@ export default function EditEventScreen() {
             onChange={handlePickerChange}
           />
           {Platform.OS === "ios" && (
-            <TouchableOpacity
+            <Pressable
               onPress={() => setActivePicker(null)}
               style={styles.pickerDoneButton}
             >
               <Text style={styles.pickerDoneText}>Done</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </View>
       )}
@@ -422,18 +413,17 @@ export default function EditEventScreen() {
       </View>
 
       {/* Submit Button */}
-      <TouchableOpacity
+      <Pressable
         onPress={handleSubmit}
         disabled={isSaving}
-        style={[styles.submitButton, isSaving && styles.submitButtonDisabled]}
-        activeOpacity={0.7}
+        style={({ pressed }) => [styles.submitButton, isSaving && styles.submitButtonDisabled, pressed && { opacity: 0.7 }]}
       >
         {isSaving ? (
           <ActivityIndicator color="#ffffff" />
         ) : (
           <Text style={styles.submitButtonText}>Save Changes</Text>
         )}
-      </TouchableOpacity>
+      </Pressable>
     </ScrollView>
   );
 }

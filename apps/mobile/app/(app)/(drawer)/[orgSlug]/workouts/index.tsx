@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Linking,
   Pressable,
   RefreshControl,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -23,6 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { formatLocalDateString } from "@/lib/date-format";
 import type { Workout, WorkoutLog, WorkoutStatus } from "@teammeet/types";
 
 // Fixed color palette
@@ -239,7 +240,7 @@ export default function WorkoutsScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
@@ -528,11 +529,7 @@ function WorkoutLogEditor({
 }
 
 function formatDateLabel(value: string) {
-  const datePart = value.split("T")[0];
-  const [year, month, day] = datePart.split("-").map(Number);
-  if (!year || !month || !day) return value;
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString();
+  return formatLocalDateString(value);
 }
 
 const createStyles = () =>

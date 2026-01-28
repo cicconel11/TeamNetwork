@@ -3,12 +3,11 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -21,6 +20,7 @@ import { useDonations } from "@/hooks/useDonations";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatMonthDay } from "@/lib/date-format";
 import type { OrganizationDonation } from "@teammeet/types";
 
 // Local colors for donations screen
@@ -141,8 +141,7 @@ export default function DonationsScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], { month: "short", day: "numeric" });
+    return formatMonthDay(dateString);
   };
 
   const getStatusStyle = (status: string) => {
@@ -209,10 +208,10 @@ export default function DonationsScreen() {
       </View>
 
       {/* Make a Donation Button */}
-      <TouchableOpacity style={styles.donateButton} onPress={handleMakeDonation}>
+      <Pressable style={({ pressed }) => [styles.donateButton, pressed && { opacity: 0.7 }]} onPress={handleMakeDonation}>
         <Plus size={20} color={DONATIONS_COLORS.primaryCTAText} />
         <Text style={styles.donateButtonText}>Make a Donation</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Purpose Breakdown */}
       {sortedPurposes.length > 0 && (
@@ -257,7 +256,7 @@ export default function DonationsScreen() {
             <View style={styles.navHeader}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "D"}</Text>
@@ -289,7 +288,7 @@ export default function DonationsScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "D"}</Text>
@@ -329,6 +328,10 @@ export default function DonationsScreen() {
             tintColor={DONATIONS_COLORS.primaryCTA}
           />
         }
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
     </View>
   );

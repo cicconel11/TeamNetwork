@@ -3,12 +3,11 @@ import {
   View,
   Text,
   FlatList,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -21,6 +20,7 @@ import { useExpenses } from "@/hooks/useExpenses";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { formatMonthDayYearSafe } from "@/lib/date-format";
 import type { Expense } from "@teammeet/types";
 
 // Local colors for expenses screen
@@ -126,13 +126,7 @@ export default function ExpensesScreen() {
   };
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
+    return formatMonthDayYearSafe(dateString, "");
   };
 
   const renderExpenseItem = ({ item }: { item: Expense }) => {
@@ -158,12 +152,12 @@ export default function ExpensesScreen() {
           </View>
           <View style={styles.expenseActions}>
             {item.venmo_link && (
-              <TouchableOpacity
-                style={styles.venmoButton}
+              <Pressable
+                style={({ pressed }) => [styles.venmoButton, pressed && { opacity: 0.7 }]}
                 onPress={() => handleVenmoPress(item.venmo_link!)}
               >
                 <Text style={styles.venmoButtonText}>Venmo</Text>
-              </TouchableOpacity>
+              </Pressable>
             )}
           </View>
         </View>
@@ -174,10 +168,10 @@ export default function ExpensesScreen() {
   const renderHeader = () => (
     <View style={styles.headerContent}>
       {/* Submit Expense Button */}
-      <TouchableOpacity style={styles.submitButton} onPress={handleSubmitExpense}>
+      <Pressable style={({ pressed }) => [styles.submitButton, pressed && { opacity: 0.7 }]} onPress={handleSubmitExpense}>
         <Plus size={20} color={EXPENSES_COLORS.primaryCTAText} />
         <Text style={styles.submitButtonText}>Submit Expense</Text>
-      </TouchableOpacity>
+      </Pressable>
 
       {/* Total Card */}
       <View style={styles.totalCard}>
@@ -214,7 +208,7 @@ export default function ExpensesScreen() {
             <View style={styles.navHeader}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "E"}</Text>
@@ -246,7 +240,7 @@ export default function ExpensesScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "E"}</Text>
@@ -286,6 +280,10 @@ export default function ExpensesScreen() {
             tintColor={EXPENSES_COLORS.primaryCTA}
           />
         }
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
     </View>
   );

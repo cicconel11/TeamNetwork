@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -205,14 +205,14 @@ export default function SignupScreen() {
         style={styles.header}
       >
         <SafeAreaView edges={["top"]} style={styles.headerContent}>
-          <TouchableOpacity
+          <Pressable
             onPress={handleBack}
-            style={styles.backButton}
+            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ChevronLeft size={24} color="#ffffff" />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>TN</Text>
           </View>
@@ -274,9 +274,9 @@ export default function SignupScreen() {
                   editable={!loading}
                   accessibilityLabel="Password"
                 />
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
+                  style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.7 }]}
                   disabled={loading}
                   accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                   accessibilityRole="button"
@@ -286,7 +286,7 @@ export default function SignupScreen() {
                   ) : (
                     <Eye size={20} color={colors.placeholder} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
               {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
             </View>
@@ -309,9 +309,9 @@ export default function SignupScreen() {
                   editable={!loading && !isWeb}
                   accessibilityLabel="Confirm password"
                 />
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                  style={styles.eyeButton}
+                  style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.7 }]}
                   disabled={loading || isWeb}
                   accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
                   accessibilityRole="button"
@@ -321,7 +321,7 @@ export default function SignupScreen() {
                   ) : (
                     <Eye size={20} color={colors.placeholder} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
               {confirmPasswordError && (
                 <Text style={styles.errorText}>{confirmPasswordError}</Text>
@@ -345,10 +345,11 @@ export default function SignupScreen() {
             )}
 
             {/* Primary CTA */}
-            <TouchableOpacity
-              style={[
+            <Pressable
+              style={({ pressed }) => [
                 styles.primaryButton,
                 (!isFormValid || loading || isWeb) && styles.primaryButtonDisabled,
+                pressed && { opacity: 0.7 },
               ]}
               onPress={handleSignup}
               disabled={!isFormValid || loading || isWeb}
@@ -362,16 +363,16 @@ export default function SignupScreen() {
                   {isWeb ? "Native App Only" : "Create Account"}
                 </Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Sign In Link */}
           <View style={styles.signinContainer}>
             <Text style={styles.signinText}>Already have an account? </Text>
             <Link href="/(auth)/login" asChild>
-              <TouchableOpacity disabled={loading} accessibilityRole="link">
+              <Pressable disabled={loading} accessibilityRole="link" style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
                 <Text style={styles.signinLink}>Sign In</Text>
-              </TouchableOpacity>
+              </Pressable>
             </Link>
           </View>
         </ScrollView>

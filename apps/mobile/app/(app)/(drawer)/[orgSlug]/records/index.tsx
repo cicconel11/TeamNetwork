@@ -3,13 +3,12 @@ import {
   View,
   Text,
   SectionList,
-  TouchableOpacity,
   StyleSheet,
   RefreshControl,
   ScrollView,
   Pressable,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
@@ -187,7 +186,7 @@ export default function RecordsScreen() {
       style={styles.chipContainer}
       contentContainerStyle={styles.chipContent}
     >
-      <TouchableOpacity
+      <Pressable
         style={[
           styles.chip,
           selectedCategory === null && styles.chipActive,
@@ -202,9 +201,9 @@ export default function RecordsScreen() {
         >
           All Categories
         </Text>
-      </TouchableOpacity>
+      </Pressable>
       {categories.map((category) => (
-        <TouchableOpacity
+        <Pressable
           key={category}
           style={[
             styles.chip,
@@ -220,7 +219,7 @@ export default function RecordsScreen() {
           >
             {category}
           </Text>
-        </TouchableOpacity>
+        </Pressable>
       ))}
     </ScrollView>
   );
@@ -246,7 +245,7 @@ export default function RecordsScreen() {
             <View style={styles.navHeader}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "R"}</Text>
@@ -278,7 +277,7 @@ export default function RecordsScreen() {
             {/* Logo */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "R"}</Text>

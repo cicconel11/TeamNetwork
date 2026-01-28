@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -19,6 +19,7 @@ import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
+import { baseSchemas } from "@teammeet/validation";
 
 // Color system matching landing page
 const colors = {
@@ -59,10 +60,8 @@ const colors = {
   dividerText: "#64748b",
 };
 
-// Simple email validation (no regex)
 const isEmailValid = (email: string) => {
-  const trimmed = email.trim();
-  return trimmed.length >= 5 && trimmed.includes("@") && trimmed.includes(".");
+  return baseSchemas.email.safeParse(email).success;
 };
 
 export default function LoginScreen() {
@@ -117,9 +116,17 @@ export default function LoginScreen() {
     setEmailLoading(true);
     setApiError("");
     try {
+      const devEmail = process.env.EXPO_PUBLIC_DEV_EMAIL;
+      const devPassword = process.env.EXPO_PUBLIC_DEV_PASSWORD;
+      if (!devEmail || !devPassword) {
+        setApiError(
+          "Dev credentials not configured. Add EXPO_PUBLIC_DEV_EMAIL and EXPO_PUBLIC_DEV_PASSWORD to .env.local"
+        );
+        return;
+      }
       const { error } = await supabase.auth.signInWithPassword({
-        email: "mleonard1616@gmail.com",
-        password: "dev123",
+        email: devEmail,
+        password: devPassword,
       });
       if (error) {
         setApiError(error.message);
@@ -265,14 +272,14 @@ export default function LoginScreen() {
         style={styles.header}
       >
         <SafeAreaView edges={["top"]} style={styles.headerContent}>
-          <TouchableOpacity
+          <Pressable
             onPress={handleBack}
-            style={styles.backButton}
+            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
             <ChevronLeft size={24} color="#ffffff" />
-          </TouchableOpacity>
+          </Pressable>
           <View style={styles.headerIcon}>
             <Text style={styles.headerIconText}>TN</Text>
           </View>
@@ -342,9 +349,9 @@ export default function LoginScreen() {
                   editable={!isLoading}
                   accessibilityLabel="Password"
                 />
-                <TouchableOpacity
+                <Pressable
                   onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
+                  style={({ pressed }) => [styles.eyeButton, pressed && { opacity: 0.7 }]}
                   disabled={isLoading}
                   accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                   accessibilityRole="button"
@@ -354,20 +361,20 @@ export default function LoginScreen() {
                   ) : (
                     <Eye size={20} color={colors.placeholder} />
                   )}
-                </TouchableOpacity>
+                </Pressable>
               </View>
               {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
             </View>
 
             {/* Forgot Password Link */}
-            <TouchableOpacity
+            <Pressable
               onPress={() => router.push("/(auth)/forgot-password")}
-              style={styles.forgotPassword}
+              style={({ pressed }) => [styles.forgotPassword, pressed && { opacity: 0.7 }]}
               disabled={isLoading}
               accessibilityRole="link"
             >
               <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {/* API Error */}
             {apiError && (
@@ -377,10 +384,11 @@ export default function LoginScreen() {
             )}
 
             {/* Primary CTA */}
-            <TouchableOpacity
-              style={[
+            <Pressable
+              style={({ pressed }) => [
                 styles.primaryButton,
                 (!isFormValid || isLoading) && styles.primaryButtonDisabled,
+                pressed && { opacity: 0.7 },
               ]}
               onPress={handleEmailSignIn}
               disabled={!isFormValid || isLoading}
@@ -392,7 +400,7 @@ export default function LoginScreen() {
               ) : (
                 <Text style={styles.primaryButtonText}>Sign In</Text>
               )}
-            </TouchableOpacity>
+            </Pressable>
           </View>
 
           {/* Divider */}
@@ -403,8 +411,8 @@ export default function LoginScreen() {
           </View>
 
           {/* Google OAuth Button */}
-          <TouchableOpacity
-            style={[styles.googleButton, isLoading && styles.googleButtonDisabled]}
+          <Pressable
+            style={({ pressed }) => [styles.googleButton, isLoading && styles.googleButtonDisabled, pressed && { opacity: 0.7 }]}
             onPress={signInWithGoogle}
             disabled={isLoading}
             accessibilityLabel="Continue with Google"
@@ -420,29 +428,29 @@ export default function LoginScreen() {
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
           {/* Sign Up Link */}
           <View style={styles.signupContainer}>
             <Text style={styles.signupText}>Don't have an account? </Text>
             <Link href="/(auth)/signup" asChild>
-              <TouchableOpacity disabled={isLoading} accessibilityRole="link">
+              <Pressable disabled={isLoading} accessibilityRole="link" style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
                 <Text style={styles.signupLink}>Sign Up</Text>
-              </TouchableOpacity>
+              </Pressable>
             </Link>
           </View>
 
           {/* Dev Login - only in development */}
           {__DEV__ && (
-            <TouchableOpacity
-              style={[styles.devButton, isLoading && styles.devButtonDisabled]}
+            <Pressable
+              style={({ pressed }) => [styles.devButton, isLoading && styles.devButtonDisabled, pressed && { opacity: 0.7 }]}
               onPress={handleDevLogin}
               disabled={isLoading}
               accessibilityLabel="Developer login"
               accessibilityRole="button"
             >
               <Text style={styles.devButtonText}>Dev Login</Text>
-            </TouchableOpacity>
+            </Pressable>
           )}
         </ScrollView>
       </KeyboardAvoidingView>

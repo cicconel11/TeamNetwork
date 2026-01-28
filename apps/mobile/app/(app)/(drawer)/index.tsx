@@ -89,6 +89,10 @@ export default function OrganizationsScreen() {
           </View>
         }
         ListFooterComponent={<OrgSwitcherActions />}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        removeClippedSubviews={true}
       />
     </SafeAreaView>
   );
