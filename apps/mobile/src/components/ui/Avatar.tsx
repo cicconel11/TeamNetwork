@@ -4,7 +4,8 @@
  */
 
 import React, { useMemo } from "react";
-import { View, Text, Image, StyleSheet, ViewStyle } from "react-native";
+import { View, Text, StyleSheet, ViewStyle } from "react-native";
+import { Image } from "expo-image";
 import { NEUTRAL, ENERGY, AVATAR_SIZES, PRESENCE_SIZES, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 
@@ -136,8 +137,10 @@ export const Avatar = React.memo(function Avatar({
     >
       {uri ? (
         <Image
-          source={{ uri }}
+          source={uri}
           style={[styles.image, { borderRadius }]}
+          contentFit="cover"
+          transition={200}
         />
       ) : (
         <View

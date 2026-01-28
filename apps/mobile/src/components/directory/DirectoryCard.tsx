@@ -1,5 +1,6 @@
 import React from "react";
-import { View, Text, Image, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { ChevronRight } from "lucide-react-native";
 import { spacing, fontSize, fontWeight, borderRadius, type ThemeColors } from "@/lib/theme";
 
@@ -41,7 +42,7 @@ export const DirectoryCard = React.memo(function DirectoryCard({
       ]}
     >
       {avatarUrl ? (
-        <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+        <Image source={avatarUrl} style={styles.avatar} contentFit="cover" transition={200} />
       ) : (
         <View style={[styles.avatarPlaceholder, { backgroundColor: colors.primaryLight }]}>
           <Text style={[styles.avatarText, { color: colors.primaryDark }]}>{initials}</Text>

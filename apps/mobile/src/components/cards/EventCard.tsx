@@ -13,6 +13,7 @@ import Animated, {
 import { MapPin, Users, Clock } from "lucide-react-native";
 import { NEUTRAL, SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION, RSVP_COLORS, ENERGY } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { formatMonth, formatDay, formatTime, formatShortWeekdayDate } from "@/lib/date-format";
 import { LiveBadge, Badge } from "@/components/ui/Badge";
 import { AvatarGroup } from "@/components/ui/Avatar";
 import { Button, RSVPButton, type RSVPStatus } from "@/components/ui/Button";
@@ -39,29 +40,6 @@ interface EventCardProps {
   compact?: boolean;
   // For org-specific accent color
   accentColor?: string;
-}
-
-function formatMonth(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-US", { month: "short" }).toUpperCase();
-}
-
-function formatDay(dateString: string): number {
-  return new Date(dateString).getDate();
-}
-
-function formatTime(dateString: string): string {
-  return new Date(dateString).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 export const EventCard = React.memo(function EventCard({
@@ -122,7 +100,7 @@ export const EventCard = React.memo(function EventCard({
             <View style={styles.detailRow}>
               <Clock size={13} color={NEUTRAL.secondary} />
               <Text style={styles.detailText}>
-                {formatDate(event.start_date)} · {formatTime(event.start_date)}
+                {formatShortWeekdayDate(event.start_date)} · {formatTime(event.start_date)}
               </Text>
             </View>
 

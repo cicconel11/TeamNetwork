@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useGlobalSearchParams } from "expo-router";
 import { supabase } from "@/lib/supabase";
-import { setUserProperties } from "@/lib/analytics";
+import { setUserProperties, captureException } from "@/lib/analytics";
 import { normalizeRole, type OrgRole } from "@teammeet/core";
 
 export type AnalyticsRole = "admin" | "member" | "alumni" | "unknown";
@@ -23,6 +23,7 @@ interface OrgContextValue {
   orgSecondaryColor: string | null;
   userRole: NormalizedRole;
   isLoading: boolean;
+  error: string | null;
 }
 
 const OrgContext = createContext<OrgContextValue | null>(null);
@@ -36,6 +37,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [orgSecondaryColor, setOrgSecondaryColor] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<NormalizedRole>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -46,52 +48,64 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Fetch org and user's membership in parallel
-      const [orgResult, userResult] = await Promise.all([
-        supabase
-          .from("organizations")
-          .select("id, name, logo_url, primary_color, secondary_color")
-          .eq("slug", orgSlug)
-          .single(),
-        supabase.auth.getUser(),
-      ]);
+      try {
+        // Fetch org and user's membership in parallel
+        const [orgResult, userResult] = await Promise.all([
+          supabase
+            .from("organizations")
+            .select("id, name, logo_url, primary_color, secondary_color")
+            .eq("slug", orgSlug)
+            .single(),
+          supabase.auth.getUser(),
+        ]);
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      const fetchedOrgId = orgResult.data?.id ?? null;
-      const fetchedOrgName = orgResult.data?.name ?? null;
-      const fetchedOrgLogoUrl = orgResult.data?.logo_url ?? null;
-      const fetchedPrimaryColor = orgResult.data?.primary_color ?? null;
-      const fetchedSecondaryColor = orgResult.data?.secondary_color ?? null;
+        const fetchedOrgId = orgResult.data?.id ?? null;
+        const fetchedOrgName = orgResult.data?.name ?? null;
+        const fetchedOrgLogoUrl = orgResult.data?.logo_url ?? null;
+        const fetchedPrimaryColor = orgResult.data?.primary_color ?? null;
+        const fetchedSecondaryColor = orgResult.data?.secondary_color ?? null;
 
-      setOrgId(fetchedOrgId);
-      setOrgName(fetchedOrgName);
-      setOrgLogoUrl(fetchedOrgLogoUrl);
-      setOrgPrimaryColor(fetchedPrimaryColor);
-      setOrgSecondaryColor(fetchedSecondaryColor);
+        setOrgId(fetchedOrgId);
+        setOrgName(fetchedOrgName);
+        setOrgLogoUrl(fetchedOrgLogoUrl);
+        setOrgPrimaryColor(fetchedPrimaryColor);
+        setOrgSecondaryColor(fetchedSecondaryColor);
 
-      // Fetch user's role if we have both org and user
-      if (fetchedOrgId && userResult.data?.user?.id) {
-        const { data: roleData } = await supabase
-          .from("user_organization_roles")
-          .select("role")
-          .eq("organization_id", fetchedOrgId)
-          .eq("user_id", userResult.data.user.id)
-          .eq("status", "active")
-          .single();
+        // Fetch user's role if we have both org and user
+        if (fetchedOrgId && userResult.data?.user?.id) {
+          const { data: roleData } = await supabase
+            .from("user_organization_roles")
+            .select("role")
+            .eq("organization_id", fetchedOrgId)
+            .eq("user_id", userResult.data.user.id)
+            .eq("status", "active")
+            .single();
 
-        if (isMounted && roleData?.role) {
-          const normalized = normalizeRole(roleData.role);
-          setUserRole(normalized);
+          if (isMounted && roleData?.role) {
+            const normalized = normalizeRole(roleData.role);
+            setUserRole(normalized);
+          }
         }
-      }
-
-      if (isMounted) {
-        setIsLoading(false);
+      } catch (err) {
+        if (isMounted) {
+          const message = err instanceof Error ? err.message : String(err);
+          captureException(
+            err instanceof Error ? err : new Error(message),
+            { context: "OrgContext.fetchOrgData", orgSlug }
+          );
+          setError(message);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
     setIsLoading(true);
+    setError(null);
     setUserRole(null);
     setOrgId(null);
     setOrgName(null);
@@ -127,6 +141,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         orgSecondaryColor,
         userRole,
         isLoading,
+        error,
       }}
     >
       {children}

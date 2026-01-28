@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native";
+import { View, Pressable, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -53,20 +53,20 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
     };
 
     return (
-      <TouchableOpacity
+      <Pressable
         key={route.key}
         accessibilityRole="button"
         accessibilityState={isFocused ? { selected: true } : {}}
         accessibilityLabel={options.tabBarAccessibilityLabel || tabConfig.label}
         onPress={onPress}
-        style={styles.tab}
+        style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}
       >
         <View style={styles.tabContent}>
           <IconComponent size={ICON_SIZE} color={color} strokeWidth={isFocused ? 2.5 : 2} />
           <Text style={[styles.tabLabel, { color }]}>{tabConfig.label}</Text>
           {isFocused && <View style={styles.activeIndicator} />}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     );
   };
 
@@ -79,15 +79,15 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
             return rendered;
           }).filter(Boolean)}
         </View>
-        <TouchableOpacity
+        <Pressable
           accessibilityRole="button"
           accessibilityLabel="Quick actions"
           onPress={onActionPress}
-          style={styles.actionButton}
+          style={({ pressed }) => [styles.actionButton, pressed && { opacity: 0.7 }]}
           disabled={!onActionPress}
         >
           <Plus size={22} color={APP_CHROME.actionButtonIcon} strokeWidth={2.5} />
-        </TouchableOpacity>
+        </Pressable>
         <View style={styles.tabGroup}>
           {RIGHT_TABS.map((tab) => {
             const rendered = renderTab(tab);

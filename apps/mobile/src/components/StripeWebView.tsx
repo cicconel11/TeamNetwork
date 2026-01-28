@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import {
   View,
   Modal,
-  TouchableOpacity,
+  Pressable,
   Text,
   StyleSheet,
   SafeAreaView,
@@ -63,9 +63,9 @@ export function StripeWebView({
     >
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Pressable onPress={onClose} style={({ pressed }) => [styles.closeButton, pressed && { opacity: 0.7 }]}>
             <X size={24} color={colors.foreground} />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.title}>{title}</Text>
           <View style={styles.placeholder} />
         </View>

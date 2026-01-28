@@ -4,8 +4,16 @@
  * Uses APP_CHROME colors for consistent visual identity.
  */
 
-import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Animated, Easing } from "react-native";
+import React, { useEffect } from "react";
+import { View, StyleSheet } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { APP_CHROME } from "@/lib/chrome";
@@ -23,33 +31,21 @@ function ShimmerPlaceholder({
   borderRadius?: number;
   style?: object;
 }) {
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const opacity = useSharedValue(0.3);
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 1000,
-          easing: Easing.ease,
-          useNativeDriver: true,
-        }),
-      ])
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.6, { duration: 1000, easing: Easing.ease }),
+        withTiming(0.3, { duration: 1000, easing: Easing.ease })
+      ),
+      -1
     );
-    animation.start();
-    return () => animation.stop();
-  }, [shimmerAnim]);
+  }, []);
 
-  const opacity = shimmerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.3, 0.6],
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
   return (
     <Animated.View
@@ -59,9 +55,9 @@ function ShimmerPlaceholder({
           height,
           borderRadius,
           backgroundColor: NEUTRAL.border,
-          opacity,
         },
         style,
+        animatedStyle,
       ]}
     />
   );

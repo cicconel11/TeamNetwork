@@ -1,5 +1,10 @@
-import { useRef } from "react";
-import { View, Text, ScrollView, Pressable, Animated, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { X } from "lucide-react-native";
 import { spacing, fontSize, fontWeight, type ThemeColors } from "@/lib/theme";
 
@@ -30,13 +35,17 @@ function FilterChip({
   onPress: () => void;
   colors: ThemeColors;
 }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const handlePress = () => {
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 0.95, duration: 50, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
+    scale.value = withSequence(
+      withTiming(0.95, { duration: 50 }),
+      withTiming(1, { duration: 100 })
+    );
     onPress();
   };
 
@@ -47,7 +56,7 @@ function FilterChip({
           styles.filterChip,
           { backgroundColor: colors.card, borderColor: colors.border },
           isActive && { backgroundColor: colors.primary, borderColor: colors.primary },
-          { transform: [{ scale: scaleAnim }] },
+          animatedStyle,
         ]}
       >
         <Text

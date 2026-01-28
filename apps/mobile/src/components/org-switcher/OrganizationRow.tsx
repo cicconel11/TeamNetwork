@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Image, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { ChevronRight, Check } from "lucide-react-native";
 
 const colors = {
@@ -31,7 +32,7 @@ export function OrganizationRow({ org, isCurrent, onPress }: OrganizationRowProp
     >
       <View style={styles.avatar}>
         {org.logo_url ? (
-          <Image source={{ uri: org.logo_url }} style={styles.avatarImage} />
+          <Image source={org.logo_url} style={styles.avatarImage} contentFit="contain" transition={200} />
         ) : (
           <Text style={styles.avatarText}>{initials}</Text>
         )}
@@ -89,7 +90,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 4,
-    resizeMode: "contain",
   },
   avatarText: {
     fontSize: 13,

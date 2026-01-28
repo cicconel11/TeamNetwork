@@ -21,6 +21,7 @@ let enabled = !__DEV__;
 let configStored: AnalyticsConfig | null = null;
 let sdksInitialized = false;
 const eventQueue: QueuedEvent[] = [];
+const MAX_QUEUE_SIZE = 100;
 const ENABLED_STORAGE_KEY = "analytics.enabled";
 
 async function persistEnabled(value: boolean): Promise<void> {
@@ -94,7 +95,11 @@ export function identify(userId: string, traits?: UserTraits): void {
   if (!enabled) return;
 
   if (!sdksInitialized) {
-    eventQueue.push({ type: "identify", userId, traits });
+    if (eventQueue.length < MAX_QUEUE_SIZE) {
+      eventQueue.push({ type: "identify", userId, traits });
+    } else {
+      console.warn(`[Analytics] Event queue full (${MAX_QUEUE_SIZE}), dropping identify event`);
+    }
     return;
   }
 
@@ -109,7 +114,11 @@ export function setUserProperties(properties: UserProperties): void {
   if (!enabled) return;
 
   if (!sdksInitialized) {
-    eventQueue.push({ type: "setUserProperties", properties });
+    if (eventQueue.length < MAX_QUEUE_SIZE) {
+      eventQueue.push({ type: "setUserProperties", properties });
+    } else {
+      console.warn(`[Analytics] Event queue full (${MAX_QUEUE_SIZE}), dropping setUserProperties event`);
+    }
     return;
   }
 
@@ -123,7 +132,11 @@ export function screen(name: string, properties?: ScreenProperties): void {
   if (!enabled) return;
 
   if (!sdksInitialized) {
-    eventQueue.push({ type: "screen", name, properties });
+    if (eventQueue.length < MAX_QUEUE_SIZE) {
+      eventQueue.push({ type: "screen", name, properties });
+    } else {
+      console.warn(`[Analytics] Event queue full (${MAX_QUEUE_SIZE}), dropping screen event`);
+    }
     return;
   }
 
@@ -137,7 +150,11 @@ export function track(event: string, properties?: EventProperties): void {
   if (!enabled) return;
 
   if (!sdksInitialized) {
-    eventQueue.push({ type: "track", event, properties });
+    if (eventQueue.length < MAX_QUEUE_SIZE) {
+      eventQueue.push({ type: "track", event, properties });
+    } else {
+      console.warn(`[Analytics] Event queue full (${MAX_QUEUE_SIZE}), dropping track event`);
+    }
     return;
   }
 
