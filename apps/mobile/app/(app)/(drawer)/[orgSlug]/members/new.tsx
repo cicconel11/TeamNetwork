@@ -1,20 +1,26 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   Share,
+  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter, useNavigation } from "expo-router";
+import { DrawerActions } from "@react-navigation/native";
 import QRCode from "react-native-qrcode-svg";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { getWebAppUrl } from "@/lib/web-api";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type InviteRole = "active_member" | "admin" | "alumni";
 
@@ -35,8 +41,8 @@ const ROLE_OPTIONS: { value: InviteRole; label: string }[] = [
 
 export default function NewMemberInviteScreen() {
   const router = useRouter();
-  const { orgId, orgSlug } = useOrg();
-  const { colors } = useOrgTheme();
+  const navigation = useNavigation();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
 
   const [role, setRole] = useState<InviteRole>("active_member");
   const [uses, setUses] = useState("");
@@ -44,6 +50,16 @@ export default function NewMemberInviteScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState<InviteRecord | null>(null);
+
+  const styles = useMemo(() => createStyles(), []);
+
+  const handleDrawerToggle = useCallback(() => {
+    try {
+      if (navigation && typeof (navigation as any).dispatch === "function") {
+        (navigation as any).dispatch(DrawerActions.toggleDrawer());
+      }
+    } catch {}
+  }, [navigation]);
 
   const inviteLink = useMemo(() => {
     if (!invite) return null;
@@ -112,205 +128,333 @@ export default function NewMemberInviteScreen() {
   };
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ backgroundColor: colors.primary }}
-      contentContainerStyle={{
-        padding: spacing.md,
-        gap: spacing.lg,
-      }}
-    >
-      {error && (
-        <View
-          style={{
-            backgroundColor: `${colors.error}20`,
-            borderRadius: borderRadius.md,
-            padding: spacing.sm,
-          }}
-        >
-          <Text selectable style={{ color: colors.error, fontSize: fontSize.sm }}>
-            {error}
-          </Text>
-        </View>
-      )}
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Role</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {ROLE_OPTIONS.map((option) => {
-            const selected = role === option.value;
-            return (
-              <Pressable
-                key={option.value}
-                onPress={() => setRole(option.value)}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  paddingVertical: spacing.xs,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: selected ? colors.primary : colors.border,
-                  backgroundColor: selected ? colors.primaryLight : colors.card,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: fontSize.sm,
-                    color: selected ? colors.primaryForeground : colors.foreground,
-                    fontWeight: selected ? fontWeight.semibold : fontWeight.normal,
-                  }}
-                >
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Uses (optional)</Text>
-        <TextInput
-          value={uses}
-          onChangeText={setUses}
-          placeholder="Unlimited"
-          placeholderTextColor={colors.secondaryForeground}
-          keyboardType="number-pad"
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            fontSize: fontSize.base,
-            color: colors.secondaryForeground,
-            backgroundColor: colors.secondary,
-          }}
-        />
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: fontSize.sm, color: colors.primaryForeground }}>Expires on (optional)</Text>
-        <TextInput
-          value={expires}
-          onChangeText={setExpires}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={colors.secondaryForeground}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.secondaryDark,
-            borderRadius: borderRadius.md,
-            paddingHorizontal: spacing.md,
-            paddingVertical: spacing.sm,
-            fontSize: fontSize.base,
-            color: colors.secondaryForeground,
-            backgroundColor: colors.secondary,
-          }}
-        />
-      </View>
-
-      <Pressable
-        onPress={handleSubmit}
-        disabled={isSaving}
-        style={{
-          backgroundColor: colors.primary,
-          borderRadius: borderRadius.md,
-          paddingVertical: spacing.sm,
-          alignItems: "center",
-          opacity: isSaving ? 0.7 : 1,
-        }}
+    <View style={styles.container}>
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        {isSaving ? (
-          <ActivityIndicator color={colors.primaryForeground} />
-        ) : (
-          <Text style={{ color: colors.primaryForeground, fontSize: fontSize.base, fontWeight: fontWeight.semibold }}>
-            Create Invite
-          </Text>
-        )}
-      </Pressable>
-
-      {invite && (
-        <View
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: borderRadius.lg,
-            padding: spacing.md,
-            gap: spacing.sm,
-            backgroundColor: colors.card,
-          }}
-        >
-          <Text style={{ fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.foreground }}>
-            Invite ready
-          </Text>
-          {invite.code && (
-            <Text selectable style={{ fontSize: fontSize.base, color: colors.foreground }}>
-              Code: {invite.code}
-            </Text>
-          )}
-          {inviteLink && (
-            <>
-              <Text selectable style={{ fontSize: fontSize.sm, color: colors.mutedForeground }}>
-                {inviteLink}
-              </Text>
-              <View
-                style={{
-                  alignItems: "center",
-                  paddingVertical: spacing.sm,
-                  borderRadius: borderRadius.md,
-                  backgroundColor: colors.mutedSurface,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <QRCode value={inviteLink} size={180} />
-                <Text
-                  style={{
-                    marginTop: spacing.sm,
-                    fontSize: fontSize.sm,
-                    color: colors.mutedForeground,
-                  }}
-                >
-                  Scan to join
-                </Text>
-              </View>
-            </>
-          )}
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <Pressable
-              onPress={handleShare}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: borderRadius.md,
-                paddingVertical: spacing.sm,
-                alignItems: "center",
-                backgroundColor: colors.card,
-              }}
-            >
-              <Text style={{ fontSize: fontSize.base, color: colors.foreground }}>
-                Share Link
-              </Text>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+              {orgLogoUrl ? (
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+              ) : (
+                <View style={styles.orgAvatar}>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
+                </View>
+              )}
             </Pressable>
-            <Pressable
-              onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/members`)}
-              style={{
-                flex: 1,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: borderRadius.md,
-                paddingVertical: spacing.sm,
-                alignItems: "center",
-                backgroundColor: colors.card,
-              }}
-            >
-              <Text style={{ fontSize: fontSize.base, color: colors.foreground }}>
-                Done
-              </Text>
-            </Pressable>
+            <Text style={styles.headerTitle}>Invite Member</Text>
+            <View style={styles.headerSpacer} />
           </View>
-        </View>
-      )}
-    </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.formHeader}>
+            <Text style={styles.formTitle}>Create Invite</Text>
+            <Text style={styles.formSubtitle}>Generate a link to invite new members</Text>
+          </View>
+
+          {error && (
+            <View style={styles.errorCard}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Role</Text>
+            <View style={styles.chipRow}>
+              {ROLE_OPTIONS.map((option) => {
+                const selected = role === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    onPress={() => setRole(option.value)}
+                    style={[styles.chip, selected && styles.chipSelected]}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Uses (optional)</Text>
+            <TextInput
+              value={uses}
+              onChangeText={setUses}
+              placeholder="Unlimited"
+              placeholderTextColor={NEUTRAL.placeholder}
+              keyboardType="number-pad"
+              style={styles.input}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>Expires on (optional)</Text>
+            <TextInput
+              value={expires}
+              onChangeText={setExpires}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={NEUTRAL.placeholder}
+              style={styles.input}
+            />
+          </View>
+
+          <Pressable
+            onPress={handleSubmit}
+            disabled={isSaving}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isSaving && styles.buttonDisabled,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create Invite</Text>
+            )}
+          </Pressable>
+
+          {invite && (
+            <View style={styles.inviteCard}>
+              <Text style={styles.inviteCardTitle}>Invite ready</Text>
+              {invite.code && (
+                <Text selectable style={styles.inviteCode}>
+                  Code: {invite.code}
+                </Text>
+              )}
+              {inviteLink && (
+                <>
+                  <Text selectable style={styles.inviteLink}>
+                    {inviteLink}
+                  </Text>
+                  <View style={styles.qrContainer}>
+                    <QRCode value={inviteLink} size={180} />
+                    <Text style={styles.qrHint}>Scan to join</Text>
+                  </View>
+                </>
+              )}
+              <View style={styles.inviteActions}>
+                <Pressable onPress={handleShare} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>Share Link</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/members`)}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryButtonText}>Done</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
   );
+}
+
+function createStyles() {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: NEUTRAL.background,
+    },
+    headerGradient: {
+      // Gradient fills this area
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      minHeight: 44,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      overflow: "hidden",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleMedium,
+      color: APP_CHROME.headerTitle,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+      textAlign: "center",
+    },
+    headerSpacer: {
+      width: 36,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: NEUTRAL.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    formHeader: {
+      gap: SPACING.xs,
+    },
+    formTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: NEUTRAL.foreground,
+    },
+    formSubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: NEUTRAL.secondary,
+    },
+    errorCard: {
+      backgroundColor: SEMANTIC.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: SEMANTIC.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: SEMANTIC.error,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: NEUTRAL.secondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: NEUTRAL.foreground,
+      backgroundColor: NEUTRAL.surface,
+    },
+    chipRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: SPACING.sm,
+    },
+    chip: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+      backgroundColor: NEUTRAL.surface,
+    },
+    chipSelected: {
+      borderColor: SEMANTIC.success,
+      backgroundColor: SEMANTIC.successLight,
+    },
+    chipText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: NEUTRAL.foreground,
+    },
+    chipTextSelected: {
+      color: SEMANTIC.successDark,
+      fontWeight: "600",
+    },
+    primaryButton: {
+      backgroundColor: SEMANTIC.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center",
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    inviteCard: {
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+      backgroundColor: NEUTRAL.surface,
+    },
+    inviteCardTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: NEUTRAL.foreground,
+    },
+    inviteCode: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: NEUTRAL.foreground,
+    },
+    inviteLink: {
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.muted,
+    },
+    qrContainer: {
+      alignItems: "center",
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: NEUTRAL.background,
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+    },
+    qrHint: {
+      marginTop: SPACING.sm,
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.muted,
+    },
+    inviteActions: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    secondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm,
+      alignItems: "center",
+      backgroundColor: NEUTRAL.surface,
+    },
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: NEUTRAL.foreground,
+    },
+  });
 }
