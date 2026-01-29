@@ -217,7 +217,7 @@ function OrgSettingsContent() {
       if (!user) {
         setPageError("You must be signed in.");
         setLoading(false);
-        router.push(`/auth/login?redirect=/${orgSlug}/settings`);
+        router.push(`/auth/login?redirect=/${orgSlug}/customization`);
         return;
       }
 
@@ -471,7 +471,7 @@ function OrgSettingsContent() {
 
   const handleConnectCalendar = () => {
     // Pass the current org slug so OAuth callback redirects back here
-    window.location.href = `/api/google/auth?redirect=/${orgSlug}/settings`;
+    window.location.href = `/api/google/auth?redirect=/${orgSlug}/customization`;
   };
 
   const handleDisconnectCalendar = async () => {
