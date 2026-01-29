@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
 
 interface RedeemResult {
@@ -246,11 +247,14 @@ function JoinOrgForm() {
                   An admin will review your request and grant you access. You&apos;ll be able to access the organization once approved.
                 </p>
               </div>
-              <Link href="/app">
-                <Button variant="secondary">
-                  Back to Dashboard
-                </Button>
-              </Link>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
+                <Link href="/app">
+                  <Button variant="secondary">
+                    Back to Dashboard
+                  </Button>
+                </Link>
+                <FeedbackButton context="join-org" trigger="pending_approval" />
+              </div>
             </div>
           ) : (
             // Join form state
@@ -274,6 +278,9 @@ function JoinOrgForm() {
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
                   {error}
+                  <div className="mt-2 flex justify-end">
+                    <FeedbackButton context="join-org" trigger="invite_error" />
+                  </div>
                 </div>
               )}
 

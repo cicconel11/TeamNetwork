@@ -58,6 +58,7 @@ src/
 ├── components/             # Reusable UI components
 │   ├── ui/                 # Base UI primitives (Button, Card, Input)
 │   ├── layout/             # Layout components (OrgSidebar, MobileNav)
+│   ├── feedback/           # Feedback capture components
 │   └── [feature]/          # Feature-specific components
 ├── lib/                    # Business logic and utilities
 │   ├── auth/               # Role-based auth utilities
@@ -116,10 +117,13 @@ Files: `src/lib/payments/idempotency.ts`, `src/lib/payments/stripe-events.ts`
 
 ### Organization Subscription Tiers
 Alumni quota tiers determine pricing and storage limits:
-- 0-200 alumni
-- 201-600 alumni
-- 601-1500 alumni
-- 1500+ (requires custom setup)
+- none: 0 alumni
+- 0-250 alumni
+- 251-500 alumni
+- 501-1000 alumni
+- 1001-2500 alumni
+- 2500-5000 alumni
+- 5000+ (unlimited)
 
 File: `src/lib/alumni-quota.ts`
 
@@ -155,6 +159,12 @@ Members progress through states:
 - **pending**: Awaiting admin approval
 - **active**: Full access granted
 - **revoked**: Access removed, user redirected to `/app`
+
+### Feedback Capture System
+User feedback is collected through a simple submission system:
+- Users submit feedback via form in `src/components/feedback/`
+- Submissions are processed through `/api/feedback/submit` API route
+- Feedback is stored for review and analysis
 
 ### Schedule Domain Allowlist & Security
 External schedule URLs are validated before import to prevent SSRF and abuse:
@@ -239,6 +249,17 @@ From `AGENTS.md`:
 - `useX` naming for custom hooks
 - Commit prefixes: `feat:`, `fix:`, `chore:`
 - Test files: `*.test.ts` using Node's built-in test runner
+
+## Test Strategy
+
+Tests are located in the `tests/` directory with a coverage goal of 80%.
+
+**Available test commands:**
+- `npm run test:auth` - Authentication middleware tests
+- `npm run test:payments` - Payment idempotency and Stripe webhook tests
+- `npm run test:schedules` - Schedule domain verification and enrollment tests
+
+Tests use Node's built-in test runner. Run individual test files with `node --test tests/your-test.test.ts`.
 
 ## Key Files to Understand
 

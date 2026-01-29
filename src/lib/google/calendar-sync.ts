@@ -358,8 +358,6 @@ export async function getEligibleUsersForEvent(
         .filter(c => c.status === "connected")
         .map(c => c.user_id);
 
-    console.log(`[calendar-sync] Found ${connections.length} total connections, ${connectedUserIds.length} connected`);
-
     if (connectedUserIds.length === 0) {
         return [];
     }
@@ -376,19 +374,13 @@ export async function getEligibleUsersForEvent(
         return [];
     }
 
-    console.log(`[calendar-sync] Found ${orgUsers.length} connected users in organization ${organizationId}`);
-
     // Get sync preferences for these users
-    const { data: preferences, error: prefError } = await supabase
+    // Silently continue without preferences if fetch fails - will default to syncing all types
+    const { data: preferences } = await supabase
         .from("calendar_sync_preferences")
         .select("*")
         .eq("organization_id", organizationId)
         .in("user_id", connectedUserIds);
-
-    if (prefError) {
-        console.error("[calendar-sync] Failed to fetch sync preferences:", prefError);
-        // Continue without preferences - will default to syncing all types
-    }
 
     // Build lookup maps
     const connectionMap = new Map(connections.map(c => [c.user_id, c]));
@@ -434,7 +426,6 @@ export async function syncEventToUsers(
     eventId: string,
     operation: SyncOperation
 ): Promise<void> {
-    console.log(`[calendar-sync] Starting sync for event ${eventId}, operation: ${operation}`);
 
     // Fetch the event details
     const { data: event, error: eventError } = await supabase
@@ -447,8 +438,6 @@ export async function syncEventToUsers(
         console.error("[calendar-sync] Failed to fetch event:", eventError);
         return;
     }
-
-    console.log(`[calendar-sync] Event found: ${event.title}, type: ${event.event_type}, audience: ${event.audience}`);
 
     // For delete operations, we need to process existing entries
     if (operation === "delete") {
@@ -463,10 +452,7 @@ export async function syncEventToUsers(
         event_type: event.event_type as EventType | null,
     });
 
-    console.log(`[calendar-sync] Found ${eligibleUserIds.length} eligible users for sync`);
-
     if (eligibleUserIds.length === 0) {
-        console.log("[calendar-sync] No eligible users for event:", eventId);
         return;
     }
 
@@ -481,11 +467,8 @@ export async function syncEventToUsers(
 
     // Process each eligible user
     for (const userId of eligibleUserIds) {
-        console.log(`[calendar-sync] Syncing event to user ${userId}`);
         await syncEventForUser(supabase, userId, eventId, organizationId, calendarEvent, operation);
     }
-
-    console.log(`[calendar-sync] Sync complete for event ${eventId}`);
 }
 
 /**
@@ -502,7 +485,6 @@ async function syncEventForUser(
     // Get the user's access token
     const accessToken = await getValidAccessToken(supabase, userId);
     if (!accessToken) {
-        console.warn("[calendar-sync] No valid access token for user:", userId);
         return;
     }
 
@@ -570,18 +552,14 @@ async function handleDeleteSync(
         try {
             const accessToken = await getValidAccessToken(supabase, entry.user_id);
             if (!accessToken) {
-                // Log but continue - graceful handling
-                console.warn("[calendar-sync] No valid access token for user during delete:", entry.user_id);
+                // No valid token - continue gracefully
                 continue;
             }
 
             const result = await deleteCalendarEvent(accessToken, entry.google_event_id);
 
             // Update entry status regardless of success (graceful handling - Requirement 4.3)
-            // Deletion failures are logged but do NOT throw or block
-            if (!result.success) {
-                console.warn("[calendar-sync] Failed to delete calendar event (graceful):", result.error);
-            }
+            // Deletion failures do NOT throw or block
 
             await supabase
                 .from("event_calendar_entries")
@@ -590,9 +568,8 @@ async function handleDeleteSync(
                     last_error: result.error || null,
                 })
                 .eq("id", entry.id);
-        } catch (err) {
+        } catch {
             // Catch any unexpected errors - graceful handling means we continue processing
-            console.error("[calendar-sync] Unexpected error during delete sync (graceful):", err);
             // Continue to next entry - do not throw
         }
     }
@@ -612,8 +589,7 @@ async function updateSyncEntry(
     const googleEventId = result.googleEventId || existingGoogleEventId || "";
 
     if (!googleEventId && !result.success) {
-        // Failed to create and no existing ID - log error
-        console.error("[calendar-sync] Failed to sync event, no google_event_id:", result.error);
+        // Failed to create and no existing ID - cannot proceed
         return;
     }
 

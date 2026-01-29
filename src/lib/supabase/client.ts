@@ -23,11 +23,6 @@ export function createClient() {
       domain: undefined,
     },
   });
-  
-  // Log auth state changes for debugging
-  browserClient.auth.onAuthStateChange((event, session) => {
-    console.log("[supabase/client] Auth state changed:", event, session?.user?.id?.slice(0, 8) || "no-user");
-  });
-  
+
   return browserClient;
 }

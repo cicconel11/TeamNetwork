@@ -1,5 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
 import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@/types/database";
+
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 
 export type DeliveryChannel = "email" | "sms";
 
@@ -32,9 +39,9 @@ export interface NotificationBlastResult {
 }
 
 /**
- * Price/notification plug points:
- * - Emails: replace sendEmail implementation with Resend/SendGrid/etc.
- * - SMS: replace sendSMS with Twilio/etc.
+ * Notification plug points:
+ * - Emails: Uses Resend API when RESEND_API_KEY is configured, otherwise falls back to stub
+ * - SMS: Stub implementation - replace sendSMS with Twilio/MessageBird/etc.
  * - buildNotificationTargets derives per-recipient channels from preferences and requested channel.
  */
 
@@ -94,22 +101,47 @@ async function runWithConcurrency<T extends { success: boolean; error?: string }
 }
 
 export async function sendEmail(params: EmailParams): Promise<NotificationResult> {
-  console.log("[STUB] Sending email:", {
-    to: params.to,
-    subject: params.subject,
-    body: params.body.substring(0, 100) + "...",
-  });
-  await delay(50);
-  return { success: true, messageId: `email_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+  if (!resend) {
+    // Fallback to stub behavior when Resend is not configured (e.g., local development)
+    console.log("[STUB] Sending email (RESEND_API_KEY not configured):", {
+      to: params.to,
+      subject: params.subject,
+      body: params.body.substring(0, 100) + "...",
+    });
+    await delay(50);
+    return { success: true, messageId: `stub_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+  }
+
+  try {
+    const response = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: params.subject,
+      text: params.body,
+    });
+
+    if (response.error) {
+      console.error("Resend email error:", response.error);
+      return { success: false, error: response.error.message };
+    }
+
+    return { success: true, messageId: response.data?.id };
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("Resend email exception:", errorMsg);
+    return { success: false, error: errorMsg };
+  }
 }
 
+// TODO: Replace SMS stub with actual provider integration (e.g., Twilio, MessageBird)
+// SMS requires a separate provider as Resend only handles email
 export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
-  console.log("[STUB] Sending SMS:", {
+  console.log("[STUB] Sending SMS (provider not configured):", {
     to: params.to,
     message: params.message.substring(0, 100) + "...",
   });
   await delay(50);
-  return { success: true, messageId: `sms_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+  return { success: true, messageId: `sms_stub_${Date.now()}_${Math.random().toString(36).slice(2)}` };
 }
 
 type PreferenceRow = Database["public"]["Tables"]["notification_preferences"]["Row"];

@@ -35,13 +35,12 @@ export async function deleteExpiredOrganization(organizationId: string): Promise
         if (!isNotFound) {
           // Real error - halt deletion to prevent billing the user after data is deleted
           console.error("[deleteExpiredOrganization] Stripe subscription cancel failed:", stripeError);
-          return { 
-            success: false, 
-            error: "Failed to cancel Stripe subscription. Please try again or contact support." 
+          return {
+            success: false,
+            error: "Failed to cancel Stripe subscription. Please try again or contact support."
           };
         }
         // Subscription doesn't exist in Stripe - safe to continue with deletion
-        console.log("[deleteExpiredOrganization] Stripe subscription not found, continuing with deletion");
       }
     }
 
@@ -82,7 +81,6 @@ export async function deleteExpiredOrganization(organizationId: string): Promise
       return { success: false, error: orgError.message };
     }
 
-    console.log("[deleteExpiredOrganization] Successfully deleted organization:", organizationId);
     return { success: true };
   } catch (error) {
     console.error("[deleteExpiredOrganization] Error:", error);

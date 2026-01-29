@@ -65,15 +65,18 @@ export function validateCaptchaEnv(): void {
 /**
  * Validates AUTH_TEST_MODE is never enabled in production.
  * Throws error if test mode is enabled in production environment.
+ * Checks both NODE_ENV and VERCEL_ENV to catch all production scenarios.
  */
 export function validateAuthTestMode(): void {
   const isTestMode = process.env.AUTH_TEST_MODE === "true";
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction =
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production";
 
   if (isTestMode && isProduction) {
     throw new Error(
       "SECURITY ERROR: AUTH_TEST_MODE cannot be enabled in production. " +
-      "This would bypass all authentication and allow unauthorized access."
+      "This bypasses all JWT validation and authentication checks."
     );
   }
 

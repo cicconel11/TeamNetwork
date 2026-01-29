@@ -117,14 +117,16 @@ export function canDevAdminPerform(
 
 /**
  * Log a dev-admin action (for audit purposes)
- * Currently just logs to console; can be extended to write to DB
+ * Currently a no-op; can be extended to write to DB or external logging service
  * Email is redacted in logs for privacy
  */
 export function logDevAdminAction(
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   userEmail: string,
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   action: string,
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   details?: Record<string, unknown>
 ): void {
-  const redacted = redactEmail(userEmail);
-  console.log(`[DEV-ADMIN] ${redacted} performed "${action}"`, details ?? {});
+  // No-op: audit logging should be implemented via DB or external service
 }

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 
@@ -177,6 +178,9 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
       {error && (
         <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
+          <div className="mt-2 flex justify-end">
+            <FeedbackButton context="login" trigger="login_error" />
+          </div>
         </div>
       )}
 

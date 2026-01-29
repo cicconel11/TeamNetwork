@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button, Input, Card, Textarea } from "@/components/ui";
+import { FeedbackButton } from "@/components/feedback";
 import { useIdempotencyKey } from "@/hooks";
 import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
 
@@ -143,6 +144,9 @@ export default function CreateOrgPage() {
           {error && (
             <div className="mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
+              <div className="mt-2 flex justify-end">
+                <FeedbackButton context="create-org" trigger="checkout_error" />
+              </div>
             </div>
           )}
           {infoMessage && (
