@@ -5,7 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import {
+  canDevAdminPerform,
+  logDevAdminAction,
+  extractRequestContext,
+} from "@/lib/auth/dev-admin";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +70,18 @@ export async function POST(req: Request, { params }: RouteParams) {
   const isDevAdminAllowed = canDevAdminPerform(user, "reconcile_subscription");
   if (role?.role !== "admin" && !isDevAdminAllowed) {
     return respond({ error: "Forbidden" }, 403);
+  }
+
+  // Log dev-admin action after auth check
+  if (isDevAdminAllowed) {
+    logDevAdminAction({
+      adminUserId: user.id,
+      adminEmail: user.email ?? "",
+      action: "reconcile_subscription",
+      targetType: "subscription",
+      targetId: organizationId,
+      ...extractRequestContext(req),
+    });
   }
 
   const serviceSupabase = createServiceClient();

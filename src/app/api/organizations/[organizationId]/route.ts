@@ -14,7 +14,11 @@ import {
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import {
+  canDevAdminPerform,
+  logDevAdminAction,
+  extractRequestContext,
+} from "@/lib/auth/dev-admin";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -248,6 +252,27 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
   }
 
   const serviceSupabase = createServiceClient();
+
+  // Log dev-admin action before deletion
+  if (isDevAdminAllowed) {
+    // Fetch org name for audit metadata
+    const { data: org } = await serviceSupabase
+      .from("organizations")
+      .select("name, slug")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    logDevAdminAction({
+      adminUserId: user.id,
+      adminEmail: user.email ?? "",
+      action: "delete_org",
+      targetType: "organization",
+      targetId: organizationId,
+      targetSlug: org?.slug ?? undefined,
+      ...extractRequestContext(_req),
+      metadata: { orgName: org?.name },
+    });
+  }
 
   // Fetch subscription to cancel on Stripe, if any
   const { data: subscription } = await serviceSupabase

@@ -2,47 +2,42 @@
 
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { newMemberSchema, type NewMemberForm } from "@/lib/schemas/member";
 
 export default function NewMemberPage() {
   const router = useRouter();
   const params = useParams();
   const orgSlug = params.orgSlug as string;
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    role: "",
-    status: "active",
-    graduation_year: "",
-    photo_url: "",
-    linkedin_url: "",
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<NewMemberForm>({
+    resolver: zodResolver(newMemberSchema),
+    defaultValues: {
+      first_name: "",
+      last_name: "",
+      email: "",
+      role: "",
+      status: "active",
+      graduation_year: undefined,
+      photo_url: "",
+      linkedin_url: "",
+    },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewMemberForm) => {
     setIsLoading(true);
     setError(null);
-
-    const linkedin = formData.linkedin_url?.trim();
-    if (linkedin) {
-      try {
-        const url = new URL(linkedin);
-        if (url.protocol !== "https:") {
-          throw new Error("LinkedIn URL must start with https://");
-        }
-      } catch {
-        setError("Please enter a valid LinkedIn profile URL (https://...)");
-        setIsLoading(false);
-        return;
-      }
-    }
 
     const supabase = createClient();
 
@@ -61,14 +56,14 @@ export default function NewMemberPage() {
 
     const { error: insertError } = await supabase.from("members").insert({
       organization_id: org.id,
-      first_name: formData.first_name,
-      last_name: formData.last_name,
-      email: formData.email || null,
-      role: formData.role || null,
-      status: formData.status as "active" | "inactive",
-      graduation_year: formData.graduation_year ? parseInt(formData.graduation_year) : null,
-      photo_url: formData.photo_url || null,
-      linkedin_url: linkedin || null,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email || null,
+      role: data.role || null,
+      status: data.status,
+      graduation_year: data.graduation_year || null,
+      photo_url: data.photo_url || null,
+      linkedin_url: data.linkedin_url || null,
     });
 
     if (insertError) {
@@ -90,9 +85,9 @@ export default function NewMemberPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form data-testid="member-form" onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
-            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            <div data-testid="member-error" className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
@@ -100,77 +95,80 @@ export default function NewMemberPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="First Name"
-              value={formData.first_name}
-              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-              required
+              error={errors.first_name?.message}
+              data-testid="member-first-name"
+              {...register("first_name")}
             />
             <Input
               label="Last Name"
-              value={formData.last_name}
-              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-              required
+              error={errors.last_name?.message}
+              data-testid="member-last-name"
+              {...register("last_name")}
             />
           </div>
 
           <Input
             label="Email"
             type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder="member@example.com"
+            error={errors.email?.message}
+            data-testid="member-email"
+            {...register("email")}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Role/Position"
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
               placeholder="e.g., Quarterback, Member, Staff"
+              error={errors.role?.message}
+              data-testid="member-role"
+              {...register("role")}
             />
             <Select
               label="Status"
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              error={errors.status?.message}
+              data-testid="member-status"
               options={[
                 { value: "active", label: "Active" },
                 { value: "inactive", label: "Inactive" },
               ]}
+              {...register("status")}
             />
           </div>
 
           <Input
             label="Graduation Year"
             type="number"
-            value={formData.graduation_year}
-            onChange={(e) => setFormData({ ...formData, graduation_year: e.target.value })}
             placeholder="2025"
             min={1900}
             max={2100}
+            error={errors.graduation_year?.message}
+            {...register("graduation_year")}
           />
 
           <Input
             label="Photo URL"
             type="url"
-            value={formData.photo_url}
-            onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
             placeholder="https://example.com/photo.jpg"
             helperText="Direct link to member photo"
+            error={errors.photo_url?.message}
+            {...register("photo_url")}
           />
 
           <Input
             label="LinkedIn profile (optional)"
             type="url"
-            value={formData.linkedin_url}
-            onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
             placeholder="https://www.linkedin.com/in/username"
             helperText="Must be a valid https:// URL"
+            error={errors.linkedin_url?.message}
+            {...register("linkedin_url")}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
-            <Button type="button" variant="secondary" onClick={() => router.back()}>
+            <Button type="button" variant="secondary" onClick={() => router.back()} data-testid="member-cancel">
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button type="submit" isLoading={isLoading} data-testid="member-submit">
               Add Member
             </Button>
           </div>

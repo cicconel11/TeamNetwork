@@ -24,6 +24,8 @@
  * - Example: DEV_ADMIN_EMAILS="admin1@example.com,admin2@example.com"
  */
 
+import { createServiceClient } from "@/lib/supabase/service";
+
 /**
  * Get dev-admin emails from environment variable
  * Emails are stored as comma-separated values in DEV_ADMIN_EMAILS
@@ -116,17 +118,78 @@ export function canDevAdminPerform(
 }
 
 /**
+ * Audit log entry for dev-admin actions
+ */
+export interface DevAdminAuditLogEntry {
+  adminUserId: string;
+  adminEmail: string;
+  action: DevAdminAction;
+  targetType?: "organization" | "member" | "subscription" | "billing";
+  targetId?: string;
+  targetSlug?: string;
+  requestPath?: string;
+  requestMethod?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Extract request context for audit logging
+ */
+export function extractRequestContext(req: Request): {
+  requestPath: string;
+  requestMethod: string;
+  ipAddress: string | undefined;
+  userAgent: string | undefined;
+} {
+  const url = new URL(req.url);
+  return {
+    requestPath: url.pathname,
+    requestMethod: req.method,
+    ipAddress:
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      undefined,
+    userAgent: req.headers.get("user-agent") ?? undefined,
+  };
+}
+
+/**
  * Log a dev-admin action (for audit purposes)
- * Currently a no-op; can be extended to write to DB or external logging service
+ * Fire-and-forget: returns immediately, logging happens asynchronously
  * Email is redacted in logs for privacy
  */
-export function logDevAdminAction(
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  userEmail: string,
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  action: string,
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  details?: Record<string, unknown>
-): void {
-  // No-op: audit logging should be implemented via DB or external service
+export function logDevAdminAction(entry: DevAdminAuditLogEntry): void {
+  // Fire-and-forget: call async but don't await
+  logDevAdminActionAsync(entry).catch((error) => {
+    console.error("[dev-admin-audit] Failed to log:", {
+      action: entry.action,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  });
+}
+
+async function logDevAdminActionAsync(
+  entry: DevAdminAuditLogEntry
+): Promise<void> {
+  const serviceSupabase = createServiceClient();
+  // Cast to bypass type checking since the table may not be in generated types yet
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (serviceSupabase as any)
+    .from("dev_admin_audit_logs")
+    .insert({
+      admin_user_id: entry.adminUserId,
+      admin_email_redacted: redactEmail(entry.adminEmail),
+      action: entry.action,
+      target_type: entry.targetType ?? null,
+      target_id: entry.targetId ?? null,
+      target_slug: entry.targetSlug ?? null,
+      request_path: entry.requestPath ?? null,
+      request_method: entry.requestMethod ?? null,
+      ip_address: entry.ipAddress ?? null,
+      user_agent: entry.userAgent?.slice(0, 500) ?? null,
+      metadata: entry.metadata ?? {},
+    });
+  if (error) throw error;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, SelectHTMLAttributes } from "react";
+import { forwardRef, SelectHTMLAttributes, useId } from "react";
 
 interface SelectOption {
   value: string;
@@ -16,7 +16,9 @@ interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className = "", label, error, options, id, ...props }, ref) => {
-    const inputId = id || label?.toLowerCase().replace(/\s+/g, "-");
+    const generatedId = useId();
+    const inputId = id || generatedId;
+    const errorId = `${inputId}-error`;
     const isMultiple = props.multiple;
     const selectDecoration = isMultiple
       ? "min-h-[8rem]"
@@ -33,6 +35,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           id={inputId}
           className={`input ${selectDecoration} ${error ? "border-error focus:ring-error" : ""} ${className}`}
+          aria-invalid={error ? "true" : undefined}
+          aria-describedby={error ? errorId : undefined}
           {...props}
         >
           {options.map((option) => (
@@ -41,7 +45,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             </option>
           ))}
         </select>
-        {error && <p className="text-sm text-error">{error}</p>}
+        {error && (
+          <p id={errorId} className="text-sm text-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
     );
   }

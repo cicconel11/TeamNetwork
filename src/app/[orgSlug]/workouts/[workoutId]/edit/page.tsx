@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { editWorkoutSchema, type EditWorkoutForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Workout } from "@/types/database";
 
@@ -20,15 +23,23 @@ export default function EditWorkoutPage() {
   const [error, setError] = useState<string | null>(null);
   const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    workout_date: "",
-    external_url: "",
-  });
-
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim();
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<EditWorkoutForm>({
+    resolver: zodResolver(editWorkoutSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      workout_date: "",
+      external_url: "",
+    },
+  });
 
   useEffect(() => {
     const fetchWorkout = async () => {
@@ -65,7 +76,7 @@ export default function EditWorkoutPage() {
       }
 
       const w = workout as Workout;
-      setFormData({
+      reset({
         title: w.title || "",
         description: w.description || "",
         workout_date: w.workout_date ? w.workout_date.split("T")[0] : "",
@@ -75,10 +86,9 @@ export default function EditWorkoutPage() {
     };
 
     fetchWorkout();
-  }, [orgSlug, workoutId]);
+  }, [orgSlug, workoutId, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: EditWorkoutForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -96,25 +106,13 @@ export default function EditWorkoutPage() {
       return;
     }
 
-    const external = formData.external_url.trim();
-    if (external) {
-      try {
-        const url = new URL(external);
-        if (url.protocol !== "https:") throw new Error("URL must start with https://");
-      } catch {
-        setError("Please provide a valid https:// URL");
-        setIsLoading(false);
-        return;
-      }
-    }
-
     const { error: updateError } = await supabase
       .from("workouts")
       .update({
-        title: formData.title,
-        description: formData.description || null,
-        workout_date: formData.workout_date ? formData.workout_date : null,
-        external_url: external || null,
+        title: data.title,
+        description: data.description || null,
+        workout_date: data.workout_date ? data.workout_date : null,
+        external_url: data.external_url || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", workoutId)
@@ -158,7 +156,7 @@ export default function EditWorkoutPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -167,32 +165,31 @@ export default function EditWorkoutPage() {
 
           <Input
             label="Title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
+            error={errors.description?.message}
+            {...register("description")}
           />
 
           <Input
             label="Date"
             type="date"
-            value={formData.workout_date}
-            onChange={(e) => setFormData({ ...formData, workout_date: e.target.value })}
+            error={errors.workout_date?.message}
+            {...register("workout_date")}
           />
 
           <Input
             label="External workout link (optional)"
             type="url"
-            value={formData.external_url}
-            onChange={(e) => setFormData({ ...formData, external_url: e.target.value })}
             placeholder="https://example.com/workout"
             helperText="Must be https://"
+            error={errors.external_url?.message}
+            {...register("external_url")}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
@@ -208,10 +205,3 @@ export default function EditWorkoutPage() {
     </div>
   );
 }
-
-
-
-
-
-
-

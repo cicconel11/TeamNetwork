@@ -2,24 +2,37 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
+import { signupSchema, type SignupForm } from "@/lib/schemas/auth";
 
 interface SignupClientProps {
   hcaptchaSiteKey: string;
 }
 
 export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
-  
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<SignupForm>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+    },
+  });
+
   const captchaRef = useRef<HCaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
@@ -41,24 +54,22 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const onSubmit = async (data: SignupForm) => {
     if (!isVerified || !captchaToken) {
       setError("Please complete the captcha verification");
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient()!;
     const { error } = await supabase.auth.signUp({
-      email,
-      password,
+      email: data.email,
+      password: data.password,
       options: {
         data: {
-          name,
+          name: data.name,
         },
         emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
         captchaToken,
@@ -85,6 +96,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
         className="w-full mb-6"
         onClick={handleGoogleSignup}
         isLoading={isGoogleLoading}
+        data-testid="signup-google"
       >
         <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
           <path
@@ -117,46 +129,45 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="signup-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
 
       {message && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="signup-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
           {message}
         </div>
       )}
 
-      <form onSubmit={handleSignup}>
+      <form data-testid="signup-form" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
             label="Full Name"
             type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
             placeholder="John Doe"
-            required
+            data-testid="signup-name"
+            error={errors.name?.message}
+            {...register("name")}
           />
 
           <Input
             label="Email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            required
+            data-testid="signup-email"
+            error={errors.email?.message}
+            {...register("email")}
           />
 
           <Input
             label="Password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             helperText="Must be at least 6 characters"
-            required
-            minLength={6}
+            data-testid="signup-password"
+            error={errors.password?.message}
+            {...register("password")}
           />
 
           <div className="flex justify-center">
@@ -170,11 +181,12 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             isLoading={isLoading}
             disabled={!isVerified}
+            data-testid="signup-submit"
           >
             Create Account
           </Button>

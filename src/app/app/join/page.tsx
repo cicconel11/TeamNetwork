@@ -3,10 +3,13 @@
 import { useState, useEffect, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
+import { joinOrgSchema, type JoinOrgForm } from "@/lib/schemas/auth";
 
 interface RedeemResult {
   success: boolean;
@@ -20,17 +23,29 @@ interface RedeemResult {
   status?: string;
 }
 
-function JoinOrgForm() {
+function JoinOrgFormComponent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const codeFromUrl = searchParams.get("code");
   const tokenFromUrl = searchParams.get("token");
-  
-  const [code, setCode] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ orgName: string } | null>(null);
   const [pendingTokenSubmit, setPendingTokenSubmit] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<JoinOrgForm>({
+    resolver: zodResolver(joinOrgSchema),
+    defaultValues: { code: "" },
+  });
+
+  const code = watch("code");
 
   // Captcha state management
   const captchaRef = useRef<HCaptchaRef>(null);
@@ -43,10 +58,10 @@ function JoinOrgForm() {
       // Set pending state to show captcha before processing
       setPendingTokenSubmit(true);
     } else if (codeFromUrl && !code) {
-      setCode(codeFromUrl.toUpperCase());
+      setValue("code", codeFromUrl.toUpperCase());
       // Don't auto-submit for code-based invites - user needs to complete captcha first
     }
-  }, [codeFromUrl, tokenFromUrl, code]);
+  }, [codeFromUrl, tokenFromUrl, code, setValue]);
 
   // Process token-based invite after captcha verification
   useEffect(() => {
@@ -194,9 +209,8 @@ function JoinOrgForm() {
     setIsLoading(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await redeemInvite(code);
+  const onSubmit = async (data: JoinOrgForm) => {
+    await redeemInvite(data.code);
   };
 
   return (
@@ -285,16 +299,19 @@ function JoinOrgForm() {
               )}
 
               {!tokenFromUrl && (
-                <form id="join-form" onSubmit={handleSubmit}>
+                <form id="join-form" onSubmit={handleSubmit(onSubmit)}>
                   <div className="space-y-6">
                     <Input
                       label="Invite Code"
                       type="text"
-                      value={code}
-                      onChange={(e) => setCode(e.target.value.toUpperCase())}
                       placeholder="ABCD1234"
                       className="text-center text-2xl tracking-widest font-mono"
-                      required
+                      error={errors.code?.message}
+                      {...register("code", {
+                        onChange: (e) => {
+                          e.target.value = e.target.value.toUpperCase();
+                        },
+                      })}
                     />
 
                     <div className="flex justify-center">
@@ -371,7 +388,7 @@ export default function JoinOrgPage() {
         </div>
       </div>
     }>
-      <JoinOrgForm />
+      <JoinOrgFormComponent />
     </Suspense>
   );
 }

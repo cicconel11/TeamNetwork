@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { editEventSchema, type EditEventForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Event, EventType } from "@/types/database";
 
@@ -23,17 +26,30 @@ export default function EditEventPage() {
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    start_time: "",
-    end_date: "",
-    end_time: "",
-    location: "",
-    event_type: "general" as EventType,
-    is_philanthropy: false,
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<EditEventForm>({
+    resolver: zodResolver(editEventSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      start_date: "",
+      start_time: "",
+      end_date: "",
+      end_time: "",
+      location: "",
+      event_type: "general",
+      is_philanthropy: false,
+    },
   });
+
+  const eventType = watch("event_type");
+  const isPhilanthropy = watch("is_philanthropy");
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -74,7 +90,7 @@ export default function EditEventPage() {
       const startDate = new Date(e.start_date);
       const endDate = e.end_date ? new Date(e.end_date) : null;
 
-      setFormData({
+      reset({
         title: e.title || "",
         description: e.description || "",
         start_date: startDate.toISOString().split("T")[0],
@@ -89,10 +105,9 @@ export default function EditEventPage() {
     };
 
     fetchEvent();
-  }, [orgSlug, eventId]);
+  }, [orgSlug, eventId, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: EditEventForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -111,21 +126,21 @@ export default function EditEventPage() {
     }
 
     // Combine date and time
-    const startDateTime = new Date(`${formData.start_date}T${formData.start_time}`).toISOString();
-    const endDateTime = formData.end_date && formData.end_time
-      ? new Date(`${formData.end_date}T${formData.end_time}`).toISOString()
+    const startDateTime = new Date(`${data.start_date}T${data.start_time}`).toISOString();
+    const endDateTime = data.end_date && data.end_time
+      ? new Date(`${data.end_date}T${data.end_time}`).toISOString()
       : null;
 
     const { error: updateError } = await supabase
       .from("events")
       .update({
-        title: formData.title,
-        description: formData.description || null,
+        title: data.title,
+        description: data.description || null,
         start_date: startDateTime,
         end_date: endDateTime,
-        location: formData.location || null,
-        event_type: formData.event_type,
-        is_philanthropy: formData.is_philanthropy || formData.event_type === "philanthropy",
+        location: data.location || null,
+        event_type: data.event_type,
+        is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
         updated_at: new Date().toISOString(),
       })
       .eq("id", eventId)
@@ -185,7 +200,7 @@ export default function EditEventPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -194,34 +209,31 @@ export default function EditEventPage() {
 
           <Input
             label={`${singularLabel} Title`}
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="e.g., Team Meeting, vs Cornell"
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Add event details..."
             rows={3}
+            error={errors.description?.message}
+            {...register("description")}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Date"
               type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              required
+              error={errors.start_date?.message}
+              {...register("start_date")}
             />
             <Input
               label="Start Time"
               type="time"
-              value={formData.start_time}
-              onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-              required
+              error={errors.start_time?.message}
+              {...register("start_time")}
             />
           </div>
 
@@ -229,28 +241,29 @@ export default function EditEventPage() {
             <Input
               label="End Date (Optional)"
               type="date"
-              value={formData.end_date}
-              onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+              error={errors.end_date?.message}
+              {...register("end_date")}
             />
             <Input
               label="End Time (Optional)"
               type="time"
-              value={formData.end_time}
-              onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+              error={errors.end_time?.message}
+              {...register("end_time")}
             />
           </div>
 
           <Input
             label="Location"
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             placeholder="e.g., Franklin Field, Team Room"
+            error={errors.location?.message}
+            {...register("location")}
           />
 
           <Select
             label="Event Type"
-            value={formData.event_type}
-            onChange={(e) => setFormData({ ...formData, event_type: e.target.value as EventType })}
+            value={eventType}
+            onChange={(e) => setValue("event_type", e.target.value as EventType)}
+            error={errors.event_type?.message}
             options={[
               { value: "general", label: "General" },
               { value: "game", label: "Game" },
@@ -265,8 +278,8 @@ export default function EditEventPage() {
             <input
               type="checkbox"
               id="is_philanthropy"
-              checked={formData.is_philanthropy}
-              onChange={(e) => setFormData({ ...formData, is_philanthropy: e.target.checked })}
+              checked={isPhilanthropy}
+              onChange={(e) => setValue("is_philanthropy", e.target.checked)}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_philanthropy" className="text-sm text-foreground">
@@ -287,10 +300,3 @@ export default function EditEventPage() {
     </div>
   );
 }
-
-
-
-
-
-
-

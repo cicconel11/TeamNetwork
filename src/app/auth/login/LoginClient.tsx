@@ -3,28 +3,41 @@
 import { useState, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { loginSchema, type LoginForm } from "@/lib/schemas/auth";
 
 interface LoginFormProps {
   hcaptchaSiteKey: string;
 }
 
-function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"password" | "magic-link">("password");
-  
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<LoginForm>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const email = watch("email");
+
   const captchaRef = useRef<HCaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError } = useCaptcha();
-  
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"));
@@ -48,21 +61,19 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
     }
   };
 
-  const handlePasswordLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const onPasswordLogin = async (data: LoginForm) => {
     if (!isVerified || !captchaToken) {
       setError("Please complete the captcha verification");
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient()!;
     const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: data.email,
+      password: data.password,
       options: {
         captchaToken,
       },
@@ -81,12 +92,12 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
 
   const handleMagicLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!isVerified || !captchaToken) {
       setError("Please complete the captcha verification");
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -119,6 +130,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
         className="w-full mb-6"
         onClick={handleGoogleLogin}
         isLoading={isGoogleLoading}
+        data-testid="login-google"
       >
         <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
           <path
@@ -154,6 +166,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
         <button
           type="button"
           onClick={() => setMode("password")}
+          data-testid="login-mode-password"
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-all ${
             mode === "password"
               ? "bg-card text-foreground shadow-sm"
@@ -165,6 +178,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
         <button
           type="button"
           onClick={() => setMode("magic-link")}
+          data-testid="login-mode-magic"
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-all ${
             mode === "magic-link"
               ? "bg-card text-foreground shadow-sm"
@@ -176,7 +190,7 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
       </div>
 
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="login-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
           <div className="mt-2 flex justify-end">
             <FeedbackButton context="login" trigger="login_error" />
@@ -185,20 +199,20 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
       )}
 
       {message && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="login-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
           {message}
         </div>
       )}
 
-      <form onSubmit={mode === "password" ? handlePasswordLogin : handleMagicLink}>
+      <form data-testid="login-form" onSubmit={mode === "password" ? handleSubmit(onPasswordLogin) : handleMagicLink}>
         <div className="space-y-4">
           <Input
             label="Email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            required
+            data-testid="login-email"
+            error={errors.email?.message}
+            {...register("email")}
           />
 
           {mode === "password" && (
@@ -206,10 +220,10 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
               <Input
                 label="Password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                required
+                data-testid="login-password"
+                error={errors.password?.message}
+                {...register("password")}
               />
               <div className="text-right">
                 <Link
@@ -233,11 +247,12 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
             />
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full" 
+          <Button
+            type="submit"
+            className="w-full"
             isLoading={isLoading}
             disabled={!isVerified}
+            data-testid="login-submit"
           >
             {mode === "password" ? "Sign In" : "Send Magic Link"}
           </Button>
@@ -265,7 +280,7 @@ export function LoginClient({ hcaptchaSiteKey }: LoginFormProps) {
         </div>
       </Card>
     }>
-      <LoginForm hcaptchaSiteKey={hcaptchaSiteKey} />
+      <LoginFormComponent hcaptchaSiteKey={hcaptchaSiteKey} />
     </Suspense>
   );
 }

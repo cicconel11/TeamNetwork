@@ -19,9 +19,16 @@ export default async function AuthDebugPage() {
     return notFound();
   }
 
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // Require authentication - show 404 to unauthenticated users
+  if (!user) {
+    return notFound();
+  }
+
   const cookieStore = await cookies();
   const sbCookies = cookieStore.getAll().filter((c) => c.name.startsWith("sb-"));
-  const supabase = await createClient();
   const {
     data: { session },
     error,

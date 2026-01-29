@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { newAnnouncementSchema, type NewAnnouncementForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-
-type Audience = "all" | "members" | "active_members" | "alumni" | "individuals";
 
 type TargetUser = {
   id: string;
@@ -24,18 +25,28 @@ export default function NewAnnouncementPage() {
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
+  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
 
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/announcements", navConfig, "").trim();
 
-  const [formData, setFormData] = useState({
-    title: "",
-    body: "",
-    is_pinned: false,
-    audience: "all" as Audience,
-    send_notification: true,
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<NewAnnouncementForm>({
+    resolver: zodResolver(newAnnouncementSchema),
+    defaultValues: {
+      title: "",
+      body: "",
+      is_pinned: false,
+      audience: "all",
+      send_notification: true,
+    },
   });
-  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+
+  const audience = watch("audience");
 
   useEffect(() => {
     const supabase = createClient();
@@ -80,8 +91,7 @@ export default function NewAnnouncementPage() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewAnnouncementForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -102,18 +112,18 @@ export default function NewAnnouncementPage() {
 
     const { data: { user } } = await supabase.auth.getUser();
 
-    const audienceUserIds = formData.audience === "individuals" ? targetUserIds : null;
+    const audienceUserIds = data.audience === "individuals" ? targetUserIds : null;
 
     const { error: insertError, data: announcement } = await supabase
       .from("announcements")
       .insert({
         organization_id: org.id,
-        title: formData.title,
-        body: formData.body || null,
-        is_pinned: formData.is_pinned,
+        title: data.title,
+        body: data.body || null,
+        is_pinned: data.is_pinned,
         published_at: new Date().toISOString(),
         created_by_user_id: user?.id || null,
-        audience: formData.audience,
+        audience: data.audience,
         audience_user_ids: audienceUserIds,
       })
       .select()
@@ -126,19 +136,19 @@ export default function NewAnnouncementPage() {
     }
 
     // Send notification if enabled
-    if (formData.send_notification && announcement) {
+    if (data.send_notification && announcement) {
       try {
         // Map announcement audience to notification audience
-        const notifAudience = formData.audience === "all" ? "both" 
-          : formData.audience === "active_members" ? "members"
-          : formData.audience === "individuals" ? "both"
-          : formData.audience;
-        
+        const notifAudience = data.audience === "all" ? "both"
+          : data.audience === "active_members" ? "members"
+          : data.audience === "individuals" ? "both"
+          : data.audience;
+
         // Create notification record
         const { data: notification } = await supabase.from("notifications").insert({
           organization_id: org.id,
-          title: formData.title,
-          body: formData.body || null,
+          title: data.title,
+          body: data.body || null,
           channel: "email",
           audience: notifAudience,
           target_user_ids: audienceUserIds,
@@ -171,7 +181,7 @@ export default function NewAnnouncementPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -180,24 +190,22 @@ export default function NewAnnouncementPage() {
 
           <Input
             label="Title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="e.g., Team Meeting Rescheduled"
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Body"
-            value={formData.body}
-            onChange={(e) => setFormData({ ...formData, body: e.target.value })}
             placeholder="Write your announcement..."
             rows={6}
+            error={errors.body?.message}
+            {...register("body")}
           />
 
           <Select
             label="Audience"
-            value={formData.audience}
-            onChange={(e) => setFormData({ ...formData, audience: e.target.value as Audience })}
+            error={errors.audience?.message}
             options={[
               { label: "All Members", value: "all" },
               { label: "Active Members Only", value: "active_members" },
@@ -205,9 +213,10 @@ export default function NewAnnouncementPage() {
               { label: "Alumni Only", value: "alumni" },
               { label: "Specific Individuals", value: "individuals" },
             ]}
+            {...register("audience")}
           />
 
-          {formData.audience === "individuals" && (
+          {audience === "individuals" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Select recipients</p>
               <div className="max-h-48 overflow-y-auto space-y-2 rounded-xl border border-border p-3">
@@ -233,9 +242,8 @@ export default function NewAnnouncementPage() {
             <input
               type="checkbox"
               id="is_pinned"
-              checked={formData.is_pinned}
-              onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              {...register("is_pinned")}
             />
             <label htmlFor="is_pinned" className="text-sm text-foreground">
               Pin this announcement (will appear at the top)
@@ -246,9 +254,8 @@ export default function NewAnnouncementPage() {
             <input
               type="checkbox"
               id="send_notification"
-              checked={formData.send_notification}
-              onChange={(e) => setFormData({ ...formData, send_notification: e.target.checked })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              {...register("send_notification")}
             />
             <label htmlFor="send_notification" className="text-sm text-foreground">
               Send push notification to selected audience

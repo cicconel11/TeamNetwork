@@ -3,20 +3,31 @@
 import { useState, Suspense, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildRecoveryRedirectTo } from "@/lib/auth/redirect";
+import { forgotPasswordSchema, type ForgotPasswordForm } from "@/lib/schemas/auth";
 
 interface ForgotPasswordFormProps {
   hcaptchaSiteKey: string;
 }
 
-function ForgotPasswordForm({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
-  const [email, setEmail] = useState("");
+function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ForgotPasswordForm>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
+  });
 
   const captchaRef = useRef<HCaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError } = useCaptcha();
@@ -25,9 +36,7 @@ function ForgotPasswordForm({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
   const redirect = sanitizeRedirectPath(searchParams.get("redirect"));
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const onSubmit = async (data: ForgotPasswordForm) => {
     if (!isVerified || !captchaToken) {
       setError("Please complete the captcha verification");
       return;
@@ -37,7 +46,7 @@ function ForgotPasswordForm({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
     setError(null);
 
     const supabase = createClient()!;
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
       redirectTo: buildRecoveryRedirectTo(siteUrl, redirect),
       captchaToken,
     });
@@ -57,26 +66,26 @@ function ForgotPasswordForm({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
   return (
     <Card className="p-6">
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="forgot-password-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
         </div>
       )}
 
       {message && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="forgot-password-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
           {message}
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form data-testid="forgot-password-form" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
             label="Email"
             type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            required
+            error={errors.email?.message}
+            data-testid="forgot-password-email"
+            {...register("email")}
           />
 
           <div className="flex justify-center">
@@ -95,6 +104,7 @@ function ForgotPasswordForm({ hcaptchaSiteKey }: ForgotPasswordFormProps) {
             className="w-full"
             isLoading={isLoading}
             disabled={!isVerified}
+            data-testid="forgot-password-submit"
           >
             Send Reset Link
           </Button>
@@ -121,7 +131,7 @@ export function ForgotPasswordClient({ hcaptchaSiteKey }: ForgotPasswordFormProp
         </div>
       </Card>
     }>
-      <ForgotPasswordForm hcaptchaSiteKey={hcaptchaSiteKey} />
+      <ForgotPasswordFormComponent hcaptchaSiteKey={hcaptchaSiteKey} />
     </Suspense>
   );
 }

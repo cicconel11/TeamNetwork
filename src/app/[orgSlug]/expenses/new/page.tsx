@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { newExpenseSchema, type NewExpenseForm } from "@/lib/schemas/content";
 
 export default function NewExpensePage() {
   const router = useRouter();
@@ -12,14 +15,23 @@ export default function NewExpensePage() {
   const orgSlug = params.orgSlug as string;
 
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    expense_type: "",
-    amount: "",
-    venmo_link: "",
-  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<NewExpenseForm>({
+    resolver: zodResolver(newExpenseSchema),
+    defaultValues: {
+      name: "",
+      expense_type: "",
+      amount: "",
+      venmo_link: "",
+    },
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -44,16 +56,15 @@ export default function NewExpensePage() {
           .maybeSingle();
 
         if (profile?.name) {
-          setFormData((prev) => ({ ...prev, name: profile.name || "" }));
+          setValue("name", profile.name);
         }
       }
     };
 
     load();
-  }, [orgSlug]);
+  }, [orgSlug, setValue]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewExpenseForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -76,20 +87,13 @@ export default function NewExpensePage() {
       return;
     }
 
-    const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) {
-      setError("Please enter a valid amount greater than 0");
-      setIsLoading(false);
-      return;
-    }
-
     const { error: insertError } = await supabase.from("expenses").insert({
       organization_id: orgIdToUse,
       user_id: user.id,
-      name: formData.name,
-      expense_type: formData.expense_type,
-      amount: amount,
-      venmo_link: formData.venmo_link || null,
+      name: data.name,
+      expense_type: data.expense_type,
+      amount: parseFloat(data.amount),
+      venmo_link: data.venmo_link || null,
     });
 
     if (insertError) {
@@ -111,7 +115,7 @@ export default function NewExpensePage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -120,18 +124,16 @@ export default function NewExpensePage() {
 
           <Input
             label="Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="Person requesting reimbursement"
-            required
+            error={errors.name?.message}
+            {...register("name")}
           />
 
           <Input
             label="Expense"
-            value={formData.expense_type}
-            onChange={(e) => setFormData({ ...formData, expense_type: e.target.value })}
             placeholder="e.g., Travel, Equipment, Food"
-            required
+            error={errors.expense_type?.message}
+            {...register("expense_type")}
           />
 
           <Input
@@ -139,19 +141,18 @@ export default function NewExpensePage() {
             type="number"
             step="0.01"
             min="0.01"
-            value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="0.00"
-            required
+            error={errors.amount?.message}
+            {...register("amount")}
           />
 
           <Input
             label="Venmo Request Link"
             type="text"
-            value={formData.venmo_link}
-            onChange={(e) => setFormData({ ...formData, venmo_link: e.target.value })}
             placeholder="https://venmo.com/..."
             helperText="Paste your Venmo payment request link"
+            error={errors.venmo_link?.message}
+            {...register("venmo_link")}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">

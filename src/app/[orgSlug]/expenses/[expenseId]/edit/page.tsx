@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { editExpenseSchema, type EditExpenseForm } from "@/lib/schemas/content";
 
 export default function EditExpensePage() {
   const router = useRouter();
@@ -13,15 +16,24 @@ export default function EditExpensePage() {
   const expenseId = params.expenseId as string;
 
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    expense_type: "",
-    amount: "",
-    venmo_link: "",
-  });
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<EditExpenseForm>({
+    resolver: zodResolver(editExpenseSchema),
+    defaultValues: {
+      name: "",
+      expense_type: "",
+      amount: "",
+      venmo_link: "",
+    },
+  });
 
   useEffect(() => {
     const supabase = createClient();
@@ -55,7 +67,7 @@ export default function EditExpensePage() {
         return;
       }
 
-      setFormData({
+      reset({
         name: expense.name || "",
         expense_type: expense.expense_type || "",
         amount: expense.amount?.toString() || "",
@@ -65,29 +77,23 @@ export default function EditExpensePage() {
     };
 
     load();
-  }, [orgSlug, expenseId]);
+  }, [orgSlug, expenseId, reset]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: EditExpenseForm) => {
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient();
 
-    const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) {
-      setError("Please enter a valid amount greater than 0");
-      setIsLoading(false);
-      return;
-    }
+    const amount = parseFloat(data.amount);
 
     const { error: updateError } = await supabase
       .from("expenses")
       .update({
-        name: formData.name,
-        expense_type: formData.expense_type,
+        name: data.name,
+        expense_type: data.expense_type,
         amount: amount,
-        venmo_link: formData.venmo_link || null,
+        venmo_link: data.venmo_link || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", expenseId)
@@ -132,7 +138,7 @@ export default function EditExpensePage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -141,18 +147,16 @@ export default function EditExpensePage() {
 
           <Input
             label="Name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="Person requesting reimbursement"
-            required
+            error={errors.name?.message}
+            {...register("name")}
           />
 
           <Input
             label="Expense"
-            value={formData.expense_type}
-            onChange={(e) => setFormData({ ...formData, expense_type: e.target.value })}
             placeholder="e.g., Travel, Equipment, Food"
-            required
+            error={errors.expense_type?.message}
+            {...register("expense_type")}
           />
 
           <Input
@@ -160,19 +164,18 @@ export default function EditExpensePage() {
             type="number"
             step="0.01"
             min="0.01"
-            value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
             placeholder="0.00"
-            required
+            error={errors.amount?.message}
+            {...register("amount")}
           />
 
           <Input
             label="Venmo Request Link"
             type="text"
-            value={formData.venmo_link}
-            onChange={(e) => setFormData({ ...formData, venmo_link: e.target.value })}
             placeholder="https://venmo.com/..."
             helperText="Paste your Venmo payment request link"
+            error={errors.venmo_link?.message}
+            {...register("venmo_link")}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">

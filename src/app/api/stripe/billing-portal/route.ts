@@ -10,7 +10,11 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import {
+  canDevAdminPerform,
+  logDevAdminAction,
+  extractRequestContext,
+} from "@/lib/auth/dev-admin";
 import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -178,6 +182,19 @@ export async function POST(req: Request) {
       customer: stripeCustomerId,
       return_url: `${origin}/${organization.slug}`,
     });
+
+    // Log dev-admin action after creating billing portal session
+    if (isDevAdminAllowed) {
+      logDevAdminAction({
+        adminUserId: user.id,
+        adminEmail: user.email ?? "",
+        action: "open_billing_portal",
+        targetType: "billing",
+        targetId: organization.id,
+        targetSlug: organization.slug,
+        ...extractRequestContext(req),
+      });
+    }
 
     return respond({ url: session.url });
   } catch (error) {

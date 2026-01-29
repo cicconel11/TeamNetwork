@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { newWorkoutSchema, type NewWorkoutForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
-type Audience = "members" | "alumni" | "both" | "specific";
-type Channel = "email" | "sms" | "both";
 type TargetUser = { id: string; label: string };
 
 export default function NewWorkoutPage() {
@@ -19,19 +20,30 @@ export default function NewWorkoutPage() {
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    workout_date: "",
-    external_url: "",
-    audience: "both" as Audience,
-    send_notification: true,
-    channel: "email" as Channel,
-  });
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<NewWorkoutForm>({
+    resolver: zodResolver(newWorkoutSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      workout_date: "",
+      external_url: "",
+      audience: "both",
+      send_notification: true,
+      channel: "email",
+    },
+  });
+
+  const audience = watch("audience");
 
   // Get the custom label for this page (singular form for action buttons)
   const singularLabel = resolveActionLabel("/workouts", navConfig, "").trim();
@@ -80,12 +92,11 @@ export default function NewWorkoutPage() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewWorkoutForm) => {
     setIsLoading(true);
     setError(null);
 
-    if (formData.audience === "specific" && targetUserIds.length === 0) {
+    if (data.audience === "specific" && targetUserIds.length === 0) {
       setError("Select at least one recipient for this notification.");
       setIsLoading(false);
       return;
@@ -106,27 +117,15 @@ export default function NewWorkoutPage() {
       return;
     }
 
-    const external = formData.external_url.trim();
-    if (external) {
-      try {
-        const url = new URL(external);
-        if (url.protocol !== "https:") throw new Error("URL must start with https://");
-      } catch {
-        setError("Please provide a valid https:// URL");
-        setIsLoading(false);
-        return;
-      }
-    }
-
-    const audienceValue = formData.audience === "specific" ? "both" : formData.audience;
-    const targetIds = formData.audience === "specific" ? targetUserIds : null;
+    const audienceValue = data.audience === "specific" ? "both" : data.audience;
+    const targetIds = data.audience === "specific" ? targetUserIds : null;
 
     const { error: insertError, data: workout } = await supabase.from("workouts").insert({
       organization_id: orgIdToUse,
-      title: formData.title,
-      description: formData.description || null,
-      workout_date: formData.workout_date ? formData.workout_date : null,
-      external_url: external || null,
+      title: data.title,
+      description: data.description || null,
+      workout_date: data.workout_date ? data.workout_date : null,
+      external_url: data.external_url || null,
       created_by: user?.id || null,
     }).select().single();
 
@@ -136,9 +135,9 @@ export default function NewWorkoutPage() {
       return;
     }
 
-    if (formData.send_notification && workout) {
-      const workoutDateLine = formData.workout_date ? `${singularLabel} date: ${formData.workout_date}` : "";
-      const notificationBody = [formData.description || "", workoutDateLine, external ? `Link: ${external}` : ""]
+    if (data.send_notification && workout) {
+      const workoutDateLine = data.workout_date ? `${singularLabel} date: ${data.workout_date}` : "";
+      const notificationBody = [data.description || "", workoutDateLine, data.external_url ? `Link: ${data.external_url}` : ""]
         .filter(Boolean)
         .join("\n\n");
 
@@ -148,9 +147,9 @@ export default function NewWorkoutPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: orgIdToUse,
-            title: `New ${singularLabel}: ${formData.title}`,
-            body: notificationBody || `${singularLabel} posted for ${formData.workout_date || "the team"}`,
-            channel: formData.channel,
+            title: `New ${singularLabel}: ${data.title}`,
+            body: notificationBody || `${singularLabel} posted for ${data.workout_date || "the team"}`,
+            channel: data.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
           }),
@@ -173,7 +172,7 @@ export default function NewWorkoutPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -182,47 +181,46 @@ export default function NewWorkoutPage() {
 
           <Input
             label="Title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
+            error={errors.description?.message}
+            {...register("description")}
           />
 
           <Input
             label="Date"
             type="date"
-            value={formData.workout_date}
-            onChange={(e) => setFormData({ ...formData, workout_date: e.target.value })}
+            error={errors.workout_date?.message}
+            {...register("workout_date")}
           />
 
           <Input
             label={`External ${singularLabel.toLowerCase()} link (optional)`}
             type="url"
-            value={formData.external_url}
-            onChange={(e) => setFormData({ ...formData, external_url: e.target.value })}
             placeholder={`https://example.com/${singularLabel.toLowerCase()}`}
             helperText="Must be https://"
+            error={errors.external_url?.message}
+            {...register("external_url")}
           />
 
           <Select
             label="Audience"
-            value={formData.audience}
-            onChange={(e) => setFormData({ ...formData, audience: e.target.value as Audience })}
+            error={errors.audience?.message}
             options={[
               { label: "Members + Alumni", value: "both" },
               { label: "Members only", value: "members" },
               { label: "Alumni only", value: "alumni" },
               { label: "Specific individuals", value: "specific" },
             ]}
+            {...register("audience")}
           />
 
-          {formData.audience === "specific" && (
+          {audience === "specific" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Select recipients</p>
               <div className="max-h-48 overflow-y-auto space-y-2 rounded-xl border border-border p-3">
@@ -246,22 +244,21 @@ export default function NewWorkoutPage() {
 
           <Select
             label="Notification Channel"
-            value={formData.channel}
-            onChange={(e) => setFormData({ ...formData, channel: e.target.value as Channel })}
+            error={errors.channel?.message}
             options={[
               { label: "Email", value: "email" },
               { label: "SMS", value: "sms" },
               { label: "Email + SMS", value: "both" },
             ]}
+            {...register("channel")}
           />
 
           <div className="flex items-center gap-3">
             <input
               type="checkbox"
               id="send_notification"
-              checked={formData.send_notification}
-              onChange={(e) => setFormData({ ...formData, send_notification: e.target.checked })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              {...register("send_notification")}
             />
             <label htmlFor="send_notification" className="text-sm text-foreground">
               Send email or text notification to selected audience

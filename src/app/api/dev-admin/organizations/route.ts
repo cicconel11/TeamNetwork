@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isDevAdmin } from "@/lib/auth/dev-admin";
+import {
+  isDevAdmin,
+  logDevAdminAction,
+  extractRequestContext,
+} from "@/lib/auth/dev-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,7 +16,7 @@ export const runtime = "nodejs";
  * Returns all organizations in the database with key details.
  * Only accessible by dev-admins.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     // 1. Check authentication
     const supabase = await createClient();
@@ -21,6 +25,17 @@ export async function GET() {
     // 2. Verify dev-admin access
     if (!isDevAdmin(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Log dev-admin action on list fetch
+    if (user) {
+      logDevAdminAction({
+        adminUserId: user.id,
+        adminEmail: user.email ?? "",
+        action: "view_org",
+        ...extractRequestContext(req),
+        metadata: { listAll: true },
+      });
     }
 
     // 3. Use service client to bypass RLS and get all data

@@ -46,17 +46,39 @@ export default defineConfig({
         storageState: process.env.AUDIT_STORAGE_STATE || 'playwright/.auth/state.json',
       },
     },
+    /* E2E Auth Setup - runs first to create authenticated state */
+    {
+      name: 'e2e-setup',
+      testDir: './tests/e2e',
+      testMatch: /auth\.setup\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+      },
+    },
+    /* E2E Tests - depends on auth setup */
+    {
+      name: 'e2e',
+      testDir: './tests/e2e/specs',
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: 'http://localhost:3000',
+        storageState: 'playwright/.auth/e2e-state.json',
+      },
+      dependencies: ['e2e-setup'],
+    },
   ],
 
   /* Folder for test artifacts such as screenshots, videos, traces, etc. */
   outputDir: 'audit/playwright-artifacts/',
 
   /* Run your local dev server before starting the tests */
-  // webServer: {
-  //   command: 'npm run dev',
-  //   url: 'http://127.0.0.1:3000',
-  //   reuseExistingServer: !process.env.CI,
-  // },
+  webServer: {
+    command: 'npm run dev',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
+  },
 });
 
 

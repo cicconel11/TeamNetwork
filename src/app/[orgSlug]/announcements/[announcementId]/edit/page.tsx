@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { editAnnouncementSchema, type EditAnnouncementForm } from "@/lib/schemas/content";
 import type { Announcement, AnnouncementAudience } from "@/types/database";
 
 type TargetUser = {
@@ -22,14 +25,27 @@ export default function EditAnnouncementPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
-
-  const [formData, setFormData] = useState({
-    title: "",
-    body: "",
-    is_pinned: false,
-    audience: "all" as AnnouncementAudience,
-  });
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<EditAnnouncementForm>({
+    resolver: zodResolver(editAnnouncementSchema),
+    defaultValues: {
+      title: "",
+      body: "",
+      is_pinned: false,
+      audience: "all",
+    },
+  });
+
+  const audience = watch("audience");
+  const isPinned = watch("is_pinned");
 
   useEffect(() => {
     const fetchData = async () => {
@@ -63,7 +79,7 @@ export default function EditAnnouncementPage() {
       }
 
       const a = announcement as Announcement;
-      setFormData({
+      reset({
         title: a.title || "",
         body: a.body || "",
         is_pinned: a.is_pinned || false,
@@ -92,7 +108,7 @@ export default function EditAnnouncementPage() {
     };
 
     fetchData();
-  }, [orgSlug, announcementId]);
+  }, [orgSlug, announcementId, reset]);
 
   const toggleTarget = (id: string) => {
     setTargetUserIds((prev) =>
@@ -100,8 +116,7 @@ export default function EditAnnouncementPage() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: EditAnnouncementForm) => {
     setIsLoading(true);
     setError(null);
 
@@ -119,15 +134,15 @@ export default function EditAnnouncementPage() {
       return;
     }
 
-    const audienceUserIds = formData.audience === "individuals" ? targetUserIds : null;
+    const audienceUserIds = data.audience === "individuals" ? targetUserIds : null;
 
     const { error: updateError } = await supabase
       .from("announcements")
       .update({
-        title: formData.title,
-        body: formData.body || null,
-        is_pinned: formData.is_pinned,
-        audience: formData.audience,
+        title: data.title,
+        body: data.body || null,
+        is_pinned: data.is_pinned,
+        audience: data.audience,
         audience_user_ids: audienceUserIds,
         updated_at: new Date().toISOString(),
       })
@@ -172,7 +187,7 @@ export default function EditAnnouncementPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -181,24 +196,24 @@ export default function EditAnnouncementPage() {
 
           <Input
             label="Title"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="e.g., Team Meeting Rescheduled"
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Body"
-            value={formData.body}
-            onChange={(e) => setFormData({ ...formData, body: e.target.value })}
             placeholder="Write your announcement..."
             rows={6}
+            error={errors.body?.message}
+            {...register("body")}
           />
 
           <Select
             label="Audience"
-            value={formData.audience}
-            onChange={(e) => setFormData({ ...formData, audience: e.target.value as AnnouncementAudience })}
+            value={audience}
+            onChange={(e) => setValue("audience", e.target.value as AnnouncementAudience)}
+            error={errors.audience?.message}
             options={[
               { label: "All Members", value: "all" },
               { label: "Active Members Only", value: "active_members" },
@@ -208,7 +223,7 @@ export default function EditAnnouncementPage() {
             ]}
           />
 
-          {formData.audience === "individuals" && (
+          {audience === "individuals" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Select recipients</p>
               <div className="max-h-48 overflow-y-auto space-y-2 rounded-xl border border-border p-3">
@@ -234,8 +249,8 @@ export default function EditAnnouncementPage() {
             <input
               type="checkbox"
               id="is_pinned"
-              checked={formData.is_pinned}
-              onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
+              checked={isPinned}
+              onChange={(e) => setValue("is_pinned", e.target.checked)}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
             />
             <label htmlFor="is_pinned" className="text-sm text-foreground">
@@ -256,4 +271,3 @@ export default function EditAnnouncementPage() {
     </div>
   );
 }
-

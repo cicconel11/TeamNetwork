@@ -3,18 +3,27 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card } from "@/components/ui";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
-import { validateNewPassword } from "@/lib/auth/password";
+import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/schemas/auth";
 
-function ResetPasswordForm() {
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+function ResetPasswordFormComponent() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<"loading" | "valid" | "expired" | "error">("loading");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<ResetPasswordForm>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: "", confirmPassword: "" },
+  });
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -37,20 +46,12 @@ function ResetPasswordForm() {
     checkSession();
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: ResetPasswordForm) => {
     setError(null);
-
-    const validationError = validateNewPassword(password, confirmPassword);
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
     setIsLoading(true);
 
     const supabase = createClient()!;
-    const { error: updateError } = await supabase.auth.updateUser({ password });
+    const { error: updateError } = await supabase.auth.updateUser({ password: data.password });
 
     if (updateError) {
       setError(updateError.message);
@@ -128,24 +129,22 @@ function ResetPasswordForm() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
             label="New Password"
             type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
-            required
+            error={errors.password?.message}
+            {...register("password")}
           />
 
           <Input
             label="Confirm Password"
             type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="••••••••"
-            required
+            error={errors.confirmPassword?.message}
+            {...register("confirmPassword")}
           />
 
           <Button
@@ -177,7 +176,7 @@ export function ResetPasswordClient() {
         </div>
       </Card>
     }>
-      <ResetPasswordForm />
+      <ResetPasswordFormComponent />
     </Suspense>
   );
 }

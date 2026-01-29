@@ -1,30 +1,48 @@
- "use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button, Input, Card, Textarea } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useIdempotencyKey } from "@/hooks";
-import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
+import { createOrgSchema, type CreateOrgForm } from "@/lib/schemas/organization";
 
 export default function CreateOrgPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [description, setDescription] = useState("");
-  const [primaryColor, setPrimaryColor] = useState("#1e3a5f");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [billingInterval, setBillingInterval] = useState<SubscriptionInterval>("month");
-  const [alumniBucket, setAlumniBucket] = useState<AlumniBucket>("none");
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<CreateOrgForm>({
+    resolver: zodResolver(createOrgSchema),
+    defaultValues: {
+      name: "",
+      slug: "",
+      description: "",
+      primaryColor: "#1e3a5f",
+      billingInterval: "month",
+      alumniBucket: "none",
+    },
+  });
+
+  const formValues = watch();
+  const { name, slug, description, primaryColor, billingInterval, alumniBucket } = formValues;
+
   const fingerprint = useMemo(
     () =>
       JSON.stringify({
-        name: name.trim() || "",
-        slug: slug.trim() || "",
-        description: description.trim() || "",
+        name: name?.trim() || "",
+        slug: slug?.trim() || "",
+        description: description?.trim() || "",
         primaryColor: primaryColor || "",
         billingInterval,
         alumniBucket,
@@ -38,7 +56,7 @@ export default function CreateOrgPage() {
 
   // Auto-generate slug from name
   const handleNameChange = (value: string) => {
-    setName(value);
+    setValue("name", value);
     // Generate slug: lowercase, replace spaces with hyphens, remove special chars
     const generatedSlug = value
       .toLowerCase()
@@ -46,11 +64,10 @@ export default function CreateOrgPage() {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .trim();
-    setSlug(generatedSlug);
+    setValue("slug", generatedSlug);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: CreateOrgForm) => {
     setIsLoading(true);
     setError(null);
     setInfoMessage(null);
@@ -61,38 +78,38 @@ export default function CreateOrgPage() {
     }
 
     try {
-      console.log("Creating org checkout with:", { name, slug, billingInterval, alumniBucket });
-      
+      console.log("Creating org checkout with:", { name: data.name, slug: data.slug, billingInterval: data.billingInterval, alumniBucket: data.alumniBucket });
+
       const response = await fetch("/api/stripe/create-org-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          slug,
-          description,
-          primaryColor,
-          billingInterval,
-          alumniBucket,
+          name: data.name,
+          slug: data.slug,
+          description: data.description,
+          primaryColor: data.primaryColor,
+          billingInterval: data.billingInterval,
+          alumniBucket: data.alumniBucket,
           idempotencyKey,
         }),
       });
 
-      const data = await response.json();
-      console.log("Create org response:", response.status, data);
+      const responseData = await response.json();
+      console.log("Create org response:", response.status, responseData);
 
       if (!response.ok) {
-        throw new Error(data.error || "Unable to start checkout");
+        throw new Error(responseData.error || "Unable to start checkout");
       }
 
-      if (data.mode === "sales") {
+      if (responseData.mode === "sales") {
         setInfoMessage("Thank you! We will contact you to finalize a custom alumni plan.");
-        router.push(`/app?org=${slug}&billing=pending-sales`);
+        router.push(`/app?org=${data.slug}&billing=pending-sales`);
         return;
       }
 
-      if (data.url) {
-        console.log("Redirecting to Stripe:", data.url);
-        window.location.href = data.url as string;
+      if (responseData.url) {
+        console.log("Redirecting to Stripe:", responseData.url);
+        window.location.href = responseData.url as string;
         return;
       }
 
@@ -155,35 +172,39 @@ export default function CreateOrgPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-6">
               <Input
                 label="Organization Name"
                 type="text"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
                 placeholder="e.g., Stanford Crew, The Whiffenpoofs"
-                required
+                error={errors.name?.message}
+                {...register("name", {
+                  onChange: (e) => handleNameChange(e.target.value),
+                })}
               />
 
               <div>
                 <Input
                   label="URL Slug"
                   type="text"
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                   placeholder="my-organization"
                   helperText={`Your organization will be at: teamnetwork.app/${slug || "your-slug"}`}
-                  required
+                  error={errors.slug?.message}
+                  {...register("slug", {
+                    onChange: (e) => {
+                      e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                    },
+                  })}
                 />
               </div>
 
               <Textarea
                 label="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Tell people about your organization..."
                 rows={3}
+                error={errors.description?.message}
+                {...register("description")}
               />
 
               <div className="p-4 rounded-xl bg-muted/50 text-sm space-y-2">
@@ -205,15 +226,15 @@ export default function CreateOrgPage() {
                   <input
                     type="color"
                     value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
+                    onChange={(e) => setValue("primaryColor", e.target.value)}
                     className="h-12 w-20 rounded-xl border border-border cursor-pointer"
                   />
                   <Input
                     type="text"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
                     placeholder="#1e3a5f"
                     className="flex-1"
+                    error={errors.primaryColor?.message}
+                    {...register("primaryColor")}
                   />
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -225,11 +246,11 @@ export default function CreateOrgPage() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">Billing Interval</p>
                   <div className="flex gap-2">
-                    {["month", "year"].map((interval) => (
+                    {(["month", "year"] as const).map((interval) => (
                       <button
                         key={interval}
                         type="button"
-                        onClick={() => setBillingInterval(interval as SubscriptionInterval)}
+                        onClick={() => setValue("billingInterval", interval)}
                         className={`flex-1 px-4 py-3 rounded-xl border ${
                           billingInterval === interval
                             ? "border-org-primary bg-org-primary text-white"
@@ -248,9 +269,8 @@ export default function CreateOrgPage() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-foreground">Alumni Access</p>
                   <select
-                    value={alumniBucket}
-                    onChange={(e) => setAlumniBucket(e.target.value as AlumniBucket)}
                     className="w-full rounded-xl border border-border bg-background px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-org-primary"
+                    {...register("alumniBucket")}
                   >
                     <option value="none">No alumni access</option>
                     <option value="0-250">0–250 alumni</option>

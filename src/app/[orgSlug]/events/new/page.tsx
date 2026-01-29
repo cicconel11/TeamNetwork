@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
-
-type Audience = "members" | "alumni" | "both" | "specific";
-type Channel = "email" | "sms" | "both";
 
 type TargetUser = {
   id: string;
@@ -26,25 +26,35 @@ export default function NewEventPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
+  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
 
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
 
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    start_date: "",
-    start_time: "",
-    end_date: "",
-    end_time: "",
-    location: "",
-    event_type: "general",
-    is_philanthropy: false,
-    audience: "both" as Audience,
-    send_notification: true,
-    channel: "email" as Channel,
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<NewEventForm>({
+    resolver: zodResolver(newEventSchema),
+    defaultValues: {
+      title: "",
+      description: "",
+      start_date: "",
+      start_time: "",
+      end_date: "",
+      end_time: "",
+      location: "",
+      event_type: "general",
+      is_philanthropy: false,
+      audience: "both",
+      send_notification: true,
+      channel: "email",
+    },
   });
-  const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
+
+  const audience = watch("audience");
 
   useEffect(() => {
     const supabase = createClient();
@@ -90,12 +100,11 @@ export default function NewEventPage() {
     );
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewEventForm) => {
     setIsLoading(true);
     setError(null);
 
-    if (formData.audience === "specific" && targetUserIds.length === 0) {
+    if (data.audience === "specific" && targetUserIds.length === 0) {
       setError("Select at least one recipient for this notification.");
       setIsLoading(false);
       return;
@@ -116,23 +125,23 @@ export default function NewEventPage() {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Combine date and time
-    const startDateTime = new Date(`${formData.start_date}T${formData.start_time}`).toISOString();
-    const endDateTime = formData.end_date && formData.end_time
-      ? new Date(`${formData.end_date}T${formData.end_time}`).toISOString()
+    const startDateTime = new Date(`${data.start_date}T${data.start_time}`).toISOString();
+    const endDateTime = data.end_date && data.end_time
+      ? new Date(`${data.end_date}T${data.end_time}`).toISOString()
       : null;
 
-    const audienceValue = formData.audience === "specific" ? "both" : formData.audience;
-    const targetIds = formData.audience === "specific" ? targetUserIds : null;
+    const audienceValue = data.audience === "specific" ? "both" : data.audience;
+    const targetIds = data.audience === "specific" ? targetUserIds : null;
 
     const { error: insertError, data: event } = await supabase.from("events").insert({
       organization_id: orgIdToUse,
-      title: formData.title,
-      description: formData.description || null,
+      title: data.title,
+      description: data.description || null,
       start_date: startDateTime,
       end_date: endDateTime,
-      location: formData.location || null,
-      event_type: formData.event_type as "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser",
-      is_philanthropy: formData.is_philanthropy || formData.event_type === "philanthropy",
+      location: data.location || null,
+      event_type: data.event_type,
+      is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
       created_by_user_id: user?.id || null,
       audience: audienceValue,
       target_user_ids: targetIds,
@@ -145,12 +154,12 @@ export default function NewEventPage() {
     }
 
     // Send notification if enabled
-    if (formData.send_notification && event) {
-      const scheduleLine = formData.start_date && formData.start_time
-        ? `When: ${formData.start_date} at ${formData.start_time}`
+    if (data.send_notification && event) {
+      const scheduleLine = data.start_date && data.start_time
+        ? `When: ${data.start_date} at ${data.start_time}`
         : "";
-      const locationLine = formData.location ? `Where: ${formData.location}` : null;
-      const notificationBody = [formData.description || "", scheduleLine, locationLine]
+      const locationLine = data.location ? `Where: ${data.location}` : null;
+      const notificationBody = [data.description || "", scheduleLine, locationLine]
         .filter(Boolean)
         .join("\n\n");
 
@@ -160,9 +169,9 @@ export default function NewEventPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: orgIdToUse,
-            title: `New ${singularLabel}: ${formData.title}`,
-            body: notificationBody || `${singularLabel} scheduled for ${formData.start_date} at ${formData.start_time}`,
-            channel: formData.channel,
+            title: `New ${singularLabel}: ${data.title}`,
+            body: notificationBody || `${singularLabel} scheduled for ${data.start_date} at ${data.start_time}`,
+            channel: data.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
           }),
@@ -203,7 +212,7 @@ export default function NewEventPage() {
       />
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -212,34 +221,31 @@ export default function NewEventPage() {
 
           <Input
             label={`${singularLabel} Title`}
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="e.g., Team Meeting, vs Cornell"
-            required
+            error={errors.title?.message}
+            {...register("title")}
           />
 
           <Textarea
             label="Description"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Add event details..."
             rows={3}
+            error={errors.description?.message}
+            {...register("description")}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Date"
               type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              required
+              error={errors.start_date?.message}
+              {...register("start_date")}
             />
             <Input
               label="Start Time"
               type="time"
-              value={formData.start_time}
-              onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-              required
+              error={errors.start_time?.message}
+              {...register("start_time")}
             />
           </div>
 
@@ -247,28 +253,27 @@ export default function NewEventPage() {
             <Input
               label="End Date (Optional)"
               type="date"
-              value={formData.end_date}
-              onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+              error={errors.end_date?.message}
+              {...register("end_date")}
             />
             <Input
               label="End Time (Optional)"
               type="time"
-              value={formData.end_time}
-              onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
+              error={errors.end_time?.message}
+              {...register("end_time")}
             />
           </div>
 
           <Input
             label="Location"
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             placeholder="e.g., Franklin Field, Team Room"
+            error={errors.location?.message}
+            {...register("location")}
           />
 
           <Select
             label="Event Type"
-            value={formData.event_type}
-            onChange={(e) => setFormData({ ...formData, event_type: e.target.value })}
+            error={errors.event_type?.message}
             options={[
               { value: "general", label: "General" },
               { value: "game", label: "Game" },
@@ -277,32 +282,33 @@ export default function NewEventPage() {
               { value: "fundraiser", label: "Fundraiser" },
               { value: "philanthropy", label: "Philanthropy" },
             ]}
+            {...register("event_type")}
           />
 
           <Select
             label="Audience"
-            value={formData.audience}
-            onChange={(e) => setFormData({ ...formData, audience: e.target.value as Audience })}
+            error={errors.audience?.message}
             options={[
               { label: "Members + Alumni", value: "both" },
               { label: "Active Members only", value: "members" },
               { label: "Alumni only", value: "alumni" },
               { label: "Specific individuals", value: "specific" },
             ]}
+            {...register("audience")}
           />
 
           <Select
             label="Notification Channel"
-            value={formData.channel}
-            onChange={(e) => setFormData({ ...formData, channel: e.target.value as Channel })}
+            error={errors.channel?.message}
             options={[
               { label: "Email", value: "email" },
               { label: "SMS", value: "sms" },
               { label: "Email + SMS", value: "both" },
             ]}
+            {...register("channel")}
           />
 
-          {formData.audience === "specific" && (
+          {audience === "specific" && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Select recipients</p>
               <div className="max-h-48 overflow-y-auto space-y-2 rounded-xl border border-border p-3">
@@ -328,9 +334,8 @@ export default function NewEventPage() {
             <input
               type="checkbox"
               id="is_philanthropy"
-              checked={formData.is_philanthropy}
-              onChange={(e) => setFormData({ ...formData, is_philanthropy: e.target.checked })}
               className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              {...register("is_philanthropy")}
             />
             <label htmlFor="is_philanthropy" className="text-sm text-foreground">
               Mark as philanthropy event (will show in Philanthropy section)
@@ -341,14 +346,13 @@ export default function NewEventPage() {
             <input
               type="checkbox"
               id="send_notification"
-              checked={formData.send_notification}
-            onChange={(e) => setFormData({ ...formData, send_notification: e.target.checked })}
-            className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
-          />
-          <label htmlFor="send_notification" className="text-sm text-foreground">
-            Send email or text notification to selected audience
-          </label>
-        </div>
+              className="h-4 w-4 rounded border-border text-org-primary focus:ring-org-primary"
+              {...register("send_notification")}
+            />
+            <label htmlFor="send_notification" className="text-sm text-foreground">
+              Send email or text notification to selected audience
+            </label>
+          </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <Button type="button" variant="secondary" onClick={() => router.back()}>

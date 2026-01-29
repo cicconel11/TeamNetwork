@@ -46,6 +46,7 @@ audit/
 
 # playwright
 playwright/.auth/state.json
+playwright/.auth/e2e-state.json
 
 .cursor/mcp.json
 

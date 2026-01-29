@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { newAlumniSchema, type NewAlumniForm } from "@/lib/schemas/member";
 
 interface SubscriptionInfo {
   bucket: string;
@@ -18,28 +21,35 @@ export default function NewAlumniPage() {
   const router = useRouter();
   const params = useParams();
   const orgSlug = params.orgSlug as string;
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [quota, setQuota] = useState<SubscriptionInfo | null>(null);
   const [isLoadingQuota, setIsLoadingQuota] = useState(true);
-  
-  const [formData, setFormData] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    graduation_year: "",
-    major: "",
-    job_title: "",
-    photo_url: "",
-    notes: "",
-    linkedin_url: "",
-    phone_number: "",
-    industry: "",
-    current_company: "",
-    current_city: "",
-    position_title: "",
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<NewAlumniForm>({
+    resolver: zodResolver(newAlumniSchema),
+    defaultValues: {
+      first_name: "",
+      last_name: "",
+      email: "",
+      graduation_year: "",
+      major: "",
+      job_title: "",
+      photo_url: "",
+      notes: "",
+      linkedin_url: "",
+      phone_number: "",
+      industry: "",
+      current_company: "",
+      current_city: "",
+      position_title: "",
+    },
   });
 
   const fetchQuota = useCallback(async (organizationId: string) => {
@@ -81,8 +91,7 @@ export default function NewAlumniPage() {
     void loadOrg();
   }, [orgSlug, fetchQuota]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: NewAlumniForm) => {
     if (
       quota &&
       quota.alumniLimit !== null &&
@@ -95,20 +104,6 @@ export default function NewAlumniPage() {
 
     setIsLoading(true);
     setError(null);
-
-    const linkedin = formData.linkedin_url?.trim();
-    if (linkedin) {
-      try {
-        const url = new URL(linkedin);
-        if (url.protocol !== "https:") {
-          throw new Error("LinkedIn URL must start with https://");
-        }
-      } catch {
-        setError("Please enter a valid LinkedIn profile URL (https://...)");
-        setIsLoading(false);
-        return;
-      }
-    }
 
     const supabase = createClient();
     let organizationId = orgId;
@@ -131,20 +126,20 @@ export default function NewAlumniPage() {
 
     const { error: insertError } = await supabase.from("alumni").insert({
       organization_id: organizationId,
-      first_name: formData.first_name,
-      last_name: formData.last_name,
-      email: formData.email || null,
-      graduation_year: formData.graduation_year ? parseInt(formData.graduation_year) : null,
-      major: formData.major || null,
-      job_title: formData.job_title || null,
-      photo_url: formData.photo_url || null,
-      notes: formData.notes || null,
-      linkedin_url: linkedin || null,
-      phone_number: formData.phone_number || null,
-      industry: formData.industry || null,
-      current_company: formData.current_company || null,
-      current_city: formData.current_city || null,
-      position_title: formData.position_title || null,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email || null,
+      graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
+      major: data.major || null,
+      job_title: data.job_title || null,
+      photo_url: data.photo_url || null,
+      notes: data.notes || null,
+      linkedin_url: data.linkedin_url || null,
+      phone_number: data.phone_number || null,
+      industry: data.industry || null,
+      current_company: data.current_company || null,
+      current_city: data.current_city || null,
+      position_title: data.position_title || null,
     });
 
     if (insertError) {
@@ -186,7 +181,7 @@ export default function NewAlumniPage() {
       )}
 
       <Card className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
@@ -196,114 +191,112 @@ export default function NewAlumniPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="First Name"
-              value={formData.first_name}
-              onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-              required
+              error={errors.first_name?.message}
+              {...register("first_name")}
             />
             <Input
               label="Last Name"
-              value={formData.last_name}
-              onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-              required
+              error={errors.last_name?.message}
+              {...register("last_name")}
             />
           </div>
 
           <Input
             label="Email"
             type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             placeholder="alumni@example.com"
+            error={errors.email?.message}
+            {...register("email")}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Graduation Year"
               type="number"
-              value={formData.graduation_year}
-              onChange={(e) => setFormData({ ...formData, graduation_year: e.target.value })}
               placeholder="2020"
               min={1900}
               max={2100}
+              error={errors.graduation_year?.message}
+              {...register("graduation_year")}
             />
             <Input
               label="Major"
-              value={formData.major}
-              onChange={(e) => setFormData({ ...formData, major: e.target.value })}
               placeholder="e.g., Finance, Computer Science"
+              error={errors.major?.message}
+              {...register("major")}
             />
           </div>
 
           <Input
             label="Current Position (Legacy)"
-            value={formData.job_title}
-            onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
             placeholder="e.g., Software Engineer at Google"
             helperText="Optional - use Position Title and Company below for better filtering"
+            error={errors.job_title?.message}
+            {...register("job_title")}
           />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Position Title"
-              value={formData.position_title}
-              onChange={(e) => setFormData({ ...formData, position_title: e.target.value })}
               placeholder="e.g., Software Engineer"
+              error={errors.position_title?.message}
+              {...register("position_title")}
             />
             <Input
               label="Current Company"
-              value={formData.current_company}
-              onChange={(e) => setFormData({ ...formData, current_company: e.target.value })}
               placeholder="e.g., Google"
+              error={errors.current_company?.message}
+              {...register("current_company")}
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Industry"
-              value={formData.industry}
-              onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
               placeholder="e.g., Technology, Finance, Healthcare"
+              error={errors.industry?.message}
+              {...register("industry")}
             />
             <Input
               label="Current City"
-              value={formData.current_city}
-              onChange={(e) => setFormData({ ...formData, current_city: e.target.value })}
               placeholder="e.g., San Francisco, CA"
+              error={errors.current_city?.message}
+              {...register("current_city")}
             />
           </div>
 
           <Input
             label="Phone Number"
             type="tel"
-            value={formData.phone_number}
-            onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
             placeholder="e.g., +1 (555) 123-4567"
+            error={errors.phone_number?.message}
+            {...register("phone_number")}
           />
 
           <Input
             label="Photo URL"
             type="url"
-            value={formData.photo_url}
-            onChange={(e) => setFormData({ ...formData, photo_url: e.target.value })}
             placeholder="https://example.com/photo.jpg"
             helperText="Direct link to alumni photo"
+            error={errors.photo_url?.message}
+            {...register("photo_url")}
           />
 
           <Input
             label="LinkedIn profile (optional)"
             type="url"
-            value={formData.linkedin_url}
-            onChange={(e) => setFormData({ ...formData, linkedin_url: e.target.value })}
             placeholder="https://www.linkedin.com/in/username"
             helperText="Must be a valid https:// URL"
+            error={errors.linkedin_url?.message}
+            {...register("linkedin_url")}
           />
 
           <Textarea
             label="Notes"
-            value={formData.notes}
-            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Any additional notes about this alumni..."
             rows={3}
+            error={errors.notes?.message}
+            {...register("notes")}
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export interface UseCaptchaReturn {
     token: string | null;
@@ -33,6 +33,13 @@ export function useCaptcha(): UseCaptchaReturn {
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // E2E test bypass: automatically set token when bypass is enabled
+    useEffect(() => {
+        if (process.env.NEXT_PUBLIC_E2E_CAPTCHA_BYPASS === "true") {
+            setToken("e2e-bypass-token");
+        }
+    }, []);
 
     const onVerify = useCallback((newToken: string) => {
         setToken(newToken);
