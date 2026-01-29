@@ -1,54 +1,61 @@
 import { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet, Pressable, Linking, Share } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Mail, Share as ShareIcon } from "lucide-react-native";
+import { ChevronLeft, Mail, Share as ShareIcon, Linkedin } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
+
+const DETAIL_COLORS = {
+  background: "#ffffff",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#f8fafc",
+  success: "#059669",
+  successLight: "#d1fae5",
+  successDark: "#047857",
+  error: "#ef4444",
+};
 
 interface Member {
   id: string;
-  user_id: string;
-  role: string;
-  user?: {
-    name: string | null;
-    email: string | null;
-    avatar_url: string | null;
-  };
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  photo_url: string | null;
+  graduation_year: number | null;
+  role: string | null;
+  linkedin_url: string | null;
 }
 
 export default function MemberProfileScreen() {
   const { memberId } = useLocalSearchParams<{ memberId: string }>();
-  const { orgSlug } = useOrg();
+  const { orgId } = useOrg();
   const router = useRouter();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const [member, setMember] = useState<Member | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMember() {
-      if (!memberId || !orgSlug) return;
+      if (!memberId || !orgId) return;
 
       try {
         setLoading(true);
-        const { data: orgData } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (!orgData) throw new Error("Organization not found");
-
         const { data, error: memberError } = await supabase
-          .from("user_organization_roles")
-          .select("id, user_id, role, user:users(name, email, avatar_url)")
+          .from("members")
+          .select("id, first_name, last_name, email, photo_url, graduation_year, role, linkedin_url")
           .eq("id", memberId)
-          .eq("organization_id", orgData.id)
-          .eq("status", "active")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
           .single();
 
         if (memberError) throw memberError;
@@ -61,206 +68,278 @@ export default function MemberProfileScreen() {
     }
 
     fetchMember();
-  }, [memberId, orgSlug]);
+  }, [memberId, orgId]);
 
   const handleEmail = () => {
-    if (member?.user?.email) {
-      Linking.openURL(`mailto:${member.user.email}`);
+    if (member?.email) {
+      Linking.openURL(`mailto:${member.email}`);
     }
   };
 
   const handleShareEmail = async () => {
-    if (member?.user?.email) {
-      await Share.share({ message: member.user.email });
+    if (member?.email) {
+      await Share.share({ message: member.email });
+    }
+  };
+
+  const handleLinkedIn = () => {
+    if (member?.linkedin_url) {
+      Linking.openURL(member.linkedin_url);
     }
   };
 
   const getInitials = () => {
-    const name = member?.user?.name;
-    if (name) {
-      const parts = name.split(" ");
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-      }
-      return name[0]?.toUpperCase() || "?";
+    if (member?.first_name && member?.last_name) {
+      return (member.first_name[0] + member.last_name[0]).toUpperCase();
     }
-    return member?.user?.email?.[0]?.toUpperCase() || "?";
+    if (member?.first_name) {
+      return member.first_name[0].toUpperCase();
+    }
+    return member?.email?.[0]?.toUpperCase() || "?";
+  };
+
+  const getDisplayName = () => {
+    if (member?.first_name && member?.last_name) {
+      return `${member.first_name} ${member.last_name}`;
+    }
+    return member?.first_name || member?.email || "Unknown";
+  };
+
+  const getRoleLabel = (role: string | null) => {
+    if (role === "admin") return "Admin";
+    if (role === "member" || role === "active_member") return "Member";
+    return "Member";
   };
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
       </View>
     );
   }
 
   if (error || !member) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>{error || "Member not found"}</Text>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <Pressable style={({ pressed }) => [styles.backButtonAlt, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
+          <Text style={styles.backButtonAltText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
-        <ArrowLeft size={20} color={colors.primary} />
-        <Text style={styles.backButtonText}>Back</Text>
-      </Pressable>
-
-      <View style={styles.profileHeader}>
-        {member.user?.avatar_url ? (
-          <Image source={member.user.avatar_url} style={styles.avatarImage} contentFit="cover" transition={200} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Text style={styles.avatarText}>{getInitials()}</Text>
+    <View style={styles.container}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.navHeader}>
+            <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                Member Profile
+              </Text>
+            </View>
           </View>
-        )}
-        <Text style={styles.name}>{member.user?.name || member.user?.email || "Unknown"}</Text>
-        <Text style={styles.role}>{member.role === "admin" ? "Admin" : "Member"}</Text>
-      </View>
+        </SafeAreaView>
+      </LinearGradient>
 
-      <View style={styles.contactSection}>
-        <Text style={styles.sectionTitle}>Contact</Text>
+      {/* Content */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.profileHeader}>
+          {member.photo_url ? (
+            <Image source={member.photo_url} style={styles.avatarImage} contentFit="cover" transition={200} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarText}>{getInitials()}</Text>
+            </View>
+          )}
+          <Text style={styles.name}>{getDisplayName()}</Text>
+          <Text style={styles.role}>{getRoleLabel(member.role)}</Text>
+          {member.graduation_year && (
+            <Text style={styles.year}>Class of {member.graduation_year}</Text>
+          )}
+        </View>
 
-        {member.user?.email && (
-          <>
-            <Pressable style={styles.contactButton} onPress={handleEmail}>
-              <Mail size={20} color={colors.primary} />
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactLabel}>Email</Text>
-                <Text style={styles.contactValue} numberOfLines={1}>
-                  {member.user.email}
-                </Text>
-              </View>
+        <View style={styles.contactSection}>
+          <Text style={styles.sectionTitle}>Contact</Text>
+
+          {member.email && (
+            <>
+              <Pressable style={({ pressed }) => [styles.contactButton, pressed && { opacity: 0.7 }]} onPress={handleEmail}>
+                <Mail size={20} color={DETAIL_COLORS.success} />
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactLabel}>Email</Text>
+                  <Text style={styles.contactValue} numberOfLines={1}>
+                    {member.email}
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable style={({ pressed }) => [styles.contactButton, pressed && { opacity: 0.7 }]} onPress={handleShareEmail}>
+                <ShareIcon size={20} color={DETAIL_COLORS.success} />
+                <Text style={styles.contactButtonText}>Share email address</Text>
+              </Pressable>
+            </>
+          )}
+
+          {member.linkedin_url && (
+            <Pressable style={({ pressed }) => [styles.contactButton, pressed && { opacity: 0.7 }]} onPress={handleLinkedIn}>
+              <Linkedin size={20} color={DETAIL_COLORS.success} />
+              <Text style={styles.contactButtonText}>View LinkedIn Profile</Text>
             </Pressable>
+          )}
 
-            <Pressable style={styles.contactButton} onPress={handleShareEmail}>
-              <ShareIcon size={20} color={colors.primary} />
-              <Text style={styles.contactButtonText}>Share email address</Text>
-            </Pressable>
-          </>
-        )}
-
-        {!member.user?.email && (
-          <Text style={styles.noContactText}>No contact information available</Text>
-        )}
-      </View>
-    </ScrollView>
+          {!member.email && !member.linkedin_url && (
+            <Text style={styles.noContactText}>No contact information available</Text>
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
-    content: {
-      padding: 16,
+      backgroundColor: DETAIL_COLORS.background,
     },
     centered: {
-      flex: 1,
       justifyContent: "center",
       alignItems: "center",
-      padding: 24,
+      padding: SPACING.lg,
     },
-    backButton: {
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 24,
-      gap: 8,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
     },
-    backButtonText: {
-      fontSize: 16,
-      color: colors.primary,
-      fontWeight: "500",
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
     },
     profileHeader: {
       alignItems: "center",
-      marginBottom: 32,
+      marginBottom: SPACING.lg,
     },
     avatarImage: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      marginBottom: 16,
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      marginBottom: SPACING.md,
     },
     avatarPlaceholder: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: colors.primaryLight,
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: DETAIL_COLORS.successLight,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 16,
+      marginBottom: SPACING.md,
     },
     avatarText: {
       fontSize: 32,
       fontWeight: "600",
-      color: colors.primaryDark,
+      color: DETAIL_COLORS.successDark,
     },
     name: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: colors.foreground,
+      ...TYPOGRAPHY.headlineMedium,
+      color: DETAIL_COLORS.primaryText,
       marginBottom: 4,
     },
     role: {
-      fontSize: 16,
-      color: colors.muted,
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.mutedText,
+    },
+    year: {
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.secondaryText,
+      marginTop: 2,
     },
     contactSection: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      padding: 16,
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
     },
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: colors.foreground,
-      marginBottom: 16,
+      ...TYPOGRAPHY.titleMedium,
+      color: DETAIL_COLORS.primaryText,
+      marginBottom: SPACING.md,
     },
     contactButton: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 12,
-      gap: 12,
+      paddingVertical: SPACING.sm,
+      gap: SPACING.sm,
       borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      borderBottomColor: DETAIL_COLORS.border,
     },
     contactInfo: {
       flex: 1,
     },
     contactLabel: {
-      fontSize: 14,
-      color: colors.muted,
+      ...TYPOGRAPHY.labelSmall,
+      color: DETAIL_COLORS.mutedText,
     },
     contactValue: {
-      fontSize: 16,
-      color: colors.foreground,
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.primaryText,
       marginTop: 2,
     },
     contactButtonText: {
-      fontSize: 16,
-      color: colors.primary,
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.success,
       fontWeight: "500",
     },
     noContactText: {
-      fontSize: 14,
-      color: colors.mutedForeground,
+      ...TYPOGRAPHY.bodySmall,
+      color: DETAIL_COLORS.secondaryText,
       textAlign: "center",
-      paddingVertical: 16,
+      paddingVertical: SPACING.md,
     },
     errorText: {
-      fontSize: 16,
-      color: colors.error,
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.error,
       textAlign: "center",
-      marginBottom: 16,
+      marginBottom: SPACING.md,
+    },
+    backButtonAlt: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: DETAIL_COLORS.success,
+    },
+    backButtonAltText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
     },
   });

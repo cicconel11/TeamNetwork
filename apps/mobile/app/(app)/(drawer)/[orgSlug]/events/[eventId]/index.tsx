@@ -1,18 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet, Pressable, Alert } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Calendar, MapPin, Users, ArrowLeft, UserCheck, Edit3, XCircle, ExternalLink, List } from "lucide-react-native";
+import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import type { Event } from "@/hooks/useEvents";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
-import type { ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
 import { SEMANTIC, NEUTRAL, SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
+
+const DETAIL_COLORS = {
+  background: "#ffffff",
+  primaryText: "#0f172a",
+  secondaryText: "#64748b",
+  mutedText: "#94a3b8",
+  border: "#e2e8f0",
+  card: "#f8fafc",
+  success: "#059669",
+  error: "#ef4444",
+};
 
 type RSVPStatus = "attending" | "not_attending" | "maybe";
 
@@ -30,9 +42,8 @@ export default function EventDetailScreen() {
   const { eventId } = useLocalSearchParams<{ eventId: string }>();
   const { orgId, orgSlug } = useOrg();
   const router = useRouter();
-  const { colors } = useOrgTheme();
   const { permissions } = useOrgRole();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,158 +190,186 @@ export default function EventDetailScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
       </View>
     );
   }
 
   if (error || !event) {
     return (
-      <View style={styles.centered}>
+      <View style={[styles.container, styles.centered]}>
         <Text style={styles.errorText}>{error || "Event not found"}</Text>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+        <Pressable style={({ pressed }) => [styles.backButtonAlt, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
+          <Text style={styles.backButtonAltText}>Go Back</Text>
         </Pressable>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header with back button and admin menu */}
-      <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={20} color={colors.primary} />
-          <Text style={styles.backButtonText}>Back</Text>
-        </Pressable>
-        {adminMenuItems.length > 0 && (
-          <OverflowMenu items={adminMenuItems} accessibilityLabel="Event options" />
-        )}
-      </View>
-
-      <Text style={styles.title}>{event.title}</Text>
-
-      <View style={styles.details}>
-        <View style={styles.detailRow}>
-          <Calendar size={18} color={colors.muted} />
-          <Text style={styles.detailText}>
-            {formatShortWeekdayDate(event.start_date)} at {formatTime(event.start_date)}
-            {event.end_date && ` - ${formatTime(event.end_date)}`}
-          </Text>
-        </View>
-
-        {event.location && (
-          <View style={styles.detailRow}>
-            <MapPin size={18} color={colors.muted} />
-            <Text style={styles.detailText}>{event.location}</Text>
-          </View>
-        )}
-
-        {event.rsvp_count !== undefined && (
-          <View style={styles.detailRow}>
-            <Users size={18} color={colors.muted} />
-            <Text style={styles.detailText}>{event.rsvp_count} attending</Text>
-          </View>
-        )}
-      </View>
-
-      {event.description && (
-        <View style={styles.description}>
-          <Text style={styles.descriptionText}>{event.description}</Text>
-        </View>
-      )}
-
-      {/* RSVP Summary for admins */}
-      {isAdmin && rsvps.length > 0 && (
-        <Pressable style={({ pressed }) => [styles.rsvpSummary, pressed && { opacity: 0.7 }]} onPress={handleViewRsvps}>
-          <Text style={styles.rsvpSummaryTitle}>RSVPs ({rsvpCounts.total})</Text>
-          <View style={styles.rsvpCountsRow}>
-            <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.going.background }]}>
-              <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.going.text }]}>
-                {rsvpCounts.attending} Going
+    <View style={styles.container}>
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.navHeader}>
+            <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.7 }]}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                Event Details
               </Text>
             </View>
-            {rsvpCounts.maybe > 0 && (
-              <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.maybe.background }]}>
-                <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.maybe.text }]}>
-                  {rsvpCounts.maybe} Maybe
-                </Text>
-              </View>
-            )}
-            {rsvpCounts.notAttending > 0 && (
-              <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.declined.background }]}>
-                <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.declined.text }]}>
-                  {rsvpCounts.notAttending} Can't Go
-                </Text>
-              </View>
+            {adminMenuItems.length > 0 && (
+              <OverflowMenu
+                items={adminMenuItems}
+                accessibilityLabel="Event options"
+                iconColor={APP_CHROME.headerTitle}
+              />
             )}
           </View>
-          <Text style={styles.rsvpTapHint}>Tap to view all RSVPs</Text>
-        </Pressable>
-      )}
+        </SafeAreaView>
+      </LinearGradient>
 
-      {/* Admin Check-In Button */}
-      {isAdmin && (
-        <Pressable style={styles.checkInButton} onPress={handleCheckInPress}>
-          <UserCheck size={20} color="#ffffff" />
-          <Text style={styles.checkInButtonText}>Check In Attendees</Text>
-        </Pressable>
-      )}
+      {/* Content */}
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.title}>{event.title}</Text>
 
-      {!event.user_rsvp_status && (
-        <Pressable style={styles.rsvpButton}>
-          <Text style={styles.rsvpButtonText}>RSVP</Text>
-        </Pressable>
-      )}
+        <View style={styles.details}>
+          <View style={styles.detailRow}>
+            <Calendar size={18} color={DETAIL_COLORS.mutedText} />
+            <Text style={styles.detailText}>
+              {formatShortWeekdayDate(event.start_date)} at {formatTime(event.start_date)}
+              {event.end_date && ` - ${formatTime(event.end_date)}`}
+            </Text>
+          </View>
+
+          {event.location && (
+            <View style={styles.detailRow}>
+              <MapPin size={18} color={DETAIL_COLORS.mutedText} />
+              <Text style={styles.detailText}>{event.location}</Text>
+            </View>
+          )}
+
+          {event.rsvp_count !== undefined && (
+            <View style={styles.detailRow}>
+              <Users size={18} color={DETAIL_COLORS.mutedText} />
+              <Text style={styles.detailText}>{event.rsvp_count} attending</Text>
+            </View>
+          )}
+        </View>
+
+        {event.description && (
+          <View style={styles.description}>
+            <Text style={styles.descriptionText}>{event.description}</Text>
+          </View>
+        )}
+
+        {/* RSVP Summary for admins */}
+        {isAdmin && rsvps.length > 0 && (
+          <Pressable style={({ pressed }) => [styles.rsvpSummary, pressed && { opacity: 0.7 }]} onPress={handleViewRsvps}>
+            <Text style={styles.rsvpSummaryTitle}>RSVPs ({rsvpCounts.total})</Text>
+            <View style={styles.rsvpCountsRow}>
+              <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.going.background }]}>
+                <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.going.text }]}>
+                  {rsvpCounts.attending} Going
+                </Text>
+              </View>
+              {rsvpCounts.maybe > 0 && (
+                <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.maybe.background }]}>
+                  <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.maybe.text }]}>
+                    {rsvpCounts.maybe} Maybe
+                  </Text>
+                </View>
+              )}
+              {rsvpCounts.notAttending > 0 && (
+                <View style={[styles.rsvpCountBadge, { backgroundColor: RSVP_COLORS.declined.background }]}>
+                  <Text style={[styles.rsvpCountText, { color: RSVP_COLORS.declined.text }]}>
+                    {rsvpCounts.notAttending} Can't Go
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.rsvpTapHint}>Tap to view all RSVPs</Text>
+          </Pressable>
+        )}
+
+        {/* Admin Check-In Button */}
+        {isAdmin && (
+          <Pressable style={styles.checkInButton} onPress={handleCheckInPress}>
+            <UserCheck size={20} color="#ffffff" />
+            <Text style={styles.checkInButtonText}>Check In Attendees</Text>
+          </Pressable>
+        )}
+
+        {!event.user_rsvp_status && (
+          <Pressable style={styles.rsvpButton}>
+            <Text style={styles.rsvpButtonText}>RSVP</Text>
+          </Pressable>
+        )}
+      </ScrollView>
 
       {isCancelling && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
-    },
-    content: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xxl,
+      backgroundColor: DETAIL_COLORS.background,
     },
     centered: {
-      flex: 1,
       justifyContent: "center",
       alignItems: "center",
       padding: SPACING.lg,
     },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginBottom: SPACING.md,
+    headerGradient: {
+      paddingBottom: SPACING.xs,
     },
-    backButton: {
+    headerSafeArea: {},
+    navHeader: {
       flexDirection: "row",
       alignItems: "center",
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
       gap: SPACING.sm,
     },
-    backButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: colors.primary,
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
     },
     title: {
       ...TYPOGRAPHY.headlineLarge,
-      color: colors.foreground,
+      color: DETAIL_COLORS.primaryText,
       marginBottom: SPACING.md,
     },
     details: {
-      backgroundColor: colors.card,
+      backgroundColor: DETAIL_COLORS.card,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       marginBottom: SPACING.md,
@@ -343,31 +382,31 @@ const createStyles = (colors: ThemeColors) =>
     },
     detailText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: colors.foreground,
+      color: DETAIL_COLORS.primaryText,
       flex: 1,
     },
     description: {
-      backgroundColor: colors.card,
+      backgroundColor: DETAIL_COLORS.card,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       marginBottom: SPACING.md,
     },
     descriptionText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: colors.foreground,
+      color: DETAIL_COLORS.primaryText,
       lineHeight: 24,
     },
     rsvpSummary: {
-      backgroundColor: colors.card,
+      backgroundColor: DETAIL_COLORS.card,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       marginBottom: SPACING.md,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: DETAIL_COLORS.border,
     },
     rsvpSummaryTitle: {
       ...TYPOGRAPHY.titleMedium,
-      color: colors.foreground,
+      color: DETAIL_COLORS.primaryText,
       marginBottom: SPACING.sm,
     },
     rsvpCountsRow: {
@@ -387,10 +426,10 @@ const createStyles = (colors: ThemeColors) =>
     },
     rsvpTapHint: {
       ...TYPOGRAPHY.caption,
-      color: colors.muted,
+      color: DETAIL_COLORS.mutedText,
     },
     checkInButton: {
-      backgroundColor: SEMANTIC.success,
+      backgroundColor: DETAIL_COLORS.success,
       borderRadius: RADIUS.lg,
       paddingVertical: SPACING.md,
       alignItems: "center",
@@ -405,21 +444,31 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "600",
     },
     rsvpButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: DETAIL_COLORS.success,
       borderRadius: RADIUS.lg,
       paddingVertical: SPACING.md,
       alignItems: "center",
     },
     rsvpButtonText: {
       ...TYPOGRAPHY.labelLarge,
-      color: colors.primaryForeground,
+      color: "#ffffff",
       fontWeight: "600",
     },
     errorText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: colors.error,
+      color: DETAIL_COLORS.error,
       textAlign: "center",
       marginBottom: SPACING.md,
+    },
+    backButtonAlt: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: DETAIL_COLORS.success,
+    },
+    backButtonAltText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
     },
     loadingOverlay: {
       ...StyleSheet.absoluteFillObject,
