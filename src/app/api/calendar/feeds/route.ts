@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncCalendarFeed } from "@/lib/calendar/icsSync";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
+import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { calendarFeedCreateSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -57,10 +61,24 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    const rateLimit = checkRateLimit(request, {
+      userId: user?.id ?? null,
+      feature: "calendar feeds",
+      limitPerIp: 60,
+      limitPerUser: 45,
+    });
+
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
+    const respond = (payload: unknown, status = 200) =>
+      NextResponse.json(payload, { status, headers: rateLimit.headers });
+
     if (authError || !user) {
-      return NextResponse.json(
+      return respond(
         { error: "Unauthorized", message: "You must be logged in to view feeds." },
-        { status: 401 }
+        401
       );
     }
 
@@ -68,9 +86,9 @@ export async function GET(request: Request) {
     const organizationId = url.searchParams.get("organizationId");
 
     if (!organizationId) {
-      return NextResponse.json(
+      return respond(
         { error: "Missing parameter", message: "organizationId is required." },
-        { status: 400 }
+        400
       );
     }
 
@@ -82,9 +100,9 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (!membership || membership.status === "revoked") {
-      return NextResponse.json(
+      return respond(
         { error: "Forbidden", message: "You are not a member of this organization." },
-        { status: 403 }
+        403
       );
     }
 
@@ -98,13 +116,13 @@ export async function GET(request: Request) {
 
     if (error) {
       console.error("[calendar-feeds] Failed to fetch feeds:", error);
-      return NextResponse.json(
+      return respond(
         { error: "Database error", message: "Failed to fetch feeds." },
-        { status: 500 }
+        500
       );
     }
 
-    return NextResponse.json({
+    return respond({
       feeds: (feeds || []).map(formatFeedResponse),
     });
   } catch (error) {
@@ -121,37 +139,28 @@ export async function POST(request: Request) {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+    const rateLimit = checkRateLimit(request, {
+      userId: user?.id ?? null,
+      feature: "calendar feed creation",
+      limitPerIp: 30,
+      limitPerUser: 20,
+    });
+
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
+    const respond = (payload: unknown, status = 200) =>
+      NextResponse.json(payload, { status, headers: rateLimit.headers });
+
     if (authError || !user) {
-      return NextResponse.json(
+      return respond(
         { error: "Unauthorized", message: "You must be logged in to add a feed." },
-        { status: 401 }
+        401
       );
     }
 
-    let body: { feedUrl?: string; provider?: string; organizationId?: string };
-
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid request", message: "Request body must be valid JSON." },
-        { status: 400 }
-      );
-    }
-
-    if (!body.feedUrl) {
-      return NextResponse.json(
-        { error: "Missing feedUrl", message: "feedUrl is required." },
-        { status: 400 }
-      );
-    }
-
-    if (!body.organizationId) {
-      return NextResponse.json(
-        { error: "Missing organizationId", message: "organizationId is required." },
-        { status: 400 }
-      );
-    }
+    const body = await validateJson(request, calendarFeedCreateSchema);
 
     const { data: membership } = await supabase
       .from("user_organization_roles")
@@ -161,26 +170,32 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (!membership || membership.status === "revoked") {
-      return NextResponse.json(
+      return respond(
         { error: "Forbidden", message: "You are not a member of this organization." },
-        { status: 403 }
+        403
       );
+    }
+
+    // Block mutations if org is in grace period (read-only mode)
+    const { isReadOnly } = await checkOrgReadOnly(body.organizationId);
+    if (isReadOnly) {
+      return respond(readOnlyResponse(), 403);
     }
 
     let normalizedUrl: string;
     try {
       normalizedUrl = normalizeFeedUrl(body.feedUrl);
     } catch (error) {
-      return NextResponse.json(
+      return respond(
         { error: "Invalid feedUrl", message: error instanceof Error ? error.message : "Invalid feed URL." },
-        { status: 400 }
+        400
       );
     }
 
     if (!isLikelyIcsUrl(normalizedUrl)) {
-      return NextResponse.json(
+      return respond(
         { error: "Invalid feedUrl", message: "Feed URL does not look like an ICS calendar link." },
-        { status: 400 }
+        400
       );
     }
 
@@ -200,9 +215,9 @@ export async function POST(request: Request) {
 
     if (error || !feed) {
       console.error("[calendar-feeds] Failed to insert feed:", error);
-      return NextResponse.json(
+      return respond(
         { error: "Database error", message: "Failed to save feed." },
-        { status: 500 }
+        500
       );
     }
 
@@ -215,11 +230,15 @@ export async function POST(request: Request) {
       .eq("id", feed.id)
       .single();
 
-    return NextResponse.json(
+    return respond(
       formatFeedResponse(updatedFeed ?? feed),
-      { status: 201 }
+      201
     );
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return validationErrorResponse(error);
+    }
+
     console.error("[calendar-feeds] Error adding feed:", error);
     return NextResponse.json(
       { error: "Internal error", message: "Failed to add feed." },

@@ -136,3 +136,22 @@ export const dayOfWeekSchema = z
 export const dayOfMonthSchema = z
   .string()
   .regex(/^([1-9]|[12]\d|3[01])$/, { message: "Must be a valid day of month (1-31)" });
+
+// URL validation for API routes (allows http/https/webcal)
+export const safeUrl = (maxLength = 2048) =>
+  z
+    .string()
+    .trim()
+    .min(1, "URL is required")
+    .max(maxLength, `URL must be ${maxLength} characters or fewer`)
+    .refine(
+      (val) => {
+        try {
+          const url = new URL(val.startsWith("webcal://") ? `https://${val.slice(9)}` : val);
+          return url.protocol === "http:" || url.protocol === "https:";
+        } catch {
+          return false;
+        }
+      },
+      { message: "Must be a valid URL (http, https, or webcal)" }
+    );

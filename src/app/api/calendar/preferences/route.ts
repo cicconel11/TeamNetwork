@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +29,9 @@ interface SyncPreferences {
 
 /**
  * GET /api/calendar/preferences
- * 
+ *
  * Retrieves the user's calendar sync preferences for a specific organization.
- * 
+ *
  * Requirements: 5.1, 5.2
  * - Returns sync preference options for each event type
  */
@@ -39,10 +41,24 @@ export async function GET(request: Request) {
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+        const rateLimit = checkRateLimit(request, {
+            userId: user?.id ?? null,
+            feature: "calendar preferences",
+            limitPerIp: 60,
+            limitPerUser: 45,
+        });
+
+        if (!rateLimit.ok) {
+            return buildRateLimitResponse(rateLimit);
+        }
+
+        const respond = (payload: unknown, status = 200) =>
+            NextResponse.json(payload, { status, headers: rateLimit.headers });
+
         if (authError || !user) {
-            return NextResponse.json(
+            return respond(
                 { error: "Unauthorized", message: "You must be logged in to view preferences." },
-                { status: 401 }
+                401
             );
         }
 
@@ -51,17 +67,14 @@ export async function GET(request: Request) {
         const organizationId = url.searchParams.get("organizationId");
 
         if (!organizationId) {
-            return NextResponse.json(
+            return respond(
                 { error: "Missing parameter", message: "organizationId is required." },
-                { status: 400 }
+                400
             );
         }
 
-        // Use service client for database operations
-        const serviceClient = createServiceClient();
-
-        // Verify user is a member of the organization
-        const { data: membership } = await serviceClient
+        // Use regular client for membership check (RLS handles it)
+        const { data: membership } = await supabase
             .from("user_organization_roles")
             .select("id")
             .eq("user_id", user.id)
@@ -69,14 +82,14 @@ export async function GET(request: Request) {
             .single();
 
         if (!membership) {
-            return NextResponse.json(
+            return respond(
                 { error: "Forbidden", message: "You are not a member of this organization." },
-                { status: 403 }
+                403
             );
         }
 
-        // Get existing preferences
-        const { data: preferences, error: prefError } = await serviceClient
+        // Get existing preferences using regular client
+        const { data: preferences, error: prefError } = await supabase
             .from("calendar_sync_preferences")
             .select("*")
             .eq("user_id", user.id)
@@ -86,9 +99,9 @@ export async function GET(request: Request) {
         if (prefError && prefError.code !== "PGRST116") {
             // PGRST116 = no rows returned, which is fine
             console.error("[calendar-preferences] Error fetching preferences:", prefError);
-            return NextResponse.json(
+            return respond(
                 { error: "Database error", message: "Failed to fetch preferences." },
-                { status: 500 }
+                500
             );
         }
 
@@ -113,7 +126,7 @@ export async function GET(request: Request) {
             }
             : defaultPreferences;
 
-        return NextResponse.json({
+        return respond({
             organizationId,
             preferences: responsePreferences,
             hasCustomPreferences: !!preferences,
@@ -131,9 +144,9 @@ export async function GET(request: Request) {
 
 /**
  * PUT /api/calendar/preferences
- * 
+ *
  * Updates the user's calendar sync preferences for a specific organization.
- * 
+ *
  * Requirements: 5.1, 5.2
  * - Allows users to enable or disable sync for each event type
  */
@@ -143,10 +156,24 @@ export async function PUT(request: Request) {
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+        const rateLimit = checkRateLimit(request, {
+            userId: user?.id ?? null,
+            feature: "calendar preferences update",
+            limitPerIp: 30,
+            limitPerUser: 20,
+        });
+
+        if (!rateLimit.ok) {
+            return buildRateLimitResponse(rateLimit);
+        }
+
+        const respond = (payload: unknown, status = 200) =>
+            NextResponse.json(payload, { status, headers: rateLimit.headers });
+
         if (authError || !user) {
-            return NextResponse.json(
+            return respond(
                 { error: "Unauthorized", message: "You must be logged in to update preferences." },
-                { status: 401 }
+                401
             );
         }
 
@@ -155,25 +182,25 @@ export async function PUT(request: Request) {
         try {
             body = await request.json();
         } catch {
-            return NextResponse.json(
+            return respond(
                 { error: "Invalid request", message: "Request body must be valid JSON." },
-                { status: 400 }
+                400
             );
         }
 
         const { organizationId, preferences } = body;
 
         if (!organizationId) {
-            return NextResponse.json(
+            return respond(
                 { error: "Missing parameter", message: "organizationId is required." },
-                { status: 400 }
+                400
             );
         }
 
         if (!preferences || typeof preferences !== "object") {
-            return NextResponse.json(
+            return respond(
                 { error: "Missing parameter", message: "preferences object is required." },
-                { status: 400 }
+                400
             );
         }
 
@@ -188,17 +215,14 @@ export async function PUT(request: Request) {
         }
 
         if (Object.keys(validatedPreferences).length === 0) {
-            return NextResponse.json(
+            return respond(
                 { error: "Invalid preferences", message: "At least one valid preference must be provided." },
-                { status: 400 }
+                400
             );
         }
 
-        // Use service client for database operations
-        const serviceClient = createServiceClient();
-
-        // Verify user is a member of the organization
-        const { data: membership } = await serviceClient
+        // Verify user is a member of the organization using regular client
+        const { data: membership } = await supabase
             .from("user_organization_roles")
             .select("id")
             .eq("user_id", user.id)
@@ -206,11 +230,20 @@ export async function PUT(request: Request) {
             .single();
 
         if (!membership) {
-            return NextResponse.json(
+            return respond(
                 { error: "Forbidden", message: "You are not a member of this organization." },
-                { status: 403 }
+                403
             );
         }
+
+        // Block mutations if org is in grace period (read-only mode)
+        const { isReadOnly } = await checkOrgReadOnly(organizationId);
+        if (isReadOnly) {
+            return respond(readOnlyResponse(), 403);
+        }
+
+        // Use service client for upsert (may need to bypass RLS for insert)
+        const serviceClient = createServiceClient();
 
         // Upsert preferences
         const { data: updatedPreferences, error: upsertError } = await serviceClient
@@ -228,9 +261,9 @@ export async function PUT(request: Request) {
 
         if (upsertError) {
             console.error("[calendar-preferences] Error upserting preferences:", upsertError);
-            return NextResponse.json(
+            return respond(
                 { error: "Database error", message: "Failed to save preferences." },
-                { status: 500 }
+                500
             );
         }
 
@@ -244,7 +277,7 @@ export async function PUT(request: Request) {
             sync_philanthropy: updatedPreferences.sync_philanthropy ?? true,
         };
 
-        return NextResponse.json({
+        return respond({
             success: true,
             organizationId,
             preferences: responsePreferences,

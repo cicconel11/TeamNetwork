@@ -33,3 +33,6 @@ export * from "./chat";
 
 // Competition schemas
 export * from "./competition";
+
+// Calendar schemas
+export * from "./calendar";

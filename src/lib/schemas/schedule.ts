@@ -6,6 +6,7 @@ import {
   timeStringSchema,
   dateStringSchema,
   optionalDateStringSchema,
+  safeUrl,
 } from "./common";
 
 // Academic schedule form
@@ -56,3 +57,21 @@ export type NewScheduleForm = z.infer<typeof newScheduleSchema>;
 
 export const editScheduleSchema = newScheduleSchema;
 export type EditScheduleForm = z.infer<typeof editScheduleSchema>;
+
+// API schemas for external schedule import
+export const schedulePreviewSchema = z
+  .object({
+    orgId: z.string().uuid({ message: "Invalid organization ID" }),
+    url: safeUrl(2048),
+  })
+  .strict();
+export type SchedulePreviewRequest = z.infer<typeof schedulePreviewSchema>;
+
+export const scheduleConnectSchema = z
+  .object({
+    orgId: z.string().uuid({ message: "Invalid organization ID" }),
+    url: safeUrl(2048),
+    title: optionalSafeString(200),
+  })
+  .strict();
+export type ScheduleConnectRequest = z.infer<typeof scheduleConnectSchema>;

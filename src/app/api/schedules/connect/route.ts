@@ -7,6 +7,9 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { checkHostStatus } from "@/lib/schedule-security/allowlist";
 import { verifyAndEnroll } from "@/lib/schedule-security/verifyAndEnroll";
 import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
+import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
+import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { scheduleConnectSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -37,22 +40,7 @@ export async function POST(request: Request) {
       return buildRateLimitResponse(rateLimit);
     }
 
-    let body: { orgId?: string; url?: string; title?: string };
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid request", message: "Request body must be valid JSON." },
-        { status: 400, headers: rateLimit.headers }
-      );
-    }
-
-    if (!body.orgId || !body.url) {
-      return NextResponse.json(
-        { error: "Missing parameters", message: "orgId and url are required." },
-        { status: 400, headers: rateLimit.headers }
-      );
-    }
+    const body = await validateJson(request, scheduleConnectSchema);
 
     const { data: membership } = await supabase
       .from("user_organization_roles")
@@ -66,6 +54,12 @@ export async function POST(request: Request) {
         { error: "Forbidden", message: "Only admins can connect schedules." },
         { status: 403, headers: rateLimit.headers }
       );
+    }
+
+    // Block mutations if org is in grace period (read-only mode)
+    const { isReadOnly } = await checkOrgReadOnly(body.orgId);
+    if (isReadOnly) {
+      return NextResponse.json(readOnlyResponse(), { status: 403, headers: rateLimit.headers });
     }
 
     let normalizedUrl: string;
@@ -169,6 +163,10 @@ export async function POST(request: Request) {
       sync: result,
     }, { headers: rateLimit.headers });
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return validationErrorResponse(error);
+    }
+
     console.error("[schedule-connect] Error:", {
       message: error instanceof Error ? error.message : String(error),
       name: error instanceof Error ? error.name : "Unknown",

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { detectConnector } from "@/lib/schedule-connectors/registry";
 import { maskUrl, normalizeUrl } from "@/lib/schedule-connectors/fetch";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { schedulePreviewSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
 
@@ -43,22 +45,7 @@ export async function POST(request: Request) {
       return buildRateLimitResponse(rateLimit);
     }
 
-    let body: { orgId?: string; url?: string };
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json(
-        { error: "Invalid request", message: "Request body must be valid JSON." },
-        { status: 400, headers: rateLimit.headers }
-      );
-    }
-
-    if (!body.orgId || !body.url) {
-      return NextResponse.json(
-        { error: "Missing parameters", message: "orgId and url are required." },
-        { status: 400, headers: rateLimit.headers }
-      );
-    }
+    const body = await validateJson(request, schedulePreviewSchema);
 
     const { data: membership } = await supabase
       .from("user_organization_roles")
@@ -95,6 +82,10 @@ export async function POST(request: Request) {
       maskedUrl: maskUrl(normalizedUrl),
     }, { headers: rateLimit.headers });
   } catch (error) {
+    if (error instanceof ValidationError) {
+      return validationErrorResponse(error);
+    }
+
     const message = error instanceof Error ? error.message : "Failed to preview schedule.";
     const isClientError = isPreviewClientError(message);
     if (!isClientError) {
