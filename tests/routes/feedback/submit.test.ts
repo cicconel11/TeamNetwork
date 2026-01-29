@@ -5,7 +5,6 @@ import {
   isAuthenticated,
   AuthPresets,
 } from "../../utils/authMock.ts";
-import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 
 /**
  * Tests for POST /api/feedback/submit

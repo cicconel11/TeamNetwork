@@ -23,6 +23,8 @@ Required environment variables:
 | `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key (get from [hCaptcha Dashboard](https://dashboard.hcaptcha.com/)) |
 | `HCAPTCHA_SECRET_KEY` | hCaptcha secret key (server-side only) |
 | `RESEND_API_KEY` | Resend API key for emails |
+| `FROM_EMAIL` | Sender email for notifications (optional, default: noreply@myteamnetwork.com) |
+| `ADMIN_EMAIL` | Admin notification recipient (optional, default: admin@myteamnetwork.com) |
 | `NEXT_PUBLIC_APP_URL` | Application base URL |
 
 ### Development Server

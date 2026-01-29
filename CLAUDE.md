@@ -54,7 +54,8 @@ src/
 │   ├── app/                # Platform routes (/app/join, /app/create-org)
 │   ├── auth/               # Auth flows (login, signup, callback)
 │   ├── api/                # API routes (Stripe webhooks, org APIs)
-│   └── settings/           # User settings
+│   ├── customization/      # Org customization route (renamed from settings)
+│   └── settings/           # User settings (notifications)
 ├── components/             # Reusable UI components
 │   ├── ui/                 # Base UI primitives (Button, Card, Input)
 │   ├── layout/             # Layout components (OrgSidebar, MobileNav)
@@ -67,7 +68,8 @@ src/
 │   ├── security/           # Rate limiting, validation
 │   ├── navigation/         # Navigation configuration
 │   ├── schedule-connectors/ # External schedule importers (ICS, HTML parsers)
-│   └── schedule-security/  # Domain allowlist, SSRF protection
+│   ├── schedule-security/  # Domain allowlist, SSRF protection
+│   └── schemas/            # Zod validation schemas by domain
 ├── types/
 │   └── database.ts         # Generated Supabase types
 └── middleware.ts           # Global auth/routing middleware
@@ -161,10 +163,58 @@ Members progress through states:
 - **revoked**: Access removed, user redirected to `/app`
 
 ### Feedback Capture System
-User feedback is collected through a simple submission system:
-- Users submit feedback via form in `src/components/feedback/`
-- Submissions are processed through `/api/feedback/submit` API route
-- Feedback is stored for review and analysis
+User feedback is collected through a friction feedback system:
+- Users submit feedback via `FeedbackButton` component in `src/components/feedback/`
+- Submissions processed through `POST /api/feedback/submit`
+- Rate limits: 5/hour per user, 10/hour per IP
+- Request schema: `{ message, screenshot_url?, page_url, user_agent, context, trigger }`
+- Stored in `form_submissions` table with `FORM_ID = 00000000-0000-0000-0000-000000000001`
+- Admin notification sent via Resend (email configured via `FROM_EMAIL`, `ADMIN_EMAIL` env vars)
+
+**FeedbackButton Integration Points:**
+- `src/app/app/create-org/page.tsx` - Organization creation flow
+- `src/app/app/join/page.tsx` - Join organization flow
+- `src/app/auth/login/LoginClient.tsx` - Login page
+
+### Schema Validation System
+Centralized Zod schemas in `src/lib/schemas/` for input validation:
+
+**Available Domains:**
+- `auth` - Login, signup, password reset forms
+- `chat` - Chat message validation
+- `common` - Shared utilities (`safeString`, `safeNumber`, etc.)
+- `competition` - Competition and scoring schemas
+- `content` - Events, announcements, workouts, records, expenses
+- `donations` - Donation form validation
+- `feedback` - Feedback submission validation
+- `form-builder` - Dynamic form schemas
+- `member` - Member profile schemas
+- `organization` - Organization settings schemas
+- `schedule` - Schedule import schemas
+
+**Usage:**
+```typescript
+import { forgotPasswordSchema, type ForgotPasswordForm } from "@/lib/schemas";
+const validated = forgotPasswordSchema.parse(input);
+```
+
+### Loading States
+Route-level loading skeletons using Next.js `loading.tsx` convention:
+
+**Page Skeletons (`src/components/skeletons/pages/`):**
+- `ListPageSkeleton` - Generic list views
+- `TablePageSkeleton` - Table-based pages
+- `MembersPageSkeleton` - Members directory
+- `EventsPageSkeleton` - Events listing
+- `CompetitionPageSkeleton` - Competition leaderboard
+- `MentorshipPageSkeleton` - Mentorship pairs
+
+**Component Skeletons (`src/components/skeletons/`):**
+- `SkeletonListItem`, `SkeletonTableRow` - Generic items
+- `SkeletonMemberCard`, `SkeletonEventItem` - Feature-specific
+- `SkeletonStatCard`, `SkeletonLeaderboardRow` - Dashboard components
+
+Routes with loading states: alumni, announcements, chat, competition, donations, events, expenses, forms, members, mentorship, notifications, philanthropy, records, schedules, workouts
 
 ### Schedule Domain Allowlist & Security
 External schedule URLs are validated before import to prevent SSRF and abuse:
@@ -235,6 +285,8 @@ Required variables (validated at build time in `next.config.mjs`):
 - `STRIPE_BASE_PLAN_MONTHLY_PRICE_ID` (+ 7 more tier/billing variants)
 - `STRIPE_WEBHOOK_SECRET`
 - `RESEND_API_KEY`
+- `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
+- `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
 
 Stored in `.env.local` (never commit this file).
 
@@ -259,7 +311,30 @@ Tests are located in the `tests/` directory with a coverage goal of 80%.
 - `npm run test:payments` - Payment idempotency and Stripe webhook tests
 - `npm run test:schedules` - Schedule domain verification and enrollment tests
 
-Tests use Node's built-in test runner. Run individual test files with `node --test tests/your-test.test.ts`.
+**Test Structure:**
+```
+tests/
+├── *.test.ts               # Unit tests (Node built-in runner)
+├── routes/                 # API route integration tests
+│   ├── admin/              # Admin endpoint tests
+│   ├── calendar/           # Calendar/feed tests
+│   ├── feedback/           # Feedback submission tests
+│   ├── organizations/      # Org management tests
+│   ├── schedules/          # Schedule import tests
+│   └── stripe/             # Payment/webhook tests
+├── e2e/                    # Playwright E2E tests
+│   ├── auth.setup.ts       # Auth state setup
+│   ├── fixtures/           # Test data fixtures
+│   ├── page-objects/       # Page Object Model classes
+│   └── specs/              # Test specifications
+├── fixtures/               # Test fixtures (ICS files, etc.)
+└── utils/                  # Test utilities (mocks, stubs)
+```
+
+**Running Tests:**
+- Unit tests: `node --test tests/your-test.test.ts`
+- E2E tests: `npx playwright test tests/e2e/specs/`
+- With loader: Tests use `tests/ts-loader.js` for TypeScript support
 
 ## Key Files to Understand
 
@@ -271,6 +346,7 @@ Tests use Node's built-in test runner. Run individual test files with `node --te
 - `src/lib/schedule-security/verifyAndEnroll.ts` - Domain verification and allowlist enrollment
 - `src/lib/schedule-security/safe-fetch.ts` - SSRF-protected HTTP fetching
 - `src/lib/schedule-connectors/sanitize.ts` - Event title sanitization and hash stability helpers
+- `src/lib/schemas/index.ts` - Centralized Zod validation schemas
 - `docs/db/schema-audit.md` - Database schema documentation and known issues
 
 ## Known Issues & Considerations
