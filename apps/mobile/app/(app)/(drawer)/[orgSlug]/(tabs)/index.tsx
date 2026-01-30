@@ -20,6 +20,7 @@ import {
   Users,
   Megaphone,
   GraduationCap,
+  RefreshCw,
 } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -234,7 +235,21 @@ export default function HomeScreen() {
     return (
       <View style={styles.centered}>
         <View style={styles.errorCard}>
+          <RefreshCw size={40} color={NEUTRAL.border} />
+          <Text style={styles.errorTitle}>Something went wrong</Text>
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.retryButton,
+              pressed && styles.retryButtonPressed,
+            ]}
+            onPress={handleRefresh}
+            accessibilityLabel="Retry loading"
+            accessibilityRole="button"
+          >
+            <RefreshCw size={16} color={NEUTRAL.surface} />
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -574,15 +589,40 @@ const createStyles = () =>
     },
     // Error state
     errorCard: {
-      backgroundColor: SEMANTIC.errorLight,
+      backgroundColor: NEUTRAL.surface,
       borderRadius: RADIUS.lg,
       borderWidth: 1,
-      borderColor: SEMANTIC.error,
-      padding: SPACING.lg,
+      borderColor: NEUTRAL.border,
+      padding: SPACING.xl,
+      alignItems: "center",
+      ...SHADOWS.sm,
+    },
+    errorTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: NEUTRAL.foreground,
+      marginTop: SPACING.sm,
     },
     errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
+      ...TYPOGRAPHY.bodySmall,
+      color: NEUTRAL.muted,
       textAlign: "center",
+      marginTop: SPACING.xs,
+    },
+    retryButton: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: SPACING.sm,
+      marginTop: SPACING.md,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+      backgroundColor: SEMANTIC.success,
+    },
+    retryButtonPressed: {
+      opacity: 0.8,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: NEUTRAL.surface,
     },
   });

@@ -440,16 +440,18 @@ export default function LoginScreen() {
             </Link>
           </View>
 
-          {/* Dev Login - always shown for demo */}
-          <Pressable
-            style={({ pressed }) => [styles.devButton, isLoading && styles.devButtonDisabled, pressed && { opacity: 0.7 }]}
-            onPress={handleDevLogin}
-            disabled={isLoading}
-            accessibilityLabel="Developer login"
-            accessibilityRole="button"
-          >
-            <Text style={styles.devButtonText}>Dev Login</Text>
-          </Pressable>
+          {/* Dev Login - only shown in development */}
+          {__DEV__ && (
+            <Pressable
+              style={({ pressed }) => [styles.devButton, isLoading && styles.devButtonDisabled, pressed && { opacity: 0.7 }]}
+              onPress={handleDevLogin}
+              disabled={isLoading}
+              accessibilityLabel="Developer login"
+              accessibilityRole="button"
+            >
+              <Text style={styles.devButtonText}>Dev Login</Text>
+            </Pressable>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
