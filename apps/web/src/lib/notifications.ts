@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, NotificationAudience, NotificationChannel, UserRole } from "@teammeet/types";
+import { Resend } from "resend";
 
 export type DeliveryChannel = "email" | "sms";
 
@@ -32,9 +33,9 @@ export interface NotificationBlastResult {
 }
 
 /**
- * Price/notification plug points:
- * - Emails: replace sendEmail implementation with Resend/SendGrid/etc.
- * - SMS: replace sendSMS with Twilio/etc.
+ * Notification delivery:
+ * - Emails: Sent via Resend API when RESEND_API_KEY is configured. Falls back to stub in dev.
+ * - SMS: Currently a stub - replace sendSMS with Twilio/etc. when needed.
  * - buildNotificationTargets derives per-recipient channels from preferences and requested channel.
  */
 
@@ -93,14 +94,64 @@ async function runWithConcurrency<T extends { success: boolean; error?: string }
   return results;
 }
 
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
+
 export async function sendEmail(params: EmailParams): Promise<NotificationResult> {
-  console.log("[STUB] Sending email:", {
+  // Log for development visibility
+  console.log("[EMAIL] Sending email:", {
     to: params.to,
     subject: params.subject,
-    body: params.body.substring(0, 100) + "...",
+    bodyPreview: params.body.substring(0, 100) + (params.body.length > 100 ? "..." : ""),
+    hasResend: !!resend,
   });
-  await delay(50);
-  return { success: true, messageId: `email_${Date.now()}_${Math.random().toString(36).slice(2)}` };
+
+  if (!resend) {
+    // Fallback to stub behavior when Resend is not configured (local dev without API key)
+    console.warn("[EMAIL] Resend not configured - email not sent. Set RESEND_API_KEY to enable.");
+    await delay(50);
+    return {
+      success: true,
+      messageId: `stub_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    };
+  }
+
+  try {
+    const response = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: params.subject,
+      text: params.body,
+    });
+
+    if (response.error) {
+      console.error("[EMAIL] Resend API error:", response.error);
+      return {
+        success: false,
+        error: response.error.message,
+      };
+    }
+
+    console.log("[EMAIL] Successfully sent email:", {
+      to: params.to,
+      messageId: response.data?.id,
+    });
+
+    return {
+      success: true,
+      messageId: response.data?.id,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error("[EMAIL] Failed to send email:", errorMessage);
+    return {
+      success: false,
+      error: errorMessage,
+    };
+  }
 }
 
 export async function sendSMS(params: SMSParams): Promise<NotificationResult> {

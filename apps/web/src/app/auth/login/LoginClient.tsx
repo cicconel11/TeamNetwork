@@ -197,14 +197,24 @@ function LoginForm({ hcaptchaSiteKey }: LoginFormProps) {
           />
 
           {mode === "password" && (
-            <Input
-              label="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+            <>
+              <Input
+                label="Password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+              />
+              <div className="flex justify-end">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-sm text-muted-foreground hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </>
           )}
 
           <div className="flex justify-center">

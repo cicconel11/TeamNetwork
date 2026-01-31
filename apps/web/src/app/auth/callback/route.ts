@@ -9,7 +9,8 @@ const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const redirect = requestUrl.searchParams.get("redirect") || "/app";
+  const type = requestUrl.searchParams.get("type");
+  const redirect = type === "recovery" ? "/auth/reset-password" : (requestUrl.searchParams.get("redirect") || "/app");
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");

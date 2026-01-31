@@ -13,6 +13,7 @@
     "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts tests/platform-fee.test.ts",
     "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts",
     "test:mobile": "node --test --loader ./tests/ts-loader.js tests/mobile-permissions.test.ts tests/mobile-routing.test.ts tests/mobile-parity-menu.test.ts",
+    "test:e2e": "npx playwright test --project=e2e",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
