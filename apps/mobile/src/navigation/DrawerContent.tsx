@@ -81,34 +81,34 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
     // Main section (no header): Home, Chat, Alumni*, Mentorship
     const mainItems: NavItem[] = [
-      { label: "Home", href: `/${slug}`, icon: Home },
-      { label: "Chat", href: `/${slug}/chat`, icon: MessageCircle },
+      { label: "Home", href: `/(app)/${slug}`, icon: Home },
+      { label: "Chat", href: `/(app)/${slug}/chat`, icon: MessageCircle },
     ];
 
     if (permissions.canViewAlumni) {
-      mainItems.push({ label: "Alumni", href: `/${slug}/alumni`, icon: GraduationCap });
+      mainItems.push({ label: "Alumni", href: `/(app)/${slug}/alumni`, icon: GraduationCap });
     }
 
-    mainItems.push({ label: "Mentorship", href: `/${slug}/mentorship`, icon: Handshake });
+    mainItems.push({ label: "Mentorship", href: `/(app)/${slug}/mentorship`, icon: Handshake });
 
     // Training section
     const trainingItems: NavItem[] = [
-      { label: "Workouts", href: `/${slug}/workouts`, icon: Dumbbell },
-      { label: "Competition", href: `/${slug}/competition`, icon: Award },
-      { label: "Schedules", href: `/${slug}/schedules`, icon: BookOpen },
-      { label: "Records", href: `/${slug}/records`, icon: Trophy },
+      { label: "Workouts", href: `/(app)/${slug}/workouts`, icon: Dumbbell },
+      { label: "Competition", href: `/(app)/${slug}/competition`, icon: Award },
+      { label: "Schedules", href: `/(app)/${slug}/schedules`, icon: BookOpen },
+      { label: "Records", href: `/(app)/${slug}/records`, icon: Trophy },
     ];
 
     // Money section
     const moneyItems: NavItem[] = [
-      { label: "Philanthropy", href: `/${slug}/philanthropy`, icon: Heart },
-      { label: "Donations", href: `/${slug}/donations`, icon: DollarSign },
-      { label: "Expenses", href: `/${slug}/expenses`, icon: Receipt },
+      { label: "Philanthropy", href: `/(app)/${slug}/philanthropy`, icon: Heart },
+      { label: "Donations", href: `/(app)/${slug}/donations`, icon: DollarSign },
+      { label: "Expenses", href: `/(app)/${slug}/expenses`, icon: Receipt },
     ];
 
     // Other section
     const otherItems: NavItem[] = [
-      { label: "Forms", href: `/${slug}/forms`, icon: ClipboardList },
+      { label: "Forms", href: `/(app)/${slug}/forms`, icon: ClipboardList },
     ];
 
     return [
@@ -123,8 +123,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const pinnedItems = useMemo<NavItem[]>(() => {
     if (!slug) return [];
     return [
-      { label: "Settings", href: `/${slug}/settings`, icon: Settings },
-      { label: "Navigation", href: `/${slug}/settings/navigation`, icon: SlidersHorizontal },
+      { label: "Settings", href: `/(app)/${slug}/settings`, icon: Settings },
+      { label: "Navigation", href: `/(app)/${slug}/settings/navigation`, icon: SlidersHorizontal },
       { label: "Organizations", href: "/(app)", icon: Building2 },
     ];
   }, [slug]);
@@ -138,7 +138,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     }
     // Use push for Home and Organizations to preserve back navigation
     // Use replace for secondary screens to avoid stacking
-    if (item.href === `/${slug}` || item.href === "/(app)") {
+    if (item.href === `/(app)/${slug}` || item.href === "/(app)") {
       router.push(item.href);
     } else {
       router.replace(item.href);
@@ -152,9 +152,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   // Check if a route is active
   const isRouteActive = (href: string) => {
-    // Normalize href for comparison (remove leading slash variations)
-    const normalizedHref = href.replace(/^\/(app)?/, "");
-    const normalizedPathname = pathname.replace(/^\/(app)?/, "");
+    // usePathname() returns paths WITHOUT route group segments like (app) or (drawer)
+    // Our hrefs include /(app)/ so we need to strip that prefix for comparison
+    // e.g., href "/(app)/myorg/home" -> "/myorg/home" to match pathname "/myorg/home"
+    const normalizedHref = href.replace(/^\/\(app\)/, "");
+    const normalizedPathname = pathname;
 
     if (normalizedHref === normalizedPathname) return true;
     // Check if pathname starts with href (for nested routes)

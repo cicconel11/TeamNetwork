@@ -1,11 +1,12 @@
-import { useRef, useCallback } from "react";
-import { Alert } from "react-native";
+import { useRef, useCallback, useMemo } from "react";
+import { Alert, Share } from "react-native";
 import { Tabs, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { OrgHeaderLeft } from "@/components/org-header-left";
 import { TabBar } from "@/components/TabBar";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useUnreadAnnouncementCount } from "@/hooks/useUnreadAnnouncementCount";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
 // Determine if running in Expo Go
@@ -25,10 +26,17 @@ if (!isExpoGo) {
 }
 
 export default function TabsLayout() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgName, orgId } = useOrg();
   const router = useRouter();
   const bottomSheetRef = useRef<any>(null);
   const { isAdmin } = useOrgRole();
+  const { unreadCount } = useUnreadAnnouncementCount(orgId);
+
+  // Memoize badges object to prevent unnecessary re-renders
+  const badges = useMemo(
+    () => ({ announcements: unreadCount }),
+    [unreadCount]
+  );
 
   const handleActionPress = useCallback(() => {
     if (isExpoGo || !BottomSheet) {
@@ -74,18 +82,36 @@ export default function TabsLayout() {
   }, [orgSlug, router, handleCloseSheet]);
 
   const handleCheckIn = useCallback(() => {
-    // TODO: Navigate to check-in screen
-  }, []);
+    if (!orgSlug) return;
+    // Navigate to events tab where user can select an event to check in
+    // Check-in requires selecting a specific event first
+    router.push(`/(app)/${orgSlug}/(tabs)/events`);
+    handleCloseSheet();
+  }, [orgSlug, router, handleCloseSheet]);
 
-  const handleShareOrg = useCallback(() => {
-    // TODO: Implement share org link
-  }, []);
+  const handleShareOrg = useCallback(async () => {
+    const orgUrl = `https://www.myteamnetwork.com/${orgSlug}`;
+    const shareMessage = orgName
+      ? `Check out ${orgName} on TeamMeet: ${orgUrl}`
+      : `Check out this organization on TeamMeet: ${orgUrl}`;
+
+    try {
+      await Share.share({
+        message: shareMessage,
+        url: orgUrl,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message !== "User did not share") {
+        Alert.alert("Error", "Unable to share. Please try again.");
+      }
+    }
+  }, [orgSlug, orgName]);
 
   const renderTabBar = useCallback(
     (props: any) => (
-      <TabBar {...props} onActionPress={handleActionPress} />
+      <TabBar {...props} onActionPress={handleActionPress} badges={badges} />
     ),
-    [handleActionPress]
+    [handleActionPress, badges]
   );
 
   return (

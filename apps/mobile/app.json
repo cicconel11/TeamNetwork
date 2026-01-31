@@ -4,14 +4,25 @@
     "slug": "teammeet",
     "owner": "teamnetwork",
     "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.myteamnetwork.teammeet",
+      "buildNumber": "1",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
@@ -28,6 +39,7 @@
     },
     "android": {
       "package": "com.myteamnetwork.teammeet",
+      "versionCode": 1,
       "googleServicesFile": "./google-services.json"
     },
     "scheme": "teammeet",
@@ -62,6 +74,7 @@
       "eas": {
         "projectId": "b5e6a305-0c4c-4c1d-b04f-cd5c3674ae9d"
       }
-    }
+    },
+    "privacy": "https://www.myteamnetwork.com/privacy"
   }
 }

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { APP_CHROME } from "@/lib/chrome";
+import { SEMANTIC } from "@/lib/design-tokens";
 
 const ICON_SIZE = 22;
 
@@ -18,15 +19,27 @@ const RIGHT_TABS = [
   { route: "members", icon: Users, label: "Members" },
 ] as const;
 
-interface TabBarProps extends BottomTabBarProps {
-  onActionPress?: () => void;
+interface TabBadges {
+  announcements?: number;
 }
 
-export function TabBar({ state, descriptors, navigation, onActionPress }: TabBarProps) {
+interface TabBarProps extends BottomTabBarProps {
+  onActionPress?: () => void;
+  badges?: TabBadges;
+}
+
+export function TabBar({ state, descriptors, navigation, onActionPress, badges }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(), []);
   const activeColor = APP_CHROME.tabBarActive;
   const inactiveColor = APP_CHROME.tabBarInactive;
+
+  const getBadgeCount = (routeName: string): number | undefined => {
+    if (routeName === "announcements") {
+      return badges?.announcements;
+    }
+    return undefined;
+  };
 
   const renderTab = (
     tabConfig: (typeof LEFT_TABS)[number] | (typeof RIGHT_TABS)[number]
@@ -39,6 +52,7 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
     const isFocused = state.index === actualIndex;
     const color = isFocused ? activeColor : inactiveColor;
     const IconComponent = tabConfig.icon;
+    const badgeCount = getBadgeCount(tabConfig.route);
 
     const onPress = () => {
       const event = navigation.emit({
@@ -57,12 +71,25 @@ export function TabBar({ state, descriptors, navigation, onActionPress }: TabBar
         key={route.key}
         accessibilityRole="button"
         accessibilityState={isFocused ? { selected: true } : {}}
-        accessibilityLabel={options.tabBarAccessibilityLabel || tabConfig.label}
+        accessibilityLabel={
+          badgeCount && badgeCount > 0
+            ? `${options.tabBarAccessibilityLabel || tabConfig.label}, ${badgeCount} unread`
+            : options.tabBarAccessibilityLabel || tabConfig.label
+        }
         onPress={onPress}
         style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}
       >
         <View style={styles.tabContent}>
-          <IconComponent size={ICON_SIZE} color={color} strokeWidth={isFocused ? 2.5 : 2} />
+          <View style={styles.iconContainer}>
+            <IconComponent size={ICON_SIZE} color={color} strokeWidth={isFocused ? 2.5 : 2} />
+            {badgeCount !== undefined && badgeCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {badgeCount > 9 ? "9+" : badgeCount}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text style={[styles.tabLabel, { color }]}>{tabConfig.label}</Text>
           {isFocused && <View style={styles.activeIndicator} />}
         </View>
@@ -131,6 +158,27 @@ const createStyles = () =>
       alignItems: "center",
       justifyContent: "center",
       gap: 3,
+    },
+    iconContainer: {
+      position: "relative",
+    },
+    badge: {
+      position: "absolute",
+      top: -4,
+      right: -8,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: SEMANTIC.error,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 4,
+    },
+    badgeText: {
+      color: "#ffffff",
+      fontSize: 10,
+      fontWeight: "700",
+      lineHeight: 12,
     },
     tabLabel: {
       fontSize: 10,
