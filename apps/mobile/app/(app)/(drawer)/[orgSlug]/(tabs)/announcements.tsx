@@ -16,6 +16,7 @@ import { useFocusEffect, useRouter, useNavigation } from "expo-router";
 import { ExternalLink } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
+import { useUnreadAnnouncementCount } from "@/hooks/useUnreadAnnouncementCount";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useAuth } from "@/hooks/useAuth";
@@ -36,6 +37,7 @@ export default function AnnouncementsScreen() {
   const styles = useMemo(() => createStyles(), []);
   // Use orgId from context for data hook (eliminates redundant org fetch)
   const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgId);
+  const { markAsRead } = useUnreadAnnouncementCount(orgId);
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 
@@ -80,11 +82,13 @@ export default function AnnouncementsScreen() {
     ];
   }, [permissions.canUseAdminActions, orgSlug]);
 
-  // Refetch on tab focus if data is stale
+  // Refetch on tab focus if data is stale, and mark as read
   useFocusEffect(
     useCallback(() => {
       refetchIfStale();
-    }, [refetchIfStale])
+      // Mark announcements as read when tab is focused
+      markAsRead();
+    }, [refetchIfStale, markAsRead])
   );
 
   const handleRefresh = useCallback(async () => {
