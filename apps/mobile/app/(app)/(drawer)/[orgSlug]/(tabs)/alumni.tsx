@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -12,9 +12,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useRouter, useNavigation } from "expo-router";
-import { MapPin, ArrowUpDown, Users, Search } from "lucide-react-native";
+import { MapPin, ArrowUpDown, Users, Search, Plus } from "lucide-react-native";
 import { useAlumni } from "@/hooks/useAlumni";
 import { useOrg } from "@/contexts/OrgContext";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -56,6 +57,7 @@ export default function AlumniScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
+  const { isAdmin } = useOrgRole();
   // Use orgId from context for data hook (eliminates redundant org fetch)
   const { alumni, loading, error, refetch, refetchIfStale } = useAlumni(orgId);
   const styles = useMemo(() => createStyles(), []);
@@ -78,6 +80,10 @@ export default function AlumniScreen() {
       // Drawer not available - no-op
     }
   }, [navigation]);
+
+  const handleAddAlumni = useCallback(() => {
+    router.push(`/(app)/${orgSlug}/alumni/new`);
+  }, [router, orgSlug]);
 
   useFocusEffect(
     useCallback(() => {
@@ -360,6 +366,14 @@ export default function AlumniScreen() {
                 {alumni.length} {alumni.length === 1 ? "alum" : "alumni"}
               </Text>
             </View>
+            {isAdmin && (
+              <Pressable
+                onPress={handleAddAlumni}
+                style={({ pressed }) => [styles.addButton, pressed && { opacity: 0.7 }]}
+              >
+                <Plus size={20} color={APP_CHROME.headerTitle} />
+              </Pressable>
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -434,6 +448,10 @@ const createStyles = () =>
     },
     headerTextContainer: {
       flex: 1,
+    },
+    addButton: {
+      padding: SPACING.xs,
+      marginRight: -SPACING.xs,
     },
     headerTitle: {
       ...TYPOGRAPHY.titleLarge,

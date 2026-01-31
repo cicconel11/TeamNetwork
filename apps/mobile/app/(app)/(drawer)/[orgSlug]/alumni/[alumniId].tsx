@@ -22,8 +22,10 @@ import {
   Mail,
   Linkedin,
   RefreshCw,
+  Pencil,
 } from "lucide-react-native";
 import { useAlumniDetail } from "@/hooks/useAlumniDetail";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -45,9 +47,16 @@ const DETAIL_COLORS = {
 export default function AlumniDetailScreen() {
   const { alumniId, orgSlug } = useLocalSearchParams<{ alumniId: string; orgSlug: string }>();
   const { alumni, loading, error, refetch } = useAlumniDetail(orgSlug || "", alumniId || "");
+  const { isAdmin } = useOrgRole();
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);
+
+  const handleEditPress = useCallback(() => {
+    if (alumniId && orgSlug) {
+      router.push(`/(app)/${orgSlug}/alumni/${alumniId}/edit`);
+    }
+  }, [alumniId, orgSlug, router]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -144,6 +153,14 @@ export default function AlumniDetailScreen() {
                 Alumni Profile
               </Text>
             </View>
+            {isAdmin && (
+              <Pressable
+                onPress={handleEditPress}
+                style={({ pressed }) => [styles.editButton, pressed && { opacity: 0.7 }]}
+              >
+                <Pencil size={18} color={APP_CHROME.headerTitle} />
+              </Pressable>
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -279,6 +296,10 @@ const createStyles = () =>
     backButton: {
       padding: SPACING.xs,
       marginLeft: -SPACING.xs,
+    },
+    editButton: {
+      padding: SPACING.xs,
+      marginRight: -SPACING.xs,
     },
     headerTextContainer: {
       flex: 1,
