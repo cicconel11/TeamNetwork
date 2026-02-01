@@ -19,6 +19,42 @@ interface RouteParams {
 const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED_LOGO_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"]);
 
+// Magic bytes for image format validation (prevents MIME type spoofing)
+const IMAGE_MAGIC_BYTES: Record<string, number[][]> = {
+  "image/png": [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  "image/jpeg": [[0xff, 0xd8, 0xff]],
+  "image/jpg": [[0xff, 0xd8, 0xff]],
+  "image/gif": [[0x47, 0x49, 0x46, 0x38, 0x37, 0x61], [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]],
+  "image/webp": [[0x52, 0x49, 0x46, 0x46]], // RIFF header (WebP starts with RIFF....WEBP)
+};
+
+/**
+ * Validates that the file content matches its declared MIME type.
+ * This prevents attackers from uploading malicious files with spoofed MIME types.
+ */
+function validateImageMagicBytes(buffer: Buffer, declaredType: string): boolean {
+  const signatures = IMAGE_MAGIC_BYTES[declaredType];
+  if (!signatures) return false;
+
+  for (const signature of signatures) {
+    if (buffer.length < signature.length) continue;
+    const matches = signature.every((byte, i) => buffer[i] === byte);
+    if (matches) {
+      // Additional check for WebP: verify WEBP signature at offset 8
+      if (declaredType === "image/webp") {
+        if (buffer.length >= 12) {
+          const webpSig = [0x57, 0x45, 0x42, 0x50]; // "WEBP"
+          const webpMatches = webpSig.every((byte, i) => buffer[8 + i] === byte);
+          return webpMatches;
+        }
+        return false;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
 function normalizeHexColor(value: FormDataEntryValue | null): { color: string | null; invalid: boolean } {
   if (!value || typeof value !== "string") return { color: null, invalid: false };
   const trimmed = value.trim();
@@ -93,12 +129,28 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Provide a logo or updated colors to save." }, 400);
   }
 
+  // Validate file before processing
+  let uploadBuffer: Buffer | null = null;
   if (uploadFile) {
+    // Check declared MIME type
     if (!ALLOWED_LOGO_TYPES.has(uploadFile.type)) {
       return respond({ error: "Logo must be a PNG, JPG, GIF, or WebP image." }, 400);
     }
+    // Check file size
     if (uploadFile.size > MAX_LOGO_BYTES) {
       return respond({ error: "Logo must be under 5MB." }, 400);
+    }
+
+    // Read file content for validation
+    const arrayBuffer = await uploadFile.arrayBuffer();
+    uploadBuffer = Buffer.from(arrayBuffer);
+
+    // Validate magic bytes match declared MIME type (prevents MIME spoofing attacks)
+    if (!validateImageMagicBytes(uploadBuffer, uploadFile.type)) {
+      return respond(
+        { error: "File content does not match declared image type. Please upload a valid image file." },
+        400
+      );
     }
   }
 
@@ -112,9 +164,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     updates.secondary_color = secondary.color;
   }
 
-  if (uploadFile) {
-    const arrayBuffer = await uploadFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+  if (uploadFile && uploadBuffer) {
     const extFromType = uploadFile.type.split("/")[1];
     const extFromName = extname(uploadFile.name || "").replace(".", "");
     const extension = (extFromType || extFromName || "png").toLowerCase();
@@ -122,7 +172,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     const { error: uploadError } = await serviceSupabase.storage
       .from("org-branding")
-      .upload(storagePath, buffer, { contentType: uploadFile.type, upsert: true });
+      .upload(storagePath, uploadBuffer, { contentType: uploadFile.type, upsert: true });
 
     if (uploadError) {
       return respond({ error: uploadError.message }, 400);

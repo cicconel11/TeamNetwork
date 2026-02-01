@@ -7,9 +7,6 @@ export const dynamic = "force-dynamic";
 export default function LoginPage() {
   // Read env var on server side and pass to client
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
-  
-  // Debug: log on server side during render
-  console.log("[LoginPage] NEXT_PUBLIC_HCAPTCHA_SITE_KEY:", hcaptchaSiteKey ? `${hcaptchaSiteKey.substring(0, 8)}...` : "MISSING");
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">

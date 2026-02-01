@@ -19,7 +19,7 @@ interface CalendarConnection {
   lastSyncAt: string | null;
 }
 
-const GCAL_UI_ENABLED = false;
+const GCAL_UI_ENABLED = true;
 
 function adjustColor(hex: string, amount: number): string {
   const clamp = (num: number) => Math.min(255, Math.max(0, num));
@@ -161,8 +161,8 @@ function OrgSettingsContent() {
       } else {
         setCalendarConnection(null);
       }
-    } catch (err) {
-      console.error("Failed to load calendar connection:", err);
+    } catch {
+      // Error loading calendar connection - silently continue
     } finally {
       setCalendarLoading(false);
     }
@@ -179,8 +179,8 @@ function OrgSettingsContent() {
           setCalendarPrefs(data.preferences);
         }
       }
-    } catch (err) {
-      console.error("Failed to load calendar preferences:", err);
+    } catch {
+      // Error loading calendar preferences - silently continue
     } finally {
       setCalendarPrefsLoading(false);
     }

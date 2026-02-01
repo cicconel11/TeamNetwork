@@ -34,14 +34,10 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     redirect("/auth/login");
   }
 
-  const { data: memberships, error: membershipError } = await supabase
+  const { data: memberships } = await supabase
     .from("user_organization_roles")
     .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role, status")
     .eq("user_id", user.id);
-
-  // Debug: Log membership query results
-  console.log("[app/page] User:", user.id, user.email);
-  console.log("[app/page] Memberships:", memberships?.length || 0, membershipError?.message || "OK");
 
   // Filter to only show active memberships
   const orgs = (memberships as Membership[] | null)

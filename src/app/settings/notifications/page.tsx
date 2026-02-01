@@ -33,7 +33,7 @@ interface OrgCalendarPrefs {
   isLoading: boolean;
 }
 
-const GCAL_UI_ENABLED = false;
+const GCAL_UI_ENABLED = true;
 
 export default function NotificationSettingsPage() {
   return (
@@ -101,8 +101,8 @@ function NotificationSettingsContent() {
       } else {
         setCalendarConnection(null);
       }
-    } catch (err) {
-      console.error("Failed to load calendar connection:", err);
+    } catch {
+      // Error loading calendar connection - silently continue
     } finally {
       setCalendarLoading(false);
     }
@@ -125,8 +125,8 @@ function NotificationSettingsContent() {
         const data = await response.json();
         return data.preferences || defaultPrefs;
       }
-    } catch (err) {
-      console.error("Failed to load calendar preferences:", err);
+    } catch {
+      // Error loading preferences - return defaults
     }
     return defaultPrefs;
   }, []);
