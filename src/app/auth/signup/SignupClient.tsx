@@ -1,24 +1,54 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
-import { signupSchema, type SignupForm } from "@/lib/schemas/auth";
+import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
+import { AgeGate } from "@/components/auth/AgeGate";
+
+type SignupStep = "age_gate" | "registration";
+
+const AGE_GATE_STORAGE_KEY = "signup_age_gate";
+
+interface AgeGateData {
+  ageBracket: AgeBracket;
+  isMinor: boolean;
+}
 
 interface SignupClientProps {
   hcaptchaSiteKey: string;
 }
 
 export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
+  const router = useRouter();
+  const [step, setStep] = useState<SignupStep>("age_gate");
+  const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
+  const [isMinor, setIsMinor] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+
+  // Restore age gate data from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(AGE_GATE_STORAGE_KEY);
+      if (stored) {
+        const data: AgeGateData = JSON.parse(stored);
+        setAgeBracket(data.ageBracket);
+        setIsMinor(data.isMinor);
+        setStep("registration");
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
 
   const {
     register,
@@ -36,7 +66,39 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
   const captchaRef = useRef<HCaptchaRef>(null);
   const { token: captchaToken, isVerified, onVerify, onExpire, onError: onCaptchaError } = useCaptcha();
 
+  const handleAgeGateComplete = (bracket: AgeBracket, minor: boolean) => {
+    if (bracket === "under_13") {
+      // Redirect to parental consent page
+      router.push("/auth/parental-consent?source=signup");
+      return;
+    }
+
+    // Store age gate data in sessionStorage
+    const data: AgeGateData = { ageBracket: bracket, isMinor: minor };
+    try {
+      sessionStorage.setItem(AGE_GATE_STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors
+    }
+
+    setAgeBracket(bracket);
+    setIsMinor(minor);
+    setStep("registration");
+  };
+
+  const clearAgeGateData = () => {
+    try {
+      sessionStorage.removeItem(AGE_GATE_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
   const handleGoogleSignup = async () => {
+    if (!ageBracket || isMinor === null) {
+      return;
+    }
+
     setIsGoogleLoading(true);
     setError(null);
 
@@ -45,18 +107,30 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
       provider: "google",
       options: {
         redirectTo: `${siteUrl}/auth/callback?redirect=/app`,
+        queryParams: {
+          // Pass age data as query params to be handled in callback
+          age_bracket: ageBracket,
+          is_minor: String(isMinor),
+        },
       },
     });
 
     if (error) {
       setError(error.message);
       setIsGoogleLoading(false);
+    } else {
+      clearAgeGateData();
     }
   };
 
   const onSubmit = async (data: SignupForm) => {
     if (!isVerified || !captchaToken) {
       setError("Please complete the captcha verification");
+      return;
+    }
+
+    if (!ageBracket || isMinor === null) {
+      setError("Please complete the date of birth step first");
       return;
     }
 
@@ -70,6 +144,8 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
       options: {
         data: {
           name: data.name,
+          age_bracket: ageBracket,
+          is_minor: isMinor,
         },
         emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
         captchaToken,
@@ -83,11 +159,18 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
       return;
     }
 
+    clearAgeGateData();
     setMessage("Check your email to confirm your account!");
     setIsLoading(false);
     captchaRef.current?.reset();
   };
 
+  // Render age gate step
+  if (step === "age_gate") {
+    return <AgeGate onComplete={handleAgeGateComplete} />;
+  }
+
+  // Render registration step
   return (
     <Card className="p-6">
       <Button
