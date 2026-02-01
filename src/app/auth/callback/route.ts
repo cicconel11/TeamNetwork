@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { isValidAgeBracket, verifyAgeValidationToken } from "@/lib/auth/age-validation";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -68,6 +69,86 @@ export async function GET(request: NextRequest) {
 
     if (data.session) {
       console.log("[auth/callback] Success! User:", data.session.user.id);
+
+      // Validate age data for both OAuth signups and email confirmations
+      const userMeta = data.session.user.user_metadata;
+      const ageBracket = userMeta?.age_bracket;
+      const ageToken = userMeta?.age_validation_token;
+
+      // Check if age_bracket exists
+      if (!ageBracket) {
+        // Check query params for OAuth flow (age data passed via queryParams)
+        const oauthAgeBracket = requestUrl.searchParams.get("age_bracket");
+        const oauthAgeToken = requestUrl.searchParams.get("age_token");
+
+        if (!oauthAgeToken) {
+          console.error("[auth/callback] OAuth signup missing age token");
+          return NextResponse.redirect(
+            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+          );
+        }
+
+        if (!oauthAgeBracket) {
+          console.error("[auth/callback] Signup without age validation - missing age_bracket");
+          return NextResponse.redirect(
+            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+          );
+        }
+
+        // Validate age bracket value from query params
+        if (!isValidAgeBracket(oauthAgeBracket)) {
+          console.error("[auth/callback] Invalid age bracket value:", oauthAgeBracket);
+          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
+        }
+
+        const tokenResult = verifyAgeValidationToken(oauthAgeToken);
+        if (!tokenResult.valid) {
+          console.error("[auth/callback] Invalid age token:", tokenResult.error);
+          return NextResponse.redirect(
+            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification expired. Please try again.")}`
+          );
+        }
+
+        if (tokenResult.ageBracket !== oauthAgeBracket) {
+          console.error("[auth/callback] Age bracket mismatch between token and query param");
+          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
+        }
+
+        // Block under_13 signups (parental consent not implemented yet)
+        if (tokenResult.ageBracket === "under_13") {
+          console.log("[auth/callback] Under-13 OAuth attempt - redirecting to parental consent");
+          return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
+        }
+      } else {
+        // Age bracket exists in user metadata (email signup confirmation)
+        if (!isValidAgeBracket(ageBracket)) {
+          console.error("[auth/callback] Invalid age bracket in metadata:", ageBracket);
+          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
+        }
+
+        // Verify the token if provided (for email signups)
+        if (ageToken) {
+          const tokenResult = verifyAgeValidationToken(ageToken);
+          if (!tokenResult.valid) {
+            console.error("[auth/callback] Invalid age token in metadata:", tokenResult.error);
+            if (tokenResult.error === "Token expired") {
+              // Token expired is expected for email confirmations (user may confirm hours later)
+              // Just log and continue - the age_bracket itself is still valid
+              console.log("[auth/callback] Age token expired but age_bracket present, continuing");
+            } else {
+              return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
+            }
+          }
+        }
+
+        // Block under_13 confirmations
+        if (ageBracket === "under_13") {
+          console.log("[auth/callback] Under-13 email confirmation - redirecting to parental consent");
+          return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
+        }
+      }
+
+      console.log("[auth/callback] Age validation passed");
       console.log("[auth/callback] Cookies set:", response.cookies.getAll().map((c) => ({
         name: c.name,
         domain: (c as { domain?: string }).domain || "default",

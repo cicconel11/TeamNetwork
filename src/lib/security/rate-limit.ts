@@ -34,30 +34,67 @@ type RateLimitConfig = {
   feature?: string;
 };
 
-const store = new Map<string, BucketState>();
+declare global {
+  // eslint-disable-next-line no-var
+  var __rateLimitStore: Map<string, BucketState> | undefined;
+}
+
+const store = globalThis.__rateLimitStore ?? new Map<string, BucketState>();
+globalThis.__rateLimitStore = store;
 const DEFAULT_WINDOW_MS = 60_000; // 1 minute windows keep retry feedback tight
 const DEFAULT_IP_LIMIT = 60; // 60 req/min/IP
 const DEFAULT_USER_LIMIT = 45; // 45 req/min/user
 const CLEANUP_THRESHOLD = 5_000;
+const STORE_MAX_SIZE = 10_000;
+const CLEANUP_SCAN_LIMIT = 1_000;
 
 function cleanupExpired(now: number) {
   if (store.size < CLEANUP_THRESHOLD) return;
+  let scanned = 0;
   for (const [key, state] of store) {
     if (state.resetAt <= now) {
       store.delete(key);
     }
+    scanned += 1;
+    if (scanned >= CLEANUP_SCAN_LIMIT) break;
+  }
+}
+
+function enforceStoreLimit() {
+  if (store.size <= STORE_MAX_SIZE) return;
+  const overflow = store.size - STORE_MAX_SIZE;
+  const targetEvictions = Math.max(overflow, Math.ceil(STORE_MAX_SIZE * 0.1));
+  let evicted = 0;
+  for (const key of store.keys()) {
+    store.delete(key);
+    evicted += 1;
+    if (evicted >= targetEvictions) break;
   }
 }
 
 function deriveClientIp(request: RequestLike): string | null {
-  const forwardedFor = request.headers.get("x-forwarded-for");
+  const headers = request.headers;
+
+  // Cloudflare (most reliable when using CF)
+  const cfIp = headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp.trim();
+
+  // Vercel/standard proxy
+  const forwardedFor = headers.get("x-forwarded-for");
   if (forwardedFor) {
     const first = forwardedFor.split(",")[0]?.trim();
     if (first) return first;
   }
-  const realIp = request.headers.get("x-real-ip");
+
+  // True-Client-IP (some CDNs)
+  const trueClientIp = headers.get("true-client-ip");
+  if (trueClientIp) return trueClientIp.trim();
+
+  // x-real-ip (nginx)
+  const realIp = headers.get("x-real-ip");
   if (realIp) return realIp.trim();
 
+  // NextRequest.ip fallback
   const maybeNextRequest = request as Request & { ip?: string | null };
   if (typeof maybeNextRequest.ip === "string" && maybeNextRequest.ip) {
     return maybeNextRequest.ip;
@@ -73,6 +110,7 @@ function consume(key: string, limit: number, windowMs: number, now: number): Con
   if (!current || current.resetAt <= now) {
     const resetAt = now + windowMs;
     store.set(key, { count: 1, resetAt });
+    enforceStoreLimit();
     return {
       ok: true,
       limit,
@@ -81,6 +119,10 @@ function consume(key: string, limit: number, windowMs: number, now: number): Con
       retryAfterSeconds: Math.ceil(windowMs / 1000),
     };
   }
+
+  // Refresh LRU position
+  store.delete(key);
+  store.set(key, current);
 
   if (current.count >= limit) {
     return {
@@ -94,6 +136,7 @@ function consume(key: string, limit: number, windowMs: number, now: number): Con
 
   const nextCount = current.count + 1;
   store.set(key, { ...current, count: nextCount });
+  enforceStoreLimit();
 
   return {
     ok: true,
