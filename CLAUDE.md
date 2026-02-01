@@ -355,3 +355,8 @@ From `docs/db/schema-audit.md`:
 - Announcement notifications are stubs (needs Resend API integration)
 - Consider moving invite code generation to server-side RPC for security
 - RLS policies use helper functions: `is_org_admin()`, `is_org_member()`, `has_active_role()`
+
+
+## Bug Issues and Investigation
+
+When I report a bug, don't start by trying to fix it. Instead, start by writing a test that reproduces the bug. Then, have subagents try to fix the bug and prove it with a passing test.

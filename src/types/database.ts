@@ -88,6 +88,30 @@ export type Database = {
           },
         ]
       }
+      compliance_audit_log: {
+        Row: {
+          id: string
+          event_type: string
+          age_bracket: string | null
+          ip_hash: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_type: string
+          age_bracket?: string | null
+          ip_hash?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_type?: string
+          age_bracket?: string | null
+          ip_hash?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       schedule_files: {
         Row: {
           id: string
