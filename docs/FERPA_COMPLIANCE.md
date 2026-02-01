@@ -102,11 +102,33 @@ See `docs/Data_Inventory.md` for documented security controls including:
 ### STEP 5 — Use & Disclosure Policies
 **Rule:** No unauthorized disclosure.
 
-* [ ] **Policy Check:**
-    * [ ] Data used ONLY for agreed purposes.
-    * [ ] NO repurposing for unrelated analytics.
-    * [ ] NO public disclosure of identifiable student data.
-* [ ] **Distribution:** Distribute rules to staff, subcontractors, and developers.
+* [x] **Policy Check:**
+    * [x] Data used ONLY for agreed purposes.
+    * [x] NO repurposing for unrelated analytics.
+    * [x] NO public disclosure of identifiable student data.
+* [x] **Distribution:** Distribute rules to staff, subcontractors, and developers.
+
+> **COMPLETED:** See `docs/legal_templates/Use_Disclosure_Policy.md` for the formal policy document including:
+> * Purpose statement and permitted data uses
+> * Prohibited uses (no sale, no advertising, no repurposing)
+> * Approved third-party services (Stripe, Resend, Supabase, hCaptcha, Google Calendar)
+> * Data access rules and role boundaries
+> * Enforcement procedures
+> * Annual review schedule
+>
+> See `docs/legal_templates/Staff_Data_Handling_Acknowledgment.md` for staff distribution including:
+> * Policy acknowledgment checklist
+> * Data handling commitments
+> * Prohibited actions agreement
+> * Security practice requirements
+> * Signature and HR tracking section
+>
+> **Codebase Audit Findings (February 2026):**
+> * No analytics/tracking packages installed (verified: no Google Analytics, Mixpanel, Segment, etc.)
+> * No data repurposing beyond core functionality
+> * All PII protected behind authentication middleware
+> * All third-party services have legitimate, disclosed purposes
+> * User-initiated integrations (Google Calendar) require explicit OAuth consent
 
 ### STEP 6 — Training
 * [ ] **Mandatory Training:** All staff must complete FERPA training.
@@ -142,7 +164,7 @@ See `docs/Data_Inventory.md` for documented security controls including:
 - [x] Data Inventory Complete — See `docs/Data_Inventory.md`
 - [x] Data Sharing Agreements Drafted — See `docs/legal_templates/`
 - [x] Security & Access Controls Live — RBAC, RLS, encryption active
-- [ ] Use & Disclosure Policy Published
+- [x] Use & Disclosure Policy Published — See `docs/legal_templates/Use_Disclosure_Policy.md`
 - [ ] Staff Training Completed
 - [ ] Rights Request Workflow Tested
 - [ ] Audit Plan Scheduled
