@@ -7,7 +7,9 @@ import { ageGateSchema, type AgeBracket } from "@/lib/schemas/auth";
 import { calculateAge, deriveAgeBracket } from "@/lib/auth/age-gate";
 
 interface AgeGateProps {
-  onComplete: (ageBracket: AgeBracket, isMinor: boolean) => void;
+  onComplete: (ageBracket: AgeBracket) => void | Promise<void>;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 const MONTHS = [
@@ -49,11 +51,14 @@ function generateYearOptions(): SelectOption[] {
   return options;
 }
 
-export function AgeGate({ onComplete }: AgeGateProps) {
+export function AgeGate({ onComplete, isLoading = false, error: externalError }: AgeGateProps) {
   const [month, setMonth] = useState("");
   const [day, setDay] = useState("");
   const [year, setYear] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Combine internal and external errors
+  const displayError = externalError || error;
 
   const dayOptions = useMemo(() => generateDayOptions(), []);
   const yearOptions = useMemo(() => generateYearOptions(), []);
@@ -79,9 +84,8 @@ export function AgeGate({ onComplete }: AgeGateProps) {
     const birthDate = new Date(formData.year, formData.month - 1, formData.day);
     const age = calculateAge(birthDate);
     const ageBracket = deriveAgeBracket(age);
-    const isMinor = age < 18;
 
-    onComplete(ageBracket, isMinor);
+    onComplete(ageBracket);
   };
 
   return (
@@ -93,12 +97,12 @@ export function AgeGate({ onComplete }: AgeGateProps) {
         </p>
       </div>
 
-      {error && (
+      {displayError && (
         <div
           data-testid="age-gate-error"
           className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
         >
-          {error}
+          {displayError}
         </div>
       )}
 
@@ -129,7 +133,8 @@ export function AgeGate({ onComplete }: AgeGateProps) {
       <Button
         type="button"
         className="w-full"
-        disabled={!isFormFilled}
+        disabled={!isFormFilled || isLoading}
+        isLoading={isLoading}
         onClick={validateAndProceed}
         data-testid="age-gate-continue"
       >

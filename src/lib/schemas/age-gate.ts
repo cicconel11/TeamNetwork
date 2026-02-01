@@ -3,6 +3,9 @@ import { z } from "zod";
 // Age bracket for COPPA compliance
 export type AgeBracket = "under_13" | "13_17" | "18_plus";
 
+// Schema for validating age bracket values
+export const ageBracketSchema = z.enum(["under_13", "13_17", "18_plus"]);
+
 // Age gate form for DOB collection (COPPA neutral age gate)
 export const ageGateSchema = z
   .object({
