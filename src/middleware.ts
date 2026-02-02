@@ -21,8 +21,12 @@ export async function middleware(request: NextRequest) {
   const shouldLog = shouldLogAuth();
   const logFailures = shouldLogAuthFailures();
 
-  // Bypass Stripe webhook so middleware does not block it
-  if (pathname === "/api/stripe/webhook") {
+  // Bypass routes that should never be blocked by auth middleware
+  const publicApiRoutes = [
+    "/api/stripe/webhook",
+    "/api/auth/validate-age", // Age gate validation during signup
+  ];
+  if (publicApiRoutes.includes(pathname)) {
     return NextResponse.next();
   }
 

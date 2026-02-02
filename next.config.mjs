@@ -114,10 +114,10 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co",
-              "font-src 'self'",
-              "frame-src https://hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com",
+              "font-src 'self' https://fonts.gstatic.com",
+              "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com",
               "connect-src 'self' https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com",
             ].join("; "),
           },

@@ -10,6 +10,7 @@ import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
 import { AgeGate } from "@/components/auth/AgeGate";
+import { FeedbackButton } from "@/components/feedback";
 
 type SignupStep = "age_gate" | "registration";
 
@@ -262,6 +263,9 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
       {error && (
         <div data-testid="signup-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}
+          <div className="mt-2 flex justify-end">
+            <FeedbackButton context="signup" trigger="signup_error" />
+          </div>
         </div>
       )}
 

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Button, Card, Select } from "@/components/ui";
+import { FeedbackButton } from "@/components/feedback";
 import { ageGateSchema, type AgeBracket } from "@/lib/schemas/auth";
 import { calculateAge, deriveAgeBracket } from "@/lib/auth/age-gate";
 
@@ -103,6 +104,9 @@ export function AgeGate({ onComplete, isLoading = false, error: externalError }:
           className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
         >
           {displayError}
+          <div className="mt-2 flex justify-end">
+            <FeedbackButton context="signup" trigger="age_gate_error" />
+          </div>
         </div>
       )}
 
