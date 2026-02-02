@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card, Badge, EmptyState } from "@/components/ui";
-import type { EnterpriseRelationshipType } from "@/types/enterprise";
+import type { EnterpriseRelationshipType, SubOrgBillingType } from "@/types/enterprise";
 
 interface SubOrg {
   id: string;
@@ -8,6 +8,7 @@ interface SubOrg {
   slug: string;
   alumniCount: number;
   relationshipType: EnterpriseRelationshipType;
+  billingType: SubOrgBillingType;
 }
 
 interface SubOrgListProps {
@@ -45,6 +46,9 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
               Relationship
             </th>
+            <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+              Billing
+            </th>
             <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">
               Actions
             </th>
@@ -67,6 +71,11 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
               <td className="py-4 px-4">
                 <Badge variant={org.relationshipType === "created" ? "primary" : "success"}>
                   {org.relationshipType === "created" ? "Created" : "Adopted"}
+                </Badge>
+              </td>
+              <td className="py-4 px-4">
+                <Badge variant={org.billingType === "enterprise_managed" ? "muted" : "warning"}>
+                  {org.billingType === "enterprise_managed" ? "Enterprise" : "Independent"}
                 </Badge>
               </td>
               <td className="py-4 px-4 text-right">

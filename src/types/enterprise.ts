@@ -11,6 +11,7 @@ export type BillingInterval = "month" | "year";
 export type EnterpriseRole = "owner" | "billing_admin" | "org_admin";
 export type AdoptionRequestStatus = "pending" | "accepted" | "rejected" | "expired";
 export type EnterpriseRelationshipType = "created" | "adopted";
+export type SubOrgBillingType = "enterprise_managed" | "independent";
 
 // Tier limits (null = unlimited)
 export const ENTERPRISE_TIER_LIMITS: Record<EnterpriseTier, number | null> = {

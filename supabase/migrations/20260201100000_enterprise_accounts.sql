@@ -151,21 +151,31 @@ END
 $$;
 
 -- Add new constraint allowing enterprise_managed status
+-- Include all existing statuses: pending_sales (custom pricing), canceling (scheduled cancellation)
 ALTER TABLE public.organization_subscriptions
   ADD CONSTRAINT organization_subscriptions_status_check
-  CHECK (status IN ('pending', 'active', 'past_due', 'canceled', 'trialing', 'enterprise_managed'));
+  CHECK (status IN ('pending', 'active', 'past_due', 'canceled', 'trialing', 'pending_sales', 'canceling', 'enterprise_managed'));
+
+-- Add index for efficient lookups by organization_id and status
+-- Used by the enterprise_alumni_counts view to filter by enterprise_managed status
+CREATE INDEX IF NOT EXISTS organization_subscriptions_org_status_idx
+  ON public.organization_subscriptions(organization_id, status);
 
 -- =====================================================
 -- Part 7: Enterprise Alumni Counts View
 -- =====================================================
 
+-- Only count alumni from orgs with enterprise_managed billing status.
+-- Orgs with independent billing (status = 'active', 'pending', etc.) are excluded
+-- from the pooled alumni quota since they pay separately.
 CREATE OR REPLACE VIEW public.enterprise_alumni_counts AS
 SELECT
   e.id AS enterprise_id,
-  COUNT(DISTINCT a.id) AS total_alumni_count,
+  COUNT(DISTINCT CASE WHEN os.status = 'enterprise_managed' THEN a.id END) AS total_alumni_count,
   COUNT(DISTINCT o.id) AS sub_org_count
 FROM public.enterprises e
 LEFT JOIN public.organizations o ON o.enterprise_id = e.id
+LEFT JOIN public.organization_subscriptions os ON os.organization_id = o.id
 LEFT JOIN public.alumni a ON a.organization_id = o.id AND a.deleted_at IS NULL
 GROUP BY e.id;
 

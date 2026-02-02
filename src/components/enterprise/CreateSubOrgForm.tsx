@@ -10,19 +10,22 @@ import { Button, Input, Card, CardHeader, CardTitle, CardDescription } from "@/c
 const createSubOrgSchema = z.object({
   name: z
     .string()
-    .min(2, "Name must be at least 2 characters")
-    .max(100, "Name must be less than 100 characters"),
+    .trim()
+    .min(1, "Name is required")
+    .max(120, "Name must be 120 characters or fewer"),
   slug: z
     .string()
-    .min(2, "Slug must be at least 2 characters")
-    .max(50, "Slug must be less than 50 characters")
-    .regex(/^[a-z0-9-]+$/, "Slug can only contain lowercase letters, numbers, and hyphens"),
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9-]{3,64}$/, "Use 3-64 lowercase letters, numbers, or hyphens"),
   primaryColor: z
     .string()
-    .regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+    .trim()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a 6 character hex code"),
+  billingType: z.enum(["enterprise_managed", "independent"]),
 });
 
-type CreateSubOrgForm = z.infer<typeof createSubOrgSchema>;
+type CreateSubOrgFormData = z.infer<typeof createSubOrgSchema>;
 
 interface CreateSubOrgFormProps {
   enterpriseSlug: string;
@@ -45,17 +48,19 @@ export function CreateSubOrgForm({
     watch,
     setValue,
     formState: { errors },
-  } = useForm<CreateSubOrgForm>({
+  } = useForm<CreateSubOrgFormData>({
     resolver: zodResolver(createSubOrgSchema),
     defaultValues: {
       name: "",
       slug: "",
       primaryColor: "#6B21A8", // Purple-700
+      billingType: "enterprise_managed",
     },
   });
 
   const primaryColor = watch("primaryColor");
   const slug = watch("slug");
+  const billingType = watch("billingType");
 
   const handleNameChange = (value: string) => {
     setValue("name", value);
@@ -68,7 +73,7 @@ export function CreateSubOrgForm({
     setValue("slug", generatedSlug);
   };
 
-  const onSubmit = async (data: CreateSubOrgForm) => {
+  const onSubmit = async (data: CreateSubOrgFormData) => {
     setIsLoading(true);
     setError(null);
 
@@ -80,6 +85,7 @@ export function CreateSubOrgForm({
           name: data.name,
           slug: data.slug,
           primary_color: data.primaryColor,
+          billingType: data.billingType,
         }),
       });
 
@@ -164,6 +170,26 @@ export function CreateSubOrgForm({
             </p>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Billing Type
+            </label>
+            <div className="space-y-3">
+              <BillingTypeOption
+                selected={billingType === "enterprise_managed"}
+                onSelect={() => setValue("billingType", "enterprise_managed")}
+                title="Enterprise Billing (Recommended)"
+                description="Uses the pooled alumni quota from the enterprise subscription"
+              />
+              <BillingTypeOption
+                selected={billingType === "independent"}
+                onSelect={() => setValue("billingType", "independent")}
+                title="Independent Billing"
+                description="Organization pays separately with its own subscription"
+              />
+            </div>
+          </div>
+
           <div className="flex gap-4 pt-4">
             {onCancel && (
               <Button
@@ -183,5 +209,49 @@ export function CreateSubOrgForm({
         </div>
       </form>
     </Card>
+  );
+}
+
+interface BillingTypeOptionProps {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+}
+
+function BillingTypeOption({
+  selected,
+  onSelect,
+  title,
+  description,
+}: BillingTypeOptionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
+        selected
+          ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
+          : "border-border hover:border-muted-foreground/50"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+            selected
+              ? "border-purple-600 bg-purple-600"
+              : "border-muted-foreground"
+          }`}
+        >
+          {selected && (
+            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+          )}
+        </div>
+        <div>
+          <p className="font-medium text-foreground">{title}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+        </div>
+      </div>
+    </button>
   );
 }

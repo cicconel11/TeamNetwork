@@ -34,6 +34,7 @@ const createOrgSchema = z
     description: optionalSafeString(800),
     primary_color: baseSchemas.hexColor.optional(),
     primaryColor: baseSchemas.hexColor.optional(),
+    billingType: z.enum(["enterprise_managed", "independent"]).default("enterprise_managed"),
   })
   .strict();
 
@@ -82,7 +83,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, description, primary_color, primaryColor } = body;
+    const { name, slug, description, primary_color, primaryColor, billingType } = body;
 
     // Check slug uniqueness across both organizations and enterprises
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,6 +91,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       .from("organizations")
       .select("id")
       .eq("slug", slug)
+      .is("deleted_at", null)
       .maybeSingle() as { data: { id: string } | null };
 
     if (existingOrg) {
@@ -154,18 +156,31 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: roleError.message }, 400);
     }
 
-    // Create subscription record as enterprise-managed
+    // Create subscription record based on billing type
+    // enterprise_managed: Uses pooled alumni quota, placeholder values for required fields
+    // independent (pending): Org pays separately, needs to set up own subscription via checkout
+    const subscriptionStatus = billingType === "enterprise_managed" ? "enterprise_managed" : "pending";
+
+    // For enterprise_managed: base_plan_interval and alumni_bucket are placeholders
+    // (billing is handled at enterprise level, alumni quota is pooled)
+    // For independent: these will be updated when org completes checkout
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: subError } = await (serviceSupabase as any)
       .from("organization_subscriptions")
       .insert({
         organization_id: newOrg.id,
-        status: "enterprise_managed",
+        status: subscriptionStatus,
+        base_plan_interval: "month", // Placeholder for enterprise_managed, updated on checkout for independent
+        alumni_bucket: "none", // Enterprise quota is pooled, independent sets via checkout
       }) as { error: Error | null };
 
     if (subError) {
-      // Log but don't fail - org was created successfully
-      console.error("[create-sub-org] Failed to create subscription record:", subError);
+      // Cleanup if subscription creation fails - org needs subscription to function
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (serviceSupabase as any).from("user_organization_roles").delete().eq("organization_id", newOrg.id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
+      return respond({ error: "Failed to create organization subscription" }, 500);
     }
 
     return respond({ organization: newOrg }, 201);

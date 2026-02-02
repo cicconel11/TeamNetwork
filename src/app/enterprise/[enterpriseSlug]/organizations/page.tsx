@@ -6,7 +6,7 @@ import { SubOrgList } from "@/components/enterprise/SubOrgList";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
 import { getEnterprisePermissions } from "@/types/enterprise";
 import { createServiceClient } from "@/lib/supabase/service";
-import type { EnterpriseRelationshipType } from "@/types/enterprise";
+import type { EnterpriseRelationshipType, SubOrgBillingType } from "@/types/enterprise";
 
 interface OrganizationsPageProps {
   params: Promise<{ enterpriseSlug: string }>;
@@ -32,12 +32,21 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
       id,
       name,
       slug,
-      enterprise_relationship_type
+      enterprise_relationship_type,
+      organization_subscriptions (
+        status
+      )
     `)
     .eq("enterprise_id", enterprise.id)
     .order("name");
 
-  type OrgRow = { id: string; name: string; slug: string; enterprise_relationship_type: string | null };
+  type OrgRow = {
+    id: string;
+    name: string;
+    slug: string;
+    enterprise_relationship_type: string | null;
+    organization_subscriptions: { status: string }[] | null;
+  };
   const typedOrgs = (organizations ?? []) as OrgRow[];
 
   // Get alumni counts for each org
@@ -57,13 +66,21 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
   });
 
   // Transform for SubOrgList
-  const orgs = typedOrgs.map((org) => ({
-    id: org.id,
-    name: org.name,
-    slug: org.slug,
-    alumniCount: countMap[org.id] || 0,
-    relationshipType: (org.enterprise_relationship_type || "created") as EnterpriseRelationshipType,
-  }));
+  const orgs = typedOrgs.map((org) => {
+    const subscriptionStatus = org.organization_subscriptions?.[0]?.status ?? null;
+    const billingType: SubOrgBillingType = subscriptionStatus === "enterprise_managed"
+      ? "enterprise_managed"
+      : "independent";
+
+    return {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      alumniCount: countMap[org.id] || 0,
+      relationshipType: (org.enterprise_relationship_type || "created") as EnterpriseRelationshipType,
+      billingType,
+    };
+  });
 
   return (
     <div className="animate-fade-in">

@@ -24,6 +24,7 @@ interface OrganizationRow {
   enterprise_relationship_type: EnterpriseRelationshipType | null;
   enterprise_adopted_at: string | null;
   created_at: string;
+  organization_subscriptions: { status: string }[] | null;
 }
 
 export async function GET(req: Request, { params }: RouteParams) {
@@ -69,7 +70,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  // Get all organizations belonging to this enterprise
+  // Get all organizations belonging to this enterprise with subscription status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: organizations, error } = await (serviceSupabase as any)
     .from("organizations")
@@ -82,7 +83,10 @@ export async function GET(req: Request, { params }: RouteParams) {
       logo_url,
       enterprise_relationship_type,
       enterprise_adopted_at,
-      created_at
+      created_at,
+      organization_subscriptions (
+        status
+      )
     `)
     .eq("enterprise_id", resolvedEnterpriseId)
     .is("deleted_at", null)
@@ -112,11 +116,28 @@ export async function GET(req: Request, { params }: RouteParams) {
     }
   }
 
-  // Combine organizations with their alumni counts
-  const orgsWithCounts = (organizations ?? []).map((org) => ({
-    ...org,
-    alumniCount: alumniCounts[org.id] || 0,
-  }));
+  // Combine organizations with their alumni counts and billing status
+  const orgsWithCounts = (organizations ?? []).map((org) => {
+    const subscriptionStatus = org.organization_subscriptions?.[0]?.status ?? null;
+    const billingType = subscriptionStatus === "enterprise_managed"
+      ? "enterprise_managed"
+      : "independent";
+
+    return {
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      description: org.description,
+      primary_color: org.primary_color,
+      logo_url: org.logo_url,
+      enterprise_relationship_type: org.enterprise_relationship_type,
+      enterprise_adopted_at: org.enterprise_adopted_at,
+      created_at: org.created_at,
+      alumniCount: alumniCounts[org.id] || 0,
+      subscriptionStatus,
+      billingType,
+    };
+  });
 
   return respond({ organizations: orgsWithCounts });
 }
