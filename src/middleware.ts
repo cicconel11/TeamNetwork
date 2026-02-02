@@ -12,6 +12,9 @@ const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 // Routes that don't require authentication
 const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
 
+// Enterprise public routes that don't require enterprise membership
+const enterprisePublicSlugs = ["pricing", "features"];
+
 // Routes that should redirect to /app if user is already authenticated
 const authOnlyRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
@@ -218,12 +221,74 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
+  // Handle enterprise routes
+  if (pathname.startsWith("/enterprise/")) {
+    const enterpriseSlugMatch = pathname.match(/^\/enterprise\/([^\/]+)/);
+    if (enterpriseSlugMatch) {
+      const enterpriseSlug = enterpriseSlugMatch[1];
+
+      // Skip for public enterprise paths that don't need membership validation
+      if (enterprisePublicSlugs.includes(enterpriseSlug)) {
+        return response;
+      }
+
+      // Check if user is dev-admin - if so, skip enterprise membership checks entirely
+      const userEmail = "email" in user ? (user.email as string | null | undefined) : undefined;
+      const userIsDevAdmin = isDevAdminEmail(userEmail);
+
+      if (!userIsDevAdmin) {
+        try {
+          // Get enterprise by slug
+          const { data: enterprise } = await supabase
+            .from("enterprises")
+            .select("id")
+            .eq("slug", enterpriseSlug)
+            .maybeSingle();
+
+          if (!enterprise) {
+            return NextResponse.redirect(new URL("/app?error=enterprise_not_found", request.url));
+          }
+
+          // Check user has role in enterprise
+          const { data: role } = await supabase
+            .from("user_enterprise_roles")
+            .select("role")
+            .eq("enterprise_id", enterprise.id)
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (!role) {
+            return NextResponse.redirect(new URL("/app?error=no_enterprise_access", request.url));
+          }
+
+          // Add enterprise info to headers for downstream use
+          response.headers.set("x-enterprise-id", enterprise.id);
+          response.headers.set("x-enterprise-role", role.role);
+        } catch (e) {
+          // Log error but redirect to app with error
+          if (shouldLog) {
+            console.error("[AUTH-MW] Error checking enterprise access:", e);
+          }
+          return NextResponse.redirect(new URL("/app?error=enterprise_error", request.url));
+        }
+      } else if (shouldLog) {
+        // Log dev-admin access for debugging (email redacted for privacy)
+        console.log("[AUTH-MW] Dev-admin bypassing enterprise membership check", {
+          email: userEmail ? redactEmail(userEmail) : null,
+          enterpriseSlug,
+          pathname,
+        });
+      }
+    }
+  }
+
   // Check for revoked access on org routes
-  // Org routes are paths like /[orgSlug]/... but not /app/ or /auth/ or /api/ or /settings/
+  // Org routes are paths like /[orgSlug]/... but not /app/ or /auth/ or /api/ or /settings/ or /enterprise/
   const isOrgRoute = !pathname.startsWith("/app") &&
     !pathname.startsWith("/auth") &&
     !pathname.startsWith("/api") &&
     !pathname.startsWith("/settings") &&
+    !pathname.startsWith("/enterprise") &&
     pathname !== "/" &&
     pathname.split("/").filter(Boolean).length >= 1;
 

@@ -9,6 +9,8 @@ import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/st
 import { checkWebhookRateLimit, getWebhookClientIp } from "@/lib/security/webhook-rate-limit";
 import { calculateGracePeriodEnd } from "@/lib/subscription/grace-period";
 import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
+import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
+import { getEnterpriseTierLimit } from "@/lib/enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -518,6 +520,70 @@ export async function POST(req: Request) {
     customer?: string | Stripe.Customer | Stripe.DeletedCustomer | string | null;
   };
 
+  /**
+   * Handle enterprise subscription lifecycle updates.
+   * Returns the enterprise subscription ID if found and updated, null otherwise.
+   */
+  const handleEnterpriseSubscriptionUpdate = async (
+    subscription: SubscriptionWithPeriod
+  ): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from("enterprise_subscriptions")
+      .select("id")
+      .eq("stripe_subscription_id", subscription.id)
+      .maybeSingle();
+
+    if (!data) return null; // Not an enterprise subscription
+
+    const periodEnd = subscription.current_period_end
+      ? Number(subscription.current_period_end)
+      : null;
+    const currentPeriodEnd = periodEnd
+      ? new Date(periodEnd * 1000).toISOString()
+      : null;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("enterprise_subscriptions")
+      .update({
+        status: subscription.status,
+        current_period_end: currentPeriodEnd,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+
+    return data.id;
+  };
+
+  /**
+   * Handle enterprise invoice payment failures.
+   * Returns the enterprise subscription ID if found and updated, null otherwise.
+   */
+  const handleEnterprisePaymentFailed = async (
+    subscriptionId: string
+  ): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from("enterprise_subscriptions")
+      .select("id")
+      .eq("stripe_subscription_id", subscriptionId)
+      .maybeSingle();
+
+    if (!data) return null; // Not an enterprise subscription
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from("enterprise_subscriptions")
+      .update({
+        status: "past_due",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+
+    return data.id;
+  };
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -530,6 +596,143 @@ export async function POST(req: Request) {
           typeof session.customer === "string" ? session.customer : session.customer?.id || null;
 
         console.log("[stripe-webhook] checkout.session.completed - org:", session.metadata?.organization_id, "session:", session.id);
+
+        // Handle enterprise checkout
+        if (session.metadata?.type === "enterprise") {
+          if (session.payment_status !== "paid") {
+            console.warn("[stripe-webhook] Enterprise checkout completed without payment; skipping provisioning");
+            break;
+          }
+
+          const tier = (session.metadata.tier as EnterpriseTier) || "tier_1";
+          const creatorId = session.metadata.creatorId;
+          const enterpriseName = session.metadata.enterpriseName;
+          const enterpriseSlug = session.metadata.enterpriseSlug;
+          const billingInterval = (session.metadata.billingInterval as BillingInterval) || "month";
+          const billingContactEmail = session.metadata.billingContactEmail;
+          const enterpriseDescription = session.metadata.enterpriseDescription;
+
+          if (!creatorId || !enterpriseName || !enterpriseSlug) {
+            console.error("[stripe-webhook] Enterprise checkout missing required metadata", {
+              eventId: event.id,
+              sessionId: session.id,
+              metadata: session.metadata,
+            });
+            return NextResponse.json(
+              { error: "Enterprise provisioning failed - missing metadata" },
+              { status: 500 }
+            );
+          }
+
+          console.log("[stripe-webhook] Provisioning enterprise:", enterpriseSlug);
+
+          // Create or reuse enterprise record (idempotent)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let { data: enterprise } = await (supabase as any)
+            .from("enterprises")
+            .select("*")
+            .eq("slug", enterpriseSlug)
+            .maybeSingle();
+
+          if (!enterprise) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: created, error: enterpriseError } = await (supabase as any)
+              .from("enterprises")
+              .insert({
+                name: enterpriseName,
+                slug: enterpriseSlug,
+                description: enterpriseDescription || null,
+                billing_contact_email: billingContactEmail || null,
+              })
+              .select()
+              .single();
+
+            if (enterpriseError || !created) {
+              console.error("[stripe-webhook] Failed to create enterprise", {
+                eventId: event.id,
+                error: enterpriseError?.message,
+                enterpriseSlug,
+              });
+
+              // If a duplicate insert raced, try one more fetch
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data: retry } = await (supabase as any)
+                .from("enterprises")
+                .select("*")
+                .eq("slug", enterpriseSlug)
+                .maybeSingle();
+
+              if (!retry) {
+                return NextResponse.json(
+                  { error: "Enterprise provisioning failed - will retry" },
+                  { status: 500 }
+                );
+              }
+
+              enterprise = retry;
+            } else {
+              enterprise = created;
+            }
+          } else if ((!enterprise.description && enterpriseDescription) || (!enterprise.billing_contact_email && billingContactEmail)) {
+            // Opportunistically backfill missing fields on first successful checkout
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await (supabase as any)
+              .from("enterprises")
+              .update({
+                ...(enterpriseDescription ? { description: enterpriseDescription } : {}),
+                ...(billingContactEmail ? { billing_contact_email: billingContactEmail } : {}),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", enterprise.id);
+          }
+
+          // Create or update enterprise subscription
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: subError } = await (supabase as any)
+            .from("enterprise_subscriptions")
+            .upsert({
+              enterprise_id: enterprise.id,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscriptionId,
+              billing_interval: billingInterval,
+              alumni_tier: tier,
+              pooled_alumni_limit: getEnterpriseTierLimit(tier),
+              status: "active",
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "enterprise_id" });
+
+          if (subError) {
+            console.error("[stripe-webhook] Failed to create enterprise subscription", {
+              eventId: event.id,
+              error: subError.message,
+              enterpriseId: enterprise.id,
+            });
+            // Don't fail the webhook - enterprise exists, subscription can be fixed
+          }
+
+          // Grant owner role to creator (idempotent)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: roleError } = await (supabase as any)
+            .from("user_enterprise_roles")
+            .upsert({
+              user_id: creatorId,
+              enterprise_id: enterprise.id,
+              role: "owner",
+            }, { onConflict: "user_id,enterprise_id" });
+
+          if (roleError) {
+            console.error("[stripe-webhook] Failed to grant enterprise owner role", {
+              eventId: event.id,
+              error: roleError.message,
+              enterpriseId: enterprise.id,
+              userId: creatorId,
+            });
+            // Don't fail - role can be granted manually
+          }
+
+          console.log("[stripe-webhook] Enterprise provisioned successfully:", enterprise.id);
+          break;
+        }
 
         if (session.mode === "subscription" || subscriptionId) {
           if (session.payment_status !== "paid") {
@@ -678,11 +881,18 @@ export async function POST(req: Request) {
           : null;
         const status = subscription.status || "canceled";
 
+        // Check if this is an enterprise subscription first
+        const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);
+        if (enterpriseSubId) {
+          console.log("[stripe-webhook] Enterprise subscription updated:", enterpriseSubId, { status });
+          break;
+        }
+
         // Set grace period when subscription is deleted (canceled)
         // Clear grace period when subscription is reactivated (active/trialing)
         const isDeleted = event.type === "customer.subscription.deleted";
         const isReactivated = status === "active" || status === "trialing";
-        
+
         let gracePeriodUpdate: string | null | undefined = undefined;
         if (isDeleted) {
           gracePeriodUpdate = calculateGracePeriodEnd();
@@ -731,6 +941,15 @@ export async function POST(req: Request) {
         const customerId = typeof invoice.customer === "string" ? invoice.customer : null;
         if (subscriptionId) {
           const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
+
+          // Check if this is an enterprise subscription first
+          const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);
+          if (enterpriseSubId) {
+            console.log("[stripe-webhook] Enterprise invoice paid, subscription updated:", enterpriseSubId);
+            break;
+          }
+
+          // Fall back to organization subscription
           const periodEnd = subscription.current_period_end ? Number(subscription.current_period_end) : 0;
           const currentPeriodEnd = periodEnd
             ? new Date(periodEnd * 1000).toISOString()
@@ -747,6 +966,13 @@ export async function POST(req: Request) {
         const invoice = event.data.object as InvoiceWithSub;
         const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : null;
         if (subscriptionId) {
+          // Check if this is an enterprise subscription first
+          const enterpriseSubId = await handleEnterprisePaymentFailed(subscriptionId);
+          if (enterpriseSubId) {
+            console.log("[stripe-webhook] Enterprise payment failed, marked past_due:", enterpriseSubId);
+            break;
+          }
+          // Fall back to organization subscription
           await updateBySubscriptionId(subscriptionId, { status: "past_due" });
         }
         break;
