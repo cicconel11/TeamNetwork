@@ -6,6 +6,8 @@ import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { AppPageAnimations } from "@/components/app/AppPageAnimations";
 import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
 import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
+import { EnterpriseCard } from "@/components/enterprise";
+import { getUserEnterprises } from "@/lib/auth/enterprise-context";
 
 type Membership = {
   organization: {
@@ -34,10 +36,14 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     redirect("/auth/login");
   }
 
-  const { data: memberships } = await supabase
-    .from("user_organization_roles")
-    .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role, status")
-    .eq("user_id", user.id);
+  // Fetch user's enterprises and organizations in parallel
+  const [{ data: memberships }, enterprises] = await Promise.all([
+    supabase
+      .from("user_organization_roles")
+      .select("organization:organizations(id, name, slug, description, logo_url, primary_color), role, status")
+      .eq("user_id", user.id),
+    getUserEnterprises(user.id),
+  ]);
 
   // Filter to only show active memberships
   const orgs = (memberships as Membership[] | null)
@@ -131,6 +137,35 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
           </Card>
         )}
 
+        {/* Your Enterprises Section */}
+        {enterprises.length > 0 && (
+          <section className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="app-hero-animate" style={{ opacity: 0 }}>
+                <h2 className="text-xl font-semibold text-foreground">Your Enterprises</h2>
+              </div>
+              <Link href="/app/create-enterprise" className="app-hero-animate text-sm text-purple-600 hover:text-purple-700" style={{ opacity: 0 }}>
+                Create Enterprise
+              </Link>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {enterprises
+                .filter((item) => item.enterprise !== null)
+                .map((item) => (
+                  <EnterpriseCard
+                    key={item.enterprise!.id}
+                    name={item.enterprise!.name}
+                    slug={item.enterprise!.slug}
+                    logoUrl={item.enterprise!.logo_url}
+                    role={item.role}
+                    subOrgCount={0}
+                    alumniCount={0}
+                  />
+                ))}
+            </div>
+          </section>
+        )}
+
         <div className="mb-8 flex items-center justify-between">
           <div className="app-hero-animate" style={{ opacity: 0 }}>
             <p className="text-sm text-muted-foreground">Welcome back</p>
@@ -154,15 +189,22 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
               </svg>
             }
             title="No organizations yet"
-            description="Create a new organization or join one you were invited to."
+            description="Create a new organization, join one you were invited to, or create an enterprise to manage multiple organizations."
             action={
-              <div className="flex gap-3">
-                <Link href="/app/create-org">
-                  <Button>Create organization</Button>
-                </Link>
-                <Link href="/app/join">
-                  <Button variant="secondary">Join organization</Button>
-                </Link>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <Link href="/app/create-org">
+                    <Button>Create organization</Button>
+                  </Link>
+                  <Link href="/app/join">
+                    <Button variant="secondary">Join organization</Button>
+                  </Link>
+                </div>
+                {enterprises.length === 0 && (
+                  <Link href="/app/create-enterprise" className="text-sm text-purple-600 hover:text-purple-700 text-center">
+                    Or create an enterprise to manage multiple organizations
+                  </Link>
+                )}
               </div>
             }
           />
