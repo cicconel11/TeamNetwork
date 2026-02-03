@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkAdoptionQuota } from "./quota";
+import { checkAdoptionQuota, canEnterpriseAddSubOrg } from "./quota";
 
 const ADOPTION_EXPIRY_DAYS = 7;
 
@@ -143,10 +143,19 @@ export async function acceptAdoptionRequest(
     return { success: false, error: "Organization already belongs to an enterprise" };
   }
 
-  // Check quota again
+  // Check alumni quota again
   const quotaCheck = await checkAdoptionQuota(request.enterprise_id, request.organization_id);
   if (!quotaCheck.allowed) {
     return { success: false, error: quotaCheck.error };
+  }
+
+  // Check seat limit for enterprise-managed orgs
+  const seatQuota = await canEnterpriseAddSubOrg(request.enterprise_id);
+  if (!seatQuota.allowed) {
+    return {
+      success: false,
+      error: `Seat limit reached. You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Add more seats to adopt additional organizations.`,
+    };
   }
 
   // Get org's current subscription for preservation
@@ -173,12 +182,26 @@ export async function acceptAdoptionRequest(
     return { success: false, error: updateError.message };
   }
 
-  // Update org subscription status if exists
+  // Ensure org has a subscription row so the enterprise_alumni_counts view can
+  // correctly include it for pooled alumni/seat enforcement.
   if (orgSub) {
     await supabase
       .from("organization_subscriptions")
       .update({ status: "enterprise_managed" })
       .eq("id", orgSub.id);
+  } else {
+    const { error: createSubError } = await supabase
+      .from("organization_subscriptions")
+      .insert({
+        organization_id: request.organization_id,
+        status: "enterprise_managed",
+        base_plan_interval: "month", // Placeholder - billing handled at enterprise level
+        alumni_bucket: "none", // Enterprise quota is pooled
+      });
+
+    if (createSubError) {
+      return { success: false, error: "Failed to create organization subscription" };
+    }
   }
 
   // Mark request as accepted

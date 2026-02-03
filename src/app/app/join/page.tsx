@@ -426,7 +426,7 @@ function JoinOrgFormComponent() {
                 <p className="text-sm text-muted-foreground mb-3">
                   Want to create your own organization instead?
                 </p>
-                <Link href="/app/create-org">
+                <Link href="/app/create">
                   <Button variant="secondary" size="sm">
                     Create Organization
                   </Button>

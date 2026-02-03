@@ -9,7 +9,7 @@ import { validateJson, ValidationError, validationErrorResponse } from "@/lib/se
 import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
 import { getEnterpriseQuota } from "@/lib/enterprise/quota";
 import { formatTierName, getEnterprisePricing, getEnterpriseTierLimit } from "@/lib/enterprise/pricing";
-import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
+import type { EnterpriseTier, BillingInterval, PricingModel } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
 // Extended Stripe type to include current_period_end
@@ -39,6 +39,8 @@ interface EnterpriseSubscriptionRow {
   stripe_subscription_id: string | null;
   billing_interval: BillingInterval;
   alumni_tier: EnterpriseTier;
+  pricing_model: PricingModel | null;
+  sub_org_quantity: number | null;
   pooled_alumni_limit: number | null;
   custom_price_cents: number | null;
   status: string;
@@ -116,6 +118,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     tier: subscription.alumni_tier,
     tierName: formatTierName(subscription.alumni_tier),
     billingInterval: subscription.billing_interval,
+    pricingModel: subscription.pricing_model ?? "alumni_tier",
+    subOrgQuantity: subscription.sub_org_quantity ?? null,
     stripeCustomerId: subscription.stripe_customer_id,
     stripeSubscriptionId: subscription.stripe_subscription_id,
     currentPeriodEnd: subscription.current_period_end,
@@ -246,12 +250,14 @@ export async function POST(req: Request, { params }: RouteParams) {
       proration_behavior: "create_prorations",
     })) as SubscriptionWithPeriod;
 
-    const periodEnd = updated.current_period_end ? new Date(updated.current_period_end * 1000).toISOString() : null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatedSub = updated as any;
+    const periodEnd = updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000).toISOString() : null;
     const stripeCustomerId =
-      typeof updated.customer === "string" ? updated.customer : updated.customer?.id || null;
+      typeof updatedSub.customer === "string" ? updatedSub.customer : updatedSub.customer?.id || null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceSupabase as any)
+    const { error: updateError } = await (serviceSupabase as any)
       .from("enterprise_subscriptions")
       .update({
         alumni_tier: tier,
@@ -264,6 +270,14 @@ export async function POST(req: Request, { params }: RouteParams) {
         updated_at: new Date().toISOString(),
       })
       .eq("enterprise_id", resolvedEnterpriseId);
+
+    if (updateError) {
+      console.error("[enterprise-billing] Failed to update subscription record", updateError);
+      return respond(
+        { error: "Stripe updated successfully, but billing record update failed. Please refresh or contact support." },
+        500,
+      );
+    }
 
     return respond({ success: true });
   } catch (error) {

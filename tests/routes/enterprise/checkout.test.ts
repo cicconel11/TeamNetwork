@@ -128,9 +128,6 @@ function simulateCreateEnterpriseCheckout(
   }
 
   // Create checkout session
-  const priceCents =
-    request.billingInterval === "year" ? pricing.yearly : pricing.monthly;
-
   const session = createMockCheckoutSession({
     mode: "subscription",
     metadata: {

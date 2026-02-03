@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import type { EnterpriseQuotaInfo } from "../../src/lib/enterprise/quota.ts";
+import type { EnterpriseQuotaInfo, SeatQuotaInfo } from "../../src/lib/enterprise/quota.ts";
 
 /**
  * Tests for enterprise quota utilities
@@ -9,6 +9,7 @@ import type { EnterpriseQuotaInfo } from "../../src/lib/enterprise/quota.ts";
  * 1. canEnterpriseAddAlumni() with various scenarios
  * 2. checkAdoptionQuota() edge cases
  * 3. getEnterpriseQuota() return structure
+ * 4. canEnterpriseAddSubOrg() seat limit enforcement
  *
  * Since the actual functions use Supabase, we test the logic
  * by simulating the function behavior with mocked data.
@@ -351,5 +352,146 @@ describe("EnterpriseQuotaInfo structure", () => {
     };
 
     assert.ok(quota.remaining !== null && quota.remaining >= 0);
+  });
+});
+
+// Subscription types for seat-based pricing
+interface MockSeatSubscription {
+  pricing_model: string | null;
+  sub_org_quantity: number | null;
+}
+
+// Simulated canEnterpriseAddSubOrg logic (mirrors actual implementation)
+function simulateCanEnterpriseAddSubOrg(
+  subscription: MockSeatSubscription | null,
+  enterpriseManagedOrgCount: number
+): SeatQuotaInfo {
+  // If no seat-based pricing, no limit (legacy tier-based)
+  if (!subscription || subscription.pricing_model !== "per_sub_org" || !subscription.sub_org_quantity) {
+    return { allowed: true, currentCount: 0, maxAllowed: null, needsUpgrade: false };
+  }
+
+  return {
+    allowed: enterpriseManagedOrgCount < subscription.sub_org_quantity,
+    currentCount: enterpriseManagedOrgCount,
+    maxAllowed: subscription.sub_org_quantity,
+    needsUpgrade: enterpriseManagedOrgCount >= subscription.sub_org_quantity,
+  };
+}
+
+describe("canEnterpriseAddSubOrg", () => {
+  it("returns unlimited when subscription is null", () => {
+    const result = simulateCanEnterpriseAddSubOrg(null, 5);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.maxAllowed, null);
+    assert.strictEqual(result.needsUpgrade, false);
+  });
+
+  it("returns unlimited when pricing_model is not per_sub_org", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "tier_based",
+      sub_org_quantity: null,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 10);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.maxAllowed, null);
+  });
+
+  it("returns unlimited when sub_org_quantity is null", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: null,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 5);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.maxAllowed, null);
+  });
+
+  it("allows adding sub-org when under limit", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 5,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 3);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 3);
+    assert.strictEqual(result.maxAllowed, 5);
+    assert.strictEqual(result.needsUpgrade, false);
+  });
+
+  it("allows adding sub-org when one below limit", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 5,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 4);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 4);
+    assert.strictEqual(result.maxAllowed, 5);
+    assert.strictEqual(result.needsUpgrade, false);
+  });
+
+  it("denies adding sub-org when at limit", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 5,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 5);
+    assert.strictEqual(result.allowed, false);
+    assert.strictEqual(result.currentCount, 5);
+    assert.strictEqual(result.maxAllowed, 5);
+    assert.strictEqual(result.needsUpgrade, true);
+  });
+
+  it("denies adding sub-org when over limit", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 5,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 6);
+    assert.strictEqual(result.allowed, false);
+    assert.strictEqual(result.currentCount, 6);
+    assert.strictEqual(result.maxAllowed, 5);
+    assert.strictEqual(result.needsUpgrade, true);
+  });
+
+  it("handles zero current count", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 3,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 0);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 0);
+    assert.strictEqual(result.maxAllowed, 3);
+    assert.strictEqual(result.needsUpgrade, false);
+  });
+
+  it("handles single seat limit", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 1,
+    };
+
+    // Can add first org
+    const result1 = simulateCanEnterpriseAddSubOrg(subscription, 0);
+    assert.strictEqual(result1.allowed, true);
+    assert.strictEqual(result1.maxAllowed, 1);
+
+    // Cannot add second org
+    const result2 = simulateCanEnterpriseAddSubOrg(subscription, 1);
+    assert.strictEqual(result2.allowed, false);
+    assert.strictEqual(result2.needsUpgrade, true);
+  });
+
+  it("handles large seat quantities", () => {
+    const subscription: MockSeatSubscription = {
+      pricing_model: "per_sub_org",
+      sub_org_quantity: 100,
+    };
+    const result = simulateCanEnterpriseAddSubOrg(subscription, 99);
+    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 99);
+    assert.strictEqual(result.maxAllowed, 100);
   });
 });

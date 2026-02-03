@@ -11,11 +11,12 @@ interface OrgSidebarProps {
   organization: Organization;
   role: OrgRole | null;
   isDevAdmin?: boolean;
+  hasAlumniAccess?: boolean;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   
@@ -31,13 +32,16 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
     .filter((item) => {
       // Role check
       if (role && !item.roles.includes(role)) return false;
-      
+
+      // Alumni access check - hide items that require alumni access when org doesn't have it
+      if (item.requiresAlumni && !hasAlumniAccess) return false;
+
       // Config check (hide if hidden is true)
       const configKey = getConfigKey(item.href);
       const config = navConfig[configKey];
       if (config?.hidden) return false;
       if (role && Array.isArray(config?.hiddenForRoles) && config.hiddenForRoles.includes(role)) return false;
-      
+
       return true;
     })
     .map((item) => {

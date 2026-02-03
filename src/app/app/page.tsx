@@ -97,7 +97,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             <Link href="/app/join">
               <Button variant="ghost" size="sm">Join Org</Button>
             </Link>
-            <Link href="/app/create-org">
+            <Link href="/app/create">
               <Button size="sm">Create Org</Button>
             </Link>
           </div>
@@ -197,7 +197,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             <Link href="/app/join">
               <Button variant="secondary" size="sm">Join existing</Button>
             </Link>
-            <Link href="/app/create-org">
+            <Link href="/app/create">
               <Button size="sm">Create new</Button>
             </Link>
           </div>
@@ -213,13 +213,20 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             title="No organizations yet"
             description="Create a new organization or join one you were invited to."
             action={
-              <div className="flex gap-3">
-                <Link href="/app/create-org">
-                  <Button>Create organization</Button>
-                </Link>
-                <Link href="/app/join">
-                  <Button variant="secondary">Join organization</Button>
-                </Link>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <Link href="/app/create">
+                    <Button>Create organization</Button>
+                  </Link>
+                  <Link href="/app/join">
+                    <Button variant="secondary">Join organization</Button>
+                  </Link>
+                </div>
+                {enterprises.length === 0 && (
+                  <Link href="/app/create-enterprise" className="text-sm text-purple-600 hover:text-purple-700 text-center">
+                    Or create an enterprise to manage multiple organizations
+                  </Link>
+                )}
               </div>
             }
           />

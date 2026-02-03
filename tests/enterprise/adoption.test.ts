@@ -43,6 +43,13 @@ interface MockQuotaCheck {
   limit?: number;
 }
 
+interface MockSeatQuotaCheck {
+  allowed: boolean;
+  currentCount: number;
+  maxAllowed: number | null;
+  needsUpgrade: boolean;
+}
+
 interface CreateAdoptionContext {
   organizations: MockOrganization[];
   existingRequests: MockAdoptionRequest[];
@@ -101,6 +108,7 @@ interface AcceptAdoptionContext {
   request: MockAdoptionRequest | null;
   organization: MockOrganization | null;
   quotaCheck: MockQuotaCheck;
+  seatQuotaCheck?: MockSeatQuotaCheck;
 }
 
 interface AcceptAdoptionResult {
@@ -132,9 +140,17 @@ function simulateAcceptAdoptionRequest(
     return { success: false, error: "Organization already belongs to an enterprise" };
   }
 
-  // Check quota again
+  // Check alumni quota again
   if (!ctx.quotaCheck.allowed) {
     return { success: false, error: ctx.quotaCheck.error };
+  }
+
+  // Check seat limit for enterprise-managed orgs
+  if (ctx.seatQuotaCheck && !ctx.seatQuotaCheck.allowed) {
+    return {
+      success: false,
+      error: `Seat limit reached. You have used all ${ctx.seatQuotaCheck.maxAllowed} enterprise-managed org seats. Add more seats to adopt additional organizations.`,
+    };
   }
 
   return { success: true };
@@ -514,6 +530,98 @@ describe("acceptAdoptionRequest", () => {
       },
       organization: { id: "org-1", name: "Test Org", enterprise_id: null },
       quotaCheck: { allowed: true },
+    };
+
+    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns error when seat limit is reached", () => {
+    const futureDate = new Date(Date.now() + 86400000 * 7);
+
+    const ctx: AcceptAdoptionContext = {
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        requested_at: new Date().toISOString(),
+        status: "pending",
+        responded_by: null,
+        responded_at: null,
+        expires_at: futureDate.toISOString(),
+      },
+      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuotaCheck: {
+        allowed: false,
+        currentCount: 5,
+        maxAllowed: 5,
+        needsUpgrade: true,
+      },
+    };
+
+    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
+
+    assert.strictEqual(result.success, false);
+    assert.ok(result.error?.includes("Seat limit reached"));
+    assert.ok(result.error?.includes("5 enterprise-managed org seats"));
+  });
+
+  it("succeeds when seat limit has room", () => {
+    const futureDate = new Date(Date.now() + 86400000 * 7);
+
+    const ctx: AcceptAdoptionContext = {
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        requested_at: new Date().toISOString(),
+        status: "pending",
+        responded_by: null,
+        responded_at: null,
+        expires_at: futureDate.toISOString(),
+      },
+      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuotaCheck: {
+        allowed: true,
+        currentCount: 3,
+        maxAllowed: 5,
+        needsUpgrade: false,
+      },
+    };
+
+    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("succeeds when enterprise has no seat limit (legacy tier-based)", () => {
+    const futureDate = new Date(Date.now() + 86400000 * 7);
+
+    const ctx: AcceptAdoptionContext = {
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        requested_at: new Date().toISOString(),
+        status: "pending",
+        responded_by: null,
+        responded_at: null,
+        expires_at: futureDate.toISOString(),
+      },
+      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuotaCheck: {
+        allowed: true,
+        currentCount: 0,
+        maxAllowed: null,
+        needsUpgrade: false,
+      },
     };
 
     const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);

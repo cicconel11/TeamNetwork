@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const params = useParams();
   const enterpriseSlug = params.enterpriseSlug as string;
 
-  const [settings, setSettings] = useState<EnterpriseSettings | null>(null);
+  const [, setSettings] = useState<EnterpriseSettings | null>(null);
   const [admins, setAdmins] = useState<EnterpriseAdmin[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);

@@ -13,10 +13,9 @@ interface SubOrg {
 
 interface SubOrgListProps {
   orgs: SubOrg[];
-  enterpriseSlug: string;
 }
 
-export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
+export function SubOrgList({ orgs }: SubOrgListProps) {
   if (orgs.length === 0) {
     return (
       <Card>

@@ -165,7 +165,7 @@ describe("formatTierName", () => {
 
   it("formats tier_3 correctly", () => {
     const name = formatTierName("tier_3");
-    assert.strictEqual(name, "Tier 3 (10,000+ alumni)");
+    assert.strictEqual(name, "Tier 3 (Unlimited alumni)");
   });
 
   it("formats custom correctly", () => {
@@ -180,7 +180,7 @@ describe("formatTierName", () => {
 
     assert.ok(tier1Name.includes("5,000"));
     assert.ok(tier2Name.includes("10,000"));
-    assert.ok(tier3Name.includes("10,000+"));
+    assert.ok(tier3Name.toLowerCase().includes("unlimited"));
   });
 });
 

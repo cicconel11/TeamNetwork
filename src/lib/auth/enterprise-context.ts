@@ -3,10 +3,10 @@ import { createServiceClient } from "@/lib/supabase/service";
 import type { EnterpriseContext, EnterpriseRole, Enterprise, EnterpriseSubscription } from "@/types/enterprise";
 
 // Type aliases for queries (until types regenerated)
-interface EnterpriseRow extends Enterprise {}
+type EnterpriseRow = Enterprise;
 interface EnterpriseRoleRow { role: string }
-interface SubscriptionRow extends EnterpriseSubscription {}
-interface AlumniCountsRow { total_alumni_count: number; sub_org_count: number }
+type SubscriptionRow = EnterpriseSubscription;
+interface AlumniCountsRow { total_alumni_count: number; sub_org_count: number; enterprise_managed_org_count: number }
 
 export async function getEnterpriseContext(enterpriseSlug: string): Promise<EnterpriseContext | null> {
   const supabase = await createClient();
@@ -48,7 +48,7 @@ export async function getEnterpriseContext(enterpriseSlug: string): Promise<Ente
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: counts } = await (serviceSupabase as any)
     .from("enterprise_alumni_counts")
-    .select("total_alumni_count, sub_org_count")
+    .select("total_alumni_count, sub_org_count, enterprise_managed_org_count")
     .eq("enterprise_id", enterprise.id)
     .single() as { data: AlumniCountsRow | null };
 
@@ -66,7 +66,7 @@ export async function getEnterpriseContext(enterpriseSlug: string): Promise<Ente
     role: roleData.role as EnterpriseRole,
     alumniCount: counts?.total_alumni_count ?? 0,
     subOrgCount: counts?.sub_org_count ?? 0,
-    enterpriseManagedOrgCount: enterpriseManagedCount ?? 0,
+    enterpriseManagedOrgCount: counts?.enterprise_managed_org_count ?? 0,
   };
 }
 

@@ -40,3 +40,10 @@
 
 ## Agent-Specific Instructions
 - Use `grep -r` or `rg` (ripgrep) for searching the repository instead of mgrep.
+
+## TODOs
+- Add a brief comment in `src/app/auth/callback/route.ts` explaining why under_13 is checked before token verification (consistent parental-consent flow).
+- Add a callback test that explicitly asserts invalid/expired metadata tokens still allow login (trusts `age_bracket`).
+- Gate non-error `console.log` statements in the auth callback behind `shouldLogAuth()` to reduce production noise.
+- Consider making the “new user” age-gate bypass window configurable (env var) instead of hardcoded 60s.
+- Optional: add coverage for OAuth error/no-code/exchange-failure paths and verify custom OAuth query params are preserved end-to-end.

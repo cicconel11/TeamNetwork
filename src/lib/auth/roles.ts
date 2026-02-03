@@ -20,6 +20,7 @@ export type OrgContextResult = {
   isAlumni: boolean;
   subscription: SubscriptionStatus | null;
   gracePeriod: GracePeriodInfo;
+  hasAlumniAccess: boolean;
 };
 
 export async function getOrgRole(params: { orgId: string; userId?: string }): Promise<OrgRoleResult> {
@@ -86,6 +87,7 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
       userId,
       subscription: null,
       gracePeriod: getGracePeriodInfo(null),
+      hasAlumniAccess: false,
       ...flags,
     };
   }
@@ -93,7 +95,7 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
   // Fetch subscription status for the organization
   const { data: subscriptionData } = await supabase
     .from("organization_subscriptions")
-    .select("status, grace_period_ends_at, current_period_end")
+    .select("status, grace_period_ends_at, current_period_end, alumni_bucket")
     .eq("organization_id", org.id)
     .maybeSingle();
 
@@ -105,6 +107,11 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
       }
     : null;
 
+  // Determine alumni access based on subscription status and alumni_bucket
+  const hasAlumniAccess =
+    subscriptionData?.status === "enterprise_managed" ||
+    (subscriptionData?.alumni_bucket != null && subscriptionData.alumni_bucket !== "none");
+
   const gracePeriod = getGracePeriodInfo(subscription);
 
   const membership = await getOrgRole({ orgId: org.id, userId: userId ?? undefined });
@@ -115,6 +122,7 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
     userId,
     subscription,
     gracePeriod,
+    hasAlumniAccess,
     ...flags,
   };
 }

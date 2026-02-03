@@ -7,6 +7,7 @@ export type OrgNavItem = {
   icon: ComponentType<{ className?: string }>;
   roles: OrgRole[];
   configurable?: boolean;
+  requiresAlumni?: boolean;
 };
 
 export type NavConfigEntry = {
@@ -23,7 +24,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "", label: "Dashboard", icon: HomeIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/members", label: "Members", icon: UsersIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/chat", label: "Chat", icon: ChatIcon, roles: ["admin", "active_member", "alumni"] },
-  { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni"], requiresAlumni: true },
   { href: "/mentorship", label: "Mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/workouts", label: "Workouts", icon: DumbbellIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/competition", label: "Competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni"] },

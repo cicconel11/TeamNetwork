@@ -31,7 +31,6 @@ export async function resolveEnterpriseParam(
     .maybeSingle() as { data: { id: string; slug: string } | null; error: Error | null };
 
   if (error) {
-    console.error("[enterprise] Failed to resolve enterprise param", error);
     return { data: null, error: { message: "Failed to resolve enterprise", status: 500 } };
   }
 

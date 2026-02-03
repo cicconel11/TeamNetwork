@@ -8,6 +8,17 @@ interface EnterpriseSubscriptionRow {
   pooled_alumni_limit: number | null;
 }
 
+// Type for seat-based subscription row (until types regenerated)
+interface SeatSubscriptionRow {
+  pricing_model: string | null;
+  sub_org_quantity: number | null;
+}
+
+// Type for enterprise-managed org count from view
+interface EnterpriseManagedCountRow {
+  enterprise_managed_org_count: number;
+}
+
 // Type for enterprise alumni counts view (until types regenerated)
 interface AlumniCountsRow {
   total_alumni_count: number;
@@ -21,6 +32,13 @@ export interface EnterpriseQuotaInfo {
   alumniCount: number;
   remaining: number | null;
   subOrgCount: number;
+}
+
+export interface SeatQuotaInfo {
+  allowed: boolean;
+  currentCount: number;  // enterprise-managed orgs only
+  maxAllowed: number | null;  // sub_org_quantity (null = unlimited/legacy)
+  needsUpgrade: boolean;
 }
 
 export async function getEnterpriseQuota(enterpriseId: string): Promise<EnterpriseQuotaInfo | null> {
@@ -121,4 +139,39 @@ export async function checkAdoptionQuota(
   }
 
   return { allowed: true, wouldBeTotal, limit: quota.alumniLimit ?? undefined };
+}
+
+export async function canEnterpriseAddSubOrg(enterpriseId: string): Promise<SeatQuotaInfo> {
+  const supabase = createServiceClient();
+
+  // Get subscription with pricing model
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: subscription } = await (supabase as any)
+    .from("enterprise_subscriptions")
+    .select("pricing_model, sub_org_quantity")
+    .eq("enterprise_id", enterpriseId)
+    .single() as { data: SeatSubscriptionRow | null };
+
+  // If no seat-based pricing, no limit (legacy tier-based)
+  if (!subscription || subscription.pricing_model !== "per_sub_org" || !subscription.sub_org_quantity) {
+    return { allowed: true, currentCount: 0, maxAllowed: null, needsUpgrade: false };
+  }
+
+  // Get current enterprise-managed org count from the view
+  // Source of truth: organization_subscriptions.status = 'enterprise_managed'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: counts } = await (supabase as any)
+    .from("enterprise_alumni_counts")
+    .select("enterprise_managed_org_count")
+    .eq("enterprise_id", enterpriseId)
+    .single() as { data: EnterpriseManagedCountRow | null };
+
+  const currentCount = counts?.enterprise_managed_org_count ?? 0;
+
+  return {
+    allowed: currentCount < subscription.sub_org_quantity,
+    currentCount,
+    maxAllowed: subscription.sub_org_quantity,
+    needsUpgrade: currentCount >= subscription.sub_org_quantity,
+  };
 }

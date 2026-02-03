@@ -229,10 +229,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} />
 
       <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod ? "mt-12" : ""}`}>
         {children}

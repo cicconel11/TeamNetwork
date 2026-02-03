@@ -356,6 +356,53 @@ From `docs/db/schema-audit.md`:
 - Consider moving invite code generation to server-side RPC for security
 - RLS policies use helper functions: `is_org_admin()`, `is_org_member()`, `has_active_role()`
 
+### Enterprise Accounts System
+Enterprise accounts allow managing multiple organizations under a single billing entity.
+
+**Database Tables:**
+- `enterprises` - Core enterprise data (id, name, slug, logo, billing_contact_email)
+- `enterprise_subscriptions` - Billing & subscription (status, pricing_model, sub_org_quantity, alumni_tier)
+- `user_enterprise_roles` - User roles (owner, billing_admin, org_admin)
+- `enterprise_adoption_requests` - Pending requests for enterprises to adopt existing orgs
+
+**Pricing Models:**
+- `alumni_tier` - Legacy tier-based pricing (tier_1: 5000, tier_2: 10000, tier_3: unlimited)
+- `per_sub_org` - Quantity-based seat pricing ($150/seat default)
+
+**RLS Helper Functions:**
+- `is_enterprise_member(ent_id)` - Check if current user has any role in enterprise
+- `is_enterprise_admin(ent_id)` - Check if user is owner/billing_admin/org_admin
+
+**Key Files:**
+- `src/lib/auth/enterprise-context.ts` - Enterprise context & `getUserEnterprises()`
+- `src/app/app/page.tsx` - Displays "Your Enterprises" section
+- `src/components/enterprise/EnterpriseCard.tsx` - Enterprise card component
+- `src/app/enterprise/[enterpriseSlug]/` - Enterprise dashboard routes
+
+**Test Enterprise (Development):**
+A test enterprise exists for development without Stripe payment:
+- Slug: `test-enterprise`
+- ID: `aaaaaaaa-0000-0000-0000-000000000001`
+- Status: `active` with 10 sub-org seats
+- Created via: `supabase/migrations/20260202200000_seed_test_enterprise.sql`
+
+### Enterprise Independent Billing (Incomplete)
+The "Independent Billing" option for enterprise sub-organizations is partially implemented but **not functional**. Current state:
+- Sub-orgs created with `billingType: "independent"` get `subscription.status: "pending"`
+- **Missing**: No checkout flow exists for independent sub-orgs to complete billing setup
+- **Missing**: Stripe webhook doesn't handle independent sub-org payments
+- **Missing**: No mechanism to transition from `pending` → `active` status
+- **Missing**: No UI prompt to "Complete Billing Setup" after creation
+
+**Impact**: Users who select "Independent Billing" will get a non-functional organization.
+
+**Workaround**: Always select "Enterprise Billing (Recommended)" when creating sub-orgs.
+
+Files affected:
+- `src/components/enterprise/CreateSubOrgForm.tsx` - UI option marked as "Coming Soon"
+- `src/app/api/enterprise/[enterpriseId]/organizations/create/route.ts`
+- `src/app/api/stripe/webhook/route.ts`
+
 
 ## Bug Issues and Investigation
 

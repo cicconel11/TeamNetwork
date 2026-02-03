@@ -3,9 +3,10 @@ import { redirect } from "next/navigation";
 import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
+import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
 import { createServiceClient } from "@/lib/supabase/service";
-import { ENTERPRISE_TIER_LIMITS } from "@/types/enterprise";
+import { ENTERPRISE_TIER_LIMITS, type PricingModel } from "@/types/enterprise";
 
 interface EnterpriseDashboardProps {
   params: Promise<{ enterpriseSlug: string }>;
@@ -19,10 +20,12 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
     redirect("/app?error=no_enterprise_access");
   }
 
-  const { enterprise, subscription, alumniCount, subOrgCount, role } = context;
+  const { enterprise, subscription, alumniCount, subOrgCount, enterpriseManagedOrgCount, role } = context;
   const alumniLimit = subscription?.alumni_tier
     ? ENTERPRISE_TIER_LIMITS[subscription.alumni_tier]
     : null;
+  const pricingModel: PricingModel = subscription?.pricing_model ?? "alumni_tier";
+  const subOrgQuantity = subscription?.sub_org_quantity ?? null;
 
   // Fetch recent sub-organizations
   const serviceSupabase = createServiceClient();
@@ -132,6 +135,24 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
             <Link href={`/enterprise/${enterpriseSlug}/billing`}>
               <Button variant="secondary" size="sm">
                 Manage Quota
+              </Button>
+            </Link>
+          </div>
+        ) : null}
+      </Card>
+
+      {/* Seat Usage Summary Card */}
+      <Card className="p-6 mb-8">
+        <SeatUsageBar
+          currentSeats={enterpriseManagedOrgCount}
+          maxSeats={subOrgQuantity}
+          pricingModel={pricingModel}
+        />
+        {(role === "owner" || role === "billing_admin") && pricingModel === "per_sub_org" ? (
+          <div className="mt-4 flex justify-end">
+            <Link href={`/enterprise/${enterpriseSlug}/billing`}>
+              <Button variant="secondary" size="sm">
+                Manage Seats
               </Button>
             </Link>
           </div>
