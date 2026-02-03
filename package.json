@@ -15,7 +15,8 @@
     "test:routes": "node --test --loader ./tests/ts-loader.js tests/routes/stripe/*.test.ts tests/routes/organizations/*.test.ts tests/routes/admin/*.test.ts tests/routes/schedules/*.test.ts tests/routes/calendar/*.test.ts tests/routes/feedback/*.test.ts tests/routes/notifications/*.test.ts tests/routes/dev-admin/*.test.ts",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:ui": "playwright test --project=e2e --ui",
-    "test:e2e:debug": "playwright test --project=e2e --debug"
+    "test:e2e:debug": "playwright test --project=e2e --debug",
+    "analyze": "ANALYZE=true npm run build"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.17.4",
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
+    "@next/bundle-analyzer": "^14.2.35",
     "@playwright/test": "^1.58.0",
     "@types/node": "^20",
     "@types/react": "^18",
