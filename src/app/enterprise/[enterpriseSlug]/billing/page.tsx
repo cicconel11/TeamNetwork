@@ -5,7 +5,8 @@ import { useParams } from "next/navigation";
 import { Card, Button, Badge, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
-import { ENTERPRISE_TIER_LIMITS, ENTERPRISE_TIER_PRICING, type EnterpriseTier, type BillingInterval } from "@/types/enterprise";
+import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
+import { ENTERPRISE_TIER_LIMITS, ENTERPRISE_TIER_PRICING, ENTERPRISE_SEAT_PRICING, type EnterpriseTier, type BillingInterval, type PricingModel } from "@/types/enterprise";
 
 interface BillingInfo {
   tier: EnterpriseTier;
@@ -16,6 +17,9 @@ interface BillingInfo {
   currentPeriodEnd: string | null;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
+  pricingModel: PricingModel;
+  subOrgCount: number;
+  subOrgQuantity: number | null;
 }
 
 const TIER_OPTIONS: { value: EnterpriseTier; label: string }[] = [
@@ -44,6 +48,7 @@ export default function BillingPage() {
   const [selectedInterval, setSelectedInterval] = useState<BillingInterval>("month");
   const [isUpdating, setIsUpdating] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [isAddingSeats, setIsAddingSeats] = useState(false);
 
   const loadBilling = useCallback(async () => {
     setIsLoading(true);
@@ -63,6 +68,9 @@ export default function BillingPage() {
         ...billingPayload,
         alumniCount: usage.alumniCount ?? billingPayload?.alumniCount ?? 0,
         alumniLimit: usage.alumniLimit ?? billingPayload?.alumniLimit ?? null,
+        pricingModel: billingPayload?.pricingModel ?? "alumni_tier",
+        subOrgCount: usage.subOrgCount ?? billingPayload?.subOrgCount ?? 0,
+        subOrgQuantity: billingPayload?.subOrgQuantity ?? null,
       });
       setSelectedTier(billingPayload?.tier || "tier_1");
       setSelectedInterval(billingPayload?.billingInterval || "month");
@@ -143,6 +151,48 @@ export default function BillingPage() {
       setError(err instanceof Error ? err.message : "Failed to open billing portal");
     } finally {
       setIsOpeningPortal(false);
+    }
+  };
+
+  const handleAddSeats = async () => {
+    setIsAddingSeats(true);
+    setError(null);
+
+    try {
+      const currentQuantity = billing?.subOrgQuantity;
+      if (!currentQuantity) {
+        throw new Error("Unable to adjust seats without a current seat quantity.");
+      }
+
+      const response = await fetch(`/api/enterprise/${enterpriseSlug}/billing/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          newQuantity: currentQuantity + 1,
+          expectedCurrentQuantity: currentQuantity,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          loadBilling();
+        }
+        throw new Error(data.error || "Failed to add seats");
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+
+      setSuccessMessage("Seats added successfully");
+      loadBilling();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add seats");
+    } finally {
+      setIsAddingSeats(false);
     }
   };
 
@@ -236,6 +286,41 @@ export default function BillingPage() {
           currentCount={billing?.alumniCount ?? 0}
           limit={billing?.alumniLimit ?? null}
         />
+
+        <div className="mt-6">
+          <SeatUsageBar
+            currentSeats={billing?.subOrgCount ?? 0}
+            maxSeats={billing?.subOrgQuantity ?? null}
+            pricingModel={billing?.pricingModel ?? "alumni_tier"}
+            onAddSeats={!isAddingSeats ? handleAddSeats : undefined}
+          />
+        </div>
+
+        {/* Pricing breakdown for per_sub_org model */}
+        {billing?.pricingModel === "per_sub_org" && (
+          <div className="mt-6 p-4 rounded-xl bg-muted/50">
+            <h4 className="text-sm font-medium text-foreground mb-2">Pricing</h4>
+            <ul className="text-sm text-muted-foreground space-y-1">
+              <li>
+                <span className="text-green-600 dark:text-green-400">First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} organizations: Free</span>
+              </li>
+              <li>Additional organizations: ${(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100).toFixed(0)}/year each</li>
+            </ul>
+            {billing?.subOrgQuantity && billing.subOrgQuantity > ENTERPRISE_SEAT_PRICING.freeSubOrgs && (
+              <p className="mt-2 text-sm font-medium text-foreground">
+                Your annual cost: ${((billing.subOrgQuantity - ENTERPRISE_SEAT_PRICING.freeSubOrgs) * ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100).toFixed(0)}/year
+                <span className="text-muted-foreground font-normal ml-1">
+                  ({billing.subOrgQuantity - ENTERPRISE_SEAT_PRICING.freeSubOrgs} paid org{billing.subOrgQuantity - ENTERPRISE_SEAT_PRICING.freeSubOrgs !== 1 ? "s" : ""})
+                </span>
+              </p>
+            )}
+            {billing?.subOrgQuantity && billing.subOrgQuantity <= ENTERPRISE_SEAT_PRICING.freeSubOrgs && (
+              <p className="mt-2 text-sm font-medium text-green-600 dark:text-green-400">
+                You are on the free tier!
+              </p>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Change Plan */}
