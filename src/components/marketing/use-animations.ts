@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { animate, createScope, stagger } from "animejs";
-import type { Scope } from "animejs";
+import { loadAnime } from "./anime-loader";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
@@ -10,15 +9,22 @@ function prefersReducedMotion(): boolean {
 }
 
 export function useAnimationScope() {
-  const scopeRef = useRef<Scope | null>(null);
+  const scopeRef = useRef<{ revert: () => void } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    const scope = createScope({ root: containerRef.current });
-    scopeRef.current = scope;
+    let isMounted = true;
+
+    loadAnime().then((anime) => {
+      if (!isMounted || !containerRef.current) return;
+      const scope = anime.createScope({ root: containerRef.current });
+      scopeRef.current = scope;
+    });
+
     return () => {
-      scope.revert();
+      isMounted = false;
+      scopeRef.current?.revert();
     };
   }, []);
 
@@ -41,13 +47,15 @@ export function useHeroEntrance(selector: string) {
     }
 
     // Enhanced pop-out animation with spring physics
-    animate(selector, {
-      opacity: [0, 1],
-      translateY: [40, 0],
-      scale: [0.95, 1],
-      duration: 900,
-      ease: "out(3)",
-      delay: stagger(120, { start: 100 }),
+    loadAnime().then((anime) => {
+      anime.animate(selector, {
+        opacity: [0, 1],
+        translateY: [40, 0],
+        scale: [0.95, 1],
+        duration: 900,
+        ease: "out(3)",
+        delay: anime.stagger(120, { start: 100 }),
+      });
     });
   }, [selector, reduced]);
 }
@@ -97,12 +105,14 @@ export function useScrollReveal(selector: string) {
             const target = entry.target as HTMLElement;
 
             // Enhanced pop-out animation with spring effect
-            animate(target, {
-              opacity: [0, 1],
-              translateY: [40, 0],
-              scale: [0.92, 1],
-              duration: 700,
-              ease: "out(3)",
+            loadAnime().then((anime) => {
+              anime.animate(target, {
+                opacity: [0, 1],
+                translateY: [40, 0],
+                scale: [0.92, 1],
+                duration: 700,
+                ease: "out(3)",
+              });
             });
 
             observer.unobserve(target);
@@ -129,14 +139,19 @@ export function useChipDrift(selector: string) {
 
   useEffect(() => {
     if (reduced) return;
-    const anim = animate(selector, {
-      translateY: [0, -10, 0],
-      rotate: [0, 2, 0, -2, 0],
-      duration: 4000,
-      ease: "inOutSine",
-      loop: true,
-      delay: stagger(300),
+    let anim: { pause?: () => void } | null = null;
+
+    loadAnime().then((anime) => {
+      anim = anime.animate(selector, {
+        translateY: [0, -10, 0],
+        rotate: [0, 2, 0, -2, 0],
+        duration: 4000,
+        ease: "inOutSine",
+        loop: true,
+        delay: anime.stagger(300),
+      });
     });
+
     return () => {
       anim?.pause?.();
     };
@@ -174,12 +189,14 @@ export function useSectionPop(selector: string) {
             const target = entry.target as HTMLElement;
 
             // Dramatic pop-out with glow effect
-            animate(target, {
-              opacity: [0, 1],
-              translateY: [30, 0],
-              scale: [0.9, 1.02, 1],
-              duration: 800,
-              ease: "spring(1, 80, 12, 0)",
+            loadAnime().then((anime) => {
+              anime.animate(target, {
+                opacity: [0, 1],
+                translateY: [30, 0],
+                scale: [0.9, 1.02, 1],
+                duration: 800,
+                ease: "spring(1, 80, 12, 0)",
+              });
             });
 
             observer.unobserve(target);
@@ -235,13 +252,15 @@ export function useStaggeredReveal(containerSelector: string, itemSelector: stri
             const container = entry.target as HTMLElement;
             const items = container.querySelectorAll<HTMLElement>(itemSelector);
 
-            animate(items, {
-              opacity: [0, 1],
-              translateY: [20, 0],
-              scale: [0.95, 1],
-              duration: 600,
-              ease: "outExpo",
-              delay: stagger(80),
+            loadAnime().then((anime) => {
+              anime.animate(items, {
+                opacity: [0, 1],
+                translateY: [20, 0],
+                scale: [0.95, 1],
+                duration: 600,
+                ease: "outExpo",
+                delay: anime.stagger(80),
+              });
             });
 
             observer.unobserve(container);
@@ -283,13 +302,15 @@ export function useStadiumLights(beamSelector: string) {
       return;
     }
 
-    animate(beamSelector, {
-      opacity: [0, 0.25, 0.15],
-      rotate: [-25, 8],
-      translateY: ["-30%", "0%"],
-      duration: 1800,
-      ease: "out(3)",
-      delay: stagger(200, { start: 200 }),
+    loadAnime().then((anime) => {
+      anime.animate(beamSelector, {
+        opacity: [0, 0.25, 0.15],
+        rotate: [-25, 8],
+        translateY: ["-30%", "0%"],
+        duration: 1800,
+        ease: "out(3)",
+        delay: anime.stagger(200, { start: 200 }),
+      });
     });
   }, [beamSelector, reduced]);
 }
@@ -387,13 +408,15 @@ export function useBannerDrop(selector: string) {
             const container = entry.target as HTMLElement;
             const items = container.querySelectorAll<HTMLElement>(selector);
 
-            animate(items, {
-              opacity: [0, 1],
-              translateY: ["-100%", "5px", "-2px", "0"],
-              rotate: ["-2deg", "1deg", "-0.5deg", "0"],
-              duration: 800,
-              ease: "spring(1, 80, 12, 0)",
-              delay: stagger(100),
+            loadAnime().then((anime) => {
+              anime.animate(items, {
+                opacity: [0, 1],
+                translateY: ["-100%", "5px", "-2px", "0"],
+                rotate: ["-2deg", "1deg", "-0.5deg", "0"],
+                duration: 800,
+                ease: "spring(1, 80, 12, 0)",
+                delay: anime.stagger(100),
+              });
             });
 
             observer.unobserve(container);
@@ -475,12 +498,14 @@ export function useTrophyBounce(selector: string) {
           if (entry.isIntersecting) {
             const target = entry.target as HTMLElement;
 
-            animate(target, {
-              opacity: [0, 1],
-              scale: [0, 1.2, 0.9, 1],
-              rotate: ["-10deg", "5deg", "-2deg", "0"],
-              duration: 800,
-              ease: "spring(1, 80, 12, 0)",
+            loadAnime().then((anime) => {
+              anime.animate(target, {
+                opacity: [0, 1],
+                scale: [0, 1.2, 0.9, 1],
+                rotate: ["-10deg", "5deg", "-2deg", "0"],
+                duration: 800,
+                ease: "spring(1, 80, 12, 0)",
+              });
             });
 
             observer.unobserve(target);

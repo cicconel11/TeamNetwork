@@ -14,3 +14,4 @@ export {
   useConfettiBurst,
   useTrophyBounce,
 } from "./use-animations";
+export { loadAnime } from "./anime-loader";

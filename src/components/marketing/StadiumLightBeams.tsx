@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { animate, stagger } from "animejs";
+import { loadAnime } from "./anime-loader";
 
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;
@@ -29,13 +29,16 @@ export function StadiumLightBeams() {
     }
 
     // Animate light beams sweeping across
-    animate(beams, {
-      opacity: [0, 0.25, 0.15],
-      rotate: [-25, 8],
-      translateY: ["-30%", "0%"],
-      duration: 1800,
-      ease: "out(3)",
-      delay: stagger(200, { start: 200 }),
+    loadAnime().then((anime) => {
+      if (!containerRef.current) return;
+      anime.animate(beams, {
+        opacity: [0, 0.25, 0.15],
+        rotate: [-25, 8],
+        translateY: ["-30%", "0%"],
+        duration: 1800,
+        ease: "out(3)",
+        delay: anime.stagger(200, { start: 200 }),
+      });
     });
   }, []);
 
