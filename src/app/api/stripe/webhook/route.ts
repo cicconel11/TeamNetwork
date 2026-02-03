@@ -9,8 +9,25 @@ import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/st
 import { checkWebhookRateLimit, getWebhookClientIp } from "@/lib/security/webhook-rate-limit";
 import { calculateGracePeriodEnd } from "@/lib/subscription/grace-period";
 import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
-import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
+import type { EnterpriseTier, BillingInterval, PricingModel } from "@/types/enterprise";
 import { getEnterpriseTierLimit } from "@/lib/enterprise";
+
+/**
+ * Normalizes a pricing model from metadata.
+ * Defaults to "alumni_tier" for backwards compatibility.
+ */
+const normalizePricingModel = (value?: string | null): PricingModel =>
+  value === "per_sub_org" ? "per_sub_org" : "alumni_tier";
+
+/**
+ * Parses sub_org_quantity from metadata.
+ * Returns null if not present or not a valid positive integer.
+ */
+const parseSubOrgQuantity = (value?: string | null): number | null => {
+  if (!value) return null;
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -523,6 +540,9 @@ export async function POST(req: Request) {
   /**
    * Handle enterprise subscription lifecycle updates.
    * Returns the enterprise subscription ID if found and updated, null otherwise.
+   *
+   * Updates pricing_model and sub_org_quantity from subscription metadata
+   * if the subscription uses per_sub_org pricing model.
    */
   const handleEnterpriseSubscriptionUpdate = async (
     subscription: SubscriptionWithPeriod
@@ -530,7 +550,7 @@ export async function POST(req: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
       .from("enterprise_subscriptions")
-      .select("id")
+      .select("id, pricing_model")
       .eq("stripe_subscription_id", subscription.id)
       .maybeSingle();
 
@@ -543,14 +563,46 @@ export async function POST(req: Request) {
       ? new Date(periodEnd * 1000).toISOString()
       : null;
 
+    // Build update payload
+    const updatePayload: Record<string, unknown> = {
+      status: subscription.status,
+      current_period_end: currentPeriodEnd,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Check for pricing model and quantity updates from metadata
+    const metadata = subscription.metadata;
+    const pricingModelFromMetadata = metadata?.pricing_model ? normalizePricingModel(metadata.pricing_model) : null;
+    const pricingModel =
+      pricingModelFromMetadata ?? (data.pricing_model === "per_sub_org" ? "per_sub_org" : "alumni_tier");
+
+    const subOrgQuantityFromMetadata = parseSubOrgQuantity(metadata?.sub_org_quantity);
+    const subOrgQuantityFromItems = Array.isArray(subscription.items?.data)
+      ? subscription.items.data.reduce((total, item) => total + (item.quantity ?? 0), 0)
+      : null;
+    const resolvedSubOrgQuantity =
+      subOrgQuantityFromItems && subOrgQuantityFromItems > 0 ? subOrgQuantityFromItems : subOrgQuantityFromMetadata;
+
+    // Update pricing_model if present in metadata
+    if (pricingModelFromMetadata) {
+      updatePayload.pricing_model = pricingModelFromMetadata;
+    }
+
+    // Update sub_org_quantity for per_sub_org pricing model
+    // Prefer Stripe item quantity to avoid metadata drift
+    if (pricingModel === "per_sub_org" && resolvedSubOrgQuantity !== null) {
+      updatePayload.sub_org_quantity = resolvedSubOrgQuantity;
+      console.log("[stripe-webhook] Updating enterprise sub_org_quantity:", {
+        enterpriseSubId: data.id,
+        quantity: resolvedSubOrgQuantity,
+        source: subOrgQuantityFromItems ? "items" : "metadata",
+      });
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from("enterprise_subscriptions")
-      .update({
-        status: subscription.status,
-        current_period_end: currentPeriodEnd,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updatePayload)
       .eq("id", data.id);
 
     return data.id;
@@ -595,22 +647,155 @@ export async function POST(req: Request) {
         const customerId =
           typeof session.customer === "string" ? session.customer : session.customer?.id || null;
 
-        console.log("[stripe-webhook] checkout.session.completed - org:", session.metadata?.organization_id, "session:", session.id);
+        console.log("[stripe-webhook] checkout.session.completed - org:", session.metadata?.organization_id, "session:", session.id, "mode:", session.mode);
 
-        // Handle enterprise checkout
+        // Handle enterprise setup mode (free tier - card on file without payment)
+        if (session.metadata?.type === "enterprise_setup" && session.mode === "setup") {
+          const tier =
+            (session.metadata.tier as EnterpriseTier) ||
+            (session.metadata.alumni_tier as EnterpriseTier) ||
+            "tier_1";
+          const creatorId = session.metadata.creatorId;
+          const enterpriseName = session.metadata.enterpriseName;
+          const enterpriseSlug = session.metadata.enterpriseSlug;
+          const billingContactEmail = session.metadata.billingContactEmail;
+          const enterpriseDescription = session.metadata.enterpriseDescription;
+          const pricingModel = normalizePricingModel(session.metadata.pricing_model);
+          const subOrgQuantity = parseSubOrgQuantity(session.metadata.sub_org_quantity);
+
+          if (!creatorId || !enterpriseName || !enterpriseSlug) {
+            console.error("[stripe-webhook] Enterprise setup missing required metadata", {
+              eventId: event.id,
+              sessionId: session.id,
+              metadata: session.metadata,
+            });
+            return NextResponse.json(
+              { error: "Enterprise provisioning failed - missing metadata" },
+              { status: 500 }
+            );
+          }
+
+          console.log("[stripe-webhook] Provisioning enterprise (setup mode - free tier):", enterpriseSlug);
+
+          // Create or reuse enterprise record (idempotent)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let { data: enterprise } = await (supabase as any)
+            .from("enterprises")
+            .select("*")
+            .eq("slug", enterpriseSlug)
+            .maybeSingle();
+
+          if (!enterprise) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: created, error: enterpriseError } = await (supabase as any)
+              .from("enterprises")
+              .insert({
+                name: enterpriseName,
+                slug: enterpriseSlug,
+                description: enterpriseDescription || null,
+                billing_contact_email: billingContactEmail || null,
+              })
+              .select()
+              .single();
+
+            if (enterpriseError || !created) {
+              console.error("[stripe-webhook] Failed to create enterprise (setup mode)", {
+                eventId: event.id,
+                error: enterpriseError?.message,
+                enterpriseSlug,
+              });
+
+              // If a duplicate insert raced, try one more fetch
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data: retry } = await (supabase as any)
+                .from("enterprises")
+                .select("*")
+                .eq("slug", enterpriseSlug)
+                .maybeSingle();
+
+              if (!retry) {
+                return NextResponse.json(
+                  { error: "Enterprise provisioning failed - will retry" },
+                  { status: 500 }
+                );
+              }
+
+              enterprise = retry;
+            } else {
+              enterprise = created;
+            }
+          }
+
+          // Create enterprise subscription with card on file but no active Stripe subscription
+          // The subscription will be created when they exceed the free tier
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: subError } = await (supabase as any)
+            .from("enterprise_subscriptions")
+            .upsert({
+              enterprise_id: enterprise.id,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: null, // No subscription yet - free tier
+              billing_interval: "year",
+              alumni_tier: tier,
+              pooled_alumni_limit: getEnterpriseTierLimit(tier),
+              pricing_model: pricingModel,
+              sub_org_quantity: subOrgQuantity,
+              status: "active", // Active even without subscription (free tier)
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "enterprise_id" });
+
+          if (subError) {
+            console.error("[stripe-webhook] Failed to create enterprise subscription (setup mode)", {
+              eventId: event.id,
+              error: subError.message,
+              enterpriseId: enterprise.id,
+            });
+          }
+
+          // Grant owner role to creator (idempotent)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { error: roleError } = await (supabase as any)
+            .from("user_enterprise_roles")
+            .upsert({
+              user_id: creatorId,
+              enterprise_id: enterprise.id,
+              role: "owner",
+            }, { onConflict: "user_id,enterprise_id" });
+
+          if (roleError) {
+            console.error("[stripe-webhook] Failed to grant enterprise owner role (setup mode)", {
+              eventId: event.id,
+              error: roleError.message,
+              enterpriseId: enterprise.id,
+              userId: creatorId,
+            });
+          }
+
+          console.log("[stripe-webhook] Enterprise provisioned (free tier - setup mode):", enterprise.id);
+          break;
+        }
+
+        // Handle enterprise checkout (subscription mode - paying customers)
         if (session.metadata?.type === "enterprise") {
           if (session.payment_status !== "paid") {
             console.warn("[stripe-webhook] Enterprise checkout completed without payment; skipping provisioning");
             break;
           }
 
-          const tier = (session.metadata.tier as EnterpriseTier) || "tier_1";
+          const tier =
+            (session.metadata.tier as EnterpriseTier) ||
+            (session.metadata.alumni_tier as EnterpriseTier) ||
+            "tier_1";
           const creatorId = session.metadata.creatorId;
           const enterpriseName = session.metadata.enterpriseName;
           const enterpriseSlug = session.metadata.enterpriseSlug;
-          const billingInterval = (session.metadata.billingInterval as BillingInterval) || "month";
+          const billingInterval = (session.metadata.billingInterval as BillingInterval) || "year";
           const billingContactEmail = session.metadata.billingContactEmail;
           const enterpriseDescription = session.metadata.enterpriseDescription;
+
+          // New quantity pricing metadata
+          const pricingModel = normalizePricingModel(session.metadata.pricing_model);
+          const subOrgQuantity = parseSubOrgQuantity(session.metadata.sub_org_quantity);
 
           if (!creatorId || !enterpriseName || !enterpriseSlug) {
             console.error("[stripe-webhook] Enterprise checkout missing required metadata", {
@@ -697,6 +882,8 @@ export async function POST(req: Request) {
               billing_interval: billingInterval,
               alumni_tier: tier,
               pooled_alumni_limit: getEnterpriseTierLimit(tier),
+              pricing_model: pricingModel,
+              sub_org_quantity: subOrgQuantity,
               status: "active",
               updated_at: new Date().toISOString(),
             }, { onConflict: "enterprise_id" });
