@@ -209,15 +209,21 @@ function NotificationSettingsContent() {
           }));
           setCalendarPrefs(calPrefs);
 
-          // Load preferences for each org
-          for (const form of nextForms) {
-            const prefs = await loadCalendarPreferences(form.orgId);
-            setCalendarPrefs((prev) =>
-              prev.map((p) =>
-                p.orgId === form.orgId ? { ...p, preferences: prefs, isLoading: false } : p
-              )
-            );
-          }
+          // Load preferences for all orgs in parallel
+          const prefsResults = await Promise.all(
+            nextForms.map(async (form) => ({
+              orgId: form.orgId,
+              preferences: await loadCalendarPreferences(form.orgId),
+            }))
+          );
+
+          setCalendarPrefs(
+            prefsResults.map((result) => ({
+              orgId: result.orgId,
+              preferences: result.preferences,
+              isLoading: false,
+            }))
+          );
         }
       } else {
         setCalendarLoading(false);

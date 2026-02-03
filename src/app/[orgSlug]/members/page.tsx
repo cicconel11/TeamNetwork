@@ -44,36 +44,38 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
 
   // Build query with filters
   const devAdminEmails = getDevAdminEmails();
+  const devAdminEmailFilter = `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`;
 
-  let query = dataClient
+  let membersQuery = dataClient
     .from("members")
     .select("*")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
-    .not("email", "in", `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`)
+    .not("email", "in", devAdminEmailFilter)
     .order("last_name");
 
   // Apply filters
   // Default: show active members only unless explicitly filtered
   if (filters.status) {
-    query = query.eq("status", filters.status);
+    membersQuery = membersQuery.eq("status", filters.status);
   } else {
-    query = query.eq("status", "active");
+    membersQuery = membersQuery.eq("status", "active");
   }
 
   if (filters.role) {
-    query = query.eq("role", filters.role);
+    membersQuery = membersQuery.eq("role", filters.role);
   }
 
-  const { data: members } = await query;
-
-  // Get unique roles for filter
-  const { data: allMembers } = await dataClient
-    .from("members")
-    .select("role")
-    .eq("organization_id", org.id)
-    .is("deleted_at", null)
-    .not("email", "in", `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`);
+  // Run both queries in parallel
+  const [{ data: members }, { data: allMembers }] = await Promise.all([
+    membersQuery,
+    dataClient
+      .from("members")
+      .select("role")
+      .eq("organization_id", org.id)
+      .is("deleted_at", null)
+      .not("email", "in", devAdminEmailFilter),
+  ]);
   
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 

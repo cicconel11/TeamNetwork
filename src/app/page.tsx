@@ -1,15 +1,35 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
-import {
-  LandingAnimations,
-  FloatingParticles,
-  StadiumLightBeams,
-  Confetti,
-} from "@/components/marketing";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
-import { PricingSection } from "@/components/marketing/PricingSection";
+
+// Lazy-load animation components - only needed on landing page
+const LandingAnimations = dynamic(
+  () => import("@/components/marketing/LandingAnimations").then((mod) => mod.LandingAnimations),
+  { ssr: false }
+);
+
+const FloatingParticles = dynamic(
+  () => import("@/components/marketing/FloatingParticles").then((mod) => mod.FloatingParticles),
+  { ssr: false }
+);
+
+const StadiumLightBeams = dynamic(
+  () => import("@/components/marketing/StadiumLightBeams").then((mod) => mod.StadiumLightBeams),
+  { ssr: false }
+);
+
+const Confetti = dynamic(
+  () => import("@/components/marketing/Confetti").then((mod) => mod.Confetti),
+  { ssr: false }
+);
+
+const PricingSection = dynamic(
+  () => import("@/components/marketing/PricingSection").then((mod) => mod.PricingSection),
+  { ssr: true }
+);
 
 export default async function LandingPage() {
   const supabase = await createClient();

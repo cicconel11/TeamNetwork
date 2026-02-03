@@ -29,27 +29,27 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
 
   const pairIds = pairs?.map((p) => p.id) || [];
 
-  const { data: logs } =
-    pairIds.length > 0
-      ? await supabase
-          .from("mentorship_logs")
-          .select("*")
-          .eq("organization_id", orgId)
-          .in("pair_id", pairIds)
-          .order("entry_date", { ascending: false })
-          .order("created_at", { ascending: false })
-      : { data: [] };
-
   const userIds = new Set<string>();
   pairs?.forEach((p) => {
     userIds.add(p.mentor_user_id);
     userIds.add(p.mentee_user_id);
   });
 
-  const { data: users } =
+  // Run logs and users queries in parallel
+  const [{ data: logs }, { data: users }] = await Promise.all([
+    pairIds.length > 0
+      ? supabase
+          .from("mentorship_logs")
+          .select("*")
+          .eq("organization_id", orgId)
+          .in("pair_id", pairIds)
+          .order("entry_date", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [] }),
     userIds.size > 0
-      ? await supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
-      : { data: [] };
+      ? supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
+      : Promise.resolve({ data: [] }),
+  ]);
 
   const filteredPairs =
     orgCtx.isAdmin
