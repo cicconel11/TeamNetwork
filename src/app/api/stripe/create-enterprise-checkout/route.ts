@@ -12,8 +12,9 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import { getEnterprisePricing } from "@/lib/enterprise/pricing";
-import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
+import { getEnterprisePricing, getBillableOrgCount } from "@/lib/enterprise/pricing";
+import type { EnterpriseTier, BillingInterval, PricingModel } from "@/types/enterprise";
+import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,8 +28,22 @@ const createEnterpriseSchema = z
     billingContactEmail: baseSchemas.email,
     description: optionalSafeString(800),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
+    pricingModel: z.enum(["alumni_tier", "per_sub_org"]).optional().default("alumni_tier"),
+    subOrgQuantity: z.number().int().min(1).max(1000).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => {
+      if (data.pricingModel === "per_sub_org") {
+        return data.subOrgQuantity !== undefined && data.subOrgQuantity >= 1;
+      }
+      return true;
+    },
+    {
+      message: "subOrgQuantity is required when pricingModel is 'per_sub_org'",
+      path: ["subOrgQuantity"],
+    }
+  );
 
 export async function POST(req: Request) {
   try {
@@ -63,6 +78,8 @@ export async function POST(req: Request) {
       billingContactEmail,
       description,
       idempotencyKey,
+      pricingModel,
+      subOrgQuantity,
     } = body;
 
     // Check slug uniqueness against enterprises
@@ -90,22 +107,129 @@ export async function POST(req: Request) {
 
     const interval: BillingInterval = billingInterval;
     const enterpriseTier: EnterpriseTier = tier;
-
-    // Get pricing for the tier
-    const priceCents = getEnterprisePricing(enterpriseTier, interval);
-
-    // tier_3 and custom require sales-led process
-    if (priceCents === null) {
-      return respond({
-        mode: "sales",
-        message: "This tier requires custom pricing. Please contact sales.",
-      });
-    }
+    const selectedPricingModel: PricingModel = pricingModel;
 
     try {
       const origin = req.headers.get("origin") ?? new URL(req.url).origin;
 
-      // Create Stripe checkout session
+      // Handle per_sub_org pricing model (quantity-based with free tier)
+      if (selectedPricingModel === "per_sub_org") {
+        const quantity = subOrgQuantity as number; // validated by schema refinement
+        const billableOrgs = getBillableOrgCount(quantity);
+
+        // Create or get Stripe customer first
+        const customer = await stripe.customers.create(
+          {
+            email: billingContactEmail,
+            metadata: {
+              type: "enterprise",
+              enterpriseName: name,
+              enterpriseSlug: slug,
+              creatorId: user.id,
+            },
+          },
+          idempotencyKey ? { idempotencyKey: `${idempotencyKey}-customer` } : undefined,
+        );
+
+        // If all orgs are free (5 or fewer), use setup mode to collect card on file
+        if (billableOrgs === 0) {
+          const session = await stripe.checkout.sessions.create(
+            {
+              mode: "setup",
+              customer: customer.id,
+              payment_method_types: ["card"],
+              metadata: {
+                type: "enterprise_setup",
+                pricing_model: "per_sub_org",
+                sub_org_quantity: quantity.toString(),
+                tier: enterpriseTier,
+                alumni_tier: enterpriseTier,
+                creatorId: user.id,
+                enterpriseName: name,
+                enterpriseSlug: slug,
+                enterpriseDescription: description ?? "",
+                billingContactEmail,
+                billingInterval: "year", // Always yearly for new model
+              },
+              success_url: `${origin}/app?enterprise=${slug}&checkout=success`,
+              cancel_url: `${origin}/app/create-enterprise?checkout=cancel`,
+            },
+            idempotencyKey ? { idempotencyKey: `${idempotencyKey}-session` } : undefined,
+          );
+
+          return respond({ checkoutUrl: session.url });
+        }
+
+        // If there are billable orgs (more than 5), create subscription immediately
+        const session = await stripe.checkout.sessions.create(
+          {
+            mode: "subscription",
+            customer: customer.id,
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  unit_amount: ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly,
+                  recurring: {
+                    interval: "year",
+                  },
+                  product_data: {
+                    name: "Enterprise Additional Organization",
+                    description: `TeamNetwork Enterprise - Additional organizations beyond free tier (${ENTERPRISE_SEAT_PRICING.freeSubOrgs} free included)`,
+                  },
+                },
+                quantity: billableOrgs, // Only charge for orgs beyond free tier
+              },
+            ],
+            subscription_data: {
+              metadata: {
+                type: "enterprise",
+                pricing_model: "per_sub_org",
+                sub_org_quantity: quantity.toString(), // Total orgs capacity
+                tier: enterpriseTier,
+                alumni_tier: enterpriseTier,
+                creatorId: user.id,
+                enterpriseName: name,
+                enterpriseSlug: slug,
+                enterpriseDescription: description ?? "",
+                billingContactEmail,
+                billingInterval: "year",
+              },
+            },
+            metadata: {
+              type: "enterprise",
+              pricing_model: "per_sub_org",
+              sub_org_quantity: quantity.toString(),
+              tier: enterpriseTier,
+              alumni_tier: enterpriseTier,
+              creatorId: user.id,
+              enterpriseName: name,
+              enterpriseSlug: slug,
+              enterpriseDescription: description ?? "",
+              billingContactEmail,
+              billingInterval: "year",
+            },
+            success_url: `${origin}/app?enterprise=${slug}&checkout=success`,
+            cancel_url: `${origin}/app/create-enterprise?checkout=cancel`,
+          },
+          idempotencyKey ? { idempotencyKey: `${idempotencyKey}-session` } : undefined,
+        );
+
+        return respond({ checkoutUrl: session.url });
+      }
+
+      // Handle alumni_tier pricing model (legacy tier-based)
+      const priceCents = getEnterprisePricing(enterpriseTier, interval);
+
+      // tier_3 and custom require sales-led process for alumni_tier model
+      if (priceCents === null) {
+        return respond({
+          mode: "sales",
+          message: "This tier requires custom pricing. Please contact sales.",
+        });
+      }
+
+      // Create Stripe checkout session for alumni_tier model
       const session = await stripe.checkout.sessions.create(
         {
           mode: "subscription",
@@ -129,6 +253,7 @@ export async function POST(req: Request) {
           subscription_data: {
             metadata: {
               type: "enterprise",
+              pricing_model: "alumni_tier",
               tier: enterpriseTier,
               creatorId: user.id,
               enterpriseName: name,
@@ -138,16 +263,17 @@ export async function POST(req: Request) {
               billingInterval: interval,
             },
           },
-        metadata: {
-          type: "enterprise",
-          tier: enterpriseTier,
-          creatorId: user.id,
-          enterpriseName: name,
-          enterpriseSlug: slug,
-          enterpriseDescription: description ?? "",
-          billingContactEmail,
-          billingInterval: interval,
-        },
+          metadata: {
+            type: "enterprise",
+            pricing_model: "alumni_tier",
+            tier: enterpriseTier,
+            creatorId: user.id,
+            enterpriseName: name,
+            enterpriseSlug: slug,
+            enterpriseDescription: description ?? "",
+            billingContactEmail,
+            billingInterval: interval,
+          },
           success_url: `${origin}/app?enterprise=${slug}&checkout=success`,
           cancel_url: `${origin}/app/create-enterprise?checkout=cancel`,
         },
