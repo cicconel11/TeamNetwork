@@ -13,6 +13,7 @@ import {
 } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,7 +35,8 @@ const createOrgSchema = z
     description: optionalSafeString(800),
     primary_color: baseSchemas.hexColor.optional(),
     primaryColor: baseSchemas.hexColor.optional(),
-    billingType: z.enum(["enterprise_managed", "independent"]).default("enterprise_managed"),
+    // Independent billing is not yet implemented - only enterprise_managed is supported
+    billingType: z.literal("enterprise_managed").default("enterprise_managed"),
   })
   .strict();
 
@@ -83,7 +85,19 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, description, primary_color, primaryColor, billingType } = body;
+    const { name, slug, description, primary_color, primaryColor } = body;
+
+    // Check seat limit for enterprise-managed orgs
+    const seatQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
+    if (!seatQuota.allowed) {
+      return respond({
+        error: "Seat limit reached",
+        message: `You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Add more seats to create additional organizations.`,
+        currentCount: seatQuota.currentCount,
+        maxAllowed: seatQuota.maxAllowed,
+        needsUpgrade: true,
+      }, 400);
+    }
 
     // Check slug uniqueness across both organizations and enterprises
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -156,22 +170,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: roleError.message }, 400);
     }
 
-    // Create subscription record based on billing type
-    // enterprise_managed: Uses pooled alumni quota, placeholder values for required fields
-    // independent (pending): Org pays separately, needs to set up own subscription via checkout
-    const subscriptionStatus = billingType === "enterprise_managed" ? "enterprise_managed" : "pending";
-
-    // For enterprise_managed: base_plan_interval and alumni_bucket are placeholders
+    // Create subscription record for enterprise-managed org
+    // Uses pooled alumni quota, placeholder values for required fields
     // (billing is handled at enterprise level, alumni quota is pooled)
-    // For independent: these will be updated when org completes checkout
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: subError } = await (serviceSupabase as any)
       .from("organization_subscriptions")
       .insert({
         organization_id: newOrg.id,
-        status: subscriptionStatus,
-        base_plan_interval: "month", // Placeholder for enterprise_managed, updated on checkout for independent
-        alumni_bucket: "none", // Enterprise quota is pooled, independent sets via checkout
+        status: "enterprise_managed",
+        base_plan_interval: "month", // Placeholder - billing handled at enterprise level
+        alumni_bucket: "none", // Enterprise quota is pooled
       }) as { error: Error | null };
 
     if (subError) {

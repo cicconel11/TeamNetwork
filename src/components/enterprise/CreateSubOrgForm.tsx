@@ -22,7 +22,7 @@ const createSubOrgSchema = z.object({
     .string()
     .trim()
     .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a 6 character hex code"),
-  billingType: z.enum(["enterprise_managed", "independent"]),
+  billingType: z.literal("enterprise_managed"),
 });
 
 type CreateSubOrgFormData = z.infer<typeof createSubOrgSchema>;
@@ -60,7 +60,6 @@ export function CreateSubOrgForm({
 
   const primaryColor = watch("primaryColor");
   const slug = watch("slug");
-  const billingType = watch("billingType");
 
   const handleNameChange = (value: string) => {
     setValue("name", value);
@@ -176,16 +175,17 @@ export function CreateSubOrgForm({
             </label>
             <div className="space-y-3">
               <BillingTypeOption
-                selected={billingType === "enterprise_managed"}
-                onSelect={() => setValue("billingType", "enterprise_managed")}
-                title="Enterprise Billing (Recommended)"
+                selected={true}
+                onSelect={() => {}}
+                title="Enterprise Billing"
                 description="Uses the pooled alumni quota from the enterprise subscription"
               />
               <BillingTypeOption
-                selected={billingType === "independent"}
-                onSelect={() => setValue("billingType", "independent")}
-                title="Independent Billing"
-                description="Organization pays separately with its own subscription"
+                selected={false}
+                onSelect={() => {}}
+                title="Independent Billing (Coming Soon)"
+                description="Organization pays separately with its own subscription — not yet available"
+                disabled
               />
             </div>
           </div>
@@ -217,6 +217,7 @@ interface BillingTypeOptionProps {
   onSelect: () => void;
   title: string;
   description: string;
+  disabled?: boolean;
 }
 
 function BillingTypeOption({
@@ -224,13 +225,17 @@ function BillingTypeOption({
   onSelect,
   title,
   description,
+  disabled = false,
 }: BillingTypeOptionProps) {
   return (
     <button
       type="button"
-      onClick={onSelect}
+      onClick={disabled ? undefined : onSelect}
+      disabled={disabled}
       className={`w-full text-left p-4 rounded-xl border-2 transition-colors ${
-        selected
+        disabled
+          ? "border-border bg-muted/50 cursor-not-allowed opacity-60"
+          : selected
           ? "border-purple-600 bg-purple-50 dark:bg-purple-900/20"
           : "border-border hover:border-muted-foreground/50"
       }`}
@@ -238,17 +243,19 @@ function BillingTypeOption({
       <div className="flex items-start gap-3">
         <div
           className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-            selected
+            disabled
+              ? "border-muted-foreground/50"
+              : selected
               ? "border-purple-600 bg-purple-600"
               : "border-muted-foreground"
           }`}
         >
-          {selected && (
+          {selected && !disabled && (
             <div className="w-1.5 h-1.5 rounded-full bg-white" />
           )}
         </div>
         <div>
-          <p className="font-medium text-foreground">{title}</p>
+          <p className={`font-medium ${disabled ? "text-muted-foreground" : "text-foreground"}`}>{title}</p>
           <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
         </div>
       </div>
