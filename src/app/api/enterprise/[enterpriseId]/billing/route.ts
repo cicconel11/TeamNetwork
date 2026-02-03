@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripe } from "@/lib/stripe";
@@ -10,6 +11,11 @@ import { getEnterpriseQuota } from "@/lib/enterprise/quota";
 import { formatTierName, getEnterprisePricing, getEnterpriseTierLimit } from "@/lib/enterprise/pricing";
 import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+
+// Extended Stripe type to include current_period_end
+type SubscriptionWithPeriod = Stripe.Subscription & {
+  current_period_end?: number | null;
+};
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -232,20 +238,20 @@ export async function POST(req: Request, { params }: RouteParams) {
       recurring: { interval: interval === "year" ? "year" : "month" },
       product_data: {
         name: `Enterprise Plan - ${formatTierName(tier)}`,
-        description: "TeamNetwork Enterprise subscription",
       },
     });
 
-    const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+    const updated = (await stripe.subscriptions.update(subscription.stripe_subscription_id, {
       items: [{ id: itemId, price: price.id }],
       proration_behavior: "create_prorations",
-    });
+    })) as SubscriptionWithPeriod;
 
     const periodEnd = updated.current_period_end ? new Date(updated.current_period_end * 1000).toISOString() : null;
     const stripeCustomerId =
       typeof updated.customer === "string" ? updated.customer : updated.customer?.id || null;
 
-    await serviceSupabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
       .from("enterprise_subscriptions")
       .update({
         alumni_tier: tier,

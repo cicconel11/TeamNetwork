@@ -27,6 +27,7 @@ ALTER TABLE user_deletion_requests ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies
 -- Users can only read their own deletion request
+DROP POLICY IF EXISTS "Users can view own deletion request" ON user_deletion_requests;
 CREATE POLICY "Users can view own deletion request"
   ON user_deletion_requests
   FOR SELECT
@@ -50,6 +51,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS user_deletion_requests_updated_at ON user_deletion_requests;
 CREATE TRIGGER user_deletion_requests_updated_at
   BEFORE UPDATE ON user_deletion_requests
   FOR EACH ROW

@@ -52,12 +52,21 @@ export async function getEnterpriseContext(enterpriseSlug: string): Promise<Ente
     .eq("enterprise_id", enterprise.id)
     .single() as { data: AlumniCountsRow | null };
 
+  // Get count of enterprise-managed organizations
+  const { count: enterpriseManagedCount } = await serviceSupabase
+    .from("organizations")
+    .select("*", { count: "exact", head: true })
+    .eq("enterprise_id", enterprise.id)
+    .eq("enterprise_relationship_type", "created")
+    .is("deleted_at", null);
+
   return {
     enterprise,
     subscription,
     role: roleData.role as EnterpriseRole,
     alumniCount: counts?.total_alumni_count ?? 0,
     subOrgCount: counts?.sub_org_count ?? 0,
+    enterpriseManagedOrgCount: enterpriseManagedCount ?? 0,
   };
 }
 

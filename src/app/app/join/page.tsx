@@ -17,10 +17,79 @@ interface RedeemResult {
   organization_id?: string;
   slug?: string;
   name?: string;
+  organization_slug?: string;
+  organization_name?: string;
   role?: string;
   already_member?: boolean;
   pending_approval?: boolean;
   status?: string;
+}
+
+type InviteFlow = "org" | "enterprise";
+type SupabaseBrowserClient = ReturnType<typeof createClient>;
+
+function normalizeRedeemResult(data: unknown): RedeemResult {
+  const result = (data ?? {}) as RedeemResult;
+  return {
+    ...result,
+    slug: result.slug ?? result.organization_slug,
+    name: result.name ?? result.organization_name,
+  };
+}
+
+async function redeemInviteWithFallback(
+  supabase: SupabaseBrowserClient,
+  codeOrToken: string,
+  preferredFlow: InviteFlow = "org",
+): Promise<{ result: RedeemResult | null; rpcError: string | null }> {
+  const trimmedCode = codeOrToken.trim();
+  const flows: InviteFlow[] = preferredFlow === "enterprise"
+    ? ["enterprise", "org"]
+    : ["org", "enterprise"];
+
+  let lastResult: RedeemResult | null = null;
+  let lastRpcError: string | null = null;
+
+  for (const flow of flows) {
+    if (flow === "enterprise") {
+      const { data, error } = await supabase.rpc("redeem_enterprise_invite", {
+        p_code_or_token: trimmedCode,
+      });
+
+      if (error) {
+        lastRpcError = error.message;
+        continue;
+      }
+
+      const normalized = normalizeRedeemResult(data);
+      lastResult = normalized;
+      if (normalized.success) {
+        return { result: normalized, rpcError: null };
+      }
+      continue;
+    }
+
+    const { data, error } = await supabase.rpc("redeem_org_invite", {
+      p_code: trimmedCode,
+    });
+
+    if (error) {
+      lastRpcError = error.message;
+      continue;
+    }
+
+    const normalized = normalizeRedeemResult(data);
+    lastResult = normalized;
+    if (normalized.success) {
+      return { result: normalized, rpcError: null };
+    }
+  }
+
+  if (lastResult) {
+    return { result: lastResult, rpcError: null };
+  }
+
+  return { result: null, rpcError: lastRpcError };
 }
 
 function JoinOrgFormComponent() {
@@ -28,6 +97,7 @@ function JoinOrgFormComponent() {
   const searchParams = useSearchParams();
   const codeFromUrl = searchParams.get("code");
   const tokenFromUrl = searchParams.get("token");
+  const inviteType = searchParams.get("invite");
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,22 +153,18 @@ function JoinOrgFormComponent() {
         return;
       }
 
-      // Use server-side RPC to redeem invite
-      const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
-        p_code: tokenFromUrl.trim(),
-      });
+      const preferredFlow: InviteFlow = inviteType === "enterprise" ? "enterprise" : "org";
+      const { result, rpcError } = await redeemInviteWithFallback(supabase, tokenFromUrl, preferredFlow);
 
       if (rpcError) {
-        setError(rpcError.message);
+        setError(rpcError);
         setIsLoading(false);
         captchaRef.current?.reset();
         return;
       }
 
-      const result = data as RedeemResult;
-
-      if (!result.success) {
-        setError(result.error || "Failed to join organization");
+      if (!result?.success) {
+        setError(result?.error || "Failed to join organization");
         setIsLoading(false);
         captchaRef.current?.reset();
         return;
@@ -135,7 +201,7 @@ function JoinOrgFormComponent() {
     };
 
     processTokenInvite();
-  }, [pendingTokenSubmit, isVerified, tokenFromUrl, router]);
+  }, [pendingTokenSubmit, isVerified, tokenFromUrl, inviteType, router]);
 
   const redeemInvite = async (inviteCode: string) => {
     // Require captcha verification before submission
@@ -158,22 +224,17 @@ function JoinOrgFormComponent() {
       return;
     }
 
-    // Use server-side RPC to redeem invite (handles all validation)
-    const { data, error: rpcError } = await supabase.rpc("redeem_org_invite", {
-      p_code: inviteCode.trim(),
-    });
+    const { result, rpcError } = await redeemInviteWithFallback(supabase, inviteCode, "org");
 
     if (rpcError) {
-      setError(rpcError.message);
+      setError(rpcError);
       setIsLoading(false);
       captchaRef.current?.reset();
       return;
     }
 
-    const result = data as RedeemResult;
-
-    if (!result.success) {
-      setError(result.error || "Failed to join organization");
+    if (!result?.success) {
+      setError(result?.error || "Failed to join organization");
       setIsLoading(false);
       captchaRef.current?.reset();
       return;

@@ -23,11 +23,12 @@ export async function resolveEnterpriseParam(
     return { data: null, error: { message: "Invalid enterprise id", status: 400 } };
   }
 
-  const { data, error } = await serviceSupabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (serviceSupabase as any)
     .from("enterprises")
     .select("id, slug")
     .eq("slug", slugParsed.data)
-    .maybeSingle();
+    .maybeSingle() as { data: { id: string; slug: string } | null; error: Error | null };
 
   if (error) {
     console.error("[enterprise] Failed to resolve enterprise param", error);

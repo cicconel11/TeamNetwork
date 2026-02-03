@@ -67,6 +67,32 @@ export async function canEnterpriseAddAlumni(enterpriseId: string, additionalCou
   return quota.alumniCount + additionalCount <= quota.alumniLimit;
 }
 
+export interface SubOrgQuotaResult {
+  allowed: boolean;
+  currentCount?: number;
+  maxAllowed?: number | null;
+}
+
+export async function canEnterpriseAddSubOrg(
+  enterpriseId: string
+): Promise<SubOrgQuotaResult> {
+  const quota = await getEnterpriseQuota(enterpriseId);
+
+  if (!quota) {
+    // No subscription found - shouldn't happen for valid enterprises
+    return { allowed: false, currentCount: 0, maxAllowed: 0 };
+  }
+
+  // Current model: no hard limit on sub-orgs
+  // Pricing is handled via quantity-based billing (see ENTERPRISE_SEAT_PRICING)
+  // First 5 orgs free, additional orgs billed per-org
+  return {
+    allowed: true,
+    currentCount: quota.subOrgCount,
+    maxAllowed: null, // No hard limit
+  };
+}
+
 export async function checkAdoptionQuota(
   enterpriseId: string,
   orgId: string

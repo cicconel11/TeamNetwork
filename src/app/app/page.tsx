@@ -8,6 +8,7 @@ import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
 import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
 import { EnterpriseCard } from "@/components/enterprise";
 import { getUserEnterprises } from "@/lib/auth/enterprise-context";
+import { SeedEnterpriseButton } from "@/components/dev/SeedEnterpriseButton";
 
 type Membership = {
   organization: {
@@ -137,17 +138,17 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
           </Card>
         )}
 
-        {/* Your Enterprises Section */}
-        {enterprises.length > 0 && (
-          <section className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="app-hero-animate" style={{ opacity: 0 }}>
-                <h2 className="text-xl font-semibold text-foreground">Your Enterprises</h2>
-              </div>
-              <Link href="/app/create-enterprise" className="app-hero-animate text-sm text-purple-600 hover:text-purple-700" style={{ opacity: 0 }}>
-                Create Enterprise
-              </Link>
+        {/* Your Enterprises Section - always show to allow creating enterprises */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="app-hero-animate" style={{ opacity: 0 }}>
+              <h2 className="text-xl font-semibold text-foreground">Your Enterprises</h2>
             </div>
+            <Link href="/app/create-enterprise" className="app-hero-animate text-sm text-purple-600 hover:text-purple-700" style={{ opacity: 0 }}>
+              Create Enterprise
+            </Link>
+          </div>
+          {enterprises.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {enterprises
                 .filter((item) => item.enterprise !== null)
@@ -163,8 +164,29 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                   />
                 ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <Card className="app-hero-animate p-6 text-center" style={{ opacity: 0 }}>
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Manage multiple organizations under one billing account
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Link href="/app/create-enterprise">
+                    <Button variant="secondary" size="sm">Create your first enterprise</Button>
+                  </Link>
+                  {process.env.NODE_ENV === "development" && <SeedEnterpriseButton />}
+                </div>
+              </div>
+            </Card>
+          )}
+        </section>
 
         <div className="mb-8 flex items-center justify-between">
           <div className="app-hero-animate" style={{ opacity: 0 }}>
@@ -189,22 +211,15 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
               </svg>
             }
             title="No organizations yet"
-            description="Create a new organization, join one you were invited to, or create an enterprise to manage multiple organizations."
+            description="Create a new organization or join one you were invited to."
             action={
-              <div className="flex flex-col gap-3">
-                <div className="flex gap-3">
-                  <Link href="/app/create-org">
-                    <Button>Create organization</Button>
-                  </Link>
-                  <Link href="/app/join">
-                    <Button variant="secondary">Join organization</Button>
-                  </Link>
-                </div>
-                {enterprises.length === 0 && (
-                  <Link href="/app/create-enterprise" className="text-sm text-purple-600 hover:text-purple-700 text-center">
-                    Or create an enterprise to manage multiple organizations
-                  </Link>
-                )}
+              <div className="flex gap-3">
+                <Link href="/app/create-org">
+                  <Button>Create organization</Button>
+                </Link>
+                <Link href="/app/join">
+                  <Button variant="secondary">Join organization</Button>
+                </Link>
               </div>
             }
           />

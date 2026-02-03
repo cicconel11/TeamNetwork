@@ -168,7 +168,8 @@ CREATE INDEX IF NOT EXISTS organization_subscriptions_org_status_idx
 -- Only count alumni from orgs with enterprise_managed billing status.
 -- Orgs with independent billing (status = 'active', 'pending', etc.) are excluded
 -- from the pooled alumni quota since they pay separately.
-CREATE OR REPLACE VIEW public.enterprise_alumni_counts AS
+DROP VIEW IF EXISTS public.enterprise_alumni_counts;
+CREATE VIEW public.enterprise_alumni_counts AS
 SELECT
   e.id AS enterprise_id,
   COUNT(DISTINCT CASE WHEN os.status = 'enterprise_managed' THEN a.id END) AS total_alumni_count,

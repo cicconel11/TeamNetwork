@@ -74,7 +74,8 @@ export async function POST(req: Request, { params }: RouteParams) {
         typeof stripeSub.customer === "string" ? stripeSub.customer : stripeSub.customer?.id || null;
 
       if (stripeCustomerId) {
-        await serviceSupabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (serviceSupabase as any)
           .from("enterprise_subscriptions")
           .update({ stripe_customer_id: stripeCustomerId, updated_at: new Date().toISOString() })
           .eq("enterprise_id", resolvedEnterpriseId);
@@ -90,11 +91,12 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   let enterpriseSlug = resolved?.enterpriseSlug;
   if (!enterpriseSlug) {
-    const { data: enterprise } = await serviceSupabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: enterprise } = await (serviceSupabase as any)
       .from("enterprises")
       .select("slug")
       .eq("id", resolvedEnterpriseId)
-      .maybeSingle();
+      .maybeSingle() as { data: { slug: string } | null };
     enterpriseSlug = enterprise?.slug ?? null;
   }
 
