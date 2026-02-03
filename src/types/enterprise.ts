@@ -13,6 +13,15 @@ export type AdoptionRequestStatus = "pending" | "accepted" | "rejected" | "expir
 export type EnterpriseRelationshipType = "created" | "adopted";
 export type SubOrgBillingType = "enterprise_managed" | "independent";
 
+// Pricing model types
+export type PricingModel = "alumni_tier" | "per_sub_org";
+
+// Quantity pricing constants
+export const ENTERPRISE_SEAT_PRICING = {
+  freeSubOrgs: 5, // First 5 organizations are free
+  pricePerAdditionalCentsYearly: 15000, // $150/year per additional org beyond free tier
+} as const;
+
 // Tier limits (null = unlimited)
 export const ENTERPRISE_TIER_LIMITS: Record<EnterpriseTier, number | null> = {
   tier_1: 5000,
@@ -55,6 +64,9 @@ export interface EnterpriseSubscription {
   alumni_tier: EnterpriseTier;
   pooled_alumni_limit: number | null;
   custom_price_cents: number | null;
+  pricing_model: PricingModel;
+  sub_org_quantity: number | null;
+  price_per_sub_org_cents: number | null;
   status: string;
   current_period_end: string | null;
   grace_period_ends_at: string | null;
@@ -96,6 +108,7 @@ export interface EnterpriseContext {
   role: EnterpriseRole;
   alumniCount: number;
   subOrgCount: number;
+  enterpriseManagedOrgCount: number;
 }
 
 // Role permissions helper type
