@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { showToast } from "@/components/ui/Toast";
+import * as sentry from "@/lib/analytics/sentry";
 import { filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
 import { normalizeRole } from "@teammeet/core";
 import type { Announcement } from "@teammeet/types";
@@ -159,7 +161,13 @@ export function useAnnouncements(
         }
       } catch (e) {
         if (isMountedRef.current) {
-          setError((e as Error).message);
+          const message = (e as Error).message || "An error occurred";
+          setError(message);
+          showToast(message, "error");
+          sentry.captureException(e as Error, {
+            context: "useAnnouncements",
+            orgId,
+          });
         }
       } finally {
         if (isMountedRef.current) {

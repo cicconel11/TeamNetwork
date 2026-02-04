@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { showToast } from "@/components/ui/Toast";
+import * as sentry from "@/lib/analytics/sentry";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 
@@ -79,7 +81,13 @@ export function useMembers(orgId: string | null): UseMembersReturn {
       }
     } catch (e) {
       if (isMountedRef.current) {
-        setError((e as Error).message);
+        const message = (e as Error).message || "An error occurred";
+        setError(message);
+        showToast(message, "error");
+        sentry.captureException(e as Error, {
+          context: "useMembers",
+          orgId,
+        });
       }
     } finally {
       if (isMountedRef.current) {

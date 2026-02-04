@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { showToast } from "@/components/ui/Toast";
+import * as sentry from "@/lib/analytics/sentry";
 import type { OrganizationDonation, OrganizationDonationStat } from "@teammeet/types";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
@@ -112,7 +114,13 @@ export function useDonations(orgSlug: string): UseDonationsReturn {
           setStats(null);
           setError(null);
         } else {
-          setError(error.message);
+          const message = error.message || "An error occurred";
+          setError(message);
+          showToast(message, "error");
+          sentry.captureException(e as Error, {
+            context: "useDonations",
+            orgSlug,
+          });
         }
       }
     } finally {
