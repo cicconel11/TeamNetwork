@@ -136,10 +136,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       void Linking.openURL(`${baseUrl}${item.href}`);
       return;
     }
-    // Use push for Home and Organizations to preserve back navigation
+    // Use push for Home to preserve back navigation within org
+    // Use navigate for Organizations to reset navigation state (avoids "[orgSlug]" back button)
     // Use replace for secondary screens to avoid stacking
-    if (item.href === `/(app)/${slug}` || item.href === "/(app)") {
+    if (item.href === `/(app)/${slug}`) {
       router.push(item.href);
+    } else if (item.href === "/(app)") {
+      router.navigate(item.href);
     } else {
       router.replace(item.href);
     }

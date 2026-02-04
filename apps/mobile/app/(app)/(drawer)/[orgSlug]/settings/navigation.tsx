@@ -11,15 +11,17 @@ import {
   TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavConfig, type NavConfig, type NavConfigEntry } from "@/hooks/useNavConfig";
-import { useOrgTheme } from "@/hooks/useOrgTheme";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import type { OrgRole } from "@teammeet/core";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
-import type { ThemeColors } from "@/lib/theme";
+import { APP_CHROME } from "@/lib/chrome";
+import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
 import {
   Home,
   Users,
@@ -39,6 +41,7 @@ import {
   Settings,
   ChevronUp,
   ChevronDown,
+  ChevronLeft,
   Check,
 } from "lucide-react-native";
 
@@ -72,8 +75,7 @@ export default function NavigationSettingsScreen() {
   const router = useRouter();
   const { orgSlug, orgId } = useOrg();
   const { user } = useAuth();
-  const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const styles = useMemo(() => createStyles(), []);
 
   const { navConfig, loading, saving, error, saveNavConfig, refetch } = useNavConfig(orgSlug);
 
@@ -260,9 +262,27 @@ export default function NavigationSettingsScreen() {
   if (roleLoading || loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={() => router.replace(`/(app)/${orgSlug}/settings`)} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Navigation</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        <View style={styles.contentSheet}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={SEMANTIC.success} />
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
         </View>
       </View>
     );
@@ -272,9 +292,27 @@ export default function NavigationSettingsScreen() {
   if (!isAdmin) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>Admin Access Required</Text>
-          <Text style={styles.emptyText}>You need admin permissions to manage navigation settings.</Text>
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable onPress={() => router.replace(`/(app)/${orgSlug}/settings`)} style={styles.backButton}>
+                <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <Text style={styles.headerTitle}>Navigation</Text>
+              <View style={styles.headerSpacer} />
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+
+        <View style={styles.contentSheet}>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>Admin Access Required</Text>
+            <Text style={styles.emptyText}>You need admin permissions to manage navigation settings.</Text>
+          </View>
         </View>
       </View>
     );
@@ -282,23 +320,40 @@ export default function NavigationSettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
+      {/* Gradient Header */}
+      <LinearGradient
+        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+        style={styles.headerGradient}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Navigation</Text>
-          <Text style={styles.headerDescription}>
-            Use arrows to reorder tabs, rename them, or hide them from members and alumni.
-          </Text>
-        </View>
-
-        {error && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>{error}</Text>
+        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+          <View style={styles.headerContent}>
+            <Pressable onPress={() => router.replace(`/(app)/${orgSlug}/settings`)} style={styles.backButton}>
+              <ChevronLeft size={24} color={APP_CHROME.headerTitle} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Navigation</Text>
+            <View style={styles.headerSpacer} />
           </View>
-        )}
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* Content Sheet */}
+      <View style={styles.contentSheet}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />}
+        >
+          {/* Description */}
+          <View style={styles.descriptionSection}>
+            <Text style={styles.descriptionText}>
+              Use arrows to reorder tabs, rename them, or hide them from members and alumni.
+            </Text>
+          </View>
+
+          {error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
         {/* Nav Items List */}
         <View style={styles.itemsList}>
@@ -328,19 +383,19 @@ export default function NavigationSettingsScreen() {
                       disabled={isFirst}
                       style={[styles.reorderButton, isFirst && styles.reorderButtonDisabled]}
                     >
-                      <ChevronUp size={18} color={isFirst ? colors.border : colors.mutedForeground} />
+                      <ChevronUp size={18} color={isFirst ? NEUTRAL.border : NEUTRAL.muted} />
                     </Pressable>
                     <Pressable
                       onPress={() => moveItem(item.href, "down")}
                       disabled={isLast}
                       style={[styles.reorderButton, isLast && styles.reorderButtonDisabled]}
                     >
-                      <ChevronDown size={18} color={isLast ? colors.border : colors.mutedForeground} />
+                      <ChevronDown size={18} color={isLast ? NEUTRAL.border : NEUTRAL.muted} />
                     </Pressable>
                   </View>
 
                   {/* Icon */}
-                  <Icon size={20} color={colors.mutedForeground} />
+                  <Icon size={20} color={NEUTRAL.muted} />
 
                   {/* Label */}
                   <View style={styles.itemLabelContainer}>
@@ -371,7 +426,7 @@ export default function NavigationSettingsScreen() {
                   >
                     <ChevronDown
                       size={20}
-                      color={colors.mutedForeground}
+                      color={NEUTRAL.muted}
                       style={{ transform: [{ rotate: isExpanded ? "180deg" : "0deg" }] }}
                     />
                   </Pressable>
@@ -388,7 +443,7 @@ export default function NavigationSettingsScreen() {
                         value={labelValue}
                         onChangeText={(text) => handleLabelChange(item.href, text)}
                         placeholder={item.label}
-                        placeholderTextColor={colors.mutedForeground}
+                        placeholderTextColor={NEUTRAL.placeholder}
                       />
                     </View>
 
@@ -406,7 +461,7 @@ export default function NavigationSettingsScreen() {
                           ]}
                         >
                           {hiddenForRoles.includes("active_member") && (
-                            <Check size={14} color={colors.primaryForeground} />
+                            <Check size={14} color={NEUTRAL.surface} />
                           )}
                         </View>
                         <Text style={styles.checkboxLabel}>Hide from members</Text>
@@ -419,7 +474,7 @@ export default function NavigationSettingsScreen() {
                           style={[styles.checkbox, hiddenForRoles.includes("alumni") && styles.checkboxChecked]}
                         >
                           {hiddenForRoles.includes("alumni") && (
-                            <Check size={14} color={colors.primaryForeground} />
+                            <Check size={14} color={NEUTRAL.surface} />
                           )}
                         </View>
                         <Text style={styles.checkboxLabel}>Hide from alumni</Text>
@@ -429,7 +484,7 @@ export default function NavigationSettingsScreen() {
                         onPress={() => toggleHiddenEverywhere(item.href)}
                       >
                         <View style={[styles.checkbox, isHiddenEverywhere && styles.checkboxChecked]}>
-                          {isHiddenEverywhere && <Check size={14} color={colors.primaryForeground} />}
+                          {isHiddenEverywhere && <Check size={14} color={NEUTRAL.surface} />}
                         </View>
                         <Text style={styles.checkboxLabel}>Disable for everyone</Text>
                       </Pressable>
@@ -441,7 +496,7 @@ export default function NavigationSettingsScreen() {
                       <View style={styles.editRolesRow}>
                         <View style={[styles.checkboxRow, styles.checkboxRowInline]}>
                           <View style={[styles.checkbox, styles.checkboxChecked, styles.checkboxDisabled]}>
-                            <Check size={14} color={colors.primaryForeground} />
+                            <Check size={14} color={NEUTRAL.surface} />
                           </View>
                           <Text style={styles.checkboxLabel}>Admins</Text>
                         </View>
@@ -456,7 +511,7 @@ export default function NavigationSettingsScreen() {
                             ]}
                           >
                             {editRoles.includes("active_member") && (
-                              <Check size={14} color={colors.primaryForeground} />
+                              <Check size={14} color={NEUTRAL.surface} />
                             )}
                           </View>
                           <Text style={styles.checkboxLabel}>Members</Text>
@@ -469,7 +524,7 @@ export default function NavigationSettingsScreen() {
                             style={[styles.checkbox, editRoles.includes("alumni") && styles.checkboxChecked]}
                           >
                             {editRoles.includes("alumni") && (
-                              <Check size={14} color={colors.primaryForeground} />
+                              <Check size={14} color={NEUTRAL.surface} />
                             )}
                           </View>
                           <Text style={styles.checkboxLabel}>Alumni</Text>
@@ -483,104 +538,133 @@ export default function NavigationSettingsScreen() {
           })}
         </View>
 
-        {/* Save Button */}
-        <View style={styles.footer}>
-          <Pressable
-            style={[styles.saveButton, (!hasChanges || saving) && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={!hasChanges || saving}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={colors.primaryForeground} />
-            ) : (
-              <Text style={styles.saveButtonText}>Save changes</Text>
-            )}
-          </Pressable>
-        </View>
-      </ScrollView>
+          {/* Save Button */}
+          <View style={styles.footer}>
+            <Pressable
+              style={[styles.saveButton, (!hasChanges || saving) && styles.saveButtonDisabled]}
+              onPress={handleSave}
+              disabled={!hasChanges || saving}
+            >
+              {saving ? (
+                <ActivityIndicator size="small" color={NEUTRAL.surface} />
+              ) : (
+                <Text style={styles.saveButtonText}>Save changes</Text>
+              )}
+            </Pressable>
+          </View>
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: NEUTRAL.background,
+    },
+    // Header styles
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {
+      // SafeAreaView handles top inset
+    },
+    headerContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: "600",
+      color: APP_CHROME.headerTitle,
+      textAlign: "center",
+    },
+    headerSpacer: {
+      width: 40, // Match back button width for centering
+    },
+    // Content sheet
+    contentSheet: {
+      flex: 1,
+      backgroundColor: NEUTRAL.surface,
     },
     scrollContent: {
-      padding: 16,
+      padding: SPACING.md,
       paddingBottom: 40,
+    },
+    descriptionSection: {
+      marginBottom: SPACING.md,
+    },
+    descriptionText: {
+      fontSize: 14,
+      color: NEUTRAL.muted,
+      lineHeight: 20,
     },
     loadingContainer: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      gap: 12,
+      gap: SPACING.sm,
     },
     loadingText: {
       fontSize: 14,
-      color: colors.muted,
+      color: NEUTRAL.muted,
     },
     emptyContainer: {
       flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      padding: 24,
+      padding: SPACING.lg,
     },
     emptyTitle: {
       fontSize: 18,
       fontWeight: "600",
-      color: colors.foreground,
-      marginBottom: 8,
+      color: NEUTRAL.foreground,
+      marginBottom: SPACING.sm,
     },
     emptyText: {
       fontSize: 14,
-      color: colors.muted,
+      color: NEUTRAL.muted,
       textAlign: "center",
     },
-    header: {
-      marginBottom: 20,
-    },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: colors.foreground,
-      marginBottom: 8,
-    },
-    headerDescription: {
-      fontSize: 14,
-      color: colors.mutedForeground,
-      lineHeight: 20,
-    },
     errorBanner: {
-      backgroundColor: colors.error + "15",
-      borderRadius: 8,
-      padding: 12,
-      marginBottom: 16,
+      backgroundColor: SEMANTIC.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.sm,
+      marginBottom: SPACING.md,
     },
     errorText: {
       fontSize: 14,
-      color: colors.error,
+      color: SEMANTIC.error,
     },
     itemsList: {
-      gap: 8,
+      gap: SPACING.sm,
     },
     itemCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      borderCurve: "continuous",
+      backgroundColor: NEUTRAL.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
       overflow: "hidden",
     },
     itemCardDisabled: {
       opacity: 0.6,
-      borderWidth: 1,
-      borderColor: colors.error + "40",
+      borderColor: SEMANTIC.error + "40",
     },
     itemHeader: {
       flexDirection: "row",
       alignItems: "center",
-      padding: 12,
+      padding: SPACING.sm,
       gap: 10,
     },
     reorderButtons: {
@@ -601,11 +685,11 @@ const createStyles = (colors: ThemeColors) =>
     itemLabel: {
       fontSize: 15,
       fontWeight: "600",
-      color: colors.foreground,
+      color: NEUTRAL.foreground,
     },
     itemLabelOriginal: {
       fontSize: 13,
-      color: colors.muted,
+      color: NEUTRAL.muted,
     },
     badgesContainer: {
       flexDirection: "row",
@@ -614,50 +698,50 @@ const createStyles = (colors: ThemeColors) =>
     badge: {
       paddingVertical: 2,
       paddingHorizontal: 8,
-      borderRadius: 4,
+      borderRadius: RADIUS.xs,
     },
     badgeError: {
-      backgroundColor: colors.error + "15",
+      backgroundColor: SEMANTIC.errorLight,
     },
     badgeErrorText: {
       fontSize: 11,
       fontWeight: "600",
-      color: colors.error,
+      color: SEMANTIC.error,
     },
     badgeWarning: {
-      backgroundColor: colors.warning + "15",
+      backgroundColor: SEMANTIC.warningLight,
     },
     badgeWarningText: {
       fontSize: 11,
       fontWeight: "600",
-      color: colors.warning,
+      color: SEMANTIC.warning,
     },
     expandButton: {
       padding: 4,
     },
     expandedContent: {
       borderTopWidth: 1,
-      borderTopColor: colors.border,
-      padding: 16,
-      gap: 16,
+      borderTopColor: NEUTRAL.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
     },
     fieldGroup: {
-      gap: 8,
+      gap: SPACING.sm,
     },
     fieldLabel: {
       fontSize: 14,
       fontWeight: "500",
-      color: colors.foreground,
+      color: NEUTRAL.foreground,
     },
     input: {
-      backgroundColor: colors.background,
+      backgroundColor: NEUTRAL.surface,
       borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
+      borderColor: NEUTRAL.border,
+      borderRadius: RADIUS.md,
       paddingVertical: 10,
       paddingHorizontal: 14,
       fontSize: 15,
-      color: colors.foreground,
+      color: NEUTRAL.foreground,
     },
     checkboxRow: {
       flexDirection: "row",
@@ -671,35 +755,35 @@ const createStyles = (colors: ThemeColors) =>
     checkbox: {
       width: 20,
       height: 20,
-      borderRadius: 4,
+      borderRadius: RADIUS.xs,
       borderWidth: 2,
-      borderColor: colors.border,
+      borderColor: NEUTRAL.border,
       alignItems: "center",
       justifyContent: "center",
     },
     checkboxChecked: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
+      backgroundColor: SEMANTIC.success,
+      borderColor: SEMANTIC.success,
     },
     checkboxDisabled: {
       opacity: 0.6,
     },
     checkboxLabel: {
       fontSize: 14,
-      color: colors.foreground,
+      color: NEUTRAL.foreground,
     },
     editRolesRow: {
       flexDirection: "row",
       flexWrap: "wrap",
-      gap: 16,
+      gap: SPACING.md,
     },
     footer: {
-      marginTop: 24,
+      marginTop: SPACING.lg,
     },
     saveButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: SEMANTIC.success,
       paddingVertical: 14,
-      borderRadius: 10,
+      borderRadius: RADIUS.md,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -709,6 +793,6 @@ const createStyles = (colors: ThemeColors) =>
     saveButtonText: {
       fontSize: 16,
       fontWeight: "600",
-      color: colors.primaryForeground,
+      color: NEUTRAL.surface,
     },
   });
