@@ -18,6 +18,7 @@ import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
+import { showToast } from "@/components/ui/Toast";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
 import { baseSchemas } from "@teammeet/validation";
 
@@ -129,10 +130,24 @@ export default function LoginScreen() {
         password: devPassword,
       });
       if (error) {
-        setApiError(error.message);
+        // Provide more helpful error messages for common issues
+        let helpfulMessage = error.message;
+        if (error.message === "Invalid login credentials") {
+          helpfulMessage =
+            "Invalid login credentials. Check that the dev user exists in Supabase and the email is confirmed.";
+        } else if (error.message === "Email not confirmed") {
+          helpfulMessage =
+            "Email not confirmed. Confirm the user in Supabase Dashboard or run: UPDATE auth.users SET email_confirmed_at = NOW() WHERE email = '" +
+            devEmail +
+            "';";
+        }
+        setApiError(helpfulMessage);
+        showToast(helpfulMessage, "error");
       }
     } catch (e) {
-      setApiError((e as Error).message);
+      const message = (e as Error).message || "An error occurred";
+      setApiError(message);
+      showToast(message, "error");
     } finally {
       setEmailLoading(false);
     }
@@ -169,14 +184,26 @@ export default function LoginScreen() {
 
       if (error) {
         captureException(new Error(error.message), { screen: "Login", method: "email" });
-        setApiError(error.message);
+        // Provide more helpful error messages for common issues
+        let helpfulMessage = error.message;
+        if (error.message === "Invalid login credentials") {
+          helpfulMessage =
+            "Invalid email or password. Please check your credentials and try again.";
+        } else if (error.message === "Email not confirmed") {
+          helpfulMessage =
+            "Please check your email and click the confirmation link before signing in.";
+        }
+        setApiError(helpfulMessage);
+        showToast(helpfulMessage, "error");
         return;
       }
 
       // Navigation happens automatically via _layout.tsx onAuthStateChange
     } catch (e) {
       captureException(e as Error, { screen: "Login", method: "email" });
-      setApiError((e as Error).message);
+      const message = (e as Error).message || "An error occurred";
+      setApiError(message);
+      showToast(message, "error");
     } finally {
       setEmailLoading(false);
     }
@@ -248,7 +275,9 @@ export default function LoginScreen() {
     } catch (error: unknown) {
       const err = error as { message?: string };
       captureException(error as Error, { screen: "Login", provider: "google" });
-      setApiError(err.message || "An unexpected error occurred");
+      const message = err.message || "An unexpected error occurred";
+      setApiError(message);
+      showToast(message, "error");
     } finally {
       setGoogleLoading(false);
     }
