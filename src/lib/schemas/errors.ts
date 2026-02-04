@@ -17,7 +17,7 @@ export const errorEventSchema = z.object({
   route: safeString(500).optional(),
   apiPath: safeString(500).optional(),
   severity: errorSeveritySchema.optional(),
-  meta: z.record(z.unknown()).optional(),
+  meta: z.record(z.string(), z.unknown()).optional(),
 });
 export type ErrorEventInput = z.infer<typeof errorEventSchema>;
 
