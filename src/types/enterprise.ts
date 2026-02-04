@@ -20,6 +20,7 @@ export type PricingModel = "alumni_tier" | "per_sub_org";
 export const ENTERPRISE_SEAT_PRICING = {
   freeSubOrgs: 5, // First 5 organizations are free
   pricePerAdditionalCentsYearly: 15000, // $150/year per additional org beyond free tier
+  pricePerAdditionalCentsMonthly: 1250, // $12.50/month per additional org (yearly / 12)
 } as const;
 
 // Tier limits (null = unlimited)

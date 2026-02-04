@@ -1,20 +1,24 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const bulkInvitesSchema = z.object({
+  invites: z
+    .array(z.unknown())
+    .min(1, "At least one invite is required")
+    .max(100, "Maximum 100 invites per batch"),
+});
+
 interface RouteParams {
   params: Promise<{ enterpriseId: string }>;
-}
-
-interface InviteInput {
-  organizationId: string;
-  role: string;
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
@@ -59,16 +63,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  const body = await req.json();
-  const { invites } = body as { invites: InviteInput[] };
-
-  if (!Array.isArray(invites) || invites.length === 0) {
-    return respond({ error: "No invites provided" }, 400);
+  let body;
+  try {
+    body = await validateJson(req, bulkInvitesSchema);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return respond({ error: error.message, details: error.details }, 400);
+    }
+    return respond({ error: "Invalid request" }, 400);
   }
 
-  if (invites.length > 100) {
-    return respond({ error: "Maximum 100 invites per batch" }, 400);
-  }
+  const { invites } = body;
 
   // Get all organizations for this enterprise
   const { data: orgs } = await serviceSupabase
@@ -84,15 +89,24 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Process invites one by one using the RPC function
   for (const invite of invites) {
-    const { organizationId, role } = invite;
+    const inviteObject = typeof invite === "object" && invite !== null
+      ? (invite as Record<string, unknown>)
+      : null;
+    const organizationId = inviteObject?.organizationId;
+    const role = inviteObject?.role;
 
     // Validate
-    if (!organizationId || !validOrgIds.has(organizationId)) {
+    if (typeof organizationId !== "string" || !baseSchemas.uuid.safeParse(organizationId).success) {
       failed++;
       continue;
     }
 
-    if (!role || !["admin", "active_member", "alumni"].includes(role)) {
+    if (!validOrgIds.has(organizationId)) {
+      failed++;
+      continue;
+    }
+
+    if (typeof role !== "string" || !["admin", "active_member", "alumni"].includes(role)) {
       failed++;
       continue;
     }

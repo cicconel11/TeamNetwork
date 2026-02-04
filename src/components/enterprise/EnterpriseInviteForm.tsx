@@ -9,20 +9,30 @@ interface Organization {
   slug: string;
 }
 
+export interface CreatedInvite {
+  code: string;
+  token: string;
+  organization_id: string;
+  organization_name: string;
+  role: string;
+}
+
 interface EnterpriseInviteFormProps {
   enterpriseId: string;
   organizations: Organization[];
-  onInviteCreated: () => void;
+  defaultOrgId?: string;
+  onInviteCreated: (invite: CreatedInvite) => void;
   onCancel: () => void;
 }
 
 export function EnterpriseInviteForm({
   enterpriseId,
   organizations,
+  defaultOrgId,
   onInviteCreated,
   onCancel,
 }: EnterpriseInviteFormProps) {
-  const [selectedOrg, setSelectedOrg] = useState<string>("");
+  const [selectedOrg, setSelectedOrg] = useState<string>(defaultOrgId || "");
   const [role, setRole] = useState<"active_member" | "admin" | "alumni">("active_member");
   const [maxUses, setMaxUses] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState<string>("");
@@ -65,7 +75,15 @@ export function EnterpriseInviteForm({
         throw new Error(data.error || "Failed to create invite");
       }
 
-      onInviteCreated();
+      const data = await res.json();
+      const selectedOrgData = organizations.find(o => o.id === selectedOrg);
+      onInviteCreated({
+        code: data.invite.code,
+        token: data.invite.token,
+        organization_id: selectedOrg,
+        organization_name: selectedOrgData?.name || "",
+        role,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invite");
     } finally {

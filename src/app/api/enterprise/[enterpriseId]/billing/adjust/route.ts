@@ -210,11 +210,17 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Case 2: Was free, now needs subscription (crossing from 5 to 6+ orgs)
     if (oldBillable === 0 && newBillable > 0) {
-      // First create a price for the subscription
+      // Determine price based on billing interval
+      const billingInterval = subscription.billing_interval;
+      const unitAmount = billingInterval === "month"
+        ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
+        : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
+
+      // Create a price for the subscription
       const price = await stripe.prices.create({
         currency: "usd",
-        unit_amount: ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly,
-        recurring: { interval: "year" },
+        unit_amount: unitAmount,
+        recurring: { interval: billingInterval },
         product_data: {
           name: "Enterprise Additional Organization",
           metadata: {

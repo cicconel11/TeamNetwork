@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button, Input, Card, CardHeader, CardTitle, CardDescription } from "@/components/ui";
+import { OrgLimitUpgradeModal } from "./OrgLimitUpgradeModal";
 
 const createSubOrgSchema = z.object({
   name: z
@@ -27,6 +28,11 @@ const createSubOrgSchema = z.object({
 
 type CreateSubOrgFormData = z.infer<typeof createSubOrgSchema>;
 
+interface UpgradeInfo {
+  currentCount: number;
+  maxAllowed: number;
+}
+
 interface CreateSubOrgFormProps {
   enterpriseSlug: string;
   onSuccess?: (slug: string) => void;
@@ -41,6 +47,10 @@ export function CreateSubOrgForm({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<CreateSubOrgFormData | null>(null);
+  const [upgradeInfo, setUpgradeInfo] = useState<UpgradeInfo | null>(null);
+  const [isUpgrading, setIsUpgrading] = useState(false);
 
   const {
     register,
@@ -91,9 +101,20 @@ export function CreateSubOrgForm({
       const responseData = await response.json();
 
       if (!response.ok) {
+        if (responseData.needsUpgrade) {
+          setPendingFormData(data);
+          setUpgradeInfo({
+            currentCount: responseData.currentCount,
+            maxAllowed: responseData.maxAllowed,
+          });
+          setShowUpgradeModal(true);
+          setIsLoading(false);
+          return;
+        }
         throw new Error(responseData.error || "Failed to create organization");
       }
 
+      setIsLoading(false);
       if (onSuccess) {
         onSuccess(data.slug);
       } else {
@@ -105,110 +126,180 @@ export function CreateSubOrgForm({
     }
   };
 
+  const handleUpgradeConfirm = async () => {
+    if (!pendingFormData) {
+      return;
+    }
+
+    setIsUpgrading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/enterprise/${enterpriseSlug}/organizations/create-with-upgrade`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: pendingFormData.name,
+          slug: pendingFormData.slug,
+          primary_color: pendingFormData.primaryColor,
+          billingType: pendingFormData.billingType,
+          upgradeIfNeeded: true,
+        }),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(responseData.error || "Failed to create organization with upgrade");
+      }
+
+      setShowUpgradeModal(false);
+      setPendingFormData(null);
+      setUpgradeInfo(null);
+
+      if (onSuccess) {
+        onSuccess(pendingFormData.slug);
+      } else {
+        router.push(`/${pendingFormData.slug}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong during upgrade");
+      setShowUpgradeModal(false);
+      setPendingFormData(null);
+      setUpgradeInfo(null);
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
+  const handleUpgradeModalClose = () => {
+    setShowUpgradeModal(false);
+    setPendingFormData(null);
+    setUpgradeInfo(null);
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create New Organization</CardTitle>
-        <CardDescription>
-          Create a new organization under this enterprise. It will use the pooled alumni quota.
-        </CardDescription>
-      </CardHeader>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Create New Organization</CardTitle>
+          <CardDescription>
+            Create a new organization under this enterprise. It will use the pooled alumni quota.
+          </CardDescription>
+        </CardHeader>
 
-      {error && (
-        <div className="mx-6 mb-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
-          {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-6">
-        <div className="space-y-4">
-          <Input
-            label="Organization Name"
-            type="text"
-            placeholder="e.g., Stanford Crew, The Whiffenpoofs"
-            error={errors.name?.message}
-            {...register("name", {
-              onChange: (e) => handleNameChange(e.target.value),
-            })}
-          />
-
-          <Input
-            label="URL Slug"
-            type="text"
-            placeholder="my-organization"
-            helperText={`Your organization will be at: teamnetwork.app/${slug || "your-slug"}`}
-            error={errors.slug?.message}
-            {...register("slug", {
-              onChange: (e) => {
-                e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
-              },
-            })}
-          />
-
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Brand Color
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                type="color"
-                value={primaryColor}
-                onChange={(e) => setValue("primaryColor", e.target.value)}
-                className="h-12 w-20 rounded-xl border border-border cursor-pointer"
-              />
-              <Input
-                type="text"
-                placeholder="#6B21A8"
-                className="flex-1"
-                error={errors.primaryColor?.message}
-                {...register("primaryColor")}
-              />
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This color will be used for the organization&apos;s branding
-            </p>
+        {error && (
+          <div className="mx-6 mb-4 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            {error}
           </div>
+        )}
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Billing Type
-            </label>
-            <div className="space-y-3">
-              <BillingTypeOption
-                selected={true}
-                onSelect={() => {}}
-                title="Enterprise Billing"
-                description="Uses the pooled alumni quota from the enterprise subscription"
-              />
-              <BillingTypeOption
-                selected={false}
-                onSelect={() => {}}
-                title="Independent Billing (Coming Soon)"
-                description="Organization pays separately with its own subscription — not yet available"
-                disabled
-              />
+        <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-6">
+          <div className="space-y-4">
+            <Input
+              label="Organization Name"
+              type="text"
+              placeholder="e.g., Stanford Crew, The Whiffenpoofs"
+              error={errors.name?.message}
+              {...register("name", {
+                onChange: (e) => handleNameChange(e.target.value),
+              })}
+            />
+
+            <Input
+              label="URL Slug"
+              type="text"
+              placeholder="my-organization"
+              helperText={`Your organization will be at: teamnetwork.app/${slug || "your-slug"}`}
+              error={errors.slug?.message}
+              {...register("slug", {
+                onChange: (e) => {
+                  e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+                },
+              })}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Brand Color
+              </label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="color"
+                  value={primaryColor}
+                  onChange={(e) => setValue("primaryColor", e.target.value)}
+                  className="h-12 w-20 rounded-xl border border-border cursor-pointer"
+                />
+                <Input
+                  type="text"
+                  placeholder="#6B21A8"
+                  className="flex-1"
+                  error={errors.primaryColor?.message}
+                  {...register("primaryColor")}
+                />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                This color will be used for the organization&apos;s branding
+              </p>
             </div>
-          </div>
 
-          <div className="flex gap-4 pt-4">
-            {onCancel && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onCancel}
-                disabled={isLoading}
-                className="flex-1"
-              >
-                Cancel
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Billing Type
+              </label>
+              <div className="space-y-3">
+                <BillingTypeOption
+                  selected={true}
+                  onSelect={() => {}}
+                  title="Enterprise Billing"
+                  description="Uses the pooled alumni quota from the enterprise subscription"
+                />
+                <BillingTypeOption
+                  selected={false}
+                  onSelect={() => {}}
+                  title="Independent Billing (Coming Soon)"
+                  description="Organization pays separately with its own subscription — not yet available"
+                  disabled
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              {onCancel && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onCancel}
+                  disabled={isLoading}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button type="submit" className="flex-1" isLoading={isLoading}>
+                Create Organization
               </Button>
-            )}
-            <Button type="submit" className="flex-1" isLoading={isLoading}>
-              Create Organization
-            </Button>
+            </div>
           </div>
-        </div>
-      </form>
-    </Card>
+        </form>
+      </Card>
+
+      {pendingFormData && upgradeInfo && (
+        <OrgLimitUpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={handleUpgradeModalClose}
+          onConfirm={handleUpgradeConfirm}
+          pendingOrgData={{
+            name: pendingFormData.name,
+            slug: pendingFormData.slug,
+            primaryColor: pendingFormData.primaryColor,
+          }}
+          currentCount={upgradeInfo.currentCount}
+          maxAllowed={upgradeInfo.maxAllowed}
+          isLoading={isUpgrading}
+        />
+      )}
+    </>
   );
 }
 

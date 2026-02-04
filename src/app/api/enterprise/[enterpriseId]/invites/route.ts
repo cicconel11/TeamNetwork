@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+
+const createInviteSchema = z.object({
+  organizationId: baseSchemas.uuid,
+  role: z.enum(["admin", "active_member", "alumni"]),
+  usesRemaining: z.number().int().positive().optional(),
+  expiresAt: z.string().datetime().optional(),
+});
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -143,16 +152,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await validateJson(req, createInviteSchema);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return respond({ error: error.message, details: error.details }, 400);
+    }
+    return respond({ error: "Invalid request" }, 400);
+  }
+
   const { organizationId, role, usesRemaining, expiresAt } = body;
-
-  if (!organizationId) {
-    return respond({ error: "Organization ID is required" }, 400);
-  }
-
-  if (!role || !["admin", "active_member", "alumni"].includes(role)) {
-    return respond({ error: "Valid role is required" }, 400);
-  }
 
   // Verify organization belongs to this enterprise
   const { data: org } = await serviceSupabase

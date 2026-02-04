@@ -110,7 +110,7 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
       />
 
       <Card>
-        <SubOrgList orgs={orgs} />
+        <SubOrgList orgs={orgs} enterpriseSlug={enterpriseSlug} />
       </Card>
     </div>
   );

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { EnterpriseInviteForm } from "@/components/enterprise/EnterpriseInviteForm";
+import type { CreatedInvite } from "@/components/enterprise/EnterpriseInviteForm";
 import { EnterpriseInviteList } from "@/components/enterprise/EnterpriseInviteList";
 import { BulkInviteUploader } from "@/components/enterprise/BulkInviteUploader";
+import { InviteSuccessModal } from "@/components/enterprise/InviteSuccessModal";
 
 interface Organization {
   id: string;
@@ -39,6 +41,10 @@ export default function EnterpriseInvitesPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<CreatedInvite | null>(null);
+  const searchParams = useSearchParams();
+  const preselectedOrgId = searchParams.get("org");
+  const [filterOrgId, setFilterOrgId] = useState<string>("all");
 
   const fetchInvites = useCallback(async (entId: string) => {
     try {
@@ -84,12 +90,30 @@ export default function EnterpriseInvitesPage() {
     fetchData();
   }, [enterpriseSlug, fetchInvites]);
 
-  const handleInviteCreated = () => {
+  useEffect(() => {
+    if (preselectedOrgId && organizations.some(o => o.id === preselectedOrgId)) {
+      setShowCreateForm(true);
+    }
+  }, [preselectedOrgId, organizations]);
+
+  const handleInviteCreated = (invite?: CreatedInvite) => {
+    if (invite) {
+      setCreatedInvite(invite);
+    }
     setShowCreateForm(false);
     setShowBulkUpload(false);
     if (enterpriseId) {
       fetchInvites(enterpriseId);
     }
+  };
+
+  const handleCloseSuccessModal = () => {
+    setCreatedInvite(null);
+  };
+
+  const handleCreateAnother = () => {
+    setCreatedInvite(null);
+    setShowCreateForm(true);
   };
 
   const handleRevoke = async (inviteId: string) => {
@@ -130,6 +154,10 @@ export default function EnterpriseInvitesPage() {
     }
   };
 
+  const filteredInvites = filterOrgId === "all"
+    ? invites
+    : invites.filter(i => i.organization_id === filterOrgId);
+
   if (isLoading) {
     return (
       <div className="animate-fade-in">
@@ -160,7 +188,7 @@ export default function EnterpriseInvitesPage() {
         title="Invites"
         description={`Manage invite codes across ${organizations.length} organizations`}
         actions={
-          !showCreateForm && !showBulkUpload && (
+          !showCreateForm && !showBulkUpload && !createdInvite && (
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setShowBulkUpload(true)}>
                 <UploadIcon className="h-4 w-4" />
@@ -193,12 +221,24 @@ export default function EnterpriseInvitesPage() {
         </Card>
       </div>
 
+      {/* Success Modal */}
+      {createdInvite && (
+        <div className="mb-6">
+          <InviteSuccessModal
+            invite={createdInvite}
+            onClose={handleCloseSuccessModal}
+            onCreateAnother={handleCreateAnother}
+          />
+        </div>
+      )}
+
       {/* Create Form */}
-      {showCreateForm && enterpriseId && (
+      {showCreateForm && !createdInvite && enterpriseId && (
         <div className="mb-6">
           <EnterpriseInviteForm
             enterpriseId={enterpriseId}
             organizations={organizations}
+            defaultOrgId={preselectedOrgId || undefined}
             onInviteCreated={handleInviteCreated}
             onCancel={() => setShowCreateForm(false)}
           />
@@ -217,12 +257,29 @@ export default function EnterpriseInvitesPage() {
         </div>
       )}
 
+      {/* Org Filter */}
+      {!showCreateForm && !showBulkUpload && invites.length > 0 && (
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-sm text-muted-foreground">Filter by organization:</span>
+          <select
+            value={filterOrgId}
+            onChange={(e) => setFilterOrgId(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="all">All Organizations</option>
+            {organizations.map(o => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Invites List */}
       <EnterpriseInviteList
-        invites={invites}
+        invites={filteredInvites}
         onRevoke={handleRevoke}
         onDelete={handleDelete}
-        groupByOrg={true}
+        groupByOrg={filterOrgId === "all"}
       />
     </div>
   );

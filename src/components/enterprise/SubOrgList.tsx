@@ -13,9 +13,10 @@ interface SubOrg {
 
 interface SubOrgListProps {
   orgs: SubOrg[];
+  enterpriseSlug: string;
 }
 
-export function SubOrgList({ orgs }: SubOrgListProps) {
+export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
   if (orgs.length === 0) {
     return (
       <Card>
@@ -78,6 +79,13 @@ export function SubOrgList({ orgs }: SubOrgListProps) {
                 </Badge>
               </td>
               <td className="py-4 px-4 text-right">
+                <Link
+                  href={`/enterprise/${enterpriseSlug}/invites?org=${org.id}`}
+                  className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  Invite
+                </Link>
+                <span className="mx-2 text-muted-foreground">|</span>
                 <Link
                   href={`/${org.slug}`}
                   className="text-sm text-purple-600 dark:text-purple-400 hover:underline"
