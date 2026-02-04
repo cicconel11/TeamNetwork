@@ -17,6 +17,7 @@ import { DrawerActions } from "@react-navigation/native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { fetchWithAuth } from "@/lib/web-api";
+import { showToast } from "@/components/ui/Toast";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -184,10 +185,10 @@ export default function NewAnnouncementScreen() {
 
           if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            console.warn("Failed to send notification:", data?.error || response.status);
+            showToast(data?.error || "Failed to send notification", "error");
           }
         } catch (notifyError) {
-          console.warn("Failed to send notification:", notifyError);
+          showToast("Failed to send notification", "error");
         }
       }
 

@@ -7,7 +7,9 @@ import {
   Alert,
   RefreshControl,
   Pressable,
+  Linking,
 } from "react-native";
+import * as Application from "expo-application";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -207,7 +209,7 @@ export default function MenuScreen() {
     {
       icon: <Bell size={20} color={NEUTRAL.muted} />,
       label: "Notifications",
-      onPress: () => console.log("Notifications"),
+      onPress: () => router.push(`/(app)/${orgSlug}/notifications`),
       badge: notificationCount,
     },
   ];
@@ -248,25 +250,41 @@ export default function MenuScreen() {
     {
       icon: <UserPlus size={20} color={NEUTRAL.muted} />,
       label: "Invites",
-      onPress: () => console.log("Invites"),
+      onPress: () => router.push(`/(app)/${orgSlug}/invites`),
     },
     {
       icon: <CreditCard size={20} color={NEUTRAL.muted} />,
       label: "Billing",
-      onPress: () => console.log("Billing"),
+      onPress: () => router.push(`/(app)/${orgSlug}/billing`),
     },
   ];
+
+  const handleAbout = () => {
+    const version = Application.nativeApplicationVersion || "1.0.0";
+    const buildNumber = Application.nativeBuildVersion || "1";
+    Alert.alert(
+      "About TeamMeet",
+      `Version ${version} (${buildNumber})\n\nTeamMeet helps teams stay connected and organized.`,
+      [
+        { text: "OK", style: "default" },
+        {
+          text: "Learn More",
+          onPress: () => Linking.openURL("https://www.myteamnetwork.com/about"),
+        },
+      ]
+    );
+  };
 
   const appItems: MenuItem[] = [
     {
       icon: <HelpCircle size={20} color={NEUTRAL.muted} />,
       label: "Help & Support",
-      onPress: () => console.log("Help"),
+      onPress: () => Linking.openURL("https://www.myteamnetwork.com/help"),
     },
     {
       icon: <Info size={20} color={NEUTRAL.muted} />,
       label: "About TeamMeet",
-      onPress: () => console.log("About"),
+      onPress: handleAbout,
     },
     {
       icon: <FileText size={20} color={NEUTRAL.muted} />,

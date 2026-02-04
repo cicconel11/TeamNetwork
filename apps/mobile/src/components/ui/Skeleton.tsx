@@ -230,10 +230,42 @@ export function SkeletonMemberCard({ style }: SkeletonCardProps) {
   );
 }
 
+// Notification card skeleton
+export function SkeletonNotificationCard({ style }: SkeletonCardProps) {
+  return (
+    <View
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading notification"
+      accessibilityState={{ busy: true }}
+      style={[styles.notificationCard, style]}
+    >
+      <View style={styles.notificationContent}>
+        {/* Unread indicator placeholder */}
+        <Skeleton width={8} height={8} borderRadius={4} style={{ marginRight: 4 }} />
+
+        {/* Main content */}
+        <View style={styles.notificationMain}>
+          <Skeleton width="80%" height={16} />
+          <View style={{ height: 6 }} />
+          <Skeleton width="100%" height={14} />
+          <View style={{ height: 4 }} />
+          <Skeleton width="60%" height={14} />
+          <View style={{ height: 8 }} />
+          <Skeleton width={80} height={12} />
+        </View>
+
+        {/* Toggle placeholder */}
+        <Skeleton width={24} height={24} borderRadius={12} />
+      </View>
+    </View>
+  );
+}
+
 // List skeleton (multiple cards)
 interface SkeletonListProps {
   count?: number;
-  type?: "event" | "announcement" | "member";
+  type?: "event" | "announcement" | "member" | "notification";
   style?: ViewStyle;
 }
 
@@ -242,19 +274,22 @@ export function SkeletonList({
   type = "event",
   style,
 }: SkeletonListProps) {
-  const CardComponent =
-    type === "event"
-      ? SkeletonEventCard
-      : type === "announcement"
-      ? SkeletonAnnouncementCard
-      : SkeletonMemberCard;
+  const cardComponentMap = {
+    event: SkeletonEventCard,
+    announcement: SkeletonAnnouncementCard,
+    member: SkeletonMemberCard,
+    notification: SkeletonNotificationCard,
+  };
 
-  const typeLabel =
-    type === "event"
-      ? "events"
-      : type === "announcement"
-      ? "announcements"
-      : "members";
+  const typeLabelMap = {
+    event: "events",
+    announcement: "announcements",
+    member: "members",
+    notification: "notifications",
+  };
+
+  const CardComponent = cardComponentMap[type];
+  const typeLabel = typeLabelMap[type];
 
   return (
     <View
@@ -332,5 +367,20 @@ const styles = StyleSheet.create({
   },
   memberCardRight: {
     marginLeft: SPACING.sm,
+  },
+  notificationCard: {
+    backgroundColor: NEUTRAL.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: NEUTRAL.border,
+    padding: SPACING.md,
+  },
+  notificationContent: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: SPACING.sm,
+  },
+  notificationMain: {
+    flex: 1,
   },
 });

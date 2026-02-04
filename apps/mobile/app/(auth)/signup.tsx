@@ -171,13 +171,21 @@ export default function SignupScreen() {
       });
 
       if (error) {
-        setApiError(error.message);
+        // Provide more helpful error messages
+        let helpfulMessage = error.message;
+        if (error.message.includes("already registered")) {
+          helpfulMessage = "This email is already registered. Try signing in instead.";
+        }
+        setApiError(helpfulMessage);
       } else {
         // Show success and navigate to login
         setApiError("");
         router.replace({
           pathname: "/(auth)/login",
-          params: { message: "Check your email to verify your account" },
+          params: {
+            message:
+              "Account created! Check your email for a verification link. If you don't see it, check your spam folder.",
+          },
         });
       }
     } catch (e) {

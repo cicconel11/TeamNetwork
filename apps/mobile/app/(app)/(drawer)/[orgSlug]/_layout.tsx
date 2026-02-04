@@ -142,6 +142,12 @@ function OrgLayoutInner() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="notifications"
+        options={{
+          headerShown: false,
+        }}
+      />
     </Stack>
   );
 }
