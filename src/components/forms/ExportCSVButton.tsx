@@ -11,7 +11,7 @@ interface ExportCSVButtonProps {
 
 export function ExportCSVButton({ form, submissions }: ExportCSVButtonProps) {
   const handleExport = () => {
-    const fields = (form.fields || []) as FormField[];
+    const fields = (form.fields || []) as unknown as FormField[];
 
     // Build CSV headers
     const headers = ["Submitted By", "Email", "Date", ...fields.map((f) => f.label)];

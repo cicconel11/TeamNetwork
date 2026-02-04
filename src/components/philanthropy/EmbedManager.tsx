@@ -111,7 +111,7 @@ export function EmbedManager({ orgId, embeds: initialEmbeds }: EmbedManagerProps
     setFormData({
       title: embed.title,
       url: embed.url,
-      embed_type: embed.embed_type,
+      embed_type: embed.embed_type as "link" | "iframe",
     });
     setEditingId(embed.id);
     setShowForm(true);

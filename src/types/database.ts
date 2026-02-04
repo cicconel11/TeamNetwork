@@ -3174,3 +3174,66 @@ export const Constants = {
     },
   },
 } as const
+
+// Convenience type aliases for common tables
+export type Alumni = Database["public"]["Tables"]["alumni"]["Row"];
+export type Organization = Database["public"]["Tables"]["organizations"]["Row"];
+export type Member = Database["public"]["Tables"]["members"]["Row"];
+export type Event = Database["public"]["Tables"]["events"]["Row"];
+export type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
+export type User = Database["public"]["Tables"]["users"]["Row"];
+export type Workout = Database["public"]["Tables"]["workouts"]["Row"];
+export type WorkoutLog = Database["public"]["Tables"]["workout_logs"]["Row"];
+
+// Chat types
+export type ChatGroup = Database["public"]["Tables"]["chat_groups"]["Row"];
+export type ChatGroupMember = Database["public"]["Tables"]["chat_group_members"]["Row"];
+export type ChatMessage = Database["public"]["Tables"]["chat_messages"]["Row"];
+
+// Form types
+export type Form = Database["public"]["Tables"]["forms"]["Row"];
+export type FormDocument = Database["public"]["Tables"]["form_documents"]["Row"];
+export type FormDocumentSubmission = Database["public"]["Tables"]["form_document_submissions"]["Row"];
+export type FormSubmission = Database["public"]["Tables"]["form_submissions"]["Row"];
+
+// FormField represents a field definition stored in the forms.fields JSONB column
+export interface FormField {
+  name: string;
+  type: FormFieldType;
+  label: string;
+  required: boolean;
+  options?: string[] | { label: string; value: string }[];
+  placeholder?: string;
+}
+
+// Donation types
+export type OrganizationDonation = Database["public"]["Tables"]["organization_donations"]["Row"];
+export type OrganizationDonationStat = Database["public"]["Tables"]["organization_donation_stats"]["Row"];
+
+// Schedule types
+export type AcademicSchedule = Database["public"]["Tables"]["academic_schedules"]["Row"];
+export type ScheduleFile = Database["public"]["Tables"]["schedule_files"]["Row"];
+
+// Philanthropy types
+export type PhilanthropyEmbed = Database["public"]["Tables"]["org_philanthropy_embeds"]["Row"];
+
+// Notification types
+export type NotificationPreference = Database["public"]["Tables"]["notification_preferences"]["Row"];
+
+// Subscription types
+export type OrganizationSubscription = Database["public"]["Tables"]["organization_subscriptions"]["Row"];
+export type AlumniBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
+export type SubscriptionInterval = "month" | "year";
+
+// Enum types (using string literals for type safety)
+export type AnnouncementAudience = "all" | "members" | "active_members" | "alumni" | "individuals";
+export type NotificationAudience = "all" | "members" | "active_members" | "alumni" | "individuals" | "both";
+export type NotificationChannel = "email" | "sms" | "both";
+export type ChatMessageStatus = "pending" | "approved" | "rejected";
+export type MembershipStatus = "active" | "revoked" | "pending";
+export type UserRole = "admin" | "member" | "viewer" | "active_member" | "alumni";
+export type EventType = "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
+export type RsvpStatus = "attending" | "not_attending" | "maybe";
+export type WorkoutStatus = "not_started" | "in_progress" | "completed";
+export type FormFieldType = "text" | "textarea" | "select" | "multiselect" | "checkbox" | "radio" | "date" | "email" | "phone" | "number" | "url" | "file";
+export type EmbedType = "video" | "image" | "link" | "document" | "iframe";

@@ -59,8 +59,8 @@ export default function EditFormPage() {
       const form = data as Form;
       setTitle(form.title);
       setDescription(form.description || "");
-      setFields((form.fields || []) as FormField[]);
-      setIsActive(form.is_active);
+      setFields((form.fields || []) as unknown as FormField[]);
+      setIsActive(form.is_active ?? true);
       setIsFetching(false);
     };
 

@@ -342,7 +342,7 @@ export async function getCalendarConnection(
         accessToken: decryptToken(data.access_token_encrypted),
         refreshToken: decryptToken(data.refresh_token_encrypted),
         expiresAt: new Date(data.token_expires_at),
-        status: data.status,
+        status: data.status as "connected" | "disconnected" | "error",
         lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
     };
 }

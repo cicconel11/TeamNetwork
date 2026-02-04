@@ -400,7 +400,10 @@ export async function getEligibleUsersForEvent(
             continue;
         }
 
-        if (isUserEligibleForSync(event, userId, connection || null, prefs, role)) {
+        const connectionForSync = connection
+            ? { status: connection.status as "connected" | "disconnected" | "error" }
+            : null;
+        if (isUserEligibleForSync(event, userId, connectionForSync, prefs, role)) {
             eligibleUsers.push(userId);
         }
     }

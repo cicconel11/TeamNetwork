@@ -144,7 +144,7 @@ async function ensureStripePlan(params: {
       .from("organization_subscriptions")
       .update({
         alumni_bucket: bucket,
-        base_plan_interval: baseInterval,
+        base_plan_interval: baseInterval ?? undefined,
         alumni_plan_interval: bucket === "none" ? null : baseInterval,
         updated_at: new Date().toISOString(),
       })
