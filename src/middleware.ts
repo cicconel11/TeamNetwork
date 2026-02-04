@@ -25,6 +25,7 @@ export async function middleware(request: NextRequest) {
   const publicApiRoutes = [
     "/api/stripe/webhook",
     "/api/auth/validate-age", // Age gate validation during signup
+    "/api/telemetry/error", // Error tracking from unauthenticated contexts
   ];
   if (publicApiRoutes.includes(pathname)) {
     return NextResponse.next();
