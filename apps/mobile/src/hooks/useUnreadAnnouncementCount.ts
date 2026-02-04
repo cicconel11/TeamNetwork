@@ -2,13 +2,23 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import { ViewerContext, normalizeRole } from "@teammeet/core";
-import { EventEmitter } from "events";
 
 const STORAGE_KEY_PREFIX = "announcement_last_viewed_";
 
-// Event emitter to sync mark-as-read across all hook instances
-const markAsReadEmitter = new EventEmitter();
-markAsReadEmitter.setMaxListeners(20);
+// Simple event emitter for React Native (replaces Node.js EventEmitter)
+type MarkAsReadHandler = (data: { orgId: string; userId: string }) => void;
+const markAsReadListeners = new Set<MarkAsReadHandler>();
+const markAsReadEmitter = {
+  emit: (data: { orgId: string; userId: string }) => {
+    markAsReadListeners.forEach((handler) => handler(data));
+  },
+  on: (handler: MarkAsReadHandler) => {
+    markAsReadListeners.add(handler);
+  },
+  off: (handler: MarkAsReadHandler) => {
+    markAsReadListeners.delete(handler);
+  },
+};
 const STALE_TIME_MS = 30_000; // 30 seconds
 
 // Minimal announcement data needed for audience filtering
@@ -172,7 +182,7 @@ export function useUnreadAnnouncementCount(
     }
 
     // Emit event so other hook instances can sync their state
-    markAsReadEmitter.emit("marked", { orgId, userId });
+    markAsReadEmitter.emit({ orgId: orgId!, userId: userId! });
   }, [orgId, userId, getStorageKey]);
 
   const refetchIfStale = useCallback(() => {
@@ -201,9 +211,9 @@ export function useUnreadAnnouncementCount(
       }
     };
 
-    markAsReadEmitter.on("marked", handleMarked);
+    markAsReadEmitter.on(handleMarked);
     return () => {
-      markAsReadEmitter.off("marked", handleMarked);
+      markAsReadEmitter.off(handleMarked);
     };
   }, [orgId, userId]);
 

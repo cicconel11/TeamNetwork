@@ -21,8 +21,3 @@ export function uniqueStringsCaseInsensitive(values: Array<string | null | undef
 
   return result;
 }
-
-export function equalsIgnoreCase(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (typeof a !== "string" || typeof b !== "string") return false;
-  return a.toLowerCase() === b.toLowerCase();
-}

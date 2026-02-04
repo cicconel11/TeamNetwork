@@ -28,6 +28,14 @@ build/
 .DS_Store
 *.pem
 
+# editor backup files
+*~
+*.swp
+*.swo
+
+# IDE directories
+.idea/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
@@ -42,6 +50,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+expo-env.d.ts
 
 # audit artifacts (keep templates)
 audit/
@@ -49,6 +58,8 @@ audit/
 
 # playwright
 playwright/.auth/state.json
+playwright-report/
+test-results/
 
 .cursor/mcp.json
 

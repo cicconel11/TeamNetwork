@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { showToast } from "@/components/ui/Toast";
+import * as sentry from "@/lib/analytics/sentry";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 const DEFAULT_PAGE_SIZE = 50;
@@ -149,7 +151,13 @@ export function useEvents(
             setHasMore(false);
             setTotalCount(null);
           } else {
-            setError(err.message);
+            const message = err.message || "An error occurred";
+            setError(message);
+            showToast(message, "error");
+            sentry.captureException(e as Error, {
+              context: "useEvents",
+              orgId,
+            });
           }
         }
       } finally {
