@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/stripe-events";
 import { checkWebhookRateLimit, getWebhookClientIp } from "@/lib/security/webhook-rate-limit";
 import { calculateGracePeriodEnd } from "@/lib/subscription/grace-period";
+import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -16,6 +17,11 @@ const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
 
 export async function POST(req: Request) {
   console.log("[stripe-webhook] Received request");
+
+  const telemetry = createTelemetryReporter({
+    apiPath: "/api/stripe/webhook",
+    method: "POST",
+  });
 
   // Rate limiting - defense in depth against compromised Stripe accounts or DoS
   const clientIp = getWebhookClientIp(req);
@@ -29,7 +35,7 @@ export async function POST(req: Request) {
       );
     }
   }
-  
+
   const signature = req.headers.get("stripe-signature");
   if (!signature) {
     console.log("[stripe-webhook] Missing stripe-signature header");
@@ -45,6 +51,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Invalid signature";
     console.error("[stripe-webhook] Signature verification failed:", message);
+    await telemetry.reportError(err, { phase: "signature_verification" });
     return NextResponse.json({ error: message }, { status: 400 });
   }
 
@@ -585,6 +592,12 @@ export async function POST(req: Request) {
                 : null;
             } catch (error) {
               console.error("[stripe-webhook] Failed to retrieve subscription:", subscriptionId, error);
+              await reportExternalServiceWarning(
+                "stripe",
+                `Failed to retrieve subscription ${subscriptionId} in checkout.session.completed`,
+                telemetry.getContext(),
+                { subscriptionId, eventType: event.type }
+              );
               // If subscription retrieval fails, default to "active" for paid checkout
               status = "active";
             }
@@ -830,6 +843,7 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Webhook processing failed";
     console.error("[stripe-webhook] Handler error:", message);
+    await telemetry.reportError(err, { phase: "event_processing", eventType: event.type, eventId: event.id });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

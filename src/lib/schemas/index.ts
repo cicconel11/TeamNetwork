@@ -36,3 +36,9 @@ export * from "./competition";
 
 // Calendar schemas
 export * from "./calendar";
+
+// Telemetry schemas
+export * from "./telemetry";
+
+// Error tracking schemas
+export * from "./errors";

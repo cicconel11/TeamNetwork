@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/error-baselines",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

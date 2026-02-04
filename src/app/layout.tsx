@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Bitter, Space_Mono } from "next/font/google";
 import "./globals.css";
+import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -39,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${plusJakartaSans.variable} ${bitter.variable} ${spaceMono.variable}`}>
       <body className="antialiased">
-        {children}
+        <ErrorBoundaryProvider>{children}</ErrorBoundaryProvider>
       </body>
     </html>
   );

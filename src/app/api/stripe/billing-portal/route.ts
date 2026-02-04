@@ -16,6 +16,7 @@ import {
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
 import type { Database } from "@/types/database";
+import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,9 +34,15 @@ const requestSchema = z
   .strict();
 
 export async function POST(req: Request) {
+  const telemetry = createTelemetryReporter({
+    apiPath: "/api/stripe/billing-portal",
+    method: "POST",
+  });
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    telemetry.setUserId(user?.id ?? null);
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -116,6 +123,12 @@ export async function POST(req: Request) {
         }
       } catch (error) {
         console.error("[billing-portal] Unable to backfill Stripe customer id", error);
+        await reportExternalServiceWarning(
+          "stripe",
+          `Unable to backfill customer from subscription ${stripeSubId}`,
+          telemetry.getContext(),
+          { stripeSubId, organizationId: organization.id }
+        );
         // If subscription doesn't exist in Stripe, clear it from database
         if (error instanceof Error && error.message.includes("No such subscription")) {
           console.log("[billing-portal] Clearing invalid subscription ID for org:", organization.id);
@@ -164,6 +177,12 @@ export async function POST(req: Request) {
           }
         } catch (error) {
           console.error("[billing-portal] Failed to retrieve customer from checkout session", error);
+          await reportExternalServiceWarning(
+            "stripe",
+            `Failed to retrieve customer from checkout session ${paymentAttempt.stripe_checkout_session_id}`,
+            telemetry.getContext(),
+            { checkoutSessionId: paymentAttempt.stripe_checkout_session_id, organizationId: organization.id }
+          );
         }
       }
     }

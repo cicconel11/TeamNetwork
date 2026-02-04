@@ -49,6 +49,85 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 - Troubleshooting: look up the attempt by `idempotency_key` to see status and any `last_error`; confirm the matching Stripe IDs; check `stripe_events` to see if the webhook ran.
 - Tests: `npm run test:payments` runs idempotency + webhook dedupe unit tests (uses the lightweight TS loader in `tests/ts-loader.js`).
 
+## Error Reporting
+
+Automated error tracking with fingerprinting, deduplication, and alerting.
+
+### How It Works
+
+1. Client/server errors are sent to `POST /api/telemetry/error`
+2. Errors are deduplicated by fingerprint (hash of error name + normalized message + route + stack frame)
+3. Counts are tracked hourly/daily with spike detection
+4. New production errors trigger admin notifications
+
+### Environment Variables
+
+| Variable | Required | Where to Set | Description |
+|----------|----------|--------------|-------------|
+| `VERCEL_DEPLOYMENT_ID` | Auto | Vercel (automatic) | Unique deployment identifier |
+| `VERCEL_GIT_COMMIT_SHA` | Auto | Vercel (automatic) | Full git commit SHA |
+| `ADMIN_EMAIL` | Yes | Vercel | Recipient for error alerts |
+| `FROM_EMAIL` | Yes | Vercel | Sender address for alerts |
+| `RESEND_API_KEY` | Yes | Vercel | Resend API key for sending alerts |
+
+**Supabase Setup:**
+- Apply migration: `supabase db push` or run `20260203000001_add_deployment_tracking.sql`
+- Schedule hourly cron: Call `update_error_baselines()` RPC every hour
+
+### Staging vs Production
+
+Environment separation is automatic:
+- `env` field in payloads: `"development"` | `"staging"` | `"production"`
+- Production server discards development-env errors silently
+- Query by env: `SELECT * FROM error_groups WHERE env = 'production'`
+
+### Alert Runbook
+
+**Responding to an Error Alert:**
+
+1. **Identify the error group** - Alert includes fingerprint and title
+2. **Check recent occurrences** - View count_1h and count_24h for spike severity
+3. **Review sample event** - Contains stack trace, user context, breadcrumbs
+4. **Correlate with deployment** - Check deployment_id and git_sha to identify if caused by recent deploy
+5. **Investigate** - Use session_id to trace user journey, user_id for affected accounts
+
+**Marking an Error Resolved:**
+
+```sql
+-- Mark resolved (will reopen if error recurs)
+UPDATE error_groups
+SET status = 'resolved'
+WHERE fingerprint = '<fingerprint>';
+
+-- Mute alerts for known issues
+UPDATE error_groups
+SET status = 'muted'
+WHERE fingerprint = '<fingerprint>';
+
+-- Ignore permanently (won't reopen)
+UPDATE error_groups
+SET status = 'ignored'
+WHERE fingerprint = '<fingerprint>';
+```
+
+**Status Meanings:**
+- `open` - Active error, will trigger alerts on spikes
+- `resolved` - Fixed, will auto-reopen if error recurs
+- `muted` - Known issue, no alerts but still tracked
+- `ignored` - Won't alert or reopen
+
+### Testing Locally
+
+```bash
+# Send test error
+curl -X POST http://localhost:3000/api/telemetry/error \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Test error","env":"development","name":"TestError"}'
+
+# Verify in database
+psql -c "SELECT * FROM error_groups ORDER BY last_seen_at DESC LIMIT 1"
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

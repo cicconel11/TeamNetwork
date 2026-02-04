@@ -60,3 +60,4 @@ opencode-auth/
 # Screen recordings
 *.mov
 *.mp4
+.env*.local
