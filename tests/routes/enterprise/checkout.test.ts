@@ -29,12 +29,15 @@ interface EnterpriseCheckoutRequest {
   billingInterval: "month" | "year";
   billingContactEmail: string;
   description?: string;
+  pricingModel?: "alumni_tier" | "per_sub_org";
+  subOrgQuantity?: number;
 }
 
 interface EnterpriseCheckoutResult {
   status: number;
   checkoutUrl?: string;
   error?: string;
+  mode?: "setup" | "subscription" | "sales";
 }
 
 interface EnterpriseCheckoutContext {
@@ -51,8 +54,15 @@ const ENTERPRISE_PRICING: Record<string, { monthly: number; yearly: number } | n
   custom: null, // custom pricing
 };
 
+// Seat-based pricing constants (matches ENTERPRISE_SEAT_PRICING in types/enterprise.ts)
+const SEAT_PRICING = {
+  freeSubOrgs: 5,
+  pricePerAdditionalCentsYearly: 15000,
+};
+
 const VALID_TIERS = ["tier_1", "tier_2", "tier_3", "custom"];
 const VALID_BILLING_INTERVALS = ["month", "year"];
+const VALID_PRICING_MODELS = ["alumni_tier", "per_sub_org"];
 
 // Validation helpers
 function isValidSlug(slug: string): boolean {
@@ -91,10 +101,22 @@ function simulateCreateEnterpriseCheckout(
     return { status: 400, error: "Invalid enterprise slug" };
   }
 
+  // Check if enterprises table query would fail
+  const enterprisesError = (ctx.supabase as any).getError("enterprises");
+  if (enterprisesError) {
+    return { status: 500, error: "Unable to validate slug availability" };
+  }
+
   // Check slug uniqueness against enterprises
   const existingEnterpriseSlugs = ctx.existingEnterpriseSlugs || [];
   if (existingEnterpriseSlugs.includes(request.slug)) {
     return { status: 409, error: "Slug is already taken" };
+  }
+
+  // Check if organizations table query would fail
+  const orgsError = (ctx.supabase as any).getError("organizations");
+  if (orgsError) {
+    return { status: 500, error: "Unable to validate slug availability" };
   }
 
   // Check slug uniqueness against organizations
@@ -118,20 +140,73 @@ function simulateCreateEnterpriseCheckout(
     return { status: 400, error: "Invalid billing contact email" };
   }
 
-  // Get pricing for the tier
+  const pricingModel = request.pricingModel || "alumni_tier";
+
+  // Validate pricing model
+  if (!VALID_PRICING_MODELS.includes(pricingModel)) {
+    return { status: 400, error: "Invalid pricing model" };
+  }
+
+  // Handle per_sub_org pricing model (quantity-based with free tier)
+  if (pricingModel === "per_sub_org") {
+    // Validate subOrgQuantity is required for per_sub_org
+    if (request.subOrgQuantity === undefined || request.subOrgQuantity < 1) {
+      return { status: 400, error: "subOrgQuantity is required when pricingModel is 'per_sub_org'" };
+    }
+
+    const billableOrgs = Math.max(0, request.subOrgQuantity - SEAT_PRICING.freeSubOrgs);
+
+    // If all orgs are free (5 or fewer), use setup mode to collect card on file
+    if (billableOrgs === 0) {
+      const session = createMockCheckoutSession({
+        mode: "setup",
+        metadata: {
+          type: "enterprise_setup",
+          pricing_model: "per_sub_org",
+          sub_org_quantity: request.subOrgQuantity.toString(),
+          tier: request.tier,
+          creatorId: request.auth.user!.id,
+          enterpriseName: request.name,
+          enterpriseSlug: request.slug,
+        },
+      });
+
+      return { status: 200, checkoutUrl: session.url, mode: "setup" };
+    }
+
+    // If there are billable orgs (more than 5), create subscription immediately
+    const session = createMockCheckoutSession({
+      mode: "subscription",
+      metadata: {
+        type: "enterprise",
+        pricing_model: "per_sub_org",
+        sub_org_quantity: request.subOrgQuantity.toString(),
+        tier: request.tier,
+        creatorId: request.auth.user!.id,
+        enterpriseName: request.name,
+        enterpriseSlug: request.slug,
+      },
+    });
+
+    return { status: 200, checkoutUrl: session.url, mode: "subscription" };
+  }
+
+  // Handle alumni_tier pricing model (legacy tier-based)
   const pricing = ENTERPRISE_PRICING[request.tier];
   if (pricing === null) {
     return {
-      status: 400,
+      status: 200,
+      mode: "sales",
       error: "This tier requires custom pricing. Please contact sales.",
     };
   }
 
-  // Create checkout session
+  // Create checkout session for alumni_tier model
   const session = createMockCheckoutSession({
     mode: "subscription",
     metadata: {
       type: "enterprise",
+      pricing_model: "alumni_tier",
       tier: request.tier,
       creatorId: request.auth.user!.id,
       enterpriseName: request.name,
@@ -139,7 +214,7 @@ function simulateCreateEnterpriseCheckout(
     },
   });
 
-  return { status: 200, checkoutUrl: session.url };
+  return { status: 200, checkoutUrl: session.url, mode: "subscription" };
 }
 
 // Tests
@@ -403,7 +478,7 @@ test("create-enterprise-checkout returns checkout URL for tier_2", () => {
   assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
 });
 
-test("create-enterprise-checkout returns error for tier_3 (custom pricing)", () => {
+test("create-enterprise-checkout returns sales mode for tier_3 (custom pricing)", () => {
   const supabase = createSupabaseStub();
   const result = simulateCreateEnterpriseCheckout(
     {
@@ -417,12 +492,13 @@ test("create-enterprise-checkout returns error for tier_3 (custom pricing)", () 
     { supabase }
   );
 
-  assert.strictEqual(result.status, 400);
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "sales");
   assert.ok(result.error?.includes("custom pricing"));
   assert.ok(result.error?.includes("contact sales"));
 });
 
-test("create-enterprise-checkout returns error for custom tier", () => {
+test("create-enterprise-checkout returns sales mode for custom tier", () => {
   const supabase = createSupabaseStub();
   const result = simulateCreateEnterpriseCheckout(
     {
@@ -436,7 +512,8 @@ test("create-enterprise-checkout returns error for custom tier", () => {
     { supabase }
   );
 
-  assert.strictEqual(result.status, 400);
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "sales");
   assert.ok(result.error?.includes("custom pricing"));
 });
 
@@ -559,4 +636,233 @@ test("create-enterprise-checkout works for org members", () => {
   // Anyone authenticated can start enterprise checkout
   assert.strictEqual(result.status, 200);
   assert.ok(result.checkoutUrl);
+});
+
+test("create-enterprise-checkout returns 500 if enterprises table query fails", () => {
+  const supabase = createSupabaseStub();
+  // Simulate database error on enterprises table
+  supabase.simulateError("enterprises", { code: "DB_ERROR", message: "Database connection failed" });
+
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Test Enterprise",
+      slug: "test-enterprise",
+      tier: "tier_1",
+      billingInterval: "month",
+      billingContactEmail: "billing@test.com",
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 500);
+  assert.ok(result.error?.includes("Unable to validate slug availability"));
+});
+
+test("create-enterprise-checkout returns 500 if organizations table query fails", () => {
+  const supabase = createSupabaseStub();
+  // Simulate database error on organizations table
+  supabase.simulateError("organizations", { code: "DB_ERROR", message: "Database connection failed" });
+
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Test Enterprise",
+      slug: "test-enterprise",
+      tier: "tier_1",
+      billingInterval: "month",
+      billingContactEmail: "billing@test.com",
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 500);
+  assert.ok(result.error?.includes("Unable to validate slug availability"));
+});
+
+// per_sub_org pricing model tests
+
+test("create-enterprise-checkout with per_sub_org model requires subOrgQuantity", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Test Enterprise",
+      slug: "test-enterprise",
+      tier: "tier_1",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      // Missing subOrgQuantity
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 400);
+  assert.ok(result.error?.includes("subOrgQuantity is required"));
+});
+
+test("create-enterprise-checkout with per_sub_org model and 5 orgs creates setup mode (free tier)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Free Tier Enterprise",
+      slug: "free-tier-enterprise",
+      tier: "tier_1",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      subOrgQuantity: 5, // Exactly at free tier limit
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "setup");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with per_sub_org model and 3 orgs creates setup mode (within free tier)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Small Enterprise",
+      slug: "small-enterprise",
+      tier: "tier_1",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      subOrgQuantity: 3, // Within free tier
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "setup");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with per_sub_org model and 6 orgs creates subscription mode (1 billable)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Small Paid Enterprise",
+      slug: "small-paid-enterprise",
+      tier: "tier_1",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      subOrgQuantity: 6, // 1 billable org beyond free tier
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "subscription");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with per_sub_org model and 10 orgs creates subscription mode (5 billable)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Medium Enterprise",
+      slug: "medium-enterprise",
+      tier: "tier_2",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      subOrgQuantity: 10, // 5 billable orgs beyond free tier
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "subscription");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with per_sub_org model and 1 org creates setup mode (minimum)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Single Org Enterprise",
+      slug: "single-org-enterprise",
+      tier: "tier_1",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "per_sub_org",
+      subOrgQuantity: 1, // Minimum quantity
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "setup");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with alumni_tier model still works (backward compatibility)", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Legacy Enterprise",
+      slug: "legacy-enterprise",
+      tier: "tier_1",
+      billingInterval: "month",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "alumni_tier",
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "subscription");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
+});
+
+test("create-enterprise-checkout with alumni_tier model returns sales mode for tier_3", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Large Enterprise",
+      slug: "large-enterprise",
+      tier: "tier_3",
+      billingInterval: "year",
+      billingContactEmail: "billing@test.com",
+      pricingModel: "alumni_tier",
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "sales");
+  assert.ok(result.error?.includes("custom pricing"));
+});
+
+test("create-enterprise-checkout defaults to alumni_tier when pricingModel not specified", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateEnterpriseCheckout(
+    {
+      auth: AuthPresets.authenticatedNoOrg,
+      name: "Default Model Enterprise",
+      slug: "default-model-enterprise",
+      tier: "tier_1",
+      billingInterval: "month",
+      billingContactEmail: "billing@test.com",
+      // No pricingModel specified
+    },
+    { supabase }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.mode, "subscription");
+  assert.ok(result.checkoutUrl?.includes("checkout.stripe.com"));
 });

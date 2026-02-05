@@ -4,6 +4,7 @@ type TableName =
   | "payment_attempts"
   | "stripe_events"
   | "organizations"
+  | "enterprises"
   | "user_organization_roles"
   | "organization_subscriptions"
   | "calendar_feeds"
@@ -40,6 +41,7 @@ const uniqueKeys: Record<TableName, string[]> = {
   payment_attempts: ["idempotency_key", "stripe_payment_intent_id", "stripe_checkout_session_id"],
   stripe_events: ["event_id"],
   organizations: ["slug"],
+  enterprises: ["slug"],
   user_organization_roles: [],
   organization_subscriptions: ["organization_id"],
   calendar_feeds: [],
@@ -70,6 +72,7 @@ export function createSupabaseStub() {
     payment_attempts: [],
     stripe_events: [],
     organizations: [],
+    enterprises: [],
     user_organization_roles: [],
     organization_subscriptions: [],
     calendar_feeds: [],
@@ -93,6 +96,9 @@ export function createSupabaseStub() {
 
   // RPC handler registry
   const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown> = {};
+
+  // Track which tables should fail with an error
+  const errorSimulation: Partial<Record<TableName, { code?: string; message: string }>> = {};
 
   const applyFilters = (rows: Row[], filters: ((row: Row) => boolean)[]) =>
     filters.reduce((current, filter) => current.filter(filter), rows);
@@ -305,6 +311,9 @@ export function createSupabaseStub() {
           return builder;
         },
         maybeSingle(): SupabaseResponse<Row> {
+          if (errorSimulation[table]) {
+            return { data: null, error: errorSimulation[table] ?? null };
+          }
           let rows = applyFilters(storage[table], filters);
           if (sortColumn) {
             const col = sortColumn;
@@ -319,6 +328,9 @@ export function createSupabaseStub() {
           return { data: clone(rows[0] ?? null), error: null };
         },
         single(): SupabaseResponse<Row> {
+          if (errorSimulation[table]) {
+            return { data: null, error: errorSimulation[table] ?? null };
+          }
           let rows = applyFilters(storage[table], filters);
           if (sortColumn) {
             const col = sortColumn;
@@ -440,6 +452,18 @@ export function createSupabaseStub() {
     }
   };
 
+  const simulateError = (table: TableName, error: { code?: string; message: string }) => {
+    errorSimulation[table] = error;
+  };
+
+  const clearError = (table: TableName) => {
+    delete errorSimulation[table];
+  };
+
+  const getError = (table: TableName) => {
+    return errorSimulation[table];
+  };
+
   return {
     from,
     rpc,
@@ -447,5 +471,8 @@ export function createSupabaseStub() {
     seed,
     clear,
     registerRpc,
+    simulateError,
+    clearError,
+    getError,
   };
 }
