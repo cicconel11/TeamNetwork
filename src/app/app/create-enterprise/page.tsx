@@ -94,17 +94,18 @@ export default function CreateEnterprisePage() {
     },
   });
 
-  const { name, slug, seatQuantity, alumniTier } = watch();
+  const { name, slug, billingContactEmail, seatQuantity, alumniTier } = watch();
 
   const fingerprint = useMemo(
     () =>
       JSON.stringify({
         name: name?.trim() || "",
         slug: slug?.trim() || "",
+        billingContactEmail: billingContactEmail?.trim() || "",
         seatQuantity,
         alumniTier,
       }),
-    [name, slug, seatQuantity, alumniTier],
+    [name, slug, billingContactEmail, seatQuantity, alumniTier],
   );
 
   const { idempotencyKey } = useIdempotencyKey({

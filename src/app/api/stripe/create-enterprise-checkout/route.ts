@@ -84,22 +84,30 @@ export async function POST(req: Request) {
 
     // Check slug uniqueness against enterprises
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingEnterprise } = await (serviceSupabase as any)
+    const { data: existingEnterprise, error: enterpriseError } = await (serviceSupabase as any)
       .from("enterprises")
       .select("id")
       .eq("slug", slug)
-      .maybeSingle() as { data: { id: string } | null };
+      .maybeSingle() as { data: { id: string } | null; error: { message: string } | null };
+
+    if (enterpriseError) {
+      return respond({ error: "Unable to validate slug availability" }, 500);
+    }
 
     if (existingEnterprise) {
       return respond({ error: "Slug is already taken" }, 409);
     }
 
     // Also check organization slugs to prevent conflicts
-    const { data: existingOrg } = await serviceSupabase
+    const { data: existingOrg, error: orgError } = await serviceSupabase
       .from("organizations")
       .select("id")
       .eq("slug", slug)
-      .maybeSingle();
+      .maybeSingle() as { data: { id: string } | null; error: { message: string } | null };
+
+    if (orgError) {
+      return respond({ error: "Unable to validate slug availability" }, 500);
+    }
 
     if (existingOrg) {
       return respond({ error: "Slug is already taken" }, 409);
