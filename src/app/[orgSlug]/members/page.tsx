@@ -14,6 +14,19 @@ interface MembersPageProps {
   searchParams: Promise<{ status?: string; role?: string }>;
 }
 
+// Extended member type with admin flag
+interface MemberWithAdminFlag {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  photo_url: string | null;
+  role: string | null;
+  status: string | null;
+  graduation_year: number | null;
+  isAdmin: boolean;
+}
+
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
@@ -46,29 +59,68 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const devAdminEmails = getDevAdminEmails();
   const devAdminEmailFilter = `(${devAdminEmails.map((email) => `"${email}"`).join(",")})`;
 
-  let membersQuery = dataClient
+  // Step 1: Get user_ids with active_member or admin role
+  const { data: memberRoles } = await dataClient
+    .from("user_organization_roles")
+    .select("user_id, role")
+    .eq("organization_id", org.id)
+    .in("role", ["active_member", "admin"])
+    .eq("status", "active");
+
+  const memberUserIds = memberRoles?.map((r) => r.user_id) || [];
+  const adminUserIds = new Set(
+    memberRoles?.filter((r) => r.role === "admin").map((r) => r.user_id) || []
+  );
+
+  // Step 2a: Query members WITH user accounts that have correct roles
+  let linkedMembersQuery = dataClient
     .from("members")
-    .select("*")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, user_id")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
     .not("email", "in", devAdminEmailFilter)
-    .order("last_name");
+    .not("user_id", "is", null);
 
-  // Apply filters
+  // Only filter by role-matched user_ids if there are any
+  if (memberUserIds.length > 0) {
+    linkedMembersQuery = linkedMembersQuery.in("user_id", memberUserIds);
+  } else {
+    // No users with active_member/admin role - return no linked members
+    linkedMembersQuery = linkedMembersQuery.in("user_id", ["__no_match__"]);
+  }
+
+  // Step 2b: Query members WITHOUT user accounts (manually added) - always show in members tab
+  let manualMembersQuery = dataClient
+    .from("members")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, user_id")
+    .eq("organization_id", org.id)
+    .is("deleted_at", null)
+    .not("email", "in", devAdminEmailFilter)
+    .is("user_id", null);
+
+  // Apply filters to both queries
   // Default: show active members only unless explicitly filtered
   if (filters.status) {
-    membersQuery = membersQuery.eq("status", filters.status);
+    linkedMembersQuery = linkedMembersQuery.eq("status", filters.status);
+    manualMembersQuery = manualMembersQuery.eq("status", filters.status);
   } else {
-    membersQuery = membersQuery.eq("status", "active");
+    linkedMembersQuery = linkedMembersQuery.eq("status", "active");
+    manualMembersQuery = manualMembersQuery.eq("status", "active");
   }
 
   if (filters.role) {
-    membersQuery = membersQuery.eq("role", filters.role);
+    linkedMembersQuery = linkedMembersQuery.eq("role", filters.role);
+    manualMembersQuery = manualMembersQuery.eq("role", filters.role);
   }
 
-  // Run both queries in parallel
-  const [{ data: members }, { data: allMembers }] = await Promise.all([
-    membersQuery,
+  // Apply ordering after all filters
+  linkedMembersQuery = linkedMembersQuery.order("last_name");
+  manualMembersQuery = manualMembersQuery.order("last_name");
+
+  // Run queries in parallel
+  const [{ data: linkedMembers }, { data: manualMembers }, { data: allMembers }] = await Promise.all([
+    linkedMembersQuery,
+    manualMembersQuery,
     dataClient
       .from("members")
       .select("role")
@@ -76,7 +128,45 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .is("deleted_at", null)
       .not("email", "in", devAdminEmailFilter),
   ]);
-  
+
+  // Combine and add isAdmin flag
+  type MemberRow = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string | null;
+    photo_url: string | null;
+    role: string | null;
+    status: string | null;
+    graduation_year: number | null;
+    user_id: string | null;
+  };
+
+  const members: MemberWithAdminFlag[] = [
+    ...(linkedMembers || []).map((m: MemberRow) => ({
+      id: m.id,
+      first_name: m.first_name,
+      last_name: m.last_name,
+      email: m.email,
+      photo_url: m.photo_url,
+      role: m.role,
+      status: m.status,
+      graduation_year: m.graduation_year,
+      isAdmin: m.user_id ? adminUserIds.has(m.user_id) : false,
+    })),
+    ...(manualMembers || []).map((m: MemberRow) => ({
+      id: m.id,
+      first_name: m.first_name,
+      last_name: m.last_name,
+      email: m.email,
+      photo_url: m.photo_url,
+      role: m.role,
+      status: m.status,
+      graduation_year: m.graduation_year,
+      isAdmin: false,
+    })),
+  ].sort((a, b) => a.last_name.localeCompare(b.last_name));
+
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
   const navConfig = org.nav_config as NavConfig | null;
@@ -131,10 +221,13 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                     {member.role && (
                       <p className="text-sm text-muted-foreground">{member.role}</p>
                     )}
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <Badge variant={member.status === "active" ? "success" : "muted"}>
                         {member.status}
                       </Badge>
+                      {member.isAdmin && (
+                        <Badge variant="warning">Admin</Badge>
+                      )}
                       {member.graduation_year && (
                         <span className="text-xs text-muted-foreground">
                           &apos;{member.graduation_year.toString().slice(-2)}

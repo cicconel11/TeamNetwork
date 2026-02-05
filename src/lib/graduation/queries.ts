@@ -262,3 +262,62 @@ export async function markWarningSent(
     console.error("[graduation] Error marking warning sent:", error);
   }
 }
+
+/**
+ * Reinstate a graduated alumni back to active member (pending approval).
+ *
+ * Actions:
+ * 1. Clear members.graduated_at
+ * 2. Clear members.graduation_warning_sent_at
+ * 3. Update user_organization_roles.role = "active_member"
+ * 4. Update user_organization_roles.status = "pending"
+ * 5. Soft-delete alumni record (updates alumni count)
+ */
+export async function reinstateToActiveMember(
+  supabase: SupabaseClient<Database>,
+  memberId: string,
+  userId: string,
+  orgId: string
+): Promise<{ success: boolean; error?: string }> {
+  // Clear graduation tracking on members table
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: memberError } = await (supabase.from("members") as any)
+    .update({
+      graduated_at: null,
+      graduation_warning_sent_at: null,
+    })
+    .eq("id", memberId);
+
+  if (memberError) {
+    return { success: false, error: memberError.message };
+  }
+
+  // Update role to active_member with pending status
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: roleError } = await (supabase.from("user_organization_roles") as any)
+    .update({
+      role: "active_member",
+      status: "pending",
+    })
+    .eq("organization_id", orgId)
+    .eq("user_id", userId);
+
+  if (roleError) {
+    return { success: false, error: roleError.message };
+  }
+
+  // Soft-delete alumni record to update alumni count
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: alumniError } = await (supabase.from("alumni") as any)
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("organization_id", orgId)
+    .eq("user_id", userId)
+    .is("deleted_at", null);
+
+  if (alumniError) {
+    // Log but don't fail - alumni record may not exist for manually-set alumni
+    console.warn("[graduation] Failed to soft-delete alumni record:", alumniError.message);
+  }
+
+  return { success: true };
+}

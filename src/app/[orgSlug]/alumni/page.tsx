@@ -22,6 +22,21 @@ interface AlumniPageProps {
   }>;
 }
 
+// Extended alumni type with admin flag
+interface AlumniWithAdminFlag {
+  id: string;
+  first_name: string;
+  last_name: string;
+  photo_url: string | null;
+  position_title: string | null;
+  job_title: string | null;
+  current_company: string | null;
+  graduation_year: number | null;
+  industry: string | null;
+  current_city: string | null;
+  isAdmin: boolean;
+}
+
 export default async function AlumniPage({ params, searchParams }: AlumniPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
@@ -54,13 +69,36 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { role } = await getOrgRole({ orgId: org.id });
   const canEdit = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
 
-  // Build query with filters
+  // Step 1: Get user_ids with alumni or admin role
+  const { data: alumniRoles } = await dataClient
+    .from("user_organization_roles")
+    .select("user_id, role")
+    .eq("organization_id", org.id)
+    .in("role", ["alumni", "admin"])
+    .eq("status", "active");
+
+  const alumniUserIds = alumniRoles?.map((r) => r.user_id) || [];
+  const adminUserIds = new Set(
+    alumniRoles?.filter((r) => r.role === "admin").map((r) => r.user_id) || []
+  );
+
+  // Step 2: Build query with filters - only show alumni with alumni or admin role
   let query = dataClient
     .from("alumni")
-    .select("*")
+    .select(`
+      id, first_name, last_name, photo_url, position_title, job_title, current_company,
+      graduation_year, industry, current_city, user_id
+    `)
     .eq("organization_id", org.id)
-    .is("deleted_at", null)
-    .order("graduation_year", { ascending: false });
+    .is("deleted_at", null);
+
+  // Only filter by role-matched user_ids if there are any
+  if (alumniUserIds.length > 0) {
+    query = query.in("user_id", alumniUserIds);
+  } else {
+    // No users with alumni/admin role - return no alumni
+    query = query.in("user_id", ["__no_match__"]);
+  }
 
   // Apply filters
   if (filters.year) {
@@ -83,9 +121,41 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     query = query.ilike("position_title", position);
   }
 
-  const { data: alumni } = await query;
+  // Apply ordering after all filters
+  query = query.order("graduation_year", { ascending: false });
 
-  // Get unique values for filter dropdowns
+  const { data: rawAlumni } = await query;
+
+  // Map and add isAdmin flag
+  type AlumniRow = {
+    id: string;
+    first_name: string;
+    last_name: string;
+    photo_url: string | null;
+    position_title: string | null;
+    job_title: string | null;
+    current_company: string | null;
+    graduation_year: number | null;
+    industry: string | null;
+    current_city: string | null;
+    user_id: string | null;
+  };
+
+  const alumni: AlumniWithAdminFlag[] = (rawAlumni || []).map((a: AlumniRow) => ({
+    id: a.id,
+    first_name: a.first_name,
+    last_name: a.last_name,
+    photo_url: a.photo_url,
+    position_title: a.position_title,
+    job_title: a.job_title,
+    current_company: a.current_company,
+    graduation_year: a.graduation_year,
+    industry: a.industry,
+    current_city: a.current_city,
+    isAdmin: a.user_id ? adminUserIds.has(a.user_id) : false,
+  }));
+
+  // Get unique values for filter dropdowns (from all alumni, not just filtered)
   const { data: allAlumni } = await dataClient
     .from("alumni")
     .select("graduation_year, industry, current_company, current_city, position_title")
@@ -165,6 +235,9 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {alum.graduation_year && (
                         <Badge variant="muted">Class of {alum.graduation_year}</Badge>
+                      )}
+                      {alum.isAdmin && (
+                        <Badge variant="warning">Admin</Badge>
                       )}
                       {alum.industry && (
                         <Badge variant="primary">{alum.industry}</Badge>

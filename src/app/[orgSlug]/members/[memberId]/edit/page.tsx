@@ -49,6 +49,9 @@ export default function EditMemberPage() {
   const [accessError, setAccessError] = useState<string | null>(null);
   const [isUpdatingAccess, setIsUpdatingAccess] = useState(false);
 
+  const [isReinstating, setIsReinstating] = useState(false);
+  const [reinstateError, setReinstateError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchMember = async () => {
       const supabase = createClient();
@@ -80,7 +83,10 @@ export default function EditMemberPage() {
         return;
       }
 
-      const m = member as Member & { expected_graduation_date?: string };
+      const m = member as Member & {
+        expected_graduation_date?: string;
+        graduated_at?: string;
+      };
       reset({
         first_name: m.first_name || "",
         last_name: m.last_name || "",
@@ -147,6 +153,39 @@ export default function EditMemberPage() {
       router.refresh();
     }
     setIsUpdatingAccess(false);
+  };
+
+  const handleReinstate = async () => {
+    setIsReinstating(true);
+    setReinstateError(null);
+
+    const supabase = createClient();
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("id")
+      .eq("slug", orgSlug)
+      .single();
+
+    if (!org) {
+      setReinstateError("Organization not found");
+      setIsReinstating(false);
+      return;
+    }
+
+    const response = await fetch(
+      `/api/organizations/${org.id}/members/${memberId}/reinstate`,
+      { method: "POST" }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setReinstateError(data.error || "Failed to reinstate member");
+    } else {
+      router.refresh();
+      setAccessData({ ...accessData, role: "active_member", status: "pending" });
+    }
+    setIsReinstating(false);
   };
 
   const onSubmit = async (data: EditMemberForm) => {
@@ -341,6 +380,33 @@ export default function EditMemberPage() {
                   </span>
                 )}
               </div>
+
+              {/* Reinstate Button - show for alumni members */}
+              {accessData.role === "alumni" && (
+                <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-amber-800 dark:text-amber-200">
+                        This member is an alumni
+                      </p>
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Reinstate them as an active member pending approval
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleReinstate}
+                      isLoading={isReinstating}
+                      variant="secondary"
+                      className="whitespace-nowrap"
+                    >
+                      Reinstate Member
+                    </Button>
+                  </div>
+                  {reinstateError && (
+                    <p className="mt-2 text-sm text-red-600">{reinstateError}</p>
+                  )}
+                </div>
+              )}
 
               {accessError && (
                 <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">

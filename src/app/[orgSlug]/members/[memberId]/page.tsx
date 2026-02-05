@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { ReinstateCard } from "@/components/members/ReinstateCard";
 import { isOrgAdmin } from "@/lib/auth";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import type { Member } from "@/types/database";
@@ -49,13 +50,26 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   if (!memberData) return notFound();
 
   const member = memberData as Member;
+  const memberUserId = (memberData as Member & { user_id?: string | null }).user_id || null;
+
+  // Fetch the member's organization role if they have a linked user
+  let userOrgRole: string | null = null;
+  if (memberUserId) {
+    const { data: roleData } = await dataClient
+      .from("user_organization_roles")
+      .select("role")
+      .eq("organization_id", org.id)
+      .eq("user_id", memberUserId)
+      .maybeSingle();
+
+    userOrgRole = roleData?.role || null;
+  }
 
   const isAdmin = await isOrgAdmin(org.id);
   const {
     data: { session },
   } = await supabase.auth.getSession();
   const currentUserId = session?.user?.id ?? null;
-  const memberUserId = (member as Member & { user_id?: string | null }).user_id || null;
   const canEdit = isAdmin || (currentUserId && memberUserId === currentUserId);
 
   return (
@@ -190,6 +204,15 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
             </div>
           </dl>
         </Card>
+
+        {/* Reinstate Banner - for admins viewing alumni members */}
+        {isAdmin && userOrgRole === "alumni" && (
+          <ReinstateCard
+            orgId={org.id}
+            memberId={memberId}
+            memberName={`${member.first_name} ${member.last_name}`}
+          />
+        )}
       </div>
     </div>
   );
