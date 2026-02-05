@@ -6,6 +6,7 @@ import {
   memberStatusSchema,
   graduationYearSchema,
   optionalHttpsUrlSchema,
+  optionalDateStringSchema,
 } from "./common";
 
 // New member form
@@ -16,6 +17,7 @@ export const newMemberSchema = z.object({
   role: optionalSafeString(100),
   status: memberStatusSchema,
   graduation_year: graduationYearSchema,
+  expected_graduation_date: optionalDateStringSchema,
   photo_url: optionalHttpsUrlSchema,
   linkedin_url: optionalHttpsUrlSchema,
 });

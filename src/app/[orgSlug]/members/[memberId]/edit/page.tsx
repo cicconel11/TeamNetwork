@@ -24,6 +24,7 @@ export default function EditMemberPage() {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<EditMemberForm>({
     resolver: zodResolver(editMemberSchema),
@@ -34,6 +35,7 @@ export default function EditMemberPage() {
       role: "",
       status: "active",
       graduation_year: "",
+      expected_graduation_date: "",
       photo_url: "",
       linkedin_url: "",
     },
@@ -78,7 +80,7 @@ export default function EditMemberPage() {
         return;
       }
 
-      const m = member as Member;
+      const m = member as Member & { expected_graduation_date?: string };
       reset({
         first_name: m.first_name || "",
         last_name: m.last_name || "",
@@ -86,6 +88,7 @@ export default function EditMemberPage() {
         role: m.role || "",
         status: m.status || "active",
         graduation_year: m.graduation_year?.toString() || "",
+        expected_graduation_date: m.expected_graduation_date || "",
         photo_url: m.photo_url || "",
         linkedin_url: m.linkedin_url || "",
       });
@@ -173,6 +176,7 @@ export default function EditMemberPage() {
         role: data.role || null,
         status: data.status,
         graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
+        expected_graduation_date: data.expected_graduation_date || null,
         photo_url: data.photo_url || null,
         linkedin_url: data.linkedin_url || null,
         updated_at: new Date().toISOString(),
@@ -269,6 +273,28 @@ export default function EditMemberPage() {
                   error={errors.graduation_year?.message}
                   {...register("graduation_year")}
                 />
+              </div>
+
+              <div className="mb-4">
+                <Input
+                  label="Expected Graduation Date"
+                  type="date"
+                  error={errors.expected_graduation_date?.message}
+                  {...register("expected_graduation_date", {
+                    onChange: (e) => {
+                      if (e.target.value) {
+                        // Parse year directly from YYYY-MM-DD string to avoid timezone issues
+                        // Using new Date("YYYY-MM-DD").getFullYear() can return wrong year
+                        // in timezones west of UTC (e.g., 2025-01-01 becomes 2024)
+                        const year = parseInt(e.target.value.split("-")[0], 10);
+                        setValue("graduation_year", year.toString());
+                      }
+                    },
+                  })}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  When this member will automatically transition to alumni status
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

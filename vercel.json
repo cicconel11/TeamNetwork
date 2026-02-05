@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/error-baselines",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/graduation-check",
+      "schedule": "0 8 * * *"
     }
   ]
 }
