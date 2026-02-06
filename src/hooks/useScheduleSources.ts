@@ -12,6 +12,8 @@ export type SourceSummary = {
   last_synced_at: string | null;
   last_error: string | null;
   title: string | null;
+  last_event_count: number | null;
+  last_imported: number | null;
 };
 
 type UseScheduleSourcesOptions = {

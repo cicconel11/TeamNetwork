@@ -174,6 +174,10 @@ export type Database = {
           status: "active" | "paused" | "error"
           last_synced_at: string | null
           last_error: string | null
+          last_event_count: number | null
+          last_imported: number | null
+          last_updated: number | null
+          last_cancelled: number | null
           created_at: string | null
           updated_at: string | null
         }
@@ -187,6 +191,10 @@ export type Database = {
           status?: "active" | "paused" | "error"
           last_synced_at?: string | null
           last_error?: string | null
+          last_event_count?: number | null
+          last_imported?: number | null
+          last_updated?: number | null
+          last_cancelled?: number | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -200,6 +208,10 @@ export type Database = {
           status?: "active" | "paused" | "error"
           last_synced_at?: string | null
           last_error?: string | null
+          last_event_count?: number | null
+          last_imported?: number | null
+          last_updated?: number | null
+          last_cancelled?: number | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -2454,6 +2466,8 @@ export type Database = {
           role: Database["public"]["Enums"]["chat_group_role"]
           joined_at: string
           last_read_at: string | null
+          added_by: string | null
+          removed_at: string | null
         }
         Insert: {
           id?: string
@@ -2463,6 +2477,8 @@ export type Database = {
           role?: Database["public"]["Enums"]["chat_group_role"]
           joined_at?: string
           last_read_at?: string | null
+          added_by?: string | null
+          removed_at?: string | null
         }
         Update: {
           id?: string
@@ -2472,6 +2488,8 @@ export type Database = {
           role?: Database["public"]["Enums"]["chat_group_role"]
           joined_at?: string
           last_read_at?: string | null
+          added_by?: string | null
+          removed_at?: string | null
         }
         Relationships: [
           {
@@ -2493,6 +2511,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_group_members_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

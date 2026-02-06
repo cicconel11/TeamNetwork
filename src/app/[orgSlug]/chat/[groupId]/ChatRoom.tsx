@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Badge, Avatar } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
+import { ManageMembersPanel } from "@/components/chat/ManageMembersPanel";
 import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { debugLog } from "@/lib/debug";
 
 interface ChatRoomProps {
   group: ChatGroup;
@@ -16,7 +19,9 @@ interface ChatRoomProps {
   currentUser: User;
   members: (ChatGroupMember & { users: User })[];
   canModerate: boolean;
+  isCreator: boolean;
   requiresApproval: boolean;
+  memberJoinedAt?: string;
 }
 
 type MessageWithAuthor = ChatMessage & {
@@ -29,18 +34,34 @@ export function ChatRoom({
   organizationId,
   currentUserId,
   currentUser,
-  members,
+  members: initialMembers,
   canModerate,
+  isCreator,
   requiresApproval,
+  memberJoinedAt,
 }: ChatRoomProps) {
+  const router = useRouter();
   const [messages, setMessages] = useState<MessageWithAuthor[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showPendingQueue, setShowPendingQueue] = useState(false);
+  const [showMembersPanel, setShowMembersPanel] = useState(false);
+  const [members, setMembers] = useState(initialMembers);
   const [userCache, setUserCache] = useState<Map<string, User>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
+
+  // Debug: log chat room state on mount
+  useEffect(() => {
+    debugLog("chat", "ChatRoom mounted", {
+      groupId: group.id,
+      memberCount: members.length,
+      canModerate,
+      requiresApproval,
+      hasEditMembersUI: true,
+    });
+  }, [group.id, members.length, canModerate, requiresApproval]);
 
   // Build a map of user IDs to user info (combining members + cached users)
   const userMap = useMemo(() => {
@@ -94,15 +115,21 @@ export function ChatRoom({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  // Load initial messages
+  // Load initial messages (filtered by joined_at so new members only see messages from after they joined)
   useEffect(() => {
     async function loadMessages() {
       setIsLoading(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from("chat_messages")
         .select("*")
         .eq("chat_group_id", group.id)
-        .is("deleted_at", null)
+        .is("deleted_at", null);
+
+      if (memberJoinedAt) {
+        query = query.gte("created_at", memberJoinedAt);
+      }
+
+      const { data, error } = await query
         .order("created_at", { ascending: true })
         .limit(100);
 
@@ -121,7 +148,7 @@ export function ChatRoom({
       setTimeout(scrollToBottom, 100);
     }
     loadMessages();
-  }, [group.id, supabase, scrollToBottom, userMap, fetchUnknownUsers]);
+  }, [group.id, supabase, scrollToBottom, userMap, fetchUnknownUsers, memberJoinedAt]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -197,6 +224,54 @@ export function ChatRoom({
       supabase.removeChannel(channel);
     };
   }, [group.id, supabase, currentUserId, canModerate, scrollToBottom, userMap, fetchUnknownUsers]);
+
+  const canManage = canModerate || isCreator;
+
+  // Refresh members list (called by ManageMembersPanel and realtime)
+  const refreshMembers = useCallback(async () => {
+    const { data } = await supabase
+      .from("chat_group_members")
+      .select(`
+        *,
+        users:user_id (id, name, email, avatar_url)
+      `)
+      .eq("chat_group_id", group.id)
+      .is("removed_at", null);
+
+    if (data) {
+      setMembers(data as unknown as (ChatGroupMember & { users: User })[]);
+    }
+  }, [supabase, group.id]);
+
+  // Subscribe to real-time member changes
+  useEffect(() => {
+    const channel = supabase
+      .channel(`chat_group_members:${group.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_group_members",
+          filter: `chat_group_id=eq.${group.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const deleted = payload.old as { user_id?: string };
+            if (deleted.user_id === currentUserId) {
+              router.push(`/${orgSlug}/chat`);
+              return;
+            }
+          }
+          refreshMembers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [group.id, supabase, currentUserId, orgSlug, router, refreshMembers]);
 
   // Send message with optimistic UI
   const handleSend = async (e: React.FormEvent) => {
@@ -324,6 +399,16 @@ export function ChatRoom({
         description={group.description || `${members.length} members`}
         actions={
           <div className="flex items-center gap-2">
+            <Button
+              variant={showMembersPanel ? "primary" : "secondary"}
+              onClick={() => setShowMembersPanel(!showMembersPanel)}
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+              </svg>
+              <Badge variant="muted">{members.length}</Badge>
+              Members
+            </Button>
             {canModerate && pendingCount > 0 && (
               <Button
                 variant={showPendingQueue ? "primary" : "secondary"}
@@ -345,7 +430,8 @@ export function ChatRoom({
         }
       />
 
-      <Card className="flex-1 flex flex-col overflow-hidden mt-4">
+      <div className="flex-1 flex overflow-hidden mt-4">
+      <Card className="flex-1 flex flex-col overflow-hidden">
         {/* Messages area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {isLoading ? (
@@ -457,6 +543,20 @@ export function ChatRoom({
           </form>
         )}
       </Card>
+
+      {showMembersPanel && (
+        <ManageMembersPanel
+          orgSlug={orgSlug}
+          organizationId={organizationId}
+          groupId={group.id}
+          currentUserId={currentUserId}
+          isCreator={isCreator}
+          canManage={canManage}
+          onClose={() => setShowMembersPanel(false)}
+          onMembersChanged={refreshMembers}
+        />
+      )}
+      </div>
     </div>
   );
 }

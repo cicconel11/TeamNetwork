@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { getAlumniLimit } from "@/lib/alumni-quota";
+import { debugLog, maskPII } from "@/lib/debug";
 
 export interface GraduatingMember {
   id: string;
@@ -163,13 +164,12 @@ export async function checkAlumniCapacity(
     return { hasCapacity: true, currentCount: 0, limit: null };
   }
 
-  // Count current alumni
+  // Count current alumni from the alumni table (source of truth for quota)
   const { count, error: countError } = await supabase
-    .from("user_organization_roles")
+    .from("alumni")
     .select("*", { count: "exact", head: true })
     .eq("organization_id", orgId)
-    .eq("role", "alumni")
-    .eq("status", "active");
+    .is("deleted_at", null);
 
   if (countError) {
     console.error("[graduation] Error counting alumni:", countError);
@@ -177,73 +177,101 @@ export async function checkAlumniCapacity(
   }
 
   const currentCount = count || 0;
+
+  // Cross-reference: also count from user_organization_roles for consistency check
+  const { count: roleCount, error: roleCountError } = await supabase
+    .from("user_organization_roles")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .eq("role", "alumni")
+    .eq("status", "active");
+
+  const roleAlumniCount = roleCountError ? -1 : (roleCount || 0);
+
+  if (!roleCountError && roleAlumniCount !== currentCount) {
+    console.warn(
+      `[graduation] ALUMNI COUNT MISMATCH: org=${maskPII(orgId)} alumni_table=${currentCount} roles_table=${roleAlumniCount}. ` +
+      "The alumni table and user_organization_roles disagree. This may indicate a failed DB trigger (handle_org_member_sync)."
+    );
+  }
+
+  debugLog("graduation", "checkAlumniCapacity", {
+    orgId: maskPII(orgId),
+    bucket: alumniBucket,
+    limit,
+    alumniTableCount: currentCount,
+    rolesTableCount: roleAlumniCount,
+    hasCapacity: currentCount < limit,
+  });
+
   return { hasCapacity: currentCount < limit, currentCount, limit };
 }
 
 /**
- * Transition a member to alumni status.
+ * Transition a member to alumni status via transactional RPC.
+ *
+ * The RPC atomically:
+ * 1. Guards: skips admins, already-graduated, checks alumni quota
+ * 2. Updates role to alumni in user_organization_roles
+ * 3. Sets graduated_at on members row
+ * 4. Copies graduation_year to alumni row
  */
 export async function transitionToAlumni(
   supabase: SupabaseClient<Database>,
   memberId: string,
   userId: string,
   orgId: string
-): Promise<{ success: boolean; error?: string }> {
-  // Update user_organization_roles to alumni
-  const { error: roleError } = await supabase
-    .from("user_organization_roles")
-    .update({ role: "alumni" })
-    .eq("organization_id", orgId)
-    .eq("user_id", userId);
+): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  debugLog("graduation", "transitionToAlumni start", {
+    memberId: maskPII(memberId),
+    userId: maskPII(userId),
+    orgId: maskPII(orgId),
+  });
 
-  if (roleError) {
-    return { success: false, error: roleError.message };
-  }
-
-  // Mark member as graduated
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: memberError } = await (supabase.from("members") as any)
-    .update({ graduated_at: new Date().toISOString() })
-    .eq("id", memberId);
+  const { data, error } = await (supabase as any).rpc("transition_member_to_alumni", {
+    p_member_id: memberId,
+    p_user_id: userId,
+    p_org_id: orgId,
+  });
 
-  if (memberError) {
-    return { success: false, error: memberError.message };
+  if (error) {
+    debugLog("graduation", "transitionToAlumni RPC error", error.message);
+    return { success: false, error: error.message };
   }
 
-  return { success: true };
+  const result = data as { success: boolean; skipped?: boolean; error?: string };
+  debugLog("graduation", "transitionToAlumni result", result);
+  return result;
 }
 
 /**
- * Revoke member access when organization has no alumni capacity.
+ * Revoke member access via transactional RPC when organization has no alumni capacity.
+ *
+ * The RPC atomically:
+ * 1. Guards: skips admins, already-graduated
+ * 2. Sets status to revoked on user_organization_roles
+ * 3. Sets graduated_at on members row
  */
 export async function revokeMemberAccess(
   supabase: SupabaseClient<Database>,
   memberId: string,
   userId: string,
   orgId: string
-): Promise<{ success: boolean; error?: string }> {
-  // Update user_organization_roles to revoked
-  const { error: roleError } = await supabase
-    .from("user_organization_roles")
-    .update({ status: "revoked" })
-    .eq("organization_id", orgId)
-    .eq("user_id", userId);
-
-  if (roleError) {
-    return { success: false, error: roleError.message };
-  }
-
-  // Mark member as graduated (even though access was revoked)
+): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: memberError } = await (supabase.from("members") as any)
-    .update({ graduated_at: new Date().toISOString() })
-    .eq("id", memberId);
+  const { data, error } = await (supabase as any).rpc("revoke_graduated_member", {
+    p_member_id: memberId,
+    p_user_id: userId,
+    p_org_id: orgId,
+  });
 
-  if (memberError) {
-    return { success: false, error: memberError.message };
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  return { success: true };
+  const result = data as { success: boolean; skipped?: boolean; error?: string };
+  return result;
 }
 
 /**
@@ -264,60 +292,122 @@ export async function markWarningSent(
 }
 
 /**
- * Reinstate a graduated alumni back to active member (pending approval).
+ * Reinstate a graduated alumni back to active member via transactional RPC.
  *
- * Actions:
- * 1. Clear members.graduated_at
- * 2. Clear members.graduation_warning_sent_at
- * 3. Update user_organization_roles.role = "active_member"
- * 4. Update user_organization_roles.status = "pending"
- * 5. Soft-delete alumni record (updates alumni count)
+ * The RPC atomically:
+ * 1. Guards: skips admins, already-active members
+ * 2. Clears graduated_at and graduation_warning_sent_at
+ * 3. Sets role to active_member with the given status
+ * 4. Soft-deletes alumni record
+ *
+ * @param status - 'active' for cron-driven reinstatement (date moved forward),
+ *                 'pending' for manual admin reinstatement via API
  */
 export async function reinstateToActiveMember(
   supabase: SupabaseClient<Database>,
   memberId: string,
   userId: string,
-  orgId: string
-): Promise<{ success: boolean; error?: string }> {
-  // Clear graduation tracking on members table
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: memberError } = await (supabase.from("members") as any)
-    .update({
-      graduated_at: null,
-      graduation_warning_sent_at: null,
-    })
-    .eq("id", memberId);
+  orgId: string,
+  status: "active" | "pending" = "active"
+): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  debugLog("graduation", "reinstateToActiveMember start", {
+    memberId: maskPII(memberId),
+    userId: maskPII(userId),
+    orgId: maskPII(orgId),
+    status,
+  });
 
-  if (memberError) {
-    return { success: false, error: memberError.message };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("reinstate_alumni_to_active", {
+    p_member_id: memberId,
+    p_user_id: userId,
+    p_org_id: orgId,
+    p_status: status,
+  });
+
+  if (error) {
+    debugLog("graduation", "reinstateToActiveMember RPC error", error.message);
+    return { success: false, error: error.message };
   }
 
-  // Update role to active_member with pending status
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: roleError } = await (supabase.from("user_organization_roles") as any)
-    .update({
-      role: "active_member",
-      status: "pending",
-    })
-    .eq("organization_id", orgId)
-    .eq("user_id", userId);
+  const result = data as { success: boolean; skipped?: boolean; error?: string };
+  debugLog("graduation", "reinstateToActiveMember result", result);
+  return result;
+}
 
-  if (roleError) {
-    return { success: false, error: roleError.message };
+/**
+ * Get graduated members whose expected_graduation_date has been moved to the future.
+ * These members should be auto-reinstated back to active status.
+ *
+ * Criteria: graduated_at IS NOT NULL AND expected_graduation_date > today (strictly)
+ * Date exactly today stays graduated (matches getMembersPastGraduation using lte).
+ */
+export async function getMembersToReinstate(
+  supabase: SupabaseClient<Database>
+): Promise<GraduatingMember[]> {
+  const today = new Date().toISOString().split("T")[0];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const query = supabase.from("members") as any;
+  const { data, error } = await query
+    .select("id, user_id, first_name, last_name, email, organization_id, expected_graduation_date")
+    .is("deleted_at", null)
+    .not("graduated_at", "is", null)
+    .not("expected_graduation_date", "is", null)
+    .gt("expected_graduation_date", today);
+
+  if (error) {
+    console.error("[graduation] Error fetching members to reinstate:", error);
+    throw error;
   }
 
-  // Soft-delete alumni record to update alumni count
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: alumniError } = await (supabase.from("alumni") as any)
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("organization_id", orgId)
-    .eq("user_id", userId)
-    .is("deleted_at", null);
+  return (data || []) as GraduatingMember[];
+}
 
-  if (alumniError) {
-    // Log but don't fail - alumni record may not exist for manually-set alumni
-    console.warn("[graduation] Failed to soft-delete alumni record:", alumniError.message);
+/**
+ * Dry-run result for the graduation cron job.
+ */
+export interface GraduationDryRunResult {
+  toAlumni: GraduatingMember[];
+  toRevoke: GraduatingMember[];
+  toReinstate: GraduatingMember[];
+  warnings: GraduatingMember[];
+  capacityByOrg: Record<string, { hasCapacity: boolean; currentCount: number; limit: number | null }>;
+}
+
+/**
+ * Preview what the graduation cron would do without writing anything.
+ * Fetches all relevant member sets and capacity info in parallel.
+ */
+export async function getGraduationDryRun(
+  supabase: SupabaseClient<Database>
+): Promise<GraduationDryRunResult> {
+  const [pastGraduation, toReinstate, warnings] = await Promise.all([
+    getMembersPastGraduation(supabase),
+    getMembersToReinstate(supabase),
+    getMembersNearingGraduation(supabase, 30),
+  ]);
+
+  // Determine capacity per org for past-graduation members
+  const orgIds = [...new Set(pastGraduation.map((m) => m.organization_id))];
+  const capacityByOrg: Record<string, { hasCapacity: boolean; currentCount: number; limit: number | null }> = {};
+
+  for (const orgId of orgIds) {
+    capacityByOrg[orgId] = await checkAlumniCapacity(supabase, orgId);
   }
 
-  return { success: true };
+  const toAlumni: GraduatingMember[] = [];
+  const toRevoke: GraduatingMember[] = [];
+
+  for (const member of pastGraduation) {
+    if (!member.user_id) continue;
+    const capacity = capacityByOrg[member.organization_id];
+    if (capacity?.hasCapacity) {
+      toAlumni.push(member);
+    } else {
+      toRevoke.push(member);
+    }
+  }
+
+  return { toAlumni, toRevoke, toReinstate, warnings, capacityByOrg };
 }

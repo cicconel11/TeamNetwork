@@ -1,18 +1,23 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendEmail } from "@/lib/notifications";
+import { debugLog, maskPII } from "@/lib/debug";
 import {
   getMembersNearingGraduation,
   getMembersPastGraduation,
+  getMembersToReinstate,
   getOrganization,
   getOrgAdminEmails,
   checkAlumniCapacity,
   transitionToAlumni,
   revokeMemberAccess,
+  reinstateToActiveMember,
   markWarningSent,
+  getGraduationDryRun,
   build30DayWarningEmail,
   buildGraduationEmail,
   buildNoCapacityEmail,
+  buildReinstatementEmail,
 } from "@/lib/graduation";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +31,10 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * This endpoint:
  * 1. Sends 30-day warnings to admins for upcoming graduations
  * 2. Transitions graduated members to alumni (or revokes if no capacity)
- * 3. Notifies admins of all transitions
+ * 3. Auto-reinstates members whose graduation date was moved to the future
+ * 4. Notifies admins of all transitions
+ *
+ * Pass ?dry_run=true to preview what would happen without writing.
  */
 export async function GET(request: Request) {
   const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
@@ -45,11 +53,52 @@ export async function GET(request: Request) {
 
   try {
     const supabase = createServiceClient();
+    const url = new URL(request.url);
+    const isDryRun = url.searchParams.get("dry_run") === "true";
+
+    // Dry-run mode: return preview without writing
+    if (isDryRun) {
+      const dryRun = await getGraduationDryRun(supabase);
+      return NextResponse.json({
+        success: true,
+        dryRun: true,
+        warningsCount: dryRun.warnings.length,
+        transitionsToAlumniCount: dryRun.toAlumni.length,
+        accessRevokedCount: dryRun.toRevoke.length,
+        reinstatesToActiveCount: dryRun.toReinstate.length,
+        warnings: dryRun.warnings.map((m) => ({
+          id: m.id,
+          name: `${m.first_name || ""} ${m.last_name || ""}`.trim(),
+          organization_id: m.organization_id,
+          expected_graduation_date: m.expected_graduation_date,
+        })),
+        toAlumni: dryRun.toAlumni.map((m) => ({
+          id: m.id,
+          name: `${m.first_name || ""} ${m.last_name || ""}`.trim(),
+          organization_id: m.organization_id,
+          expected_graduation_date: m.expected_graduation_date,
+        })),
+        toRevoke: dryRun.toRevoke.map((m) => ({
+          id: m.id,
+          name: `${m.first_name || ""} ${m.last_name || ""}`.trim(),
+          organization_id: m.organization_id,
+          expected_graduation_date: m.expected_graduation_date,
+        })),
+        toReinstate: dryRun.toReinstate.map((m) => ({
+          id: m.id,
+          name: `${m.first_name || ""} ${m.last_name || ""}`.trim(),
+          organization_id: m.organization_id,
+          expected_graduation_date: m.expected_graduation_date,
+        })),
+        capacityByOrg: dryRun.capacityByOrg,
+      });
+    }
 
     const results = {
       warningsSent: 0,
       transitionsToAlumni: 0,
       accessRevoked: 0,
+      reinstatesToActive: 0,
       errors: [] as string[],
     };
 
@@ -133,14 +182,21 @@ export async function GET(request: Request) {
           continue;
         }
 
+        debugLog("graduation-cron", "processing member", {
+          memberId: maskPII(member.id),
+          graduationDate: member.expected_graduation_date,
+          orgId: maskPII(orgId),
+        });
+
         // Check alumni capacity
         const { hasCapacity, currentCount, limit } = await checkAlumniCapacity(supabase, orgId);
+        debugLog("graduation-cron", "capacity check", { hasCapacity, currentCount, limit });
 
         if (hasCapacity) {
           // Transition to alumni
           const result = await transitionToAlumni(supabase, member.id, member.user_id, orgId);
 
-          if (result.success) {
+          if (result.success && !result.skipped) {
             results.transitionsToAlumni++;
             const email = buildGraduationEmail(member, org);
 
@@ -151,14 +207,14 @@ export async function GET(request: Request) {
                 body: email.body,
               });
             }
-          } else {
+          } else if (!result.success) {
             results.errors.push(`Failed to transition ${member.id}: ${result.error}`);
           }
         } else {
           // Revoke access
           const result = await revokeMemberAccess(supabase, member.id, member.user_id, orgId);
 
-          if (result.success) {
+          if (result.success && !result.skipped) {
             results.accessRevoked++;
             const email = buildNoCapacityEmail(member, org, currentCount, limit!);
 
@@ -169,14 +225,73 @@ export async function GET(request: Request) {
                 body: email.body,
               });
             }
-          } else {
+          } else if (!result.success) {
             results.errors.push(`Failed to revoke ${member.id}: ${result.error}`);
           }
         }
       }
     }
 
+    // Step 3: Reverse flow — reinstate members whose graduation date was moved forward
+    const membersToReinstate = await getMembersToReinstate(supabase);
+    console.log(`[cron/graduation-check] Found ${membersToReinstate.length} members to reinstate`);
+
+    const byOrgReinstate = new Map<string, typeof membersToReinstate>();
+    for (const member of membersToReinstate) {
+      const orgMembers = byOrgReinstate.get(member.organization_id) || [];
+      orgMembers.push(member);
+      byOrgReinstate.set(member.organization_id, orgMembers);
+    }
+
+    for (const [orgId, members] of byOrgReinstate) {
+      const org = await getOrganization(supabase, orgId);
+      if (!org) {
+        results.errors.push(`Organization not found: ${orgId}`);
+        continue;
+      }
+
+      const adminEmails = await getOrgAdminEmails(supabase, orgId);
+
+      for (const member of members) {
+        if (!member.user_id) {
+          console.log(`[cron/graduation-check] Skipping reinstate for member ${member.id} - no user_id`);
+          continue;
+        }
+
+        const result = await reinstateToActiveMember(
+          supabase,
+          member.id,
+          member.user_id,
+          orgId,
+          "active"
+        );
+
+        if (result.success && !result.skipped) {
+          results.reinstatesToActive++;
+          const email = buildReinstatementEmail(member, org);
+
+          for (const adminEmail of adminEmails) {
+            await sendEmail({
+              to: adminEmail,
+              subject: email.subject,
+              body: email.body,
+            });
+          }
+        } else if (!result.success) {
+          results.errors.push(`Failed to reinstate ${member.id}: ${result.error}`);
+        }
+      }
+    }
+
     console.log("[cron/graduation-check] Completed:", results);
+    debugLog("graduation-cron", "batch summary", {
+      totalProcessed: pastGraduation.length,
+      transitioned: results.transitionsToAlumni,
+      revoked: results.accessRevoked,
+      reinstated: results.reinstatesToActive,
+      warningsSent: results.warningsSent,
+      errors: results.errors.length,
+    });
 
     return NextResponse.json({
       success: true,

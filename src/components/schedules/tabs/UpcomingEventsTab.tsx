@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, EmptyState } from "@/components/ui";
 
-const UPCOMING_DAYS = 30;
+const UPCOMING_DAYS = 90;
 
 type CalendarEventSummary = {
   id: string;

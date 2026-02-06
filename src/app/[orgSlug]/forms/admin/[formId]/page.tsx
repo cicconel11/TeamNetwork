@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { ExportCSVButton } from "@/components/forms/ExportCSVButton";
+import { debugLog } from "@/lib/debug";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface FormSubmissionsPageProps {
@@ -41,6 +42,26 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
 
   const typedSubmissions = (submissions || []) as (FormSubmission & { users: Pick<User, "name" | "email"> | null })[];
   const fields = (typedForm.fields || []) as FormField[];
+
+  // Debug: detect data vs responses property mismatch (Issue #5)
+  if (typedSubmissions.length > 0) {
+    const sample = typedSubmissions[0] as unknown as Record<string, unknown>;
+    const hasDataProp = "data" in sample && sample.data != null;
+    const hasResponsesProp = "responses" in sample && sample.responses != null;
+    debugLog("forms-admin", "submission property check", {
+      formId,
+      submissionCount: typedSubmissions.length,
+      hasDataProp,
+      hasResponsesProp,
+    });
+    if (hasResponsesProp && !hasDataProp) {
+      console.warn(
+        `[forms-admin] Submission has "responses" but not "data". ` +
+        `The admin page reads submission.data which will be undefined. ` +
+        `formId=${formId} submissionCount=${typedSubmissions.length}`
+      );
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -90,7 +111,8 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
               </thead>
               <tbody>
                 {typedSubmissions.map((submission) => {
-                  const responses = (submission.data || {}) as Record<string, unknown>;
+                  const sub = submission as unknown as Record<string, unknown>;
+                  const responses = (sub.data || sub.responses || {}) as Record<string, unknown>;
                   return (
                     <tr key={submission.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="p-3 text-foreground">

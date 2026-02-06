@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
     const { data: sources, error } = await supabase
       .from("schedule_sources")
-      .select("id, vendor_id, source_url, status, last_synced_at, last_error, title")
+      .select("id, vendor_id, source_url, status, last_synced_at, last_error, title, last_event_count, last_imported")
       .eq("org_id", orgId)
       .order("created_at", { ascending: false });
 
@@ -88,6 +88,8 @@ export async function GET(request: Request) {
           last_synced_at: source.last_synced_at,
           last_error: source.last_error,
           title: source.title,
+          last_event_count: source.last_event_count,
+          last_imported: source.last_imported,
         })),
       },
       { headers: rateLimit.headers }

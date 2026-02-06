@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { getConnectorById } from "./registry";
 import type { SyncResult, VendorId } from "./types";
+import { debugLog } from "@/lib/debug";
 
 export type SyncOutcome = SyncResult & { ok: boolean; error?: string };
 
@@ -46,9 +47,22 @@ export async function syncScheduleSource(
         status: "active",
         last_synced_at: now.toISOString(),
         last_error: null,
+        last_event_count: result.imported + result.updated,
+        last_imported: result.imported,
+        last_updated: result.updated,
+        last_cancelled: result.cancelled,
         updated_at: now.toISOString(),
       })
       .eq("id", input.source.id);
+
+    debugLog("schedule-sync", "source synced", {
+      sourceId: input.source.id,
+      vendor: vendorId,
+      url: input.source.source_url.slice(0, 80),
+      imported: result.imported,
+      updated: result.updated,
+      cancelled: result.cancelled,
+    });
 
     return { ...result, ok: true };
   } catch (error) {

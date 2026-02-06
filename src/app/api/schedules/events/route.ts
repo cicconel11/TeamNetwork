@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { debugLog } from "@/lib/debug";
+
+const MAX_EVENTS = 500;
+const MAX_DATE_RANGE_DAYS = 400;
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +83,36 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: events, error } = await supabase
+    if (from > to) {
+      return NextResponse.json(
+        { error: "Invalid parameters", message: "start must be before end." },
+        { status: 400, headers: rateLimit.headers }
+      );
+    }
+
+    const rangeDays = Math.ceil((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24));
+    if (rangeDays > MAX_DATE_RANGE_DAYS) {
+      return NextResponse.json(
+        { error: "Invalid parameters", message: `Date range cannot exceed ${MAX_DATE_RANGE_DAYS} days.` },
+        { status: 400, headers: rateLimit.headers }
+      );
+    }
+
+    const includeCancelled = url.searchParams.get("include_cancelled") === "true";
+
+    let query = supabase
       .from("schedule_events")
       .select("id, source_id, title, start_at, end_at, location, status")
       .eq("org_id", orgId)
       .gte("start_at", from.toISOString())
-      .lte("start_at", to.toISOString())
+      .lte("start_at", to.toISOString());
+
+    if (!includeCancelled) {
+      query = query.neq("status", "cancelled");
+    }
+
+    const { data: events, error } = await query
+      .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 
     if (error) {
@@ -95,7 +123,27 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({ events: events || [] }, { headers: rateLimit.headers });
+    const allEvents = events || [];
+    const truncated = allEvents.length > MAX_EVENTS;
+    const limitedEvents = allEvents.slice(0, MAX_EVENTS);
+
+    debugLog("schedule-events", "query result", {
+      total: allEvents.length,
+      truncated,
+      includeCancelled,
+      dateRange: { from: fromParam, to: toParam },
+    });
+
+    return NextResponse.json(
+      {
+        events: limitedEvents,
+        meta: {
+          count: limitedEvents.length,
+          truncated,
+        },
+      },
+      { headers: rateLimit.headers }
+    );
   } catch (error) {
     console.error("[schedule-events] Error:", error);
     return NextResponse.json(

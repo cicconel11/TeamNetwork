@@ -127,12 +127,14 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
       user_id: string;
       organization_id: string;
       role: "admin" | "moderator" | "member";
+      added_by: string;
     }> = [
       {
         chat_group_id: group.id,
         user_id: currentUserId,
         organization_id: organizationId,
         role: "admin",
+        added_by: currentUserId,
       },
     ];
 
@@ -144,6 +146,7 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
           user_id: member.user_id,
           organization_id: organizationId,
           role: "member",
+          added_by: currentUserId,
         });
       }
     }

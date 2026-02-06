@@ -66,6 +66,7 @@ interface UserDataExport {
     chatGroupId: string;
     role: string;
     joinedAt: string | null;
+    removedAt: string | null;
   }>;
   mentorshipPairs: Array<{
     id: string;
@@ -232,7 +233,7 @@ export async function GET(request: Request) {
     // Fetch chat group memberships
     const { data: chatMembers } = await serviceSupabase
       .from("chat_group_members")
-      .select("chat_group_id, role, joined_at")
+      .select("chat_group_id, role, joined_at, removed_at")
       .eq("user_id", user.id);
 
     if (chatMembers) {
@@ -240,6 +241,7 @@ export async function GET(request: Request) {
         chatGroupId: m.chat_group_id,
         role: m.role,
         joinedAt: m.joined_at,
+        removedAt: m.removed_at,
       }));
     }
 

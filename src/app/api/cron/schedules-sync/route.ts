@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
+import { debugLog } from "@/lib/debug";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,16 @@ export async function GET(request: Request) {
     const batchResults = await Promise.all(
       batch.map(async (source) => {
         const result = await syncScheduleSource(supabase, { source, window });
+        debugLog("schedule-cron", "source sync result", {
+          sourceId: source.id,
+          url: source.source_url.slice(0, 80),
+          vendor: result.vendor,
+          status: result.ok ? "ok" : "error",
+          imported: result.imported,
+          updated: result.updated,
+          cancelled: result.cancelled,
+          error: result.error,
+        });
         return {
           id: source.id,
           vendor: result.vendor,
@@ -70,6 +81,15 @@ export async function GET(request: Request) {
     );
     results.push(...batchResults);
   }
+
+  const successCount = results.filter((r) => r.status === "ok").length;
+  const errorCount = results.filter((r) => r.status === "error").length;
+  debugLog("schedule-cron", "batch complete", {
+    totalSources: (sources || []).length,
+    successCount,
+    errorCount,
+    errors: results.filter((r) => r.error).map((r) => ({ id: r.id, error: r.error })),
+  });
 
   return NextResponse.json({
     processed: (sources || []).length,

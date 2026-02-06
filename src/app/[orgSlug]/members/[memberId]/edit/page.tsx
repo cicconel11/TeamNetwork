@@ -183,7 +183,7 @@ export default function EditMemberPage() {
       setReinstateError(data.error || "Failed to reinstate member");
     } else {
       router.refresh();
-      setAccessData({ ...accessData, role: "active_member", status: "pending" });
+      setAccessData({ ...accessData, role: "active_member", status: "active" });
     }
     setIsReinstating(false);
   };
@@ -390,7 +390,7 @@ export default function EditMemberPage() {
                         This member is an alumni
                       </p>
                       <p className="text-sm text-amber-600 dark:text-amber-400">
-                        Reinstate them as an active member pending approval
+                        Reinstate them as an active member immediately
                       </p>
                     </div>
                     <Button

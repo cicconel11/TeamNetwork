@@ -86,6 +86,7 @@ export function SourceCard({
           <p className="text-sm text-muted-foreground truncate">{source.maskedUrl}</p>
           <p className="text-xs text-muted-foreground">
             Last sync: {source.last_synced_at ? formatDateTime(source.last_synced_at) : "Never"}
+            {source.last_event_count != null && ` · ${source.last_event_count} events`}
           </p>
           {source.status === "error" && source.last_error && (
             <p className="text-xs text-error mt-1 bg-error/5 rounded px-2 py-1">{source.last_error}</p>

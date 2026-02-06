@@ -6,6 +6,7 @@ import { fetchUrlSafe } from "./fetch";
 import type { NormalizedEvent, ScheduleConnector, SyncResult } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { sanitizeEventTitle } from "./sanitize";
+import { debugLog } from "@/lib/debug";
 
 const PREVIEW_DAYS_FORWARD = 180;
 const PREVIEW_DAYS_BACK = 30;
@@ -92,6 +93,10 @@ export function expandIcsEvents(icsText: string, window: SyncWindow): Normalized
 
     if (event.rrule) {
       const occurrences = event.rrule.between(window.from, window.to, true);
+      debugLog("ics", "RRULE expansion", {
+        uid: event.uid,
+        occurrenceCount: occurrences.length,
+      });
       for (const occurrence of occurrences) {
         const occurrenceKey = occurrence.toISOString();
         if (event.exdate && event.exdate[occurrenceKey]) {
@@ -188,6 +193,12 @@ function isAllDayEvent(event: IcsEvent, start: Date, end: Date | null) {
 function addInstance(map: Map<string, NormalizedEvent>, instance: NormalizedEvent) {
   if (!map.has(instance.external_uid)) {
     map.set(instance.external_uid, instance);
+  } else {
+    debugLog("ics", "duplicate UID skipped", {
+      external_uid: instance.external_uid,
+      title: instance.title,
+      start_at: instance.start_at,
+    });
   }
 }
 

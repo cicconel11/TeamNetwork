@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import type { NormalizedEvent } from "./types";
+import { debugLog } from "@/lib/debug";
 
 export type SyncWindow = { from: Date; to: Date };
 
@@ -32,12 +33,48 @@ export async function syncScheduleEvents(
   const fromIso = input.window.from.toISOString();
   const toIso = input.window.to.toISOString();
 
-  const deduped = dedupeEvents(input.events)
+  const rawCount = input.events.length;
+  const dedupedAll = dedupeEvents(input.events);
+  const dedupDropCount = rawCount - dedupedAll.length;
+  if (dedupDropCount > 0) {
+    const seen = new Set<string>();
+    for (const event of input.events) {
+      if (seen.has(event.external_uid)) {
+        debugLog("schedule-sync", "dedup drop", {
+          external_uid: event.external_uid,
+          title: event.title,
+          start_at: event.start_at,
+        });
+      }
+      seen.add(event.external_uid);
+    }
+  }
+
+  const deduped = dedupedAll
     .filter((event) => {
       const start = new Date(event.start_at);
-      return start >= input.window.from && start <= input.window.to;
+      const inWindow = start >= input.window.from && start <= input.window.to;
+      if (!inWindow) {
+        debugLog("schedule-sync", "window filter drop", {
+          external_uid: event.external_uid,
+          start_at: event.start_at,
+          windowFrom: input.window.from.toISOString(),
+          windowTo: input.window.to.toISOString(),
+        });
+      }
+      return inWindow;
     })
     .map((event) => ensureEndAt(event));
+
+  const windowFilteredOut = dedupedAll.length - deduped.length;
+  debugLog("schedule-sync", "syncScheduleEvents dedup+filter", {
+    sourceId: input.sourceId,
+    rawEventCount: rawCount,
+    dedupedCount: dedupedAll.length,
+    dedupDropped: dedupDropCount,
+    afterWindowFilter: deduped.length,
+    windowFilteredOut,
+  });
 
   const { data: existing, error: existingError } = await supabase
     .from("schedule_events")
@@ -51,6 +88,11 @@ export async function syncScheduleEvents(
   }
 
   const existingRows = (existing || []) as ExistingEvent[];
+  const existingCancelledCount = existingRows.filter((r) => r.status === "cancelled").length;
+  debugLog("schedule-sync", "existing events loaded", {
+    existingCount: existingRows.length,
+    existingCancelledCount,
+  });
   const existingMap = new Map(existingRows.map((row) => [row.external_uid, row]));
   const nextSet = new Set(deduped.map((event) => event.external_uid));
 
@@ -79,12 +121,14 @@ export async function syncScheduleEvents(
       updated_at: now.toISOString(),
     }));
 
-    const { error: upsertError } = await supabase
-      .from("schedule_events")
-      .upsert(rows, { onConflict: "source_id,external_uid" });
+    for (const chunk of chunkArray(rows, 200)) {
+      const { error: upsertError } = await supabase
+        .from("schedule_events")
+        .upsert(chunk, { onConflict: "source_id,external_uid" });
 
-    if (upsertError) {
-      throw new Error(upsertError.message);
+      if (upsertError) {
+        throw new Error(upsertError.message);
+      }
     }
   }
 
@@ -109,6 +153,7 @@ export async function syncScheduleEvents(
     cancelled += chunk.length;
   }
 
+  debugLog("schedule-sync", "syncScheduleEvents result", { imported, updated, cancelled });
   return { imported, updated, cancelled };
 }
 

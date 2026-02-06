@@ -18,7 +18,11 @@ type TableName =
   | "alumni"
   | "members"
   | "donations"
-  | "philanthropy_events";
+  | "philanthropy_events"
+  | "users"
+  | "chat_groups"
+  | "chat_group_members"
+  | "chat_messages";
 
 type Row = Record<string, unknown>;
 
@@ -51,6 +55,10 @@ const uniqueKeys: Record<TableName, string[]> = {
   members: [],
   donations: [],
   philanthropy_events: [],
+  users: [],
+  chat_groups: [],
+  chat_group_members: [],
+  chat_messages: [],
 };
 
 function nowIso() {
@@ -77,7 +85,14 @@ export function createSupabaseStub() {
     members: [],
     donations: [],
     philanthropy_events: [],
+    users: [],
+    chat_groups: [],
+    chat_group_members: [],
+    chat_messages: [],
   };
+
+  // RPC handler registry
+  const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown> = {};
 
   const applyFilters = (rows: Row[], filters: ((row: Row) => boolean)[]) =>
     filters.reduce((current, filter) => current.filter(filter), rows);
@@ -125,12 +140,70 @@ export function createSupabaseStub() {
       return builder;
     },
 
+    upsert: (payload: Row | Row[], options?: { onConflict?: string }) => {
+      const records = Array.isArray(payload) ? payload : [payload];
+      const conflictColumns = options?.onConflict?.split(",").map((c) => c.trim()) ?? [];
+
+      for (const record of records) {
+        const existingIndex = conflictColumns.length > 0
+          ? storage[table].findIndex((existing) =>
+            conflictColumns.every((col) => existing[col] === record[col])
+          )
+          : -1;
+
+        if (existingIndex >= 0) {
+          const existing = storage[table][existingIndex];
+          Object.entries(record).forEach(([key, value]) => {
+            if (value !== undefined) {
+              existing[key] = value;
+            }
+          });
+          if (!("updated_at" in record)) {
+            existing.updated_at = nowIso();
+          }
+        } else {
+          const row: Row = {
+            id: record.id || randomUUID(),
+            created_at: record.created_at || nowIso(),
+            updated_at: record.updated_at || nowIso(),
+            ...record,
+          };
+          storage[table].push(row);
+        }
+      }
+
+      return {
+        then(resolve: (value: SupabaseResponse<null>) => void) {
+          resolve({ data: null, error: null });
+        },
+      };
+    },
+
     update: (updates: Row) => {
       const filters: ((row: Row) => boolean)[] = [];
+
+      const applyUpdate = () => {
+        const rows = applyFilters(storage[table], filters);
+        for (const target of rows) {
+          Object.entries(updates).forEach(([key, value]) => {
+            if (value !== undefined) {
+              target[key] = value;
+            }
+          });
+          if (!("updated_at" in updates)) {
+            target.updated_at = nowIso();
+          }
+        }
+        return rows;
+      };
 
       const builder = {
         eq(column: string, value: unknown) {
           filters.push((row) => row[column] === value);
+          return builder;
+        },
+        in(column: string, values: unknown[]) {
+          filters.push((row) => values.includes(row[column]));
           return builder;
         },
         is(column: string, value: unknown) {
@@ -141,29 +214,32 @@ export function createSupabaseStub() {
           });
           return builder;
         },
+        not(column: string, operator: string, value: unknown) {
+          if (operator === "is") {
+            filters.push((row) => {
+              const cell = row[column];
+              if (value === null) return cell !== null && cell !== undefined;
+              return cell !== value;
+            });
+          }
+          return builder;
+        },
         select() {
           return builder;
         },
         maybeSingle(): SupabaseResponse<Row> {
-          const rows = applyFilters(storage[table], filters);
+          const rows = applyUpdate();
           if (!rows.length) {
             return { data: null, error: { code: "PGRST116", message: "No rows found" } };
           }
-
-          const target = rows[0];
-          Object.entries(updates).forEach(([key, value]) => {
-            if (value !== undefined) {
-              target[key] = value;
-            }
-          });
-          if (!("updated_at" in updates)) {
-            target.updated_at = nowIso();
-          }
-
-          return { data: clone(target), error: null };
+          return { data: clone(rows[0]), error: null };
         },
         single(): SupabaseResponse<Row> {
           return builder.maybeSingle();
+        },
+        then(resolve: (value: SupabaseResponse<Row[]>) => void) {
+          const rows = applyUpdate();
+          resolve({ data: clone(rows), error: null });
         },
       };
 
@@ -195,6 +271,20 @@ export function createSupabaseStub() {
             if (value === null) return cell === null || cell === undefined;
             return cell === value;
           });
+          return builder;
+        },
+        not(column: string, operator: string, value: unknown) {
+          if (operator === "is") {
+            filters.push((row) => {
+              const cell = row[column];
+              if (value === null) return cell !== null && cell !== undefined;
+              return cell !== value;
+            });
+          }
+          return builder;
+        },
+        gt(column: string, value: unknown) {
+          filters.push((row) => (row[column] as number) > (value as number));
           return builder;
         },
         gte(column: string, value: unknown) {
@@ -326,10 +416,36 @@ export function createSupabaseStub() {
     }
   };
 
+  /**
+   * Register an RPC handler for testing.
+   */
+  const registerRpc = (name: string, handler: (params: Record<string, unknown>) => unknown) => {
+    rpcHandlers[name] = handler;
+  };
+
+  /**
+   * Call a registered RPC handler (mirrors supabase.rpc()).
+   */
+  const rpc = async (name: string, params: Record<string, unknown> = {}) => {
+    const handler = rpcHandlers[name];
+    if (!handler) {
+      return { data: null, error: { code: "42883", message: `function ${name}() does not exist` } };
+    }
+    try {
+      const result = handler(params);
+      return { data: result, error: null };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { data: null, error: { message } };
+    }
+  };
+
   return {
     from,
+    rpc,
     getRows: (table: TableName) => clone(storage[table]),
     seed,
     clear,
+    registerRpc,
   };
 }

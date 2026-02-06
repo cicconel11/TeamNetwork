@@ -1,11 +1,12 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { fetchUrlSafe } from "./fetch";
-import { extractJsonLdEvents, extractTableEvents, findIcsLink, hashEventId, type ParsedEvent } from "./html-utils";
+import { extractBalancedJson, extractJsonLdEvents, extractTableEvents, findIcsLink, hashEventId, type ParsedEvent } from "./html-utils";
 import type { NormalizedEvent, ScheduleConnector } from "./types";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { icsConnector, syncIcsToSource } from "./ics";
 import { isHostAllowed } from "@/lib/schedule-security/allowlist";
 import { sanitizeEventTitle, getTitleForHash } from "./sanitize";
+import { debugLog } from "@/lib/debug";
 
 const MARKERS = ["chsaa", "sidearm", "sidearm sports", "athletics"];
 
@@ -63,31 +64,33 @@ export const vendorBConnector: ScheduleConnector = {
 
 function extractVendorBEvents(html: string): ParsedEvent[] {
   const jsonLd = extractJsonLdEvents(html);
-  if (jsonLd.length > 0) return jsonLd;
+  if (jsonLd.length > 0) {
+    debugLog("vendorB", "extraction method: JSON-LD", { eventCount: jsonLd.length });
+    return jsonLd;
+  }
 
   const embedded = extractEmbeddedEvents(html);
-  if (embedded.length > 0) return embedded;
+  if (embedded.length > 0) {
+    debugLog("vendorB", "extraction method: embedded JS", { eventCount: embedded.length });
+    return embedded;
+  }
 
-  return extractTableEvents(html);
+  const table = extractTableEvents(html);
+  debugLog("vendorB", "extraction method: HTML table", { eventCount: table.length });
+  return table;
 }
 
 function extractEmbeddedEvents(html: string): ParsedEvent[] {
-  const patterns = [
-    /window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]*?\});/,
-    /window\.__SIDARM_DATA__\s*=\s*(\{[\s\S]*?\});/,
+  const prefixes = [
+    /window\.__INITIAL_STATE__\s*=\s*/,
+    /window\.__SIDARM_DATA__\s*=\s*/,
   ];
 
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (!match) continue;
-    const jsonText = match[1];
-    try {
-      const parsed = JSON.parse(jsonText) as { events?: Array<Record<string, unknown>> };
-      if (Array.isArray(parsed.events)) {
-        return parsed.events.flatMap(normalizeEmbeddedEvent).filter(Boolean) as ParsedEvent[];
-      }
-    } catch {
-      continue;
+  for (const prefix of prefixes) {
+    const parsed = extractBalancedJson(html, prefix) as { events?: Array<Record<string, unknown>> } | null;
+    if (!parsed) continue;
+    if (Array.isArray(parsed.events)) {
+      return parsed.events.flatMap(normalizeEmbeddedEvent).filter(Boolean) as ParsedEvent[];
     }
   }
 
@@ -117,7 +120,8 @@ function normalizeEmbeddedEvent(event: Record<string, unknown>): ParsedEvent | n
 function normalizeEvents(events: ParsedEvent[]): NormalizedEvent[] {
   return events.map((event) => {
     const endAt = event.end_at ?? new Date(new Date(event.start_at).getTime() + 2 * 60 * 60 * 1000).toISOString();
-    const hashInput = `${getTitleForHash(event.rawTitle, event.title)}|${event.start_at}|${event.location ?? ""}`;
+    const rowSuffix = event.rowIndex != null ? `|${event.rowIndex}` : "";
+    const hashInput = `${getTitleForHash(event.rawTitle, event.title)}|${event.start_at}|${event.location ?? ""}${rowSuffix}`;
 
     return {
       external_uid: hashEventId(hashInput),

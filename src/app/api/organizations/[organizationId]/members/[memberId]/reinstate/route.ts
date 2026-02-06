@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { reinstateToActiveMember } from "@/lib/graduation/queries";
+import { debugLog, maskPII } from "@/lib/debug";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ interface RouteParams {
 }
 
 /**
- * Reinstate a graduated alumni back to active member status (pending approval).
+ * Reinstate a graduated alumni back to active member status.
  *
  * Preconditions:
  * - User must be admin of the organization
@@ -21,10 +22,9 @@ interface RouteParams {
  * - Member must be currently graduated (graduated_at is set) OR role is "alumni"
  *
  * Actions:
- * 1. Clear members.graduated_at
- * 2. Clear members.graduation_warning_sent_at
- * 3. Update user_organization_roles.role = "active_member"
- * 4. Update user_organization_roles.status = "pending"
+ * 1. Clear members.graduated_at and graduation_warning_sent_at
+ * 2. Update user_organization_roles role = "active_member", status = "active"
+ * 3. Soft-delete alumni record
  */
 export async function POST(_req: Request, { params }: RouteParams) {
   const { organizationId, memberId } = await params;
@@ -103,16 +103,26 @@ export async function POST(_req: Request, { params }: RouteParams) {
   const isAlumni = currentRole?.role === "alumni";
   const hasGraduated = !!member.graduated_at;
 
+  debugLog("reinstate", "precondition check", {
+    memberId: maskPII(memberId),
+    hasUserId: !!member.user_id,
+    hasGraduatedAt: hasGraduated,
+    currentRole: currentRole?.role ?? null,
+    currentStatus: currentRole?.status ?? null,
+    isAlumni,
+  });
+
   if (!isAlumni && !hasGraduated) {
     return respond({ error: "Member is not graduated or alumni" }, 400);
   }
 
-  // Perform reinstatement
+  // Perform reinstatement (manual admin action → status = 'pending')
   const result = await reinstateToActiveMember(
     serviceSupabase,
     memberId,
     member.user_id,
-    organizationId
+    organizationId,
+    "pending"
   );
 
   if (!result.success) {
@@ -121,6 +131,6 @@ export async function POST(_req: Request, { params }: RouteParams) {
 
   return respond({
     success: true,
-    message: "Member reinstated pending approval",
+    message: "Member reinstated successfully",
   });
 }

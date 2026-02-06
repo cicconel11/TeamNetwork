@@ -53,7 +53,7 @@ export default function FillFormPage() {
 
         if (submission) {
           setExistingSubmission(submission as FormSubmission);
-          setResponses((submission.responses as Record<string, unknown>) || {});
+          setResponses((submission.data as Record<string, unknown>) || {});
         }
       }
 
@@ -97,7 +97,7 @@ export default function FillFormPage() {
       // Update existing
       const { error: updateError } = await supabase
         .from("form_submissions")
-        .update({ responses, submitted_at: new Date().toISOString() })
+        .update({ data: responses, submitted_at: new Date().toISOString() })
         .eq("id", existingSubmission.id);
 
       if (updateError) {
@@ -111,7 +111,7 @@ export default function FillFormPage() {
         form_id: formId,
         organization_id: form.organization_id,
         user_id: user.id,
-        responses,
+        data: responses,
       });
 
       if (insertError) {

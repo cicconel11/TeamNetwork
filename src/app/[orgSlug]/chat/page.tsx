@@ -11,7 +11,7 @@ interface ChatPageProps {
 }
 
 type ChatGroupWithMembers = ChatGroup & {
-  chat_group_members: Pick<ChatGroupMember, "id" | "user_id" | "role">[];
+  chat_group_members: Pick<ChatGroupMember, "id" | "user_id" | "role" | "removed_at">[];
   _count?: { pending: number };
 };
 
@@ -36,7 +36,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
     .from("chat_groups")
     .select(`
       *,
-      chat_group_members (id, user_id, role)
+      chat_group_members (id, user_id, role, removed_at)
     `)
     .eq("organization_id", org.id)
     .is("deleted_at", null)
@@ -86,7 +86,7 @@ export default async function ChatPage({ params }: ChatPageProps) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
           {chatGroups.map((group) => {
             const pendingCount = pendingCounts[group.id] || 0;
-            const memberCount = group.chat_group_members?.length || 0;
+            const memberCount = group.chat_group_members?.filter(m => !m.removed_at).length || 0;
 
             return (
               <ChatGroupCard

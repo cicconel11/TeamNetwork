@@ -9,6 +9,7 @@ export type ParsedEvent = {
   end_at: string | null;
   location?: string;
   status?: "confirmed" | "cancelled" | "tentative";
+  rowIndex?: number;  // Table row index for dedup disambiguation
   raw?: unknown;
 };
 
@@ -59,7 +60,7 @@ export function extractTableEvents(html: string): ParsedEvent[] {
 
     $(table)
       .find("tbody tr")
-      .each((_, row) => {
+      .each((rowIndex, row) => {
         const cells = $(row)
           .find("td")
           .map((_, cell) => $(cell).text().trim())
@@ -93,6 +94,7 @@ export function extractTableEvents(html: string): ParsedEvent[] {
           start_at: start.toISOString(),
           end_at: end.toISOString(),
           location: locationText,
+          rowIndex,
           raw: { dateText, timeText, titleText, locationText },
         });
       });
@@ -133,6 +135,64 @@ export function findIcsLink(html: string, baseUrl: string) {
 
 export function hashEventId(input: string) {
   return createHash("sha256").update(input).digest("hex");
+}
+
+/**
+ * Extract a balanced JSON object from HTML after a variable assignment prefix.
+ * Unlike non-greedy regex, this properly handles nested braces so the extraction
+ * is not truncated mid-object when the JSON contains nested `};` sequences.
+ *
+ * @param html  Full HTML string to search
+ * @param prefix  Regex pattern for the assignment prefix (e.g. /window\.__DATA__\s*=\s+/)
+ * @returns Parsed JSON object or null if not found / parse fails
+ */
+export function extractBalancedJson(html: string, prefix: RegExp): object | null {
+  const match = prefix.exec(html);
+  if (!match) return null;
+
+  const startIdx = match.index + match[0].length;
+  if (html[startIdx] !== "{") return null;
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = startIdx; i < html.length; i++) {
+    const ch = html[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (ch === "\\") {
+      if (inString) escapeNext = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) continue;
+
+    if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        const jsonText = html.slice(startIdx, i + 1);
+        try {
+          return JSON.parse(jsonText) as object;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 function collectJsonLdObjects(parsed: unknown): unknown[] {

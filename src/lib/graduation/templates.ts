@@ -91,3 +91,33 @@ To restore their access, upgrade your plan:
 ${billingUrl}`,
   };
 }
+
+/**
+ * Build the reinstatement email for admins (auto-reinstated because graduation date was moved forward).
+ */
+export function buildReinstatementEmail(
+  member: GraduatingMember,
+  org: OrgWithSlug
+): EmailTemplate {
+  const firstName = member.first_name || "Member";
+  const lastName = member.last_name || "";
+  const fullName = `${firstName} ${lastName}`.trim();
+  const newGraduationDate = new Date(member.expected_graduation_date).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const memberEditUrl = `${APP_URL}/${org.slug}/members/${member.id}/edit`;
+
+  return {
+    subject: `Member Auto-Reinstated: ${fullName}`,
+    body: `${fullName} has been automatically reinstated to active member status.
+
+Their graduation date was updated to ${newGraduationDate}, which is in the future.
+
+Organization: ${org.name}
+
+View their profile:
+${memberEditUrl}`,
+  };
+}
