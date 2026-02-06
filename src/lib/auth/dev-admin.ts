@@ -82,6 +82,7 @@ export type DevAdminAction =
   | "view_org"
   | "view_members"
   | "view_billing"
+  | "view_enterprise"
   | "reconcile_subscription"
   | "open_billing_portal"
   | "delete_org"
@@ -109,6 +110,7 @@ export function canDevAdminPerform(
     "view_org",
     "view_members",
     "view_billing",
+    "view_enterprise",
     "reconcile_subscription",
     "open_billing_portal",
     "delete_org",
@@ -124,7 +126,7 @@ export interface DevAdminAuditLogEntry {
   adminUserId: string;
   adminEmail: string;
   action: DevAdminAction;
-  targetType?: "organization" | "member" | "subscription" | "billing";
+  targetType?: "organization" | "member" | "subscription" | "billing" | "enterprise";
   targetId?: string;
   targetSlug?: string;
   requestPath?: string;

@@ -49,6 +49,7 @@ export async function GET(req: Request) {
         name,
         slug,
         created_at,
+        enterprise_id,
         stripe_connect_account_id,
         organization_subscriptions(
           status,
@@ -63,19 +64,54 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 5. Get member counts for each organization
+    // 5. Batch-fetch enterprise names/slugs for orgs with enterprise_id
+    const enterpriseIds = [
+      ...new Set(
+        (orgs ?? [])
+          .map((org) => org.enterprise_id)
+          .filter((id): id is string => id != null)
+      ),
+    ];
+
+    const enterpriseMap = new Map<
+      string,
+      { name: string; slug: string }
+    >();
+
+    if (enterpriseIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: enterprises } = (await (serviceClient as any)
+        .from("enterprises")
+        .select("id, name, slug")
+        .in("id", enterpriseIds)) as {
+        data: Array<{ id: string; name: string; slug: string }> | null;
+      };
+
+      for (const ent of enterprises ?? []) {
+        enterpriseMap.set(ent.id, { name: ent.name, slug: ent.slug });
+      }
+    }
+
+    // 6. Get member counts for each organization
     const orgsWithCounts = await Promise.all(
       (orgs ?? []).map(async (org) => {
         const { count } = await serviceClient
-          .from("user_organization_roles")
-          .select("*", { count: "exact", head: true })
+          .from("members")
+          .select("id", { count: "exact", head: true })
           .eq("organization_id", org.id)
-          .eq("status", "active");
+          .is("deleted_at", null);
+
+        const enterprise = org.enterprise_id
+          ? enterpriseMap.get(org.enterprise_id)
+          : null;
 
         return {
           ...org,
           member_count: count ?? 0,
           subscription: org.organization_subscriptions?.[0] ?? null,
+          enterprise_id: org.enterprise_id ?? null,
+          enterprise_name: enterprise?.name ?? null,
+          enterprise_slug: enterprise?.slug ?? null,
         };
       })
     );

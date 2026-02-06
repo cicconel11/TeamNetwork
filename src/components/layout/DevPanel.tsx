@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import DevEnterpriseModal from "./DevEnterpriseModal";
 
 interface DevPanelProps {
   organizationId: string;
@@ -21,6 +22,9 @@ interface Organization {
   slug: string;
   created_at: string;
   member_count: number;
+  enterprise_id: string | null;
+  enterprise_name: string | null;
+  enterprise_slug: string | null;
   subscription: {
     status: string;
     stripe_subscription_id: string | null;
@@ -46,6 +50,7 @@ export function DevPanel({
   const [showAllOrgs, setShowAllOrgs] = useState(false);
   const [allOrgs, setAllOrgs] = useState<Organization[]>([]);
   const [isLoadingOrgs, setIsLoadingOrgs] = useState(false);
+  const [showEnterprises, setShowEnterprises] = useState(false);
   const isMountedRef = useRef(true);
   const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -246,6 +251,12 @@ export function DevPanel({
                 >
                   {isLoadingOrgs ? "Loading..." : "View All Orgs"}
                 </button>
+                <button
+                  onClick={() => setShowEnterprises(true)}
+                  className="bg-purple-500 hover:bg-purple-600 px-3 py-1.5 rounded text-xs font-medium transition-colors"
+                >
+                  View Enterprises
+                </button>
               </div>
               {reconcileResult && (
                 <div className={`mt-2 p-2 rounded text-xs ${reconcileResult.startsWith("Error") ? "bg-red-900/50" : "bg-green-900/50"}`}>
@@ -284,6 +295,12 @@ export function DevPanel({
         </div>
       )}
 
+      {/* Enterprise Modal */}
+      <DevEnterpriseModal
+        isOpen={showEnterprises}
+        onClose={() => setShowEnterprises(false)}
+      />
+
       {/* All Orgs Modal */}
       {showAllOrgs && (
         <div
@@ -310,6 +327,7 @@ export function DevPanel({
                     <th className="text-left py-2 px-3 font-semibold">Name</th>
                     <th className="text-left py-2 px-3 font-semibold">Slug</th>
                     <th className="text-left py-2 px-3 font-semibold">Members</th>
+                    <th className="text-left py-2 px-3 font-semibold">Enterprise</th>
                     <th className="text-left py-2 px-3 font-semibold">Created</th>
                     <th className="text-left py-2 px-3 font-semibold">Subscription</th>
                   </tr>
@@ -327,6 +345,18 @@ export function DevPanel({
                         </a>
                       </td>
                       <td className="py-3 px-3">{org.member_count}</td>
+                      <td className="py-3 px-3">
+                        {org.enterprise_slug ? (
+                          <a
+                            href={`/enterprise/${org.enterprise_slug}`}
+                            className="text-purple-600 hover:text-purple-800 hover:underline"
+                          >
+                            {org.enterprise_name}
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">--</span>
+                        )}
+                      </td>
                       <td className="py-3 px-3">
                         {new Date(org.created_at).toLocaleDateString()}
                       </td>
