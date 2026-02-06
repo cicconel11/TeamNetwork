@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         refresh_url: refreshUrl,
         return_url: returnUrl,
         type: "account_onboarding",
-      }, idempotencyKey ? { idempotencyKey } : undefined);
+      });
 
       return respond({ url: accountLink.url, accountId, idempotencyKey: idempotencyKey || null });
     } catch (error) {

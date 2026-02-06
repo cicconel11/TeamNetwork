@@ -13,7 +13,7 @@ export function ConnectSetup({ organizationId, isConnected }: ConnectSetupProps)
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fingerprint = useMemo(() => organizationId, [organizationId]);
-  const { idempotencyKey } = useIdempotencyKey({
+  const { idempotencyKey, refreshKey } = useIdempotencyKey({
     storageKey: `connect-onboarding:${organizationId}`,
     fingerprint,
   });
@@ -41,6 +41,7 @@ export function ConnectSetup({ organizationId, isConnected }: ConnectSetupProps)
       }
 
       if (data.url) {
+        refreshKey();
         window.location.href = data.url;
       }
     } catch (err) {
