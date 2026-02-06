@@ -8,8 +8,9 @@ interface InviteSuccessModalProps {
   invite: {
     code: string;
     token: string;
-    organization_name: string;
+    organization_name: string | null;
     role: string;
+    is_enterprise_wide?: boolean;
   };
   onClose: () => void;
   onCreateAnother: () => void;
@@ -50,7 +51,10 @@ export function InviteSuccessModal({
         </div>
         <h3 className="text-lg font-semibold text-foreground">Invite Created!</h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Share this invite for <span className="font-medium">{invite.organization_name}</span>
+          {invite.is_enterprise_wide
+            ? "Share this enterprise-wide invite"
+            : <>Share this invite for <span className="font-medium">{invite.organization_name}</span></>
+          }
         </p>
       </div>
 

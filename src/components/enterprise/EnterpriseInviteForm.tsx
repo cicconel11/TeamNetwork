@@ -12,15 +12,17 @@ interface Organization {
 export interface CreatedInvite {
   code: string;
   token: string;
-  organization_id: string;
-  organization_name: string;
+  organization_id: string | null;
+  organization_name: string | null;
   role: string;
+  is_enterprise_wide: boolean;
 }
 
 interface EnterpriseInviteFormProps {
   enterpriseId: string;
   organizations: Organization[];
   defaultOrgId?: string;
+  isEnterpriseWide?: boolean;
   onInviteCreated: (invite: CreatedInvite) => void;
   onCancel: () => void;
 }
@@ -29,11 +31,12 @@ export function EnterpriseInviteForm({
   enterpriseId,
   organizations,
   defaultOrgId,
+  isEnterpriseWide = false,
   onInviteCreated,
   onCancel,
 }: EnterpriseInviteFormProps) {
   const [selectedOrg, setSelectedOrg] = useState<string>(defaultOrgId || "");
-  const [role, setRole] = useState<"active_member" | "admin" | "alumni">("active_member");
+  const [role, setRole] = useState<"active_member" | "admin" | "alumni">(isEnterpriseWide ? "alumni" : "active_member");
   const [maxUses, setMaxUses] = useState<string>("");
   const [expiresAt, setExpiresAt] = useState<string>("");
   const [isCreating, setIsCreating] = useState(false);
@@ -42,7 +45,7 @@ export function EnterpriseInviteForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedOrg) {
+    if (!isEnterpriseWide && !selectedOrg) {
       setError("Please select an organization");
       return;
     }
@@ -51,10 +54,11 @@ export function EnterpriseInviteForm({
     setError(null);
 
     try {
-      const body: Record<string, unknown> = {
-        organizationId: selectedOrg,
-        role,
-      };
+      const body: Record<string, unknown> = { role };
+
+      if (!isEnterpriseWide) {
+        body.organizationId = selectedOrg;
+      }
 
       if (maxUses) {
         body.usesRemaining = parseInt(maxUses);
@@ -76,13 +80,14 @@ export function EnterpriseInviteForm({
       }
 
       const data = await res.json();
-      const selectedOrgData = organizations.find(o => o.id === selectedOrg);
+      const selectedOrgData = isEnterpriseWide ? null : organizations.find(o => o.id === selectedOrg);
       onInviteCreated({
-        code: data.invite.code,
-        token: data.invite.token,
-        organization_id: selectedOrg,
-        organization_name: selectedOrgData?.name || "",
+        code: data.code ?? data.invite?.code,
+        token: data.token ?? data.invite?.token,
+        organization_id: isEnterpriseWide ? null : selectedOrg,
+        organization_name: selectedOrgData?.name ?? null,
         role,
+        is_enterprise_wide: isEnterpriseWide,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invite");
@@ -96,15 +101,28 @@ export function EnterpriseInviteForm({
     ...organizations.map((org) => ({ value: org.id, label: org.name })),
   ];
 
-  const roleOptions = [
+  const allRoleOptions = [
     { value: "active_member", label: "Active Member" },
     { value: "admin", label: "Admin" },
     { value: "alumni", label: "Alumni" },
   ];
 
+  // Enterprise-wide invites only allow admin and alumni (members must join a specific org)
+  const roleOptions = isEnterpriseWide
+    ? allRoleOptions.filter((opt) => opt.value !== "active_member")
+    : allRoleOptions;
+
   return (
     <Card className="p-6">
-      <h3 className="font-semibold text-foreground mb-4">Create New Invite</h3>
+      <h3 className="font-semibold text-foreground mb-4">
+        {isEnterpriseWide ? "Create Enterprise-wide Invite" : "Create Organization Invite"}
+      </h3>
+
+      {isEnterpriseWide && (
+        <p className="text-sm text-muted-foreground mb-4">
+          This invite lets users join any organization in your enterprise. They will choose which organization to join when they redeem the invite.
+        </p>
+      )}
 
       {error && (
         <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
@@ -114,13 +132,15 @@ export function EnterpriseInviteForm({
 
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <Select
-            label="Organization"
-            value={selectedOrg}
-            onChange={(e) => setSelectedOrg(e.target.value)}
-            options={orgOptions}
-            required
-          />
+          {!isEnterpriseWide && (
+            <Select
+              label="Organization"
+              value={selectedOrg}
+              onChange={(e) => setSelectedOrg(e.target.value)}
+              options={orgOptions}
+              required
+            />
+          )}
           <Select
             label="Role"
             value={role}

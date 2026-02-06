@@ -8,7 +8,7 @@ import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
 const createInviteSchema = z.object({
-  organizationId: baseSchemas.uuid,
+  organizationId: baseSchemas.uuid.optional(),
   role: z.enum(["admin", "active_member", "alumni"]),
   usesRemaining: z.number().int().positive().optional(),
   expiresAt: z.string().datetime().optional(),
@@ -24,7 +24,7 @@ interface RouteParams {
 // Type for enterprise invite row (until types are regenerated)
 interface EnterpriseInviteRow {
   id: string;
-  organization_id: string;
+  organization_id: string | null;
   email: string;
   role: string;
   status: string;
@@ -78,36 +78,40 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data: orgs } = await serviceSupabase
     .from("organizations")
     .select("id, name")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null);
+    .eq("enterprise_id", resolvedEnterpriseId);
 
   const orgMap = new Map(orgs?.map((o) => [o.id, o.name]) ?? []);
-  const orgIds = orgs?.map((o) => o.id) ?? [];
 
-  if (orgIds.length === 0) {
-    return respond({ invites: [] });
-  }
-
-  // Get all invites for enterprise organizations
+  // Get all invites for this enterprise (both org-specific and enterprise-wide)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invites, error } = await (serviceSupabase as any)
     .from("enterprise_invites")
     .select("*")
     .eq("enterprise_id", resolvedEnterpriseId)
-    .in("organization_id", orgIds)
     .order("created_at", { ascending: false }) as { data: EnterpriseInviteRow[] | null; error: Error | null };
 
   if (error) {
     return respond({ error: error.message }, 400);
   }
 
-  // Add organization names
+  // Count current admins across all enterprise orgs (for admin cap display)
+  const { count: adminCount } = await serviceSupabase
+    .from("user_organization_roles")
+    .select("id, organizations!inner(enterprise_id)", { count: "exact", head: true })
+    .eq("organizations.enterprise_id", resolvedEnterpriseId)
+    .eq("role", "admin")
+    .eq("status", "active");
+
+  // Add organization names (null org_id = enterprise-wide)
   const invitesWithOrg = (invites ?? []).map((invite: EnterpriseInviteRow) => ({
     ...invite,
-    organization_name: orgMap.get(invite.organization_id) ?? "Unknown",
+    organization_name: invite.organization_id
+      ? (orgMap.get(invite.organization_id) ?? "Unknown")
+      : null,
+    is_enterprise_wide: invite.organization_id === null,
   }));
 
-  return respond({ invites: invitesWithOrg });
+  return respond({ invites: invitesWithOrg, adminCount: adminCount ?? 0, adminLimit: 12 });
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
@@ -164,22 +168,54 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const { organizationId, role, usesRemaining, expiresAt } = body;
 
-  // Verify organization belongs to this enterprise
-  const { data: org } = await serviceSupabase
-    .from("organizations")
-    .select("id, name")
-    .eq("id", organizationId)
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .single();
+  // Enterprise-wide invites cannot use active_member role
+  if (!organizationId && role === "active_member") {
+    return respond(
+      { error: "Enterprise-wide invites require a specific role (admin or alumni). Members must join a specific organization." },
+      400
+    );
+  }
 
-  if (!org) {
-    return respond({ error: "Organization not found in this enterprise" }, 404);
+  // Pre-check enterprise admin cap (12 max across all orgs)
+  if (role === "admin") {
+    const { count, error: countError } = await serviceSupabase
+      .from("user_organization_roles")
+      .select("id, organizations!inner(enterprise_id)", { count: "exact", head: true })
+      .eq("organizations.enterprise_id", resolvedEnterpriseId)
+      .eq("role", "admin")
+      .eq("status", "active");
+
+    if (countError) {
+      // Fallback: let the RPC enforce the cap if the pre-check fails
+    } else if ((count ?? 0) >= 12) {
+      return respond(
+        { error: "Enterprise admin limit reached (maximum 12 admins across all organizations)" },
+        400
+      );
+    }
+  }
+
+  let orgName: string | null = null;
+
+  // If org-specific invite, verify organization belongs to this enterprise
+  if (organizationId) {
+    const { data: org } = await serviceSupabase
+      .from("organizations")
+      .select("id, name")
+      .eq("id", organizationId)
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .single();
+
+    if (!org) {
+      return respond({ error: "Organization not found in this enterprise" }, 404);
+    }
+    orgName = org.name;
   }
 
   // Use the RPC function to create invite
   const { data: invite, error: rpcError } = await supabase.rpc("create_enterprise_invite", {
     p_enterprise_id: resolvedEnterpriseId,
-    p_organization_id: organizationId,
+    p_organization_id: organizationId ?? null,
     p_role: role,
     p_uses: usesRemaining ?? null,
     p_expires_at: expiresAt ?? null,
@@ -191,6 +227,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   return respond({
     ...invite,
-    organization_name: org.name,
+    organization_name: orgName,
+    is_enterprise_wide: !organizationId,
   });
 }

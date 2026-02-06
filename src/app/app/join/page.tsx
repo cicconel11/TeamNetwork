@@ -8,8 +8,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
+import { EnterpriseOrgPicker } from "@/components/enterprise/EnterpriseOrgPicker";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { joinOrgSchema, type JoinOrgForm } from "@/lib/schemas/auth";
+
+interface AvailableOrg {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
 
 interface RedeemResult {
   success: boolean;
@@ -23,6 +31,8 @@ interface RedeemResult {
   already_member?: boolean;
   pending_approval?: boolean;
   status?: string;
+  organizations?: AvailableOrg[];
+  invite_token?: string;
 }
 
 type InviteFlow = "org" | "enterprise";
@@ -103,6 +113,11 @@ function JoinOrgFormComponent() {
   const [error, setError] = useState<string | null>(null);
   const [pendingApproval, setPendingApproval] = useState<{ orgName: string } | null>(null);
   const [pendingTokenSubmit, setPendingTokenSubmit] = useState(false);
+  const [chooseOrgState, setChooseOrgState] = useState<{
+    organizations: AvailableOrg[];
+    role: string;
+    inviteToken: string;
+  } | null>(null);
 
   const {
     register,
@@ -167,6 +182,17 @@ function JoinOrgFormComponent() {
         setError(result?.error || "Failed to join organization");
         setIsLoading(false);
         captchaRef.current?.reset();
+        return;
+      }
+
+      // Handle enterprise-wide invite: user must choose an org
+      if (result.status === "choose_org" && result.organizations && result.invite_token) {
+        setChooseOrgState({
+          organizations: result.organizations,
+          role: result.role || "active_member",
+          inviteToken: result.invite_token,
+        });
+        setIsLoading(false);
         return;
       }
 
@@ -240,6 +266,17 @@ function JoinOrgFormComponent() {
       return;
     }
 
+    // Handle enterprise-wide invite: user must choose an org
+    if (result.status === "choose_org" && result.organizations && result.invite_token) {
+      setChooseOrgState({
+        organizations: result.organizations,
+        role: result.role || "active_member",
+        inviteToken: result.invite_token,
+      });
+      setIsLoading(false);
+      return;
+    }
+
     // Handle already a member
     if (result.already_member) {
       if (result.status === "pending") {
@@ -266,6 +303,50 @@ function JoinOrgFormComponent() {
     // Success - redirect to organization
     if (result.slug) {
       router.push(`/${result.slug}`);
+    }
+    setIsLoading(false);
+  };
+
+  const handleOrgSelected = async (orgId: string) => {
+    if (!chooseOrgState) return;
+
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(orgId)) {
+      setError("Invalid organization selection");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    const supabase = createClient();
+
+    const { data, error: rpcError } = await supabase.rpc("complete_enterprise_invite_redemption", {
+      p_token: chooseOrgState.inviteToken,
+      p_organization_id: orgId,
+    });
+
+    if (rpcError) {
+      setError(rpcError.message);
+      setIsLoading(false);
+      captchaRef.current?.reset();
+      return;
+    }
+
+    const result = data as RedeemResult | null;
+
+    if (!result?.success) {
+      setError(result?.error || "Failed to join organization");
+      setIsLoading(false);
+      captchaRef.current?.reset();
+      return;
+    }
+
+    // Success - redirect to chosen organization
+    const slug = result.organization_slug ?? result.slug;
+    if (slug) {
+      router.push(`/${slug}`);
     }
     setIsLoading(false);
   };
@@ -304,7 +385,31 @@ function JoinOrgFormComponent() {
         </div>
 
         <Card className="p-8">
-          {pendingApproval ? (
+          {chooseOrgState ? (
+            // Enterprise-wide invite: choose org
+            <div>
+              <div className="text-center mb-6">
+                <div className="h-16 w-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-4">
+                  <svg className="h-8 w-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                  </svg>
+                </div>
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <EnterpriseOrgPicker
+                organizations={chooseOrgState.organizations}
+                role={chooseOrgState.role}
+                isLoading={isLoading}
+                onSelect={handleOrgSelected}
+              />
+            </div>
+          ) : pendingApproval ? (
             // Pending approval success state
             <div className="text-center">
               <div className="h-16 w-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">

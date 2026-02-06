@@ -7,8 +7,8 @@ import { QRCodeDisplay } from "@/components/invites";
 interface Invite {
   id: string;
   enterprise_id: string;
-  organization_id: string;
-  organization_name: string;
+  organization_id: string | null;
+  organization_name: string | null;
   code: string;
   token: string;
   role: string;
@@ -16,6 +16,7 @@ interface Invite {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  is_enterprise_wide?: boolean;
 }
 
 interface EnterpriseInviteListProps {
@@ -97,7 +98,7 @@ export function EnterpriseInviteList({
   // Group invites by organization if enabled
   const groupedInvites = groupByOrg
     ? invites.reduce((acc, invite) => {
-        const key = invite.organization_name;
+        const key = invite.organization_name ?? "Enterprise-wide";
         if (!acc[key]) acc[key] = [];
         acc[key].push(invite);
         return acc;
@@ -142,7 +143,7 @@ export function EnterpriseInviteList({
                           </Badge>
                           {!groupByOrg && (
                             <Badge variant="muted" className="text-xs">
-                              {invite.organization_name}
+                              {invite.organization_name ?? "Enterprise-wide"}
                             </Badge>
                           )}
                           {expired && <Badge variant="error">Expired</Badge>}
