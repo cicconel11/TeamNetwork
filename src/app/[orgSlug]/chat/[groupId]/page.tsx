@@ -37,13 +37,17 @@ export default async function ChatGroupPage({ params }: ChatGroupPageProps) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return notFound();
 
-  const { data: membership } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("chat_group_members")
     .select("*")
     .eq("chat_group_id", groupId)
     .eq("user_id", currentUser.id)
     .is("removed_at", null)
     .single();
+
+  if (membershipError && membershipError.code !== "PGRST116") {
+    console.error("[chat-members] membership check failed:", membershipError);
+  }
 
   const isAdmin = await isOrgAdmin(org.id);
   const isModerator = membership?.role === "admin" || membership?.role === "moderator";
@@ -57,7 +61,7 @@ export default async function ChatGroupPage({ params }: ChatGroupPageProps) {
   const isCreator = group.created_by === currentUser.id;
 
   // Fetch active members with user info
-  const { data: members } = await supabase
+  const { data: members, error: membersError } = await supabase
     .from("chat_group_members")
     .select(`
       *,
@@ -65,6 +69,10 @@ export default async function ChatGroupPage({ params }: ChatGroupPageProps) {
     `)
     .eq("chat_group_id", groupId)
     .is("removed_at", null);
+
+  if (membersError) {
+    console.error("[chat-members] failed to fetch members:", membersError);
+  }
 
   // Get user info for display
   const { data: userInfo } = await supabase

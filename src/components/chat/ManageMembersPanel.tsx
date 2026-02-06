@@ -62,7 +62,8 @@ export function ManageMembersPanel({
 
   const loadMembers = useCallback(async () => {
     setIsLoading(true);
-    const { data } = await supabase
+    setError(null);
+    const { data, error: queryError } = await supabase
       .from("chat_group_members")
       .select(`
         id, user_id, role, joined_at, removed_at,
@@ -71,7 +72,10 @@ export function ManageMembersPanel({
       .eq("chat_group_id", groupId)
       .is("removed_at", null);
 
-    if (data) {
+    if (queryError) {
+      console.error("[chat-members] loadMembers failed:", queryError);
+      setError(queryError.message);
+    } else if (data) {
       setMembers(data as unknown as MemberRow[]);
     }
     setIsLoading(false);
@@ -129,7 +133,6 @@ export function ManageMembersPanel({
         chat_group_id: groupId,
         user_id: userId,
         organization_id: organizationId,
-        added_by: currentUserId,
       });
 
     if (insertError) {
@@ -137,16 +140,18 @@ export function ManageMembersPanel({
         // Unique violation — re-add by clearing removed_at
         const { error: updateError } = await supabase
           .from("chat_group_members")
-          .update({ removed_at: null, added_by: currentUserId })
+          .update({ removed_at: null })
           .eq("chat_group_id", groupId)
           .eq("user_id", userId);
 
         if (updateError) {
+          console.error("[chat-members] re-add failed:", updateError);
           setError("Failed to re-add member");
           setActionInProgress(null);
           return;
         }
       } else {
+        console.error("[chat-members] add member failed:", insertError);
         setError(insertError.message || "Failed to add member");
         setActionInProgress(null);
         return;

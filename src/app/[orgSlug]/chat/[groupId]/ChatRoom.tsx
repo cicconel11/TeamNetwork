@@ -229,7 +229,7 @@ export function ChatRoom({
 
   // Refresh members list (called by ManageMembersPanel and realtime)
   const refreshMembers = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error: refreshError } = await supabase
       .from("chat_group_members")
       .select(`
         *,
@@ -238,6 +238,10 @@ export function ChatRoom({
       .eq("chat_group_id", group.id)
       .is("removed_at", null);
 
+    if (refreshError) {
+      console.error("[chat-members] refreshMembers failed:", refreshError);
+      return;
+    }
     if (data) {
       setMembers(data as unknown as (ChatGroupMember & { users: User })[]);
     }
