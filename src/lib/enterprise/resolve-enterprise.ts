@@ -2,6 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { baseSchemas } from "@/lib/security/validation";
 
+// Lenient UUID regex: accepts any 8-4-4-4-12 hex string (not just RFC 4122 v4)
+const UUID_REGEX = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export interface ResolvedEnterpriseParam {
   enterpriseId: string;
   enterpriseSlug: string | null;
@@ -13,8 +16,7 @@ export async function resolveEnterpriseParam(
   idOrSlug: string,
   serviceSupabase: SupabaseClient<Database, "public">,
 ): Promise<{ data: ResolvedEnterpriseParam | null; error?: ResolveEnterpriseError }> {
-  const idParsed = baseSchemas.uuid.safeParse(idOrSlug);
-  if (idParsed.success) {
+  if (UUID_REGEX.test(idOrSlug)) {
     return { data: { enterpriseId: idOrSlug, enterpriseSlug: null } };
   }
 

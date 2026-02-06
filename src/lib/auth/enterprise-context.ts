@@ -24,41 +24,40 @@ export async function getEnterpriseContext(enterpriseSlug: string): Promise<Ente
 
   if (!enterprise) return null;
 
-  // Get user's role
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: roleData } = await (supabase as any)
-    .from("user_enterprise_roles")
-    .select("role")
-    .eq("enterprise_id", enterprise.id)
-    .eq("user_id", user.id)
-    .single() as { data: EnterpriseRoleRow | null };
+  // Run role, subscription, and alumni count queries in parallel
+  // (all only depend on enterprise.id, not each other)
+  const serviceSupabase = createServiceClient();
+
+  const [
+    { data: roleData },
+    { data: subscription },
+    { data: counts },
+  ] = await Promise.all([
+    // Get user's role
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("user_enterprise_roles")
+      .select("role")
+      .eq("enterprise_id", enterprise.id)
+      .eq("user_id", user.id)
+      .single() as Promise<{ data: EnterpriseRoleRow | null }>,
+    // Get subscription (using service client for sensitive data)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("enterprise_subscriptions")
+      .select("*")
+      .eq("enterprise_id", enterprise.id)
+      .single() as Promise<{ data: SubscriptionRow | null }>,
+    // Get alumni counts
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("enterprise_alumni_counts")
+      .select("total_alumni_count, sub_org_count, enterprise_managed_org_count")
+      .eq("enterprise_id", enterprise.id)
+      .single() as Promise<{ data: AlumniCountsRow | null }>,
+  ]);
 
   if (!roleData) return null;
-
-  // Get subscription (using service client for sensitive data)
-  const serviceSupabase = createServiceClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription } = await (serviceSupabase as any)
-    .from("enterprise_subscriptions")
-    .select("*")
-    .eq("enterprise_id", enterprise.id)
-    .single() as { data: SubscriptionRow | null };
-
-  // Get alumni counts
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: counts } = await (serviceSupabase as any)
-    .from("enterprise_alumni_counts")
-    .select("total_alumni_count, sub_org_count, enterprise_managed_org_count")
-    .eq("enterprise_id", enterprise.id)
-    .single() as { data: AlumniCountsRow | null };
-
-  // Get count of enterprise-managed organizations
-  const { count: enterpriseManagedCount } = await serviceSupabase
-    .from("organizations")
-    .select("*", { count: "exact", head: true })
-    .eq("enterprise_id", enterprise.id)
-    .eq("enterprise_relationship_type", "created")
-    .is("deleted_at", null);
 
   return {
     enterprise,

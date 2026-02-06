@@ -33,7 +33,6 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
     .from("organizations")
     .select("id, name, slug, created_at")
     .eq("enterprise_id", enterprise.id)
-    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(5);
 

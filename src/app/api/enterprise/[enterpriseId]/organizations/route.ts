@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import type { EnterpriseRelationshipType } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
@@ -59,14 +58,16 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
 
-  try {
-    // Check enterprise membership (any role can view)
-    await requireEnterpriseRole(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
+  // Check enterprise membership via service client (bypasses RLS)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: userRole } = await (serviceSupabase as any)
+    .from("user_enterprise_roles")
+    .select("role")
+    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("user_id", user.id)
+    .single() as { data: { role: string } | null };
+
+  if (!userRole) {
     return respond({ error: "Forbidden" }, 403);
   }
 
@@ -89,7 +90,6 @@ export async function GET(req: Request, { params }: RouteParams) {
       )
     `)
     .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null)
     .order("name", { ascending: true }) as { data: OrganizationRow[] | null; error: Error | null };
 
   if (error) {

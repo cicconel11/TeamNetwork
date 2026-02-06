@@ -127,7 +127,7 @@ export async function canEnterpriseAddSubOrg(enterpriseId: string): Promise<Seat
     .single() as { data: SeatSubscriptionRow | null };
 
   // If no seat-based pricing, no limit (legacy tier-based)
-  if (!subscription || subscription.pricing_model !== "per_sub_org" || !subscription.sub_org_quantity) {
+  if (!subscription || subscription.pricing_model !== "per_sub_org") {
     return { allowed: true, currentCount: 0, maxAllowed: null, needsUpgrade: false };
   }
 
@@ -142,10 +142,11 @@ export async function canEnterpriseAddSubOrg(enterpriseId: string): Promise<Seat
 
   const currentCount = counts?.enterprise_managed_org_count ?? 0;
 
+  // per_sub_org model: unlimited orgs allowed, billing kicks in after free tier
   return {
-    allowed: currentCount < subscription.sub_org_quantity,
+    allowed: true,
     currentCount,
-    maxAllowed: subscription.sub_org_quantity,
-    needsUpgrade: currentCount >= subscription.sub_org_quantity,
+    maxAllowed: null,
+    needsUpgrade: false,
   };
 }
