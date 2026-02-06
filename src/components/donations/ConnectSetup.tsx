@@ -45,6 +45,7 @@ export function ConnectSetup({ organizationId, isConnected }: ConnectSetupProps)
         window.location.href = data.url;
       }
     } catch (err) {
+      refreshKey();
       setError(err instanceof Error ? err.message : "Something went wrong");
       setIsLoading(false);
     }

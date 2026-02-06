@@ -78,7 +78,9 @@ export async function POST(req: Request) {
 
     try {
       if (!accountId) {
-        const accountKey = idempotencyKey || `connect-account-${org.id}-${user.id}`;
+        const accountKey = idempotencyKey
+          ? `acct-${idempotencyKey}`
+          : `acct-${org.id}-${user.id}`;
         const account = await stripe.accounts.create({
           type: "express",
           metadata: {

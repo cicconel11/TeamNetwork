@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
+import type { AuthContext } from "../../utils/authMock.ts";
 import {
-  AuthContext,
   isAuthenticated,
   isOrgAdmin,
   AuthPresets,
@@ -318,7 +318,9 @@ function simulateConnectOnboardingWithTracking(
 
   // accounts.create — only called when no account exists, receives idempotency key
   if (!accountId) {
-    const accountKey = request.idempotencyKey || `connect-account-${ctx.organization.id}-${request.auth.userId}`;
+    const accountKey = request.idempotencyKey
+      ? `acct-${request.idempotencyKey}`
+      : `acct-${ctx.organization.id}-${request.auth.userId}`;
     stripeCalls.push({ endpoint: "accounts.create", idempotencyKey: accountKey });
     const account = createMockConnectAccount();
     accountId = account.id;
@@ -362,7 +364,7 @@ test("idempotency key is only passed to accounts.create, not accountLinks.create
   // accounts.create should receive the idempotency key
   const accountCall = result.stripeCalls.find(c => c.endpoint === "accounts.create");
   assert.ok(accountCall, "accounts.create should be called");
-  assert.strictEqual(accountCall!.idempotencyKey, idempotencyKey);
+  assert.strictEqual(accountCall!.idempotencyKey, `acct-${idempotencyKey}`);
 
   // accountLinks.create should NOT receive any idempotency key
   const linkCall = result.stripeCalls.find(c => c.endpoint === "accountLinks.create");
