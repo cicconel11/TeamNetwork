@@ -59,8 +59,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data: orgs } = await serviceSupabase
     .from("organizations")
     .select("id, name, slug")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null);
+    .eq("enterprise_id", resolvedEnterpriseId);
 
   if (!orgs || orgs.length === 0) {
     return respond({

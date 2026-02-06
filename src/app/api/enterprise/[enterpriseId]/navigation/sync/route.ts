@@ -58,8 +58,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { data: orgs, error: orgsError } = await serviceSupabase
     .from("organizations")
     .select("id")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null);
+    .eq("enterprise_id", resolvedEnterpriseId);
 
   if (orgsError || !orgs) {
     return respond({ error: "Failed to fetch organizations" }, 400);

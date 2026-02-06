@@ -79,8 +79,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { data: orgs } = await serviceSupabase
     .from("organizations")
     .select("id")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null);
+    .eq("enterprise_id", resolvedEnterpriseId);
 
   const validOrgIds = new Set(orgs?.map((o) => o.id) ?? []);
 

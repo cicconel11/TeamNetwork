@@ -77,7 +77,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       .from("organizations")
       .select("id")
       .eq("slug", organizationSlug)
-      .is("deleted_at", null)
       .maybeSingle() as { data: { id: string } | null };
 
     if (!org) {

@@ -71,7 +71,6 @@ export async function GET(req: Request, { params }: RouteParams) {
     .from("organizations")
     .select("id, name, slug, enterprise_nav_synced_at")
     .eq("enterprise_id", resolvedEnterpriseId)
-    .is("deleted_at", null)
     .order("name");
 
   return respond({

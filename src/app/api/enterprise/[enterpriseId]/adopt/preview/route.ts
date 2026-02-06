@@ -67,7 +67,6 @@ export async function GET(req: Request, { params }: RouteParams) {
     .from("organizations")
     .select("id, name, slug, enterprise_id")
     .eq("slug", slugParsed.data)
-    .is("deleted_at", null)
     .maybeSingle() as { data: { id: string; name: string; slug: string; enterprise_id: string | null } | null };
 
   if (!org) {
