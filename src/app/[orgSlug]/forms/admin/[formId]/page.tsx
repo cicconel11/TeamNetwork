@@ -41,7 +41,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
     .order("submitted_at", { ascending: false });
 
   const typedSubmissions = (submissions || []) as (FormSubmission & { users: Pick<User, "name" | "email"> | null })[];
-  const fields = (typedForm.fields || []) as FormField[];
+  const fields = (typedForm.fields || []) as unknown as FormField[];
 
   // Debug: detect data vs responses property mismatch (Issue #5)
   if (typedSubmissions.length > 0) {
