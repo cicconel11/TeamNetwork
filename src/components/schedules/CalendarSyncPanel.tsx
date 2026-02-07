@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
 
-const UPCOMING_DAYS = 30;
+const UPCOMING_DAYS = 365;
 
 type FeedSummary = {
   id: string;
@@ -91,6 +91,7 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
   const [orgError, setOrgError] = useState<string | null>(null);
   const [orgNotice, setOrgNotice] = useState<string | null>(null);
   const [orgEventsError, setOrgEventsError] = useState<string | null>(null);
+  const [orgEventsTruncated, setOrgEventsTruncated] = useState(false);
 
   useEffect(() => {
     if (!isAdmin && feedScope === "org") {
@@ -168,6 +169,7 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
       }
 
       setOrgEvents(data.events || []);
+      setOrgEventsTruncated(data.meta?.truncated === true);
     } catch (err) {
       setOrgEventsError(err instanceof Error ? err.message : "Failed to load events.");
     } finally {
@@ -528,18 +530,27 @@ export function CalendarSyncPanel({ organizationId, isAdmin }: CalendarSyncPanel
               description="Org events will appear here once an admin connects a calendar."
             />
           ) : (
-            <div className="divide-y divide-border/60">
-              {orgEvents.map((event) => (
-                <div key={event.id} className="py-3">
-                  <p className="font-medium text-foreground">{event.title || "Untitled event"}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {formatEventTime(event)}
+            <div className="space-y-3">
+              {orgEventsTruncated && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Showing first {orgEvents.length} events. Some events may not be displayed.
                   </p>
-                  {event.location && (
-                    <p className="text-sm text-muted-foreground">{event.location}</p>
-                  )}
                 </div>
-              ))}
+              )}
+              <div className="divide-y divide-border/60">
+                {orgEvents.map((event) => (
+                  <div key={event.id} className="py-3">
+                    <p className="font-medium text-foreground">{event.title || "Untitled event"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatEventTime(event)}
+                    </p>
+                    {event.location && (
+                      <p className="text-sm text-muted-foreground">{event.location}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </Card>

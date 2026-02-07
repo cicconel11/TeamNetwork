@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { debugLog } from "@/lib/debug";
 
-const MAX_EVENTS = 500;
+const MAX_EVENTS = 2000;
 const MAX_DATE_RANGE_DAYS = 400;
 
 export const dynamic = "force-dynamic";
@@ -99,10 +99,15 @@ export async function GET(request: Request) {
     }
 
     const includeCancelled = url.searchParams.get("include_cancelled") === "true";
+    const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
+    const limitParam = parseInt(url.searchParams.get("limit") || String(MAX_EVENTS), 10);
+    const page = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+    const limit = Number.isNaN(limitParam) || limitParam < 1 ? MAX_EVENTS : Math.min(limitParam, MAX_EVENTS);
+    const offset = (page - 1) * limit;
 
     let query = supabase
       .from("schedule_events")
-      .select("id, source_id, title, start_at, end_at, location, status")
+      .select("id, source_id, title, start_at, end_at, location, status", { count: "exact" })
       .eq("org_id", orgId)
       .gte("start_at", from.toISOString())
       .lte("start_at", to.toISOString());
@@ -111,8 +116,8 @@ export async function GET(request: Request) {
       query = query.neq("status", "cancelled");
     }
 
-    const { data: events, error } = await query
-      .limit(MAX_EVENTS + 1)
+    const { data: events, error, count } = await query
+      .range(offset, offset + limit - 1)
       .order("start_at", { ascending: true });
 
     if (error) {
@@ -123,22 +128,30 @@ export async function GET(request: Request) {
       );
     }
 
-    const allEvents = events || [];
-    const truncated = allEvents.length > MAX_EVENTS;
-    const limitedEvents = allEvents.slice(0, MAX_EVENTS);
+    const returnedEvents = events || [];
+    const total = count ?? returnedEvents.length;
+    const truncated = total > limit;
+    const hasMore = offset + returnedEvents.length < total;
 
     debugLog("schedule-events", "query result", {
-      total: allEvents.length,
+      total,
+      page,
+      limit,
       truncated,
+      hasMore,
       includeCancelled,
       dateRange: { from: fromParam, to: toParam },
     });
 
     return NextResponse.json(
       {
-        events: limitedEvents,
+        events: returnedEvents,
         meta: {
-          count: limitedEvents.length,
+          count: returnedEvents.length,
+          total,
+          page,
+          limit,
+          hasMore,
           truncated,
         },
       },
