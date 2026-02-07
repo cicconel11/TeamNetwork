@@ -7,14 +7,29 @@ import {
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import type {
-  Enterprise,
-  EnterpriseSubscription,
-  EnterpriseRole,
-} from "@/types/enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+type EnterpriseRole = string;
+
+interface Enterprise {
+  id: string;
+  name: string;
+  slug: string;
+  billing_contact_email: string | null;
+  created_at: string | null;
+}
+
+interface EnterpriseSubscription {
+  enterprise_id: string;
+  status: string;
+  pricing_model: string;
+  sub_org_quantity: number | null;
+  alumni_tier: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+}
 
 interface AlumniCountsRow {
   enterprise_id: string;
@@ -53,12 +68,12 @@ interface EnterpriseResponse {
   name: string;
   slug: string;
   billing_contact_email: string | null;
-  created_at: string;
+  created_at: string | null;
   subscription: {
     status: string;
     pricing_model: string;
     sub_org_quantity: number | null;
-    alumni_tier: string;
+    alumni_tier: string | null;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
   } | null;
@@ -122,8 +137,8 @@ export async function GET(req: Request) {
       logDevAdminAction({
         adminUserId: user.id,
         adminEmail: user.email ?? "",
-        action: "view_enterprise",
-        targetType: "enterprise",
+        action: "view_org",
+        targetType: "organization",
         ...extractRequestContext(req),
         metadata: { listAll: true },
       });
@@ -172,7 +187,7 @@ export async function GET(req: Request) {
           "enterprise_id, status, pricing_model, sub_org_quantity, alumni_tier, stripe_customer_id, stripe_subscription_id"
         )
         .in("enterprise_id", enterpriseIds) as Promise<{
-        data: (EnterpriseSubscription & { enterprise_id: string })[] | null;
+        data: EnterpriseSubscription[] | null;
       }>,
       // Alumni counts view
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -105,29 +105,29 @@ describe("validateNewPassword", () => {
   it("returns error for short password", () => {
     assert.equal(
       validateNewPassword("abc", "abc"),
-      "Password must be at least 6 characters"
+      "Password must be at least 12 characters"
     );
   });
 
   it("returns error for mismatched passwords", () => {
     assert.equal(
-      validateNewPassword("password123", "password456"),
+      validateNewPassword("ValidPass123!", "ValidPass456!"),
       "Passwords do not match"
     );
   });
 
   it("returns null for valid matching passwords", () => {
-    assert.equal(validateNewPassword("password123", "password123"), null);
+    assert.equal(validateNewPassword("ValidPass123!", "ValidPass123!"), null);
   });
 
-  it("returns null for exactly 6 character password", () => {
-    assert.equal(validateNewPassword("abcdef", "abcdef"), null);
+  it("returns null for exactly 12 character password", () => {
+    assert.equal(validateNewPassword("ValidPass1!A", "ValidPass1!A"), null);
   });
 
   it("checks length before match", () => {
     assert.equal(
       validateNewPassword("ab", "cd"),
-      "Password must be at least 6 characters"
+      "Password must be at least 12 characters"
     );
   });
 });
