@@ -27,9 +27,7 @@ function isAuthorized(request: Request) {
 
   const authHeader = request.headers.get("authorization");
   const headerSecret = request.headers.get("x-cron-secret");
-  const urlSecret = new URL(request.url).searchParams.get("secret");
-
-  if (authHeader === `Bearer ${secret}` || headerSecret === secret || urlSecret === secret) {
+  if (authHeader === `Bearer ${secret}` || headerSecret === secret) {
     return { ok: true };
   }
 
