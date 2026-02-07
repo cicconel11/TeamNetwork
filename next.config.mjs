@@ -32,6 +32,12 @@ const priceEnvKeys = [
   "STRIPE_PRICE_ALUMNI_2500_5000_YEARLY",
 ];
 
+const googleCalendarEnv = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_TOKEN_ENCRYPTION_KEY",
+];
+
 function assertEnv(name, required = true) {
   const value = process.env[name];
   if (required && (!value || value.trim() === "")) {
@@ -59,6 +65,12 @@ function validateBuildEnv() {
         throw new Error(`Invalid Stripe price id for ${key}: ${value}`);
       }
     });
+  }
+
+  // Optional: warn if Google Calendar env vars are missing (feature will be disabled)
+  const missingGoogleVars = googleCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingGoogleVars.length > 0 && missingGoogleVars.length < googleCalendarEnv.length) {
+    console.warn(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`);
   }
 }
 

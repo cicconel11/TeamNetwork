@@ -2822,7 +2822,7 @@ export interface FormField {
   label: string;
   type: FormFieldType;
   required: boolean;
-  options?: string[];
+  options?: Array<string | { label: string; value: string }>;
 }
 export type Alumni = Tables<'alumni'>;
 export type Announcement = Tables<'announcements'>;

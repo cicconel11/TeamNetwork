@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import { debugLog } from "@/lib/debug";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface ExportCSVButtonProps {
@@ -11,19 +10,13 @@ interface ExportCSVButtonProps {
 
 export function ExportCSVButton({ form, submissions }: ExportCSVButtonProps) {
   const handleExport = () => {
-    const fields = (form.fields || []) as FormField[];
+    const fields = (form.fields || []) as unknown as FormField[];
 
     // Build CSV headers
     const headers = ["Submitted By", "Email", "Date", ...fields.map((f) => f.label)];
 
-    // Try both "data" and "responses" properties (Issue #5)
-    debugLog("forms-export", "exporting", {
-      submissionCount: submissions.length,
-      fieldCount: fields.length,
-    });
     const rows = submissions.map((sub) => {
-      const raw = sub as unknown as Record<string, unknown>;
-      const responses = (raw.data || raw.responses || {}) as Record<string, unknown>;
+      const responses = (sub.data ?? {}) as Record<string, unknown>;
       return [
         sub.users?.name || "",
         sub.users?.email || "",

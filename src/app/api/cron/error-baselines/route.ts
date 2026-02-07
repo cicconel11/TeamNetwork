@@ -18,20 +18,14 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Expected to be called hourly via Vercel Cron.
  */
 export async function GET(request: Request) {
-  // In production, CRON_SECRET is required - fail closed
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-
-  if (isProduction && !CRON_SECRET) {
-    console.error("[cron/error-baselines] CRON_SECRET not configured in production");
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
+  if (!CRON_SECRET) {
+    console.error("[cron/error-baselines] CRON_SECRET not configured");
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
   }
 
-  // Verify cron secret if configured
-  if (CRON_SECRET) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  const authHeader = request.headers.get("authorization");
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
