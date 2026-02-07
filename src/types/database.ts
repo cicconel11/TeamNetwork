@@ -409,6 +409,7 @@ export type Database = {
           joined_at: string
           last_read_at: string | null
           organization_id: string
+          removed_at: string | null
           role: Database["public"]["Enums"]["chat_group_role"]
           user_id: string
         }
@@ -418,6 +419,7 @@ export type Database = {
           joined_at?: string
           last_read_at?: string | null
           organization_id: string
+          removed_at?: string | null
           role?: Database["public"]["Enums"]["chat_group_role"]
           user_id: string
         }
@@ -427,6 +429,7 @@ export type Database = {
           joined_at?: string
           last_read_at?: string | null
           organization_id?: string
+          removed_at?: string | null
           role?: Database["public"]["Enums"]["chat_group_role"]
           user_id?: string
         }
