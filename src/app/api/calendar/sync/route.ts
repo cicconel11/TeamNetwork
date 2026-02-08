@@ -70,6 +70,23 @@ export async function POST(request: Request) {
             );
         }
 
+        // Get synced entries whose google_calendar_id differs from the user's
+        // current target calendar. These need reprocessing so the existing
+        // mismatch detection in syncEventForUser can migrate them.
+        const targetCalendarId = connection.targetCalendarId || "primary";
+        let mismatchQuery = serviceClient
+            .from("event_calendar_entries")
+            .select("event_id, organization_id")
+            .eq("user_id", user.id)
+            .eq("sync_status", "synced")
+            .neq("google_calendar_id", targetCalendarId);
+
+        if (organizationId) {
+            mismatchQuery = mismatchQuery.eq("organization_id", organizationId);
+        }
+
+        const { data: mismatchedEntries } = await mismatchQuery;
+
         // Also get events that haven't been synced yet for this user
         // (events created after user connected their calendar)
         const { data: userOrgs } = await serviceClient
@@ -85,8 +102,15 @@ export async function POST(request: Request) {
         let failedCount = 0;
         const errors: string[] = [];
 
-        // Sync pending entries
-        for (const entry of pendingEntries || []) {
+        // Merge pending/failed entries with mismatched entries for processing.
+        // No dedup needed: pending/failed and synced are mutually exclusive statuses.
+        const allEntriesToSync = [
+            ...(pendingEntries || []),
+            ...(mismatchedEntries || []),
+        ];
+
+        // Sync pending and mismatched entries
+        for (const entry of allEntriesToSync) {
             try {
                 await syncEventToUsers(serviceClient, entry.organization_id, entry.event_id, "update");
                 syncedCount++;

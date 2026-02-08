@@ -20,6 +20,7 @@ export type {
   AllowStatus,
   VerificationResponse,
 } from "./useSchedulePreview";
+export { useGoogleCalendarSync } from "./useGoogleCalendarSync";
 
 
 

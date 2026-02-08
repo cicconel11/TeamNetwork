@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, Input, Select } from "@/components/ui";
+import { CalendarConnectionCard } from "@/components/settings/CalendarConnectionCard";
+import { SyncPreferencesForm } from "@/components/settings/SyncPreferencesForm";
+import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { AcademicSchedule } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -91,6 +94,10 @@ export function MyCalendarTab({
   navConfig,
   pageLabel,
 }: MyCalendarTabProps) {
+  // Google Calendar Sync hook
+  const gcal = useGoogleCalendarSync({ orgId, orgSlug });
+
+  // Personal calendar feed state
   const [feedUrl, setFeedUrl] = useState("");
   const [personalFeeds, setPersonalFeeds] = useState<FeedSummary[]>([]);
   const [loadingFeeds, setLoadingFeeds] = useState(true);
@@ -99,6 +106,7 @@ export function MyCalendarTab({
   const [disconnectingFeedId, setDisconnectingFeedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState<string | null>(null);
 
   const refreshFeeds = useCallback(async () => {
     setLoadingFeeds(true);
@@ -223,10 +231,104 @@ export function MyCalendarTab({
     }
   };
 
+  const handleTargetCalendarChange = async (calendarId: string) => {
+    setTargetError(null);
+    try {
+      await gcal.setTargetCalendar(calendarId);
+    } catch (err) {
+      setTargetError(err instanceof Error ? err.message : "Failed to update target calendar");
+    }
+  };
+
+  // Build calendar dropdown options
+  const calendarOptions = gcal.calendarsLoading
+    ? [{ value: gcal.targetCalendarId, label: "Loading calendars..." }]
+    : gcal.calendars.length > 0
+    ? gcal.calendars.map((cal) => ({
+        value: cal.id,
+        label: cal.primary ? `${cal.summary} (Primary)` : cal.summary,
+      }))
+    : [{ value: "primary", label: "Primary Calendar" }];
+
   return (
     <div className="space-y-6">
+      {/* Section 1: Google Calendar Sync */}
       <section>
-        <h2 className="text-lg font-semibold text-foreground mb-4">Sync Personal Calendar</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Google Calendar Sync</h2>
+
+        {/* OAuth callback banners */}
+        {gcal.oauthStatus === "connected" && (
+          <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+            Google Calendar connected successfully! Your events will now sync automatically.
+          </div>
+        )}
+        {gcal.oauthError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+            {gcal.oauthError === "access_denied"
+              ? "You denied access to your Google Calendar. Please try again and allow access."
+              : gcal.oauthError === "invalid_code"
+              ? "The authorization code has expired. Please try connecting again."
+              : gcal.oauthError === "oauth_init_failed"
+              ? "Google Calendar integration is not configured. Please contact the administrator."
+              : gcal.oauthErrorMessage || "Failed to connect Google Calendar. Please try again."}
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <CalendarConnectionCard
+            connection={gcal.connection}
+            isLoading={gcal.connectionLoading}
+            onConnect={gcal.connect}
+            onDisconnect={gcal.disconnect}
+            onSync={gcal.isConnected ? gcal.syncNow : undefined}
+          />
+
+          {gcal.isConnected && (
+            <>
+              {/* Reconnect prompt when scope is insufficient */}
+              {gcal.reconnectRequired && (
+                <Card className="p-4 space-y-3">
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Reconnect your Google account to enable calendar selection. Your sync will continue using your primary calendar.
+                  </p>
+                  <Button variant="secondary" size="sm" onClick={gcal.reconnect}>
+                    Reconnect Google Account
+                  </Button>
+                </Card>
+              )}
+
+              {/* Calendar destination picker */}
+              {!gcal.reconnectRequired && (
+                <Card className="p-4 space-y-3">
+                  <Select
+                    label="Sync events to"
+                    options={calendarOptions}
+                    value={gcal.targetCalendarId}
+                    onChange={(e) => handleTargetCalendarChange(e.target.value)}
+                    disabled={gcal.calendarsLoading}
+                  />
+                  {targetError && (
+                    <p className="text-sm text-error">{targetError}</p>
+                  )}
+                </Card>
+              )}
+
+              {/* Sync preferences */}
+              <SyncPreferencesForm
+                organizationId={orgId}
+                preferences={gcal.preferences}
+                isLoading={gcal.preferencesLoading}
+                disabled={!gcal.isConnected}
+                onPreferenceChange={gcal.updatePreferences}
+              />
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Section 2: Personal Calendar Feeds */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Personal Calendar Feeds</h2>
         <Card className="p-4 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
@@ -249,63 +351,63 @@ export function MyCalendarTab({
           {notice && <p className="text-sm text-foreground">{notice}</p>}
           {error && <p className="text-sm text-error">{error}</p>}
         </Card>
-      </section>
 
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-4">Connected Calendars</h2>
-        <Card className="p-4">
-          {loadingFeeds ? (
-            <p className="text-sm text-muted-foreground">Loading schedules...</p>
-          ) : personalFeeds.length === 0 ? (
-            <EmptyState
-              title="No connected schedules"
-              description="Connect a calendar feed to keep your availability in sync."
-            />
-          ) : (
-            <div className="space-y-3">
-              {personalFeeds.map((feed) => (
-                <div
-                  key={feed.id}
-                  className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">ICS Feed</p>
-                      <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
+        <div className="mt-4">
+          <Card className="p-4">
+            {loadingFeeds ? (
+              <p className="text-sm text-muted-foreground">Loading schedules...</p>
+            ) : personalFeeds.length === 0 ? (
+              <EmptyState
+                title="No connected schedules"
+                description="Connect a calendar feed to keep your availability in sync."
+              />
+            ) : (
+              <div className="space-y-3">
+                {personalFeeds.map((feed) => (
+                  <div
+                    key={feed.id}
+                    className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">ICS Feed</p>
+                        <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {feed.last_synced_at ? formatDateTime(feed.last_synced_at) : "Never"}
+                      </p>
+                      {feed.status === "error" && feed.last_error && (
+                        <p className="text-xs text-error">{feed.last_error}</p>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Last sync: {feed.last_synced_at ? formatDateTime(feed.last_synced_at) : "Never"}
-                    </p>
-                    {feed.status === "error" && feed.last_error && (
-                      <p className="text-xs text-error">{feed.last_error}</p>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        isLoading={syncingFeedId === feed.id}
+                        onClick={() => handleSyncNow(feed.id)}
+                      >
+                        Sync now
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        isLoading={disconnectingFeedId === feed.id}
+                        onClick={() => handleDisconnect(feed.id)}
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={syncingFeedId === feed.id}
-                      onClick={() => handleSyncNow(feed.id)}
-                    >
-                      Sync now
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isLoading={disconnectingFeedId === feed.id}
-                      onClick={() => handleDisconnect(feed.id)}
-                    >
-                      Disconnect
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </section>
 
+      {/* Section 3: My Schedules */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">My {pageLabel}</h2>
         {mySchedules && mySchedules.length > 0 ? (

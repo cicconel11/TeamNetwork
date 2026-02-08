@@ -59,9 +59,10 @@ export interface OAuthError {
     message: string;
 }
 
-// Required scopes - only calendar.events as per requirement 7.4
+// Required scopes for Google Calendar integration
 const GOOGLE_CALENDAR_SCOPES = [
     "https://www.googleapis.com/auth/calendar.events",
+    "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/userinfo.email",
 ];
 
@@ -324,6 +325,7 @@ export async function getCalendarConnection(
     refreshToken: string;
     expiresAt: Date;
     status: "connected" | "disconnected" | "error";
+    targetCalendarId: string;
     lastSyncAt: Date | null;
 } | null> {
     const { data, error } = await supabase
@@ -343,6 +345,7 @@ export async function getCalendarConnection(
         refreshToken: decryptToken(data.refresh_token_encrypted),
         expiresAt: new Date(data.token_expires_at),
         status: data.status,
+        targetCalendarId: data.target_calendar_id,
         lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
     };
 }

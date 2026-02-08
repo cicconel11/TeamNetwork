@@ -1207,6 +1207,7 @@ export type Database = {
           refresh_token_encrypted: string
           token_expires_at: string
           status: "connected" | "disconnected" | "error"
+          target_calendar_id: string
           last_sync_at: string | null
           created_at: string | null
           updated_at: string | null
@@ -1219,6 +1220,7 @@ export type Database = {
           refresh_token_encrypted: string
           token_expires_at: string
           status?: "connected" | "disconnected" | "error"
+          target_calendar_id?: string
           last_sync_at?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1231,6 +1233,7 @@ export type Database = {
           refresh_token_encrypted?: string
           token_expires_at?: string
           status?: "connected" | "disconnected" | "error"
+          target_calendar_id?: string
           last_sync_at?: string | null
           created_at?: string | null
           updated_at?: string | null
@@ -1252,6 +1255,7 @@ export type Database = {
           user_id: string
           organization_id: string
           google_event_id: string
+          google_calendar_id: string
           sync_status: "pending" | "synced" | "failed" | "deleted"
           last_error: string | null
           created_at: string | null
@@ -1263,6 +1267,7 @@ export type Database = {
           user_id: string
           organization_id: string
           google_event_id: string
+          google_calendar_id?: string
           sync_status?: "pending" | "synced" | "failed" | "deleted"
           last_error?: string | null
           created_at?: string | null
@@ -1274,6 +1279,7 @@ export type Database = {
           user_id?: string
           organization_id?: string
           google_event_id?: string
+          google_calendar_id?: string
           sync_status?: "pending" | "synced" | "failed" | "deleted"
           last_error?: string | null
           created_at?: string | null

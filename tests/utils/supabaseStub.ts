@@ -24,7 +24,8 @@ type TableName =
   | "chat_groups"
   | "chat_group_members"
   | "chat_messages"
-  | "user_calendar_connections";
+  | "user_calendar_connections"
+  | "event_calendar_entries";
 
 type Row = Record<string, unknown>;
 
@@ -63,6 +64,7 @@ const uniqueKeys: Record<TableName, string[]> = {
   chat_group_members: [],
   chat_messages: [],
   user_calendar_connections: ["user_id"],
+  event_calendar_entries: [],
 };
 
 function nowIso() {
@@ -95,6 +97,7 @@ export function createSupabaseStub() {
     chat_group_members: [],
     chat_messages: [],
     user_calendar_connections: [],
+    event_calendar_entries: [],
   };
 
   // RPC handler registry
