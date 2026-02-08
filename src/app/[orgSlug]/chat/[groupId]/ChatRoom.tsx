@@ -267,6 +267,14 @@ export function ChatRoom({
               return;
             }
           }
+          // Handle soft-delete: member removal is an UPDATE setting removed_at
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as { user_id?: string; removed_at?: string | null };
+            if (updated.user_id === currentUserId && updated.removed_at) {
+              router.push(`/${orgSlug}/chat`);
+              return;
+            }
+          }
           refreshMembers();
         }
       )

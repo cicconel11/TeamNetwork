@@ -90,12 +90,11 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
     };
   }
 
-  // Fetch subscription status for the organization
-  const { data: subscriptionData } = await supabase
-    .from("organization_subscriptions")
-    .select("status, grace_period_ends_at, current_period_end")
-    .eq("organization_id", org.id)
-    .maybeSingle();
+  // Fetch subscription status via security-definer RPC (exposes only safe columns,
+  // works for all authenticated org members — not just admins)
+  const { data: subscriptionRows } = await supabase
+    .rpc("get_subscription_status", { p_org_id: org.id });
+  const subscriptionData = subscriptionRows?.[0] ?? null;
 
   const subscription: SubscriptionStatus | null = subscriptionData
     ? {
