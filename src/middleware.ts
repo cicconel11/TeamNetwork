@@ -24,6 +24,7 @@ export async function middleware(request: NextRequest) {
   // Bypass routes that should never be blocked by auth middleware
   const publicApiRoutes = [
     "/api/stripe/webhook",
+    "/api/stripe/webhook-connect",
     "/api/auth/validate-age", // Age gate validation during signup
     "/api/telemetry/error", // Error tracking from unauthenticated contexts
   ];

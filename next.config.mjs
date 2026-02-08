@@ -67,6 +67,11 @@ function validateBuildEnv() {
     });
   }
 
+  // Warn if Connect webhook secret is missing (donation events won't be processed)
+  if (!process.env.STRIPE_WEBHOOK_SECRET_CONNECT && !skipStripe) {
+    console.warn("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation events will not be processed");
+  }
+
   // Optional: warn if Google Calendar env vars are missing (feature will be disabled)
   const missingGoogleVars = googleCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingGoogleVars.length > 0 && missingGoogleVars.length < googleCalendarEnv.length) {
