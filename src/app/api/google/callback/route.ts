@@ -153,8 +153,20 @@ export async function GET(request: Request) {
             errorUrl.searchParams.set("error", "no_refresh_token");
             errorUrl.searchParams.set("error_message", "Could not get a refresh token. Please revoke access in your Google account settings and try again.");
         } else {
+            // Only pass through known user-friendly error messages;
+            // server config errors (env vars, encryption key) get a generic fallback.
+            const safePatterns = [
+                "No access token received",
+                "No refresh token received",
+                "Could not retrieve user email",
+                "Failed to refresh access token",
+            ];
+            const isSafe = safePatterns.some(p => errorMessage.includes(p));
             errorUrl.searchParams.set("error", "callback_failed");
-            errorUrl.searchParams.set("error_message", errorMessage);
+            errorUrl.searchParams.set(
+                "error_message",
+                isSafe ? errorMessage : "An unexpected error occurred while connecting your Google Calendar. Please try again."
+            );
         }
 
         return NextResponse.redirect(errorUrl);

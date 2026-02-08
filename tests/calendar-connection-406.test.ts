@@ -49,9 +49,8 @@ describe("calendar-connection 406 bug", () => {
     assert.equal(result, null, "should return null for missing connection");
   });
 
-  it("callback route passes through actual error message in catch-all branch", () => {
+  it("callback route sanitizes server config errors via safePatterns whitelist", () => {
     // Read the actual route source to verify the fix is in place.
-    // The catch-all branch (else) must use `errorMessage` not a hardcoded generic string.
     const testDir = dirname(fileURLToPath(import.meta.url));
     const routeSrc = readFileSync(
       join(testDir, "..", "src", "app", "api", "google", "callback", "route.ts"),
@@ -62,18 +61,41 @@ describe("calendar-connection 406 bug", () => {
     const catchBlock = routeSrc.slice(routeSrc.indexOf("} catch (error)"));
     assert.ok(catchBlock, "catch block should exist in route");
 
-    // The else branch should set error_message to errorMessage (the variable),
-    // NOT a hardcoded string like "An error occurred while connecting..."
     const elseBranch = catchBlock.slice(catchBlock.lastIndexOf("} else {"));
     assert.ok(elseBranch, "else branch should exist");
 
+    // The else branch must contain a safePatterns whitelist
     assert.ok(
-      elseBranch.includes('errorMessage)') || elseBranch.includes('errorMessage );'),
-      "catch-all branch should pass through errorMessage variable, not a hardcoded generic string"
+      elseBranch.includes("safePatterns"),
+      "catch-all branch should use a safePatterns whitelist"
+    );
+
+    // Known user-friendly messages should be in the whitelist
+    assert.ok(
+      elseBranch.includes("No access token received"),
+      "safePatterns should include 'No access token received'"
     );
     assert.ok(
-      !elseBranch.includes("An error occurred while connecting"),
-      "catch-all branch should NOT contain the generic error message"
+      elseBranch.includes("No refresh token received"),
+      "safePatterns should include 'No refresh token received'"
+    );
+
+    // Server config errors (e.g. ENCRYPTION_KEY) must NOT pass through
+    assert.ok(
+      !elseBranch.includes("ENCRYPTION_KEY"),
+      "catch-all branch should NOT leak server config error patterns"
+    );
+
+    // A generic fallback message should be used for unrecognized errors
+    assert.ok(
+      elseBranch.includes("An unexpected error occurred"),
+      "catch-all branch should have a generic fallback for unrecognized errors"
+    );
+
+    // The branch should use isSafe conditional to decide which message to show
+    assert.ok(
+      elseBranch.includes("isSafe"),
+      "catch-all branch should use isSafe conditional"
     );
   });
 
