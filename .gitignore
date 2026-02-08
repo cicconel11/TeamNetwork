@@ -61,3 +61,4 @@ opencode-auth/
 *.mov
 *.mp4
 .env*.local
+.worktrees

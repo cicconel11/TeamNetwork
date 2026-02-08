@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Select } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import type { OrgRole } from "@/lib/auth/role-utils";
 
 interface NavItemRowProps {

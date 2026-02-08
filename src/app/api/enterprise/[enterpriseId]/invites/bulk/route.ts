@@ -3,16 +3,23 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
+import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const inviteItemSchema = z.object({
+  organizationId: z.string().uuid("organizationId must be a valid UUID"),
+  role: z.enum(["admin", "active_member", "alumni"], {
+    message: "role must be one of: admin, active_member, alumni",
+  }),
+});
+
 const bulkInvitesSchema = z.object({
   invites: z
-    .array(z.unknown())
+    .array(inviteItemSchema)
     .min(1, "At least one invite is required")
     .max(100, "Maximum 100 invites per batch"),
 });
@@ -88,24 +95,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Process invites one by one using the RPC function
   for (const invite of invites) {
-    const inviteObject = typeof invite === "object" && invite !== null
-      ? (invite as Record<string, unknown>)
-      : null;
-    const organizationId = inviteObject?.organizationId;
-    const role = inviteObject?.role;
-
-    // Validate
-    if (typeof organizationId !== "string" || !baseSchemas.uuid.safeParse(organizationId).success) {
-      failed++;
-      continue;
-    }
-
-    if (!validOrgIds.has(organizationId)) {
-      failed++;
-      continue;
-    }
-
-    if (typeof role !== "string" || !["admin", "active_member", "alumni"].includes(role)) {
+    if (!validOrgIds.has(invite.organizationId)) {
       failed++;
       continue;
     }
@@ -113,8 +103,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     try {
       const { error: rpcError } = await supabase.rpc("create_enterprise_invite", {
         p_enterprise_id: resolvedEnterpriseId,
-        p_organization_id: organizationId,
-        p_role: role,
+        p_organization_id: invite.organizationId,
+        p_role: invite.role,
         p_uses: null,
         p_expires_at: null,
       });

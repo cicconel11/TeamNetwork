@@ -1,9 +1,26 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+
+const navConfigItemSchema = z.object({
+  hidden: z.boolean().optional(),
+  hiddenForRoles: z.array(z.enum(["admin", "active_member", "alumni"])).max(10).optional(),
+  label: z.string().max(100).optional(),
+});
+
+const navigationPatchSchema = z
+  .object({
+    navConfig: z.record(z.string().max(100), navConfigItemSchema).optional(),
+    lockedItems: z.array(z.string().max(100)).max(50).optional(),
+  })
+  .refine((data) => data.navConfig !== undefined || data.lockedItems !== undefined, {
+    message: "No update data provided",
+  });
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -122,12 +139,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  const body = await req.json();
-  const { navConfig, lockedItems } = body;
-
-  if (navConfig === undefined && lockedItems === undefined) {
-    return respond({ error: "No update data provided" }, 400);
+  let body;
+  try {
+    body = await validateJson(req, navigationPatchSchema);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return respond({ error: error.message, details: error.details }, 400);
+    }
+    return respond({ error: "Invalid request" }, 400);
   }
+
+  const { navConfig, lockedItems } = body;
 
   // Build update object
   const update: Record<string, unknown> = {};

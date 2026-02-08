@@ -1,9 +1,24 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { sanitizeIlikeInput } from "@/lib/security/validation";
+
+const alumniSearchSchema = z.object({
+  org: z.string().uuid().optional(),
+  year: z.coerce.number().int().min(1900).max(2100).optional(),
+  industry: z.string().max(200).optional(),
+  company: z.string().max(200).optional(),
+  city: z.string().max(200).optional(),
+  position: z.string().max(200).optional(),
+  hasEmail: z.enum(["true", "false"]).optional(),
+  hasPhone: z.enum(["true", "false"]).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,17 +83,20 @@ export async function GET(req: Request, { params }: RouteParams) {
   const orgIds = orgs.map((o) => o.id);
   const orgMap = new Map(orgs.map((o) => [o.id, { name: o.name, slug: o.slug }]));
 
-  // Parse filters
-  const orgFilter = searchParams.get("org");
-  const yearFilter = searchParams.get("year");
-  const industryFilter = searchParams.get("industry");
-  const companyFilter = searchParams.get("company");
-  const cityFilter = searchParams.get("city");
-  const positionFilter = searchParams.get("position");
-  const hasEmailFilter = searchParams.get("hasEmail");
-  const hasPhoneFilter = searchParams.get("hasPhone");
-  const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 500);
-  const offset = parseInt(searchParams.get("offset") || "0");
+  // Parse and validate filters
+  const rawParams = Object.fromEntries(
+    [...searchParams.entries()].filter(([, v]) => v !== "")
+  );
+  const parsed = alumniSearchSchema.safeParse(rawParams);
+
+  if (!parsed.success) {
+    const details = parsed.error.issues.map(
+      (issue) => `${issue.path.join(".") || "param"}: ${issue.message}`
+    );
+    return respond({ error: "Invalid search parameters", details }, 400);
+  }
+
+  const filters = parsed.data;
 
   // Build query
   let query = serviceSupabase
@@ -87,36 +105,36 @@ export async function GET(req: Request, { params }: RouteParams) {
     .is("deleted_at", null);
 
   // Filter by organization(s)
-  if (orgFilter && orgIds.includes(orgFilter)) {
-    query = query.eq("organization_id", orgFilter);
+  if (filters.org && orgIds.includes(filters.org)) {
+    query = query.eq("organization_id", filters.org);
   } else {
     query = query.in("organization_id", orgIds);
   }
 
-  // Apply filters
-  if (yearFilter) {
-    query = query.eq("graduation_year", parseInt(yearFilter));
+  // Apply filters with sanitized ilike values
+  if (filters.year !== undefined) {
+    query = query.eq("graduation_year", filters.year);
   }
-  if (industryFilter) {
-    query = query.ilike("industry", industryFilter);
+  if (filters.industry) {
+    query = query.ilike("industry", `%${sanitizeIlikeInput(filters.industry)}%`);
   }
-  if (companyFilter) {
-    query = query.ilike("current_company", companyFilter);
+  if (filters.company) {
+    query = query.ilike("current_company", `%${sanitizeIlikeInput(filters.company)}%`);
   }
-  if (cityFilter) {
-    query = query.ilike("current_city", cityFilter);
+  if (filters.city) {
+    query = query.ilike("current_city", `%${sanitizeIlikeInput(filters.city)}%`);
   }
-  if (positionFilter) {
-    query = query.ilike("position_title", positionFilter);
+  if (filters.position) {
+    query = query.ilike("position_title", `%${sanitizeIlikeInput(filters.position)}%`);
   }
-  if (hasEmailFilter === "true") {
+  if (filters.hasEmail === "true") {
     query = query.not("email", "is", null);
-  } else if (hasEmailFilter === "false") {
+  } else if (filters.hasEmail === "false") {
     query = query.is("email", null);
   }
-  if (hasPhoneFilter === "true") {
+  if (filters.hasPhone === "true") {
     query = query.not("phone_number", "is", null);
-  } else if (hasPhoneFilter === "false") {
+  } else if (filters.hasPhone === "false") {
     query = query.is("phone_number", null);
   }
 
@@ -124,7 +142,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   query = query
     .order("graduation_year", { ascending: false, nullsFirst: false })
     .order("last_name", { ascending: true })
-    .range(offset, offset + limit - 1);
+    .range(filters.offset, filters.offset + filters.limit - 1);
 
   const { data: alumni, count, error } = await query;
 
@@ -145,7 +163,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   return respond({
     alumni: alumniWithOrg,
     total: count ?? 0,
-    limit,
-    offset,
+    limit: filters.limit,
+    offset: filters.offset,
   });
 }

@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+
+const invitePatchSchema = z.object({
+  revoked: z.literal(true, { message: "revoked must be true" }),
+});
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,10 +73,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return respond({ error: "Invite not found" }, 404);
   }
 
-  const body = await req.json();
-  const { revoked } = body;
+  let body;
+  try {
+    body = await validateJson(req, invitePatchSchema);
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return respond({ error: error.message, details: error.details }, 400);
+    }
+    return respond({ error: "Invalid request" }, 400);
+  }
 
-  if (revoked === true) {
+  if (body.revoked === true) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error: updateError } = await (serviceSupabase as any)
       .from("enterprise_invites")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Badge, Avatar, EmptyState, Button } from "@/components/ui";
+import { Card, Badge, Avatar, EmptyState } from "@/components/ui";
 
 interface Alumni {
   id: string;

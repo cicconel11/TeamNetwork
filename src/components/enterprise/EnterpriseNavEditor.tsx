@@ -7,7 +7,7 @@ import { NavPreviewPanel } from "./NavPreviewPanel";
 import { OrgSyncStatus } from "./OrgSyncStatus";
 import { ORG_NAV_ITEMS } from "@/lib/navigation/nav-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
-import type { NavConfig, NavConfigEntry } from "@/lib/navigation/nav-items";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface Organization {
   id: string;
@@ -26,7 +26,6 @@ interface EnterpriseNavEditorProps {
 }
 
 export function EnterpriseNavEditor({
-  enterpriseId,
   initialNavConfig,
   initialLockedItems,
   organizations,

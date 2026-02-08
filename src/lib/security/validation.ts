@@ -83,6 +83,14 @@ export async function validateJson<T>(
   return parsed.data;
 }
 
+/**
+ * Escape special SQL pattern characters for safe use in ilike filters.
+ * Prevents user input from being interpreted as wildcards.
+ */
+export function sanitizeIlikeInput(input: string): string {
+  return input.replace(/[%_\\]/g, "\\$&");
+}
+
 export function validationErrorResponse(error: ValidationError) {
   return NextResponse.json(
     {
