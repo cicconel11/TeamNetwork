@@ -178,12 +178,14 @@ export async function GET(request: Request) {
                 errorUrl.searchParams.set("error", "callback_failed");
                 errorUrl.searchParams.set("error_message", errorMessage);
             } else if (isConfig) {
+                console.error("[google-callback] Server config error:", errorMessage);
                 errorUrl.searchParams.set("error", "server_config_error");
                 errorUrl.searchParams.set(
                     "error_message",
                     "There is a server configuration issue. Please contact support."
                 );
             } else {
+                console.error("[google-callback] Unclassified error:", errorMessage);
                 errorUrl.searchParams.set("error", "callback_failed");
                 errorUrl.searchParams.set(
                     "error_message",
