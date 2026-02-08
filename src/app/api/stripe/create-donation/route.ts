@@ -132,6 +132,9 @@ export async function POST(req: Request) {
   }
 
   const connectStatus = await getConnectAccountStatus(org.stripe_connect_account_id);
+  if (connectStatus.lookupFailed) {
+    return respond({ error: "Unable to verify Stripe connection. Please try again." }, 503);
+  }
   if (!connectStatus.isReady) {
     return respond({ error: "Stripe onboarding is not completed for this organization" }, 400);
   }

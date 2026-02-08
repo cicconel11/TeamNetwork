@@ -49,6 +49,10 @@ interface DonationContext {
     stripe_connect_account_id?: string | null;
     name?: string;
   };
+  connectStatus?: {
+    isReady: boolean;
+    lookupFailed?: boolean;
+  };
 }
 
 // Constants
@@ -80,6 +84,16 @@ function simulateCreateDonation(
   // Validate org has Stripe Connect account
   if (!ctx.organization.stripe_connect_account_id) {
     return { status: 400, error: "Organization has not set up donations" };
+  }
+
+  // If Stripe account lookup fails, surface temporary failure
+  if (ctx.connectStatus?.lookupFailed) {
+    return { status: 503, error: "Unable to verify Stripe connection. Please try again." };
+  }
+
+  // Stripe onboarding must be complete
+  if (ctx.connectStatus && !ctx.connectStatus.isReady) {
+    return { status: 400, error: "Stripe onboarding is not completed for this organization" };
   }
 
   // Amount validation
@@ -247,6 +261,27 @@ test("create-donation fails if org has no Stripe Connect account", () => {
 
   assert.strictEqual(result.status, 400);
   assert.strictEqual(result.error, "Organization has not set up donations");
+});
+
+test("create-donation returns 503 when Stripe connect lookup fails", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-lookup-failed",
+    },
+    {
+      supabase,
+      organization: { id: "org-1", stripe_connect_account_id: "acct_123" },
+      connectStatus: { isReady: false, lookupFailed: true },
+    }
+  );
+
+  assert.strictEqual(result.status, 503);
+  assert.strictEqual(result.error, "Unable to verify Stripe connection. Please try again.");
 });
 
 test("create-donation rejects amount below minimum ($1)", () => {

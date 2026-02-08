@@ -6,6 +6,7 @@ type TableName =
   | "organizations"
   | "user_organization_roles"
   | "organization_subscriptions"
+  | "organization_donations"
   | "calendar_feeds"
   | "calendar_events"
   | "schedule_allowed_domains"
@@ -42,6 +43,7 @@ const uniqueKeys: Record<TableName, string[]> = {
   organizations: ["slug"],
   user_organization_roles: [],
   organization_subscriptions: ["organization_id"],
+  organization_donations: ["stripe_payment_intent_id", "stripe_checkout_session_id"],
   calendar_feeds: [],
   calendar_events: [],
   schedule_allowed_domains: ["hostname"],
@@ -72,6 +74,7 @@ export function createSupabaseStub() {
     organizations: [],
     user_organization_roles: [],
     organization_subscriptions: [],
+    organization_donations: [],
     calendar_feeds: [],
     calendar_events: [],
     schedule_allowed_domains: [],

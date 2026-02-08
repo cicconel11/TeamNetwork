@@ -10,13 +10,17 @@ import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 /**
  * Tests for POST /api/stripe/webhook
  *
- * The webhook route should:
+ * The main webhook route handles:
  * 1. Verify Stripe signature
  * 2. Deduplicate events (prevent double processing)
- * 3. Handle checkout.session.completed for org provisioning
+ * 3. Handle checkout.session.completed for org provisioning (subscription mode only)
  * 4. Handle subscription lifecycle events
- * 5. Handle donation payment events
- * 6. Validate org ownership of Stripe resources (prevent cross-org hijacking)
+ * 5. Validate org ownership of Stripe resources (prevent cross-org hijacking)
+ * 6. Guard: Connect events (event.account present) are returned immediately
+ *
+ * Donation events (payment_intent.succeeded, payment_intent.payment_failed,
+ * and payment-mode checkout.session.completed) are handled by the Connect
+ * webhook at /api/stripe/webhook-connect. See webhook-connect.test.ts.
  */
 
 // Types
@@ -178,36 +182,19 @@ function simulateSubscriptionEvent(ctx: SubscriptionEventContext): WebhookResult
   }
 }
 
-interface DonationEventContext {
-  paymentIntent: {
-    id: string;
-    amount: number;
-    metadata?: {
-      organization_id?: string;
-      event_id?: string;
-      donor_name?: string;
-      donor_email?: string;
-    };
+interface ConnectEventGuardContext {
+  event: {
+    type: string;
+    account?: string;
   };
-  connectedAccountId?: string;
 }
 
-function simulateDonationEvent(ctx: DonationEventContext): WebhookResult {
-  const { paymentIntent, connectedAccountId } = ctx;
-  const metadata = paymentIntent.metadata || {};
-
-  // Donations should have organization_id
-  if (!metadata.organization_id) {
-    return { status: 400, error: "Missing organization_id in donation metadata" };
+function simulateConnectEventGuard(ctx: ConnectEventGuardContext): WebhookResult {
+  // Guard: Connect events should be handled by /api/stripe/webhook-connect
+  if (ctx.event.account) {
+    return { status: 500, error: "Connect events must be sent to /api/stripe/webhook-connect" };
   }
-
-  // For Connect donations, verify connected account
-  if (connectedAccountId) {
-    // Would verify org.stripe_connect_account_id === connectedAccountId
-    return { status: 200, message: "Connect donation recorded" };
-  }
-
-  return { status: 200, message: "Donation recorded" };
+  return { status: 200, message: "Event processed by main webhook" };
 }
 
 // Tests
@@ -369,50 +356,27 @@ test("subscription event rejects cross-org subscription hijacking", () => {
   assert.ok(result.error?.includes("does not belong"));
 });
 
-test("donation event requires organization_id in metadata", () => {
-  const result = simulateDonationEvent({
-    paymentIntent: {
-      id: "pi_test_123",
-      amount: 5000,
-      metadata: {}, // Missing organization_id
+test("main webhook skips events with event.account (Connect events)", () => {
+  const result = simulateConnectEventGuard({
+    event: {
+      type: "payment_intent.succeeded",
+      account: "acct_connect_123",
     },
   });
 
-  assert.strictEqual(result.status, 400);
-  assert.ok(result.error?.includes("Missing organization_id"));
+  assert.strictEqual(result.status, 500);
+  assert.ok(result.error?.includes("webhook-connect"));
 });
 
-test("donation event processes with valid metadata", () => {
-  const result = simulateDonationEvent({
-    paymentIntent: {
-      id: "pi_test_123",
-      amount: 5000,
-      metadata: {
-        organization_id: "org_123",
-        donor_name: "John Doe",
-        donor_email: "john@example.com",
-      },
+test("main webhook processes events without event.account", () => {
+  const result = simulateConnectEventGuard({
+    event: {
+      type: "customer.subscription.updated",
     },
   });
 
   assert.strictEqual(result.status, 200);
-  assert.ok(result.message?.includes("recorded"));
-});
-
-test("connect donation event records with connected account", () => {
-  const result = simulateDonationEvent({
-    paymentIntent: {
-      id: "pi_test_123",
-      amount: 5000,
-      metadata: {
-        organization_id: "org_123",
-      },
-    },
-    connectedAccountId: "acct_123",
-  });
-
-  assert.strictEqual(result.status, 200);
-  assert.ok(result.message?.includes("Connect donation"));
+  assert.ok(result.message?.includes("Event processed by main webhook"));
 });
 
 test("createMockWebhookEvent generates valid event structure", () => {

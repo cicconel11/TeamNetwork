@@ -86,7 +86,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
       {canEdit && !isConnected && (
         <div className="mb-6">
-          <ConnectSetup organizationId={org.id} isConnected={isConnected} />
+          <ConnectSetup organizationId={org.id} isConnected={isConnected} connectStatus={connectStatus} />
         </div>
       )}
 

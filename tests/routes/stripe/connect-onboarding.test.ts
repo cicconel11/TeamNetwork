@@ -44,6 +44,7 @@ interface ConnectOnboardingContext {
     stripe_connect_account_id?: string | null;
   };
   isReadOnly?: boolean;
+  saveConnectAccountFails?: boolean;
 }
 
 // Simulation function
@@ -81,6 +82,9 @@ function simulateConnectOnboarding(
   if (!accountId) {
     const account = createMockConnectAccount();
     accountId = account.id;
+    if (ctx.saveConnectAccountFails) {
+      return { status: 500, error: "Failed to save Stripe connection. Please try again." };
+    }
   }
 
   // Generate account link
@@ -216,6 +220,28 @@ test("connect-onboarding creates new account when none exists", () => {
   assert.strictEqual(result.status, 200);
   assert.ok(result.url?.includes("connect.stripe.com"));
   assert.ok(result.accountId?.startsWith("acct_"));
+});
+
+test("connect-onboarding returns 500 when saving account ID fails", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateConnectOnboarding(
+    {
+      auth: AuthPresets.orgAdmin("org-1"),
+      organizationId: "org-1",
+    },
+    {
+      supabase,
+      organization: {
+        id: "org-1",
+        slug: "test-org",
+        stripe_connect_account_id: null,
+      },
+      saveConnectAccountFails: true,
+    }
+  );
+
+  assert.strictEqual(result.status, 500);
+  assert.strictEqual(result.error, "Failed to save Stripe connection. Please try again.");
 });
 
 test("connect-onboarding uses existing account", () => {
