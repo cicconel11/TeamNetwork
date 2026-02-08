@@ -330,7 +330,7 @@ export async function getCalendarConnection(
         .from("user_calendar_connections")
         .select("*")
         .eq("user_id", userId)
-        .single();
+        .maybeSingle();
 
     if (error || !data) {
         return null;

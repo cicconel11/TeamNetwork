@@ -74,6 +74,7 @@ function NotificationSettingsContent() {
   // Check for OAuth callback status
   const oauthStatus = searchParams.get("calendar");
   const oauthError = searchParams.get("error");
+  const oauthErrorMessage = searchParams.get("error_message");
 
   // Load calendar connection status
   const loadCalendarConnection = useCallback(async () => {
@@ -90,7 +91,7 @@ function NotificationSettingsContent() {
         .from("user_calendar_connections")
         .select("google_email, status, last_sync_at")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (connection) {
         setCalendarConnection({
@@ -348,7 +349,7 @@ function NotificationSettingsContent() {
                 ? "You denied access to your Google Calendar. Please try again and allow access."
                 : oauthError === "invalid_code"
                 ? "The authorization code has expired. Please try connecting again."
-                : "Failed to connect Google Calendar. Please try again."}
+                : oauthErrorMessage || "Failed to connect Google Calendar. Please try again."}
             </Card>
           )}
         </>

@@ -128,6 +128,7 @@ function OrgSettingsContent() {
   // Check for OAuth callback status
   const oauthStatus = searchParams.get("calendar");
   const oauthError = searchParams.get("error");
+  const oauthErrorMessage = searchParams.get("error_message");
 
   useEffect(() => {
     if (!selectedLogo) return;
@@ -150,7 +151,7 @@ function OrgSettingsContent() {
         .from("user_calendar_connections")
         .select("google_email, status, last_sync_at")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (connection) {
         setCalendarConnection({
@@ -812,7 +813,7 @@ function OrgSettingsContent() {
                     ? "The authorization code has expired. Please try connecting again."
                     : oauthError === "oauth_init_failed"
                     ? "Google Calendar integration is not configured. Please contact the administrator."
-                    : "Failed to connect Google Calendar. Please try again."}
+                    : oauthErrorMessage || "Failed to connect Google Calendar. Please try again."}
                 </div>
               )}
 
