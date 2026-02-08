@@ -154,7 +154,7 @@ export async function GET(request: Request) {
             errorUrl.searchParams.set("error_message", "Could not get a refresh token. Please revoke access in your Google account settings and try again.");
         } else {
             errorUrl.searchParams.set("error", "callback_failed");
-            errorUrl.searchParams.set("error_message", "An error occurred while connecting your Google Calendar. Please try again.");
+            errorUrl.searchParams.set("error_message", errorMessage);
         }
 
         return NextResponse.redirect(errorUrl);
