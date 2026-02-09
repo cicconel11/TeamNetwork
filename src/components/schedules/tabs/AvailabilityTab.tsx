@@ -34,24 +34,34 @@ export function AvailabilityTab({
   allSchedules,
 }: AvailabilityTabProps) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <section>
-        <div className="flex items-center gap-2 mb-4">
-          <UserIcon className="w-5 h-5 text-org-secondary" />
-          <h2 className="text-lg font-display font-semibold text-foreground">My Availability</h2>
+        <div className="flex items-center gap-3 mb-4 border-l-4 border-org-secondary pl-4">
+          <div className="p-2 rounded-lg bg-org-secondary/10">
+            <UserIcon className="w-5 h-5 text-org-secondary" />
+          </div>
+          <div>
+            <h2 className="text-xl font-display font-semibold text-foreground">My Availability</h2>
+            <p className="text-xs text-muted-foreground">Your personal schedule overview</p>
+          </div>
         </div>
-        <Card className="p-6">
+        <Card className="p-6 overflow-hidden">
           <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" />
         </Card>
       </section>
 
       {isAdmin && (
         <section>
-          <div className="flex items-center gap-2 mb-4">
-            <UsersIcon className="w-5 h-5 text-org-secondary" />
-            <h2 className="text-lg font-display font-semibold text-foreground">Team Availability</h2>
+          <div className="flex items-center gap-3 mb-4 border-l-4 border-org-secondary pl-4">
+            <div className="p-2 rounded-lg bg-org-secondary/10">
+              <UsersIcon className="w-5 h-5 text-org-secondary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-display font-semibold text-foreground">Team Availability</h2>
+              <p className="text-xs text-muted-foreground">Aggregate view across all team members</p>
+            </div>
           </div>
-          <Card className="p-6">
+          <Card className="p-6 overflow-hidden">
             <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" />
           </Card>
         </section>
