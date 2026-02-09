@@ -60,6 +60,7 @@ const TABS: Tab[] = [
 type SchedulesTabsProps = {
   orgId: string;
   orgSlug: string;
+  orgName: string;
   isAdmin: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
@@ -70,6 +71,7 @@ type SchedulesTabsProps = {
 export function SchedulesTabs({
   orgId,
   orgSlug,
+  orgName,
   isAdmin,
   mySchedules,
   allSchedules,
@@ -125,6 +127,7 @@ export function SchedulesTabs({
           <MyCalendarTab
             orgId={orgId}
             orgSlug={orgSlug}
+            orgName={orgName}
             mySchedules={mySchedules}
             navConfig={navConfig}
             pageLabel={pageLabel}

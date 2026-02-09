@@ -68,6 +68,7 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
       <SchedulesTabs
         orgId={orgId}
         orgSlug={orgSlug}
+        orgName={orgCtx.organization.name}
         isAdmin={orgCtx.isAdmin}
         mySchedules={mySchedules || []}
         allSchedules={allSchedules}

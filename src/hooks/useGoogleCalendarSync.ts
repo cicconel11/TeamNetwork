@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import type { SyncPreferences } from "@/components/settings/SyncPreferencesForm";
+import type { SyncPreferences } from "@/components/settings/GoogleCalendarSyncPanel";
 
 interface CalendarConnection {
   googleEmail: string;

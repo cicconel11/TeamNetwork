@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Button, Card, EmptyState, Input, Select } from "@/components/ui";
-import { CalendarConnectionCard } from "@/components/settings/CalendarConnectionCard";
-import { SyncPreferencesForm } from "@/components/settings/SyncPreferencesForm";
+import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
+import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
 import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { AcademicSchedule } from "@/types/database";
@@ -24,6 +23,7 @@ type FeedSummary = {
 type MyCalendarTabProps = {
   orgId: string;
   orgSlug: string;
+  orgName: string;
   mySchedules: AcademicSchedule[];
   navConfig: NavConfig | null;
   pageLabel: string;
@@ -90,6 +90,7 @@ function isLikelyIcsUrl(feedUrl: string) {
 export function MyCalendarTab({
   orgId,
   orgSlug,
+  orgName,
   mySchedules,
   navConfig,
   pageLabel,
@@ -106,7 +107,6 @@ export function MyCalendarTab({
   const [disconnectingFeedId, setDisconnectingFeedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [targetError, setTargetError] = useState<string | null>(null);
 
   const refreshFeeds = useCallback(async () => {
     setLoadingFeeds(true);
@@ -231,25 +231,6 @@ export function MyCalendarTab({
     }
   };
 
-  const handleTargetCalendarChange = async (calendarId: string) => {
-    setTargetError(null);
-    try {
-      await gcal.setTargetCalendar(calendarId);
-    } catch (err) {
-      setTargetError(err instanceof Error ? err.message : "Failed to update target calendar");
-    }
-  };
-
-  // Build calendar dropdown options
-  const calendarOptions = gcal.calendarsLoading
-    ? [{ value: gcal.targetCalendarId, label: "Loading calendars..." }]
-    : gcal.calendars.length > 0
-    ? gcal.calendars.map((cal) => ({
-        value: cal.id,
-        label: cal.primary ? `${cal.summary} (Primary)` : cal.summary,
-      }))
-    : [{ value: "primary", label: "Primary Calendar" }];
-
   return (
     <div className="space-y-6">
       {/* Section 1: Google Calendar Sync */}
@@ -274,56 +255,25 @@ export function MyCalendarTab({
           </div>
         )}
 
-        <div className="space-y-4">
-          <CalendarConnectionCard
-            connection={gcal.connection}
-            isLoading={gcal.connectionLoading}
-            onConnect={gcal.connect}
-            onDisconnect={gcal.disconnect}
-            onSync={gcal.isConnected ? gcal.syncNow : undefined}
-          />
-
-          {gcal.isConnected && (
-            <>
-              {/* Reconnect prompt when scope is insufficient */}
-              {gcal.reconnectRequired && (
-                <Card className="p-4 space-y-3">
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    Reconnect your Google account to enable calendar selection. Your sync will continue using your primary calendar.
-                  </p>
-                  <Button variant="secondary" size="sm" onClick={gcal.reconnect}>
-                    Reconnect Google Account
-                  </Button>
-                </Card>
-              )}
-
-              {/* Calendar destination picker */}
-              {!gcal.reconnectRequired && (
-                <Card className="p-4 space-y-3">
-                  <Select
-                    label="Sync events to"
-                    options={calendarOptions}
-                    value={gcal.targetCalendarId}
-                    onChange={(e) => handleTargetCalendarChange(e.target.value)}
-                    disabled={gcal.calendarsLoading}
-                  />
-                  {targetError && (
-                    <p className="text-sm text-error">{targetError}</p>
-                  )}
-                </Card>
-              )}
-
-              {/* Sync preferences */}
-              <SyncPreferencesForm
-                organizationId={orgId}
-                preferences={gcal.preferences}
-                isLoading={gcal.preferencesLoading}
-                disabled={!gcal.isConnected}
-                onPreferenceChange={gcal.updatePreferences}
-              />
-            </>
-          )}
-        </div>
+        <GoogleCalendarSyncPanel
+          orgName={orgName}
+          organizationId={orgId}
+          connection={gcal.connection}
+          isConnected={gcal.isConnected}
+          connectionLoading={gcal.connectionLoading}
+          calendars={gcal.calendars}
+          calendarsLoading={gcal.calendarsLoading}
+          targetCalendarId={gcal.targetCalendarId}
+          preferences={gcal.preferences}
+          preferencesLoading={gcal.preferencesLoading}
+          reconnectRequired={gcal.reconnectRequired}
+          onConnect={gcal.connect}
+          onDisconnect={gcal.disconnect}
+          onSync={gcal.syncNow}
+          onReconnect={gcal.reconnect}
+          onTargetCalendarChange={gcal.setTargetCalendar}
+          onPreferenceChange={gcal.updatePreferences}
+        />
       </section>
 
       {/* Section 2: Personal Calendar Feeds */}
