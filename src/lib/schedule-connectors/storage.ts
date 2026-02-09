@@ -100,6 +100,7 @@ export async function syncScheduleEvents(
   let updated = 0;
 
   for (const event of deduped) {
+    if (event.status === "cancelled") continue;
     if (existingMap.has(event.external_uid)) {
       updated += 1;
     } else {

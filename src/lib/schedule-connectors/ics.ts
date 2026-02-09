@@ -98,12 +98,12 @@ export function expandIcsEvents(icsText: string, window: SyncWindow): Normalized
         occurrenceCount: occurrences.length,
       });
       for (const occurrence of occurrences) {
-        const occurrenceKey = occurrence.toISOString();
-        if (event.exdate && event.exdate[occurrenceKey]) {
+        if (event.exdate && isExcluded(occurrence, event.exdate)) {
           continue;
         }
 
-        const override = event.recurrences?.[occurrenceKey];
+        const dateKey = toDateKey(occurrence);
+        const override = event.recurrences?.[dateKey];
         const instanceEvent = override ?? event;
         const start = override?.start ?? occurrence;
         const end = resolveEventEnd(instanceEvent, event, start);
@@ -142,10 +142,12 @@ function buildPreviewWindow(): SyncWindow {
 }
 
 function resolveEventEnd(instanceEvent: IcsEvent, baseEvent: IcsEvent, start: Date) {
-  if (instanceEvent.end) {
+  // If we have an override with its own end, use it directly
+  if (instanceEvent !== baseEvent && instanceEvent.end) {
     return instanceEvent.end;
   }
 
+  // Compute duration from base event and apply to the occurrence start
   if (baseEvent.start && baseEvent.end) {
     const durationMs = baseEvent.end.getTime() - baseEvent.start.getTime();
     return new Date(start.getTime() + durationMs);
@@ -200,6 +202,19 @@ function addInstance(map: Map<string, NormalizedEvent>, instance: NormalizedEven
       start_at: instance.start_at,
     });
   }
+}
+
+/**
+ * Converts a Date to a "YYYY-MM-DD" key matching node-ical's internal format
+ * for exdate and recurrence lookups.
+ */
+function toDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function isExcluded(occurrence: Date, exdates: Record<string, Date>): boolean {
+  const key = toDateKey(occurrence);
+  return key in exdates;
 }
 
 function isWithinWindow(start: Date, window: SyncWindow) {

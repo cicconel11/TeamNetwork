@@ -347,10 +347,27 @@ export async function getEligibleUsersForEvent(
         event_type?: EventType | null;
     }
 ): Promise<string[]> {
-    // Get all users with connected calendars in this organization
+    // Get org members first, then filter connections by those user IDs
+    const { data: orgUsers, error: orgError } = await supabase
+        .from("user_organization_roles")
+        .select("user_id, role")
+        .eq("organization_id", organizationId);
+
+    if (orgError || !orgUsers) {
+        console.error("[calendar-sync] Failed to fetch organization users:", orgError);
+        return [];
+    }
+
+    const orgUserIds = orgUsers.map(u => u.user_id);
+    if (orgUserIds.length === 0) {
+        return [];
+    }
+
+    // Get connections only for org members
     const { data: connections, error: connError } = await supabase
         .from("user_calendar_connections")
-        .select("user_id, status");
+        .select("user_id, status")
+        .in("user_id", orgUserIds);
 
     if (connError || !connections) {
         console.error("[calendar-sync] Failed to fetch calendar connections:", connError);
@@ -363,18 +380,6 @@ export async function getEligibleUsersForEvent(
         .map(c => c.user_id);
 
     if (connectedUserIds.length === 0) {
-        return [];
-    }
-
-    // Get user roles from user_organization_roles
-    const { data: orgUsers, error: orgError } = await supabase
-        .from("user_organization_roles")
-        .select("user_id, role")
-        .eq("organization_id", organizationId)
-        .in("user_id", connectedUserIds);
-
-    if (orgError || !orgUsers) {
-        console.error("[calendar-sync] Failed to fetch organization users:", orgError);
         return [];
     }
 

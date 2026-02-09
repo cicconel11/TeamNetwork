@@ -139,6 +139,13 @@ export async function POST(request: Request) {
       .single();
 
     if (error || !source) {
+      // Unique constraint violation → duplicate source URL for this org
+      if (error?.code === "23505") {
+        return NextResponse.json(
+          { error: "Already connected", message: "This schedule URL is already connected." },
+          { status: 409, headers: rateLimit.headers }
+        );
+      }
       console.error("[schedule-connect] Failed to create source:", error);
       return NextResponse.json(
         { error: "Database error", message: "Failed to create schedule source." },
@@ -150,15 +157,24 @@ export async function POST(request: Request) {
     const window = buildSyncWindow();
     const result = await syncScheduleSource(serviceClient, { source, window });
 
+    // Re-fetch source to get post-sync state (last_synced_at, last_event_count, etc.)
+    const { data: freshSource } = await supabase
+      .from("schedule_sources")
+      .select("id, org_id, vendor_id, source_url, status, last_synced_at, last_error, title, last_event_count, last_imported")
+      .eq("id", source.id)
+      .single();
+
+    const s = freshSource ?? source;
+
     return NextResponse.json({
       source: {
-        id: source.id,
-        vendor_id: source.vendor_id,
-        maskedUrl: maskUrl(source.source_url),
-        status: source.status,
-        last_synced_at: source.last_synced_at,
-        last_error: source.last_error,
-        title: source.title,
+        id: s.id,
+        vendor_id: s.vendor_id,
+        maskedUrl: maskUrl(s.source_url),
+        status: s.status,
+        last_synced_at: s.last_synced_at,
+        last_error: s.last_error,
+        title: s.title,
       },
       sync: result,
     }, { headers: rateLimit.headers });
