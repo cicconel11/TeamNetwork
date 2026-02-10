@@ -5,7 +5,7 @@ import { isStrongPassword, PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
 // Reusable strong password schema for signup and reset flows
 const strongPasswordSchema = z
   .string()
-  .min(12, "Password must be at least 12 characters")
+  .min(6, "Password must be at least 6 characters")
   .refine(isStrongPassword, { message: PASSWORD_REQUIREMENTS });
 
 // Forgot password form
