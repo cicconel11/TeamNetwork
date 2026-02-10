@@ -6,6 +6,7 @@ import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { AppPageAnimations } from "@/components/app/AppPageAnimations";
 import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
 import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 type Membership = {
   organization: {
@@ -84,6 +85,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             Team<span className="text-emerald-500">Network</span>
           </h1>
           <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
+            <ThemeToggle />
             <form action="/auth/signout" method="POST">
               <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
             </form>

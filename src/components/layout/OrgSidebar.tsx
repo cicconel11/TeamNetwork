@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -138,6 +139,11 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
 
       {/* User Section */}
       <div className="p-4 border-t border-border space-y-1">
+        <div className="flex items-center justify-between px-3 py-2.5">
+          <span className="text-sm font-medium text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
+
         <Link
           href="/app"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
