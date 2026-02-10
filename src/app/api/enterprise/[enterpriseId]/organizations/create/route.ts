@@ -13,6 +13,7 @@ import {
 } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
 
 export const dynamic = "force-dynamic";
@@ -190,6 +191,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
       return respond({ error: "Failed to create organization subscription" }, 500);
     }
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "create_sub_org",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "organization",
+      targetId: newOrg.id as string,
+      metadata: { name, slug },
+      ...extractRequestContext(req),
+    });
 
     return respond({ organization: newOrg }, 201);
   } catch (error) {

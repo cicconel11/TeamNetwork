@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 // Field mappings for export
@@ -229,6 +230,17 @@ export async function GET(req: Request, { params }: RouteParams) {
     const now = new Date().toISOString().split("T")[0];
     const filename = `alumni-export-${now}.csv`;
 
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "export_alumni_data",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "alumni",
+      targetId: resolvedEnterpriseId,
+      metadata: { format: filters.format, recordCount: alumniWithOrg.length, fields: validFields },
+      ...extractRequestContext(req),
+    });
+
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
@@ -257,6 +269,17 @@ export async function GET(req: Request, { params }: RouteParams) {
     const tsvContent = tsvRows.join("\n");
     const now = new Date().toISOString().split("T")[0];
     const filename = `alumni-export-${now}.xls`;
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "export_alumni_data",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "alumni",
+      targetId: resolvedEnterpriseId,
+      metadata: { format: filters.format, recordCount: alumniWithOrg.length, fields: validFields },
+      ...extractRequestContext(req),
+    });
 
     return new NextResponse(tsvContent, {
       status: 200,

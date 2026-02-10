@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 const invitePatchSchema = z.object({
   revoked: z.literal(true, { message: "revoked must be true" }),
@@ -94,6 +95,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return respond({ error: updateError.message }, 400);
     }
 
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "revoke_invite",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "invite",
+      targetId: inviteId,
+      ...extractRequestContext(req),
+    });
+
     return respond({ success: true, message: "Invite revoked" });
   }
 
@@ -164,6 +175,16 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   if (deleteError) {
     return respond({ error: deleteError.message }, 400);
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "delete_invite",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "invite",
+    targetId: inviteId,
+    ...extractRequestContext(req),
+  });
 
   return respond({ success: true, message: "Invite deleted" });
 }

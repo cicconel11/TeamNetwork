@@ -5,6 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -108,6 +109,16 @@ export async function POST(req: Request, { params }: RouteParams) {
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: `${origin}/enterprise/${enterpriseSlug}/billing`,
+  });
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "open_billing_portal",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "billing",
+    targetId: resolvedEnterpriseId,
+    ...extractRequestContext(req),
   });
 
   return respond({ url: session.url });

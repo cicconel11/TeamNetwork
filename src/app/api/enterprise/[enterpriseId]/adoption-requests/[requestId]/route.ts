@@ -9,6 +9,7 @@ import {
 } from "@/lib/auth/enterprise-roles";
 import type { AdoptionRequestStatus } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -188,6 +189,16 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   if (deleteError) {
     return respond({ error: deleteError.message }, 400);
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "withdraw_adoption",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "adoption_request",
+    targetId: requestId,
+    ...extractRequestContext(req),
+  });
 
   return respond({ success: true });
 }

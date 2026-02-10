@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -92,6 +93,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       failed++;
     }
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "sync_navigation",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "enterprise",
+    targetId: resolvedEnterpriseId,
+    metadata: { synced, failed, total: orgs.length },
+    ...extractRequestContext(req),
+  });
 
   return respond({
     success: true,

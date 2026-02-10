@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -118,6 +119,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       failed++;
     }
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "bulk_invite",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "invite",
+    metadata: { success, failed, total: invites.length },
+    ...extractRequestContext(req),
+  });
 
   return respond({ success, failed, total: invites.length });
 }

@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 const createInviteSchema = z.object({
   organizationId: baseSchemas.uuid.optional(),
@@ -224,6 +225,17 @@ export async function POST(req: Request, { params }: RouteParams) {
   if (rpcError) {
     return respond({ error: rpcError.message }, 400);
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "create_invite",
+    enterpriseId: resolvedEnterpriseId,
+    organizationId: organizationId ?? undefined,
+    targetType: "invite",
+    metadata: { role, isEnterpriseWide: !organizationId },
+    ...extractRequestContext(req),
+  });
 
   return respond({
     ...invite,

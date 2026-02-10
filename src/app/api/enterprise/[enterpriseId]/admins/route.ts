@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/enterprise-roles";
 import type { EnterpriseRole } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -213,6 +214,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: roleError.message }, 400);
     }
 
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "invite_admin",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "user",
+      targetId: targetUser.id,
+      metadata: { role, targetEmail: email },
+      ...extractRequestContext(req),
+    });
+
     return respond({
       admin: {
         ...newRole,
@@ -312,6 +324,17 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     if (deleteError) {
       return respond({ error: deleteError.message }, 400);
     }
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "remove_admin",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "user",
+      targetId: targetUserId,
+      metadata: { removedRole: targetRole.role },
+      ...extractRequestContext(req),
+    });
 
     return respond({ success: true });
   } catch (error) {

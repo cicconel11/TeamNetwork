@@ -13,6 +13,7 @@ import {
 } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
 import { getBillableOrgCount, getEnterpriseSubOrgPricing } from "@/lib/enterprise/pricing";
 import type { PricingModel } from "@/types/enterprise";
@@ -367,6 +368,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     // Get updated quota info for response
     const updatedQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
     const pricing = getEnterpriseSubOrgPricing(updatedQuota.maxAllowed ?? updatedQuota.currentCount);
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "create_sub_org_with_upgrade",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "organization",
+      targetId: newOrg.id as string,
+      metadata: { name, slug, upgraded },
+      ...extractRequestContext(req),
+    });
 
     return respond({
       organization: newOrg,

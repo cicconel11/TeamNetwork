@@ -16,6 +16,7 @@ import {
 } from "@/lib/auth/enterprise-roles";
 import type { Enterprise, EnterpriseSubscription } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -188,6 +189,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     if (updateError) {
       return respond({ error: updateError.message }, 400);
     }
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "update_enterprise",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "enterprise",
+      targetId: resolvedEnterpriseId,
+      metadata: { updatedFields: Object.keys(updatePayload) },
+      ...extractRequestContext(req),
+    });
 
     return respond({ enterprise: updated });
   } catch (error) {

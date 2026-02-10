@@ -12,6 +12,7 @@ import {
 import { requireEnterpriseOwner } from "@/lib/auth/enterprise-roles";
 import { createAdoptionRequest } from "@/lib/enterprise/adoption";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,6 +88,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (!result.success) {
       return respond({ error: result.error }, 400);
     }
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "adopt_organization",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "organization",
+      targetId: org.id,
+      metadata: { organizationSlug, requestId: result.requestId },
+      ...extractRequestContext(req),
+    });
 
     return respond({ requestId: result.requestId }, 201);
   } catch (error) {

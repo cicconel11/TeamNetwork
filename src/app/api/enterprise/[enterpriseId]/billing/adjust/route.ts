@@ -7,6 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { getBillableOrgCount, getEnterpriseSubOrgPricing } from "@/lib/enterprise/pricing";
 import type { PricingModel } from "@/types/enterprise";
 import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
@@ -193,6 +194,17 @@ export async function POST(req: Request, { params }: RouteParams) {
 
       const pricing = getEnterpriseSubOrgPricing(newQuantity);
 
+      logEnterpriseAuditAction({
+        actorUserId: user.id,
+        actorEmail: user.email ?? "",
+        action: "adjust_billing",
+        enterpriseId: resolvedEnterpriseId,
+        targetType: "subscription",
+        targetId: resolvedEnterpriseId,
+        metadata: { newQuantity, previousQuantity: subscription.sub_org_quantity },
+        ...extractRequestContext(req),
+      });
+
       return respond({
         success: true,
         subscription: {
@@ -311,6 +323,17 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Calculate new pricing info
     const pricing = getEnterpriseSubOrgPricing(newQuantity);
+
+    logEnterpriseAuditAction({
+      actorUserId: user.id,
+      actorEmail: user.email ?? "",
+      action: "adjust_billing",
+      enterpriseId: resolvedEnterpriseId,
+      targetType: "subscription",
+      targetId: resolvedEnterpriseId,
+      metadata: { newQuantity, previousQuantity: subscription.sub_org_quantity },
+      ...extractRequestContext(req),
+    });
 
     return respond({
       success: true,

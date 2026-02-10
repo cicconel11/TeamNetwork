@@ -5,6 +5,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { baseSchemas } from "@/lib/security/validation";
 import { requireEnterpriseOwner } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -103,6 +104,17 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   if (deleteError) {
     return respond({ error: deleteError.message }, 400);
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "remove_admin",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "user",
+    targetId: userId,
+    metadata: { removedRole: targetRole.role },
+    ...extractRequestContext(req),
+  });
 
   return respond({ success: true });
 }

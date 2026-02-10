@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 const navConfigItemSchema = z.object({
   hidden: z.boolean().optional(),
@@ -169,6 +170,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   if (updateError) {
     return respond({ error: updateError.message }, 400);
   }
+
+  logEnterpriseAuditAction({
+    actorUserId: user.id,
+    actorEmail: user.email ?? "",
+    action: "update_navigation",
+    enterpriseId: resolvedEnterpriseId,
+    targetType: "enterprise",
+    targetId: resolvedEnterpriseId,
+    metadata: { hasNavConfig: navConfig !== undefined, hasLockedItems: lockedItems !== undefined },
+    ...extractRequestContext(req),
+  });
 
   return respond({ success: true, message: "Navigation settings updated" });
 }
