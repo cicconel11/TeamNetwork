@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { DonationForm, ConnectSetup } from "@/components/donations";
+import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
@@ -72,6 +73,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
 
   return (
     <div className="animate-fade-in">
+      <DonationResultTracker organizationId={org.id} />
       <PageHeader
         title={pageLabel}
         description="Community service and fundraising for your organization."

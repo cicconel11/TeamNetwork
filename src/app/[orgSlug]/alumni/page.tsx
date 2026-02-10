@@ -10,6 +10,8 @@ import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
+import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
 
 interface AlumniPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -134,6 +136,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   return (
     <div className="animate-fade-in">
+      <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
       <PageHeader
         title={pageLabel}
         description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? " (filtered)" : " in our network"}`}
@@ -153,6 +156,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
       {/* Dynamic Filters */}
       <AlumniFilters
+        orgId={org.id}
         years={years}
         industries={industries}
         companies={companies}
@@ -164,7 +168,12 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       {alumni && alumni.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {alumni.map((alum) => (
-            <Link key={alum.id} href={`/${orgSlug}/alumni/${alum.id}`}>
+            <DirectoryCardLink
+              key={alum.id}
+              href={`/${orgSlug}/alumni/${alum.id}`}
+              organizationId={org.id}
+              directoryType="alumni"
+            >
               <Card interactive className="p-5">
                 <div className="flex items-center gap-4">
                   <Avatar
@@ -198,7 +207,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                   </div>
                 </div>
               </Card>
-            </Link>
+            </DirectoryCardLink>
           ))}
         </div>
       ) : (

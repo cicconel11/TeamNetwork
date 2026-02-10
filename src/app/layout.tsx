@@ -3,7 +3,6 @@ import { Plus_Jakarta_Sans, Bitter, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
-import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -44,7 +43,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider>
           <ErrorBoundaryProvider>
-            <AnalyticsProvider>{children}</AnalyticsProvider>
+            {children}
           </ErrorBoundaryProvider>
         </ThemeProvider>
       </body>

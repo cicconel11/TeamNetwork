@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { RsvpStatus } from "@/types/database";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface EventRsvpProps {
   eventId: string;
@@ -61,7 +62,15 @@ export function EventRsvp({ eventId, organizationId, userId, initialStatus }: Ev
       setStatus(previousStatus);
       setError("Failed to save RSVP");
       console.error("RSVP error:", upsertError);
+      trackBehavioralEvent("rsvp_update", {
+        event_id: eventId,
+        rsvp_status: newStatus === "attending" ? "going" : newStatus === "maybe" ? "maybe" : "not_going",
+      }, organizationId);
     } else {
+      trackBehavioralEvent("rsvp_update", {
+        event_id: eventId,
+        rsvp_status: newStatus === "attending" ? "going" : newStatus === "maybe" ? "maybe" : "not_going",
+      }, organizationId);
       router.refresh();
     }
 

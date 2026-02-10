@@ -6,8 +6,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Daily cron job to purge expired usage events (older than 90 days).
- * Runs every day at 3 AM UTC.
+ * Daily cron job to purge expired analytics + ops events.
  */
 export async function GET(request: Request) {
   const authError = validateCronAuth(request);
@@ -17,30 +16,26 @@ export async function GET(request: Request) {
     const supabase = createServiceClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.rpc as any)("purge_expired_usage_events");
-
-    if (error) {
-      if (error.code === "42883") {
-        console.log("[cron/analytics-purge] RPC function not found, skipping");
-        return NextResponse.json({
-          success: true,
-          message: "Purge skipped (function not found)",
-        });
-      }
-      throw error;
+    const { data: analyticsData, error: analyticsError } = await (supabase.rpc as any)("purge_analytics_events");
+    if (analyticsError && analyticsError.code !== "42883") {
+      throw analyticsError;
     }
 
-    console.log("[cron/analytics-purge] Purge completed:", data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: opsData, error: opsError } = await (supabase.rpc as any)("purge_ops_events");
+    if (opsError && opsError.code !== "42883") {
+      throw opsError;
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Expired usage events purged",
-      result: data,
+      analytics: analyticsData ?? null,
+      ops: opsData ?? null,
     });
   } catch (err) {
     console.error("[cron/analytics-purge] Error:", err);
     return NextResponse.json(
-      { error: "Failed to purge usage events" },
+      { error: "Failed to purge analytics events" },
       { status: 500 },
     );
   }

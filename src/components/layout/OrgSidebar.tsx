@@ -8,6 +8,7 @@ import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -114,7 +115,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1">
-          {visibleNav.map((item) => {
+          {visibleNav.map((item, index) => {
             const href = `${basePath}${item.href}`;
             // Check for exact match first
             let isActive = pathname === href;
@@ -137,7 +138,14 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
               <li key={item.href}>
                 <Link
                   href={href}
-                  onClick={onClose}
+                  onClick={() => {
+                    trackBehavioralEvent(\"nav_click\", {
+                      destination_route: href,
+                      nav_surface: \"sidebar\",
+                      position: index,
+                    }, organization.id);
+                    onClose?.();
+                  }}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-org-secondary text-org-secondary-foreground shadow-soft"

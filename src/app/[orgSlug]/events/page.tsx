@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { EventsViewTracker } from "@/components/analytics/EventsViewTracker";
 
 interface EventsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -57,6 +58,10 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
 
   return (
     <div className="animate-fade-in">
+      <EventsViewTracker
+        organizationId={org.id}
+        viewMode={filters.view === "past" ? "past" : "upcoming"}
+      />
       <PageHeader
         title={pageLabel}
         description={`${events?.length || 0} ${filters.view === "past" ? "past" : "upcoming"} ${pageLabel.toLowerCase()}`}
@@ -194,4 +199,3 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
     </div>
   );
 }
-

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, Badge, Button, Input } from "@/components/ui";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface MemberRow {
   id: string;
@@ -146,12 +147,24 @@ export function ManageMembersPanel({
 
         if (updateError) {
           console.error("[chat-members] re-add failed:", updateError);
+          trackBehavioralEvent("chat_participants_change", {
+            thread_id: groupId,
+            action: "add",
+            delta_count: 1,
+            result: "fail_server",
+          }, organizationId);
           setError("Failed to re-add member");
           setActionInProgress(null);
           return;
         }
       } else {
         console.error("[chat-members] add member failed:", insertError);
+        trackBehavioralEvent("chat_participants_change", {
+          thread_id: groupId,
+          action: "add",
+          delta_count: 1,
+          result: "fail_server",
+        }, organizationId);
         setError(insertError.message || "Failed to add member");
         setActionInProgress(null);
         return;
@@ -159,6 +172,12 @@ export function ManageMembersPanel({
     }
 
     await loadMembers();
+    trackBehavioralEvent("chat_participants_change", {
+      thread_id: groupId,
+      action: "add",
+      delta_count: 1,
+      result: "success",
+    }, organizationId);
     onMembersChanged();
     setActionInProgress(null);
   };
@@ -178,18 +197,36 @@ export function ManageMembersPanel({
       .eq("user_id", userId);
 
     if (updateError) {
+      trackBehavioralEvent("chat_participants_change", {
+        thread_id: groupId,
+        action: "remove",
+        delta_count: 1,
+        result: "fail_server",
+      }, organizationId);
       setError("Failed to remove member");
       setActionInProgress(null);
       return;
     }
 
     if (isSelf) {
+      trackBehavioralEvent("chat_participants_change", {
+        thread_id: groupId,
+        action: "remove",
+        delta_count: 1,
+        result: "success",
+      }, organizationId);
       // Redirect to chat list after leaving
       router.push(`/${orgSlug}/chat`);
       return;
     }
 
     await loadMembers();
+    trackBehavioralEvent("chat_participants_change", {
+      thread_id: groupId,
+      action: "remove",
+      delta_count: 1,
+      result: "success",
+    }, organizationId);
     onMembersChanged();
     setActionInProgress(null);
   };

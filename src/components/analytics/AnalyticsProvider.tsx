@@ -3,16 +3,14 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { extractFeature } from "@/lib/analytics/client";
 import {
-  initAnalytics,
-  setAnalyticsContext,
-  setOrgContext,
-  handleRouteChange,
-  flushFeatureExit,
-  getLastConsentState,
-} from "@/lib/analytics/client";
+  trackBehavioralEvent,
+  getAnalyticsSessionMetadata,
+  getConsentState,
+  setConsentState,
+} from "@/lib/analytics/events";
 import { useOrgAnalytics } from "./OrgAnalyticsContext";
-import type { AgeBracket, OrgType } from "@/lib/analytics/types";
 
 interface AnalyticsProviderProps {
   children: ReactNode;
@@ -21,118 +19,100 @@ interface AnalyticsProviderProps {
 /** Non-org route prefixes that should never be treated as org slugs. */
 const NON_ORG_PREFIXES = ["app", "auth", "settings", "privacy", "terms", "api"];
 
-/**
- * Global analytics provider.
- *
- * Mirrors the ErrorBoundaryProvider pattern:
- *  - Initializes client-side tracking in useEffect
- *  - Listens for auth state changes to update context
- *  - Tracks route changes via usePathname()
- *
- * Org context is provided by OrgAnalyticsProvider (rendered in
- * [orgSlug]/layout.tsx) which eliminates the per-navigation DB query
- * that was previously needed to resolve slug → orgId + orgType.
- */
 export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
   const pathname = usePathname();
   const orgAnalytics = useOrgAnalytics();
 
-  // Refs to share consent/ageBracket between the two effects without
-  // creating a dependency loop.
-  const consentedRef = useRef(false);
-  const ageBracketRef = useRef<AgeBracket>("18_plus");
+  const lastRouteRef = useRef<string | null>(null);
+  const lastRouteStartRef = useRef<number | null>(null);
+  const lastRouteOrgIdRef = useRef<string | null>(null);
+  const lastAppOpenSessionRef = useRef<string | null>(null);
 
-  // Effect #1: Initialize analytics, fetch consent, listen for auth changes.
-  // Runs once on mount.
   useEffect(() => {
-    initAnalytics();
+    let cancelled = false;
 
-    const supabase = createClient();
+    async function syncRoute() {
+      const segments = pathname.replace(/^\//, "").split("/");
+      const maybeSlug = segments[0];
+      const isOrgRoute = !!maybeSlug && !NON_ORG_PREFIXES.includes(maybeSlug);
+      const orgId = isOrgRoute ? orgAnalytics?.orgId ?? null : null;
 
-    async function loadUserContext() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        consentedRef.current = false;
-        setAnalyticsContext(false, null, null);
+      if (lastRouteRef.current && lastRouteStartRef.current && lastRouteOrgIdRef.current) {
+        const durationMs = Date.now() - lastRouteStartRef.current;
+        const previousRoute = lastRouteRef.current;
+        const previousFeature = extractFeature(previousRoute);
+        const dwellBucket =
+          durationMs <= 5000 ? "0-5s" :
+          durationMs <= 15000 ? "6-15s" :
+          durationMs <= 30000 ? "16-30s" :
+          durationMs <= 60000 ? "31-60s" :
+          durationMs <= 180000 ? "61-180s" :
+          "180s+";
+
+        trackBehavioralEvent("page_dwell_bucket", {
+          screen: previousFeature,
+          feature: previousFeature,
+          dwell_bucket: dwellBucket,
+        }, lastRouteOrgIdRef.current);
+      }
+
+      if (!isOrgRoute || !orgId) {
+        lastRouteRef.current = pathname;
+        lastRouteStartRef.current = Date.now();
+        lastRouteOrgIdRef.current = null;
         return;
       }
 
-      const ageBracket = (user.user_metadata?.age_bracket as AgeBracket) ?? "18_plus";
-      ageBracketRef.current = ageBracket;
+      let consentState = getConsentState(orgId);
 
-      // Check consent
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: consent } = await (supabase as any)
-        .from("analytics_consent")
-        .select("consented")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      if (consentState === "unknown") {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (cancelled || !user) {
+          lastRouteRef.current = pathname;
+          lastRouteStartRef.current = Date.now();
+          lastRouteOrgIdRef.current = orgId;
+          return;
+        }
 
-      const consented = consent?.consented === true;
-      consentedRef.current = consented;
+        const { data } = await supabase
+          .from("analytics_consent")
+          .select("consent_state")
+          .eq("org_id", orgId)
+          .maybeSingle();
 
-      // Set context without org (org effect handles that separately)
-      setAnalyticsContext(consented, ageBracket, null);
+        consentState = data?.consent_state ?? "unknown";
+        setConsentState(orgId, consentState);
+      }
+
+      if (cancelled) return;
+
+      lastRouteRef.current = pathname;
+      lastRouteStartRef.current = Date.now();
+      lastRouteOrgIdRef.current = orgId;
+
+      if (consentState !== "opted_in") {
+        return;
+      }
+
+      const { session_id } = getAnalyticsSessionMetadata();
+      if (session_id && lastAppOpenSessionRef.current !== session_id) {
+        lastAppOpenSessionRef.current = session_id;
+        trackBehavioralEvent("app_open", {}, orgId);
+      }
+
+      const feature = extractFeature(pathname);
+      trackBehavioralEvent("route_view", {
+        screen: feature,
+        feature,
+      }, orgId);
     }
 
-    loadUserContext();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      loadUserContext();
-    });
+    syncRoute();
 
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
     };
-  }, []);
-
-  // Effect #2: Re-derive org context whenever the pathname or org context changes,
-  // then track the route change once context is settled.
-  //
-  // Uses getLastConsentState() instead of consentedRef so that consent
-  // changes made by ConsentBanner (via setAnalyticsContext) are immediately
-  // reflected without waiting for an auth state change or reload.
-  //
-  // OrgAnalyticsContext (from [orgSlug]/layout.tsx) provides orgId + orgType
-  // synchronously, eliminating the per-navigation DB query.
-  useEffect(() => {
-    const segments = pathname.replace(/^\//, "").split("/");
-    const maybeSlug = segments[0];
-
-    if (!maybeSlug || maybeSlug === "" || NON_ORG_PREFIXES.includes(maybeSlug)) {
-      // Emit exit event for the previous page under its original org context
-      // before clearing org state for the new (non-org) route.
-      flushFeatureExit();
-      setOrgContext(undefined);
-      const { consented, ageBracket } = getLastConsentState();
-      setAnalyticsContext(consented, ageBracket, null);
-      handleRouteChange(pathname);
-      return;
-    }
-
-    // Emit exit event for the previous page under its original org context
-    // before updating to the new context.
-    flushFeatureExit();
-
-    const { consented, ageBracket } = getLastConsentState();
-
-    if (orgAnalytics) {
-      // Use org context provided by OrgAnalyticsProvider (no DB query)
-      setOrgContext(orgAnalytics.orgId);
-      setAnalyticsContext(
-        consented,
-        ageBracket,
-        (orgAnalytics.orgType as OrgType) ?? "general",
-      );
-    } else {
-      // Org route but OrgAnalyticsProvider hasn't mounted yet — defer
-      // until orgAnalytics populates (the dep array will re-fire this effect).
-      return;
-    }
-
-    // Track route change — org context is already set synchronously
-    handleRouteChange(pathname);
   }, [pathname, orgAnalytics]);
 
   return <>{children}</>;

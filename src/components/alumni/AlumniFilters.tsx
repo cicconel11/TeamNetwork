@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button, Select } from "@/components/ui";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface FilterOption {
   value: string;
@@ -11,6 +12,7 @@ interface FilterOption {
 }
 
 interface AlumniFiltersProps {
+  orgId: string;
   years: (number | null)[];
   industries: (string | null)[];
   companies: (string | null)[];
@@ -19,6 +21,7 @@ interface AlumniFiltersProps {
 }
 
 export function AlumniFilters({
+  orgId,
   years,
   industries,
   companies,
@@ -28,6 +31,7 @@ export function AlumniFilters({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const didMountRef = useRef(false);
 
   const [filters, setFilters] = useState({
     year: searchParams.get("year") || "",
@@ -54,9 +58,21 @@ export function AlumniFilters({
   useEffect(() => {
     const debounce = setTimeout(() => {
       updateURL();
+      if (!didMountRef.current) {
+        didMountRef.current = true;
+        return;
+      }
+      const filterKeys = Object.entries(filters)
+        .filter(([, value]) => value)
+        .map(([key]) => key);
+      trackBehavioralEvent("directory_filter_apply", {
+        directory_type: "alumni",
+        filter_keys: filterKeys,
+        filters_count: filterKeys.length,
+      }, orgId);
     }, 300);
     return () => clearTimeout(debounce);
-  }, [filters, updateURL]);
+  }, [filters, orgId, updateURL]);
 
   const clearFilters = () => {
     setFilters({

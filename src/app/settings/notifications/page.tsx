@@ -5,7 +5,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference } from "@/types/database";
 import { Card, Button, Badge, Input } from "@/components/ui";
-import { ConsentBanner } from "@/components/analytics/ConsentBanner";
 
 type OrgPrefForm = {
   orgId: string;
@@ -275,7 +274,6 @@ function NotificationSettingsContent() {
           Control anonymous usage pattern tracking.
         </p>
       </div>
-      <ConsentBanner />
 
       <Card className="p-5 space-y-3">
         <div>

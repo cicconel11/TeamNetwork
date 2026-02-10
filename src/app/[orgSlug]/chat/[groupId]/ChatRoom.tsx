@@ -10,6 +10,7 @@ import { ManageMembersPanel } from "@/components/chat/ManageMembersPanel";
 import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { debugLog } from "@/lib/debug";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface ChatRoomProps {
   group: ChatGroup;
@@ -61,7 +62,11 @@ export function ChatRoom({
       requiresApproval,
       hasEditMembersUI: true,
     });
-  }, [group.id, members.length, canModerate, requiresApproval]);
+    trackBehavioralEvent("chat_thread_open", {
+      thread_id: group.id,
+      open_source: "list",
+    }, organizationId);
+  }, [group.id, members.length, canModerate, requiresApproval, organizationId]);
 
   // Build a map of user IDs to user info (combining members + cached users)
   const userMap = useMemo(() => {
@@ -334,10 +339,21 @@ export function ChatRoom({
 
     if (error) {
       console.error("Failed to send message:", error);
+      trackBehavioralEvent("chat_message_send", {
+        thread_id: group.id,
+        message_type: "text",
+        result: "fail_server",
+        error_code: "send_failed",
+      }, organizationId);
       // Remove the optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(messageBody); // Restore message for retry
     } else if (data) {
+      trackBehavioralEvent("chat_message_send", {
+        thread_id: group.id,
+        message_type: "text",
+        result: "success",
+      }, organizationId);
       // Replace temp message with real one from server
       setMessages((prev) =>
         prev.map((m) =>

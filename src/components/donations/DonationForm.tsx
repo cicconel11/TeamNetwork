@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, Button, Input, Textarea, Select, HCaptcha } from "@/components/ui";
 import { useIdempotencyKey, useCaptcha } from "@/hooks";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface PhilanthropyEventOption {
   id: string;
@@ -31,6 +32,7 @@ export function DonationForm({
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const didTrackOpenRef = useRef(false);
   const {
     token: captchaToken,
     isVerified: isCaptchaVerified,
@@ -57,6 +59,15 @@ export function DonationForm({
   });
 
   const hasEvents = (philanthropyEventsForForm ?? []).length > 0;
+
+  useEffect(() => {
+    if (!didTrackOpenRef.current) {
+      didTrackOpenRef.current = true;
+      trackBehavioralEvent("donation_flow_start", {
+        campaign_id: eventId ?? undefined,
+      }, organizationId);
+    }
+  }, [eventId, organizationId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +120,16 @@ export function DonationForm({
     };
 
     try {
+      trackBehavioralEvent("donation_checkout_start", {
+        campaign_id: eventId ?? undefined,
+        amount_bucket:
+          amountNumber < 10 ? "<10" :
+          amountNumber <= 25 ? "10-25" :
+          amountNumber <= 50 ? "26-50" :
+          amountNumber <= 100 ? "51-100" :
+          amountNumber <= 250 ? "101-250" :
+          "250+",
+      }, organizationId);
       const res = await fetch("/api/stripe/create-donation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -127,6 +148,11 @@ export function DonationForm({
 
       setMessage("Donation intent created. Complete payment via Stripe.");
     } catch (err) {
+      trackBehavioralEvent("donation_checkout_result", {
+        campaign_id: eventId ?? undefined,
+        result: "fail",
+        error_code: "checkout_failed",
+      }, organizationId);
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsLoading(false);
@@ -235,8 +261,6 @@ export function DonationForm({
     </Card>
   );
 }
-
-
 
 
 

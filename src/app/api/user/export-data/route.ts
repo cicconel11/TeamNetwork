@@ -74,11 +74,11 @@ interface UserDataExport {
     organizationId: string;
     status: string;
   }>;
-  analyticsConsent: {
-    consented: boolean;
-    consentedAt: string | null;
-    revokedAt: string | null;
-  } | null;
+  analyticsConsent: Array<{
+    organizationId: string;
+    consentState: string;
+    decidedAt: string | null;
+  }>;
   usageSummaries: Array<{
     organizationId: string;
     feature: string;
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
       formSubmissions: [],
       chatGroupMemberships: [],
       mentorshipPairs: [],
-      analyticsConsent: null,
+      analyticsConsent: [],
       usageSummaries: [],
     };
 
@@ -297,16 +297,15 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: analyticsConsent } = await (serviceSupabase as any)
       .from("analytics_consent")
-      .select("consented, consented_at, revoked_at")
-      .eq("user_id", user.id)
-      .maybeSingle();
+      .select("org_id, consent_state, decided_at")
+      .eq("user_id", user.id);
 
     if (analyticsConsent) {
-      exportData.analyticsConsent = {
-        consented: analyticsConsent.consented,
-        consentedAt: analyticsConsent.consented_at,
-        revokedAt: analyticsConsent.revoked_at,
-      };
+      exportData.analyticsConsent = analyticsConsent.map((row: { org_id: string; consent_state: string; decided_at: string | null }) => ({
+        organizationId: row.org_id,
+        consentState: row.consent_state,
+        decidedAt: row.decided_at,
+      }));
     }
 
     // Fetch usage summaries

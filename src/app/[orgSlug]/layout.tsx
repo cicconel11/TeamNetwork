@@ -10,6 +10,8 @@ import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
+import { ConsentModal } from "@/components/analytics/ConsentModal";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -168,6 +170,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   return (
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
+    <AnalyticsProvider>
     <div
       data-org-shell
       className="min-h-screen"
@@ -235,6 +238,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       </div>
 
       <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
+      <ConsentModal />
 
       <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod ? "mt-12" : ""}`}>
         {children}
@@ -255,6 +259,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         />
       )}
     </div>
+    </AnalyticsProvider>
     </OrgAnalyticsProvider>
   );
 }
