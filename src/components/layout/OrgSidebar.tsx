@@ -139,9 +139,9 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
                 <Link
                   href={href}
                   onClick={() => {
-                    trackBehavioralEvent(\"nav_click\", {
+                    trackBehavioralEvent("nav_click", {
                       destination_route: href,
-                      nav_surface: \"sidebar\",
+                      nav_surface: "sidebar",
                       position: index,
                     }, organization.id);
                     onClose?.();
