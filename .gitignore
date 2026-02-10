@@ -61,3 +61,9 @@ opencode-auth/
 *.mov
 *.mp4
 .env*.local
+
+# Gas Town (added by gt)
+.runtime/
+.claude/
+.beads/
+.logs/
