@@ -11,41 +11,7 @@ import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { validateOrgName } from "@/lib/validation/org-name";
-
-function adjustColor(hex: string, amount: number): string {
-  const clamp = (num: number) => Math.min(255, Math.max(0, num));
-
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-
-  const num = parseInt(color, 16);
-  const r = clamp((num >> 16) + amount);
-  const g = clamp(((num >> 8) & 0x00ff) + amount);
-  const b = clamp((num & 0x0000ff) + amount);
-
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
-function isColorDark(hex: string): boolean {
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-  const num = parseInt(color, 16);
-  const r = (num >> 16) & 255;
-  const g = (num >> 8) & 255;
-  const b = num & 255;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.6;
-}
+import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
 
 export default function OrgSettingsPage() {
   return (
@@ -108,6 +74,13 @@ function OrgSettingsContent() {
     setLogoPreview(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [selectedLogo]);
+
+  useEffect(() => {
+    return () => {
+      const existingStyle = document.getElementById("org-theme-preview");
+      if (existingStyle) existingStyle.remove();
+    };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -204,37 +177,31 @@ function OrgSettingsContent() {
   }, [primaryColor, secondaryColor, logoPreview, logoUrl, loading]);
 
   const applyThemeLocally = (nextPrimary: string, nextSecondary: string) => {
-    const shell = document.querySelector<HTMLElement>("[data-org-shell]");
-    const target = shell || document.documentElement;
-    const primaryLight = adjustColor(nextPrimary, 20);
-    const primaryDark = adjustColor(nextPrimary, -20);
-    const secondaryLight = adjustColor(nextSecondary, 20);
-    const secondaryDark = adjustColor(nextSecondary, -20);
-    const isPrimaryDark = isColorDark(nextPrimary);
-    const isSecondaryDark = isColorDark(nextSecondary);
-    const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
-    const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
-    const cardColor = isPrimaryDark ? adjustColor(nextPrimary, 18) : adjustColor(nextPrimary, -12);
-    const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-    const muted = isPrimaryDark ? adjustColor(nextPrimary, 28) : adjustColor(nextPrimary, -35);
-    const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-    const borderColor = isPrimaryDark ? adjustColor(nextPrimary, 35) : adjustColor(nextPrimary, -45);
+    // Instead of setting inline styles (which override :root.dark stylesheet rules
+    // and break theme toggling), inject a scoped <style> tag that mirrors the
+    // dual-mode approach used in the org layout.
+    const lightVars = computeOrgThemeVariables(nextPrimary, nextSecondary, false);
+    const darkVars = computeOrgThemeVariables(nextPrimary, nextSecondary, true);
 
-    target.style.setProperty("--color-org-primary", nextPrimary);
-    target.style.setProperty("--color-org-primary-light", primaryLight);
-    target.style.setProperty("--color-org-primary-dark", primaryDark);
-    target.style.setProperty("--color-org-secondary", nextSecondary);
-    target.style.setProperty("--color-org-secondary-light", secondaryLight);
-    target.style.setProperty("--color-org-secondary-dark", secondaryDark);
-    target.style.setProperty("--color-org-secondary-foreground", secondaryForeground);
-    target.style.setProperty("--background", nextPrimary);
-    target.style.setProperty("--foreground", baseForeground);
-    target.style.setProperty("--card", cardColor);
-    target.style.setProperty("--card-foreground", cardForeground);
-    target.style.setProperty("--muted", muted);
-    target.style.setProperty("--muted-foreground", mutedForeground);
-    target.style.setProperty("--border", borderColor);
-    target.style.setProperty("--ring", nextSecondary);
+    const existingStyle = document.getElementById("org-theme-preview");
+    if (existingStyle) existingStyle.remove();
+
+    const style = document.createElement("style");
+    style.id = "org-theme-preview";
+    style.textContent = `
+      :root {
+        ${Object.entries(lightVars).map(([k, v]) => `${k}: ${v};`).join("\n        ")}
+      }
+      :root.dark {
+        ${Object.entries(darkVars).map(([k, v]) => `${k}: ${v};`).join("\n        ")}
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not(.light) {
+          ${Object.entries(darkVars).map(([k, v]) => `${k}: ${v};`).join("\n          ")}
+        }
+      }
+    `;
+    document.head.appendChild(style);
   };
 
   const handlePreferenceSave = async () => {

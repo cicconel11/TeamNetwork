@@ -77,6 +77,17 @@ function validateBuildEnv() {
   if (missingGoogleVars.length > 0 && missingGoogleVars.length < googleCalendarEnv.length) {
     console.warn(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`);
   }
+
+  // Require CRON_SECRET on Vercel production deploys, warn otherwise
+  // (Local `next build` runs with NODE_ENV=production, so we key off Vercel env vars instead.)
+  const isVercelProduction = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
+  const cronSecret = process.env.CRON_SECRET;
+  if (isVercelProduction && (!cronSecret || cronSecret.trim() === "")) {
+    throw new Error("Missing required environment variable: CRON_SECRET (required on Vercel production)");
+  }
+  if (!isDev && !cronSecret) {
+    console.warn("⚠️  CRON_SECRET not set — cron job authentication will not work");
+  }
 }
 
 validateBuildEnv();

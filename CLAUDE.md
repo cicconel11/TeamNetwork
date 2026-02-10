@@ -10,6 +10,7 @@ npm run dev          # Start Next.js dev server at localhost:3000
 npm run build        # Build production application
 npm run start        # Start production server
 npm run lint         # Run ESLint
+npm run gen:types    # Regenerate Supabase TypeScript types (writes to src/types/database.ts)
 ```
 
 ### Testing
@@ -337,6 +338,26 @@ Modular system for importing events from external schedule sources:
 
 Files: `src/lib/schedule-connectors/sanitize.ts`, `src/lib/schedule-connectors/html-utils.ts`, `src/lib/schedule-connectors/genericHtml.ts`, `src/lib/schedule-connectors/vendorA.ts`, `src/lib/schedule-connectors/vendorB.ts`, `src/lib/schedule-connectors/ics.ts`
 
+### Cron Jobs
+Automated background jobs scheduled via Vercel Cron (configured in `vercel.json`). All cron endpoints require authentication using the `CRON_SECRET` environment variable passed as `Authorization: Bearer <secret>` header.
+
+**Authentication:**
+- Cron routes use `validateCronAuth()` from `src/lib/security/cron-auth.ts`
+- Returns 401 Unauthorized if secret doesn't match
+- Returns 500 if CRON_SECRET not configured
+
+**Active Cron Jobs:**
+- `/api/cron/error-baselines` - Hourly (0 * * * *): Updates error group rolling baselines and resets hourly counts for spike detection
+- `/api/cron/graduation-check` - Daily at 8 AM UTC (0 8 * * *): Processes member graduations, sends 30-day warnings, transitions members to alumni or revokes access based on capacity, auto-reinstates members with updated graduation dates
+- `/api/cron/analytics-aggregate` - Weekly on Sunday at 2 AM UTC (0 2 * * 0): Disabled (legacy usage_events aggregation not used in minimal analytics system)
+- `/api/cron/analytics-purge` - Daily at 3 AM UTC (0 3 * * *): Purges expired analytics and ops events using `purge_analytics_events()` and `purge_ops_events()` RPC functions
+- `/api/cron/analytics-rate-limit-cleanup` - Daily at 3 AM UTC (0 3 * * *): Deletes expired rate limit records older than 24 hours from `rate_limit_analytics` table
+
+**Inactive Cron Jobs (not in vercel.json):**
+- `/api/cron/schedules-sync` - Syncs active schedule sources that haven't been updated in 24 hours (batch processing with max 3 concurrent syncs)
+- `/api/cron/calendar-sync` - Syncs active calendar feeds not updated in 60 minutes
+- `/api/cron/error-alerts` - Sends email notifications for new error groups and error spikes to ALERT_EMAIL_TO (or ADMIN_EMAIL)
+
 ## Environment Variables
 
 Required variables (validated at build time in `next.config.mjs`):
@@ -350,6 +371,12 @@ Required variables (validated at build time in `next.config.mjs`):
 - `RESEND_API_KEY`
 - `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
 - `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
+- `CRON_SECRET` - Secret for authenticating Vercel cron job requests (required in production)
+
+Optional variables:
+- `STRIPE_WEBHOOK_SECRET_CONNECT` - Stripe Connect webhook secret for donation events
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
+- `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
 
 Stored in `.env.local` (never commit this file).
 

@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/analytics-purge",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/analytics-rate-limit-cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }

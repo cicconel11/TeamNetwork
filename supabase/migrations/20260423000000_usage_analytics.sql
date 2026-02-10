@@ -2,35 +2,11 @@
 -- FERPA/COPPA-compliant behavioral analytics with privacy-first design
 
 -- =============================================================================
--- Table 1: analytics_consent — per-user opt-in consent tracking
+-- Table 1: analytics_consent
+-- SKIPPED: analytics_consent is created by 20260210090000_analytics_events.sql
+-- with the correct org-scoped composite PK (org_id, user_id).
+-- This migration originally defined a conflicting user-only schema.
 -- =============================================================================
-CREATE TABLE analytics_consent (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  consented BOOLEAN NOT NULL DEFAULT false,
-  age_bracket TEXT,
-  consented_at TIMESTAMPTZ,
-  revoked_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE(user_id)
-);
-
--- RLS: users can read/update their own row only
-ALTER TABLE analytics_consent ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read own consent"
-  ON analytics_consent FOR SELECT
-  USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own consent"
-  ON analytics_consent FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own consent"
-  ON analytics_consent FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
 
 -- =============================================================================
 -- Table 2: usage_events — raw behavioral events (purged after 90 days)

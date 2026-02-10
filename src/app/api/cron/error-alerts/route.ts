@@ -11,28 +11,13 @@ import {
   getNotificationType,
   type NotificationType,
 } from "@/lib/error-alerts/templates";
+import { validateCronAuth } from "@/lib/security/cron-auth";
 
 export const dynamic = "force-dynamic";
 
 const SPIKE_THRESHOLD = 10;
 const SPIKE_COOLDOWN_HOURS = 1;
 const MAX_BATCH_SIZE = 50;
-
-function isAuthorized(request: Request) {
-  const secret = process.env.CRON_SECRET;
-
-  if (!secret) {
-    return { ok: false, reason: "Missing CRON_SECRET" };
-  }
-
-  const authHeader = request.headers.get("authorization");
-  const headerSecret = request.headers.get("x-cron-secret");
-  if (authHeader === `Bearer ${secret}` || headerSecret === secret) {
-    return { ok: true };
-  }
-
-  return { ok: false, reason: "Unauthorized" };
-}
 
 function getAlertRecipients(): string[] {
   const alertEmail = process.env.ALERT_EMAIL_TO;
@@ -81,14 +66,8 @@ async function processErrorGroup(
 }
 
 export async function GET(request: Request) {
-  const authResult = isAuthorized(request);
-
-  if (!authResult.ok) {
-    return NextResponse.json(
-      { error: "Unauthorized", message: authResult.reason },
-      { status: authResult.reason === "Missing CRON_SECRET" ? 500 : 401 }
-    );
-  }
+  const authError = validateCronAuth(request);
+  if (authError) return authError;
 
   const recipients = getAlertRecipients();
   if (recipients.length === 0) {
