@@ -116,7 +116,7 @@ export const hexColorSchema = z
   .regex(/^#[0-9a-fA-F]{6}$/, { message: "Color must be a 6 character hex code (e.g., #1e3a5f)" });
 
 // Member status
-export const memberStatusSchema = z.enum(["active", "inactive"]);
+export const memberStatusSchema = z.enum(["active", "inactive", "pending"]);
 export type MemberStatus = z.infer<typeof memberStatusSchema>;
 
 // Event types

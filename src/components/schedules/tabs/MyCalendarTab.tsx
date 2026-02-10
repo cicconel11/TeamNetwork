@@ -55,7 +55,7 @@ function formatOccurrence(schedule: AcademicSchedule): string {
       return "Daily";
     case "weekly":
       if (schedule.day_of_week && schedule.day_of_week.length > 0) {
-        const labels = schedule.day_of_week.map((day) => DAYS[day]).join(", ");
+        const labels = schedule.day_of_week.map((day: number) => DAYS[day]).join(", ");
         return `Every ${labels}`;
       }
       return "Weekly";

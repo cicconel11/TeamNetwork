@@ -251,7 +251,7 @@ export function isUserEligibleForSync(
         event_type?: EventType | null;
     },
     userId: string,
-    connection: { status: "connected" | "disconnected" | "error" } | null,
+    connection: { status: string | null } | null,
     preferences: {
         sync_general?: boolean | null;
         sync_game?: boolean | null;

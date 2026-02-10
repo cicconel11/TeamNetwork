@@ -86,7 +86,10 @@ export default async function ChatPage({ params }: ChatPageProps) {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
           {chatGroups.map((group) => {
             const pendingCount = pendingCounts[group.id] || 0;
-            const memberCount = group.chat_group_members?.filter(m => !m.removed_at).length || 0;
+            const memberCount =
+              group.chat_group_members?.filter(
+                (m: ChatGroupWithMembers["chat_group_members"][number]) => !m.removed_at
+              ).length || 0;
 
             return (
               <ChatGroupCard
