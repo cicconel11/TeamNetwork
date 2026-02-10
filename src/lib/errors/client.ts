@@ -1,5 +1,6 @@
 "use client";
 
+import { getSessionId } from "@/lib/session";
 import type { ErrorEventInput, ErrorEnv } from "@/lib/schemas/errors";
 import { trackOpsEvent } from "@/lib/analytics/events";
 
