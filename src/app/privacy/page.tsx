@@ -31,8 +31,9 @@ const privacySections: PrivacySection[] = [
       "Profile Information: Organization details, role, and other profile data you choose to provide.",
       "Content: Information you submit through the Service, including events, announcements, forms, and other organizational data.",
       "Payment Information: When you make purchases or donations, payment details are processed securely by our payment processor (Stripe). We do not store full credit card numbers.",
-      "Usage Data: Information about how you interact with the Service, including pages visited, features used, and actions taken.",
-      "Device Information: Browser type, operating system, IP address, and device identifiers.",
+      "Usage Data (opt-in): With explicit consent, we collect minimal, privacy-first usage events (e.g., route views, navigation clicks, and feature interactions) without identities or content.",
+      "Ops/Security Telemetry: Limited error and reliability signals (e.g., API error codes, HTTP status, retryable flags) to keep the Service secure and stable. No content or user identifiers are included.",
+      "Device Information: Browser type and device class (mobile/tablet/desktop).",
     ],
   },
   {
@@ -133,7 +134,7 @@ const privacySections: PrivacySection[] = [
     bullets: [
       "Maintain your session and authentication state.",
       "Remember your preferences and settings.",
-      "Analyze usage patterns and improve the Service.",
+      "Support opt-in usage analytics (only after you explicitly consent).",
       "You can control cookies through your browser settings. Disabling cookies may affect the functionality of the Service.",
     ],
   },
@@ -142,16 +143,15 @@ const privacySections: PrivacySection[] = [
     number: "10",
     title: "Usage Analytics and Personalization",
     paragraphs: [
-      "With your explicit opt-in consent, we collect anonymous usage patterns to personalize your navigation experience. This feature is entirely optional and disabled by default.",
-      "You can enable or disable usage analytics at any time in your account settings under Notifications.",
+      "With your explicit opt-in consent, we collect minimal, privacy-first usage analytics. Behavioral analytics are disabled by default until you accept the in-app consent prompt for a specific organization.",
+      "Consent is stored per organization and may be withdrawn at any time by contacting support.",
     ],
     bullets: [
-      "What we track: Which features you navigate to (e.g., 'members', 'events'), how often, device category (mobile/tablet/desktop from screen width), and time-of-day patterns.",
-      "What we never track: Content you view, search queries, specific resource IDs, IP addresses, user-agent strings, click targets, form values, educational records, or location data.",
-      "Age restrictions: Users aged 13-17 have reduced tracking (page visit counts only, no timing or behavioral data). Users under 13 are never tracked.",
-      "Educational organizations: Only aggregate page view counts are collected (FERPA compliance). No behavioral profiling is performed.",
-      "Data lifecycle: Raw events are automatically deleted after 90 days. Aggregated summaries (containing no personally identifiable information) are retained to improve your experience.",
-      "Personalization profiles are generated using AI to optimize your navigation order and highlight relevant features. These profiles expire after 7 days and are regenerated on demand.",
+      "What we track (opt-in only): Page/route views, navigation and CTA clicks, feature-level events (e.g., directory view, event open, RSVP update), device class, app version, and a daily-rotating session ID.",
+      "What we never track: Names, emails, phone numbers, message bodies, form answers, filenames, raw URLs, search terms, precise timestamps in analytics payloads, or any content you submit.",
+      "No user IDs in analytics: Consent is stored using your account ID, but analytics event payloads never include user identifiers.",
+      "Ops telemetry (always-on): Error and security events are logged without consent to keep the Service safe. These are minimal and never include content or identities.",
+      "Data lifecycle: Behavioral analytics are automatically deleted after 90 days. Ops telemetry is deleted after 30 days.",
       "Account deletion removes all analytics data immediately.",
     ],
   },
@@ -229,7 +229,7 @@ export default function PrivacyPage() {
             Legal
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-landing-cream/50">Last Updated: January 11, 2026</p>
+          <p className="text-landing-cream/50">Last Updated: February 10, 2026</p>
         </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-12">
