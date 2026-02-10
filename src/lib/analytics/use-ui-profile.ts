@@ -6,7 +6,7 @@ import type { UIProfile } from "./types";
  * Disabled for now: self-evolving AI profile generation is intentionally off.
  * Returns null so UI renders default ordering without personalization.
  */
-export function useUIProfile(_orgId: string | undefined): {
+export function useUIProfile(): {
   profile: UIProfile | null;
   loading: boolean;
 } {

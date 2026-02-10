@@ -31,7 +31,7 @@ function featureToHref(orgSlug: string, feature: string): string {
  * Renders nothing when there's no profile or no suggestions (graceful degradation).
  */
 export function SuggestedFeatures({ orgId, orgSlug }: SuggestedFeaturesProps) {
-  const { profile, loading } = useUIProfile(orgId);
+  const { profile, loading } = useUIProfile();
 
   if (loading) return null;
   if (!profile) return null;

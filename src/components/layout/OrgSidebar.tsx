@@ -21,7 +21,7 @@ interface OrgSidebarProps {
 export function OrgSidebar({ organization, role, isDevAdmin = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
-  const { profile } = useUIProfile(organization.id);
+  const { profile } = useUIProfile();
   
   // Parse nav_config
   const navConfig = (organization.nav_config && typeof organization.nav_config === "object" && !Array.isArray(organization.nav_config)
