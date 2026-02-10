@@ -5,7 +5,6 @@ import { Card } from "@/components/ui";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 
 interface SuggestedFeaturesProps {
-  orgId: string;
   orgSlug: string;
 }
 
@@ -30,7 +29,7 @@ function featureToHref(orgSlug: string, feature: string): string {
  * Client component that shows LLM-generated feature suggestions on the dashboard.
  * Renders nothing when there's no profile or no suggestions (graceful degradation).
  */
-export function SuggestedFeatures({ orgId, orgSlug }: SuggestedFeaturesProps) {
+export function SuggestedFeatures({ orgSlug }: SuggestedFeaturesProps) {
   const { profile, loading } = useUIProfile();
 
   if (loading) return null;

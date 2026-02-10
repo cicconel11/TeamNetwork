@@ -189,12 +189,18 @@ Thank you for using TeamNetwork.
     }
 
     // Clean up analytics data immediately (no grace period needed for anonymous data)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    type SupabaseDeleteClient = {
+      from: (table: string) => {
+        delete: () => { eq: (column: string, value: string) => Promise<unknown> };
+      };
+    };
+    const deleteClient = serviceSupabase as unknown as SupabaseDeleteClient;
+
     await Promise.allSettled([
-      (serviceSupabase as any).from("analytics_consent").delete().eq("user_id", user.id),
-      (serviceSupabase as any).from("usage_events").delete().eq("user_id", user.id),
-      (serviceSupabase as any).from("usage_summaries").delete().eq("user_id", user.id),
-      (serviceSupabase as any).from("ui_profiles").delete().eq("user_id", user.id),
+      deleteClient.from("analytics_consent").delete().eq("user_id", user.id),
+      deleteClient.from("usage_events").delete().eq("user_id", user.id),
+      deleteClient.from("usage_summaries").delete().eq("user_id", user.id),
+      deleteClient.from("ui_profiles").delete().eq("user_id", user.id),
     ]);
 
     // Sign out the user from current session (but don't delete auth record yet)

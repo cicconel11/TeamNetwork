@@ -4,7 +4,6 @@ import {
   computeSummaryStats,
   formatDateKey,
   type ConflictInfo,
-  type SummaryStats,
 } from "@/components/schedules/availability-stats";
 
 // HOURS constant from the component: 6am to 9pm (16 slots)

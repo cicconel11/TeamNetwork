@@ -86,7 +86,10 @@ function simulateIngest(request: IngestRequest): IngestResult {
   }
 
   // Basic validation (mimics Zod schema)
-  const body = request.body as any;
+  const body = request.body as {
+    events?: unknown;
+    session_id?: unknown;
+  };
   if (!body || typeof body !== "object") {
     return { status: 400, error: "Invalid payload" };
   }
@@ -105,16 +108,22 @@ function simulateIngest(request: IngestRequest): IngestResult {
 
   // Validate each event
   for (const event of body.events) {
-    if (!event.event_type || !["page_view", "feature_enter", "feature_exit", "nav_click"].includes(event.event_type)) {
+    const payload = event as {
+      event_type?: unknown;
+      feature?: unknown;
+      device_class?: unknown;
+      hour_of_day?: unknown;
+    };
+    if (!payload.event_type || !["page_view", "feature_enter", "feature_exit", "nav_click"].includes(String(payload.event_type))) {
       return { status: 400, error: "Invalid payload" };
     }
-    if (!event.feature || typeof event.feature !== "string") {
+    if (!payload.feature || typeof payload.feature !== "string") {
       return { status: 400, error: "Invalid payload" };
     }
-    if (!event.device_class || !["mobile", "tablet", "desktop"].includes(event.device_class)) {
+    if (!payload.device_class || !["mobile", "tablet", "desktop"].includes(String(payload.device_class))) {
       return { status: 400, error: "Invalid payload" };
     }
-    if (typeof event.hour_of_day !== "number" || event.hour_of_day < 0 || event.hour_of_day > 23) {
+    if (typeof payload.hour_of_day !== "number" || payload.hour_of_day < 0 || payload.hour_of_day > 23) {
       return { status: 400, error: "Invalid payload" };
     }
   }
@@ -164,7 +173,7 @@ function simulateIngest(request: IngestRequest): IngestResult {
 
 test("ingest requires authentication", () => {
   const result = simulateIngest({
-    auth: { user: null, memberships: [] } as any,
+    auth: { user: null },
     consented: true,
     body: {
       events: [

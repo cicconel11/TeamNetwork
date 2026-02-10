@@ -170,7 +170,8 @@ export function trackBehavioralEvent(
     },
   };
 
-  void supabase.rpc("log_analytics_event", payload).catch(() => {});
+  // Fire-and-forget; do not block UI on analytics.
+  void supabase.rpc("log_analytics_event", payload);
 }
 
 export function trackOpsEvent(
@@ -200,5 +201,6 @@ export function trackOpsEvent(
     p_retryable: props.retryable ?? null,
   };
 
-  void supabase.rpc("log_ops_event", payload).catch(() => {});
+  // Fire-and-forget; do not block UI on ops telemetry.
+  void supabase.rpc("log_ops_event", payload);
 }

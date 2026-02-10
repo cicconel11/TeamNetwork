@@ -72,7 +72,7 @@ function simulateConsentPut(
     return { status: 400, error: "Invalid JSON" };
   }
 
-  const payload = body as any;
+  const payload = body as { consented?: unknown };
   if (typeof payload.consented !== "boolean") {
     return { status: 400, error: "Invalid payload" };
   }

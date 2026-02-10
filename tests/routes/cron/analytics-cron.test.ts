@@ -90,7 +90,7 @@ function simulateAggregate(
         result: rpcResult?.data,
       },
     };
-  } catch (err) {
+  } catch {
     // Step 6: Return 500 with NO details field (Issue 3 fix)
     return {
       status: 500,
@@ -139,7 +139,7 @@ function simulatePurge(
         result: rpcResult?.data,
       },
     };
-  } catch (err) {
+  } catch {
     // Step 5: Return 500 with NO details field (Issue 3 fix)
     return {
       status: 500,

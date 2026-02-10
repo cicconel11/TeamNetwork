@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 
 // ---------------------------------------------------------------------------
 // Type Definitions (recreated locally for test isolation)
@@ -107,6 +107,13 @@ function createMockClient(mockResponse: MockResponse): MockClient {
 
 const MODEL_ID = "claude-haiku-4-5-20251001";
 
+type SimulateAdapterCallFn = ((
+  mockResponse: MockResponse,
+  input: ProfileInput,
+) => Promise<UIProfile>) & {
+  lastCapturedParams?: MessageCreateParams;
+};
+
 /**
  * Simulates the adapter's generateUIProfile method.
  * This recreates the logic from AnthropicAdapter for testing purposes.
@@ -152,7 +159,7 @@ Only output valid JSON, no markdown fences, no explanation.`;
   // Verify client was called correctly (for test case 2)
   if (client.capturedParams) {
     // This allows us to inspect the captured params in tests
-    (simulateAdapterCall as any).lastCapturedParams = client.capturedParams;
+    (simulateAdapterCall as SimulateAdapterCallFn).lastCapturedParams = client.capturedParams;
   }
 
   // Extract text from the response
@@ -236,7 +243,8 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await simulateAdapterCall(mockResponse, sampleInput);
 
-    const captured = (simulateAdapterCall as any).lastCapturedParams as MessageCreateParams;
+    const captured = (simulateAdapterCall as SimulateAdapterCallFn).lastCapturedParams;
+    assert.ok(captured, "Captured params should be set");
 
     // Verify system message is a string and contains expected content
     assert.strictEqual(typeof captured.system, "string");
@@ -250,16 +258,16 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
     assert.strictEqual(captured.messages[0].role, "user");
 
     const userContent = captured.messages[0].content;
-    let parsedUserData: any;
+    let parsedUserData: Record<string, unknown> | null = null;
     assert.doesNotThrow(() => {
-      parsedUserData = JSON.parse(userContent);
+      parsedUserData = JSON.parse(userContent) as Record<string, unknown>;
     }, "User message should be valid JSON");
 
     // Verify user data structure
-    assert.ok(parsedUserData.user_role, "Should contain user_role");
-    assert.ok(parsedUserData.organization_type, "Should contain organization_type");
-    assert.ok(parsedUserData.available_features, "Should contain available_features");
-    assert.ok(parsedUserData.usage_summaries, "Should contain usage_summaries");
+    assert.ok(parsedUserData?.user_role, "Should contain user_role");
+    assert.ok(parsedUserData?.organization_type, "Should contain organization_type");
+    assert.ok(parsedUserData?.available_features, "Should contain available_features");
+    assert.ok(parsedUserData?.usage_summaries, "Should contain usage_summaries");
 
     // Verify it does NOT contain system instructions
     assert.ok(
@@ -292,7 +300,7 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
+      (error: unknown) => {
         // JSON.parse throws SyntaxError
         return error instanceof SyntaxError;
       },
@@ -312,9 +320,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
+      (error: unknown) => {
         // Zod throws ZodError
-        return error.name === "ZodError" || error.issues !== undefined;
+        return error instanceof ZodError || (typeof error === "object" && error !== null && "issues" in error);
       },
     );
   });
@@ -347,8 +355,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     // Result should only contain valid schema fields
     assert.deepStrictEqual(result, validProfile);
-    assert.strictEqual((result as any).unused_field, undefined);
-    assert.strictEqual((result as any).another_extra, undefined);
+    const resultRecord = result as Record<string, unknown>;
+    assert.strictEqual(resultRecord.unused_field, undefined);
+    assert.strictEqual(resultRecord.another_extra, undefined);
   });
 
   it("should throw when nav_order exceeds max length (30)", async () => {
@@ -368,9 +377,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
-        return error.name === "ZodError" && error.issues.some(
-          (issue: any) => issue.path.includes("nav_order"),
+      (error: unknown) => {
+        return error instanceof ZodError && error.issues.some(
+          (issue) => issue.path.includes("nav_order"),
         );
       },
     );
@@ -393,9 +402,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
-        return error.name === "ZodError" && error.issues.some(
-          (issue: any) => issue.path.includes("feature_highlights"),
+      (error: unknown) => {
+        return error instanceof ZodError && error.issues.some(
+          (issue) => issue.path.includes("feature_highlights"),
         );
       },
     );
@@ -418,9 +427,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
-        return error.name === "ZodError" && error.issues.some(
-          (issue: any) => issue.path.includes("suggested_features"),
+      (error: unknown) => {
+        return error instanceof ZodError && error.issues.some(
+          (issue) => issue.path.includes("suggested_features"),
         );
       },
     );
@@ -443,9 +452,9 @@ describe("AnthropicAdapter.generateUIProfile()", () => {
 
     await assert.rejects(
       async () => await simulateAdapterCall(mockResponse, sampleInput),
-      (error: any) => {
-        return error.name === "ZodError" && error.issues.some(
-          (issue: any) => issue.path.includes("preferred_time_label"),
+      (error: unknown) => {
+        return error instanceof ZodError && error.issues.some(
+          (issue) => issue.path.includes("preferred_time_label"),
         );
       },
     );
