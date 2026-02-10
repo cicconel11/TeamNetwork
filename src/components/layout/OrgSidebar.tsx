@@ -7,6 +7,7 @@ import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -19,6 +20,7 @@ interface OrgSidebarProps {
 export function OrgSidebar({ organization, role, isDevAdmin = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
+  const { profile } = useUIProfile(organization.id);
   
   // Parse nav_config
   const navConfig = (organization.nav_config && typeof organization.nav_config === "object" && !Array.isArray(organization.nav_config)
@@ -51,14 +53,28 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, className =
       };
     })
     .sort((a, b) => {
-      // If both have explicit orders, compare them
+      // If both have explicit orders from nav_config, compare them
       if (a.order !== undefined && b.order !== undefined) {
         return a.order - b.order;
       }
       // If only one has an explicit order, it comes first
       if (a.order !== undefined) return -1;
       if (b.order !== undefined) return 1;
-      // If neither has an order, use default position from ORG_NAV_ITEMS
+
+      // Fall back to LLM-generated profile nav_order (if available)
+      if (profile?.nav_order && profile.nav_order.length > 0) {
+        const aKey = a.href === "" ? "dashboard" : a.href.replace(/^\//, "");
+        const bKey = b.href === "" ? "dashboard" : b.href.replace(/^\//, "");
+        const aIdx = profile.nav_order.indexOf(aKey);
+        const bIdx = profile.nav_order.indexOf(bKey);
+        // Both in profile → sort by profile order
+        if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+        // Only one in profile → it comes first
+        if (aIdx >= 0) return -1;
+        if (bIdx >= 0) return 1;
+      }
+
+      // Default position from ORG_NAV_ITEMS
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
     });
 
