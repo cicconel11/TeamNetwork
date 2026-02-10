@@ -9,6 +9,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -166,7 +167,8 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const borderColor = isPrimaryDark ? adjustColor(primary, 35) : adjustColor(primary, -45);
 
   return (
-    <div 
+    <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
+    <div
       data-org-shell
       className="min-h-screen"
       style={{
@@ -253,6 +255,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         />
       )}
     </div>
+    </OrgAnalyticsProvider>
   );
 }
 

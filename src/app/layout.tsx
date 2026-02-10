@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Bitter, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -42,7 +43,9 @@ export default function RootLayout({
     <html lang="en" className={`${plusJakartaSans.variable} ${bitter.variable} ${spaceMono.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider>
-          <ErrorBoundaryProvider>{children}</ErrorBoundaryProvider>
+          <ErrorBoundaryProvider>
+            <AnalyticsProvider>{children}</AnalyticsProvider>
+          </ErrorBoundaryProvider>
         </ThemeProvider>
       </body>
     </html>

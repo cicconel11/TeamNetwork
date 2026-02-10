@@ -74,6 +74,19 @@ interface UserDataExport {
     organizationId: string;
     status: string;
   }>;
+  analyticsConsent: {
+    consented: boolean;
+    consentedAt: string | null;
+    revokedAt: string | null;
+  } | null;
+  usageSummaries: Array<{
+    organizationId: string;
+    feature: string;
+    visitCount: number;
+    totalDurationMs: number;
+    periodStart: string;
+    periodEnd: string;
+  }>;
 }
 
 /**
@@ -133,6 +146,8 @@ export async function GET(request: Request) {
       formSubmissions: [],
       chatGroupMemberships: [],
       mentorshipPairs: [],
+      analyticsConsent: null,
+      usageSummaries: [],
     };
 
     // Fetch memberships with organization names
@@ -276,6 +291,40 @@ export async function GET(request: Request) {
           status: p.status,
         }))
       );
+    }
+
+    // Fetch analytics consent
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: analyticsConsent } = await (serviceSupabase as any)
+      .from("analytics_consent")
+      .select("consented, consented_at, revoked_at")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (analyticsConsent) {
+      exportData.analyticsConsent = {
+        consented: analyticsConsent.consented,
+        consentedAt: analyticsConsent.consented_at,
+        revokedAt: analyticsConsent.revoked_at,
+      };
+    }
+
+    // Fetch usage summaries
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: usageSummaries } = await (serviceSupabase as any)
+      .from("usage_summaries")
+      .select("organization_id, feature, visit_count, total_duration_ms, period_start, period_end")
+      .eq("user_id", user.id);
+
+    if (usageSummaries) {
+      exportData.usageSummaries = usageSummaries.map((s: { organization_id: string; feature: string; visit_count: number; total_duration_ms: number; period_start: string; period_end: string }) => ({
+        organizationId: s.organization_id,
+        feature: s.feature,
+        visitCount: s.visit_count,
+        totalDurationMs: s.total_duration_ms,
+        periodStart: s.period_start,
+        periodEnd: s.period_end,
+      }));
     }
 
     // Send notification email

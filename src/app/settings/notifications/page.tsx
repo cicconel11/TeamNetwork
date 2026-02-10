@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference } from "@/types/database";
 import { Card, Button, Badge, Input } from "@/components/ui";
+import { ConsentBanner } from "@/components/analytics/ConsentBanner";
 
 type OrgPrefForm = {
   orgId: string;
@@ -266,6 +267,15 @@ function NotificationSettingsContent() {
           ))}
         </div>
       )}
+
+      {/* Analytics Consent */}
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-foreground">Usage Analytics</h2>
+        <p className="text-sm text-muted-foreground">
+          Control anonymous usage pattern tracking.
+        </p>
+      </div>
+      <ConsentBanner />
 
       <Card className="p-5 space-y-3">
         <div>

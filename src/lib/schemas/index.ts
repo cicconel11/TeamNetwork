@@ -42,3 +42,6 @@ export * from "./telemetry";
 
 // Error tracking schemas
 export * from "./errors";
+
+// Analytics schemas
+export * from "./analytics";

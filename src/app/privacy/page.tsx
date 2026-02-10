@@ -138,8 +138,26 @@ const privacySections: PrivacySection[] = [
     ],
   },
   {
-    id: "children",
+    id: "usage-analytics",
     number: "10",
+    title: "Usage Analytics and Personalization",
+    paragraphs: [
+      "With your explicit opt-in consent, we collect anonymous usage patterns to personalize your navigation experience. This feature is entirely optional and disabled by default.",
+      "You can enable or disable usage analytics at any time in your account settings under Notifications.",
+    ],
+    bullets: [
+      "What we track: Which features you navigate to (e.g., 'members', 'events'), how often, device category (mobile/tablet/desktop from screen width), and time-of-day patterns.",
+      "What we never track: Content you view, search queries, specific resource IDs, IP addresses, user-agent strings, click targets, form values, educational records, or location data.",
+      "Age restrictions: Users aged 13-17 have reduced tracking (page visit counts only, no timing or behavioral data). Users under 13 are never tracked.",
+      "Educational organizations: Only aggregate page view counts are collected (FERPA compliance). No behavioral profiling is performed.",
+      "Data lifecycle: Raw events are automatically deleted after 90 days. Aggregated summaries (containing no personally identifiable information) are retained to improve your experience.",
+      "Personalization profiles are generated using AI to optimize your navigation order and highlight relevant features. These profiles expire after 7 days and are regenerated on demand.",
+      "Account deletion removes all analytics data immediately.",
+    ],
+  },
+  {
+    id: "children",
+    number: "11",
     title: "Children's Privacy",
     paragraphs: [
       "The Service is not intended for children under 16 years of age. We do not knowingly collect personal information from children under 16. If we learn that we have collected personal information from a child under 16, we will take steps to delete that information promptly.",
@@ -148,7 +166,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "international",
-    number: "11",
+    number: "12",
     title: "International Data Transfers",
     paragraphs: [
       "Your information may be transferred to and processed in countries other than your country of residence. These countries may have data protection laws that are different from the laws of your country.",
@@ -157,7 +175,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "changes",
-    number: "12",
+    number: "13",
     title: "Changes to This Policy",
     paragraphs: [
       "We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the \"Last Updated\" date.",
@@ -166,7 +184,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "contact",
-    number: "13",
+    number: "14",
     title: "Contact Us",
     paragraphs: [
       "If you have any questions about this Privacy Policy or our data practices, please contact us:",
