@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
+import { CancelingBanner } from "@/components/layout/CancelingBanner";
 import { BillingGate } from "@/components/layout/BillingGate";
 import { DevPanel } from "@/components/layout/DevPanel";
 import { getOrgContext } from "@/lib/auth/roles";
@@ -187,11 +188,23 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         }}
       />
 
+      {/* Canceling banner - shown when subscription is scheduled to cancel at period end */}
+      {orgContext.gracePeriod.isCanceling && orgContext.subscription?.currentPeriodEnd && (
+        <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
+          <CancelingBanner
+            periodEndDate={orgContext.subscription.currentPeriodEnd}
+            orgSlug={orgSlug}
+            organizationId={organization.id}
+            isAdmin={isAdmin}
+          />
+        </div>
+      )}
+
       {/* Grace period banner - shown when subscription is canceled but within 30-day grace */}
       {orgContext.gracePeriod.isInGracePeriod && (
         <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
-          <GracePeriodBanner 
-            daysRemaining={orgContext.gracePeriod.daysRemaining} 
+          <GracePeriodBanner
+            daysRemaining={orgContext.gracePeriod.daysRemaining}
             orgSlug={orgSlug}
             organizationId={organization.id}
             isAdmin={isAdmin}
@@ -206,7 +219,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} />
       <ConsentModal />
 
-      <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod ? "mt-12" : ""}`}>
+      <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>
         {children}
       </main>
 
