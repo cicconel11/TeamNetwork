@@ -279,6 +279,60 @@ async function handleConnectWebhook(req: Request, deps: ConnectWebhookDeps = def
         break;
       }
 
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        const refundPaymentIntentId = typeof charge.payment_intent === "string"
+          ? charge.payment_intent : null;
+
+        if (refundPaymentIntentId) {
+          const { data: donation } = await supabase
+            .from("organization_donations")
+            .select("organization_id, amount_cents, status")
+            .eq("stripe_payment_intent_id", refundPaymentIntentId)
+            .maybeSingle();
+
+          if (!donation) {
+            debugLog("webhook-connect", "No donation found for refunded payment intent:", maskPII(refundPaymentIntentId));
+            break;
+          }
+
+          const { error: donationError } = await supabase
+            .from("organization_donations")
+            .update({ status: "refunded" })
+            .eq("stripe_payment_intent_id", refundPaymentIntentId);
+
+          if (donationError) {
+            throw new Error(`Failed to update donation status: ${donationError.message}`);
+          }
+
+          const { error: attemptError } = await supabase
+            .from("payment_attempts")
+            .update({ status: "refunded" })
+            .eq("stripe_payment_intent_id", refundPaymentIntentId);
+
+          if (attemptError) {
+            throw new Error(`Failed to update payment attempt status: ${attemptError.message}`);
+          }
+
+          if (donation.status === "succeeded") {
+            const { error: statsError } = await deps.incrementDonationStats(
+              supabase,
+              donation.organization_id,
+              -donation.amount_cents,
+              new Date().toISOString(),
+              -1
+            );
+
+            if (statsError) {
+              throw new Error(`Failed to decrement donation stats: ${statsError.message}`);
+            }
+          }
+
+          debugLog("webhook-connect", "Refund processed for payment intent:", maskPII(refundPaymentIntentId));
+        }
+        break;
+      }
+
       default:
         debugLog("webhook-connect", "Unhandled event type:", event.type);
         break;
