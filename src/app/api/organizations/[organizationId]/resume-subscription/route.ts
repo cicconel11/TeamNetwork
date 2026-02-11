@@ -61,11 +61,20 @@ export async function POST(_req: Request, { params }: RouteParams) {
   type OrgSubTable = Database["public"]["Tables"]["organization_subscriptions"];
   type OrgSubUpdate = OrgSubTable["Update"];
 
-  const { data: subscription } = await serviceSupabase
+  const { data: subscription, error: subscriptionError } = await serviceSupabase
     .from("organization_subscriptions")
     .select("stripe_subscription_id, status")
     .eq("organization_id", organizationId)
     .maybeSingle();
+
+  if (subscriptionError) {
+    console.error("[resume-subscription] Failed to load subscription", {
+      organizationId,
+      code: subscriptionError.code,
+      message: subscriptionError.message,
+    });
+    return respond({ error: "Unable to load subscription details" }, 500);
+  }
 
   const sub = subscription as { 
     stripe_subscription_id: string | null; 
@@ -97,7 +106,19 @@ export async function POST(_req: Request, { params }: RouteParams) {
     };
 
     const table = "organization_subscriptions" as const;
-    await serviceSupabase.from(table).update(payload).eq("organization_id", organizationId);
+    const { error: updateError } = await serviceSupabase
+      .from(table)
+      .update(payload)
+      .eq("organization_id", organizationId);
+
+    if (updateError) {
+      console.error("[resume-subscription] Failed to update subscription", {
+        organizationId,
+        code: updateError.code,
+        message: updateError.message,
+      });
+      return respond({ error: "Unable to persist subscription state" }, 500);
+    }
 
     return respond({ 
       status: "active",

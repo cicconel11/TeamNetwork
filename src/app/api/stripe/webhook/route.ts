@@ -97,7 +97,10 @@ export async function POST(req: Request) {
     if (match.stripe_subscription_id) {
       query = query.eq("stripe_subscription_id", match.stripe_subscription_id);
     }
-    await query;
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to update organization_subscriptions: ${error.message}`);
+    }
   };
 
   const updateByOrgId = async (
@@ -260,9 +263,12 @@ export async function POST(req: Request) {
         updated_at: new Date().toISOString(),
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Update"];
 
-      await orgSubs()
+      const { error } = await orgSubs()
         .update(payload)
         .eq("organization_id", orgId);
+      if (error) {
+        throw new Error(`Failed to seed subscription row: ${error.message}`);
+      }
     } else {
       const insertPayload = {
         organization_id: orgId,
@@ -272,7 +278,10 @@ export async function POST(req: Request) {
         status: "pending",
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Insert"];
 
-      await orgSubs().insert(insertPayload);
+      const { error } = await orgSubs().insert(insertPayload);
+      if (error) {
+        throw new Error(`Failed to create subscription row: ${error.message}`);
+      }
     }
   };
 
@@ -411,10 +420,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true });
   }
 
-  type SubscriptionWithPeriod = Stripe.Subscription & { current_period_end?: number | null };
+  type SubscriptionWithPeriod = Stripe.Subscription & {
+    current_period_end?: number | null;
+    cancel_at_period_end?: boolean | null;
+  };
   type InvoiceWithSub = Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
     customer?: string | Stripe.Customer | Stripe.DeletedCustomer | string | null;
+  };
+  const normalizeSubscriptionStatus = (
+    subscription: Pick<SubscriptionWithPeriod, "status" | "cancel_at_period_end">,
+    eventType?: Stripe.Event.Type
+  ) => {
+    const status = subscription.status || "canceled";
+    if (eventType === "customer.subscription.deleted") {
+      return "canceled";
+    }
+    if (subscription.cancel_at_period_end && status !== "canceled") {
+      return "canceling";
+    }
+    return status;
   };
 
   try {
@@ -483,7 +508,7 @@ export async function POST(req: Request) {
             try {
               const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
               // Always use the actual subscription status from Stripe
-              status = subscription.status || "active";
+              status = normalizeSubscriptionStatus(subscription);
               const periodEnd = subscription.current_period_end ? Number(subscription.current_period_end) : null;
               currentPeriodEnd = periodEnd
                 ? new Date(periodEnd * 1000).toISOString()
@@ -539,7 +564,7 @@ export async function POST(req: Request) {
         const currentPeriodEnd = periodEnd
           ? new Date(periodEnd * 1000).toISOString()
           : null;
-        const status = subscription.status || "canceled";
+        const status = normalizeSubscriptionStatus(subscription, event.type);
 
         // Set grace period when subscription is deleted (canceled)
         // Clear grace period when subscription is reactivated (active/trialing)
@@ -611,6 +636,46 @@ export async function POST(req: Request) {
         const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : null;
         if (subscriptionId) {
           await updateBySubscriptionId(subscriptionId, { status: "past_due" });
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge & { invoice?: string | null };
+        const invoiceId = typeof charge.invoice === "string" ? charge.invoice : null;
+
+        if (invoiceId) {
+          let invoice: (Stripe.Invoice & { subscription?: string | Stripe.Subscription | null }) | null = null;
+          try {
+            invoice = await stripe.invoices.retrieve(invoiceId) as Stripe.Invoice & { subscription?: string | Stripe.Subscription | null };
+          } catch (error) {
+            console.error("[stripe-webhook] Failed to retrieve invoice:", maskPII(invoiceId), error);
+            await reportExternalServiceWarning(
+              "stripe",
+              `Failed to retrieve invoice ${invoiceId} in charge.refunded`,
+              telemetry.getContext(),
+              { invoiceId, eventType: event.type }
+            );
+            break;
+          }
+
+          const subscriptionId = typeof invoice.subscription === "string"
+            ? invoice.subscription : null;
+
+          if (subscriptionId) {
+            try {
+              await stripe.subscriptions.cancel(subscriptionId);
+            } catch {
+              debugLog("stripe-webhook", "Subscription already cancelled or not found:", subscriptionId);
+            }
+
+            await updateBySubscriptionId(subscriptionId, {
+              status: "canceled",
+              grace_period_ends_at: calculateGracePeriodEnd(),
+            });
+
+            debugLog("stripe-webhook", "Refund detected — cancelled subscription:", subscriptionId);
+          }
         }
         break;
       }
