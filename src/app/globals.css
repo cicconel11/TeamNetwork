@@ -1163,3 +1163,22 @@ noscript~.scroll-reveal {
     opacity: 1;
   }
 }
+
+/* ========================================
+   Availability Grid - Current Time Indicator
+   ======================================== */
+
+@keyframes timeLinePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.7; }
+}
+
+.time-line-dot {
+  animation: timeLinePulse 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .time-line-dot {
+    animation: none;
+  }
+}

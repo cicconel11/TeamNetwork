@@ -95,8 +95,67 @@ export function ConnectSetup({ organizationId, isConnected, connectStatus }: Con
     );
   }
 
-  // Details submitted but charges not yet enabled (under review)
+  // Details submitted but charges not yet enabled — differentiate by reason
   if (connectStatus?.detailsSubmitted && !connectStatus.chargesEnabled) {
+    const reason = connectStatus.disabledReason;
+
+    // Requirements past due — user must take action
+    if (reason?.startsWith("requirements.")) {
+      return (
+        <Card className="p-6 border-l-4 border-l-amber-500">
+          <div className="flex items-start gap-4">
+            <div className="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div>
+              <CardTitle>Action Required: Complete Stripe Setup</CardTitle>
+              <CardDescription className="mt-1 mb-4">
+                Your Stripe account needs additional information before donations can be enabled.
+                Click below to complete the remaining verification steps.
+              </CardDescription>
+              {error && (
+                <p className="text-sm text-error mb-4">{error}</p>
+              )}
+              <Button onClick={handleSetup} isLoading={isLoading}>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                </svg>
+                Complete Setup
+              </Button>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // Account rejected by Stripe
+    if (reason?.startsWith("rejected.")) {
+      return (
+        <Card className="p-6 border-l-4 border-l-red-500">
+          <div className="flex items-start gap-4">
+            <div className="h-10 w-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+              <svg className="h-5 w-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+            </div>
+            <div>
+              <CardTitle>Stripe Account Issue</CardTitle>
+              <CardDescription className="mt-1">
+                Your Stripe account has been flagged. Please check your{" "}
+                <a href="https://dashboard.stripe.com/" target="_blank" rel="noopener noreferrer" className="text-org-primary hover:underline">
+                  Stripe Dashboard
+                </a>{" "}
+                for details, or contact Stripe support.
+              </CardDescription>
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
+    // Genuinely under review (disabledReason is null) or other platform-level reason
     return (
       <Card className="p-6 border-l-4 border-l-blue-500">
         <div className="flex items-start gap-4">
