@@ -19,7 +19,6 @@ const GRID_START_HOUR = HOURS[0];
 const GRID_END_HOUR = HOURS[HOURS.length - 1] + 1;
 const GRID_START_MINUTE = GRID_START_HOUR * 60;
 const ROW_HEIGHT = 60; // px per hour row
-const TOTAL_GRID_HEIGHT = HOURS.length * ROW_HEIGHT; // 960px
 
 type CalendarEventSummary = {
   id: string;
