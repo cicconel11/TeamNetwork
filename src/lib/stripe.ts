@@ -104,6 +104,7 @@ export type ConnectAccountStatus = {
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   disabledReason: string | null;
+  lookupFailed: boolean;
 };
 
 export async function getConnectAccountStatus(accountId: string): Promise<ConnectAccountStatus> {
@@ -119,6 +120,7 @@ export async function getConnectAccountStatus(accountId: string): Promise<Connec
       chargesEnabled,
       payoutsEnabled,
       disabledReason: account.requirements?.disabled_reason ?? null,
+      lookupFailed: false,
     };
   } catch (error) {
     console.error("[stripe] Unable to retrieve connect account status", error);
@@ -128,6 +130,7 @@ export async function getConnectAccountStatus(accountId: string): Promise<Connec
       chargesEnabled: false,
       payoutsEnabled: false,
       disabledReason: "lookup_failed",
+      lookupFailed: true,
     };
   }
 }

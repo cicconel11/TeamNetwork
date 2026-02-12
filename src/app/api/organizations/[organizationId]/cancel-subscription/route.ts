@@ -57,11 +57,20 @@ export async function POST(_req: Request, { params }: RouteParams) {
   type OrgSubTable = Database["public"]["Tables"]["organization_subscriptions"];
   type OrgSubUpdate = OrgSubTable["Update"];
 
-  const { data: subscription } = await serviceSupabase
+  const { data: subscription, error: subscriptionError } = await serviceSupabase
     .from("organization_subscriptions")
     .select("stripe_subscription_id, status, current_period_end")
     .eq("organization_id", organizationId)
     .maybeSingle();
+
+  if (subscriptionError) {
+    console.error("[cancel-subscription] Failed to load subscription", {
+      organizationId,
+      code: subscriptionError.code,
+      message: subscriptionError.message,
+    });
+    return respond({ error: "Unable to load subscription details" }, 500);
+  }
 
   const sub = subscription as { 
     stripe_subscription_id: string | null; 
@@ -82,10 +91,15 @@ export async function POST(_req: Request, { params }: RouteParams) {
         cancel_at_period_end: true,
       });
       
-      // Get the period end from the first subscription item
-      const firstItem = updatedSub.items?.data?.[0];
-      if (firstItem?.current_period_end) {
-        currentPeriodEnd = new Date(firstItem.current_period_end * 1000).toISOString();
+      // API versions may expose period end either on subscription or item(s).
+      const subscriptionLevelPeriodEnd = (updatedSub as unknown as { current_period_end?: number | null }).current_period_end ?? null;
+      const itemPeriodEnd = updatedSub.items?.data
+        ?.map((item) => item.current_period_end)
+        .filter((value): value is number => typeof value === "number")
+        .sort((a, b) => a - b)?.[0] ?? null;
+      const periodEnd = subscriptionLevelPeriodEnd ?? itemPeriodEnd;
+      if (periodEnd) {
+        currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
       }
     }
 
@@ -97,7 +111,19 @@ export async function POST(_req: Request, { params }: RouteParams) {
     };
 
     const table = "organization_subscriptions" as const;
-    await serviceSupabase.from(table).update(payload).eq("organization_id", organizationId);
+    const { error: updateError } = await serviceSupabase
+      .from(table)
+      .update(payload)
+      .eq("organization_id", organizationId);
+
+    if (updateError) {
+      console.error("[cancel-subscription] Failed to update subscription", {
+        organizationId,
+        code: updateError.code,
+        message: updateError.message,
+      });
+      return respond({ error: "Unable to persist cancellation state" }, 500);
+    }
 
     return respond({ 
       status: "canceling",
@@ -109,4 +135,3 @@ export async function POST(_req: Request, { params }: RouteParams) {
     return respond({ error: message }, 400);
   }
 }
-

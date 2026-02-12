@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useUIProfile } from "@/lib/analytics/use-ui-profile";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -19,6 +22,7 @@ interface OrgSidebarProps {
 export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
+  const { profile } = useUIProfile();
   
   // Parse nav_config
   const navConfig = (organization.nav_config && typeof organization.nav_config === "object" && !Array.isArray(organization.nav_config)
@@ -54,14 +58,28 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       };
     })
     .sort((a, b) => {
-      // If both have explicit orders, compare them
+      // If both have explicit orders from nav_config, compare them
       if (a.order !== undefined && b.order !== undefined) {
         return a.order - b.order;
       }
       // If only one has an explicit order, it comes first
       if (a.order !== undefined) return -1;
       if (b.order !== undefined) return 1;
-      // If neither has an order, use default position from ORG_NAV_ITEMS
+
+      // Fall back to LLM-generated profile nav_order (if available)
+      if (profile?.nav_order && profile.nav_order.length > 0) {
+        const aKey = a.href === "" ? "dashboard" : a.href.replace(/^\//, "");
+        const bKey = b.href === "" ? "dashboard" : b.href.replace(/^\//, "");
+        const aIdx = profile.nav_order.indexOf(aKey);
+        const bIdx = profile.nav_order.indexOf(bKey);
+        // Both in profile → sort by profile order
+        if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
+        // Only one in profile → it comes first
+        if (aIdx >= 0) return -1;
+        if (bIdx >= 0) return 1;
+      }
+
+      // Default position from ORG_NAV_ITEMS
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
     });
 
@@ -101,7 +119,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1">
-          {visibleNav.map((item) => {
+          {visibleNav.map((item, index) => {
             const href = `${basePath}${item.href}`;
             // Check for exact match first
             let isActive = pathname === href;
@@ -124,7 +142,14 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
               <li key={item.href}>
                 <Link
                   href={href}
-                  onClick={onClose}
+                  onClick={() => {
+                    trackBehavioralEvent("nav_click", {
+                      destination_route: href,
+                      nav_surface: "sidebar",
+                      position: index,
+                    }, organization.id);
+                    onClose?.();
+                  }}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-org-secondary text-org-secondary-foreground shadow-soft"
@@ -142,6 +167,11 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
       {/* User Section */}
       <div className="p-4 border-t border-border space-y-1">
+        <div className="flex items-center justify-between px-3 py-2.5">
+          <span className="text-sm font-medium text-muted-foreground">Theme</span>
+          <ThemeToggle />
+        </div>
+
         <Link
           href="/app"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"

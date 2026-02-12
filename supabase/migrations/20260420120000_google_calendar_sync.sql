@@ -13,6 +13,7 @@ create table if not exists public.user_calendar_connections (
   last_sync_at timestamptz,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
+  target_calendar_id text not null default 'primary',
   unique(user_id)
 );
 

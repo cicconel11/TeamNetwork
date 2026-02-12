@@ -4,6 +4,11 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 export async function resolve(specifier, context, defaultResolve) {
+  if (specifier === "next/server") {
+    const result = await defaultResolve("next/server.js", context, defaultResolve);
+    return { ...result, shortCircuit: true };
+  }
+
   if (typeof specifier === "string" && specifier.startsWith("@/")) {
     const basePath = path.join(process.cwd(), "src", specifier.slice(2));
     const candidates = [

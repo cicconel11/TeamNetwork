@@ -2,7 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { fetchUrlSafe } from "./fetch";
 import { extractBalancedJson, extractJsonLdEvents, extractTableEvents, findIcsLink, hashEventId, type ParsedEvent } from "./html-utils";
 import type { NormalizedEvent, ScheduleConnector } from "./types";
-import { syncScheduleEvents, type SyncWindow } from "./storage";
+import { syncScheduleEvents } from "./storage";
 import { icsConnector, syncIcsToSource } from "./ics";
 import { isHostAllowed } from "@/lib/schedule-security/allowlist";
 import { sanitizeEventTitle, getTitleForHash } from "./sanitize";
@@ -50,7 +50,7 @@ export const vendorBConnector: ScheduleConnector = {
       return { ...result, vendor: "vendorB" };
     }
 
-    const events = normalizeEvents(extractVendorBEvents(text)).filter((event) => isWithinWindow(event, window));
+    const events = normalizeEvents(extractVendorBEvents(text));
     const supabase = createServiceClient();
     const { imported, updated, cancelled } = await syncScheduleEvents(supabase, {
       orgId,
@@ -143,7 +143,3 @@ function safeHost(rawUrl: string) {
   }
 }
 
-function isWithinWindow(event: NormalizedEvent, window: SyncWindow) {
-  const start = new Date(event.start_at);
-  return start >= window.from && start <= window.to;
-}

@@ -3,12 +3,17 @@ import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
+import { CancelingBanner } from "@/components/layout/CancelingBanner";
 import { BillingGate } from "@/components/layout/BillingGate";
 import { DevPanel } from "@/components/layout/DevPanel";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
+import { ConsentModal } from "@/components/analytics/ConsentModal";
+import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
   children: React.ReactNode;
@@ -148,79 +153,58 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     : { data: null };
   const primary = organization.primary_color || "#1e3a5f";
   const secondary = organization.secondary_color || "#10b981";
-  const primaryLight = organization.primary_color ? adjustColor(organization.primary_color, 20) : "#2d4a6f";
-  const primaryDark = organization.primary_color ? adjustColor(organization.primary_color, -20) : "#0f2a4f";
-  const secondaryLight = organization.secondary_color ? adjustColor(organization.secondary_color, 20) : "#34d399";
-  const secondaryDark = organization.secondary_color ? adjustColor(organization.secondary_color, -20) : "#047857";
-  const isPrimaryDark = isColorDark(primary);
-  const isSecondaryDark = isColorDark(secondary);
-  const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
-  // Use black text on bright secondary colors for better readability
-  const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
-  const cardColor = isPrimaryDark ? adjustColor(primary, 18) : adjustColor(primary, -12);
-  const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-  // For light themes, use a more visible muted color that provides better contrast
-  const muted = isPrimaryDark ? adjustColor(primary, 28) : adjustColor(primary, -35);
-  const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-  // For light themes, use a darker border for better visibility
-  const borderColor = isPrimaryDark ? adjustColor(primary, 35) : adjustColor(primary, -45);
+
+  // Compute theme variables for both light and dark modes
+  const lightModeVars = computeOrgThemeVariables(primary, secondary, false);
+  const darkModeVars = computeOrgThemeVariables(primary, secondary, true);
 
   return (
-    <div 
-      data-org-shell
-      className="min-h-screen"
-      style={{
-        // Set org primary color as CSS variable
-        "--color-org-primary": primary,
-        "--color-org-primary-light": primaryLight,
-        "--color-org-primary-dark": primaryDark,
-        "--color-org-secondary": secondary,
-        "--color-org-secondary-light": secondaryLight,
-        "--color-org-secondary-dark": secondaryDark,
-        "--color-org-secondary-foreground": secondaryForeground,
-        // Apply org colors to global surface tokens for this layout
-        "--background": primary,
-        "--foreground": baseForeground,
-        "--card": cardColor,
-        "--card-foreground": cardForeground,
-        "--muted": muted,
-        "--muted-foreground": mutedForeground,
-        "--border": borderColor,
-        "--ring": secondary,
-        backgroundColor: primary,
-        color: baseForeground,
-      } as React.CSSProperties}
-    >
+    <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
+    <AnalyticsProvider>
+    <div data-org-shell className="min-h-screen">
       <style
-        // Mirror theme variables to :root so portals/modals also pick up org branding
         dangerouslySetInnerHTML={{
           __html: `
             :root {
-              --color-org-primary: ${primary};
-              --color-org-primary-light: ${primaryLight};
-              --color-org-primary-dark: ${primaryDark};
-              --color-org-secondary: ${secondary};
-              --color-org-secondary-light: ${secondaryLight};
-              --color-org-secondary-dark: ${secondaryDark};
-              --color-org-secondary-foreground: ${secondaryForeground};
-              --background: ${primary};
-              --foreground: ${baseForeground};
-              --card: ${cardColor};
-              --card-foreground: ${cardForeground};
-              --muted: ${muted};
-              --muted-foreground: ${mutedForeground};
-              --border: ${borderColor};
-              --ring: ${secondary};
+              ${Object.entries(lightModeVars)
+                .map(([key, value]) => `${key}: ${value};`)
+                .join("\n              ")}
+            }
+
+            :root.dark {
+              ${Object.entries(darkModeVars)
+                .map(([key, value]) => `${key}: ${value};`)
+                .join("\n              ")}
+            }
+
+            @media (prefers-color-scheme: dark) {
+              :root:not(.light) {
+                ${Object.entries(darkModeVars)
+                  .map(([key, value]) => `${key}: ${value};`)
+                  .join("\n                ")}
+              }
             }
           `,
         }}
       />
 
+      {/* Canceling banner - shown when subscription is scheduled to cancel at period end */}
+      {orgContext.gracePeriod.isCanceling && orgContext.subscription?.currentPeriodEnd && (
+        <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
+          <CancelingBanner
+            periodEndDate={orgContext.subscription.currentPeriodEnd}
+            orgSlug={orgSlug}
+            organizationId={organization.id}
+            isAdmin={isAdmin}
+          />
+        </div>
+      )}
+
       {/* Grace period banner - shown when subscription is canceled but within 30-day grace */}
       {orgContext.gracePeriod.isInGracePeriod && (
         <div className="fixed top-0 left-0 right-0 z-50 lg:left-64">
-          <GracePeriodBanner 
-            daysRemaining={orgContext.gracePeriod.daysRemaining} 
+          <GracePeriodBanner
+            daysRemaining={orgContext.gracePeriod.daysRemaining}
             orgSlug={orgSlug}
             organizationId={organization.id}
             isAdmin={isAdmin}
@@ -233,8 +217,9 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       </div>
 
       <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} />
+      <ConsentModal />
 
-      <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod ? "mt-12" : ""}`}>
+      <main className={`lg:ml-64 p-4 lg:p-8 pt-20 lg:pt-8 ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>
         {children}
       </main>
 
@@ -253,38 +238,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
         />
       )}
     </div>
+    </AnalyticsProvider>
+    </OrgAnalyticsProvider>
   );
-}
-
-// Helper function to lighten/darken a hex color
-function adjustColor(hex: string, amount: number): string {
-  const clamp = (num: number) => Math.min(255, Math.max(0, num));
-  
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color.split("").map(c => c + c).join("");
-  }
-  
-  const num = parseInt(color, 16);
-  const r = clamp((num >> 16) + amount);
-  const g = clamp(((num >> 8) & 0x00FF) + amount);
-  const b = clamp((num & 0x0000FF) + amount);
-  
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
-function isColorDark(hex: string): boolean {
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-  const num = parseInt(color, 16);
-  const r = (num >> 16) & 255;
-  const g = (num >> 8) & 255;
-  const b = num & 255;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.6;
 }

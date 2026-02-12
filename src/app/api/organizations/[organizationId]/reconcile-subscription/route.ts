@@ -137,10 +137,18 @@ export async function POST(req: Request, { params }: RouteParams) {
         updated_at: new Date().toISOString(),
       };
 
-      await serviceSupabase
+      const { error: updateError } = await serviceSupabase
         .from("organization_subscriptions")
         .update(payload)
         .eq("organization_id", organizationId);
+      if (updateError) {
+        console.error("[reconcile-subscription] Failed to persist reconciled subscription", {
+          organizationId,
+          code: updateError.code,
+          message: updateError.message,
+        });
+        return respond({ error: "Unable to persist reconciled subscription state" }, 500);
+      }
 
       return respond({ status, stripeSubscriptionId: subscriptionRow.stripe_subscription_id, stripeCustomerId: customerId });
     } catch (error) {
@@ -208,16 +216,32 @@ export async function POST(req: Request, { params }: RouteParams) {
       updated_at: new Date().toISOString(),
     };
 
-    await serviceSupabase
+    const { error: updateError } = await serviceSupabase
       .from("organization_subscriptions")
       .update(payload)
       .eq("organization_id", organizationId);
+    if (updateError) {
+      console.error("[reconcile-subscription] Failed to persist recovered subscription", {
+        organizationId,
+        code: updateError.code,
+        message: updateError.message,
+      });
+      return respond({ error: "Unable to persist reconciled subscription state" }, 500);
+    }
 
     if (!attempt.organization_id) {
-      await serviceSupabase
+      const { error: attemptUpdateError } = await serviceSupabase
         .from("payment_attempts")
         .update({ organization_id: organizationId, updated_at: new Date().toISOString() })
         .eq("id", attempt.id);
+      if (attemptUpdateError) {
+        console.error("[reconcile-subscription] Failed to update payment attempt organization_id", {
+          attemptId: attempt.id,
+          organizationId,
+          code: attemptUpdateError.code,
+          message: attemptUpdateError.message,
+        });
+      }
     }
 
     return respond({ status, stripeSubscriptionId: subscriptionId, stripeCustomerId: customerId });

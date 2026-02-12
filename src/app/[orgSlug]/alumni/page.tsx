@@ -11,6 +11,8 @@ import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { getOrgContext, getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
+import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
 
 interface AlumniPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -23,8 +25,7 @@ interface AlumniPageProps {
   }>;
 }
 
-// Extended alumni type with admin flag
-interface AlumniWithAdminFlag {
+interface AlumniRecord {
   id: string;
   first_name: string;
   last_name: string;
@@ -35,7 +36,6 @@ interface AlumniWithAdminFlag {
   graduation_year: number | null;
   industry: string | null;
   current_city: string | null;
-  isAdmin: boolean;
 }
 
 export default async function AlumniPage({ params, searchParams }: AlumniPageProps) {
@@ -77,36 +77,15 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const { role } = await getOrgRole({ orgId: org.id });
   const canEdit = canEditNavItem(navConfig, "/alumni", role, ["admin"]);
 
-  // Step 1: Get user_ids with alumni or admin role
-  const { data: alumniRoles } = await dataClient
-    .from("user_organization_roles")
-    .select("user_id, role")
-    .eq("organization_id", org.id)
-    .in("role", ["alumni", "admin"])
-    .eq("status", "active");
-
-  const alumniUserIds = alumniRoles?.map((r) => r.user_id) || [];
-  const adminUserIds = new Set(
-    alumniRoles?.filter((r) => r.role === "admin").map((r) => r.user_id) || []
-  );
-
-  // Step 2: Build query with filters - only show alumni with alumni or admin role
+  // Query alumni directly — the alumni table is the source of truth
   let query = dataClient
     .from("alumni")
     .select(`
       id, first_name, last_name, photo_url, position_title, job_title, current_company,
-      graduation_year, industry, current_city, user_id
+      graduation_year, industry, current_city
     `)
     .eq("organization_id", org.id)
     .is("deleted_at", null);
-
-  // Only filter by role-matched user_ids if there are any
-  if (alumniUserIds.length > 0) {
-    query = query.in("user_id", alumniUserIds);
-  } else {
-    // No users with alumni/admin role - return no alumni
-    query = query.in("user_id", ["__no_match__"]);
-  }
 
   // Apply filters
   if (filters.year) {
@@ -134,34 +113,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   const { data: rawAlumni } = await query;
 
-  // Map and add isAdmin flag
-  type AlumniRow = {
-    id: string;
-    first_name: string;
-    last_name: string;
-    photo_url: string | null;
-    position_title: string | null;
-    job_title: string | null;
-    current_company: string | null;
-    graduation_year: number | null;
-    industry: string | null;
-    current_city: string | null;
-    user_id: string | null;
-  };
-
-  const alumni: AlumniWithAdminFlag[] = (rawAlumni || []).map((a: AlumniRow) => ({
-    id: a.id,
-    first_name: a.first_name,
-    last_name: a.last_name,
-    photo_url: a.photo_url,
-    position_title: a.position_title,
-    job_title: a.job_title,
-    current_company: a.current_company,
-    graduation_year: a.graduation_year,
-    industry: a.industry,
-    current_city: a.current_city,
-    isAdmin: a.user_id ? adminUserIds.has(a.user_id) : false,
-  }));
+  const alumni: AlumniRecord[] = (rawAlumni as AlumniRecord[] | null) || [];
 
   // Get unique values for filter dropdowns (from all alumni, not just filtered)
   const { data: allAlumni } = await dataClient
@@ -192,6 +144,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
   return (
     <div className="animate-fade-in">
+      <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
       <PageHeader
         title={pageLabel}
         description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? " (filtered)" : " in our network"}`}
@@ -211,6 +164,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
       {/* Dynamic Filters */}
       <AlumniFilters
+        orgId={org.id}
         years={years}
         industries={industries}
         companies={companies}
@@ -222,7 +176,12 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       {alumni && alumni.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {alumni.map((alum) => (
-            <Link key={alum.id} href={`/${orgSlug}/alumni/${alum.id}`}>
+            <DirectoryCardLink
+              key={alum.id}
+              href={`/${orgSlug}/alumni/${alum.id}`}
+              organizationId={org.id}
+              directoryType="alumni"
+            >
               <Card interactive className="p-5">
                 <div className="flex items-center gap-4">
                   <Avatar
@@ -244,9 +203,6 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                       {alum.graduation_year && (
                         <Badge variant="muted">Class of {alum.graduation_year}</Badge>
                       )}
-                      {alum.isAdmin && (
-                        <Badge variant="warning">Admin</Badge>
-                      )}
                       {alum.industry && (
                         <Badge variant="primary">{alum.industry}</Badge>
                       )}
@@ -259,7 +215,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                   </div>
                 </div>
               </Card>
-            </Link>
+            </DirectoryCardLink>
           ))}
         </div>
       ) : (

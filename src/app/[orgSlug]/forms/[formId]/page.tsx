@@ -70,7 +70,7 @@ export default function FillFormPage() {
     setIsLoading(true);
     setError(null);
 
-    const fields = (form.fields || []) as unknown as unknown as FormField[];
+    const fields = (form.fields || []) as unknown as FormField[];
 
     // Validate required fields
     for (const field of fields) {

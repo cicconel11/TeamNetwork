@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
-const MAX_EVENTS = 500;
-const MAX_DATE_RANGE_DAYS = 365;
+const MAX_EVENTS = 2000;
+const MAX_DATE_RANGE_DAYS = 400;
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +46,12 @@ export async function GET(request: Request) {
     const organizationId = url.searchParams.get("organizationId");
     const startParam = url.searchParams.get("start");
     const endParam = url.searchParams.get("end");
+
+    const pageParam = parseInt(url.searchParams.get("page") || "1", 10);
+    const limitParam = parseInt(url.searchParams.get("limit") || String(MAX_EVENTS), 10);
+    const page = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+    const limit = Number.isNaN(limitParam) || limitParam < 1 ? MAX_EVENTS : Math.min(limitParam, MAX_EVENTS);
+    const offset = (page - 1) * limit;
 
     if (!organizationId || !startParam || !endParam) {
       return NextResponse.json(
@@ -180,16 +186,21 @@ export async function GET(request: Request) {
       return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
     });
 
-    const truncated = combined.length > MAX_EVENTS;
-    const limitedEvents = combined.slice(0, MAX_EVENTS);
+    const total = combined.length;
+    const paginatedEvents = combined.slice(offset, offset + limit);
+    const truncated = total > limit;
+    const hasMore = offset + paginatedEvents.length < total;
 
     return NextResponse.json(
       {
-        events: limitedEvents,
+        events: paginatedEvents,
         meta: {
-          count: limitedEvents.length,
+          count: paginatedEvents.length,
+          total,
+          page,
+          limit,
+          hasMore,
           truncated,
-          limit: MAX_EVENTS,
         },
       },
       { headers: rateLimit.headers }

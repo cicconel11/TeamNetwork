@@ -31,8 +31,9 @@ const privacySections: PrivacySection[] = [
       "Profile Information: Organization details, role, and other profile data you choose to provide.",
       "Content: Information you submit through the Service, including events, announcements, forms, and other organizational data.",
       "Payment Information: When you make purchases or donations, payment details are processed securely by our payment processor (Stripe). We do not store full credit card numbers.",
-      "Usage Data: Information about how you interact with the Service, including pages visited, features used, and actions taken.",
-      "Device Information: Browser type, operating system, IP address, and device identifiers.",
+      "Usage Data (opt-in): With explicit consent, we collect minimal, privacy-first usage events (e.g., route views, navigation clicks, and feature interactions) without identities or content.",
+      "Ops/Security Telemetry: Limited error and reliability signals (e.g., API error codes, HTTP status, retryable flags) to keep the Service secure and stable. No content or user identifiers are included.",
+      "Device Information: Browser type and device class (mobile/tablet/desktop).",
     ],
   },
   {
@@ -133,13 +134,30 @@ const privacySections: PrivacySection[] = [
     bullets: [
       "Maintain your session and authentication state.",
       "Remember your preferences and settings.",
-      "Analyze usage patterns and improve the Service.",
+      "Support opt-in usage analytics (only after you explicitly consent).",
       "You can control cookies through your browser settings. Disabling cookies may affect the functionality of the Service.",
     ],
   },
   {
-    id: "children",
+    id: "usage-analytics",
     number: "10",
+    title: "Usage Analytics and Personalization",
+    paragraphs: [
+      "With your explicit opt-in consent, we collect minimal, privacy-first usage analytics. Behavioral analytics are disabled by default until you accept the in-app consent prompt for a specific organization.",
+      "Consent is stored per organization and may be withdrawn at any time by contacting support.",
+    ],
+    bullets: [
+      "What we track (opt-in only): Page/route views, navigation and CTA clicks, feature-level events (e.g., directory view, event open, RSVP update), device class, app version, and a daily-rotating session ID.",
+      "What we never track: Names, emails, phone numbers, message bodies, form answers, filenames, raw URLs, search terms, precise timestamps in analytics payloads, or any content you submit.",
+      "No user IDs in analytics: Consent is stored using your account ID, but analytics event payloads never include user identifiers.",
+      "Ops telemetry (always-on): Error and security events are logged without consent to keep the Service safe. These are minimal and never include content or identities.",
+      "Data lifecycle: Behavioral analytics are automatically deleted after 90 days. Ops telemetry is deleted after 30 days.",
+      "Account deletion removes all analytics data immediately.",
+    ],
+  },
+  {
+    id: "children",
+    number: "11",
     title: "Children's Privacy",
     paragraphs: [
       "The Service is not intended for children under 16 years of age. We do not knowingly collect personal information from children under 16. If we learn that we have collected personal information from a child under 16, we will take steps to delete that information promptly.",
@@ -148,7 +166,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "international",
-    number: "11",
+    number: "12",
     title: "International Data Transfers",
     paragraphs: [
       "Your information may be transferred to and processed in countries other than your country of residence. These countries may have data protection laws that are different from the laws of your country.",
@@ -157,7 +175,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "changes",
-    number: "12",
+    number: "13",
     title: "Changes to This Policy",
     paragraphs: [
       "We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the \"Last Updated\" date.",
@@ -166,7 +184,7 @@ const privacySections: PrivacySection[] = [
   },
   {
     id: "contact",
-    number: "13",
+    number: "14",
     title: "Contact Us",
     paragraphs: [
       "If you have any questions about this Privacy Policy or our data practices, please contact us:",
@@ -211,7 +229,7 @@ export default function PrivacyPage() {
             Legal
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-landing-cream/50">Last Updated: January 11, 2026</p>
+          <p className="text-landing-cream/50">Last Updated: February 10, 2026</p>
         </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-12">

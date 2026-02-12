@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import {
     getValidAccessToken,
+    getCalendarConnection,
 } from "./oauth";
 
 // Types for calendar events
@@ -54,13 +55,14 @@ function createCalendarClient(accessToken: string): calendar_v3.Calendar {
  */
 export async function createCalendarEvent(
     accessToken: string,
-    event: CalendarEvent
+    event: CalendarEvent,
+    calendarId: string = "primary"
 ): Promise<SyncResult> {
     try {
         const calendar = createCalendarClient(accessToken);
 
         const response = await calendar.events.insert({
-            calendarId: "primary",
+            calendarId,
             requestBody: {
                 summary: event.summary,
                 description: event.description,
@@ -103,13 +105,14 @@ export async function createCalendarEvent(
 export async function updateCalendarEvent(
     accessToken: string,
     googleEventId: string,
-    event: CalendarEvent
+    event: CalendarEvent,
+    calendarId: string = "primary"
 ): Promise<SyncResult> {
     try {
         const calendar = createCalendarClient(accessToken);
 
         await calendar.events.update({
-            calendarId: "primary",
+            calendarId,
             eventId: googleEventId,
             requestBody: {
                 summary: event.summary,
@@ -152,13 +155,14 @@ export async function updateCalendarEvent(
  */
 export async function deleteCalendarEvent(
     accessToken: string,
-    googleEventId: string
+    googleEventId: string,
+    calendarId: string = "primary"
 ): Promise<SyncResult> {
     try {
         const calendar = createCalendarClient(accessToken);
 
         await calendar.events.delete({
-            calendarId: "primary",
+            calendarId,
             eventId: googleEventId,
         });
 
@@ -247,7 +251,7 @@ export function isUserEligibleForSync(
         event_type?: EventType | null;
     },
     userId: string,
-    connection: { status: "connected" | "disconnected" | "error" } | null,
+    connection: { status: string | null } | null,
     preferences: {
         sync_general?: boolean | null;
         sync_game?: boolean | null;
@@ -343,10 +347,27 @@ export async function getEligibleUsersForEvent(
         event_type?: EventType | null;
     }
 ): Promise<string[]> {
-    // Get all users with connected calendars in this organization
+    // Get org members first, then filter connections by those user IDs
+    const { data: orgUsers, error: orgError } = await supabase
+        .from("user_organization_roles")
+        .select("user_id, role")
+        .eq("organization_id", organizationId);
+
+    if (orgError || !orgUsers) {
+        console.error("[calendar-sync] Failed to fetch organization users:", orgError);
+        return [];
+    }
+
+    const orgUserIds = orgUsers.map(u => u.user_id);
+    if (orgUserIds.length === 0) {
+        return [];
+    }
+
+    // Get connections only for org members
     const { data: connections, error: connError } = await supabase
         .from("user_calendar_connections")
-        .select("user_id, status");
+        .select("user_id, status")
+        .in("user_id", orgUserIds);
 
     if (connError || !connections) {
         console.error("[calendar-sync] Failed to fetch calendar connections:", connError);
@@ -359,18 +380,6 @@ export async function getEligibleUsersForEvent(
         .map(c => c.user_id);
 
     if (connectedUserIds.length === 0) {
-        return [];
-    }
-
-    // Get user roles from user_organization_roles
-    const { data: orgUsers, error: orgError } = await supabase
-        .from("user_organization_roles")
-        .select("user_id, role")
-        .eq("organization_id", organizationId)
-        .in("user_id", connectedUserIds);
-
-    if (orgError || !orgUsers) {
-        console.error("[calendar-sync] Failed to fetch organization users:", orgError);
         return [];
     }
 
@@ -491,6 +500,10 @@ async function syncEventForUser(
         return;
     }
 
+    // Get the user's target calendar ID
+    const connection = await getCalendarConnection(supabase, userId);
+    const targetCalendarId = connection?.targetCalendarId || "primary";
+
     // Check if there's an existing entry for this event/user
     const { data: existingEntry } = await supabase
         .from("event_calendar_entries")
@@ -505,24 +518,36 @@ async function syncEventForUser(
             return;
         }
 
-        const result = await createCalendarEvent(accessToken, calendarEvent);
-        await updateSyncEntry(supabase, eventId, userId, organizationId, result);
+        const result = await createCalendarEvent(accessToken, calendarEvent, targetCalendarId);
+        await updateSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, result);
     } else if (operation === "update") {
         if (!existingEntry) {
             // No existing entry, create new
-            const result = await createCalendarEvent(accessToken, calendarEvent);
-            await updateSyncEntry(supabase, eventId, userId, organizationId, result);
+            const result = await createCalendarEvent(accessToken, calendarEvent, targetCalendarId);
+            await updateSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, result);
         } else {
-            // Update existing entry
-            const result = await updateCalendarEvent(accessToken, existingEntry.google_event_id, calendarEvent);
+            // Check if user switched their target calendar since the event was created
+            const storedCalendarId = existingEntry.google_calendar_id || "primary";
 
-            // Handle 404 - event was deleted from Google Calendar (Requirement 3.3)
-            if (!result.success && isNotFoundError(result.error)) {
-                // Create new event and update entry with new google_event_id
-                const createResult = await createCalendarEvent(accessToken, calendarEvent);
-                await updateSyncEntry(supabase, eventId, userId, organizationId, createResult);
+            if (storedCalendarId !== targetCalendarId) {
+                // Calendar changed — migrate the event
+                // Best-effort delete from old calendar (ignore failures)
+                await deleteCalendarEvent(accessToken, existingEntry.google_event_id, storedCalendarId);
+                // Create on new calendar
+                const createResult = await createCalendarEvent(accessToken, calendarEvent, targetCalendarId);
+                await updateSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, createResult);
             } else {
-                await updateSyncEntry(supabase, eventId, userId, organizationId, result, existingEntry.google_event_id);
+                // Same calendar — normal update
+                const result = await updateCalendarEvent(accessToken, existingEntry.google_event_id, calendarEvent, targetCalendarId);
+
+                // Handle 404 - event was deleted from Google Calendar (Requirement 3.3)
+                if (!result.success && isNotFoundError(result.error)) {
+                    // Create new event and update entry with new google_event_id
+                    const createResult = await createCalendarEvent(accessToken, calendarEvent, targetCalendarId);
+                    await updateSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, createResult);
+                } else {
+                    await updateSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, result, existingEntry.google_event_id);
+                }
             }
         }
     }
@@ -559,7 +584,10 @@ async function handleDeleteSync(
                 continue;
             }
 
-            const result = await deleteCalendarEvent(accessToken, entry.google_event_id);
+            // Use the stored calendar ID (where the event actually lives)
+            const calendarId = entry.google_calendar_id || "primary";
+
+            const result = await deleteCalendarEvent(accessToken, entry.google_event_id, calendarId);
 
             // Update entry status regardless of success (graceful handling - Requirement 4.3)
             // Deletion failures do NOT throw or block
@@ -586,6 +614,7 @@ async function updateSyncEntry(
     eventId: string,
     userId: string,
     organizationId: string,
+    googleCalendarId: string,
     result: SyncResult,
     existingGoogleEventId?: string
 ): Promise<void> {
@@ -603,6 +632,7 @@ async function updateSyncEntry(
             user_id: userId,
             organization_id: organizationId,
             google_event_id: googleEventId,
+            google_calendar_id: googleCalendarId,
             sync_status: result.success ? "synced" : "failed",
             last_error: result.error || null,
         }, {

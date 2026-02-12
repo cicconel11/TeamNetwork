@@ -10,6 +10,7 @@ npm run dev          # Start Next.js dev server at localhost:3000
 npm run build        # Build production application
 npm run start        # Start production server
 npm run lint         # Run ESLint
+npm run gen:types    # Regenerate Supabase TypeScript types (writes to src/types/database.ts)
 ```
 
 ### Testing
@@ -42,6 +43,69 @@ stripe listen --forward-to localhost:3000/api/stripe/webhook
 - **Payments**: Stripe (subscriptions + Stripe Connect for donations)
 - **Email**: Resend
 - **Styling**: Tailwind CSS
+
+### Prompt for Plan Mode
+
+Review this plan thoroughly before making any code changes. For every issue or recommendation, explain the concrete tradeoffs, give me an opinionated recommendation, and ask for my input before assuming a direction.
+
+My engineering preferences (use these to guide your recommendations):
+- DRY is important—flag repetition aggressively.
+- Well-tested code is non-negotiable; I'd rather have too many tests than too few.
+- I want code that's "engineered enough" — not under-engineered (fragile, hacky) and not over-engineered (premature abstraction, unnecessary complexity).
+- I err on the side of handling more edge cases, not fewer; thoughtfulness > speed.
+- Bias toward explicit over clever.
+
+## 1. Architecture review
+Evaluate:
+- Overall system design and component boundaries.
+- Dependency graph and coupling concerns.
+- Data flow patterns and potential bottlenecks.
+- Scaling characteristics and single points of failure.
+- Security architecture (auth, data access, API boundaries).
+
+## 2. Code quality review
+Evaluate:
+- Code organization and module structure.
+- DRY violations—be aggressive here.
+- Error handling patterns and missing edge cases (call these out explicitly).
+- Technical debt hotspots.
+- Areas that are over-engineered or under-engineered relative to my preferences.
+
+## 3. Test review
+Evaluate:
+- Test coverage gaps (unit, integration, e2e).
+- Test quality and assertion strength.
+- Missing edge case coverage—be thorough.
+- Untested failure modes and error paths.
+
+## 4. Performance review
+Evaluate:
+- N+1 queries and database access patterns.
+- Memory-usage concerns.
+- Caching opportunities.
+- Slow or high-complexity code paths.
+
+**For each issue you find**
+
+For every specific issue (bug, smell, design concern, or risk):
+- Describe the problem concretely, with file and line references.
+- Present 2–3 options, including "do nothing" where that's reasonable.
+- For each option, specify: implementation effort, risk, impact on other code, and maintenance burden.
+- Give me your recommended option and why, mapped to my preferences above.
+- Then explicitly ask whether I agree or want to choose a different direction before proceeding.
+
+**Workflow and interaction**
+- Do not assume my priorities on timeline or scale.
+- After each section, pause and ask for my feedback before moving on.
+
+---
+
+BEFORE YOU START:
+Ask if I want one of two options:
+1/ BIG CHANGE: Work through this interactively, one section at a time (Architecture → Code Quality → Tests → Performance) with at most 4 top issues in each section.
+2/ SMALL CHANGE: Work through interactively ONE question per review section
+
+FOR EACH STAGE OF REVIEW: output the explanation and pros and cons of each stage's questions AND your opinionated recommendation and why, and then use AskUserQuestion. Also NUMBER issues and then give LETTERS for options and when using AskUserQuestion make sure each option clearly labels the issue NUMBER and option LETTER so the user doesn't get confused. Make the recommended option always the 1st option.
 
 ### Multi-Tenant SaaS Architecture
 This is a multi-tenant application where organizations are first-class entities identified by slugs (e.g., `/[orgSlug]/members`). The middleware validates organization access on every request.
@@ -274,6 +338,26 @@ Modular system for importing events from external schedule sources:
 
 Files: `src/lib/schedule-connectors/sanitize.ts`, `src/lib/schedule-connectors/html-utils.ts`, `src/lib/schedule-connectors/genericHtml.ts`, `src/lib/schedule-connectors/vendorA.ts`, `src/lib/schedule-connectors/vendorB.ts`, `src/lib/schedule-connectors/ics.ts`
 
+### Cron Jobs
+Automated background jobs scheduled via Vercel Cron (configured in `vercel.json`). All cron endpoints require authentication using the `CRON_SECRET` environment variable passed as `Authorization: Bearer <secret>` header.
+
+**Authentication:**
+- Cron routes use `validateCronAuth()` from `src/lib/security/cron-auth.ts`
+- Returns 401 Unauthorized if secret doesn't match
+- Returns 500 if CRON_SECRET not configured
+
+**Active Cron Jobs:**
+- `/api/cron/error-baselines` - Hourly (0 * * * *): Updates error group rolling baselines and resets hourly counts for spike detection
+- `/api/cron/graduation-check` - Daily at 8 AM UTC (0 8 * * *): Processes member graduations, sends 30-day warnings, transitions members to alumni or revokes access based on capacity, auto-reinstates members with updated graduation dates
+- `/api/cron/analytics-aggregate` - Weekly on Sunday at 2 AM UTC (0 2 * * 0): Disabled (legacy usage_events aggregation not used in minimal analytics system)
+- `/api/cron/analytics-purge` - Daily at 3 AM UTC (0 3 * * *): Purges expired analytics and ops events using `purge_analytics_events()` and `purge_ops_events()` RPC functions
+- `/api/cron/analytics-rate-limit-cleanup` - Daily at 3 AM UTC (0 3 * * *): Deletes expired rate limit records older than 24 hours from `rate_limit_analytics` table
+
+**Inactive Cron Jobs (not in vercel.json):**
+- `/api/cron/schedules-sync` - Syncs active schedule sources that haven't been updated in 24 hours (batch processing with max 3 concurrent syncs)
+- `/api/cron/calendar-sync` - Syncs active calendar feeds not updated in 60 minutes
+- `/api/cron/error-alerts` - Sends email notifications for new error groups and error spikes to ALERT_EMAIL_TO (or ADMIN_EMAIL)
+
 ## Environment Variables
 
 Required variables (validated at build time in `next.config.mjs`):
@@ -287,6 +371,12 @@ Required variables (validated at build time in `next.config.mjs`):
 - `RESEND_API_KEY`
 - `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
 - `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
+- `CRON_SECRET` - Secret for authenticating Vercel cron job requests (required in production)
+
+Optional variables:
+- `STRIPE_WEBHOOK_SECRET_CONNECT` - Stripe Connect webhook secret for donation events
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
+- `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
 
 Stored in `.env.local` (never commit this file).
 

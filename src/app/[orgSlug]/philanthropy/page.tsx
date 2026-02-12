@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { DonationForm, ConnectSetup } from "@/components/donations";
+import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
@@ -14,12 +15,13 @@ import { ExportCsvButton } from "@/components/shared";
 
 interface PhilanthropyPageProps {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; onboarding?: string }>;
 }
 
 export default async function PhilanthropyPage({ params, searchParams }: PhilanthropyPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+  const onboardingStatus = filters.onboarding;
   const orgCtx = await getOrgContext(orgSlug);
   if (!orgCtx.organization) return null;
   const org = orgCtx.organization;
@@ -71,6 +73,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
 
   return (
     <div className="animate-fade-in">
+      <DonationResultTracker organizationId={org.id} />
       <PageHeader
         title={pageLabel}
         description="Community service and fundraising for your organization."
@@ -98,9 +101,31 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         }
       />
 
-      {canEdit && !isConnected && (
+      {onboardingStatus === "success" && isConnected && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-4">
+          <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
+            Stripe account connected successfully! You can now accept donations.
+          </p>
+        </div>
+      )}
+      {onboardingStatus === "success" && !isConnected && (
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-4">
+          <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+            Stripe account setup submitted. Verification is in progress — this usually takes 1-2 business days.
+          </p>
+        </div>
+      )}
+      {onboardingStatus === "refresh" && (
+        <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Stripe setup was not completed. Please try again when you&apos;re ready.
+          </p>
+        </div>
+      )}
+
+      {orgCtx.isAdmin && !isConnected && (
         <div className="mb-6">
-          <ConnectSetup organizationId={org.id} isConnected={isConnected} />
+          <ConnectSetup organizationId={org.id} isConnected={isConnected} connectStatus={connectStatus} />
         </div>
       )}
 

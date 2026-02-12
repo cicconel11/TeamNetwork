@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import Image from "next/image";
 import { Button, Textarea } from "@/components/ui";
 
 type FeedbackStatus = "idle" | "submitting" | "success" | "error";
@@ -257,11 +258,13 @@ export function FeedbackModal({
                 </label>
 
                 {screenshotPreview ? (
-                  <div className="relative">
-                    <img
+                  <div className="relative h-32">
+                    <Image
                       src={screenshotPreview}
                       alt="Screenshot preview"
-                      className="w-full h-32 object-cover rounded-lg border border-border"
+                      fill
+                      className="object-cover rounded-lg border border-border"
+                      sizes="(max-width: 768px) 100vw, 640px"
                     />
                     <button
                       type="button"

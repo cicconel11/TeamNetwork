@@ -7,6 +7,18 @@
     {
       "path": "/api/cron/graduation-check",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/analytics-aggregate",
+      "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/analytics-purge",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/analytics-rate-limit-cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }

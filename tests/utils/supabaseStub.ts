@@ -7,6 +7,7 @@ type TableName =
   | "enterprises"
   | "user_organization_roles"
   | "organization_subscriptions"
+  | "organization_donations"
   | "calendar_feeds"
   | "calendar_events"
   | "schedule_allowed_domains"
@@ -23,7 +24,9 @@ type TableName =
   | "users"
   | "chat_groups"
   | "chat_group_members"
-  | "chat_messages";
+  | "chat_messages"
+  | "user_calendar_connections"
+  | "event_calendar_entries";
 
 type Row = Record<string, unknown>;
 
@@ -44,6 +47,7 @@ const uniqueKeys: Record<TableName, string[]> = {
   enterprises: ["slug"],
   user_organization_roles: [],
   organization_subscriptions: ["organization_id"],
+  organization_donations: ["stripe_payment_intent_id", "stripe_checkout_session_id"],
   calendar_feeds: [],
   calendar_events: [],
   schedule_allowed_domains: ["hostname"],
@@ -61,6 +65,8 @@ const uniqueKeys: Record<TableName, string[]> = {
   chat_groups: [],
   chat_group_members: [],
   chat_messages: [],
+  user_calendar_connections: ["user_id"],
+  event_calendar_entries: [],
 };
 
 function nowIso() {
@@ -75,6 +81,7 @@ export function createSupabaseStub() {
     enterprises: [],
     user_organization_roles: [],
     organization_subscriptions: [],
+    organization_donations: [],
     calendar_feeds: [],
     calendar_events: [],
     schedule_allowed_domains: [],
@@ -92,6 +99,8 @@ export function createSupabaseStub() {
     chat_groups: [],
     chat_group_members: [],
     chat_messages: [],
+    user_calendar_connections: [],
+    event_calendar_entries: [],
   };
 
   // RPC handler registry

@@ -153,8 +153,45 @@ export async function GET(request: Request) {
             errorUrl.searchParams.set("error", "no_refresh_token");
             errorUrl.searchParams.set("error_message", "Could not get a refresh token. Please revoke access in your Google account settings and try again.");
         } else {
-            errorUrl.searchParams.set("error", "callback_failed");
-            errorUrl.searchParams.set("error_message", "An error occurred while connecting your Google Calendar. Please try again.");
+            // 3-way classification: safe → config → unknown
+            // Safe: user-friendly messages from oauth.ts that can be shown directly
+            const safePatterns = [
+                "No access token received",
+                "No refresh token received",
+                "Could not retrieve user email",
+                "Failed to refresh access token",
+            ];
+            // Config: server-side misconfiguration the user cannot fix by retrying
+            const configPatterns = [
+                "Missing required environment variable",
+                "ENCRYPTION_KEY",
+                "must be 64 hex",
+                "GOOGLE_CLIENT_ID",
+                "GOOGLE_CLIENT_SECRET",
+                "SUPABASE",
+            ];
+
+            const isSafe = safePatterns.some(p => errorMessage.includes(p));
+            const isConfig = configPatterns.some(p => errorMessage.includes(p));
+
+            if (isSafe) {
+                errorUrl.searchParams.set("error", "callback_failed");
+                errorUrl.searchParams.set("error_message", errorMessage);
+            } else if (isConfig) {
+                console.error("[google-callback] Server config error:", errorMessage);
+                errorUrl.searchParams.set("error", "server_config_error");
+                errorUrl.searchParams.set(
+                    "error_message",
+                    "There is a server configuration issue. Please contact support."
+                );
+            } else {
+                console.error("[google-callback] Unclassified error:", errorMessage);
+                errorUrl.searchParams.set("error", "callback_failed");
+                errorUrl.searchParams.set(
+                    "error_message",
+                    "An unexpected error occurred while connecting your Google Calendar. Please try again later."
+                );
+            }
         }
 
         return NextResponse.redirect(errorUrl);

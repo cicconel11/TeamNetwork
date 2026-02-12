@@ -11,6 +11,7 @@ import type {
   EnterpriseSubscription,
   EnterpriseRole,
 } from "@/types/enterprise";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,12 +53,12 @@ interface EnterpriseResponse {
   name: string;
   slug: string;
   billing_contact_email: string | null;
-  created_at: string;
+  created_at: string | null;
   subscription: {
     status: string;
     pricing_model: string;
     sub_org_quantity: number | null;
-    alumni_tier: string;
+    alumni_tier: string | null;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
   } | null;
@@ -84,13 +85,34 @@ interface EnterpriseResponse {
  */
 export async function GET(req: Request) {
   try {
-    // 1. Check authentication
+    // 1. Rate limit by IP before any auth backend calls
+    const ipRateLimit = checkRateLimit(req, {
+      feature: "dev-admin",
+      limitPerIp: 30,
+      limitPerUser: 0,
+    });
+    if (!ipRateLimit.ok) {
+      return buildRateLimitResponse(ipRateLimit);
+    }
+
+    // 2. Check authentication
     const supabase = await createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
 
-    // 2. Verify dev-admin access
+    // 3. Rate limit authenticated users (separate from IP limit above)
+    const userRateLimit = checkRateLimit(req, {
+      userId: user?.id ?? null,
+      feature: "dev-admin",
+      limitPerIp: 0,
+      limitPerUser: 20,
+    });
+    if (!userRateLimit.ok) {
+      return buildRateLimitResponse(userRateLimit);
+    }
+
+    // 4. Verify dev-admin access
     if (!isDevAdmin(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

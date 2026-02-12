@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, EmptyState } from "@/components/ui";
 
-const UPCOMING_DAYS = 90;
+const UPCOMING_DAYS = 365;
 
 type CalendarEventSummary = {
   id: string;
@@ -57,6 +57,7 @@ function groupEventsByDate(events: CalendarEventSummary[]): Map<string, Calendar
 
 export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
   const [events, setEvents] = useState<CalendarEventSummary[]>([]);
+  const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +88,7 @@ export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
       }
 
       setEvents(data.events || []);
+      setTruncated(data.meta?.truncated === true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load events.");
     } finally {
@@ -131,6 +133,13 @@ export function UpcomingEventsTab({ orgId }: UpcomingEventsTabProps) {
             />
           ) : (
             <div className="space-y-6">
+              {truncated && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    Showing first {events.length} events. Some events may not be displayed.
+                  </p>
+                </div>
+              )}
               {Array.from(groupedEvents.entries()).map(([dateLabel, dayEvents]) => (
                 <div key={dateLabel}>
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">{dateLabel}</h3>

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Badge, Button, Card, EmptyState, Input } from "@/components/ui";
+import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
+import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { AcademicSchedule } from "@/types/database";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -21,6 +23,7 @@ type FeedSummary = {
 type MyCalendarTabProps = {
   orgId: string;
   orgSlug: string;
+  orgName: string;
   mySchedules: AcademicSchedule[];
   navConfig: NavConfig | null;
   pageLabel: string;
@@ -52,7 +55,7 @@ function formatOccurrence(schedule: AcademicSchedule): string {
       return "Daily";
     case "weekly":
       if (schedule.day_of_week && schedule.day_of_week.length > 0) {
-        const labels = schedule.day_of_week.map((day) => DAYS[day]).join(", ");
+        const labels = schedule.day_of_week.map((day: number) => DAYS[day]).join(", ");
         return `Every ${labels}`;
       }
       return "Weekly";
@@ -87,10 +90,15 @@ function isLikelyIcsUrl(feedUrl: string) {
 export function MyCalendarTab({
   orgId,
   orgSlug,
+  orgName,
   mySchedules,
   navConfig,
   pageLabel,
 }: MyCalendarTabProps) {
+  // Google Calendar Sync hook
+  const gcal = useGoogleCalendarSync({ orgId, orgSlug });
+
+  // Personal calendar feed state
   const [feedUrl, setFeedUrl] = useState("");
   const [personalFeeds, setPersonalFeeds] = useState<FeedSummary[]>([]);
   const [loadingFeeds, setLoadingFeeds] = useState(true);
@@ -225,8 +233,52 @@ export function MyCalendarTab({
 
   return (
     <div className="space-y-6">
+      {/* Section 1: Google Calendar Sync */}
       <section>
-        <h2 className="text-lg font-semibold text-foreground mb-4">Sync Personal Calendar</h2>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Google Calendar Sync</h2>
+
+        {/* OAuth callback banners */}
+        {gcal.oauthStatus === "connected" && (
+          <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+            Google Calendar connected successfully! Your events will now sync automatically.
+          </div>
+        )}
+        {gcal.oauthError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+            {gcal.oauthError === "access_denied"
+              ? "You denied access to your Google Calendar. Please try again and allow access."
+              : gcal.oauthError === "invalid_code"
+              ? "The authorization code has expired. Please try connecting again."
+              : gcal.oauthError === "oauth_init_failed"
+              ? "Google Calendar integration is not configured. Please contact the administrator."
+              : gcal.oauthErrorMessage || "Failed to connect Google Calendar. Please try again."}
+          </div>
+        )}
+
+        <GoogleCalendarSyncPanel
+          orgName={orgName}
+          organizationId={orgId}
+          connection={gcal.connection}
+          isConnected={gcal.isConnected}
+          connectionLoading={gcal.connectionLoading}
+          calendars={gcal.calendars}
+          calendarsLoading={gcal.calendarsLoading}
+          targetCalendarId={gcal.targetCalendarId}
+          preferences={gcal.preferences}
+          preferencesLoading={gcal.preferencesLoading}
+          reconnectRequired={gcal.reconnectRequired}
+          onConnect={gcal.connect}
+          onDisconnect={gcal.disconnect}
+          onSync={gcal.syncNow}
+          onReconnect={gcal.reconnect}
+          onTargetCalendarChange={gcal.setTargetCalendar}
+          onPreferenceChange={gcal.updatePreferences}
+        />
+      </section>
+
+      {/* Section 2: Personal Calendar Feeds */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Personal Calendar Feeds</h2>
         <Card className="p-4 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
@@ -249,63 +301,63 @@ export function MyCalendarTab({
           {notice && <p className="text-sm text-foreground">{notice}</p>}
           {error && <p className="text-sm text-error">{error}</p>}
         </Card>
-      </section>
 
-      <section>
-        <h2 className="text-lg font-semibold text-foreground mb-4">Connected Calendars</h2>
-        <Card className="p-4">
-          {loadingFeeds ? (
-            <p className="text-sm text-muted-foreground">Loading schedules...</p>
-          ) : personalFeeds.length === 0 ? (
-            <EmptyState
-              title="No connected schedules"
-              description="Connect a calendar feed to keep your availability in sync."
-            />
-          ) : (
-            <div className="space-y-3">
-              {personalFeeds.map((feed) => (
-                <div
-                  key={feed.id}
-                  className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-foreground">ICS Feed</p>
-                      <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
+        <div className="mt-4">
+          <Card className="p-4">
+            {loadingFeeds ? (
+              <p className="text-sm text-muted-foreground">Loading schedules...</p>
+            ) : personalFeeds.length === 0 ? (
+              <EmptyState
+                title="No connected schedules"
+                description="Connect a calendar feed to keep your availability in sync."
+              />
+            ) : (
+              <div className="space-y-3">
+                {personalFeeds.map((feed) => (
+                  <div
+                    key={feed.id}
+                    className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">ICS Feed</p>
+                        <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Last sync: {feed.last_synced_at ? formatDateTime(feed.last_synced_at) : "Never"}
+                      </p>
+                      {feed.status === "error" && feed.last_error && (
+                        <p className="text-xs text-error">{feed.last_error}</p>
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Last sync: {feed.last_synced_at ? formatDateTime(feed.last_synced_at) : "Never"}
-                    </p>
-                    {feed.status === "error" && feed.last_error && (
-                      <p className="text-xs text-error">{feed.last_error}</p>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        isLoading={syncingFeedId === feed.id}
+                        onClick={() => handleSyncNow(feed.id)}
+                      >
+                        Sync now
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        isLoading={disconnectingFeedId === feed.id}
+                        onClick={() => handleDisconnect(feed.id)}
+                      >
+                        Disconnect
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      isLoading={syncingFeedId === feed.id}
-                      onClick={() => handleSyncNow(feed.id)}
-                    >
-                      Sync now
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      isLoading={disconnectingFeedId === feed.id}
-                      onClick={() => handleDisconnect(feed.id)}
-                    >
-                      Disconnect
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
       </section>
 
+      {/* Section 3: My Schedules */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">My {pageLabel}</h2>
         {mySchedules && mySchedules.length > 0 ? (

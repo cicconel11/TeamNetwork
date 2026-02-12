@@ -17,7 +17,8 @@
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:ui": "playwright test --project=e2e --ui",
     "test:e2e:debug": "playwright test --project=e2e --debug",
-    "analyze": "ANALYZE=true npm run build"
+    "analyze": "ANALYZE=true npm run build",
+    "gen:types": "npx supabase gen types --lang=typescript --project-id rytsziwekhtjdqzzpdso > src/types/database.ts"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.17.4",
@@ -31,6 +32,7 @@
     "googleapis": "^170.0.0",
     "lucide-react": "^0.474.0",
     "next": "^14.2.35",
+    "next-themes": "^0.4.6",
     "node-ical": "^0.19.0",
     "qrcode": "^1.5.4",
     "react": "^18",

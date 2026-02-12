@@ -79,7 +79,7 @@ export async function GET(request: Request) {
             .select("id")
             .eq("user_id", user.id)
             .eq("organization_id", organizationId)
-            .single();
+            .maybeSingle();
 
         if (!membership) {
             return respond(
@@ -94,10 +94,9 @@ export async function GET(request: Request) {
             .select("*")
             .eq("user_id", user.id)
             .eq("organization_id", organizationId)
-            .single();
+            .maybeSingle();
 
-        if (prefError && prefError.code !== "PGRST116") {
-            // PGRST116 = no rows returned, which is fine
+        if (prefError) {
             console.error("[calendar-preferences] Error fetching preferences:", prefError);
             return respond(
                 { error: "Database error", message: "Failed to fetch preferences." },
@@ -227,7 +226,7 @@ export async function PUT(request: Request) {
             .select("id")
             .eq("user_id", user.id)
             .eq("organization_id", organizationId)
-            .single();
+            .maybeSingle();
 
         if (!membership) {
             return respond(

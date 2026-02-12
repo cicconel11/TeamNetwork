@@ -8,6 +8,7 @@ import { Button, Card, Input, Badge } from "@/components/ui";
 import { AdminGuard } from "@/components/auth";
 import { ORG_NAV_ITEMS, type NavConfig, type NavConfigEntry } from "@/lib/navigation/nav-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
+import { setConsentState as setAnalyticsConsentState } from "@/lib/analytics/events";
 
 const CONFIGURABLE_ITEMS = ORG_NAV_ITEMS.filter((item) => item.configurable !== false);
 const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni"];
@@ -25,6 +26,10 @@ function NavigationSettingsContent() {
   const [saved, setSaved] = useState(false);
   const [orderedItems, setOrderedItems] = useState<typeof CONFIGURABLE_ITEMS>([]);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [consentState, setConsentState] = useState<"opted_in" | "opted_out" | "unknown">("unknown");
+  const [consentLoading, setConsentLoading] = useState(true);
+  const [consentSaving, setConsentSaving] = useState(false);
+  const [consentMessage, setConsentMessage] = useState<string | null>(null);
 
   // Use a unique key for nav config - Dashboard has empty href, so use "dashboard" as key
   const getConfigKey = (href: string) => href === "" ? "dashboard" : href;
@@ -70,6 +75,62 @@ function NavigationSettingsContent() {
     };
     loadConfig();
   }, [orgSlug, sortItemsByOrder]);
+
+  useEffect(() => {
+    const loadConsent = async () => {
+      if (!orgId) {
+        setConsentLoading(false);
+        return;
+      }
+      setConsentLoading(true);
+      setConsentMessage(null);
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setConsentState("unknown");
+        setConsentLoading(false);
+        return;
+      }
+      const { data } = await supabase
+        .from("analytics_consent")
+        .select("consent_state")
+        .eq("org_id", orgId)
+        .maybeSingle();
+      const nextState = (data?.consent_state as "opted_in" | "opted_out") ?? "unknown";
+      setConsentState(nextState);
+      setAnalyticsConsentState(orgId, nextState);
+      setConsentLoading(false);
+    };
+    loadConsent();
+  }, [orgId]);
+
+  const handleConsentToggle = async (nextConsented: boolean) => {
+    if (!orgId || consentSaving) return;
+    setConsentSaving(true);
+    setConsentMessage(null);
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setConsentSaving(false);
+      setConsentMessage("You must be signed in.");
+      return;
+    }
+    const nextState = nextConsented ? "opted_in" : "opted_out";
+    const { error: updateError } = await supabase
+      .from("analytics_consent")
+      .upsert(
+        { org_id: orgId, user_id: user.id, consent_state: nextState },
+        { onConflict: "org_id,user_id" },
+      );
+    if (updateError) {
+      setConsentMessage(updateError.message || "Failed to update preference");
+      setConsentSaving(false);
+      return;
+    }
+    setConsentState(nextState);
+    setAnalyticsConsentState(orgId, nextState);
+    setConsentSaving(false);
+  };
 
   const updateEntry = (href: string, updater: (entry?: NavConfigEntry) => NavConfigEntry | undefined) => {
     const key = getConfigKey(href);
@@ -224,6 +285,40 @@ function NavigationSettingsContent() {
           </Button>
         }
       />
+      <Card className="p-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-semibold text-foreground">Usage Analytics (Admin)</h3>
+            <p className="text-sm text-muted-foreground">
+              Control your personal analytics consent for this organization. Behavioral analytics are
+              disabled by default until you opt in.
+            </p>
+          </div>
+          <Badge variant="muted" className="uppercase tracking-wide">
+            {consentState === "opted_in" ? "Opted In" : consentState === "opted_out" ? "Opted Out" : "Not Set"}
+          </Badge>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <label htmlFor="analytics-consent-toggle" className="flex items-center gap-3 cursor-pointer">
+            <input
+              id="analytics-consent-toggle"
+              type="checkbox"
+              className="h-4 w-4 rounded border-border"
+              checked={consentState === "opted_in"}
+              disabled={consentLoading || consentSaving}
+              onChange={(e) => handleConsentToggle(e.target.checked)}
+            />
+            <span className="text-sm text-foreground">Enable opt-in usage analytics</span>
+          </label>
+          {consentLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
+          {consentSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
+        </div>
+        {consentMessage && (
+          <div className="mt-3 text-sm text-red-600 dark:text-red-400">
+            {consentMessage}
+          </div>
+        )}
+      </Card>
       {error && (
         <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
           {error}

@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { ExportCSVButton } from "@/components/forms/ExportCSVButton";
-import { debugLog } from "@/lib/debug";
+import { NonSubmitters } from "@/components/forms/NonSubmitters";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface FormSubmissionsPageProps {
@@ -21,7 +21,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
   if (!orgCtx.isAdmin) redirect(`/${orgSlug}/forms`);
 
   // Fetch form
-  const { data: form } = await supabase
+  const { data: form, error: formError } = await supabase
     .from("forms")
     .select("*")
     .eq("id", formId)
@@ -29,46 +29,31 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
     .is("deleted_at", null)
     .single();
 
+  if (formError) console.error("[forms-admin] Failed to fetch form:", formError.message);
   if (!form) return notFound();
 
   const typedForm = form as Form;
 
   // Fetch submissions with user info
-  const { data: submissions } = await supabase
+  const { data: submissions, error: submissionsError } = await supabase
     .from("form_submissions")
     .select("*, users(name, email)")
     .eq("form_id", formId)
     .order("submitted_at", { ascending: false });
 
+  if (submissionsError) {
+    console.error("[forms-admin] Failed to fetch submissions:", submissionsError.message);
+  }
+
   const typedSubmissions = (submissions || []) as (FormSubmission & { users: Pick<User, "name" | "email"> | null })[];
   const fields = (typedForm.fields || []) as unknown as FormField[];
-
-  // Debug: detect data vs responses property mismatch (Issue #5)
-  if (typedSubmissions.length > 0) {
-    const sample = typedSubmissions[0] as unknown as Record<string, unknown>;
-    const hasDataProp = "data" in sample && sample.data != null;
-    const hasResponsesProp = "responses" in sample && sample.responses != null;
-    debugLog("forms-admin", "submission property check", {
-      formId,
-      submissionCount: typedSubmissions.length,
-      hasDataProp,
-      hasResponsesProp,
-    });
-    if (hasResponsesProp && !hasDataProp) {
-      console.warn(
-        `[forms-admin] Submission has "responses" but not "data". ` +
-        `The admin page reads submission.data which will be undefined. ` +
-        `formId=${formId} submissionCount=${typedSubmissions.length}`
-      );
-    }
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
         title={typedForm.title}
         description={`${typedSubmissions.length} submission${typedSubmissions.length !== 1 ? "s" : ""}`}
-        backHref={`/${orgSlug}/forms/admin`}
+        backHref={`/${orgSlug}/forms`}
         actions={
           <div className="flex items-center gap-2">
             <ExportCSVButton form={typedForm} submissions={typedSubmissions} />
@@ -99,22 +84,19 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
                 <tr>
                   <th className="text-left p-3 font-medium text-muted-foreground">Submitted By</th>
                   <th className="text-left p-3 font-medium text-muted-foreground">Date</th>
-                  {fields.slice(0, 3).map((field) => (
+                  {fields.map((field) => (
                     <th key={field.name} className="text-left p-3 font-medium text-muted-foreground">
                       {field.label}
                     </th>
                   ))}
-                  {fields.length > 3 && (
-                    <th className="text-left p-3 font-medium text-muted-foreground">...</th>
-                  )}
+                  <th className="text-left p-3 font-medium text-muted-foreground w-16"></th>
                 </tr>
               </thead>
               <tbody>
                 {typedSubmissions.map((submission) => {
-                  const sub = submission as unknown as Record<string, unknown>;
-                  const responses = (sub.data || sub.responses || {}) as Record<string, unknown>;
+                  const responses = (submission.data || {}) as Record<string, unknown>;
                   return (
-                    <tr key={submission.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <tr key={submission.id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer">
                       <td className="p-3 text-foreground">
                         {submission.users?.name || submission.users?.email || "Unknown"}
                       </td>
@@ -123,16 +105,16 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
                           ? new Date(submission.submitted_at).toLocaleDateString()
                           : "-"}
                       </td>
-                      {fields.slice(0, 3).map((field) => (
+                      {fields.map((field) => (
                         <td key={field.name} className="p-3 text-foreground max-w-[200px] truncate">
                           {formatValue(responses[field.name])}
                         </td>
                       ))}
-                      {fields.length > 3 && (
-                        <td className="p-3 text-muted-foreground">
-                          +{fields.length - 3} more
-                        </td>
-                      )}
+                      <td className="p-3">
+                        <Link href={`/${orgSlug}/forms/admin/${formId}/submissions/${submission.id}`} className="text-sm text-blue-500 hover:text-blue-600">
+                          View
+                        </Link>
+                      </td>
                     </tr>
                   );
                 })}
@@ -145,6 +127,11 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
           <p className="text-muted-foreground">No submissions yet.</p>
         </Card>
       )}
+
+      <NonSubmitters
+        orgId={orgCtx.organization.id}
+        submitterUserIds={typedSubmissions.map((s) => s.user_id)}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -174,7 +175,7 @@ export async function POST(request: Request) {
         organization_id:
           membership?.organization_id ?? "00000000-0000-0000-0000-000000000000",
         user_id: user.id,
-        data: responses,
+        data: responses as unknown as Json,
         submitted_at: new Date().toISOString(),
       })
       .select("id")

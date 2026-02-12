@@ -91,10 +91,15 @@ export async function POST(req: Request) {
         }, { idempotencyKey: accountKey });
         accountId = account.id;
 
-        await supabase
+        const { error: updateError } = await supabase
           .from("organizations")
           .update({ stripe_connect_account_id: accountId })
           .eq("id", org.id);
+
+        if (updateError) {
+          console.error("[connect-onboarding] Failed to save Stripe account ID:", updateError.message);
+          return respond({ error: "Failed to save Stripe connection. Please try again." }, 500);
+        }
       }
 
       const origin = req.headers.get("origin") ?? new URL(req.url).origin;

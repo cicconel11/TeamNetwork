@@ -1,8 +1,9 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
@@ -10,51 +11,7 @@ import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { validateOrgName } from "@/lib/validation/org-name";
-import { CalendarConnectionCard } from "@/components/settings/CalendarConnectionCard";
-import { SyncPreferencesForm, type SyncPreferences } from "@/components/settings/SyncPreferencesForm";
-
-interface CalendarConnection {
-  googleEmail: string;
-  status: "connected" | "disconnected" | "error";
-  lastSyncAt: string | null;
-}
-
-const GCAL_UI_ENABLED = true;
-
-function adjustColor(hex: string, amount: number): string {
-  const clamp = (num: number) => Math.min(255, Math.max(0, num));
-
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-
-  const num = parseInt(color, 16);
-  const r = clamp((num >> 16) + amount);
-  const g = clamp(((num >> 8) & 0x00ff) + amount);
-  const b = clamp((num & 0x0000ff) + amount);
-
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-}
-
-function isColorDark(hex: string): boolean {
-  let color = hex.replace("#", "");
-  if (color.length === 3) {
-    color = color
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-  const num = parseInt(color, 16);
-  const r = (num >> 16) & 255;
-  const g = (num >> 8) & 255;
-  const b = num & 255;
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.6;
-}
+import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
 
 export default function OrgSettingsPage() {
   return (
@@ -67,7 +24,7 @@ export default function OrgSettingsPage() {
 function OrgSettingsLoading() {
   const params = useParams();
   const orgSlug = params.orgSlug as string;
-  
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -83,7 +40,6 @@ function OrgSettingsLoading() {
 function OrgSettingsContent() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const orgSlug = params.orgSlug as string;
   const supabase = useMemo(() => createClient(), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,23 +68,6 @@ function OrgSettingsContent() {
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
-  // Calendar connection state
-  const [calendarConnection, setCalendarConnection] = useState<CalendarConnection | null>(null);
-  const [calendarLoading, setCalendarLoading] = useState(true);
-  const [calendarPrefs, setCalendarPrefs] = useState<SyncPreferences>({
-    sync_general: true,
-    sync_game: true,
-    sync_meeting: true,
-    sync_social: true,
-    sync_fundraiser: true,
-    sync_philanthropy: true,
-  });
-  const [calendarPrefsLoading, setCalendarPrefsLoading] = useState(true);
-
-  // Check for OAuth callback status
-  const oauthStatus = searchParams.get("calendar");
-  const oauthError = searchParams.get("error");
-
   useEffect(() => {
     if (!selectedLogo) return;
     const previewUrl = URL.createObjectURL(selectedLogo);
@@ -136,54 +75,11 @@ function OrgSettingsContent() {
     return () => URL.revokeObjectURL(previewUrl);
   }, [selectedLogo]);
 
-  // Load calendar connection status
-  const loadCalendarConnection = useCallback(async () => {
-    setCalendarLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setCalendarLoading(false);
-        return;
-      }
-
-      const { data: connection } = await supabase
-        .from("user_calendar_connections")
-        .select("google_email, status, last_sync_at")
-        .eq("user_id", user.id)
-        .single();
-
-      if (connection) {
-        setCalendarConnection({
-          googleEmail: connection.google_email,
-          status: connection.status,
-          lastSyncAt: connection.last_sync_at,
-        });
-      } else {
-        setCalendarConnection(null);
-      }
-    } catch {
-      // Error loading calendar connection - silently continue
-    } finally {
-      setCalendarLoading(false);
-    }
-  }, [supabase]);
-
-  // Load calendar sync preferences for the organization
-  const loadCalendarPreferences = useCallback(async (organizationId: string) => {
-    setCalendarPrefsLoading(true);
-    try {
-      const response = await fetch(`/api/calendar/preferences?organizationId=${organizationId}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.preferences) {
-          setCalendarPrefs(data.preferences);
-        }
-      }
-    } catch {
-      // Error loading calendar preferences - silently continue
-    } finally {
-      setCalendarPrefsLoading(false);
-    }
+  useEffect(() => {
+    return () => {
+      const existingStyle = document.getElementById("org-theme-preview");
+      if (existingStyle) existingStyle.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -250,19 +146,10 @@ function OrgSettingsContent() {
       setEmailEnabled(typedPref?.email_enabled ?? true);
       setPrefId(typedPref?.id || null);
       setLoading(false);
-
-      // Load calendar connection and preferences
-      if (GCAL_UI_ENABLED) {
-        await loadCalendarConnection();
-        await loadCalendarPreferences(org.id);
-      } else {
-        setCalendarLoading(false);
-        setCalendarPrefsLoading(false);
-      }
     };
 
     load();
-  }, [orgSlug, router, supabase, loadCalendarConnection, loadCalendarPreferences]);
+  }, [orgSlug, router, supabase]);
 
   useEffect(() => {
     if (loading) return;
@@ -290,40 +177,31 @@ function OrgSettingsContent() {
   }, [primaryColor, secondaryColor, logoPreview, logoUrl, loading]);
 
   const applyThemeLocally = (nextPrimary: string, nextSecondary: string) => {
-    const shell = document.querySelector<HTMLElement>("[data-org-shell]");
-    const target = shell || document.documentElement;
-    const primaryLight = adjustColor(nextPrimary, 20);
-    const primaryDark = adjustColor(nextPrimary, -20);
-    const secondaryLight = adjustColor(nextSecondary, 20);
-    const secondaryDark = adjustColor(nextSecondary, -20);
-    const isPrimaryDark = isColorDark(nextPrimary);
-    const isSecondaryDark = isColorDark(nextSecondary);
-    const baseForeground = isPrimaryDark ? "#f8fafc" : "#0f172a";
-    // Use black text on bright secondary colors for better readability
-    const secondaryForeground = isSecondaryDark ? "#ffffff" : "#0f172a";
-    const cardColor = isPrimaryDark ? adjustColor(nextPrimary, 18) : adjustColor(nextPrimary, -12);
-    const cardForeground = isColorDark(cardColor) ? "#f8fafc" : "#0f172a";
-    // For light themes, use a more visible muted color that provides better contrast
-    const muted = isPrimaryDark ? adjustColor(nextPrimary, 28) : adjustColor(nextPrimary, -35);
-    const mutedForeground = isColorDark(muted) ? "#e2e8f0" : "#475569";
-    // For light themes, use a darker border for better visibility
-    const borderColor = isPrimaryDark ? adjustColor(nextPrimary, 35) : adjustColor(nextPrimary, -45);
+    // Instead of setting inline styles (which override :root.dark stylesheet rules
+    // and break theme toggling), inject a scoped <style> tag that mirrors the
+    // dual-mode approach used in the org layout.
+    const lightVars = computeOrgThemeVariables(nextPrimary, nextSecondary, false);
+    const darkVars = computeOrgThemeVariables(nextPrimary, nextSecondary, true);
 
-    target.style.setProperty("--color-org-primary", nextPrimary);
-    target.style.setProperty("--color-org-primary-light", primaryLight);
-    target.style.setProperty("--color-org-primary-dark", primaryDark);
-    target.style.setProperty("--color-org-secondary", nextSecondary);
-    target.style.setProperty("--color-org-secondary-light", secondaryLight);
-    target.style.setProperty("--color-org-secondary-dark", secondaryDark);
-    target.style.setProperty("--color-org-secondary-foreground", secondaryForeground);
-    target.style.setProperty("--background", nextPrimary);
-    target.style.setProperty("--foreground", baseForeground);
-    target.style.setProperty("--card", cardColor);
-    target.style.setProperty("--card-foreground", cardForeground);
-    target.style.setProperty("--muted", muted);
-    target.style.setProperty("--muted-foreground", mutedForeground);
-    target.style.setProperty("--border", borderColor);
-    target.style.setProperty("--ring", nextSecondary);
+    const existingStyle = document.getElementById("org-theme-preview");
+    if (existingStyle) existingStyle.remove();
+
+    const style = document.createElement("style");
+    style.id = "org-theme-preview";
+    style.textContent = `
+      :root {
+        ${Object.entries(lightVars).map(([k, v]) => `${k}: ${v};`).join("\n        ")}
+      }
+      :root.dark {
+        ${Object.entries(darkVars).map(([k, v]) => `${k}: ${v};`).join("\n        ")}
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not(.light) {
+          ${Object.entries(darkVars).map(([k, v]) => `${k}: ${v};`).join("\n          ")}
+        }
+      }
+    `;
+    document.head.appendChild(style);
   };
 
   const handlePreferenceSave = async () => {
@@ -468,48 +346,6 @@ function OrgSettingsContent() {
       setNameSaving(false);
     }
   };
-
-  const handleConnectCalendar = () => {
-    // Pass the current org slug so OAuth callback redirects back here
-    window.location.href = `/api/google/auth?redirect=/${orgSlug}/customization`;
-  };
-
-  const handleDisconnectCalendar = async () => {
-    const response = await fetch("/api/google/disconnect", { method: "POST" });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.message || "Failed to disconnect");
-    }
-    setCalendarConnection(null);
-  };
-
-  const handleSyncCalendar = async () => {
-    const response = await fetch("/api/calendar/sync", { method: "POST" });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.message || "Failed to sync");
-    }
-    // Reload connection to get updated last_sync_at
-    await loadCalendarConnection();
-  };
-
-  const handleCalendarPreferenceChange = async (preferences: SyncPreferences) => {
-    if (!orgId) return;
-    const response = await fetch("/api/calendar/preferences", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ organizationId: orgId, preferences }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.message || "Failed to save preferences");
-    }
-
-    setCalendarPrefs(preferences);
-  };
-
-  const isCalendarConnected = calendarConnection?.status === "connected";
 
   return (
     <div className="space-y-6">
@@ -778,64 +614,25 @@ function OrgSettingsContent() {
             </div>
           </Card>
 
-          {GCAL_UI_ENABLED && (
-            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <svg
-                    className="w-6 h-6 text-foreground"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
-                  </svg>
-                  <div>
-                    <p className="font-semibold text-foreground">Google Calendar Sync</p>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically sync organization events to your Google Calendar.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* OAuth callback messages */}
-              {oauthStatus === "connected" && (
-                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
-                  Google Calendar connected successfully! Your events will now sync automatically.
-                </div>
-              )}
-              {oauthError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
-                  {oauthError === "access_denied"
-                    ? "You denied access to your Google Calendar. Please try again and allow access."
-                    : oauthError === "invalid_code"
-                    ? "The authorization code has expired. Please try connecting again."
-                    : oauthError === "oauth_init_failed"
-                    ? "Google Calendar integration is not configured. Please contact the administrator."
-                    : "Failed to connect Google Calendar. Please try again."}
-                </div>
-              )}
-
-              <CalendarConnectionCard
-                connection={calendarConnection}
-                isLoading={calendarLoading}
-                onConnect={handleConnectCalendar}
-                onDisconnect={handleDisconnectCalendar}
-                onSync={isCalendarConnected ? handleSyncCalendar : undefined}
-              />
-
-              {/* Sync Preferences - only show when connected */}
-              {isCalendarConnected && orgId && (
-                <SyncPreferencesForm
-                  organizationId={orgId}
-                  preferences={calendarPrefs}
-                  isLoading={calendarPrefsLoading}
-                  disabled={!isCalendarConnected}
-                  onPreferenceChange={handleCalendarPreferenceChange}
-                />
-              )}
-            </Card>
-          )}
+          {/* Google Calendar Sync — redirect to My Calendar tab */}
+          <Card className="org-settings-card p-5 space-y-3 opacity-0 translate-y-2">
+            <div className="flex items-center gap-2">
+              <svg
+                className="w-5 h-5 text-foreground"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+              </svg>
+              <p className="font-semibold text-foreground">Google Calendar Sync</p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Manage your Google Calendar connection and sync preferences in the Schedules section.
+            </p>
+            <Link href={`/${orgSlug}/schedules?calendar=true`}>
+              <Button variant="secondary" size="sm">Go to My Calendar</Button>
+            </Link>
+          </Card>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 
 import { getSessionId } from "@/lib/session";
 import type { ErrorEventInput, ErrorEnv } from "@/lib/schemas/errors";
+import { trackOpsEvent } from "@/lib/analytics/events";
 
 // Configuration
 const MAX_BATCH_SIZE = 20;
@@ -143,8 +144,8 @@ function setupNetworkTracking(): void {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const method = init?.method || "GET";
 
-    // Skip error ingest endpoint to avoid recursion
-    if (url.includes("/api/errors/") || url.includes("/api/telemetry/")) {
+    // Skip error/telemetry/analytics endpoints to avoid recursion
+    if (url.includes("/api/errors/") || url.includes("/api/telemetry/") || url.includes("/api/analytics/")) {
       return originalFetch(input, init);
     }
 
@@ -157,6 +158,15 @@ function setupNetworkTracking(): void {
         duration,
       });
 
+      if (!response.ok) {
+        trackOpsEvent("api_error", {
+          endpoint_group: classifyEndpointGroup(url),
+          http_status: response.status,
+          error_code: response.statusText || "http_error",
+          retryable: response.status >= 500,
+        });
+      }
+
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -166,9 +176,27 @@ function setupNetworkTracking(): void {
         duration,
       });
 
+      trackOpsEvent("api_error", {
+        endpoint_group: classifyEndpointGroup(url),
+        http_status: 0,
+        error_code: "network_error",
+        retryable: true,
+      });
+
       throw error;
     }
   };
+}
+
+function classifyEndpointGroup(url: string): "auth" | "directory" | "events" | "forms" | "chat" | "donations" | "schedule" | "admin" {
+  if (url.includes("/api/auth")) return "auth";
+  if (url.includes("/api/organizations") || url.includes("/api/members") || url.includes("/api/alumni")) return "directory";
+  if (url.includes("/api/events") || url.includes("/api/notifications")) return "events";
+  if (url.includes("/api/forms") || url.includes("/api/documents")) return "forms";
+  if (url.includes("/api/chat")) return "chat";
+  if (url.includes("/api/stripe") || url.includes("/api/donations")) return "donations";
+  if (url.includes("/api/calendar") || url.includes("/api/schedules")) return "schedule";
+  return "admin";
 }
 
 /**
@@ -329,6 +357,11 @@ export function captureClientError(event: ClientErrorEvent): void {
 
   // Add to queue
   errorQueue.push(errorEvent);
+
+  // Emit ops analytics event without user identifiers
+  trackOpsEvent("client_error", {
+    error_code: event.name || "ClientError",
+  });
 
   // Prevent queue from growing too large
   if (errorQueue.length > MAX_QUEUE_SIZE) {

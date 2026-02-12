@@ -9,17 +9,23 @@ import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
 import { EnterpriseCard } from "@/components/enterprise";
 import { getUserEnterprises } from "@/lib/auth/enterprise-context";
 import { SeedEnterpriseButton } from "@/components/dev/SeedEnterpriseButton";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
+
+export const dynamic = "force-dynamic";
+
+type OrganizationSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  logo_url: string | null;
+  primary_color: string | null;
+  enterprise_id: string | null;
+};
 
 type Membership = {
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-    description: string | null;
-    logo_url: string | null;
-    primary_color: string | null;
-    enterprise_id: string | null;
-  } | null;
+  organization_id: string;
+  organization: OrganizationSummary | null;
   role: string | null;
   status: string | null;
 };
@@ -38,22 +44,80 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     redirect("/auth/login");
   }
 
+  let loadError: string | null = null;
+
   // Fetch user's enterprises and organizations in parallel
-  const [{ data: memberships }, enterprises] = await Promise.all([
+  const [{ data: membershipsData, error: membershipsError }, enterprises] = await Promise.all([
     supabase
       .from("user_organization_roles")
-      .select("organization:organizations(id, name, slug, description, logo_url, primary_color, enterprise_id), role, status")
+      .select("organization_id, organization:organizations(id, name, slug, description, logo_url, primary_color, enterprise_id), role, status")
       .eq("user_id", user.id),
     getUserEnterprises(user.id),
   ]);
 
-  // Filter to only show active memberships
-  const allOrgs = (memberships as Membership[] | null)
-    ?.filter((m) => m.organization && m.status === "active")
-    .map((m) => ({
-      ...m.organization!,
-      role: m.role ?? "member",
-    })) ?? [];
+  let memberships = (membershipsData as Membership[] | null) ?? [];
+
+  if (membershipsError) {
+    console.error("[app] Failed to load memberships with org embed:", membershipsError);
+    const { data: fallbackMemberships, error: fallbackError } = await supabase
+      .from("user_organization_roles")
+      .select("organization_id, role, status")
+      .eq("user_id", user.id);
+
+    if (fallbackError) {
+      console.error("[app] Failed to load memberships (fallback):", fallbackError);
+      loadError = "We couldn't load your organizations. Please refresh or try again later.";
+      memberships = [];
+    } else {
+      const fallbackRows = (fallbackMemberships as Array<Pick<Membership, "organization_id" | "role" | "status">> | null) ?? [];
+      memberships = fallbackRows.map((row) => ({ ...row, organization: null }));
+    }
+  }
+
+  const activeMemberships = memberships.filter((m) => m.status === "active");
+  const pendingMemberships = memberships.filter((m) => m.status === "pending");
+
+  const orgLookup = new Map<string, OrganizationSummary>();
+  for (const membership of memberships) {
+    if (membership.organization) {
+      orgLookup.set(membership.organization_id, membership.organization);
+    }
+  }
+
+  const missingOrgIds = Array.from(
+    new Set(
+      memberships
+        .filter((m) => !orgLookup.has(m.organization_id))
+        .map((m) => m.organization_id)
+        .filter(Boolean),
+    ),
+  );
+
+  if (missingOrgIds.length > 0) {
+    const { data: orgData, error: orgError } = await supabase
+      .from("organizations")
+      .select("id, name, slug, description, logo_url, primary_color")
+      .in("id", missingOrgIds);
+
+    if (orgError) {
+      console.error("[app] Failed to resolve organizations for memberships:", orgError);
+      if (!loadError) {
+        loadError = "We couldn't load your organizations. Please refresh or try again later.";
+      }
+    } else {
+      for (const org of orgData ?? []) {
+        orgLookup.set(org.id, org as OrganizationSummary);
+      }
+    }
+  }
+
+  const allOrgs = activeMemberships
+    .map((m) => {
+      const org = orgLookup.get(m.organization_id);
+      if (!org) return null;
+      return { ...org, role: m.role ?? "member" };
+    })
+    .filter(Boolean) as Array<OrganizationSummary & { role: string }>;
 
   // Split into regular orgs and enterprise sub-orgs
   const orgs = allOrgs.filter((o) => !o.enterprise_id);
@@ -68,20 +132,20 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     }), {});
 
   // Get pending memberships for display
-  const pendingMemberships = (memberships as Membership[] | null)
-    ?.filter((m) => m.organization && m.status === "pending")
-    .map((m) => ({
-      ...m.organization!,
-      role: m.role ?? "member",
-    })) ?? [];
+  const pendingDisplayMemberships = pendingMemberships
+    .map((m) => {
+      const org = orgLookup.get(m.organization_id);
+      if (!org) return null;
+      return { ...org, role: m.role ?? "member" };
+    })
+    .filter(Boolean) as Array<OrganizationSummary & { role: string }>;
 
   // If checkout=success, find the org by slug to get its ID for reconciliation
   let checkoutOrgId: string | undefined;
   if (checkout === "success" && orgSlug) {
-    const targetOrg = (memberships as Membership[] | null)?.find(
-      (m) => m.organization?.slug === orgSlug
-    );
-    checkoutOrgId = targetOrg?.organization?.id;
+    const targetOrg = orgs.find((org) => org.slug === orgSlug)
+      ?? pendingDisplayMemberships.find((org) => org.slug === orgSlug);
+    checkoutOrgId = targetOrg?.id;
     
     // If org not in memberships yet (webhook may not have fired), look it up directly
     if (!checkoutOrgId) {
@@ -104,6 +168,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             Team<span className="text-emerald-500">Network</span>
           </h1>
           <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
+            <ThemeToggle />
             <form action="/auth/signout" method="POST">
               <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
             </form>
@@ -121,6 +186,17 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         {/* Checkout success banner with auto-sync */}
         {checkout === "success" && orgSlug && (
           <CheckoutSuccessBanner orgSlug={orgSlug} organizationId={checkoutOrgId} />
+        )}
+
+        {loadError && (
+          <Card className="p-4 mb-6 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20">
+            <div className="flex items-center gap-3">
+              <svg className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm text-amber-700 dark:text-amber-300">{loadError}</p>
+            </div>
+          </Card>
         )}
 
         {/* Error banner for revoked access */}
@@ -325,14 +401,14 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         </section>
 
         {/* Pending memberships section */}
-        {pendingMemberships.length > 0 && (
+        {pendingDisplayMemberships.length > 0 && (
           <div className="mt-8">
             <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               Pending Approval
-              <Badge variant="warning">{pendingMemberships.length}</Badge>
+              <Badge variant="warning">{pendingDisplayMemberships.length}</Badge>
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {pendingMemberships.map((org) => (
+              {pendingDisplayMemberships.map((org) => (
                 <Card key={org.id} className="p-5 space-y-3 opacity-70">
                   <div className="flex items-center gap-3">
                     {org.logo_url ? (

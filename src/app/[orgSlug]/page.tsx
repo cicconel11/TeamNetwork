@@ -6,6 +6,7 @@ import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgRole } from "@/lib/auth/roles";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
+import { SuggestedFeatures } from "@/components/analytics/SuggestedFeatures";
 
 interface DashboardPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -105,6 +106,9 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
         title={`Welcome to ${org.name}`}
         description={org.description || "Your organization dashboard"}
       />
+
+      {/* Personalized Suggestions (client component — renders only with consent + data) */}
+      <SuggestedFeatures orgSlug={orgSlug} />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

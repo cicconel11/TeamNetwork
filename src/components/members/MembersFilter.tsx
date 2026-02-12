@@ -2,16 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface MembersFilterProps {
   orgSlug: string;
+  orgId: string;
   currentStatus?: string;
   currentRole?: string;
   roles: Array<string | null>;
 }
 
-export function MembersFilter({ orgSlug, currentStatus, currentRole, roles }: MembersFilterProps) {
+export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, roles }: MembersFilterProps) {
   const [open, setOpen] = useState(false);
+  const buildFilterKeys = (status?: string, role?: string) => {
+    const keys: string[] = [];
+    if (status && status !== "active") keys.push("status");
+    if (role) keys.push("role");
+    return keys;
+  };
 
   const buildHref = (status?: string, role?: string) => {
     const params = new URLSearchParams();
@@ -63,7 +71,14 @@ export function MembersFilter({ orgSlug, currentStatus, currentRole, roles }: Me
                   className={`block px-4 py-2 text-sm transition-colors ${
                     active ? "text-white bg-org-primary" : "text-foreground hover:bg-muted"
                   }`}
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    trackBehavioralEvent("directory_filter_apply", {
+                      directory_type: "active_members",
+                      filter_keys: buildFilterKeys(item.value, currentRole),
+                      filters_count: buildFilterKeys(item.value, currentRole).length,
+                    }, orgId);
+                    setOpen(false);
+                  }}
                 >
                   {item.label}
                 </Link>
@@ -82,7 +97,14 @@ export function MembersFilter({ orgSlug, currentStatus, currentRole, roles }: Me
                   className={`block px-4 py-2 text-sm transition-colors ${
                     active ? "text-white bg-org-primary" : "text-foreground hover:bg-muted"
                   }`}
-                  onClick={() => setOpen(false)}
+                  onClick={() => {
+                    trackBehavioralEvent("directory_filter_apply", {
+                      directory_type: "active_members",
+                      filter_keys: buildFilterKeys(currentStatus, item.value),
+                      filters_count: buildFilterKeys(currentStatus, item.value).length,
+                    }, orgId);
+                    setOpen(false);
+                  }}
                 >
                   {item.label}
                 </Link>

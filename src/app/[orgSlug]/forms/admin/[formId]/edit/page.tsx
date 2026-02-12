@@ -26,6 +26,23 @@ function generateFieldName(label: string): string {
     .substring(0, 30) || `field_${Date.now()}`;
 }
 
+function serializeFieldOptions(options: FormField["options"]): string {
+  if (!options || options.length === 0) {
+    return "";
+  }
+
+  return options
+    .map((option) => (typeof option === "string" ? option : option.value))
+    .join(", ");
+}
+
+function parseFieldOptions(input: string): string[] {
+  return input
+    .split(",")
+    .map((option) => option.trim())
+    .filter(Boolean);
+}
+
 export default function EditFormPage() {
   const router = useRouter();
   const params = useParams();
@@ -60,7 +77,7 @@ export default function EditFormPage() {
       setTitle(form.title);
       setDescription(form.description || "");
       setFields((form.fields || []) as unknown as FormField[]);
-      setIsActive(form.is_active ?? true);
+      setIsActive(Boolean(form.is_active));
       setIsFetching(false);
     };
 
@@ -295,10 +312,10 @@ export default function EditFormPage() {
                     {["select", "radio", "checkbox"].includes(field.type) && (
                       <Input
                         label="Options (comma-separated)"
-                        value={field.options?.join(", ") || ""}
+                        value={serializeFieldOptions(field.options)}
                         onChange={(e) =>
                           updateField(index, {
-                            options: e.target.value.split(",").map((o) => o.trim()).filter(Boolean),
+                            options: parseFieldOptions(e.target.value),
                           })
                         }
                       />

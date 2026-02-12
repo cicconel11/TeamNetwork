@@ -188,6 +188,21 @@ Thank you for using TeamNetwork.
       });
     }
 
+    // Clean up analytics data immediately (no grace period needed for anonymous data)
+    type SupabaseDeleteClient = {
+      from: (table: string) => {
+        delete: () => { eq: (column: string, value: string) => Promise<unknown> };
+      };
+    };
+    const deleteClient = serviceSupabase as unknown as SupabaseDeleteClient;
+
+    await Promise.allSettled([
+      deleteClient.from("analytics_consent").delete().eq("user_id", user.id),
+      deleteClient.from("usage_events").delete().eq("user_id", user.id),
+      deleteClient.from("usage_summaries").delete().eq("user_id", user.id),
+      deleteClient.from("ui_profiles").delete().eq("user_id", user.id),
+    ]);
+
     // Sign out the user from current session (but don't delete auth record yet)
     await supabase.auth.signOut();
 

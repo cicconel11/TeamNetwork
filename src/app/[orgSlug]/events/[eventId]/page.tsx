@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { EventRsvp, AttendanceList, EventDeleteButton } from "@/components/events";
 import type { RsvpStatus } from "@/types/database";
+import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
 
 interface EventDetailPageProps {
   params: Promise<{ orgSlug: string; eventId: string }>;
@@ -72,6 +73,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
   return (
     <div className="animate-fade-in">
+      <EventOpenTracker organizationId={org.id} eventId={eventId} />
       <PageHeader
         title={event.title}
         backHref={`/${orgSlug}/events`}
@@ -205,4 +207,3 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     </div>
   );
 }
-

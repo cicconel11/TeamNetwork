@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { DonationForm, ConnectSetup } from "@/components/donations";
+import { DonationResultTracker } from "@/components/analytics/DonationResultTracker";
 import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
@@ -68,6 +69,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
   return (
     <div className="animate-fade-in">
+      <DonationResultTracker organizationId={org.id} />
       <PageHeader
         title={pageLabel}
         description={`${donationCount} contributions totaling ${totalAmount.toLocaleString(undefined, {
@@ -86,7 +88,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
       {canEdit && !isConnected && (
         <div className="mb-6">
-          <ConnectSetup organizationId={org.id} isConnected={isConnected} />
+          <ConnectSetup organizationId={org.id} isConnected={isConnected} connectStatus={connectStatus} />
         </div>
       )}
 

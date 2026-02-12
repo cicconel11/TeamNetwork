@@ -11,7 +11,11 @@ create table if not exists public.schedule_sources (
   last_synced_at timestamptz,
   last_error text,
   created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  updated_at timestamptz default now(),
+  last_event_count integer,
+  last_imported integer,
+  last_updated integer,
+  last_cancelled integer
 );
 
 create table if not exists public.schedule_events (

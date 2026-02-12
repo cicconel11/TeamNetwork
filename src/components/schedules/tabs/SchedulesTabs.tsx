@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { TeamScheduleTab } from "./TeamScheduleTab";
 import { UpcomingEventsTab } from "./UpcomingEventsTab";
 import { MyCalendarTab } from "./MyCalendarTab";
@@ -59,6 +60,7 @@ const TABS: Tab[] = [
 type SchedulesTabsProps = {
   orgId: string;
   orgSlug: string;
+  orgName: string;
   isAdmin: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
@@ -69,13 +71,22 @@ type SchedulesTabsProps = {
 export function SchedulesTabs({
   orgId,
   orgSlug,
+  orgName,
   isAdmin,
   mySchedules,
   allSchedules,
   navConfig,
   pageLabel,
 }: SchedulesTabsProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("team");
+  const searchParams = useSearchParams();
+
+  // Auto-select "calendar" tab when returning from OAuth callback
+  const initialTab = useMemo<TabId>(() => {
+    const hasCalendarParam = searchParams.has("calendar") || searchParams.has("error");
+    return hasCalendarParam ? "calendar" : "team";
+  }, [searchParams]);
+
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
 
   const visibleTabs = TABS.filter((tab) => !tab.adminOnly || isAdmin);
 
@@ -116,6 +127,7 @@ export function SchedulesTabs({
           <MyCalendarTab
             orgId={orgId}
             orgSlug={orgSlug}
+            orgName={orgName}
             mySchedules={mySchedules}
             navConfig={navConfig}
             pageLabel={pageLabel}

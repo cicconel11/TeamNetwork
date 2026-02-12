@@ -160,6 +160,141 @@ export type Database = {
           },
         ]
       }
+      analytics_consent: {
+        Row: {
+          consent_state: Database["public"]["Enums"]["analytics_consent_state"]
+          decided_at: string
+          org_id: string
+          user_id: string
+        }
+        Insert: {
+          consent_state: Database["public"]["Enums"]["analytics_consent_state"]
+          decided_at?: string
+          org_id: string
+          user_id?: string
+        }
+        Update: {
+          consent_state?: Database["public"]["Enums"]["analytics_consent_state"]
+          decided_at?: string
+          org_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_consent_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analytics_events: {
+        Row: {
+          app_version: string
+          client_day: string
+          created_at: string
+          device_class: string
+          event_name: Database["public"]["Enums"]["analytics_event_name"]
+          id: number
+          org_id: string
+          platform: string
+          props: Json
+          route: string
+          session_id: string
+        }
+        Insert: {
+          app_version: string
+          client_day: string
+          created_at?: string
+          device_class: string
+          event_name: Database["public"]["Enums"]["analytics_event_name"]
+          id?: number
+          org_id: string
+          platform: string
+          props?: Json
+          route: string
+          session_id: string
+        }
+        Update: {
+          app_version?: string
+          client_day?: string
+          created_at?: string
+          device_class?: string
+          event_name?: Database["public"]["Enums"]["analytics_event_name"]
+          id?: number
+          org_id?: string
+          platform?: string
+          props?: Json
+          route?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_events_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      analytics_ops_events: {
+        Row: {
+          app_version: string
+          client_day: string
+          consent_state: string
+          created_at: string
+          device_class: string
+          event_name: string
+          id: string
+          organization_id: string | null
+          payload: Json
+          platform: string
+          referrer_type: string
+          route: string
+          session_id: string
+        }
+        Insert: {
+          app_version: string
+          client_day: string
+          consent_state: string
+          created_at?: string
+          device_class: string
+          event_name: string
+          id?: string
+          organization_id?: string | null
+          payload: Json
+          platform: string
+          referrer_type: string
+          route: string
+          session_id: string
+        }
+        Update: {
+          app_version?: string
+          client_day?: string
+          consent_state?: string
+          created_at?: string
+          device_class?: string
+          event_name?: string
+          id?: string
+          organization_id?: string | null
+          payload?: Json
+          platform?: string
+          referrer_type?: string
+          route?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_ops_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           audience: string | null
@@ -404,6 +539,7 @@ export type Database = {
       }
       chat_group_members: {
         Row: {
+          added_by: string | null
           chat_group_id: string
           id: string
           joined_at: string
@@ -414,6 +550,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          added_by?: string | null
           chat_group_id: string
           id?: string
           joined_at?: string
@@ -424,6 +561,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          added_by?: string | null
           chat_group_id?: string
           id?: string
           joined_at?: string
@@ -446,6 +584,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_group_members_user_id_public_users_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -893,7 +1038,7 @@ export type Database = {
           enterprise_id: string
           expires_at: string | null
           id: string
-          organization_id: string
+          organization_id: string | null
           revoked_at: string | null
           role: string
           token: string
@@ -906,7 +1051,7 @@ export type Database = {
           enterprise_id: string
           expires_at?: string | null
           id?: string
-          organization_id: string
+          organization_id?: string | null
           revoked_at?: string | null
           role: string
           token: string
@@ -919,7 +1064,7 @@ export type Database = {
           enterprise_id?: string
           expires_at?: string | null
           id?: string
-          organization_id?: string
+          organization_id?: string | null
           revoked_at?: string | null
           role?: string
           token?: string
@@ -1063,37 +1208,147 @@ export type Database = {
         }
         Relationships: []
       }
+      error_events: {
+        Row: {
+          api_path: string | null
+          created_at: string
+          env: string
+          group_id: string
+          id: string
+          message: string
+          meta: Json
+          route: string | null
+          session_id: string | null
+          stack: string | null
+          user_id: string | null
+        }
+        Insert: {
+          api_path?: string | null
+          created_at?: string
+          env: string
+          group_id: string
+          id?: string
+          message: string
+          meta?: Json
+          route?: string | null
+          session_id?: string | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          api_path?: string | null
+          created_at?: string
+          env?: string
+          group_id?: string
+          id?: string
+          message?: string
+          meta?: Json
+          route?: string | null
+          session_id?: string | null
+          stack?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "error_events_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "error_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      error_groups: {
+        Row: {
+          baseline_rate_1h: number | null
+          count_1h: number
+          count_24h: number
+          env: string
+          fingerprint: string
+          first_notified_at: string | null
+          first_seen_at: string
+          id: string
+          last_notified_at: string | null
+          last_seen_at: string
+          sample_event: Json
+          severity: string
+          spike_threshold_1h: number | null
+          status: string
+          title: string
+          total_count: number
+        }
+        Insert: {
+          baseline_rate_1h?: number | null
+          count_1h?: number
+          count_24h?: number
+          env: string
+          fingerprint: string
+          first_notified_at?: string | null
+          first_seen_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          sample_event: Json
+          severity?: string
+          spike_threshold_1h?: number | null
+          status?: string
+          title: string
+          total_count?: number
+        }
+        Update: {
+          baseline_rate_1h?: number | null
+          count_1h?: number
+          count_24h?: number
+          env?: string
+          fingerprint?: string
+          first_notified_at?: string | null
+          first_seen_at?: string
+          id?: string
+          last_notified_at?: string | null
+          last_seen_at?: string
+          sample_event?: Json
+          severity?: string
+          spike_threshold_1h?: number | null
+          status?: string
+          title?: string
+          total_count?: number
+        }
+        Relationships: []
+      }
       event_calendar_entries: {
         Row: {
           created_at: string | null
           event_id: string
+          google_calendar_id: string
           google_event_id: string
           id: string
           last_error: string | null
           organization_id: string
-          sync_status: string
+          sync_status: "pending" | "synced" | "failed" | "deleted"
           updated_at: string | null
           user_id: string
         }
         Insert: {
           created_at?: string | null
           event_id: string
+          google_calendar_id?: string
           google_event_id: string
           id?: string
           last_error?: string | null
           organization_id: string
-          sync_status?: string
+          sync_status?: "pending" | "synced" | "failed" | "deleted"
           updated_at?: string | null
           user_id: string
         }
         Update: {
           created_at?: string | null
           event_id?: string
+          google_calendar_id?: string
           google_event_id?: string
           id?: string
           last_error?: string | null
           organization_id?: string
-          sync_status?: string
+          sync_status?: "pending" | "synced" | "failed" | "deleted"
           updated_at?: string | null
           user_id?: string
         }
@@ -1428,7 +1683,7 @@ export type Database = {
           form_id: string
           id: string
           organization_id: string
-          responses: Json
+          data: Json
           submitted_at: string | null
           user_id: string
         }
@@ -1436,7 +1691,7 @@ export type Database = {
           form_id: string
           id?: string
           organization_id: string
-          responses?: Json
+          data?: Json
           submitted_at?: string | null
           user_id: string
         }
@@ -1444,7 +1699,7 @@ export type Database = {
           form_id?: string
           id?: string
           organization_id?: string
-          responses?: Json
+          data?: Json
           submitted_at?: string | null
           user_id?: string
         }
@@ -1531,7 +1786,10 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           email: string | null
+          expected_graduation_date: string | null
           first_name: string
+          graduated_at: string | null
+          graduation_warning_sent_at: string | null
           graduation_year: number | null
           id: string
           last_name: string
@@ -1547,7 +1805,10 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           email?: string | null
+          expected_graduation_date?: string | null
           first_name: string
+          graduated_at?: string | null
+          graduation_warning_sent_at?: string | null
           graduation_year?: number | null
           id?: string
           last_name: string
@@ -1563,7 +1824,10 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           email?: string | null
+          expected_graduation_date?: string | null
           first_name?: string
+          graduated_at?: string | null
+          graduation_warning_sent_at?: string | null
           graduation_year?: number | null
           id?: string
           last_name?: string
@@ -1762,6 +2026,65 @@ export type Database = {
           {
             foreignKeyName: "notifications_organization_id_fkey"
             columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_events: {
+        Row: {
+          app_version: string
+          client_day: string
+          created_at: string
+          device_class: string
+          endpoint_group: string | null
+          error_code: string | null
+          event_name: Database["public"]["Enums"]["ops_event_name"]
+          http_status: number | null
+          id: number
+          org_id: string | null
+          platform: string
+          retryable: boolean | null
+          route: string
+          session_id: string | null
+        }
+        Insert: {
+          app_version: string
+          client_day: string
+          created_at?: string
+          device_class: string
+          endpoint_group?: string | null
+          error_code?: string | null
+          event_name: Database["public"]["Enums"]["ops_event_name"]
+          http_status?: number | null
+          id?: number
+          org_id?: string | null
+          platform: string
+          retryable?: boolean | null
+          route: string
+          session_id?: string | null
+        }
+        Update: {
+          app_version?: string
+          client_day?: string
+          created_at?: string
+          device_class?: string
+          endpoint_group?: string | null
+          error_code?: string | null
+          event_name?: Database["public"]["Enums"]["ops_event_name"]
+          http_status?: number | null
+          id?: number
+          org_id?: string | null
+          platform?: string
+          retryable?: boolean | null
+          route?: string
+          session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_events_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -2061,6 +2384,7 @@ export type Database = {
           logo_url: string | null
           name: string
           nav_config: Json | null
+          org_type: string
           original_subscription_id: string | null
           original_subscription_status: string | null
           primary_color: string | null
@@ -2080,6 +2404,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           nav_config?: Json | null
+          org_type?: string
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
@@ -2099,6 +2424,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           nav_config?: Json | null
+          org_type?: string
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
@@ -2259,6 +2585,41 @@ export type Database = {
           {
             foreignKeyName: "philanthropy_events_organization_id_fkey"
             columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rate_limit_analytics: {
+        Row: {
+          created_at: string
+          event_count: number
+          id: number
+          org_id: string
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          event_count?: number
+          id?: number
+          org_id: string
+          user_id: string
+          window_start?: string
+        }
+        Update: {
+          created_at?: string
+          event_count?: number
+          id?: number
+          org_id?: string
+          user_id?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rate_limit_analytics_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -2494,8 +2855,12 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           id: string
+          last_cancelled: number | null
           last_error: string | null
+          last_event_count: number | null
+          last_imported: number | null
           last_synced_at: string | null
+          last_updated: number | null
           org_id: string
           source_url: string
           status: string
@@ -2507,8 +2872,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
+          last_cancelled?: number | null
           last_error?: string | null
+          last_event_count?: number | null
+          last_imported?: number | null
           last_synced_at?: string | null
+          last_updated?: number | null
           org_id: string
           source_url: string
           status?: string
@@ -2520,8 +2889,12 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           id?: string
+          last_cancelled?: number | null
           last_error?: string | null
+          last_event_count?: number | null
+          last_imported?: number | null
           last_synced_at?: string | null
+          last_updated?: number | null
           org_id?: string
           source_url?: string
           status?: string
@@ -2566,6 +2939,147 @@ export type Database = {
         }
         Relationships: []
       }
+      ui_profiles: {
+        Row: {
+          expires_at: string
+          generated_at: string
+          id: string
+          llm_provider: string | null
+          organization_id: string
+          profile: Json
+          summary_hash: string
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string
+          generated_at?: string
+          id?: string
+          llm_provider?: string | null
+          organization_id: string
+          profile?: Json
+          summary_hash: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string
+          generated_at?: string
+          id?: string
+          llm_provider?: string | null
+          organization_id?: string
+          profile?: Json
+          summary_hash?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ui_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_events: {
+        Row: {
+          created_at: string
+          device_class: string | null
+          duration_ms: number | null
+          event_type: string
+          feature: string
+          hour_of_day: number | null
+          id: string
+          organization_id: string | null
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_class?: string | null
+          duration_ms?: number | null
+          event_type: string
+          feature: string
+          hour_of_day?: number | null
+          id?: string
+          organization_id?: string | null
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_class?: string | null
+          duration_ms?: number | null
+          event_type?: string
+          feature?: string
+          hour_of_day?: number | null
+          id?: string
+          organization_id?: string | null
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      usage_summaries: {
+        Row: {
+          created_at: string
+          device_preference: string | null
+          feature: string
+          id: string
+          last_visited_at: string | null
+          organization_id: string
+          peak_hour: number | null
+          period_end: string
+          period_start: string
+          total_duration_ms: number
+          user_id: string
+          visit_count: number
+        }
+        Insert: {
+          created_at?: string
+          device_preference?: string | null
+          feature: string
+          id?: string
+          last_visited_at?: string | null
+          organization_id: string
+          peak_hour?: number | null
+          period_end: string
+          period_start: string
+          total_duration_ms?: number
+          user_id: string
+          visit_count?: number
+        }
+        Update: {
+          created_at?: string
+          device_preference?: string | null
+          feature?: string
+          id?: string
+          last_visited_at?: string | null
+          organization_id?: string
+          peak_hour?: number | null
+          period_end?: string
+          period_start?: string
+          total_duration_ms?: number
+          user_id?: string
+          visit_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_summaries_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_calendar_connections: {
         Row: {
           access_token_encrypted: string
@@ -2574,7 +3088,8 @@ export type Database = {
           id: string
           last_sync_at: string | null
           refresh_token_encrypted: string
-          status: string
+          status: "connected" | "disconnected" | "error"
+          target_calendar_id: string
           token_expires_at: string
           updated_at: string | null
           user_id: string
@@ -2586,7 +3101,8 @@ export type Database = {
           id?: string
           last_sync_at?: string | null
           refresh_token_encrypted: string
-          status?: string
+          status?: "connected" | "disconnected" | "error"
+          target_calendar_id?: string
           token_expires_at: string
           updated_at?: string | null
           user_id: string
@@ -2598,7 +3114,8 @@ export type Database = {
           id?: string
           last_sync_at?: string | null
           refresh_token_encrypted?: string
-          status?: string
+          status?: "connected" | "disconnected" | "error"
+          target_calendar_id?: string
           token_expires_at?: string
           updated_at?: string | null
           user_id?: string
@@ -2851,6 +3368,7 @@ export type Database = {
       enterprise_alumni_counts: {
         Row: {
           enterprise_id: string | null
+          enterprise_managed_org_count: number | null
           sub_org_count: number | null
           total_alumni_count: number | null
         }
@@ -2906,6 +3424,10 @@ export type Database = {
       }
     }
     Functions: {
+      aggregate_usage_events: {
+        Args: { p_period_end: string; p_period_start: string }
+        Returns: Json
+      }
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       can_add_alumni: { Args: { p_org_id: string }; Returns: boolean }
@@ -2917,16 +3439,35 @@ export type Database = {
         Args: { p_enterprise_id: string }
         Returns: boolean
       }
+      can_view_announcement: {
+        Args: {
+          announcement_row: Database["public"]["Tables"]["announcements"]["Row"]
+        }
+        Returns: boolean
+      }
+      check_analytics_rate_limit: {
+        Args: {
+          p_max_events?: number
+          p_org_id: string
+          p_user_id: string
+          p_window_interval?: unknown
+        }
+        Returns: boolean
+      }
       check_in_event_attendee: {
         Args: { p_rsvp_id: string; p_undo?: boolean }
+        Returns: Json
+      }
+      complete_enterprise_invite_redemption: {
+        Args: { p_organization_id: string; p_token: string }
         Returns: Json
       }
       create_enterprise_invite: {
         Args: {
           p_enterprise_id: string
           p_expires_at?: string
-          p_organization_id: string
-          p_role: string
+          p_organization_id?: string
+          p_role?: string
           p_uses?: number
         }
         Returns: {
@@ -2936,7 +3477,7 @@ export type Database = {
           enterprise_id: string
           expires_at: string | null
           id: string
-          organization_id: string
+          organization_id: string | null
           revoked_at: string | null
           role: string
           token: string
@@ -2978,6 +3519,15 @@ export type Database = {
       debug_user_org_access: { Args: { target_org_id?: string }; Returns: Json }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
+      get_subscription_status: {
+        Args: { p_org_id: string }
+        Returns: {
+          current_period_end: string
+          grace_period_ends_at: string
+          status: string
+        }[]
+      }
       has_active_role: {
         Args: { allowed_roles: string[]; org: string }
         Returns: boolean
@@ -2991,12 +3541,45 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_chat_group_creator: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_member: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_moderator: { Args: { group_id: string }; Returns: boolean }
       is_enterprise_admin: { Args: { ent_id: string }; Returns: boolean }
       is_enterprise_member: { Args: { ent_id: string }; Returns: boolean }
+      is_enterprise_owner: { Args: { ent_id: string }; Returns: boolean }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_org_member: { Args: { org_id: string }; Returns: boolean }
+      log_analytics_event: {
+        Args: {
+          p_app_version: string
+          p_client_day: string
+          p_device_class: string
+          p_event_name: Database["public"]["Enums"]["analytics_event_name"]
+          p_org_id: string
+          p_platform: string
+          p_props: Json
+          p_route: string
+          p_session_id: string
+        }
+        Returns: boolean
+      }
+      log_ops_event: {
+        Args: {
+          p_app_version: string
+          p_client_day: string
+          p_device_class: string
+          p_endpoint_group: string
+          p_error_code: string
+          p_event_name: Database["public"]["Enums"]["ops_event_name"]
+          p_http_status: number
+          p_org_id: string
+          p_platform: string
+          p_retryable: boolean
+          p_route: string
+          p_session_id: string
+        }
+        Returns: boolean
+      }
       match_class_action_docs: {
         Args: {
           match_count: number
@@ -3010,6 +3593,9 @@ export type Database = {
           similarity: number
         }[]
       }
+      purge_analytics_events: { Args: never; Returns: Json }
+      purge_expired_usage_events: { Args: never; Returns: Json }
+      purge_ops_events: { Args: never; Returns: Json }
       redeem_enterprise_invite: {
         Args: { p_code_or_token: string }
         Returns: Json
@@ -3020,8 +3606,42 @@ export type Database = {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean
       }
+      update_error_baselines: { Args: never; Returns: undefined }
+      upsert_error_group: {
+        Args: {
+          p_env: string
+          p_fingerprint: string
+          p_sample_event: Json
+          p_severity: string
+          p_title: string
+        }
+        Returns: string
+      }
     }
     Enums: {
+      analytics_consent_state: "opted_in" | "opted_out"
+      analytics_event_name:
+        | "app_open"
+        | "route_view"
+        | "nav_click"
+        | "cta_click"
+        | "page_dwell_bucket"
+        | "directory_view"
+        | "directory_filter_apply"
+        | "directory_sort_change"
+        | "profile_card_open"
+        | "events_view"
+        | "event_open"
+        | "rsvp_update"
+        | "form_open"
+        | "form_submit"
+        | "file_upload_attempt"
+        | "donation_flow_start"
+        | "donation_checkout_start"
+        | "donation_checkout_result"
+        | "chat_thread_open"
+        | "chat_message_send"
+        | "chat_participants_change"
       chat_group_role: "admin" | "moderator" | "member"
       chat_message_status: "pending" | "approved" | "rejected"
       event_type:
@@ -3033,6 +3653,11 @@ export type Database = {
         | "fundraiser"
       member_status: "active" | "inactive" | "pending"
       membership_status: "active" | "revoked" | "pending"
+      ops_event_name:
+        | "api_error"
+        | "client_error"
+        | "auth_fail"
+        | "rate_limited"
       user_role: "admin" | "member" | "viewer" | "active_member" | "alumni"
     }
     CompositeTypes: {
@@ -3161,6 +3786,30 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      analytics_consent_state: ["opted_in", "opted_out"],
+      analytics_event_name: [
+        "app_open",
+        "route_view",
+        "nav_click",
+        "cta_click",
+        "page_dwell_bucket",
+        "directory_view",
+        "directory_filter_apply",
+        "directory_sort_change",
+        "profile_card_open",
+        "events_view",
+        "event_open",
+        "rsvp_update",
+        "form_open",
+        "form_submit",
+        "file_upload_attempt",
+        "donation_flow_start",
+        "donation_checkout_start",
+        "donation_checkout_result",
+        "chat_thread_open",
+        "chat_message_send",
+        "chat_participants_change",
+      ],
       chat_group_role: ["admin", "moderator", "member"],
       chat_message_status: ["pending", "approved", "rejected"],
       event_type: [
@@ -3173,70 +3822,92 @@ export const Constants = {
       ],
       member_status: ["active", "inactive", "pending"],
       membership_status: ["active", "revoked", "pending"],
+      ops_event_name: [
+        "api_error",
+        "client_error",
+        "auth_fail",
+        "rate_limited",
+      ],
       user_role: ["admin", "member", "viewer", "active_member", "alumni"],
     },
   },
 } as const
 
-// Convenience type aliases for common tables
-export type Alumni = Database["public"]["Tables"]["alumni"]["Row"];
-export type Organization = Database["public"]["Tables"]["organizations"]["Row"];
-export type Member = Database["public"]["Tables"]["members"]["Row"];
-export type Event = Database["public"]["Tables"]["events"]["Row"];
-export type Announcement = Database["public"]["Tables"]["announcements"]["Row"];
-export type User = Database["public"]["Tables"]["users"]["Row"];
-export type Workout = Database["public"]["Tables"]["workouts"]["Row"];
-export type WorkoutLog = Database["public"]["Tables"]["workout_logs"]["Row"];
+// Table type exports
+export type AcademicSchedule = Tables<'academic_schedules'>;
+export type Alumni = Tables<'alumni'>;
+export type Announcement = Tables<'announcements'>;
+export type ChatGroup = Tables<'chat_groups'>;
+export type ChatGroupMember = Tables<'chat_group_members'>;
+export type ChatMessage = Tables<'chat_messages'>;
+export type Event = Tables<'events'>;
+export type Form = Tables<'forms'>;
+export type FormDocument = Tables<'form_documents'>;
+export type FormDocumentSubmission = Tables<'form_document_submissions'>;
+export type FormSubmission = Tables<'form_submissions'>;
+export type Member = Tables<'members'>;
+export type NotificationPreference = Tables<'notification_preferences'>;
+export type Organization = Tables<'organizations'>;
+export type OrganizationDonation = Tables<'organization_donations'>;
+export type OrganizationDonationStat = Tables<'organization_donation_stats'>;
+export type ScheduleFile = Tables<'schedule_files'>;
+export type User = Tables<'users'>;
+export type Workout = Tables<'workouts'>;
+export type WorkoutLog = Tables<'workout_logs'>;
 
-// Chat types
-export type ChatGroup = Database["public"]["Tables"]["chat_groups"]["Row"];
-export type ChatGroupMember = Database["public"]["Tables"]["chat_group_members"]["Row"];
-export type ChatMessage = Database["public"]["Tables"]["chat_messages"]["Row"];
+// Enum type exports
+export type EventType = Enums<'event_type'>;
+export type ChatMessageStatus = Enums<'chat_message_status'>;
+export type MemberStatus = Enums<'member_status'>;
+export type MembershipStatus = Enums<'membership_status'>;
+export type UserRole = Enums<'user_role'>;
 
-// Form types
-export type Form = Database["public"]["Tables"]["forms"]["Row"];
-export type FormDocument = Database["public"]["Tables"]["form_documents"]["Row"];
-export type FormDocumentSubmission = Database["public"]["Tables"]["form_document_submissions"]["Row"];
-export type FormSubmission = Database["public"]["Tables"]["form_submissions"]["Row"];
-
-// FormField represents a field definition stored in the forms.fields JSONB column
-export interface FormField {
-  name: string;
-  type: FormFieldType;
-  label: string;
-  required: boolean;
-  options?: string[] | { label: string; value: string }[];
-  placeholder?: string;
-}
-
-// Donation types
-export type OrganizationDonation = Database["public"]["Tables"]["organization_donations"]["Row"];
-export type OrganizationDonationStat = Database["public"]["Tables"]["organization_donation_stats"]["Row"];
-
-// Schedule types
-export type AcademicSchedule = Database["public"]["Tables"]["academic_schedules"]["Row"];
-export type ScheduleFile = Database["public"]["Tables"]["schedule_files"]["Row"];
-
-// Philanthropy types
-export type PhilanthropyEmbed = Database["public"]["Tables"]["org_philanthropy_embeds"]["Row"];
-
-// Notification types
-export type NotificationPreference = Database["public"]["Tables"]["notification_preferences"]["Row"];
-
-// Subscription types
-export type OrganizationSubscription = Database["public"]["Tables"]["organization_subscriptions"]["Row"];
+// Additional type aliases for backward compatibility and convenience
+export type RsvpStatus = "attending" | "not_attending" | "maybe";
+export type AnnouncementAudience = "all" | "members" | "active_members" | "alumni" | "individuals";
+export type NotificationAudience = "members" | "alumni" | "both";
+export type NotificationChannel = "email" | "sms" | "both";
+export type WorkoutStatus = "not_started" | "in_progress" | "completed";
 export type AlumniBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
 export type SubscriptionInterval = "month" | "year";
+export type EmbedType = "link" | "iframe";
+export type OccurrenceType = "single" | "daily" | "weekly" | "monthly";
 
-// Enum types (using string literals for type safety)
-export type AnnouncementAudience = "all" | "members" | "active_members" | "alumni" | "individuals";
-export type NotificationAudience = "all" | "members" | "active_members" | "alumni" | "individuals" | "both";
-export type NotificationChannel = "email" | "sms" | "both";
-export type ChatMessageStatus = "pending" | "approved" | "rejected";
-export type MembershipStatus = "active" | "revoked" | "pending";
-export type UserRole = "admin" | "member" | "viewer" | "active_member" | "alumni";
-export type EventType = "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
-export type RsvpStatus = "attending" | "not_attending" | "maybe";
-export type WorkoutStatus = "not_started" | "in_progress" | "completed";
-export type FormFieldType = "text" | "textarea" | "select" | "multiselect" | "checkbox" | "radio" | "date" | "email" | "phone" | "number" | "url" | "file";
-export type EmbedType = "video" | "image" | "link" | "document" | "iframe";
+export type FormFieldType = "text" | "textarea" | "email" | "phone" | "date" | "select" | "checkbox" | "radio";
+
+export interface FormFieldOption {
+  label: string;
+  value: string;
+}
+
+export interface FormField {
+  name: string;
+  label: string;
+  type: FormFieldType;
+  required?: boolean;
+  placeholder?: string;
+  options?: (string | FormFieldOption)[];
+}
+
+// Embed types (based on component usage)
+export interface PhilanthropyEmbed {
+  id: string;
+  organization_id: string;
+  title: string;
+  url: string;
+  embed_type: "link" | "iframe";
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DonationEmbed {
+  id: string;
+  organization_id: string;
+  title: string;
+  url: string;
+  embed_type: "link" | "iframe";
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}

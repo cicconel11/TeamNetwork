@@ -20,10 +20,10 @@ import {
   buildReinstatementEmail,
 } from "@/lib/graduation";
 
+import { validateCronAuth } from "@/lib/security/cron-auth";
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const CRON_SECRET = process.env.CRON_SECRET;
 
 /**
  * Daily cron job (8 AM UTC) to process member graduations.
@@ -37,19 +37,8 @@ const CRON_SECRET = process.env.CRON_SECRET;
  * Pass ?dry_run=true to preview what would happen without writing.
  */
 export async function GET(request: Request) {
-  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
-
-  if (isProduction && !CRON_SECRET) {
-    console.error("[cron/graduation-check] CRON_SECRET not configured in production");
-    return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-  }
-
-  if (CRON_SECRET) {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-  }
+  const authError = validateCronAuth(request);
+  if (authError) return authError;
 
   try {
     const supabase = createServiceClient();

@@ -4,6 +4,7 @@ import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { isValidAgeBracket, verifyAgeValidationToken } from "@/lib/auth/age-validation";
+import { debugLog, maskPII } from "@/lib/debug";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
 
-  console.log("[auth/callback] Starting", {
+  debugLog("auth-callback", "Starting", {
     hasCode: !!code,
     redirect,
     origin: requestUrl.origin,
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          console.log("[auth/callback] setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
+          debugLog("auth-callback", "setAll called with", cookiesToSet.length, "cookies:", cookiesToSet.map(c => c.name));
           cookiesToSet.forEach(({ name, value, options }) => {
             // Ensure cookies are set with correct options for cross-route access
             // Domain is set to .myteamnetwork.com to work across www and non-www
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log("[auth/callback] Exchanging code for session...");
+    debugLog("auth-callback", "Exchanging code for session...");
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (data.session) {
-      console.log("[auth/callback] Success! User:", data.session.user.id);
+      debugLog("auth-callback", "Success! User:", maskPII(data.session.user.id));
 
       // Validate age data for signups only, not logins
       // Detection logic:
@@ -87,20 +88,20 @@ export async function GET(request: NextRequest) {
         // User has age_bracket in metadata (existing validated user or email signup confirmation)
         // Trust the stored age_bracket; token verification is only for signup flows.
         if (!isValidAgeBracket(ageBracket)) {
-          console.error("[auth/callback] Invalid age bracket in metadata:", ageBracket);
+          console.error("[auth/callback] Invalid age bracket in metadata");
           return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
         }
 
         // Block under_13 confirmations
         if (ageBracket === "under_13") {
-          console.log("[auth/callback] Under-13 email confirmation - redirecting to parental consent");
+          debugLog("auth-callback", "Under-13 email confirmation - redirecting to parental consent");
           return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
         }
 
-        console.log("[auth/callback] Age validation passed (from metadata)");
+        debugLog("auth-callback", "Age validation passed (from metadata)");
       } else if (hasAgeQueryParams) {
         // New signup flow with age data in query params - validate it
-        console.log("[auth/callback] Signup flow detected - validating age params");
+        debugLog("auth-callback", "Signup flow detected - validating age params");
 
         if (!oauthAgeBracket) {
           console.error("[auth/callback] Signup without age validation - missing age_bracket");
@@ -111,13 +112,13 @@ export async function GET(request: NextRequest) {
 
         // Validate age bracket value from query params
         if (!isValidAgeBracket(oauthAgeBracket)) {
-          console.error("[auth/callback] Invalid age bracket value:", oauthAgeBracket);
+          console.error("[auth/callback] Invalid age bracket value");
           return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
         }
 
         // Always send under_13 to parental consent for a consistent flow
         if (oauthAgeBracket === "under_13") {
-          console.log("[auth/callback] Under-13 OAuth attempt - redirecting to parental consent");
+          debugLog("auth-callback", "Under-13 OAuth attempt - redirecting to parental consent");
           return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
         }
 
@@ -141,7 +142,7 @@ export async function GET(request: NextRequest) {
           return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
         }
 
-        console.log("[auth/callback] Age validation passed (from query params)");
+        debugLog("auth-callback", "Age validation passed (from query params)");
       } else {
         // No age data present - could be login or bypassed signup
         // Check if this is a brand new user (created within last 60 seconds)
@@ -157,15 +158,15 @@ export async function GET(request: NextRequest) {
         }
 
         // Pre-age-gate user login - allow through
-        console.log("[auth/callback] Login flow for pre-age-gate user - skipping age validation");
+        debugLog("auth-callback", "Login flow for pre-age-gate user - skipping age validation");
       }
-      console.log("[auth/callback] Cookies set:", response.cookies.getAll().map((c) => ({
+      debugLog("auth-callback", "Cookies set:", response.cookies.getAll().map((c) => ({
         name: c.name,
         domain: (c as { domain?: string }).domain || "default",
         path: c.path || "/",
         secure: c.secure,
       })));
-      console.log("[auth/callback] Redirecting to:", redirectUrl.toString());
+      debugLog("auth-callback", "Redirecting to:", redirectUrl.toString());
       return response;
     }
 

@@ -10,6 +10,7 @@ import { ManageMembersPanel } from "@/components/chat/ManageMembersPanel";
 import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { debugLog } from "@/lib/debug";
+import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface ChatRoomProps {
   group: ChatGroup;
@@ -61,7 +62,11 @@ export function ChatRoom({
       requiresApproval,
       hasEditMembersUI: true,
     });
-  }, [group.id, members.length, canModerate, requiresApproval]);
+    trackBehavioralEvent("chat_thread_open", {
+      thread_id: group.id,
+      open_source: "list",
+    }, organizationId);
+  }, [group.id, members.length, canModerate, requiresApproval, organizationId]);
 
   // Build a map of user IDs to user info (combining members + cached users)
   const userMap = useMemo(() => {
@@ -229,7 +234,7 @@ export function ChatRoom({
 
   // Refresh members list (called by ManageMembersPanel and realtime)
   const refreshMembers = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error: refreshError } = await supabase
       .from("chat_group_members")
       .select(`
         *,
@@ -238,6 +243,10 @@ export function ChatRoom({
       .eq("chat_group_id", group.id)
       .is("removed_at", null);
 
+    if (refreshError) {
+      console.error("[chat-members] refreshMembers failed:", refreshError);
+      return;
+    }
     if (data) {
       setMembers(data as unknown as (ChatGroupMember & { users: User })[]);
     }
@@ -259,6 +268,14 @@ export function ChatRoom({
           if (payload.eventType === "DELETE") {
             const deleted = payload.old as { user_id?: string };
             if (deleted.user_id === currentUserId) {
+              router.push(`/${orgSlug}/chat`);
+              return;
+            }
+          }
+          // Handle soft-delete: member removal is an UPDATE setting removed_at
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as { user_id?: string; removed_at?: string | null };
+            if (updated.user_id === currentUserId && updated.removed_at) {
               router.push(`/${orgSlug}/chat`);
               return;
             }
@@ -322,10 +339,21 @@ export function ChatRoom({
 
     if (error) {
       console.error("Failed to send message:", error);
+      trackBehavioralEvent("chat_message_send", {
+        thread_id: group.id,
+        message_type: "text",
+        result: "fail_server",
+        error_code: "send_failed",
+      }, organizationId);
       // Remove the optimistic message on failure
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(messageBody); // Restore message for retry
     } else if (data) {
+      trackBehavioralEvent("chat_message_send", {
+        thread_id: group.id,
+        message_type: "text",
+        result: "success",
+      }, organizationId);
       // Replace temp message with real one from server
       setMessages((prev) =>
         prev.map((m) =>

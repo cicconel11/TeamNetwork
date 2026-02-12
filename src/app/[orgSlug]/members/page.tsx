@@ -8,6 +8,8 @@ import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { canDevAdminPerform, getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
+import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
 
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -175,6 +177,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
 
   return (
     <div className="animate-fade-in">
+      <DirectoryViewTracker organizationId={org.id} directoryType="active_members" />
       <PageHeader
         title={pageLabel}
         description={`${members?.length || 0} ${filters.status === "inactive" ? "inactive" : "active"} ${pageLabel.toLowerCase()}`}
@@ -196,6 +199,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       <div className="flex flex-wrap gap-2 mb-6">
         <MembersFilter
           orgSlug={orgSlug}
+          orgId={org.id}
           currentStatus={filters.status}
           currentRole={filters.role}
           roles={roles}
@@ -206,7 +210,12 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       {members && members.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {members.map((member) => (
-            <Link key={member.id} href={`/${orgSlug}/members/${member.id}`}>
+            <DirectoryCardLink
+              key={member.id}
+              href={`/${orgSlug}/members/${member.id}`}
+              organizationId={org.id}
+              directoryType="active_members"
+            >
               <Card interactive className="p-5">
                 <div className="flex items-center gap-4">
                   <Avatar
@@ -237,7 +246,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                   </div>
                 </div>
               </Card>
-            </Link>
+            </DirectoryCardLink>
           ))}
         </div>
       ) : (
