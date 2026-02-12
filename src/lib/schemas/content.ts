@@ -11,6 +11,8 @@ import {
   timeStringSchema,
   optionalTimeStringSchema,
   optionalHttpsUrlSchema,
+  dayOfWeekSchema,
+  dayOfMonthSchema,
 } from "./common";
 
 // Announcement form
@@ -32,6 +34,35 @@ export const editAnnouncementSchema = z.object({
 });
 export type EditAnnouncementForm = z.infer<typeof editAnnouncementSchema>;
 
+// ─── Recurrence schemas ───────────────────────────────────────────────
+
+export const recurrenceOccurrenceSchema = z.enum(["daily", "weekly", "monthly"]);
+export type RecurrenceOccurrence = z.infer<typeof recurrenceOccurrenceSchema>;
+
+export const recurrenceRuleSchema = z.discriminatedUnion("occurrence_type", [
+  z.object({
+    occurrence_type: z.literal("daily"),
+    recurrence_end_date: optionalDateStringSchema,
+  }),
+  z.object({
+    occurrence_type: z.literal("weekly"),
+    day_of_week: dayOfWeekSchema,
+    recurrence_end_date: optionalDateStringSchema,
+  }),
+  z.object({
+    occurrence_type: z.literal("monthly"),
+    day_of_month: dayOfMonthSchema,
+    recurrence_end_date: optionalDateStringSchema,
+  }),
+]);
+export type RecurrenceRuleForm = z.infer<typeof recurrenceRuleSchema>;
+
+export const editScopeSchema = z.enum(["this_only", "this_and_future"]);
+export type EditScope = z.infer<typeof editScopeSchema>;
+
+export const deleteScopeSchema = z.enum(["this_only", "this_and_future", "all_in_series"]);
+export type DeleteScope = z.infer<typeof deleteScopeSchema>;
+
 // Event form
 export const newEventSchema = z
   .object({
@@ -47,6 +78,8 @@ export const newEventSchema = z
     audience: audienceSchema,
     send_notification: z.boolean(),
     channel: channelSchema,
+    is_recurring: z.boolean(),
+    recurrence: recurrenceRuleSchema.optional(),
   })
   .refine(
     (data) => {
@@ -61,6 +94,17 @@ export const newEventSchema = z
     {
       message: "End date/time must be after start date/time",
       path: ["end_date"],
+    }
+  )
+  .refine(
+    (data) => {
+      // If recurring, recurrence rule is required
+      if (data.is_recurring && !data.recurrence) return false;
+      return true;
+    },
+    {
+      message: "Recurrence settings are required for recurring events",
+      path: ["recurrence"],
     }
   );
 export type NewEventForm = z.infer<typeof newEventSchema>;

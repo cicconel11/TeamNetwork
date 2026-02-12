@@ -25,7 +25,8 @@ type TableName =
   | "chat_group_members"
   | "chat_messages"
   | "user_calendar_connections"
-  | "event_calendar_entries";
+  | "event_calendar_entries"
+  | "events";
 
 type Row = Record<string, unknown>;
 
@@ -65,6 +66,7 @@ const uniqueKeys: Record<TableName, string[]> = {
   chat_messages: [],
   user_calendar_connections: ["user_id"],
   event_calendar_entries: [],
+  events: [],
 };
 
 function nowIso() {
@@ -98,6 +100,7 @@ export function createSupabaseStub() {
     chat_messages: [],
     user_calendar_connections: [],
     event_calendar_entries: [],
+    events: [],
   };
 
   // RPC handler registry
@@ -144,6 +147,9 @@ export function createSupabaseStub() {
         select: () => builder,
         single: (): SupabaseResponse<Row> => ({ data: inserted[0] ?? null, error }),
         maybeSingle: (): SupabaseResponse<Row> => ({ data: inserted[0] ?? null, error }),
+        then(resolve: (value: SupabaseResponse<Row[]>) => void) {
+          resolve({ data: error ? null : clone(inserted), error });
+        },
       };
 
       return builder;
@@ -233,6 +239,18 @@ export function createSupabaseStub() {
           }
           return builder;
         },
+        gte(column: string, value: unknown) {
+          filters.push((row) => (row[column] as number) >= (value as number));
+          return builder;
+        },
+        gt(column: string, value: unknown) {
+          filters.push((row) => (row[column] as number) > (value as number));
+          return builder;
+        },
+        lte(column: string, value: unknown) {
+          filters.push((row) => (row[column] as number) <= (value as number));
+          return builder;
+        },
         select() {
           return builder;
         },
@@ -300,8 +318,34 @@ export function createSupabaseStub() {
           filters.push((row) => (row[column] as number) >= (value as number));
           return builder;
         },
+        lt(column: string, value: unknown) {
+          filters.push((row) => (row[column] as string) < (value as string));
+          return builder;
+        },
         lte(column: string, value: unknown) {
           filters.push((row) => (row[column] as number) <= (value as number));
+          return builder;
+        },
+        or(filterString: string) {
+          // Parse simple PostgREST-style OR filters, e.g. "col.is.null,col.lt.value"
+          const parts = filterString.split(",");
+          const orPredicates: ((row: Row) => boolean)[] = [];
+          for (const part of parts) {
+            const [col, op, ...rest] = part.trim().split(".");
+            const val = rest.join(".");
+            if (op === "is" && val === "null") {
+              orPredicates.push((row) => row[col] === null || row[col] === undefined);
+            } else if (op === "lt") {
+              orPredicates.push((row) => (row[col] as string) < val);
+            } else if (op === "gt") {
+              orPredicates.push((row) => (row[col] as string) > val);
+            } else if (op === "eq") {
+              orPredicates.push((row) => String(row[col]) === val);
+            }
+          }
+          if (orPredicates.length > 0) {
+            filters.push((row) => orPredicates.some((pred) => pred(row)));
+          }
           return builder;
         },
         order(column: string, opts?: { ascending?: boolean }) {
@@ -376,6 +420,10 @@ export function createSupabaseStub() {
       const builder = {
         eq(column: string, value: unknown) {
           filters.push((row) => row[column] === value);
+          return builder;
+        },
+        in(column: string, values: unknown[]) {
+          filters.push((row) => values.includes(row[column]));
           return builder;
         },
         is(column: string, value: unknown) {

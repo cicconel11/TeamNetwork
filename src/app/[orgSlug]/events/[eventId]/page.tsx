@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
-import { EventRsvp, AttendanceList, EventDeleteButton } from "@/components/events";
+import { EventRsvp, AttendanceList, EventDeleteButton, RecurringEventDeleteButton } from "@/components/events";
 import type { RsvpStatus } from "@/types/database";
 import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
 
@@ -40,6 +40,19 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
 
   const isAdmin = await isOrgAdmin(org.id);
   const isPast = new Date(event.start_date) < new Date();
+  const isRecurring = !!event.recurrence_group_id;
+
+  // Fetch series info for recurring events
+  let seriesTotal = 0;
+  if (isRecurring) {
+    const { count } = await supabase
+      .from("events")
+      .select("id", { count: "exact", head: true })
+      .eq("recurrence_group_id", event.recurrence_group_id!)
+      .eq("organization_id", org.id)
+      .is("deleted_at", null);
+    seriesTotal = count ?? 0;
+  }
 
   // Get current user
   const { data: { user } } = await supabase.auth.getUser();
@@ -88,11 +101,19 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
                   Edit
                 </Button>
               </Link>
-              <EventDeleteButton
-                eventId={eventId}
-                organizationId={org.id}
-                redirectTo={`/${orgSlug}/events`}
-              />
+              {isRecurring ? (
+                <RecurringEventDeleteButton
+                  eventId={eventId}
+                  organizationId={org.id}
+                  redirectTo={`/${orgSlug}/events`}
+                />
+              ) : (
+                <EventDeleteButton
+                  eventId={eventId}
+                  organizationId={org.id}
+                  redirectTo={`/${orgSlug}/events`}
+                />
+              )}
             </div>
           )
         }
@@ -109,13 +130,27 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
             {event.is_philanthropy && (
               <Badge variant="primary">Philanthropy</Badge>
             )}
+            {isRecurring && (
+              <Badge variant="muted">
+                <svg className="h-3 w-3 mr-1 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Recurring
+              </Badge>
+            )}
           </div>
 
           <h2 className="text-2xl font-bold text-foreground mb-4">{event.title}</h2>
-          
+
           {event.description && (
             <div className="prose prose-sm text-muted-foreground max-w-none">
               <p className="whitespace-pre-wrap">{event.description}</p>
+            </div>
+          )}
+
+          {isRecurring && seriesTotal > 0 && (
+            <div className="mt-4 p-3 rounded-xl bg-muted text-sm text-muted-foreground">
+              Part of a recurring series ({(event.recurrence_index ?? 0) + 1} of {seriesTotal})
             </div>
           )}
         </Card>
@@ -123,7 +158,7 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
         {/* Event Details Sidebar */}
         <Card className="p-6 lg:col-span-1 h-fit">
           <h3 className="font-semibold text-foreground mb-4">Event Details</h3>
-          
+
           <dl className="space-y-4">
             <div>
               <dt className="text-sm text-muted-foreground flex items-center gap-2">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncCalendarFeed } from "@/lib/calendar/icsSync";
+import { syncGoogleCalendarFeed } from "@/lib/calendar/googleSync";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,14 @@ export async function GET(request: Request) {
   const results: { id: string; status: string; lastError: string | null }[] = [];
 
   for (const feed of feeds || []) {
-    const result = await syncCalendarFeed(serviceClient, feed);
+    let result;
+
+    if (feed.provider === "google") {
+      result = await syncGoogleCalendarFeed(serviceClient, feed);
+    } else {
+      result = await syncCalendarFeed(serviceClient, feed);
+    }
+
     if (result.status === "active") {
       successCount += 1;
     } else {

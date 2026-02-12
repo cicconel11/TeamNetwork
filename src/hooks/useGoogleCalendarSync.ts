@@ -146,6 +146,16 @@ export function useGoogleCalendarSync({
           return;
         }
       }
+      // 404 means server couldn't get a valid token (expired/revoked);
+      // the server-side refreshAndStoreToken likely already updated the
+      // DB status to "disconnected", so reload the connection row.
+      if (response.status === 404) {
+        setReconnectRequired(true);
+        setCalendars([]);
+        await loadConnection();
+        return;
+      }
+      if (!response.ok) return;
       if (response.ok) {
         const data = await response.json();
         const cals: GoogleCalendar[] = data.calendars || [];
@@ -169,7 +179,7 @@ export function useGoogleCalendarSync({
     } finally {
       setCalendarsLoading(false);
     }
-  }, [setTargetCalendar]);
+  }, [setTargetCalendar, loadConnection]);
 
   // Load sync preferences
   const loadPreferences = useCallback(async () => {

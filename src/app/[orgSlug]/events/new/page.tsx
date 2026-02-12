@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,12 +9,16 @@ import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
+import { expandRecurrence, type RecurrenceRule } from "@/lib/events/recurrence";
+import { createRecurringEvents } from "@/lib/events/recurring-operations";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type TargetUser = {
   id: string;
   label: string;
 };
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function NewEventPage() {
   const router = useRouter();
@@ -28,6 +32,12 @@ export default function NewEventPage() {
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
 
+  // Recurrence UI state
+  const [repeatType, setRepeatType] = useState<"none" | "daily" | "weekly" | "monthly">("none");
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [dayOfMonth, setDayOfMonth] = useState<string>("");
+  const [repeatEndDate, setRepeatEndDate] = useState<string>("");
+
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
 
@@ -35,6 +45,7 @@ export default function NewEventPage() {
     register,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<NewEventForm>({
     resolver: zodResolver(newEventSchema),
@@ -51,10 +62,78 @@ export default function NewEventPage() {
       audience: "both",
       send_notification: true,
       channel: "email",
+      is_recurring: false,
     },
   });
 
   const audience = watch("audience");
+  const startDate = watch("start_date");
+  const startTime = watch("start_time");
+  const endDate = watch("end_date");
+  const endTime = watch("end_time");
+
+  // Auto-select day of week from start_date
+  useEffect(() => {
+    if (startDate && repeatType === "weekly" && selectedDays.length === 0) {
+      const d = new Date(startDate + "T00:00:00Z");
+      setSelectedDays([String(d.getUTCDay())]);
+    }
+    if (startDate && repeatType === "monthly" && !dayOfMonth) {
+      const d = new Date(startDate + "T00:00:00Z");
+      setDayOfMonth(String(d.getUTCDate()));
+    }
+  }, [startDate, repeatType, selectedDays.length, dayOfMonth]);
+
+  // Sync recurrence state to form values
+  useEffect(() => {
+    const isRecurring = repeatType !== "none";
+    setValue("is_recurring", isRecurring);
+
+    if (!isRecurring) {
+      setValue("recurrence", undefined);
+      return;
+    }
+
+    if (repeatType === "daily") {
+      setValue("recurrence", {
+        occurrence_type: "daily",
+        recurrence_end_date: repeatEndDate || undefined,
+      });
+    } else if (repeatType === "weekly" && selectedDays.length > 0) {
+      setValue("recurrence", {
+        occurrence_type: "weekly",
+        day_of_week: selectedDays,
+        recurrence_end_date: repeatEndDate || undefined,
+      });
+    } else if (repeatType === "monthly" && dayOfMonth) {
+      setValue("recurrence", {
+        occurrence_type: "monthly",
+        day_of_month: dayOfMonth,
+        recurrence_end_date: repeatEndDate || undefined,
+      });
+    }
+  }, [repeatType, selectedDays, dayOfMonth, repeatEndDate, setValue]);
+
+  // Instance count preview
+  const instanceCount = useMemo(() => {
+    if (repeatType === "none" || !startDate || !startTime) return 0;
+
+    const rule: RecurrenceRule = {
+      occurrence_type: repeatType,
+      day_of_week: repeatType === "weekly" ? selectedDays.map(Number) : undefined,
+      day_of_month: repeatType === "monthly" && dayOfMonth ? Number(dayOfMonth) : undefined,
+      recurrence_end_date: repeatEndDate || undefined,
+    };
+
+    const startISO = new Date(`${startDate}T${startTime}`).toISOString();
+    const endISO = endDate && endTime ? new Date(`${endDate}T${endTime}`).toISOString() : null;
+
+    try {
+      return expandRecurrence(startISO, endISO, rule).length;
+    } catch {
+      return 0;
+    }
+  }, [repeatType, startDate, startTime, endDate, endTime, selectedDays, dayOfMonth, repeatEndDate]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -67,7 +146,7 @@ export default function NewEventPage() {
 
       if (!org) return;
       setOrgId(org.id);
-      
+
       // Parse nav_config
       if (org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)) {
         setNavConfig(org.nav_config as NavConfig);
@@ -97,6 +176,12 @@ export default function NewEventPage() {
   const toggleTarget = (id: string) => {
     setTargetUserIds((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    );
+  };
+
+  const toggleDay = (day: string) => {
+    setSelectedDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
     );
   };
 
@@ -133,33 +218,73 @@ export default function NewEventPage() {
     const audienceValue = data.audience === "specific" ? "both" : data.audience;
     const targetIds = data.audience === "specific" ? targetUserIds : null;
 
-    const { error: insertError, data: event } = await supabase.from("events").insert({
-      organization_id: orgIdToUse,
-      title: data.title,
-      description: data.description || null,
-      start_date: startDateTime,
-      end_date: endDateTime,
-      location: data.location || null,
-      event_type: data.event_type,
-      is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
-      created_by_user_id: user?.id || null,
-      audience: audienceValue,
-      target_user_ids: targetIds,
-    }).select().single();
+    let createdEventIds: string[] = [];
 
-    if (insertError) {
-      setError(insertError.message);
-      setIsLoading(false);
-      return;
+    if (data.is_recurring && data.recurrence) {
+      // Recurring: build the RecurrenceRule and create all instances
+      const rule: RecurrenceRule = {
+        occurrence_type: data.recurrence.occurrence_type,
+        day_of_week: "day_of_week" in data.recurrence ? data.recurrence.day_of_week.map(Number) : undefined,
+        day_of_month: "day_of_month" in data.recurrence ? Number(data.recurrence.day_of_month) : undefined,
+        recurrence_end_date: data.recurrence.recurrence_end_date || undefined,
+      };
+
+      const result = await createRecurringEvents(supabase, {
+        organization_id: orgIdToUse,
+        title: data.title,
+        description: data.description || null,
+        start_date: startDateTime,
+        end_date: endDateTime,
+        location: data.location || null,
+        event_type: data.event_type,
+        is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        created_by_user_id: user?.id || null,
+        audience: audienceValue,
+        target_user_ids: targetIds,
+      }, rule);
+
+      if (result.error) {
+        setError(result.error);
+        setIsLoading(false);
+        return;
+      }
+
+      createdEventIds = result.eventIds;
+    } else {
+      // Single event
+      const { error: insertError, data: event } = await supabase.from("events").insert({
+        organization_id: orgIdToUse,
+        title: data.title,
+        description: data.description || null,
+        start_date: startDateTime,
+        end_date: endDateTime,
+        location: data.location || null,
+        event_type: data.event_type,
+        is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+        created_by_user_id: user?.id || null,
+        audience: audienceValue,
+        target_user_ids: targetIds,
+      }).select().single();
+
+      if (insertError) {
+        setError(insertError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      if (event) createdEventIds = [event.id];
     }
 
-    // Send notification if enabled
-    if (data.send_notification && event) {
+    // Send one notification for the series (or single event)
+    if (data.send_notification && createdEventIds.length > 0) {
       const scheduleLine = data.start_date && data.start_time
         ? `When: ${data.start_date} at ${data.start_time}`
         : "";
       const locationLine = data.location ? `Where: ${data.location}` : null;
-      const notificationBody = [data.description || "", scheduleLine, locationLine]
+      const recurringLine = data.is_recurring && instanceCount > 1
+        ? `This is a recurring ${data.recurrence?.occurrence_type} event (${instanceCount} occurrences)`
+        : null;
+      const notificationBody = [data.description || "", scheduleLine, locationLine, recurringLine]
         .filter(Boolean)
         .join("\n\n");
 
@@ -181,22 +306,21 @@ export default function NewEventPage() {
       }
     }
 
-    // Trigger Google Calendar sync for users with connected calendars (Requirement 2.1)
-    if (event) {
-      try {
-        await fetch("/api/calendar/event-sync", {
+    // Trigger Google Calendar sync for all created events
+    if (createdEventIds.length > 0) {
+      const syncPromises = createdEventIds.map((eventId) =>
+        fetch("/api/calendar/event-sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            eventId: event.id,
+            eventId,
             organizationId: orgIdToUse,
             operation: "create",
           }),
-        });
-      } catch (syncError) {
-        // Calendar sync errors should not block event creation
-        console.error("Failed to trigger calendar sync:", syncError);
-      }
+        }).catch((err) => console.error("Calendar sync error:", err))
+      );
+
+      await Promise.allSettled(syncPromises);
     }
 
     router.push(`/${orgSlug}/events`);
@@ -262,6 +386,83 @@ export default function NewEventPage() {
               error={errors.end_time?.message}
               {...register("end_time")}
             />
+          </div>
+
+          {/* Recurrence Section */}
+          <div className="space-y-4">
+            <Select
+              label="Repeat"
+              value={repeatType}
+              onChange={(e) => {
+                const val = e.target.value as typeof repeatType;
+                setRepeatType(val);
+                if (val !== "weekly") setSelectedDays([]);
+                if (val !== "monthly") setDayOfMonth("");
+              }}
+              options={[
+                { value: "none", label: "Does not repeat" },
+                { value: "daily", label: "Daily" },
+                { value: "weekly", label: "Weekly" },
+                { value: "monthly", label: "Monthly" },
+              ]}
+            />
+
+            {repeatType === "weekly" && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Repeat on</label>
+                <div className="flex flex-wrap gap-2">
+                  {DAY_LABELS.map((label, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => toggleDay(String(index))}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        selectedDays.includes(String(index))
+                          ? "bg-org-primary text-white"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {selectedDays.length === 0 && (
+                  <p className="text-sm text-red-500">Select at least one day</p>
+                )}
+              </div>
+            )}
+
+            {repeatType === "monthly" && (
+              <Input
+                label="Day of month"
+                type="number"
+                min={1}
+                max={31}
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(e.target.value)}
+                placeholder="e.g., 15"
+              />
+            )}
+
+            {repeatType !== "none" && (
+              <>
+                <Input
+                  label="Repeat until (optional)"
+                  type="date"
+                  value={repeatEndDate}
+                  onChange={(e) => setRepeatEndDate(e.target.value)}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {!repeatEndDate && "Default: 6 months from start date"}
+                </p>
+
+                {instanceCount > 0 && (
+                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm">
+                    This will create <strong>{instanceCount}</strong> {instanceCount === 1 ? "event" : "events"}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <Input
@@ -359,7 +560,10 @@ export default function NewEventPage() {
               Cancel
             </Button>
             <Button type="submit" isLoading={isLoading}>
-              Create {singularLabel}
+              {repeatType !== "none" && instanceCount > 1
+                ? `Create ${instanceCount} ${singularLabel}s`
+                : `Create ${singularLabel}`
+              }
             </Button>
           </div>
         </form>

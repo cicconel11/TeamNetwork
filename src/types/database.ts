@@ -1454,6 +1454,9 @@ export type Database = {
           is_philanthropy: boolean | null
           location: string | null
           organization_id: string
+          recurrence_group_id: string | null
+          recurrence_index: number | null
+          recurrence_rule: Json | null
           start_date: string
           target_user_ids: string[] | null
           title: string
@@ -1471,6 +1474,9 @@ export type Database = {
           is_philanthropy?: boolean | null
           location?: string | null
           organization_id: string
+          recurrence_group_id?: string | null
+          recurrence_index?: number | null
+          recurrence_rule?: Json | null
           start_date: string
           target_user_ids?: string[] | null
           title: string
@@ -1488,6 +1494,9 @@ export type Database = {
           is_philanthropy?: boolean | null
           location?: string | null
           organization_id?: string
+          recurrence_group_id?: string | null
+          recurrence_index?: number | null
+          recurrence_rule?: Json | null
           start_date?: string
           target_user_ids?: string[] | null
           title?: string

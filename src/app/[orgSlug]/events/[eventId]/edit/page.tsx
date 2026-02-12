@@ -9,8 +9,11 @@ import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { editEventSchema, type EditEventForm } from "@/lib/schemas/content";
+import { updateFutureEvents } from "@/lib/events/recurring-operations";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Event, EventType } from "@/types/database";
+
+type EditScope = "this_only" | "this_and_future";
 
 export default function EditEventPage() {
   const router = useRouter();
@@ -22,6 +25,9 @@ export default function EditEventPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [navConfig, setNavConfig] = useState<NavConfig | null>(null);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [showScopeDialog, setShowScopeDialog] = useState(false);
+  const [pendingData, setPendingData] = useState<EditEventForm | null>(null);
 
   // Get the custom label for this page
   const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
@@ -87,6 +93,8 @@ export default function EditEventPage() {
       }
 
       const e = event as Event;
+      setIsRecurring(!!e.recurrence_group_id);
+
       const startDate = new Date(e.start_date);
       const endDate = e.end_date ? new Date(e.end_date) : null;
 
@@ -108,8 +116,20 @@ export default function EditEventPage() {
   }, [orgSlug, eventId, reset]);
 
   const onSubmit = async (data: EditEventForm) => {
+    if (isRecurring) {
+      // Show scope dialog for recurring events
+      setPendingData(data);
+      setShowScopeDialog(true);
+      return;
+    }
+
+    await applyUpdate(data, "this_only");
+  };
+
+  const applyUpdate = async (data: EditEventForm, scope: EditScope) => {
     setIsLoading(true);
     setError(null);
+    setShowScopeDialog(false);
 
     const supabase = createClient();
 
@@ -131,28 +151,81 @@ export default function EditEventPage() {
       ? new Date(`${data.end_date}T${data.end_time}`).toISOString()
       : null;
 
-    const { error: updateError } = await supabase
-      .from("events")
-      .update({
+    if (scope === "this_and_future") {
+      // Update this event and all future events in the series
+      // Note: only title, description, location, event_type, is_philanthropy are propagated
+      const { updatedIds, error: updateError } = await updateFutureEvents(supabase, eventId, org.id, {
         title: data.title,
         description: data.description || null,
-        start_date: startDateTime,
-        end_date: endDateTime,
         location: data.location || null,
         event_type: data.event_type,
         is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", eventId)
-      .eq("organization_id", org.id);
+      });
 
-    if (updateError) {
-      setError(updateError.message);
-      setIsLoading(false);
+      if (updateError) {
+        setError(updateError);
+        setIsLoading(false);
+        return;
+      }
+
+      // Also update the current event's date/time specifically
+      await supabase
+        .from("events")
+        .update({
+          start_date: startDateTime,
+          end_date: endDateTime,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", eventId)
+        .eq("organization_id", org.id);
+
+      // Sync all affected events to Google Calendar
+      try {
+        await Promise.allSettled(
+          updatedIds.map((id) =>
+            fetch("/api/calendar/event-sync", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                eventId: id,
+                organizationId: org.id,
+                operation: "update",
+              }),
+            })
+          )
+        );
+      } catch (syncError) {
+        console.error("Failed to trigger calendar sync:", syncError);
+      }
+
+      router.push(`/${orgSlug}/events/${eventId}`);
+      router.refresh();
       return;
+    } else {
+      // Update only this event
+      const { error: updateError } = await supabase
+        .from("events")
+        .update({
+          title: data.title,
+          description: data.description || null,
+          start_date: startDateTime,
+          end_date: endDateTime,
+          location: data.location || null,
+          event_type: data.event_type,
+          is_philanthropy: data.is_philanthropy || data.event_type === "philanthropy",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", eventId)
+        .eq("organization_id", org.id);
+
+      if (updateError) {
+        setError(updateError.message);
+        setIsLoading(false);
+        return;
+      }
     }
 
-    // Trigger Google Calendar sync for users with connected calendars (Requirement 3.1)
+    // Trigger Google Calendar sync
     try {
       await fetch("/api/calendar/event-sync", {
         method: "POST",
@@ -164,7 +237,6 @@ export default function EditEventPage() {
         }),
       });
     } catch (syncError) {
-      // Calendar sync errors should not block event update
       console.error("Failed to trigger calendar sync:", syncError);
     }
 
@@ -204,6 +276,12 @@ export default function EditEventPage() {
           {error && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
               {error}
+            </div>
+          )}
+
+          {isRecurring && (
+            <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-sm">
+              This event is part of a recurring series. When you save, you can choose to update just this event or all future events.
             </div>
           )}
 
@@ -297,6 +375,51 @@ export default function EditEventPage() {
           </div>
         </form>
       </Card>
+
+      {/* Scope Dialog for Recurring Events */}
+      {showScopeDialog && pendingData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-2xl p-6 max-w-sm mx-4 shadow-xl border border-border">
+            <h3 className="text-lg font-semibold text-foreground mb-2">Edit Recurring Event</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              This event is part of a recurring series. How would you like to apply your changes?
+            </p>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => applyUpdate(pendingData, "this_only")}
+                disabled={isLoading}
+                className="w-full text-left px-4 py-3 rounded-xl border border-border hover:bg-muted transition-colors text-sm"
+              >
+                <span className="font-medium text-foreground">This event only</span>
+                <p className="text-muted-foreground mt-0.5">Only update this specific occurrence</p>
+              </button>
+
+              <button
+                onClick={() => applyUpdate(pendingData, "this_and_future")}
+                disabled={isLoading}
+                className="w-full text-left px-4 py-3 rounded-xl border border-border hover:bg-muted transition-colors text-sm"
+              >
+                <span className="font-medium text-foreground">This and future events</span>
+                <p className="text-muted-foreground mt-0.5">Update title, description, location, and type for all future events</p>
+              </button>
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowScopeDialog(false);
+                  setPendingData(null);
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

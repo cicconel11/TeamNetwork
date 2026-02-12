@@ -338,16 +338,21 @@ export async function getCalendarConnection(
         return null;
     }
 
-    return {
-        id: data.id,
-        googleEmail: data.google_email,
-        accessToken: decryptToken(data.access_token_encrypted),
-        refreshToken: decryptToken(data.refresh_token_encrypted),
-        expiresAt: new Date(data.token_expires_at),
-        status: data.status,
-        targetCalendarId: data.target_calendar_id,
-        lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
-    };
+    try {
+        return {
+            id: data.id,
+            googleEmail: data.google_email,
+            accessToken: decryptToken(data.access_token_encrypted),
+            refreshToken: decryptToken(data.refresh_token_encrypted),
+            expiresAt: new Date(data.token_expires_at),
+            status: data.status,
+            targetCalendarId: data.target_calendar_id,
+            lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
+        };
+    } catch (decryptError) {
+        console.error("[google-oauth] Failed to decrypt tokens for user:", userId, decryptError);
+        return null;
+    }
 }
 
 /**
