@@ -75,3 +75,12 @@ export const scheduleConnectSchema = z
   })
   .strict();
 export type ScheduleConnectRequest = z.infer<typeof scheduleConnectSchema>;
+
+export const googleCalendarConnectSchema = z
+  .object({
+    orgId: z.string().uuid({ message: "Invalid organization ID" }),
+    googleCalendarId: safeString(500),
+    title: optionalSafeString(200),
+  })
+  .strict();
+export type GoogleCalendarConnectRequest = z.infer<typeof googleCalendarConnectSchema>;

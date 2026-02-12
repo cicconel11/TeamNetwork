@@ -14,6 +14,7 @@ export async function syncScheduleSource(
       org_id: string;
       vendor_id: string;
       source_url: string;
+      connected_user_id?: string | null;
     };
     window: { from: Date; to: Date };
     now?: Date;
@@ -39,6 +40,9 @@ export async function syncScheduleSource(
       orgId: input.source.org_id,
       url: input.source.source_url,
       window: input.window,
+      // Pass through for Google Calendar connector (ignored by others)
+      userId: input.source.connected_user_id ?? undefined,
+      supabase,
     });
 
     await supabase

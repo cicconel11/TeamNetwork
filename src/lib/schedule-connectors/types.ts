@@ -1,4 +1,7 @@
-export type VendorId = "ics" | "vendorA" | "vendorB" | "generic_html";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+
+export type VendorId = "ics" | "vendorA" | "vendorB" | "generic_html" | "google_calendar";
 
 export type NormalizedEvent = {
   external_uid: string;
@@ -24,6 +27,17 @@ export type SyncResult = {
   vendor: VendorId;
 };
 
+/** Optional fields used by the Google Calendar connector (ignored by others). */
+export type GoogleConnectorDeps = {
+  userId?: string;
+  supabase?: SupabaseClient<Database>;
+  fetcher?: typeof fetch;
+  getAccessToken?: (supabase: SupabaseClient<Database>, userId: string) => Promise<string | null>;
+};
+
+export type PreviewInput = { url: string; orgId: string } & GoogleConnectorDeps;
+export type SyncInput = { sourceId: string; orgId: string; url: string; window: { from: Date; to: Date } } & GoogleConnectorDeps;
+
 export interface ScheduleConnector {
   id: VendorId;
   canHandle(input: { url: string; html?: string; headers?: Record<string, string> }): Promise<{
@@ -31,6 +45,6 @@ export interface ScheduleConnector {
     confidence: number;
     reason?: string;
   }>;
-  preview(input: { url: string; orgId: string }): Promise<PreviewResult>;
-  sync(input: { sourceId: string; orgId: string; url: string; window: { from: Date; to: Date } }): Promise<SyncResult>;
+  preview(input: PreviewInput): Promise<PreviewResult>;
+  sync(input: SyncInput): Promise<SyncResult>;
 }

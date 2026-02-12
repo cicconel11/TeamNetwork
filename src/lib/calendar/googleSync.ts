@@ -170,7 +170,7 @@ function buildListUrl(calendarId: string, window: SyncWindow, pageToken?: string
   return `${GOOGLE_CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`;
 }
 
-function mapGoogleEvent(event: GoogleEvent): CalendarEventInstance | null {
+export function mapGoogleEvent(event: GoogleEvent): CalendarEventInstance | null {
   if (!event.id || !event.start) {
     return null;
   }
