@@ -432,8 +432,10 @@ export type Database = {
       }
       calendar_feeds: {
         Row: {
+          connected_user_id: string | null
           created_at: string | null
           feed_url: string
+          google_calendar_id: string | null
           id: string
           last_error: string | null
           last_synced_at: string | null
@@ -445,8 +447,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          connected_user_id?: string | null
           created_at?: string | null
           feed_url: string
+          google_calendar_id?: string | null
           id?: string
           last_error?: string | null
           last_synced_at?: string | null
@@ -458,8 +462,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          connected_user_id?: string | null
           created_at?: string | null
           feed_url?: string
+          google_calendar_id?: string | null
           id?: string
           last_error?: string | null
           last_synced_at?: string | null
@@ -925,6 +931,107 @@ export type Database = {
         }
         Relationships: []
       }
+      discussion_replies: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          organization_id: string
+          thread_id: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id: string
+          thread_id: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          organization_id?: string
+          thread_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_replies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discussion_replies_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "discussion_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discussion_threads: {
+        Row: {
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          is_locked: boolean
+          is_pinned: boolean
+          last_activity_at: string
+          organization_id: string
+          reply_count: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_locked?: boolean
+          is_pinned?: boolean
+          last_activity_at?: string
+          organization_id: string
+          reply_count?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          is_locked?: boolean
+          is_pinned?: boolean
+          last_activity_at?: string
+          organization_id?: string
+          reply_count?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_threads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       donations: {
         Row: {
           amount: number
@@ -1324,7 +1431,7 @@ export type Database = {
           id: string
           last_error: string | null
           organization_id: string
-          sync_status: "pending" | "synced" | "failed" | "deleted"
+          sync_status: string
           updated_at: string | null
           user_id: string
         }
@@ -1336,7 +1443,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           organization_id: string
-          sync_status?: "pending" | "synced" | "failed" | "deleted"
+          sync_status?: string
           updated_at?: string | null
           user_id: string
         }
@@ -1348,7 +1455,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           organization_id?: string
-          sync_status?: "pending" | "synced" | "failed" | "deleted"
+          sync_status?: string
           updated_at?: string | null
           user_id?: string
         }
@@ -1692,7 +1799,7 @@ export type Database = {
           form_id: string
           id: string
           organization_id: string
-          data: Json
+          responses: Json
           submitted_at: string | null
           user_id: string
         }
@@ -1700,7 +1807,7 @@ export type Database = {
           form_id: string
           id?: string
           organization_id: string
-          data?: Json
+          responses?: Json
           submitted_at?: string | null
           user_id: string
         }
@@ -1708,7 +1815,7 @@ export type Database = {
           form_id?: string
           id?: string
           organization_id?: string
-          data?: Json
+          responses?: Json
           submitted_at?: string | null
           user_id?: string
         }
@@ -1858,6 +1965,56 @@ export type Database = {
           },
         ]
       }
+      mentor_profiles: {
+        Row: {
+          bio: string | null
+          contact_email: string | null
+          contact_linkedin: string | null
+          contact_phone: string | null
+          created_at: string
+          expertise_areas: string[]
+          id: string
+          is_active: boolean
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bio?: string | null
+          contact_email?: string | null
+          contact_linkedin?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          expertise_areas?: string[]
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bio?: string | null
+          contact_email?: string | null
+          contact_linkedin?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          expertise_areas?: string[]
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mentor_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mentorship_logs: {
         Row: {
           created_at: string
@@ -1950,6 +2107,7 @@ export type Database = {
       notification_preferences: {
         Row: {
           created_at: string | null
+          discussion_emails_enabled: boolean
           email_address: string | null
           email_enabled: boolean | null
           id: string
@@ -1961,6 +2119,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          discussion_emails_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
           id?: string
@@ -1972,6 +2131,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          discussion_emails_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
           id?: string
@@ -2861,8 +3021,10 @@ export type Database = {
       }
       schedule_sources: {
         Row: {
+          connected_user_id: string | null
           created_at: string | null
           created_by: string | null
+          google_calendar_id: string | null
           id: string
           last_cancelled: number | null
           last_error: string | null
@@ -2878,8 +3040,10 @@ export type Database = {
           vendor_id: string
         }
         Insert: {
+          connected_user_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          google_calendar_id?: string | null
           id?: string
           last_cancelled?: number | null
           last_error?: string | null
@@ -2895,8 +3059,10 @@ export type Database = {
           vendor_id: string
         }
         Update: {
+          connected_user_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          google_calendar_id?: string | null
           id?: string
           last_cancelled?: number | null
           last_error?: string | null
