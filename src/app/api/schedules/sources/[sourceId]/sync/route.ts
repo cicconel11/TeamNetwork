@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +73,7 @@ export async function POST(
       );
     }
 
+    const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
     const serviceClient = createServiceClient();
     const window = buildSyncWindow();
     const result = await syncScheduleSource(serviceClient, { source, window });

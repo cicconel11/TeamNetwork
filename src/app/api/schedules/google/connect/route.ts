@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { googleCalendarConnectSchema } from "@/lib/schemas";
@@ -94,6 +93,7 @@ export async function POST(request: Request) {
     }
 
     // Trigger initial sync
+    const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
     const window = buildSyncWindow();
     const syncResult = await syncScheduleSource(serviceClient, {
       source: {

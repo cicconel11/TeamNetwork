@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 import { debugLog } from "@/lib/debug";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 
@@ -31,6 +30,7 @@ export async function GET(request: Request) {
     );
   }
 
+  const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
   const window = buildSyncWindow();
   const results: { id: string; vendor: string; status: string; error?: string }[] = [];
 
