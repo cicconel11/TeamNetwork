@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncCalendarFeed } from "@/lib/calendar/icsSync";
 import { syncGoogleCalendarFeed } from "@/lib/calendar/googleSync";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
-import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { calendarFeedCreateSchema, googleCalendarFeedCreateSchema } from "@/lib/schemas";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,22 @@ function formatFeedResponse(feed: {
     last_error: feed.last_error,
     provider: feed.provider,
   };
+}
+
+function parseBodyWithSchema<T>(
+  rawBody: unknown,
+  schema: z.ZodType<T>
+): T {
+  const parsed = schema.safeParse(rawBody);
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((issue) => {
+      const path = issue.path.map((part) => String(part)).join(".");
+      return `${path || "body"}: ${issue.message}`;
+    });
+    throw new ValidationError("Invalid request body", details);
+  }
+
+  return parsed.data;
 }
 
 export async function GET(request: Request) {
@@ -164,8 +181,13 @@ export async function POST(request: Request) {
     }
 
     // Peek at the body to determine which schema to use
-    const rawBody = await request.json();
-    const isGoogle = rawBody?.provider === "google";
+    let rawBody: unknown;
+    try {
+      rawBody = await request.json();
+    } catch {
+      throw new ValidationError("Invalid JSON payload");
+    }
+    const isGoogle = (rawBody as { provider?: string } | null)?.provider === "google";
 
     if (isGoogle) {
       return handleGoogleFeedCreate(supabase, user, rawBody, respond);
@@ -193,7 +215,7 @@ async function handleIcsFeedCreate(
   rawBody: unknown,
   respond: (payload: unknown, status?: number) => NextResponse
 ) {
-  const body = calendarFeedCreateSchema.parse(rawBody);
+  const body = parseBodyWithSchema(rawBody, calendarFeedCreateSchema);
 
   const { data: membership } = await supabase
     .from("user_organization_roles")
@@ -242,7 +264,7 @@ async function handleIcsFeedCreate(
       organization_id: body.organizationId,
       scope: "org",
     })
-    .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
+    .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope, connected_user_id, google_calendar_id")
     .single();
 
   if (error || !feed) {
@@ -276,7 +298,7 @@ async function handleGoogleFeedCreate(
   rawBody: unknown,
   respond: (payload: unknown, status?: number) => NextResponse
 ) {
-  const body = googleCalendarFeedCreateSchema.parse(rawBody);
+  const body = parseBodyWithSchema(rawBody, googleCalendarFeedCreateSchema);
 
   const { data: membership } = await supabase
     .from("user_organization_roles")
@@ -337,7 +359,11 @@ async function handleGoogleFeedCreate(
 
   // Trigger initial sync
   const serviceClient = createServiceClient();
-  await syncGoogleCalendarFeed(serviceClient, feed);
+  await syncGoogleCalendarFeed(serviceClient, {
+    ...(feed as Record<string, unknown>),
+    connected_user_id: user.id,
+    google_calendar_id: body.googleCalendarId,
+  } as any);
 
   const { data: updatedFeed } = await serviceClient
     .from("calendar_feeds")

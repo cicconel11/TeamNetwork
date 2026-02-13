@@ -114,6 +114,27 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // Redirect old /schedules page URLs to /calendar.
+      // Use negative lookahead to exclude "api" so /api/schedules/* routes still work.
+      {
+        source: "/:orgSlug((?!api$)[^/]+)/schedules",
+        destination: "/:orgSlug/calendar",
+        permanent: true,
+      },
+      {
+        source: "/:orgSlug((?!api$)[^/]+)/schedules/new",
+        destination: "/:orgSlug/calendar/new",
+        permanent: true,
+      },
+      {
+        source: "/:orgSlug((?!api$)[^/]+)/schedules/:path*",
+        destination: "/:orgSlug/calendar/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

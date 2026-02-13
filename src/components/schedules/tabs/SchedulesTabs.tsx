@@ -62,6 +62,7 @@ type SchedulesTabsProps = {
   orgSlug: string;
   orgName: string;
   isAdmin: boolean;
+  isReadOnly?: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
   navConfig: NavConfig | null;
@@ -73,6 +74,7 @@ export function SchedulesTabs({
   orgSlug,
   orgName,
   isAdmin,
+  isReadOnly,
   mySchedules,
   allSchedules,
   navConfig,
@@ -118,7 +120,7 @@ export function SchedulesTabs({
 
       <div className="animate-fade-in">
         {activeTab === "team" && (
-          <TeamScheduleTab orgId={orgId} isAdmin={isAdmin} />
+          <TeamScheduleTab orgId={orgId} orgSlug={orgSlug} isAdmin={isAdmin} isReadOnly={isReadOnly} />
         )}
         {activeTab === "upcoming" && (
           <UpcomingEventsTab orgId={orgId} />

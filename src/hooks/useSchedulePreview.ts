@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-export type VendorType = "ics" | "vendorA" | "vendorB" | "generic_html";
+export type VendorType = "ics" | "vendorA" | "vendorB" | "generic_html" | "google_calendar";
 
 export type PreviewEvent = {
   external_uid: string;

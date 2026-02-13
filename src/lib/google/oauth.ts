@@ -501,5 +501,12 @@ export async function disconnectCalendar(
         .delete()
         .eq("user_id", userId);
 
+    // Clean up personal Google Calendar feeds for this user (cascades to calendar_events)
+    await supabase
+        .from("calendar_feeds")
+        .delete()
+        .eq("connected_user_id", userId)
+        .eq("provider", "google");
+
     return { success: true };
 }

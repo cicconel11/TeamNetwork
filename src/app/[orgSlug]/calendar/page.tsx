@@ -45,8 +45,8 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
   }
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/schedules", navConfig);
-  const actionLabel = resolveActionLabel("/schedules", navConfig);
+  const pageLabel = resolveLabel("/calendar", navConfig);
+  const actionLabel = resolveActionLabel("/calendar", navConfig);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -54,7 +54,7 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         title={pageLabel}
         description={`Manage your class ${pageLabel.toLowerCase()} and academic commitments`}
         actions={
-          <Link href={`/${orgSlug}/schedules/new`}>
+          <Link href={`/${orgSlug}/calendar/new`}>
             <Button>
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -70,6 +70,7 @@ export default async function SchedulesPage({ params }: SchedulesPageProps) {
         orgSlug={orgSlug}
         orgName={orgCtx.organization.name}
         isAdmin={orgCtx.isAdmin}
+        isReadOnly={orgCtx.gracePeriod.isReadOnly}
         mySchedules={mySchedules || []}
         allSchedules={allSchedules}
         navConfig={navConfig}

@@ -106,7 +106,7 @@ export default function NewSchedulePage() {
       return;
     }
 
-    router.push(`/${orgSlug}/schedules`);
+    router.push(`/${orgSlug}/calendar`);
     router.refresh();
   };
 
@@ -115,7 +115,7 @@ export default function NewSchedulePage() {
       <PageHeader
         title="Add Schedule"
         description="Add a class or academic commitment"
-        backHref={`/${orgSlug}/schedules`}
+        backHref={`/${orgSlug}/calendar`}
       />
 
       <Card className="max-w-2xl">

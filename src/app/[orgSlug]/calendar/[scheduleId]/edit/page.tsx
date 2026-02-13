@@ -66,7 +66,7 @@ export default function EditSchedulePage() {
       .single()
       .then(({ data, error: fetchError }) => {
         if (fetchError || !data) {
-          router.push(`/${orgSlug}/schedules`);
+          router.push(`/${orgSlug}/calendar`);
           return;
         }
         reset({
@@ -124,7 +124,7 @@ export default function EditSchedulePage() {
       return;
     }
 
-    router.push(`/${orgSlug}/schedules`);
+    router.push(`/${orgSlug}/calendar`);
     router.refresh();
   };
 
@@ -145,14 +145,14 @@ export default function EditSchedulePage() {
       return;
     }
 
-    router.push(`/${orgSlug}/schedules`);
+    router.push(`/${orgSlug}/calendar`);
     router.refresh();
   };
 
   if (loading) {
     return (
       <div className="animate-fade-in">
-        <PageHeader title="Edit Schedule" backHref={`/${orgSlug}/schedules`} />
+        <PageHeader title="Edit Schedule" backHref={`/${orgSlug}/calendar`} />
         <Card className="max-w-2xl p-6">
           <p className="text-muted-foreground">Loading...</p>
         </Card>
@@ -164,7 +164,7 @@ export default function EditSchedulePage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Edit Schedule"
-        backHref={`/${orgSlug}/schedules`}
+        backHref={`/${orgSlug}/calendar`}
       />
 
       <Card className="max-w-2xl">

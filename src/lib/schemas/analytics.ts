@@ -18,7 +18,7 @@ export const VALID_FEATURES = [
   "donations",
   "expenses",
   "records",
-  "schedules",
+  "calendar",
   "forms",
   "customization",
   "settings",

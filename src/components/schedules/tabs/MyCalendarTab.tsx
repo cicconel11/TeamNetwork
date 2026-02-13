@@ -108,6 +108,12 @@ export function MyCalendarTab({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Google Calendar import state
+  const [selectedGoogleCalId, setSelectedGoogleCalId] = useState("");
+  const [importingGoogleCal, setImportingGoogleCal] = useState(false);
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
   const refreshFeeds = useCallback(async () => {
     setLoadingFeeds(true);
     setError(null);
@@ -231,6 +237,43 @@ export function MyCalendarTab({
     }
   };
 
+  const handleImportGoogleCalendar = async () => {
+    if (!selectedGoogleCalId) {
+      setImportError("Select a calendar to import.");
+      return;
+    }
+
+    setImportError(null);
+    setImportNotice(null);
+    setImportingGoogleCal(true);
+
+    try {
+      const response = await fetch("/api/calendar/feeds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "google",
+          googleCalendarId: selectedGoogleCalId,
+          organizationId: orgId,
+        }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.message || data?.error || "Failed to import Google Calendar.");
+      }
+
+      setSelectedGoogleCalId("");
+      setImportNotice(data?.message || "Google Calendar imported and syncing.");
+      await refreshFeeds();
+      notifyAvailabilityRefresh();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to import Google Calendar.");
+    } finally {
+      setImportingGoogleCal(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Section 1: Google Calendar Sync */}
@@ -276,6 +319,66 @@ export function MyCalendarTab({
         />
       </section>
 
+      {/* Section 1b: Import Google Calendar Events */}
+      <section>
+        <h2 className="text-lg font-semibold text-foreground mb-4">Import Google Calendar Events</h2>
+        <Card className="p-4 space-y-4">
+          {gcal.connectionLoading ? (
+            <p className="text-sm text-muted-foreground">Checking Google connection...</p>
+          ) : !gcal.isConnected ? (
+            <p className="text-sm text-muted-foreground">
+              Connect your Google account above to import calendar events into {orgName}.
+            </p>
+          ) : gcal.calendarsLoading ? (
+            <p className="text-sm text-muted-foreground">Loading calendars...</p>
+          ) : gcal.calendars.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No calendars found in your Google account.</p>
+          ) : (
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1">
+                <label htmlFor="google-cal-import" className="block text-sm font-medium text-foreground mb-1">
+                  Google Calendar
+                </label>
+                <select
+                  id="google-cal-import"
+                  value={selectedGoogleCalId}
+                  onChange={(e) => {
+                    setSelectedGoogleCalId(e.target.value);
+                    setImportError(null);
+                    setImportNotice(null);
+                  }}
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground"
+                >
+                  <option value="">Select a calendar...</option>
+                  {gcal.calendars.map((cal) => (
+                    <option key={cal.id} value={cal.id}>
+                      {cal.summary}{cal.primary ? " (Primary)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Import events from your Google Calendar into {orgName} so they appear alongside team events.
+                </p>
+              </div>
+              <Button onClick={handleImportGoogleCalendar} isLoading={importingGoogleCal}>
+                Import Calendar
+              </Button>
+            </div>
+          )}
+
+          {importNotice && (
+            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+              {importNotice}
+            </div>
+          )}
+          {importError && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-600 dark:text-red-400">
+              {importError}
+            </div>
+          )}
+        </Card>
+      </section>
+
       {/* Section 2: Personal Calendar Feeds */}
       <section>
         <h2 className="text-lg font-semibold text-foreground mb-4">Personal Calendar Feeds</h2>
@@ -298,8 +401,16 @@ export function MyCalendarTab({
               Add calendar link
             </Button>
           </div>
-          {notice && <p className="text-sm text-foreground">{notice}</p>}
-          {error && <p className="text-sm text-error">{error}</p>}
+          {notice && (
+            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 text-sm text-green-700 dark:text-green-300">
+              {notice}
+            </div>
+          )}
+          {error && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          )}
         </Card>
 
         <div className="mt-4">
@@ -320,7 +431,9 @@ export function MyCalendarTab({
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground">ICS Feed</p>
+                        <p className="font-medium text-foreground">
+                          {feed.provider === "google" ? "Google Calendar" : "ICS Feed"}
+                        </p>
                         <Badge variant={statusVariant(feed.status)}>{feed.status}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">{feed.maskedUrl}</p>
@@ -377,7 +490,7 @@ export function MyCalendarTab({
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{schedule.notes}</p>
                     )}
                   </div>
-                  <Link href={`/${orgSlug}/schedules/${schedule.id}/edit`}>
+                  <Link href={`/${orgSlug}/calendar/${schedule.id}/edit`}>
                     <Button variant="ghost" size="sm">Edit</Button>
                   </Link>
                 </div>
@@ -390,8 +503,8 @@ export function MyCalendarTab({
               title={`No ${pageLabel.toLowerCase()} yet`}
               description={`Add your class ${pageLabel.toLowerCase()} so coaches can plan around your availability.`}
               action={
-                <Link href={`/${orgSlug}/schedules/new`}>
-                  <Button>{resolveActionLabel("/schedules", navConfig, "Add First")}</Button>
+                <Link href={`/${orgSlug}/calendar/new`}>
+                  <Button>{resolveActionLabel("/calendar", navConfig, "Add First")}</Button>
                 </Link>
               }
             />

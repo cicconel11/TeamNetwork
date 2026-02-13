@@ -627,9 +627,9 @@ function OrgSettingsContent() {
               <p className="font-semibold text-foreground">Google Calendar Sync</p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Manage your Google Calendar connection and sync preferences in the Schedules section.
+              Manage your Google Calendar connection and sync preferences in the Calendar section.
             </p>
-            <Link href={`/${orgSlug}/schedules?calendar=true`}>
+            <Link href={`/${orgSlug}/calendar?calendar=true`}>
               <Button variant="secondary" size="sm">Go to My Calendar</Button>
             </Link>
           </Card>

@@ -38,7 +38,7 @@ interface UseGoogleCalendarSyncReturn {
   oauthErrorMessage: string | null;
   connect: () => void;
   disconnect: () => Promise<void>;
-  syncNow: () => Promise<void>;
+  syncNow: () => Promise<{ message: string; syncedCount?: number; failedCount?: number }>;
   updatePreferences: (prefs: SyncPreferences) => Promise<void>;
   setTargetCalendar: (calendarId: string) => Promise<void>;
   reconnect: () => void;
@@ -83,7 +83,7 @@ export function useGoogleCalendarSync({
   const oauthError = searchParams.get("error");
   const oauthErrorMessage = searchParams.get("error_message");
 
-  const effectiveRedirectPath = redirectPath || `/${orgSlug}/schedules`;
+  const effectiveRedirectPath = redirectPath || `/${orgSlug}/calendar`;
 
   // Load connection status
   const loadConnection = useCallback(async () => {
@@ -233,15 +233,23 @@ export function useGoogleCalendarSync({
     setConnection(null);
     setCalendars([]);
     setReconnectRequired(false);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("calendar:refresh"));
+    }
   }, []);
 
   const syncNow = useCallback(async () => {
     const response = await fetch("/api/calendar/sync", { method: "POST" });
+    const data = await response.json();
     if (!response.ok) {
-      const data = await response.json();
       throw new Error(data.message || "Failed to sync");
     }
     await loadConnection();
+    return {
+      message: data?.message || "Sync completed.",
+      syncedCount: data?.syncedCount,
+      failedCount: data?.failedCount,
+    };
   }, [loadConnection]);
 
   const updatePreferences = useCallback(async (prefs: SyncPreferences) => {

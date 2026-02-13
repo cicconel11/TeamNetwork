@@ -1,11 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncCalendarFeed } from "@/lib/calendar/icsSync";
+import { CALENDAR_FEED_SYNC_SELECT, syncFeedByProvider } from "@/lib/calendar/feedSync";
 
 export const dynamic = "force-dynamic";
 
+type CalendarFeedSyncRow = {
+  id: string;
+  user_id: string;
+  feed_url: string;
+  status: string;
+  last_synced_at: string | null;
+  last_error: string | null;
+  provider: string;
+  created_at: string | null;
+  updated_at: string | null;
+  organization_id: string | null;
+  scope: string;
+  connected_user_id: string | null;
+  google_calendar_id: string | null;
+};
+
 function maskFeedUrl(feedUrl: string) {
+  if (feedUrl.startsWith("google://")) {
+    return `google://${feedUrl.slice("google://".length, "google://".length + 10)}...`;
+  }
   try {
     const parsed = new URL(feedUrl);
     const tail = feedUrl.slice(-6);
@@ -30,12 +49,15 @@ export async function POST(
       );
     }
 
-    const { data: feed, error } = await supabase
+    const { data: feed, error } = await (supabase as any)
       .from("calendar_feeds")
-      .select("id, user_id, feed_url, status, last_synced_at, last_error, provider, created_at, updated_at, organization_id, scope")
+      .select(CALENDAR_FEED_SYNC_SELECT)
       .eq("id", params.feedId)
       .eq("scope", "org")
-      .single();
+      .single() as {
+      data: CalendarFeedSyncRow | null;
+      error: { message: string } | null;
+    };
 
     if (error || !feed) {
       return NextResponse.json(
@@ -59,7 +81,7 @@ export async function POST(
     }
 
     const serviceClient = createServiceClient();
-    await syncCalendarFeed(serviceClient, feed);
+    await syncFeedByProvider(serviceClient, feed as any);
 
     const { data: updatedFeed } = await serviceClient
       .from("calendar_feeds")
