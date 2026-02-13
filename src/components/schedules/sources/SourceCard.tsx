@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { vendorLabel } from "../shared/VendorBadge";
 import { SyncStatusBadge } from "../shared/SyncStatusBadge";
@@ -9,7 +10,8 @@ type SourceCardProps = {
   source: SourceSummary;
   isAdmin: boolean;
   syncingSourceId: string | null;
-  updatingSourceId: string | null;
+  pausingSourceId: string | null;
+  removingSourceId: string | null;
   onSync: (sourceId: string) => void;
   onToggleStatus: (source: SourceSummary) => void;
   onRemove: (sourceId: string) => void;
@@ -49,16 +51,43 @@ function statusBorderColor(status: SourceStatus): string {
   }
 }
 
+const CONFIRM_TIMEOUT_MS = 3000;
+
 export function SourceCard({
   source,
   isAdmin,
   syncingSourceId,
-  updatingSourceId,
+  pausingSourceId,
+  removingSourceId,
   onSync,
   onToggleStatus,
   onRemove,
 }: SourceCardProps) {
   const borderColor = statusBorderColor(source.status);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-cancel confirmation after timeout
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const handleRemoveClick = useCallback(() => {
+    if (confirmingRemove) {
+      // Second click — execute removal
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmingRemove(false);
+      onRemove(source.id);
+    } else {
+      // First click — arm confirmation
+      setConfirmingRemove(true);
+      confirmTimerRef.current = setTimeout(() => {
+        setConfirmingRemove(false);
+      }, CONFIRM_TIMEOUT_MS);
+    }
+  }, [confirmingRemove, onRemove, source.id]);
 
   return (
     <div
@@ -111,20 +140,23 @@ export function SourceCard({
           <Button
             variant="ghost"
             size="sm"
-            isLoading={updatingSourceId === source.id}
+            isLoading={pausingSourceId === source.id}
             onClick={() => onToggleStatus(source)}
           >
             {source.status === "paused" ? "Resume" : "Pause"}
           </Button>
-          {/* Remove button */}
+          {/* Remove button — two-click inline confirmation */}
           <Button
             variant="ghost"
             size="sm"
-            isLoading={updatingSourceId === source.id}
-            onClick={() => onRemove(source.id)}
-            className="text-muted-foreground hover:text-error"
+            isLoading={removingSourceId === source.id}
+            onClick={handleRemoveClick}
+            className={confirmingRemove
+              ? "text-error font-semibold"
+              : "text-muted-foreground hover:text-error"
+            }
           >
-            Remove
+            {confirmingRemove ? "Confirm?" : "Remove"}
           </Button>
         </div>
       )}

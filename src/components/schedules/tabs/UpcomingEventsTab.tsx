@@ -24,18 +24,36 @@ function formatEventTime(event: CalendarEventSummary) {
   const start = new Date(event.start_at);
 
   if (event.all_day) {
-    return `${start.toLocaleDateString()} (All day)`;
+    return "All day";
   }
 
-  const startLabel = start.toLocaleString();
+  const timeOpts: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  const startTime = start.toLocaleTimeString("en-US", timeOpts);
 
   if (!event.end_at) {
-    return startLabel;
+    return startTime;
   }
 
   const end = new Date(event.end_at);
-  const endLabel = end.toLocaleString();
-  return `${startLabel} - ${endLabel}`;
+
+  // Same day: "11:30 AM – 11:50 AM"
+  if (start.toDateString() === end.toDateString()) {
+    const endTime = end.toLocaleTimeString("en-US", timeOpts);
+    return `${startTime} – ${endTime}`;
+  }
+
+  // Multi-day: "Feb 12, 11:30 AM – Feb 13, 2:00 PM"
+  const dateTimeOpts: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+  return `${start.toLocaleDateString("en-US", dateTimeOpts)} – ${end.toLocaleDateString("en-US", dateTimeOpts)}`;
 }
 
 function groupEventsByDate(events: CalendarEventSummary[]): Map<string, CalendarEventSummary[]> {

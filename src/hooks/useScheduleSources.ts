@@ -6,7 +6,7 @@ export type SourceStatus = "active" | "paused" | "error";
 
 export type SourceSummary = {
   id: string;
-  vendor_id: "ics" | "vendorA" | "vendorB" | "generic_html";
+  vendor_id: "ics" | "vendorA" | "vendorB" | "generic_html" | "google_calendar";
   maskedUrl: string;
   status: SourceStatus;
   last_synced_at: string | null;
@@ -25,7 +25,8 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [loadingSources, setLoadingSources] = useState(true);
   const [syncingSourceId, setSyncingSourceId] = useState<string | null>(null);
-  const [updatingSourceId, setUpdatingSourceId] = useState<string | null>(null);
+  const [pausingSourceId, setPausingSourceId] = useState<string | null>(null);
+  const [removingSourceId, setRemovingSourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -95,7 +96,7 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
       return;
     }
 
-    setUpdatingSourceId(source.id);
+    setPausingSourceId(source.id);
     setError(null);
     setNotice(null);
 
@@ -117,7 +118,7 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update schedule source.");
     } finally {
-      setUpdatingSourceId(null);
+      setPausingSourceId(null);
     }
   }, [isAdmin, refreshSources]);
 
@@ -127,11 +128,7 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
       return;
     }
 
-    if (!confirm("Remove this schedule source?")) {
-      return;
-    }
-
-    setUpdatingSourceId(sourceId);
+    setRemovingSourceId(sourceId);
     setError(null);
     setNotice(null);
 
@@ -144,11 +141,17 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
       }
 
       setNotice("Schedule source removed.");
-      await refreshSources();
+      // Dispatch event first — this hook's own listener will call refreshSources(),
+      // and UpcomingEventsTab also listens for this event to refresh its data.
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("schedule:sources:refresh"));
+      } else {
+        await refreshSources();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to remove schedule source.");
     } finally {
-      setUpdatingSourceId(null);
+      setRemovingSourceId(null);
     }
   }, [isAdmin, refreshSources]);
 
@@ -156,7 +159,8 @@ export function useScheduleSources({ orgId, isAdmin }: UseScheduleSourcesOptions
     sources,
     loadingSources,
     syncingSourceId,
-    updatingSourceId,
+    pausingSourceId,
+    removingSourceId,
     error,
     notice,
     clearMessages,

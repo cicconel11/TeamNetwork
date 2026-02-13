@@ -1,20 +1,23 @@
 "use client";
 
 import { useScheduleSources, useSchedulePreview } from "@/hooks";
-import { ImportScheduleForm, SchedulePreviewCard } from "../import";
+import { ImportScheduleForm, SchedulePreviewCard, TeamGoogleCalendarConnect } from "../import";
 import { ConnectedSourcesList } from "../sources";
 
 type TeamScheduleTabProps = {
   orgId: string;
+  orgSlug: string;
   isAdmin: boolean;
+  isReadOnly?: boolean;
 };
 
-export function TeamScheduleTab({ orgId, isAdmin }: TeamScheduleTabProps) {
+export function TeamScheduleTab({ orgId, orgSlug, isAdmin, isReadOnly }: TeamScheduleTabProps) {
   const {
     sources,
     loadingSources,
     syncingSourceId,
-    updatingSourceId,
+    pausingSourceId,
+    removingSourceId,
     error: sourcesError,
     notice: sourcesNotice,
     refreshSources,
@@ -57,6 +60,14 @@ export function TeamScheduleTab({ orgId, isAdmin }: TeamScheduleTabProps) {
         notice={combinedNotice}
       />
 
+      <TeamGoogleCalendarConnect
+        orgId={orgId}
+        orgSlug={orgSlug}
+        isAdmin={isAdmin}
+        isReadOnly={isReadOnly}
+        onSourceAdded={refreshSources}
+      />
+
       {preview && (
         <SchedulePreviewCard
           preview={preview}
@@ -74,7 +85,8 @@ export function TeamScheduleTab({ orgId, isAdmin }: TeamScheduleTabProps) {
         loadingSources={loadingSources}
         isAdmin={isAdmin}
         syncingSourceId={syncingSourceId}
-        updatingSourceId={updatingSourceId}
+        pausingSourceId={pausingSourceId}
+        removingSourceId={removingSourceId}
         onSync={handleSync}
         onToggleStatus={handleToggleStatus}
         onRemove={handleRemove}

@@ -9,7 +9,8 @@ type ConnectedSourcesListProps = {
   loadingSources: boolean;
   isAdmin: boolean;
   syncingSourceId: string | null;
-  updatingSourceId: string | null;
+  pausingSourceId: string | null;
+  removingSourceId: string | null;
   onSync: (sourceId: string) => void;
   onToggleStatus: (source: SourceSummary) => void;
   onRemove: (sourceId: string) => void;
@@ -36,7 +37,8 @@ export function ConnectedSourcesList({
   loadingSources,
   isAdmin,
   syncingSourceId,
-  updatingSourceId,
+  pausingSourceId,
+  removingSourceId,
   onSync,
   onToggleStatus,
   onRemove,
@@ -78,7 +80,8 @@ export function ConnectedSourcesList({
               source={source}
               isAdmin={isAdmin}
               syncingSourceId={syncingSourceId}
-              updatingSourceId={updatingSourceId}
+              pausingSourceId={pausingSourceId}
+              removingSourceId={removingSourceId}
               onSync={onSync}
               onToggleStatus={onToggleStatus}
               onRemove={onRemove}
