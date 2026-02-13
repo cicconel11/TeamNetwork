@@ -43,7 +43,7 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
   if (subError || !submission) return notFound();
 
   const typedSubmission = submission as FormSubmission & { users: Pick<User, "name" | "email"> | null };
-  const responses = ((typedSubmission.data ?? {}) as Record<string, unknown>);
+  const responses = ((typedSubmission.responses ?? {}) as Record<string, unknown>);
 
   return (
     <div className="space-y-6 animate-fade-in">

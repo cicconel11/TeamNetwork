@@ -233,7 +233,7 @@ export async function GET(request: Request) {
     // Fetch form submissions
     const { data: submissions } = await serviceSupabase
       .from("form_submissions")
-      .select("form_id, organization_id, submitted_at, data")
+      .select("form_id, organization_id, submitted_at, responses")
       .eq("user_id", user.id);
 
     if (submissions) {
@@ -241,7 +241,7 @@ export async function GET(request: Request) {
         formId: s.form_id,
         organizationId: s.organization_id,
         submittedAt: s.submitted_at,
-        data: s.data,
+        data: s.responses,
       }));
     }
 

@@ -16,7 +16,7 @@ export function ExportCSVButton({ form, submissions }: ExportCSVButtonProps) {
     const headers = ["Submitted By", "Email", "Date", ...fields.map((f) => f.label)];
 
     const rows = submissions.map((sub) => {
-      const responses = (sub.data ?? {}) as Record<string, unknown>;
+      const responses = (sub.responses ?? {}) as Record<string, unknown>;
       return [
         sub.users?.name || "",
         sub.users?.email || "",

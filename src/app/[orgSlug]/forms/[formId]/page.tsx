@@ -53,7 +53,7 @@ export default function FillFormPage() {
 
         if (submission) {
           setExistingSubmission(submission as FormSubmission);
-          setResponses((submission.data as Record<string, unknown>) || {});
+          setResponses((submission.responses as Record<string, unknown>) || {});
         }
       }
 
