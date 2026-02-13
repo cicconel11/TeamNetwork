@@ -49,7 +49,7 @@ export async function POST(
 
     const { data: source, error } = await supabase
       .from("schedule_sources")
-      .select("id, org_id, vendor_id, source_url")
+      .select("id, org_id, vendor_id, source_url, connected_user_id")
       .eq("id", params.sourceId)
       .single();
 
