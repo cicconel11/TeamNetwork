@@ -120,19 +120,22 @@ const nextConfig = {
   async redirects() {
     return [
       // Redirect old /schedules page URLs to /calendar.
-      // Use negative lookahead to exclude "api" so /api/schedules/* routes still work.
+      // Negative lookahead excludes "api" so /api/schedules/* API routes still work.
+      // (?!api(?:/|$)) checks "not 'api' followed by / or end-of-string".
+      // Using just (?!api$) fails because $ means end-of-full-string in the compiled
+      // regex, so /api/schedules/... slips through (the text after "api" isn't EOS).
       {
-        source: "/:orgSlug((?!api$)[^/]+)/schedules",
+        source: "/:orgSlug((?!api(?:/|$))[^/]+)/schedules",
         destination: "/:orgSlug/calendar",
         permanent: true,
       },
       {
-        source: "/:orgSlug((?!api$)[^/]+)/schedules/new",
+        source: "/:orgSlug((?!api(?:/|$))[^/]+)/schedules/new",
         destination: "/:orgSlug/calendar/new",
         permanent: true,
       },
       {
-        source: "/:orgSlug((?!api$)[^/]+)/schedules/:path*",
+        source: "/:orgSlug((?!api(?:/|$))[^/]+)/schedules/:path*",
         destination: "/:orgSlug/calendar/:path*",
         permanent: true,
       },
