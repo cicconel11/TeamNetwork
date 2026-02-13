@@ -98,6 +98,9 @@ const nextConfig = {
     // Temporarily ignore ESLint during builds to avoid circular reference issue
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    serverComponentsExternalPackages: ["googleapis"],
+  },
   images: {
     remotePatterns: [
       {

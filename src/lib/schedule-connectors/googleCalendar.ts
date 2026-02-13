@@ -2,7 +2,6 @@ import { fetchGoogleCalendarEvents } from "@/lib/calendar/googleSync";
 import type { CalendarEventInstance, SyncWindow as CalSyncWindow } from "@/lib/calendar/syncHelpers";
 import { syncScheduleEvents, type SyncWindow } from "./storage";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getValidAccessToken } from "@/lib/google/oauth";
 import type { NormalizedEvent, ScheduleConnector, PreviewInput, SyncInput } from "./types";
 
 const PREVIEW_DAYS_FORWARD = 180;
@@ -59,6 +58,7 @@ async function resolveAccessToken(
   }
 
   const supabase = input.supabase ?? createServiceClient();
+  const { getValidAccessToken } = await import("@/lib/google/oauth");
   const getToken = input.getAccessToken ?? getValidAccessToken;
   const token = await getToken(supabase, input.userId);
 

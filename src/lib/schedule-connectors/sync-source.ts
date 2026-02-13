@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { getConnectorById } from "./registry";
 import type { SyncResult, VendorId } from "./types";
 import { debugLog } from "@/lib/debug";
 
@@ -22,6 +21,7 @@ export async function syncScheduleSource(
 ): Promise<SyncOutcome> {
   const now = input.now ?? new Date();
   const vendorId = input.source.vendor_id as VendorId;
+  const { getConnectorById } = await import("./registry");
   const connector = getConnectorById(vendorId);
 
   if (!connector) {
