@@ -19,10 +19,7 @@ function maskFeedUrl(feedUrl: string) {
   }
 }
 
-export async function POST(
-  _request: Request,
-  { params }: { params: { feedId: string } }
-) {
+async function handleSync(params: { feedId: string }) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -89,4 +86,18 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+export async function POST(
+  _request: Request,
+  { params }: { params: { feedId: string } }
+) {
+  return handleSync(params);
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: { feedId: string } }
+) {
+  return handleSync(params);
 }

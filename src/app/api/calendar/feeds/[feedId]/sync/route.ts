@@ -19,10 +19,7 @@ function maskFeedUrl(feedUrl: string) {
   }
 }
 
-export async function POST(
-  _request: Request,
-  { params }: { params: { feedId: string } }
-) {
+async function handleSync(params: { feedId: string }) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -56,7 +53,7 @@ export async function POST(
     const { data: updatedFeed } = await serviceClient
       .from("calendar_feeds")
       .select("id, feed_url, status, last_synced_at, last_error, provider")
-      .eq("id", feed.id)
+      .eq("id", typedFeed.id)
       .single();
 
     const responseFeed = updatedFeed ?? typedFeed;
@@ -76,4 +73,18 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+export async function POST(
+  _request: Request,
+  { params }: { params: { feedId: string } }
+) {
+  return handleSync(params);
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: { feedId: string } }
+) {
+  return handleSync(params);
 }
