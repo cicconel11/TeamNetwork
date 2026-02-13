@@ -88,3 +88,14 @@ export async function GET(
 ) {
   return handleSync(params);
 }
+
+export async function PUT(
+  _request: Request,
+  { params }: { params: { feedId: string } }
+) {
+  return handleSync(params);
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
+}
