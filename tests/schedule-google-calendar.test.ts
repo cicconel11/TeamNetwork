@@ -8,7 +8,6 @@ import {
   mapCalendarInstanceToScheduleEvent,
 } from "@/lib/schedule-connectors/googleCalendar";
 import type { CalendarEventInstance } from "@/lib/calendar/syncHelpers";
-import type { NormalizedEvent } from "@/lib/schedule-connectors/types";
 
 // ---------- helpers ----------
 
@@ -47,7 +46,7 @@ function makeGoogleEvent(overrides: Record<string, unknown> = {}) {
 
 function makeFetcher(pages: GoogleApiPage[]) {
   let callIndex = 0;
-  return async (_url: string | URL | Request, _init?: RequestInit) => {
+  return async () => {
     const page = pages[callIndex] ?? pages[pages.length - 1];
     callIndex++;
     return new Response(JSON.stringify(page), { status: 200 });

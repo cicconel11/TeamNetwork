@@ -2,24 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { CALENDAR_FEED_SYNC_SELECT, syncFeedByProvider } from "@/lib/calendar/feedSync";
+import type { CalendarFeedRow } from "@/lib/calendar/syncHelpers";
 
 export const dynamic = "force-dynamic";
-
-type CalendarFeedSyncRow = {
-  id: string;
-  user_id: string;
-  feed_url: string;
-  status: string;
-  last_synced_at: string | null;
-  last_error: string | null;
-  provider: string;
-  created_at: string | null;
-  updated_at: string | null;
-  organization_id: string | null;
-  scope: string;
-  connected_user_id: string | null;
-  google_calendar_id: string | null;
-};
 
 function maskFeedUrl(feedUrl: string) {
   if (feedUrl.startsWith("google://")) {
@@ -49,18 +34,16 @@ export async function POST(
       );
     }
 
-    const { data: feed, error } = await (supabase as any)
+    const { data: feed, error } = await supabase
       .from("calendar_feeds")
       .select(CALENDAR_FEED_SYNC_SELECT)
       .eq("id", params.feedId)
       .eq("user_id", user.id)
       .eq("scope", "personal")
-      .single() as {
-      data: CalendarFeedSyncRow | null;
-      error: { message: string } | null;
-    };
+      .single();
+    const typedFeed = feed as CalendarFeedRow | null;
 
-    if (error || !feed) {
+    if (error || !typedFeed) {
       return NextResponse.json(
         { error: "Not found", message: "Feed not found." },
         { status: 404 }
@@ -68,7 +51,7 @@ export async function POST(
     }
 
     const serviceClient = createServiceClient();
-    await syncFeedByProvider(serviceClient, feed as any);
+    await syncFeedByProvider(serviceClient, typedFeed);
 
     const { data: updatedFeed } = await serviceClient
       .from("calendar_feeds")
@@ -76,7 +59,7 @@ export async function POST(
       .eq("id", feed.id)
       .single();
 
-    const responseFeed = updatedFeed ?? feed;
+    const responseFeed = updatedFeed ?? typedFeed;
 
     return NextResponse.json({
       id: responseFeed.id,

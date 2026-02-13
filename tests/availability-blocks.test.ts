@@ -16,13 +16,6 @@ function buildWeekDays(): Date[] {
   });
 }
 
-function dateKey(day: Date): string {
-  const y = day.getFullYear();
-  const m = String(day.getMonth() + 1).padStart(2, "0");
-  const d = String(day.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 describe("computeEventBlocks", () => {
   const weekDays = buildWeekDays();
 

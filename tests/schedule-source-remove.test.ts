@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
+import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 // Mock fetch and window for hook behavior testing
@@ -14,7 +14,14 @@ describe("useScheduleSources handleRemove behavior", () => {
 
     // Mock window.dispatchEvent
     if (typeof globalThis.window === "undefined") {
-      (globalThis as any).window = {
+      const win = globalThis as unknown as {
+        window?: {
+          dispatchEvent: (event: Event) => boolean;
+          addEventListener: () => void;
+          removeEventListener: () => void;
+        };
+      };
+      win.window = {
         dispatchEvent: (event: Event) => {
           dispatchedEvents.push(event.type);
           return true;
@@ -77,7 +84,7 @@ describe("useScheduleSources handleRemove behavior", () => {
     assert.ok(confirmed);
 
     const response = await fetch(`/api/schedules/sources/${sourceId}`, { method: "DELETE" });
-    const data = await response.json();
+    await response.json();
 
     assert.ok(response.ok);
     assert.equal(calledUrl, `/api/schedules/sources/${sourceId}`);
@@ -130,7 +137,7 @@ describe("useScheduleSources handleRemove behavior", () => {
 
   it("separate loading states: removing does not affect pausing", () => {
     // This tests the contract: pausingSourceId and removingSourceId are independent
-    let pausingSourceId: string | null = null;
+    const pausingSourceId: string | null = null;
     let removingSourceId: string | null = null;
 
     // Simulate setting removingSourceId

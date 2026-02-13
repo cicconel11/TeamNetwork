@@ -38,7 +38,7 @@ type GoogleApiPage = {
 
 function makeFetcher(pages: GoogleApiPage[]) {
   let callIndex = 0;
-  return async (url: string | URL | Request, _init?: RequestInit) => {
+  return async () => {
     const page = pages[callIndex] ?? pages[pages.length - 1];
     callIndex++;
     return new Response(JSON.stringify(page), { status: 200 });
@@ -158,7 +158,7 @@ describe("fetchGoogleCalendarEvents", () => {
 
   it("passes timeMin and timeMax in request URL", async () => {
     let capturedUrl = "";
-    const fetcher = async (url: string | URL | Request, _init?: RequestInit) => {
+    const fetcher = async (url: string | URL | Request) => {
       capturedUrl = typeof url === "string" ? url : url.toString();
       return new Response(JSON.stringify({ items: [] }), { status: 200 });
     };

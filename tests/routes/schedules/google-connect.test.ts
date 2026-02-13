@@ -5,7 +5,6 @@ import {
   isAuthenticated,
   isOrgAdmin,
   AuthPresets,
-  createAuthContext,
 } from "../../utils/authMock.ts";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";
 

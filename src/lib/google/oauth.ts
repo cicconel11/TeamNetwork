@@ -506,7 +506,8 @@ export async function disconnectCalendar(
         .from("calendar_feeds")
         .delete()
         .eq("connected_user_id", userId)
-        .eq("provider", "google");
+        .eq("provider", "google")
+        .eq("scope", "personal");
 
     return { success: true };
 }

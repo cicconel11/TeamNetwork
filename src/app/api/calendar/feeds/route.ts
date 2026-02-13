@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncCalendarFeed } from "@/lib/calendar/icsSync";
 import { syncGoogleCalendarFeed } from "@/lib/calendar/googleSync";
+import type { CalendarFeedRow } from "@/lib/calendar/syncHelpers";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { ValidationError, validationErrorResponse } from "@/lib/security/validation";
@@ -377,11 +378,12 @@ async function handleGoogleFeedCreate(
 
   // Trigger initial sync
   const serviceClient = createServiceClient();
-  await syncGoogleCalendarFeed(serviceClient, {
-    ...(feed as Record<string, unknown>),
+  const feedForSync: CalendarFeedRow = {
+    ...(feed as CalendarFeedRow),
     connected_user_id: user.id,
     google_calendar_id: body.googleCalendarId,
-  } as any);
+  };
+  await syncGoogleCalendarFeed(serviceClient, feedForSync);
 
   const { data: updatedFeed } = await serviceClient
     .from("calendar_feeds")
