@@ -83,7 +83,7 @@ export function useGoogleCalendarSync({
   const oauthError = searchParams.get("error");
   const oauthErrorMessage = searchParams.get("error_message");
 
-  const effectiveRedirectPath = redirectPath || `/${orgSlug}/calendar`;
+  const effectiveRedirectPath = redirectPath || `/${orgSlug}/calendar/my-settings`;
 
   // Load connection status
   const loadConnection = useCallback(async () => {

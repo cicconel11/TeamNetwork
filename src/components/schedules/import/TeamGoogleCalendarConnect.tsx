@@ -88,7 +88,7 @@ export function TeamGoogleCalendarConnect({
   }, [connectionState]);
 
   const handleConnect = useCallback(() => {
-    window.location.href = `/api/google/auth?redirect=${encodeURIComponent(`/${orgSlug}/calendar`)}`;
+    window.location.href = `/api/google/auth?redirect=${encodeURIComponent(`/${orgSlug}/calendar/sources`)}`;
   }, [orgSlug]);
 
   const handleAddToTeamSchedule = useCallback(async () => {
