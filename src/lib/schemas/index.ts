@@ -45,3 +45,12 @@ export * from "./errors";
 
 // Analytics schemas
 export * from "./analytics";
+
+// Discussion schemas
+export * from "./discussion";
+
+// Jobs schemas
+export * from "./jobs";
+
+// Mentorship schemas
+export * from "./mentorship";

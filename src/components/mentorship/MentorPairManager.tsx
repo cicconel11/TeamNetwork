@@ -142,8 +142,8 @@ export function MentorPairManager({ orgId, orgSlug }: MentorPairManagerProps) {
             targetUserIds: [mentorId, currentMenteeId],
           }),
         });
-      } catch (notifError) {
-        console.error("Failed to send mentorship pairing notification:", notifError);
+      } catch {
+        // Notification failure is non-critical, silently continue
       }
     }
 

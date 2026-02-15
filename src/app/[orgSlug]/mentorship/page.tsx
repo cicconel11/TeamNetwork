@@ -5,6 +5,7 @@ import { MentorshipAdminPanel } from "@/components/mentorship/MentorshipAdminPan
 import { MentorPairManager } from "@/components/mentorship/MentorPairManager";
 import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
+import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
@@ -34,6 +35,32 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.add(p.mentor_user_id);
     userIds.add(p.mentee_user_id);
   });
+
+  // Check if current user has a mentor profile
+  const { data: currentUserProfile } = await supabase
+    .from("mentor_profiles")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("user_id", orgCtx.userId!)
+    .maybeSingle();
+
+  // Query active mentor profiles with users data
+  const { data: mentorProfiles } = await supabase
+    .from("mentor_profiles")
+    .select("*, users!mentor_profiles_user_id_fkey(id, name, email)")
+    .eq("organization_id", orgId)
+    .eq("is_active", true);
+
+  // Get alumni data for mentors
+  const mentorUserIds = mentorProfiles?.map((p) => p.user_id) || [];
+  const { data: mentorAlumni } = mentorUserIds.length > 0
+    ? await supabase
+        .from("alumni")
+        .select("user_id, first_name, last_name, photo_url, industry, graduation_year, current_company, current_city")
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .in("user_id", mentorUserIds)
+    : { data: [] };
 
   // Run logs and users queries in parallel
   const [{ data: logs }, { data: users }] = await Promise.all([
@@ -77,6 +104,50 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     email: u.email,
   }));
 
+  // Prepare mentor directory data
+  const alumniMap = new Map(
+    (mentorAlumni || []).map((a) => [a.user_id, a])
+  );
+
+  const mentorsForDirectory = (mentorProfiles || []).map((profile) => {
+    const user = profile.users as { id: string; name: string; email: string | null } | null;
+    const alumni = alumniMap.get(profile.user_id);
+
+    return {
+      id: profile.id,
+      user_id: profile.user_id,
+      name: user?.name || "Unknown",
+      email: user?.email || null,
+      photo_url: alumni?.photo_url || null,
+      industry: alumni?.industry || null,
+      graduation_year: alumni?.graduation_year || null,
+      current_company: alumni?.current_company || null,
+      current_city: alumni?.current_city || null,
+      expertise_areas: profile.expertise_areas || null,
+      bio: profile.bio || null,
+      contact_email: profile.contact_email || null,
+      contact_linkedin: profile.contact_linkedin || null,
+      contact_phone: profile.contact_phone || null,
+    };
+  });
+
+  // Extract unique industries and years for filters
+  const industries = Array.from(
+    new Set(
+      mentorsForDirectory
+        .map((m) => m.industry)
+        .filter((i): i is string => i !== null)
+    )
+  ).sort();
+
+  const years = Array.from(
+    new Set(
+      mentorsForDirectory
+        .map((m) => m.graduation_year)
+        .filter((y): y is number => y !== null)
+    )
+  ).sort((a, b) => b - a);
+
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/mentorship", navConfig);
 
@@ -93,6 +164,15 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
       {!orgCtx.isAdmin && orgCtx.role === "alumni" && (
         <MentorPairManager orgId={orgId} orgSlug={orgSlug} />
       )}
+
+      <MentorDirectory
+        mentors={mentorsForDirectory}
+        industries={industries}
+        years={years}
+        showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
+        orgId={orgId}
+        orgSlug={orgSlug}
+      />
 
       <MentorshipPairsList
         initialPairs={filteredPairs}

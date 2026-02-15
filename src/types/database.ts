@@ -1897,6 +1897,68 @@ export type Database = {
           },
         ]
       }
+      job_postings: {
+        Row: {
+          application_url: string | null
+          company: string
+          contact_email: string | null
+          created_at: string
+          deleted_at: string | null
+          description: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          location: string | null
+          location_type: string | null
+          organization_id: string
+          posted_by: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          application_url?: string | null
+          company: string
+          contact_email?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          location_type?: string | null
+          organization_id: string
+          posted_by: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          application_url?: string | null
+          company?: string
+          contact_email?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          location_type?: string | null
+          organization_id?: string
+          posted_by?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_postings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       members: {
         Row: {
           created_at: string | null
@@ -3263,7 +3325,7 @@ export type Database = {
           id: string
           last_sync_at: string | null
           refresh_token_encrypted: string
-          status: "connected" | "disconnected" | "error"
+          status: string
           target_calendar_id: string
           token_expires_at: string
           updated_at: string | null
@@ -3276,7 +3338,7 @@ export type Database = {
           id?: string
           last_sync_at?: string | null
           refresh_token_encrypted: string
-          status?: "connected" | "disconnected" | "error"
+          status?: string
           target_calendar_id?: string
           token_expires_at: string
           updated_at?: string | null
@@ -3289,7 +3351,7 @@ export type Database = {
           id?: string
           last_sync_at?: string | null
           refresh_token_encrypted?: string
-          status?: "connected" | "disconnected" | "error"
+          status?: string
           target_calendar_id?: string
           token_expires_at?: string
           updated_at?: string | null
@@ -4015,12 +4077,16 @@ export type Announcement = Tables<'announcements'>;
 export type ChatGroup = Tables<'chat_groups'>;
 export type ChatGroupMember = Tables<'chat_group_members'>;
 export type ChatMessage = Tables<'chat_messages'>;
+export type DiscussionThread = Tables<'discussion_threads'>;
+export type DiscussionReply = Tables<'discussion_replies'>;
 export type Event = Tables<'events'>;
 export type Form = Tables<'forms'>;
 export type FormDocument = Tables<'form_documents'>;
 export type FormDocumentSubmission = Tables<'form_document_submissions'>;
 export type FormSubmission = Tables<'form_submissions'>;
+export type JobPosting = Tables<'job_postings'>;
 export type Member = Tables<'members'>;
+export type MentorProfile = Tables<'mentor_profiles'>;
 export type NotificationPreference = Tables<'notification_preferences'>;
 export type Organization = Tables<'organizations'>;
 export type OrganizationDonation = Tables<'organization_donations'>;

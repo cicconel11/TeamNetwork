@@ -26,7 +26,11 @@ type TableName =
   | "chat_messages"
   | "user_calendar_connections"
   | "event_calendar_entries"
-  | "events";
+  | "events"
+  | "discussion_threads"
+  | "discussion_replies"
+  | "job_postings"
+  | "mentor_profiles";
 
 type Row = Record<string, unknown>;
 
@@ -67,6 +71,10 @@ const uniqueKeys: Record<TableName, string[]> = {
   user_calendar_connections: ["user_id"],
   event_calendar_entries: [],
   events: [],
+  discussion_threads: [],
+  discussion_replies: [],
+  job_postings: [],
+  mentor_profiles: [],
 };
 
 function nowIso() {
@@ -101,6 +109,10 @@ export function createSupabaseStub() {
     user_calendar_connections: [],
     event_calendar_entries: [],
     events: [],
+    discussion_threads: [],
+    discussion_replies: [],
+    job_postings: [],
+    mentor_profiles: [],
   };
 
   // RPC handler registry

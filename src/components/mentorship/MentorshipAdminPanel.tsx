@@ -97,8 +97,8 @@ export function MentorshipAdminPanel({ orgId, orgSlug }: MentorshipAdminPanelPro
           targetUserIds: [mentorId, menteeId],
         }),
       });
-    } catch (notifError) {
-      console.error("Failed to send mentorship pairing notification:", notifError);
+    } catch {
+      // Notification failure is non-critical, silently continue
     }
 
     window.location.href = `/${orgSlug}/mentorship`;
