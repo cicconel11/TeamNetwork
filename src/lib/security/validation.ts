@@ -38,7 +38,11 @@ export const baseSchemas = {
 };
 
 export const safeString = (max: number, min = 1) =>
-  z.string().trim().min(min, "Value is required").max(max, `Must be ${max} characters or fewer`);
+  z
+    .string()
+    .trim()
+    .min(min, min <= 1 ? "Value is required" : `Must be at least ${min} characters`)
+    .max(max, `Must be ${max} characters or fewer`);
 
 export const optionalSafeString = (max: number) =>
   z

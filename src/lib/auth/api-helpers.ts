@@ -17,7 +17,6 @@ export async function getOrgMembership(
     .eq("user_id", userId)
     .eq("organization_id", orgId)
     .eq("status", "active")
-    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
