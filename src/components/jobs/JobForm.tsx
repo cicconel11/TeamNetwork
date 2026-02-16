@@ -68,8 +68,9 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
         throw new Error(data.error || "Failed to save job");
       }
 
-      const { job } = await response.json();
-      router.push(`/${orgSlug}/jobs/${job.id}`);
+      await response.json();
+      router.replace(`/${orgSlug}/jobs`);
+      router.refresh();
     } catch (error) {
       setErrors({ submit: error instanceof Error ? error.message : "An error occurred" });
       setIsSubmitting(false);
@@ -77,15 +78,15 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
   };
 
   const handleChange = (field: keyof CreateJobForm, value: string) => {
-    setFormData({
-      ...formData,
-      [field]: value,
-    });
+    setFormData((prev) => ({
+      ...prev,
+      [field]: field === "location_type" && value === "" ? undefined : value,
+    }));
     if (errors[field]) {
-      setErrors({
-        ...errors,
+      setErrors((prev) => ({
+        ...prev,
         [field]: "",
-      });
+      }));
     }
   };
 
@@ -211,7 +212,7 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
           </Button>
           <Button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => router.push(`/${orgSlug}/jobs`)}
             disabled={isSubmitting}
           >
             Cancel

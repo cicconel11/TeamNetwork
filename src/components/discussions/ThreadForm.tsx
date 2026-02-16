@@ -55,8 +55,9 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
         return;
       }
 
-      // Redirect to the new thread
-      router.push(`/${orgSlug}/discussions/${result.data.id}`);
+      // Redirect to the discussions list with fresh data
+      router.replace(`/${orgSlug}/discussions`);
+      router.refresh();
     } catch (err) {
       setError("An unexpected error occurred");
       setIsSubmitting(false);
@@ -78,7 +79,7 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
             id="title"
             type="text"
             value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
             placeholder="What's your discussion about?"
             maxLength={200}
             required
@@ -92,7 +93,7 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
           <Textarea
             id="body"
             value={formData.body}
-            onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, body: e.target.value }))}
             placeholder="Provide details about your discussion..."
             rows={8}
             maxLength={10000}
@@ -104,7 +105,7 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
           <Button type="submit" disabled={isSubmitting}>
             {isSubmitting ? "Creating..." : "Create Thread"}
           </Button>
-          <Button type="button" variant="ghost" onClick={() => router.back()} disabled={isSubmitting}>
+          <Button type="button" variant="ghost" onClick={() => router.push(`/${orgSlug}/discussions`)} disabled={isSubmitting}>
             Cancel
           </Button>
         </div>

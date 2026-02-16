@@ -67,6 +67,10 @@ function OrgSettingsContent() {
   const [nameSuccess, setNameSuccess] = useState<string | null>(null);
   const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [feedPostRoles, setFeedPostRoles] = useState<string[]>(["admin", "active_member", "alumni"]);
+  const [feedSaving, setFeedSaving] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [feedSuccess, setFeedSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedLogo) return;
@@ -89,7 +93,7 @@ function OrgSettingsContent() {
 
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, name, logo_url, primary_color, secondary_color")
+        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles")
         .eq("slug", orgSlug)
         .maybeSingle();
 
@@ -105,6 +109,7 @@ function OrgSettingsContent() {
       setLogoUrl(org.logo_url);
       setPrimaryColor(org.primary_color || "#1e3a5f");
       setSecondaryColor(org.secondary_color || "#10b981");
+      setFeedPostRoles((org as Record<string, unknown>).feed_post_roles as string[] || ["admin", "active_member", "alumni"]);
 
       const {
         data: { user },
@@ -302,6 +307,48 @@ function OrgSettingsContent() {
     } finally {
       setBrandSaving(false);
     }
+  };
+
+  const handleFeedRolesSave = async () => {
+    if (!orgId) return;
+    if (role !== "admin") {
+      setFeedError("Only admins can change feed permissions.");
+      return;
+    }
+
+    setFeedSaving(true);
+    setFeedError(null);
+    setFeedSuccess(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ feed_post_roles: feedPostRoles }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Unable to update feed permissions");
+      }
+
+      if (data?.feed_post_roles) {
+        setFeedPostRoles(data.feed_post_roles);
+      }
+      setFeedSuccess("Feed posting permissions updated.");
+    } catch (err) {
+      setFeedError(err instanceof Error ? err.message : "Unable to update feed permissions");
+    } finally {
+      setFeedSaving(false);
+    }
+  };
+
+  const toggleFeedRole = (toggleRole: string) => {
+    if (toggleRole === "admin") return; // Admin always included
+    setFeedPostRoles((prev) =>
+      prev.includes(toggleRole) ? prev.filter((r) => r !== toggleRole) : [...prev, toggleRole],
+    );
+    setFeedSuccess(null);
   };
 
   const displayLogo = logoPreview || logoUrl;
@@ -633,6 +680,64 @@ function OrgSettingsContent() {
               <Button variant="secondary" size="sm">Go to Sync Settings</Button>
             </Link>
           </Card>
+
+          {/* Feed Posting Permissions Card (admin-only) */}
+          {isAdmin && (
+            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-foreground">Feed posting permissions</p>
+                  <p className="text-sm text-muted-foreground">
+                    Control which roles can create posts in the Feed.
+                  </p>
+                </div>
+                <Badge variant="muted">Admin</Badge>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-not-allowed opacity-60">
+                  <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
+                  <div>
+                    <span className="font-medium text-sm text-foreground">Admin</span>
+                    <p className="text-xs text-muted-foreground">Admins can always post.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border"
+                    checked={feedPostRoles.includes("active_member")}
+                    onChange={() => toggleFeedRole("active_member")}
+                  />
+                  <div>
+                    <span className="font-medium text-sm text-foreground">Active Members</span>
+                    <p className="text-xs text-muted-foreground">Allow active members to create feed posts.</p>
+                  </div>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-border"
+                    checked={feedPostRoles.includes("alumni")}
+                    onChange={() => toggleFeedRole("alumni")}
+                  />
+                  <div>
+                    <span className="font-medium text-sm text-foreground">Alumni</span>
+                    <p className="text-xs text-muted-foreground">Allow alumni to create feed posts.</p>
+                  </div>
+                </label>
+              </div>
+
+              {feedSuccess && <div className="text-sm text-green-600 dark:text-green-400">{feedSuccess}</div>}
+              {feedError && <div className="text-sm text-red-600 dark:text-red-400">{feedError}</div>}
+
+              <div className="flex justify-end pt-1">
+                <Button onClick={handleFeedRolesSave} isLoading={feedSaving}>
+                  Save permissions
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </div>

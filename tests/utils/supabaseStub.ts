@@ -30,7 +30,10 @@ type TableName =
   | "discussion_threads"
   | "discussion_replies"
   | "job_postings"
-  | "mentor_profiles";
+  | "mentor_profiles"
+  | "feed_posts"
+  | "feed_comments"
+  | "feed_likes";
 
 type Row = Record<string, unknown>;
 
@@ -75,6 +78,9 @@ const uniqueKeys: Record<TableName, string[]> = {
   discussion_replies: [],
   job_postings: [],
   mentor_profiles: [],
+  feed_posts: [],
+  feed_comments: [],
+  feed_likes: ["post_id", "user_id"],
 };
 
 function nowIso() {
@@ -113,6 +119,9 @@ export function createSupabaseStub() {
     discussion_replies: [],
     job_postings: [],
     mentor_profiles: [],
+    feed_posts: [],
+    feed_comments: [],
+    feed_likes: [],
   };
 
   // RPC handler registry

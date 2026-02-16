@@ -54,3 +54,6 @@ export * from "./jobs";
 
 // Mentorship schemas
 export * from "./mentorship";
+
+// Feed schemas
+export * from "./feed";

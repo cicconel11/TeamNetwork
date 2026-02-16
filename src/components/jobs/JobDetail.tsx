@@ -47,7 +47,8 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
         throw new Error(data.error || "Failed to delete job");
       }
 
-      router.push(`/${orgSlug}/jobs`);
+      router.replace(`/${orgSlug}/jobs`);
+      router.refresh();
     } catch (error) {
       alert(error instanceof Error ? error.message : "Failed to delete job");
       setIsDeleting(false);
@@ -59,7 +60,7 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
-        <Button onClick={() => router.back()}>
+        <Button onClick={() => router.push(`/${orgSlug}/jobs`)}>
           ← Back to Jobs
         </Button>
       </div>
