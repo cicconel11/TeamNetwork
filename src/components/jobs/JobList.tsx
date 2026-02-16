@@ -1,10 +1,15 @@
 "use client";
 
-import { Card } from "@/components/ui";
-import { Badge } from "@/components/ui";
-import { Button } from "@/components/ui";
-import { EmptyState } from "@/components/ui";
+import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import Link from "next/link";
+
+const EXPERIENCE_LABELS: Record<string, string> = {
+  entry: "Entry Level",
+  mid: "Mid Level",
+  senior: "Senior",
+  lead: "Lead",
+  executive: "Executive",
+};
 
 type Job = {
   id: string;
@@ -12,6 +17,8 @@ type Job = {
   company: string;
   location: string | null;
   location_type: string | null;
+  industry: string | null;
+  experience_level: string | null;
   created_at: string;
   users?: {
     name: string;
@@ -27,9 +34,10 @@ interface JobListProps {
     total: number;
     totalPages: number;
   };
+  filterParams?: string;
 }
 
-export function JobList({ jobs, orgSlug, pagination }: JobListProps) {
+export function JobList({ jobs, orgSlug, pagination, filterParams }: JobListProps) {
   if (jobs.length === 0) {
     return (
       <EmptyState
@@ -38,6 +46,12 @@ export function JobList({ jobs, orgSlug, pagination }: JobListProps) {
       />
     );
   }
+
+  const buildPageUrl = (page: number) => {
+    const params = new URLSearchParams(filterParams || "");
+    params.set("page", String(page));
+    return `/${orgSlug}/jobs?${params.toString()}`;
+  };
 
   return (
     <div className="space-y-6">
@@ -66,6 +80,12 @@ export function JobList({ jobs, orgSlug, pagination }: JobListProps) {
                           : "Onsite"}
                     </Badge>
                   )}
+                  {job.industry && <Badge variant="muted">{job.industry}</Badge>}
+                  {job.experience_level && EXPERIENCE_LABELS[job.experience_level] && (
+                    <Badge variant="primary">
+                      {EXPERIENCE_LABELS[job.experience_level]}
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="text-xs text-gray-500">
@@ -80,7 +100,7 @@ export function JobList({ jobs, orgSlug, pagination }: JobListProps) {
       {pagination && pagination.totalPages > 1 && (
         <div className="flex justify-center gap-2 pt-4">
           {pagination.page > 1 && (
-            <Link href={`/${orgSlug}/jobs?page=${pagination.page - 1}`}>
+            <Link href={buildPageUrl(pagination.page - 1)}>
               <Button variant="ghost" size="sm">
                 Previous
               </Button>
@@ -90,7 +110,7 @@ export function JobList({ jobs, orgSlug, pagination }: JobListProps) {
             Page {pagination.page} of {pagination.totalPages}
           </span>
           {pagination.page < pagination.totalPages && (
-            <Link href={`/${orgSlug}/jobs?page=${pagination.page + 1}`}>
+            <Link href={buildPageUrl(pagination.page + 1)}>
               <Button variant="ghost" size="sm">
                 Next
               </Button>

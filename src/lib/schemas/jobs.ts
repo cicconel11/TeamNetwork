@@ -10,6 +10,8 @@ export const createJobSchema = z.object({
   description: safeString(10000, 10),
   application_url: optionalHttpsUrlSchema,
   contact_email: optionalEmail,
+  industry: optionalSafeString(200),
+  experience_level: z.enum(["entry", "mid", "senior", "lead", "executive"]).optional(),
 });
 
 export type CreateJobForm = z.infer<typeof createJobSchema>;

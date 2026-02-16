@@ -2036,8 +2036,10 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           description: string
+          experience_level: string | null
           expires_at: string | null
           id: string
+          industry: string | null
           is_active: boolean
           location: string | null
           location_type: string | null
@@ -2053,8 +2055,10 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           description: string
+          experience_level?: string | null
           expires_at?: string | null
           id?: string
+          industry?: string | null
           is_active?: boolean
           location?: string | null
           location_type?: string | null
@@ -2070,8 +2074,10 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           description?: string
+          experience_level?: string | null
           expires_at?: string | null
           id?: string
+          industry?: string | null
           is_active?: boolean
           location?: string | null
           location_type?: string | null
@@ -2742,8 +2748,10 @@ export type Database = {
           enterprise_id: string | null
           enterprise_nav_synced_at: string | null
           enterprise_relationship_type: string | null
+          discussion_post_roles: string[]
           feed_post_roles: string[]
           id: string
+          job_post_roles: string[]
           logo_url: string | null
           name: string
           nav_config: Json | null
@@ -2763,8 +2771,10 @@ export type Database = {
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
+          discussion_post_roles?: string[]
           feed_post_roles?: string[]
           id?: string
+          job_post_roles?: string[]
           logo_url?: string | null
           name: string
           nav_config?: Json | null
@@ -2784,8 +2794,10 @@ export type Database = {
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
+          discussion_post_roles?: string[]
           feed_post_roles?: string[]
           id?: string
+          job_post_roles?: string[]
           logo_url?: string | null
           name?: string
           nav_config?: Json | null

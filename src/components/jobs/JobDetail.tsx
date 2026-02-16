@@ -4,12 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, Badge } from "@/components/ui";
 
+const EXPERIENCE_LABELS: Record<string, string> = {
+  entry: "Entry Level",
+  mid: "Mid Level",
+  senior: "Senior",
+  lead: "Lead",
+  executive: "Executive",
+};
+
 type Job = {
   id: string;
   title: string;
   company: string;
   location: string | null;
   location_type: string | null;
+  industry: string | null;
+  experience_level: string | null;
   description: string;
   application_url: string | null;
   contact_email: string | null;
@@ -104,6 +114,14 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
                     : job.location_type === "hybrid"
                     ? "Hybrid"
                     : "Onsite"}
+                </Badge>
+              )}
+              {job.industry && (
+                <Badge variant="muted">{job.industry}</Badge>
+              )}
+              {job.experience_level && EXPERIENCE_LABELS[job.experience_level] && (
+                <Badge variant="primary">
+                  {EXPERIENCE_LABELS[job.experience_level]}
                 </Badge>
               )}
               {isExpired && (

@@ -24,6 +24,8 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
     description: initialData?.description || "",
     application_url: initialData?.application_url || "",
     contact_email: initialData?.contact_email || "",
+    industry: initialData?.industry || "",
+    experience_level: initialData?.experience_level || undefined,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,7 +82,9 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
   const handleChange = (field: keyof CreateJobForm, value: string) => {
     setFormData((prev) => ({
       ...prev,
-      [field]: field === "location_type" && value === "" ? undefined : value,
+      [field]: (field === "location_type" || field === "experience_level") && value === ""
+        ? undefined
+        : value,
     }));
     if (errors[field]) {
       setErrors((prev) => ({
@@ -117,6 +121,41 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
             placeholder="e.g., Acme Corp"
             error={errors.company}
           />
+        </div>
+
+        <div>
+          <label htmlFor="industry" className="block text-sm font-medium mb-2">
+            Industry
+          </label>
+          <Input
+            id="industry"
+            value={formData.industry || ""}
+            onChange={(e) => handleChange("industry", e.target.value)}
+            placeholder="e.g., Technology, Finance, Healthcare"
+            error={errors.industry}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="experience_level" className="block text-sm font-medium mb-2">
+            Experience Level
+          </label>
+          <Select
+            id="experience_level"
+            value={formData.experience_level || ""}
+            onChange={(e) => handleChange("experience_level", e.target.value)}
+            options={[
+              { label: "Select...", value: "" },
+              { label: "Entry Level", value: "entry" },
+              { label: "Mid Level", value: "mid" },
+              { label: "Senior", value: "senior" },
+              { label: "Lead", value: "lead" },
+              { label: "Executive", value: "executive" },
+            ]}
+          />
+          {errors.experience_level && (
+            <p className="text-sm text-red-600 mt-1">{errors.experience_level}</p>
+          )}
         </div>
 
         <div>
