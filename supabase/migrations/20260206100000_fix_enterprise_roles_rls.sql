@@ -11,11 +11,12 @@ RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
+SET search_path = public, pg_catalog
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_enterprise_roles
     WHERE enterprise_id = ent_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
       AND role = 'owner'
   );
 $$;

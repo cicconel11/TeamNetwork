@@ -45,45 +45,45 @@ RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
-SET search_path = ''
+SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_organization_roles
     WHERE organization_id = org_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
       AND status = 'active'
   );
 $$;
 
--- Fix is_org_admin - add SET search_path = ''
+-- Fix is_org_admin - add SET search_path, use initplan
 CREATE OR REPLACE FUNCTION public.is_org_admin(org_id uuid)
 RETURNS boolean
 LANGUAGE sql
 SECURITY DEFINER
 STABLE
-SET search_path = ''
+SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_organization_roles
     WHERE organization_id = org_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
       AND status = 'active'
       AND role = 'admin'
   );
 $$;
 
--- Fix has_active_role - add SET search_path = ''
+-- Fix has_active_role - add SET search_path, use initplan
 CREATE OR REPLACE FUNCTION public.has_active_role(org uuid, allowed_roles text[])
 RETURNS boolean
 LANGUAGE sql
 STABLE
-SET search_path = ''
+SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
     FROM public.user_organization_roles uor
     WHERE uor.organization_id = org
-      AND uor.user_id = auth.uid()
+      AND uor.user_id = (select auth.uid())
       AND uor.status = 'active'
       AND uor.role = ANY(allowed_roles)
   );
@@ -627,32 +627,34 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 AS $$
   SELECT COALESCE(
     (SELECT TRUE
      FROM public.chat_group_members cgm
      WHERE cgm.chat_group_id = group_id
-       AND cgm.user_id = auth.uid()
+       AND cgm.user_id = (select auth.uid())
+       AND cgm.removed_at IS NULL
      LIMIT 1),
     FALSE
   );
 $$;
 
--- Fix is_chat_group_moderator - change from 'public' to ''
+-- Fix is_chat_group_moderator - use initplan pattern
 CREATE OR REPLACE FUNCTION public.is_chat_group_moderator(group_id uuid)
 RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 AS $$
   SELECT COALESCE(
     (SELECT TRUE
      FROM public.chat_group_members cgm
      WHERE cgm.chat_group_id = group_id
-       AND cgm.user_id = auth.uid()
+       AND cgm.user_id = (select auth.uid())
        AND cgm.role IN ('admin', 'moderator')
+       AND cgm.removed_at IS NULL
      LIMIT 1),
     FALSE
   );

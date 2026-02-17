@@ -31,7 +31,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_enterprise_roles
     WHERE enterprise_id = ent_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
   );
 $$;
 
@@ -46,7 +46,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_enterprise_roles
     WHERE enterprise_id = ent_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
       AND role IN ('owner', 'billing_admin', 'org_admin')
   );
 $$;
@@ -62,7 +62,7 @@ AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.user_enterprise_roles
     WHERE enterprise_id = ent_id
-      AND user_id = auth.uid()
+      AND user_id = (select auth.uid())
       AND role = 'owner'
   );
 $$;
