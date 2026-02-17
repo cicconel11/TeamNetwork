@@ -94,7 +94,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
               </thead>
               <tbody>
                 {typedSubmissions.map((submission) => {
-                  const responses = (submission.data || {}) as Record<string, unknown>;
+                  const responses = (submission.responses || {}) as Record<string, unknown>;
                   return (
                     <tr key={submission.id} className="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer">
                       <td className="p-3 text-foreground">

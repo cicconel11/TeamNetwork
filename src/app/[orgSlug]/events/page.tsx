@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
@@ -6,6 +7,7 @@ import { isOrgAdmin } from "@/lib/auth";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { EventsViewTracker } from "@/components/analytics/EventsViewTracker";
+import { GoogleCalendarBanner } from "@/components/events";
 
 interface EventsPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -117,6 +119,14 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
         ))}
       </div>
 
+      <Suspense fallback={null}>
+        <GoogleCalendarBanner
+          orgId={org.id}
+          orgSlug={orgSlug}
+          orgName={org.name}
+        />
+      </Suspense>
+
       {/* Events List */}
       {events && events.length > 0 ? (
         <div className="space-y-4 stagger-children">
@@ -142,6 +152,13 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
                         <Badge variant="muted" className="capitalize">{event.event_type}</Badge>
                         {event.is_philanthropy && (
                           <Badge variant="success">Philanthropy</Badge>
+                        )}
+                        {event.recurrence_group_id && (
+                          <span className="text-muted-foreground" title="Recurring event">
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </span>
                         )}
                       </div>
                     </div>

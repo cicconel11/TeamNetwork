@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { detectConnector } from "@/lib/schedule-connectors/registry";
 import { maskUrl, normalizeUrl } from "@/lib/schedule-connectors/fetch";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { checkHostStatus } from "@/lib/schedule-security/allowlist";
 import { verifyAndEnroll } from "@/lib/schedule-security/verifyAndEnroll";
-import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { scheduleConnectSchema } from "@/lib/schemas";
@@ -115,6 +113,7 @@ export async function POST(request: Request) {
       }
     }
 
+    const { detectConnector } = await import("@/lib/schedule-connectors/registry");
     let connectorResult;
     try {
       connectorResult = await detectConnector(normalizedUrl, { orgId: body.orgId });
@@ -153,6 +152,7 @@ export async function POST(request: Request) {
       );
     }
 
+    const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
     const serviceClient = createServiceClient();
     const window = buildSyncWindow();
     const result = await syncScheduleSource(serviceClient, { source, window });

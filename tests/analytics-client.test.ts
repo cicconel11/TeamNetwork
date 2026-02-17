@@ -18,7 +18,7 @@ const VALID_FEATURES = [
   "dashboard", "members", "chat", "alumni", "mentorship",
   "workouts", "competition", "events", "announcements",
   "philanthropy", "donations", "expenses", "records",
-  "schedules", "forms", "customization", "settings",
+  "calendar", "forms", "customization", "settings",
   "navigation", "other",
 ] as const;
 
@@ -88,8 +88,8 @@ describe("Analytics Client - Feature Extraction", () => {
       assert.strictEqual(extractFeature("/org/forms/abc-123"), "forms");
     });
 
-    it("extracts 'schedules' from /org-slug/schedules", () => {
-      assert.strictEqual(extractFeature("/team/schedules"), "schedules");
+    it("extracts 'calendar' from /org-slug/calendar", () => {
+      assert.strictEqual(extractFeature("/team/calendar"), "calendar");
     });
 
     it("extracts 'donations' from /org-slug/donations", () => {

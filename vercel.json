@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/analytics-rate-limit-cleanup",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/calendar-sync",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/schedules-sync",
+      "schedule": "0 0 * * *"
     }
   ]
 }

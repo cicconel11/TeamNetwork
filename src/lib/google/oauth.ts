@@ -338,16 +338,21 @@ export async function getCalendarConnection(
         return null;
     }
 
-    return {
-        id: data.id,
-        googleEmail: data.google_email,
-        accessToken: decryptToken(data.access_token_encrypted),
-        refreshToken: decryptToken(data.refresh_token_encrypted),
-        expiresAt: new Date(data.token_expires_at),
-        status: data.status,
-        targetCalendarId: data.target_calendar_id,
-        lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
-    };
+    try {
+        return {
+            id: data.id,
+            googleEmail: data.google_email,
+            accessToken: decryptToken(data.access_token_encrypted),
+            refreshToken: decryptToken(data.refresh_token_encrypted),
+            expiresAt: new Date(data.token_expires_at),
+            status: data.status as "connected" | "disconnected" | "error",
+            targetCalendarId: data.target_calendar_id,
+            lastSyncAt: data.last_sync_at ? new Date(data.last_sync_at) : null,
+        };
+    } catch (decryptError) {
+        console.error("[google-oauth] Failed to decrypt tokens for user:", userId, decryptError);
+        return null;
+    }
 }
 
 /**
@@ -495,6 +500,14 @@ export async function disconnectCalendar(
         .from("event_calendar_entries")
         .delete()
         .eq("user_id", userId);
+
+    // Clean up personal Google Calendar feeds for this user (cascades to calendar_events)
+    await supabase
+        .from("calendar_feeds")
+        .delete()
+        .eq("connected_user_id", userId)
+        .eq("provider", "google")
+        .eq("scope", "personal");
 
     return { success: true };
 }

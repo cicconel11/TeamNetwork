@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { safeUrl } from "./common";
 
-// Calendar feed creation schema
+// Calendar feed creation schema (ICS feeds)
 export const calendarFeedCreateSchema = z
   .object({
     feedUrl: safeUrl(2048),
@@ -15,6 +15,20 @@ export const calendarFeedCreateSchema = z
   })
   .strict();
 export type CalendarFeedCreateRequest = z.infer<typeof calendarFeedCreateSchema>;
+
+// Google Calendar feed creation schema
+export const googleCalendarFeedCreateSchema = z
+  .object({
+    provider: z.literal("google"),
+    googleCalendarId: z
+      .string()
+      .trim()
+      .min(1, "Google Calendar ID is required")
+      .max(500, "Google Calendar ID is too long"),
+    organizationId: z.string().uuid({ message: "Invalid organization ID" }),
+  })
+  .strict();
+export type GoogleCalendarFeedCreateRequest = z.infer<typeof googleCalendarFeedCreateSchema>;
 
 // Calendar preferences update schema
 export const calendarPreferencesUpdateSchema = z

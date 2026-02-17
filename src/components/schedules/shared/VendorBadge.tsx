@@ -15,6 +15,8 @@ export function vendorLabel(vendor: VendorType): string {
       return "Sidearm";
     case "generic_html":
       return "HTML";
+    case "google_calendar":
+      return "Google Calendar";
     default:
       return "Schedule";
   }

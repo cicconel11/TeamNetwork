@@ -444,6 +444,7 @@ export async function POST(req: Request) {
     return status;
   };
 
+
   /**
    * Handle enterprise subscription lifecycle updates.
    * Returns the enterprise subscription ID if found and updated, null otherwise.
@@ -794,6 +795,7 @@ export async function POST(req: Request) {
           ? new Date(periodEnd * 1000).toISOString()
           : null;
         const status = normalizeSubscriptionStatus(subscription, event.type);
+
 
         // Check if this is an enterprise subscription first
         const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);

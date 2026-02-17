@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -234,13 +233,6 @@ export async function PUT(request: Request) {
                 403
             );
         }
-
-        // Block mutations if org is in grace period (read-only mode)
-        const { isReadOnly } = await checkOrgReadOnly(organizationId);
-        if (isReadOnly) {
-            return respond(readOnlyResponse(), 403);
-        }
-
         // Use service client for upsert (may need to bypass RLS for insert)
         const serviceClient = createServiceClient();
 

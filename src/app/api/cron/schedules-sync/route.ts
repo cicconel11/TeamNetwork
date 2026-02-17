@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncScheduleSource } from "@/lib/schedule-connectors/sync-source";
 import { debugLog } from "@/lib/debug";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 
@@ -18,9 +17,10 @@ export async function GET(request: Request) {
 
   const { data: sources, error } = await supabase
     .from("schedule_sources")
-    .select("id, org_id, vendor_id, source_url, last_synced_at, status")
+    .select("id, org_id, vendor_id, source_url, last_synced_at, status, connected_user_id")
     .eq("status", "active")
     .or(`last_synced_at.is.null,last_synced_at.lt.${cutoff}`);
+  const typedSources = (sources ?? []) as { id: string; org_id: string; vendor_id: string; source_url: string; last_synced_at: string | null; status: string; connected_user_id: string | null }[];
 
   if (error) {
     console.error("[schedule-cron] Failed to load sources:", error);
@@ -30,11 +30,12 @@ export async function GET(request: Request) {
     );
   }
 
+  const { syncScheduleSource } = await import("@/lib/schedule-connectors/sync-source");
   const window = buildSyncWindow();
   const results: { id: string; vendor: string; status: string; error?: string }[] = [];
 
-  for (let i = 0; i < (sources || []).length; i += MAX_CONCURRENCY) {
-    const batch = (sources || []).slice(i, i + MAX_CONCURRENCY);
+  for (let i = 0; i < typedSources.length; i += MAX_CONCURRENCY) {
+    const batch = typedSources.slice(i, i + MAX_CONCURRENCY);
     const batchResults = await Promise.all(
       batch.map(async (source) => {
         const result = await syncScheduleSource(supabase, { source, window });
@@ -62,14 +63,14 @@ export async function GET(request: Request) {
   const successCount = results.filter((r) => r.status === "ok").length;
   const errorCount = results.filter((r) => r.status === "error").length;
   debugLog("schedule-cron", "batch complete", {
-    totalSources: (sources || []).length,
+    totalSources: typedSources.length,
     successCount,
     errorCount,
     errors: results.filter((r) => r.error).map((r) => ({ id: r.id, error: r.error })),
   });
 
   return NextResponse.json({
-    processed: (sources || []).length,
+    processed: typedSources.length,
     results,
   });
 }

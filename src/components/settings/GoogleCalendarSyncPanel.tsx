@@ -39,7 +39,7 @@ interface GoogleCalendarSyncPanelProps {
   reconnectRequired: boolean;
   onConnect: () => void;
   onDisconnect: () => Promise<void>;
-  onSync: () => Promise<void>;
+  onSync: () => Promise<{ message: string; syncedCount?: number; failedCount?: number }>;
   onReconnect: () => void;
   onTargetCalendarChange: (calendarId: string) => Promise<void>;
   onPreferenceChange: (prefs: SyncPreferences) => Promise<void>;
@@ -149,6 +149,20 @@ export function GoogleCalendarSyncPanel({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  // Auto-dismiss feedback after 5 seconds
+  useEffect(() => {
+    if (!actionNotice) return;
+    const timer = setTimeout(() => setActionNotice(null), 5000);
+    return () => clearTimeout(timer);
+  }, [actionNotice]);
+
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(null), 5000);
+    return () => clearTimeout(timer);
+  }, [actionError]);
   const [targetError, setTargetError] = useState<string | null>(null);
 
   // Preferences local state for optimistic updates
@@ -164,6 +178,7 @@ export function GoogleCalendarSyncPanel({
     if (!confirm("Disconnect your Google Calendar? Events already synced will remain.")) return;
     setIsDisconnecting(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await onDisconnect();
     } catch (err) {
@@ -176,8 +191,10 @@ export function GoogleCalendarSyncPanel({
   const handleSync = async () => {
     setIsSyncing(true);
     setActionError(null);
+    setActionNotice(null);
     try {
-      await onSync();
+      const result = await onSync();
+      setActionNotice(result.message);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Failed to sync");
     } finally {
@@ -321,9 +338,6 @@ export function GoogleCalendarSyncPanel({
           </div>
         )}
 
-        {actionError && (
-          <div className="text-sm text-red-600 dark:text-red-400">{actionError}</div>
-        )}
       </div>
 
       {/* Section 2: Target calendar picker OR reconnect prompt */}
@@ -423,7 +437,18 @@ export function GoogleCalendarSyncPanel({
       </div>
 
       {/* Section 4: Actions footer */}
-      <div className="p-5 flex items-center justify-between">
+      <div className="p-5 space-y-3">
+        {actionNotice && (
+          <div className="rounded-md bg-green-50 dark:bg-green-900/20 px-3 py-2 text-sm text-green-700 dark:text-green-300">
+            {actionNotice}
+          </div>
+        )}
+        {actionError && (
+          <div className="rounded-md bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+            {actionError}
+          </div>
+        )}
+        <div className="flex items-center justify-between">
         <Button
           variant="secondary"
           size="sm"
@@ -441,6 +466,7 @@ export function GoogleCalendarSyncPanel({
         >
           {isDisconnecting ? "Disconnecting..." : "Disconnect"}
         </button>
+        </div>
       </div>
     </Card>
   );

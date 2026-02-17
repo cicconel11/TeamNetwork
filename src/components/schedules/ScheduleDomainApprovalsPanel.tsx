@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, EmptyState } from "@/components/ui";
+import { Badge, Button, Card } from "@/components/ui";
 
 type PendingDomain = {
   id: string;
@@ -129,57 +129,49 @@ export function ScheduleDomainApprovalsPanel({ orgId, isAdmin }: ScheduleDomainA
   const domainCount = useMemo(() => domains.length, [domains]);
 
   if (!isAdmin) return null;
+  if (loading || domainCount === 0) return null;
 
   return (
     <section id="schedule-domain-approvals">
       <h2 className="text-lg font-semibold text-foreground mb-4">Schedule Domain Approvals</h2>
       <Card className="p-4">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading pending domains...</p>
-        ) : domainCount === 0 ? (
-          <EmptyState
-            title="No pending domains"
-            description="New schedule sources will appear here when they need approval."
-          />
-        ) : (
-          <div className="space-y-3">
-            {domains.map((domain) => (
-              <div
-                key={domain.id}
-                className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-foreground">{domain.hostname}</p>
-                    <Badge variant="warning">Pending</Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">Vendor: {vendorLabel(domain.vendor_id)}</p>
-                  {domain.created_at && (
-                    <p className="text-xs text-muted-foreground">Requested: {formatDateTime(domain.created_at)}</p>
-                  )}
-                </div>
+        <div className="space-y-3">
+          {domains.map((domain) => (
+            <div
+              key={domain.id}
+              className="flex flex-col gap-3 border border-border/60 rounded-xl p-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    isLoading={actionId === domain.id}
-                    onClick={() => handleAction(domain.id, "approve")}
-                  >
-                    Approve
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    isLoading={actionId === domain.id}
-                    onClick={() => handleAction(domain.id, "block")}
-                  >
-                    Block
-                  </Button>
+                  <p className="font-medium text-foreground">{domain.hostname}</p>
+                  <Badge variant="warning">Pending</Badge>
                 </div>
+                <p className="text-sm text-muted-foreground">Vendor: {vendorLabel(domain.vendor_id)}</p>
+                {domain.created_at && (
+                  <p className="text-xs text-muted-foreground">Requested: {formatDateTime(domain.created_at)}</p>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  isLoading={actionId === domain.id}
+                  onClick={() => handleAction(domain.id, "approve")}
+                >
+                  Approve
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  isLoading={actionId === domain.id}
+                  onClick={() => handleAction(domain.id, "block")}
+                >
+                  Block
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
         {notice && <p className="mt-3 text-sm text-foreground">{notice}</p>}
         {error && <p className="mt-3 text-sm text-error">{error}</p>}
       </Card>
