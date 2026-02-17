@@ -56,12 +56,14 @@ export async function POST() {
       enterpriseId = enterprise.id;
 
       // Create subscription
-      await serviceSupabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (serviceSupabase as any)
         .from("enterprise_subscriptions")
         .insert({
           enterprise_id: enterpriseId,
           billing_interval: "year",
-          alumni_tier: "tier_1",
+          alumni_bucket_quantity: 1,
+          sub_org_quantity: 3,
           status: "active",
         });
     }

@@ -56,9 +56,8 @@ interface EnterpriseResponse {
   created_at: string | null;
   subscription: {
     status: string;
-    pricing_model: string;
+    alumni_bucket_quantity: number;
     sub_org_quantity: number | null;
-    alumni_tier: string | null;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
   } | null;
@@ -169,7 +168,7 @@ export async function GET(req: Request) {
       (serviceClient as any)
         .from("enterprise_subscriptions")
         .select(
-          "enterprise_id, status, pricing_model, sub_org_quantity, alumni_tier, stripe_customer_id, stripe_subscription_id"
+          "enterprise_id, status, alumni_bucket_quantity, sub_org_quantity, stripe_customer_id, stripe_subscription_id"
         )
         .in("enterprise_id", enterpriseIds) as Promise<{
         data: (EnterpriseSubscription & { enterprise_id: string })[] | null;
@@ -293,9 +292,8 @@ export async function GET(req: Request) {
         subscription: sub
           ? {
               status: sub.status,
-              pricing_model: sub.pricing_model,
+              alumni_bucket_quantity: sub.alumni_bucket_quantity,
               sub_org_quantity: sub.sub_org_quantity,
-              alumni_tier: sub.alumni_tier,
               stripe_customer_id: sub.stripe_customer_id,
               stripe_subscription_id: sub.stripe_subscription_id,
             }

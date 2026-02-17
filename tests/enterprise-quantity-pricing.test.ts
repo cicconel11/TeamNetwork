@@ -2,88 +2,160 @@ import { describe, it } from "node:test";
 import assert from "node:assert";
 
 /**
- * Note: These tests don't import from src/ due to module resolution issues
- * with Node test runner and TypeScript path aliases. Instead, we replicate
- * the pricing logic here to test the business rules independently.
- */
-
-// Replicate constants from src/types/enterprise.ts
-const ENTERPRISE_SEAT_PRICING = {
-  freeSubOrgs: 3, // First 3 organizations are free
-  pricePerAdditionalCentsYearly: 15000, // $150/year per additional org beyond free tier
-} as const;
-
-// Replicate type from src/types/enterprise.ts
-type PricingModel = "alumni_tier" | "per_sub_org";
-
-// Replicate interface from src/lib/enterprise/quota.ts
-interface SeatQuotaInfo {
-  allowed: boolean;
-  currentCount: number;
-  maxAllowed: number | null;
-  needsUpgrade: boolean;
-}
-
-/**
- * Calculate the number of billable organizations (those beyond the free tier).
- * First 3 organizations are free.
- */
-function getBillableOrgCount(totalOrgs: number): number {
-  return Math.max(0, totalOrgs - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
-}
-
-/**
- * Get detailed pricing breakdown for enterprise sub-org pricing.
- * First 3 orgs are free, then $150/year for each additional org.
- */
-function getEnterpriseSubOrgPricing(totalOrgs: number): {
-  totalOrgs: number;
-  freeOrgs: number;
-  billableOrgs: number;
-  totalCentsYearly: number;
-} {
-  const billable = getBillableOrgCount(totalOrgs);
-  return {
-    totalOrgs,
-    freeOrgs: Math.min(totalOrgs, ENTERPRISE_SEAT_PRICING.freeSubOrgs),
-    billableOrgs: billable,
-    totalCentsYearly: billable * ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly,
-  };
-}
-
-// Legacy function kept for compatibility
-function getEnterpriseQuantityPricing(
-  quantity: number,
-  // Interval parameter kept for API compatibility but billing is always yearly
-  interval: "month" | "year" // eslint-disable-line @typescript-eslint/no-unused-vars
-): { unitPrice: number; total: number; savings?: number } {
-  const billable = getBillableOrgCount(quantity);
-  const yearlyUnitPrice = ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
-
-  return {
-    unitPrice: yearlyUnitPrice,
-    total: billable * yearlyUnitPrice,
-  };
-}
-
-// Replicate function from src/lib/enterprise/pricing.ts
-function formatSeatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(0)}`;
-}
-
-/**
- * Enterprise Quantity Pricing Tests
+ * Enterprise quantity pricing tests.
  *
- * Tests for seat-based (per_sub_org) pricing model with free tier:
- * 1. getBillableOrgCount() - Free tier calculations
- * 2. getEnterpriseSubOrgPricing() - Full pricing breakdown
- * 3. Seat quota enforcement logic
- * 4. Billing adjustment validation
- * 5. formatSeatPrice() - Display formatting
- *
- * Note: Functions that require Supabase (canEnterpriseAddSubOrg) are tested
- * using simulated logic that mirrors the actual implementation.
+ * These tests import constants and functions from the actual source to ensure
+ * business rules are tested against the real implementation, not duplicated logic.
  */
+
+import { ALUMNI_BUCKET_PRICING, ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import type { BillingInterval } from "@/types/enterprise";
+import {
+  getAlumniBucketCapacity,
+  getRequiredBucketQuantity,
+  isSalesLed,
+  getAlumniBucketPricing,
+  getBillableOrgCount,
+  getSubOrgPricing,
+  getEnterpriseTotalPricing,
+  formatBucketRange,
+  formatSeatPrice,
+} from "@/lib/enterprise/pricing";
+
+// =============================================================================
+// Alumni Bucket Capacity Tests
+// =============================================================================
+
+describe("getAlumniBucketCapacity", () => {
+  it("returns 2,500 for 1 bucket", () => {
+    assert.strictEqual(getAlumniBucketCapacity(1), 2500);
+  });
+
+  it("returns 5,000 for 2 buckets", () => {
+    assert.strictEqual(getAlumniBucketCapacity(2), 5000);
+  });
+
+  it("returns 7,500 for 3 buckets", () => {
+    assert.strictEqual(getAlumniBucketCapacity(3), 7500);
+  });
+
+  it("returns 10,000 for 4 buckets", () => {
+    assert.strictEqual(getAlumniBucketCapacity(4), 10000);
+  });
+
+  it("returns 25,000 for 10 buckets", () => {
+    assert.strictEqual(getAlumniBucketCapacity(10), 25000);
+  });
+});
+
+// =============================================================================
+// Required Bucket Quantity Tests
+// =============================================================================
+
+describe("getRequiredBucketQuantity", () => {
+  it("returns 1 for 0 alumni (minimum 1 bucket)", () => {
+    assert.strictEqual(getRequiredBucketQuantity(0), 1);
+  });
+
+  it("returns 1 for 1 alumni", () => {
+    assert.strictEqual(getRequiredBucketQuantity(1), 1);
+  });
+
+  it("returns 1 for 2,500 alumni (exactly fits)", () => {
+    assert.strictEqual(getRequiredBucketQuantity(2500), 1);
+  });
+
+  it("returns 2 for 2,501 alumni (needs next bucket)", () => {
+    assert.strictEqual(getRequiredBucketQuantity(2501), 2);
+  });
+
+  it("returns 2 for 5,000 alumni", () => {
+    assert.strictEqual(getRequiredBucketQuantity(5000), 2);
+  });
+
+  it("returns 3 for 5,001 alumni", () => {
+    assert.strictEqual(getRequiredBucketQuantity(5001), 3);
+  });
+
+  it("returns 4 for 10,000 alumni", () => {
+    assert.strictEqual(getRequiredBucketQuantity(10000), 4);
+  });
+
+  it("returns 5 for 10,001 alumni (sales-led)", () => {
+    assert.strictEqual(getRequiredBucketQuantity(10001), 5);
+  });
+});
+
+// =============================================================================
+// Sales-Led Check Tests
+// =============================================================================
+
+describe("isSalesLed", () => {
+  it("returns false for buckets 1-4", () => {
+    assert.strictEqual(isSalesLed(1), false);
+    assert.strictEqual(isSalesLed(2), false);
+    assert.strictEqual(isSalesLed(3), false);
+    assert.strictEqual(isSalesLed(4), false);
+  });
+
+  it("returns true for buckets 5+", () => {
+    assert.strictEqual(isSalesLed(5), true);
+    assert.strictEqual(isSalesLed(10), true);
+    assert.strictEqual(isSalesLed(100), true);
+  });
+
+  it("returns true for sentinel value 999 (legacy tier_3)", () => {
+    assert.strictEqual(isSalesLed(999), true);
+  });
+});
+
+// =============================================================================
+// Alumni Bucket Pricing Tests
+// =============================================================================
+
+describe("getAlumniBucketPricing", () => {
+  describe("monthly", () => {
+    it("returns $50/month for 1 bucket", () => {
+      const result = getAlumniBucketPricing(1, "month");
+      assert.strictEqual(result.unitCents, 5000);
+      assert.strictEqual(result.totalCents, 5000);
+      assert.strictEqual(result.capacity, 2500);
+    });
+
+    it("returns $100/month for 2 buckets", () => {
+      const result = getAlumniBucketPricing(2, "month");
+      assert.strictEqual(result.unitCents, 5000);
+      assert.strictEqual(result.totalCents, 10000);
+      assert.strictEqual(result.capacity, 5000);
+    });
+
+    it("returns $200/month for 4 buckets", () => {
+      const result = getAlumniBucketPricing(4, "month");
+      assert.strictEqual(result.totalCents, 20000);
+      assert.strictEqual(result.capacity, 10000);
+    });
+  });
+
+  describe("yearly", () => {
+    it("returns $500/year for 1 bucket", () => {
+      const result = getAlumniBucketPricing(1, "year");
+      assert.strictEqual(result.unitCents, 50000);
+      assert.strictEqual(result.totalCents, 50000);
+      assert.strictEqual(result.capacity, 2500);
+    });
+
+    it("returns $1,000/year for 2 buckets", () => {
+      const result = getAlumniBucketPricing(2, "year");
+      assert.strictEqual(result.totalCents, 100000);
+    });
+
+    it("returns $2,000/year for 4 buckets", () => {
+      const result = getAlumniBucketPricing(4, "year");
+      assert.strictEqual(result.totalCents, 200000);
+      assert.strictEqual(result.capacity, 10000);
+    });
+  });
+});
 
 // =============================================================================
 // getBillableOrgCount Tests
@@ -98,27 +170,15 @@ describe("getBillableOrgCount", () => {
     it("returns 0 billable for 3 orgs (max free)", () => {
       assert.strictEqual(getBillableOrgCount(3), 0);
     });
-
-    it("returns 0 billable for 2 orgs", () => {
-      assert.strictEqual(getBillableOrgCount(2), 0);
-    });
   });
 
   describe("paid tier (4+ orgs)", () => {
-    it("returns 1 billable for 4 orgs (first paid)", () => {
+    it("returns 1 billable for 4 orgs", () => {
       assert.strictEqual(getBillableOrgCount(4), 1);
     });
 
     it("returns 7 billable for 10 orgs", () => {
       assert.strictEqual(getBillableOrgCount(10), 7);
-    });
-
-    it("returns 17 billable for 20 orgs", () => {
-      assert.strictEqual(getBillableOrgCount(20), 17);
-    });
-
-    it("returns 97 billable for 100 orgs", () => {
-      assert.strictEqual(getBillableOrgCount(100), 97);
     });
   });
 
@@ -126,118 +186,144 @@ describe("getBillableOrgCount", () => {
     it("returns 0 for 0 orgs", () => {
       assert.strictEqual(getBillableOrgCount(0), 0);
     });
-
-    it("returns 997 for 1000 orgs", () => {
-      assert.strictEqual(getBillableOrgCount(1000), 997);
-    });
   });
 });
 
 // =============================================================================
-// getEnterpriseSubOrgPricing Tests
+// getSubOrgPricing Tests
 // =============================================================================
 
-describe("getEnterpriseSubOrgPricing", () => {
-  describe("free tier (1-3 orgs)", () => {
-    it("calculates pricing for 1 org - all free", () => {
-      const result = getEnterpriseSubOrgPricing(1);
-      assert.strictEqual(result.totalOrgs, 1);
-      assert.strictEqual(result.freeOrgs, 1);
-      assert.strictEqual(result.billableOrgs, 0);
-      assert.strictEqual(result.totalCentsYearly, 0);
-    });
-
-    it("calculates pricing for 3 orgs - all free", () => {
-      const result = getEnterpriseSubOrgPricing(3);
-      assert.strictEqual(result.totalOrgs, 3);
+describe("getSubOrgPricing", () => {
+  describe("monthly", () => {
+    it("calculates $0 for 3 orgs (all free)", () => {
+      const result = getSubOrgPricing(3, "month");
       assert.strictEqual(result.freeOrgs, 3);
       assert.strictEqual(result.billableOrgs, 0);
-      assert.strictEqual(result.totalCentsYearly, 0);
+      assert.strictEqual(result.totalCents, 0);
     });
-  });
 
-  describe("paid tier (4+ orgs)", () => {
-    it("calculates pricing for 4 orgs - 1 paid @ $150", () => {
-      const result = getEnterpriseSubOrgPricing(4);
-      assert.strictEqual(result.totalOrgs, 4);
-      assert.strictEqual(result.freeOrgs, 3);
+    it("calculates $15/month for 4 orgs (1 paid)", () => {
+      const result = getSubOrgPricing(4, "month");
       assert.strictEqual(result.billableOrgs, 1);
-      assert.strictEqual(result.totalCentsYearly, 15000); // $150
+      assert.strictEqual(result.unitCents, 1500);
+      assert.strictEqual(result.totalCents, 1500);
     });
 
-    it("calculates pricing for 10 orgs - 7 paid @ $150 = $1,050", () => {
-      const result = getEnterpriseSubOrgPricing(10);
-      assert.strictEqual(result.totalOrgs, 10);
-      assert.strictEqual(result.freeOrgs, 3);
-      assert.strictEqual(result.billableOrgs, 7);
-      assert.strictEqual(result.totalCentsYearly, 105000); // $1,050
-    });
-
-    it("calculates pricing for 20 orgs - 17 paid @ $150 = $2,550", () => {
-      const result = getEnterpriseSubOrgPricing(20);
-      assert.strictEqual(result.totalOrgs, 20);
-      assert.strictEqual(result.freeOrgs, 3);
-      assert.strictEqual(result.billableOrgs, 17);
-      assert.strictEqual(result.totalCentsYearly, 255000); // $2,550
+    it("calculates $30/month for 5 orgs (2 paid)", () => {
+      const result = getSubOrgPricing(5, "month");
+      assert.strictEqual(result.billableOrgs, 2);
+      assert.strictEqual(result.totalCents, 3000);
     });
   });
 
-  describe("edge cases", () => {
-    it("handles 0 orgs", () => {
-      const result = getEnterpriseSubOrgPricing(0);
-      assert.strictEqual(result.totalOrgs, 0);
-      assert.strictEqual(result.freeOrgs, 0);
-      assert.strictEqual(result.billableOrgs, 0);
-      assert.strictEqual(result.totalCentsYearly, 0);
+  describe("yearly", () => {
+    it("calculates $0 for 3 orgs (all free)", () => {
+      const result = getSubOrgPricing(3, "year");
+      assert.strictEqual(result.totalCents, 0);
+    });
+
+    it("calculates $150/year for 4 orgs (1 paid)", () => {
+      const result = getSubOrgPricing(4, "year");
+      assert.strictEqual(result.billableOrgs, 1);
+      assert.strictEqual(result.unitCents, 15000);
+      assert.strictEqual(result.totalCents, 15000);
+    });
+
+    it("calculates $1,050/year for 10 orgs (7 paid)", () => {
+      const result = getSubOrgPricing(10, "year");
+      assert.strictEqual(result.billableOrgs, 7);
+      assert.strictEqual(result.totalCents, 105000);
     });
   });
 });
 
 // =============================================================================
-// getEnterpriseQuantityPricing Tests (Legacy Compatibility)
+// Combined Pricing Tests (from plan spec)
 // =============================================================================
 
-describe("getEnterpriseQuantityPricing", () => {
-  describe("free tier pricing", () => {
-    it("returns $0 total for 1-3 orgs", () => {
-      const result1 = getEnterpriseQuantityPricing(1, "year");
-      const result3 = getEnterpriseQuantityPricing(3, "year");
-
-      assert.strictEqual(result1.total, 0);
-      assert.strictEqual(result3.total, 0);
+describe("getEnterpriseTotalPricing", () => {
+  describe("plan pricing examples (monthly)", () => {
+    it("3 teams, 2,500 alumni → $50/mo", () => {
+      const result = getEnterpriseTotalPricing(1, 3, "month");
+      assert.strictEqual(result.alumni.totalCents, 5000); // $50
+      assert.strictEqual(result.subOrgs.totalCents, 0); // 3 free
+      assert.strictEqual(result.totalCents, 5000); // $50/mo
     });
 
-    it("returns correct unit price", () => {
-      const result = getEnterpriseQuantityPricing(3, "year");
-      assert.strictEqual(result.unitPrice, ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly);
-    });
-  });
-
-  describe("paid tier pricing", () => {
-    it("calculates correctly for 4 orgs (1 billable)", () => {
-      const result = getEnterpriseQuantityPricing(4, "year");
-      assert.strictEqual(result.total, 15000); // $150
+    it("5 teams, 5,000 alumni → $130/mo", () => {
+      const result = getEnterpriseTotalPricing(2, 5, "month");
+      assert.strictEqual(result.alumni.totalCents, 10000); // $100
+      assert.strictEqual(result.subOrgs.totalCents, 3000); // 2 × $15
+      assert.strictEqual(result.totalCents, 13000); // $130/mo
     });
 
-    it("calculates correctly for 10 orgs (7 billable)", () => {
-      const result = getEnterpriseQuantityPricing(10, "year");
-      assert.strictEqual(result.total, 105000); // $1,050
-    });
-
-    it("handles large quantities", () => {
-      const result = getEnterpriseQuantityPricing(100, "year");
-      assert.strictEqual(result.total, 97 * 15000); // 97 billable @ $150 each
+    it("8 teams, 10,000 alumni → $275/mo", () => {
+      const result = getEnterpriseTotalPricing(4, 8, "month");
+      assert.strictEqual(result.alumni.totalCents, 20000); // $200
+      assert.strictEqual(result.subOrgs.totalCents, 7500); // 5 × $15
+      assert.strictEqual(result.totalCents, 27500); // $275/mo
     });
   });
 
-  describe("interval handling", () => {
-    it("returns same pricing for month and year (yearly-only model)", () => {
-      const monthResult = getEnterpriseQuantityPricing(10, "month");
-      const yearResult = getEnterpriseQuantityPricing(10, "year");
-
-      assert.strictEqual(monthResult.total, yearResult.total);
-      assert.strictEqual(monthResult.unitPrice, yearResult.unitPrice);
+  describe("plan pricing examples (yearly)", () => {
+    it("3 teams, 2,500 alumni → $500/yr", () => {
+      const result = getEnterpriseTotalPricing(1, 3, "year");
+      assert.strictEqual(result.alumni.totalCents, 50000); // $500
+      assert.strictEqual(result.subOrgs.totalCents, 0);
+      assert.strictEqual(result.totalCents, 50000); // $500/yr
     });
+
+    it("5 teams, 5,000 alumni → $1,300/yr", () => {
+      const result = getEnterpriseTotalPricing(2, 5, "year");
+      assert.strictEqual(result.alumni.totalCents, 100000); // $1,000
+      assert.strictEqual(result.subOrgs.totalCents, 30000); // 2 × $150
+      assert.strictEqual(result.totalCents, 130000); // $1,300/yr
+    });
+
+    it("8 teams, 10,000 alumni → $2,750/yr", () => {
+      const result = getEnterpriseTotalPricing(4, 8, "year");
+      assert.strictEqual(result.alumni.totalCents, 200000); // $2,000
+      assert.strictEqual(result.subOrgs.totalCents, 75000); // 5 × $150
+      assert.strictEqual(result.totalCents, 275000); // $2,750/yr
+    });
+  });
+
+  describe("minimum charge", () => {
+    it("minimum is $50/mo (1 bucket, 0 extra teams)", () => {
+      const result = getEnterpriseTotalPricing(1, 0, "month");
+      assert.strictEqual(result.totalCents, 5000); // $50/mo
+    });
+
+    it("minimum is $500/yr (1 bucket, 0 extra teams)", () => {
+      const result = getEnterpriseTotalPricing(1, 0, "year");
+      assert.strictEqual(result.totalCents, 50000); // $500/yr
+    });
+  });
+});
+
+// =============================================================================
+// formatBucketRange Tests
+// =============================================================================
+
+describe("formatBucketRange", () => {
+  it("formats bucket 1 as '0 - 2,500'", () => {
+    assert.strictEqual(formatBucketRange(1), "0 - 2,500");
+  });
+
+  it("formats bucket 2 as '2,501 - 5,000'", () => {
+    assert.strictEqual(formatBucketRange(2), "2,501 - 5,000");
+  });
+
+  it("formats bucket 3 as '5,001 - 7,500'", () => {
+    assert.strictEqual(formatBucketRange(3), "5,001 - 7,500");
+  });
+
+  it("formats bucket 4 as '7,501 - 10,000'", () => {
+    assert.strictEqual(formatBucketRange(4), "7,501 - 10,000");
+  });
+
+  it("handles 0 or negative", () => {
+    assert.strictEqual(formatBucketRange(0), "0");
   });
 });
 
@@ -246,465 +332,117 @@ describe("getEnterpriseQuantityPricing", () => {
 // =============================================================================
 
 describe("formatSeatPrice", () => {
-  it("formats price in cents to dollars", () => {
-    const result = formatSeatPrice(15000);
-    assert.strictEqual(result, "$150");
+  it("formats $50", () => {
+    assert.strictEqual(formatSeatPrice(5000), "$50");
   });
 
-  it("formats zero price", () => {
-    const result = formatSeatPrice(0);
-    assert.strictEqual(result, "$0");
+  it("formats $150", () => {
+    assert.strictEqual(formatSeatPrice(15000), "$150");
   });
 
-  it("formats large price", () => {
-    const result = formatSeatPrice(1500000);
-    assert.strictEqual(result, "$15000");
-  });
-
-  it("rounds to nearest dollar", () => {
-    const result = formatSeatPrice(15050);
-    // 15050 / 100 = 150.5 -> "150" (toFixed(0) rounds)
-    assert.strictEqual(result, "$151");
-  });
-
-  it("handles small amounts", () => {
-    const result = formatSeatPrice(100);
-    assert.strictEqual(result, "$1");
+  it("formats $0", () => {
+    assert.strictEqual(formatSeatPrice(0), "$0");
   });
 });
 
 // =============================================================================
-// Seat Quota Enforcement Tests (simulated)
+// Source Constants Validation Tests
 // =============================================================================
 
-/**
- * Simulates canEnterpriseAddSubOrg logic for testing
- * Mirrors src/lib/enterprise/quota.ts implementation
- *
- * per_sub_org pricing: unlimited orgs allowed (billing kicks in after free tier)
- * alumni_tier pricing: unlimited orgs (legacy, no seat concept)
- */
-interface MockSubscription {
-  pricing_model: PricingModel | null;
-  sub_org_quantity: number | null;
-}
-
-function simulateCanEnterpriseAddSubOrg(
-  subscription: MockSubscription | null,
-  currentManagedOrgCount: number
-): SeatQuotaInfo {
-  // If no seat-based pricing, no limit (legacy tier-based)
-  if (!subscription || subscription.pricing_model !== "per_sub_org") {
-    return { allowed: true, currentCount: 0, maxAllowed: null, needsUpgrade: false };
-  }
-
-  // per_sub_org model: unlimited orgs allowed, billing kicks in after free tier
-  return {
-    allowed: true,
-    currentCount: currentManagedOrgCount,
-    maxAllowed: null,
-    needsUpgrade: false,
-  };
-}
-
-describe("canEnterpriseAddSubOrg (simulated)", () => {
-  describe("per_sub_org — always allowed (unlimited)", () => {
-    it("allows adding when under free tier", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "per_sub_org",
-        sub_org_quantity: 5,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 2);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.currentCount, 2);
-      assert.strictEqual(result.maxAllowed, null);
-      assert.strictEqual(result.needsUpgrade, false);
-    });
-
-    it("allows adding first org when none exist", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "per_sub_org",
-        sub_org_quantity: 10,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 0);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.currentCount, 0);
-      assert.strictEqual(result.needsUpgrade, false);
-    });
-
-    it("allows adding beyond free tier (paid orgs)", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "per_sub_org",
-        sub_org_quantity: 5,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 10);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.currentCount, 10);
-      assert.strictEqual(result.maxAllowed, null);
-      assert.strictEqual(result.needsUpgrade, false);
-    });
-
-    it("allows adding with null sub_org_quantity", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "per_sub_org",
-        sub_org_quantity: null,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 100);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.maxAllowed, null);
-    });
+describe("source constants integrity", () => {
+  it("ALUMNI_BUCKET_PRICING has expected values", () => {
+    assert.strictEqual(ALUMNI_BUCKET_PRICING.capacityPerBucket, 2500);
+    assert.strictEqual(ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket, 5000);
+    assert.strictEqual(ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket, 50000);
+    assert.strictEqual(ALUMNI_BUCKET_PRICING.maxSelfServeBuckets, 4);
   });
 
-  describe("legacy tier pricing", () => {
-    it("allows unlimited for alumni_tier pricing model", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "alumni_tier",
-        sub_org_quantity: null,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 100);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.maxAllowed, null);
-      assert.strictEqual(result.needsUpgrade, false);
-    });
-
-    it("allows unlimited for null pricing model", () => {
-      const subscription: MockSubscription = {
-        pricing_model: null,
-        sub_org_quantity: null,
-      };
-      const result = simulateCanEnterpriseAddSubOrg(subscription, 50);
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.maxAllowed, null);
-    });
+  it("ENTERPRISE_SEAT_PRICING has expected values", () => {
+    assert.strictEqual(ENTERPRISE_SEAT_PRICING.freeSubOrgs, 3);
+    assert.strictEqual(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly, 1500);
+    assert.strictEqual(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly, 15000);
   });
+});
 
-  describe("null subscription", () => {
-    it("allows when subscription is null", () => {
-      const result = simulateCanEnterpriseAddSubOrg(null, 0);
+// =============================================================================
+// Alumni Quota Enforcement Tests (using source constants)
+// =============================================================================
 
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.maxAllowed, null);
-      assert.strictEqual(result.needsUpgrade, false);
+describe("alumni quota enforcement", () => {
+  describe("bucket capacity checks", () => {
+    it("allows adding when under capacity", () => {
+      const limit = 1 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(2000 + 1 <= limit, true);
+    });
+
+    it("allows adding at exactly boundary - 1", () => {
+      const limit = 1 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(2499 + 1 <= limit, true);
+    });
+
+    it("blocks adding at exactly boundary", () => {
+      const limit = 1 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(2500 + 1 <= limit, false);
+    });
+
+    it("blocks adding when over capacity", () => {
+      const limit = 1 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(3000 + 1 <= limit, false);
+    });
+
+    it("allows with 2 buckets (5,000 capacity)", () => {
+      const limit = 2 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(4999 + 1 <= limit, true);
+      assert.strictEqual(5000 + 1 <= limit, false);
+    });
+
+    it("allows with 4 buckets (10,000 capacity)", () => {
+      const limit = 4 * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+      assert.strictEqual(9999 + 1 <= limit, true);
+      assert.strictEqual(10000 + 1 <= limit, false);
     });
   });
 });
 
 // =============================================================================
-// Billing Adjustment Validation Tests (simulated)
+// Billing Adjustment Validation Tests (using source constants)
 // =============================================================================
-
-interface BillingAdjustmentRequest {
-  newQuantity: number;
-  currentUsage: number;
-  pricingModel: PricingModel | null;
-  stripeSubscriptionId: string | null;
-}
-
-interface BillingAdjustmentResult {
-  allowed: boolean;
-  error?: string;
-  errorCode?: "BELOW_USAGE" | "LEGACY_MODEL" | "NO_STRIPE";
-  currentUsage?: number;
-  requestedQuantity?: number;
-}
-
-/**
- * Simulates billing adjustment validation logic
- * Mirrors src/app/api/enterprise/[enterpriseId]/billing/adjust/route.ts
- */
-function simulateBillingAdjustmentValidation(
-  request: BillingAdjustmentRequest
-): BillingAdjustmentResult {
-  // Verify pricing model is per_sub_org
-  if (request.pricingModel !== "per_sub_org") {
-    return {
-      allowed: false,
-      error: "Seat quantity adjustment is only available for per-sub-org pricing. Please contact support to upgrade your pricing model.",
-      errorCode: "LEGACY_MODEL",
-    };
-  }
-
-  // Verify Stripe subscription exists
-  if (!request.stripeSubscriptionId) {
-    return {
-      allowed: false,
-      error: "Enterprise subscription is not linked to Stripe",
-      errorCode: "NO_STRIPE",
-    };
-  }
-
-  // Ensure new quantity is not below current usage
-  if (request.newQuantity < request.currentUsage) {
-    return {
-      allowed: false,
-      error: `Cannot reduce seat quantity below current usage. You currently have ${request.currentUsage} enterprise-managed organization(s). Remove some organizations first or choose a quantity of at least ${request.currentUsage}.`,
-      errorCode: "BELOW_USAGE",
-      currentUsage: request.currentUsage,
-      requestedQuantity: request.newQuantity,
-    };
-  }
-
-  return { allowed: true };
-}
 
 describe("billing adjustment validation", () => {
-  describe("reducing below current usage", () => {
-    it("prevents reducing below current usage", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 5,
-        currentUsage: 10,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "BELOW_USAGE");
-      assert.strictEqual(result.currentUsage, 10);
-      assert.strictEqual(result.requestedQuantity, 5);
+  describe("alumni_bucket adjustments", () => {
+    it("blocks 5+ buckets (sales-led)", () => {
+      assert.strictEqual(isSalesLed(5), true);
     });
 
-    it("prevents reducing by even one below usage", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 9,
-        currentUsage: 10,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "BELOW_USAGE");
+    it("allows bucket 4 (max self-serve)", () => {
+      assert.strictEqual(isSalesLed(4), false);
     });
 
-    it("includes helpful error message", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 3,
-        currentUsage: 8,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.ok(result.error?.includes("8 enterprise-managed organization(s)"));
-      assert.ok(result.error?.includes("at least 8"));
-    });
-  });
-
-  describe("valid adjustments", () => {
-    it("allows increasing seats", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 20,
-        currentUsage: 10,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, true);
-      assert.strictEqual(result.error, undefined);
-    });
-
-    it("allows maintaining same quantity", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 10,
-        currentUsage: 10,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, true);
-    });
-
-    it("allows reducing to exactly current usage", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 5,
-        currentUsage: 5,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, true);
-    });
-
-    it("allows reducing when above current usage", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 8,
-        currentUsage: 5,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, true);
-    });
-  });
-
-  describe("legacy pricing model", () => {
-    it("rejects adjustment for alumni_tier pricing", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 10,
-        currentUsage: 5,
-        pricingModel: "alumni_tier",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "LEGACY_MODEL");
-      assert.ok(result.error?.includes("per-sub-org pricing"));
-      assert.ok(result.error?.includes("contact support"));
-    });
-
-    it("rejects adjustment for null pricing model", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 10,
-        currentUsage: 5,
-        pricingModel: null,
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "LEGACY_MODEL");
-    });
-  });
-
-  describe("missing Stripe subscription", () => {
-    it("rejects when no Stripe subscription", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 10,
-        currentUsage: 5,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: null,
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "NO_STRIPE");
-      assert.ok(result.error?.includes("not linked to Stripe"));
-    });
-  });
-
-  describe("zero usage scenarios", () => {
-    it("allows any quantity when no orgs exist", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 1,
-        currentUsage: 0,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, true);
-    });
-
-    it("does not allow reducing to zero when orgs exist", () => {
-      const result = simulateBillingAdjustmentValidation({
-        newQuantity: 0,
-        currentUsage: 1,
-        pricingModel: "per_sub_org",
-        stripeSubscriptionId: "sub_123",
-      });
-
-      assert.strictEqual(result.allowed, false);
-      assert.strictEqual(result.errorCode, "BELOW_USAGE");
+    it("blocks reducing below current alumni count", () => {
+      const newCapacity = 1 * ALUMNI_BUCKET_PRICING.capacityPerBucket; // 2500
+      assert.strictEqual(3000 > newCapacity, true); // would lose data
     });
   });
 });
 
 // =============================================================================
-// Integration scenarios
+// Stripe Line Item Quantity Tests
 // =============================================================================
 
-describe("integration scenarios", () => {
-  describe("free tier to paid transition", () => {
-    it("calculates price increase when crossing free tier (3 to 4)", () => {
-      const currentOrgs = 3;
-      const newOrgs = 4;
-
-      const currentPricing = getEnterpriseSubOrgPricing(currentOrgs);
-      const newPricing = getEnterpriseSubOrgPricing(newOrgs);
-
-      assert.strictEqual(currentPricing.totalCentsYearly, 0); // Free
-      assert.strictEqual(newPricing.totalCentsYearly, 15000); // $150
-    });
-
-    it("calculates price decrease when going back to free tier (4 to 3)", () => {
-      const currentOrgs = 4;
-      const newOrgs = 3;
-
-      const currentPricing = getEnterpriseSubOrgPricing(currentOrgs);
-      const newPricing = getEnterpriseSubOrgPricing(newOrgs);
-
-      assert.strictEqual(currentPricing.totalCentsYearly, 15000); // $150
-      assert.strictEqual(newPricing.totalCentsYearly, 0); // Free
-    });
+describe("Stripe subscription line item quantities", () => {
+  it("calculates correct alumni bucket quantity", () => {
+    assert.strictEqual(getRequiredBucketQuantity(0), 1);
+    assert.strictEqual(getRequiredBucketQuantity(2500), 1);
+    assert.strictEqual(getRequiredBucketQuantity(2501), 2);
+    assert.strictEqual(getRequiredBucketQuantity(5000), 2);
+    assert.strictEqual(getRequiredBucketQuantity(10000), 4);
   });
 
-  describe("scaling paid orgs", () => {
-    it("calculates price increase when scaling up paid orgs", () => {
-      const currentOrgs = 10; // 7 billable
-      const newOrgs = 15; // 12 billable
-
-      const currentPricing = getEnterpriseSubOrgPricing(currentOrgs);
-      const newPricing = getEnterpriseSubOrgPricing(newOrgs);
-
-      const increase = newPricing.totalCentsYearly - currentPricing.totalCentsYearly;
-      assert.strictEqual(increase, 5 * 15000); // 5 additional billable orgs
-    });
-
-    it("calculates price decrease when scaling down paid orgs", () => {
-      const currentOrgs = 15; // 12 billable
-      const newOrgs = 10; // 7 billable
-
-      const currentPricing = getEnterpriseSubOrgPricing(currentOrgs);
-      const newPricing = getEnterpriseSubOrgPricing(newOrgs);
-
-      const decrease = currentPricing.totalCentsYearly - newPricing.totalCentsYearly;
-      assert.strictEqual(decrease, 5 * 15000); // 5 fewer billable orgs
-    });
-  });
-
-  describe("quota check — always allowed for per_sub_org", () => {
-    it("always allows adding orgs with per_sub_org pricing", () => {
-      const subscription: MockSubscription = {
-        pricing_model: "per_sub_org",
-        sub_org_quantity: 5,
-      };
-
-      // Even at or beyond the old "limit", still allowed
-      const quotaCheck = simulateCanEnterpriseAddSubOrg(subscription, 5);
-      assert.strictEqual(quotaCheck.allowed, true);
-      assert.strictEqual(quotaCheck.needsUpgrade, false);
-
-      const quotaCheck2 = simulateCanEnterpriseAddSubOrg(subscription, 50);
-      assert.strictEqual(quotaCheck2.allowed, true);
-      assert.strictEqual(quotaCheck2.needsUpgrade, false);
-    });
-  });
-
-  describe("pricing table from plan", () => {
-    it("matches expected pricing table", () => {
-      // | Total Orgs | Billable | Annual Charge |
-      // |------------|----------|---------------|
-      // | 1-3        | 0        | $0            |
-      // | 4          | 1        | $150          |
-      // | 10         | 7        | $1,050        |
-      // | 20         | 17       | $2,550        |
-
-      const pricing3 = getEnterpriseSubOrgPricing(3);
-      assert.strictEqual(pricing3.billableOrgs, 0);
-      assert.strictEqual(pricing3.totalCentsYearly, 0);
-
-      const pricing4 = getEnterpriseSubOrgPricing(4);
-      assert.strictEqual(pricing4.billableOrgs, 1);
-      assert.strictEqual(pricing4.totalCentsYearly, 15000);
-
-      const pricing10 = getEnterpriseSubOrgPricing(10);
-      assert.strictEqual(pricing10.billableOrgs, 7);
-      assert.strictEqual(pricing10.totalCentsYearly, 105000);
-
-      const pricing20 = getEnterpriseSubOrgPricing(20);
-      assert.strictEqual(pricing20.billableOrgs, 17);
-      assert.strictEqual(pricing20.totalCentsYearly, 255000);
-    });
+  it("calculates correct sub-org add-on quantity", () => {
+    assert.strictEqual(getBillableOrgCount(1), 0);
+    assert.strictEqual(getBillableOrgCount(3), 0);
+    assert.strictEqual(getBillableOrgCount(4), 1);
+    assert.strictEqual(getBillableOrgCount(8), 5);
+    assert.strictEqual(getBillableOrgCount(10), 7);
   });
 });

@@ -231,10 +231,11 @@ export async function GET(request: Request) {
     }
 
     // Fetch form submissions
-    const { data: submissions } = await serviceSupabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: submissions } = await (serviceSupabase as any)
       .from("form_submissions")
       .select("form_id, organization_id, submitted_at, responses")
-      .eq("user_id", user.id);
+      .eq("user_id", user.id) as { data: Array<{ form_id: string; organization_id: string; submitted_at: string; responses: unknown }> | null };
 
     if (submissions) {
       exportData.formSubmissions = submissions.map((s) => ({

@@ -67,12 +67,35 @@ Check Vercel logs for these diagnostic entries:
 
 If you see `sk_test_` in the logs, the production deployment is using test keys.
 
+## Enterprise Subscription Price IDs
+
+Enterprise subscriptions use a hybrid model: alumni buckets + team add-ons.
+
+| Env Variable | Description | Amount |
+|--------------|-------------|--------|
+| `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY` | Alumni bucket (monthly) | $50/month per bucket (2,500 alumni each) |
+| `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY` | Alumni bucket (yearly) | $500/year per bucket |
+| `STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY` | Team add-on (monthly) | $15/month per additional org (first 3 free) |
+| `STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY` | Team add-on (yearly) | $150/year per additional org |
+
+**Enterprise pricing tiers:**
+- Buckets 1-4: Self-serve checkout via `/api/stripe/create-enterprise-checkout`
+- Bucket 5+: Sales-led (API returns `{ mode: "sales" }`, no checkout session created)
+
+**Enterprise code paths:**
+- **Frontend**: `src/app/app/create-enterprise/page.tsx` → posts to `/api/stripe/create-enterprise-checkout`
+- **Checkout API**: `src/app/api/stripe/create-enterprise-checkout/route.ts`
+- **Billing API**: `src/app/api/enterprise/[enterpriseId]/billing/route.ts` (GET: billing overview, POST: change bucket quantity)
+- **Webhook**: `src/app/api/stripe/webhook/route.ts` → `handleEnterpriseSubscriptionUpdate()` for enterprise subscription events
+- **Pricing logic**: `src/lib/enterprise/pricing.ts`, constants in `src/types/enterprise.ts`
+
 ## Webhook Note
 
 There are currently **two LIVE webhook destinations** pointing at `https://www.myteamnetwork.com/api/stripe/webhook` in the Stripe Dashboard. Consider consolidating to one to avoid potential double-processing of events.
 
 ## Verification Steps
 
+### Organization Checkout
 1. Go to `https://www.myteamnetwork.com/app/create-org`
 2. Fill out the form with a fresh slug
 3. Click "Create Organization"
@@ -81,6 +104,15 @@ There are currently **two LIVE webhook destinations** pointing at `https://www.m
    - Stripe Dashboard → Developers → Logs (LIVE) shows successful `POST /v1/checkout/sessions`
    - You're redirected to Stripe Checkout (live mode)
    - After completing payment, webhook events appear in Stripe → Developers → Event destinations
+
+### Enterprise Checkout
+1. Go to `https://www.myteamnetwork.com/app/create-enterprise`
+2. Fill out the form, select a bucket quantity (1-4)
+3. Click "Continue to Checkout"
+4. Check:
+   - Stripe checkout session created with correct alumni bucket and sub-org line items
+   - Webhook creates `enterprise_subscriptions` record with correct `alumni_bucket_quantity`
+5. For bucket 5: verify "Contact Sales" CTA appears instead of checkout
 
 
 

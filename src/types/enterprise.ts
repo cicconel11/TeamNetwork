@@ -1,46 +1,30 @@
 /**
  * Enterprise TypeScript Type Definitions
  *
- * This file defines all TypeScript interfaces for the enterprise feature,
- * including pricing tiers, subscriptions, roles, and permissions.
+ * Hybrid pricing model: alumni buckets + team add-ons.
+ * Alumni pricing is mandatory (min 1 bucket). Teams are an add-on (first 3 free).
  */
 
-// Enterprise pricing tiers
-export type EnterpriseTier = "tier_1" | "tier_2" | "tier_3" | "custom";
 export type BillingInterval = "month" | "year";
 export type EnterpriseRole = "owner" | "billing_admin" | "org_admin";
 export type AdoptionRequestStatus = "pending" | "accepted" | "rejected" | "expired";
 export type EnterpriseRelationshipType = "created" | "adopted";
 export type SubOrgBillingType = "enterprise_managed" | "independent";
 
-// Pricing model types
-export type PricingModel = "alumni_tier" | "per_sub_org";
-
-// Quantity pricing constants
-export const ENTERPRISE_SEAT_PRICING = {
-  freeSubOrgs: 3, // First 3 organizations are free
-  pricePerAdditionalCentsYearly: 15000, // $150/year per additional org beyond free tier
-  pricePerAdditionalCentsMonthly: 1250, // $12.50/month per additional org (yearly / 12)
+// Alumni bucket pricing constants (cents)
+export const ALUMNI_BUCKET_PRICING = {
+  capacityPerBucket: 2500, // Each bucket covers 2,500 alumni
+  monthlyCentsPerBucket: 5000, // $50/month per bucket
+  yearlyCentsPerBucket: 50000, // $500/year per bucket
+  maxSelfServeBuckets: 4, // Buckets 1-4 are self-serve; 5+ is sales-led
 } as const;
 
-// Tier limits (null = unlimited)
-export const ENTERPRISE_TIER_LIMITS: Record<EnterpriseTier, number | null> = {
-  tier_1: 5000,
-  tier_2: 10000,
-  tier_3: null, // unlimited (custom pricing)
-  custom: null,
-};
-
-// Tier pricing in cents (null = custom pricing required)
-export const ENTERPRISE_TIER_PRICING: Record<
-  EnterpriseTier,
-  { monthly: number; yearly: number } | null
-> = {
-  tier_1: { monthly: 10000, yearly: 100000 }, // $100/mo or $1000/yr
-  tier_2: { monthly: 15000, yearly: 150000 }, // $150/mo or $1500/yr
-  tier_3: null, // custom pricing
-  custom: null,
-};
+// Team add-on pricing constants (cents)
+export const ENTERPRISE_SEAT_PRICING = {
+  freeSubOrgs: 3, // First 3 organizations are included
+  pricePerAdditionalCentsMonthly: 1500, // $15/month per additional org
+  pricePerAdditionalCentsYearly: 15000, // $150/year per additional org
+} as const;
 
 // Core enterprise interface
 export interface Enterprise {
@@ -55,19 +39,15 @@ export interface Enterprise {
   updated_at: string;
 }
 
-// Enterprise subscription
+// Enterprise subscription — hybrid model
 export interface EnterpriseSubscription {
   id: string;
   enterprise_id: string;
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   billing_interval: BillingInterval;
-  alumni_tier: EnterpriseTier;
-  pooled_alumni_limit: number | null;
-  custom_price_cents: number | null;
-  pricing_model: PricingModel;
+  alumni_bucket_quantity: number; // >= 1, each bucket = 2,500 alumni
   sub_org_quantity: number | null;
-  price_per_sub_org_cents: number | null;
   status: string;
   current_period_end: string | null;
   grace_period_ends_at: string | null;

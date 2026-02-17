@@ -10,9 +10,8 @@ interface EnterpriseData {
   created_at: string;
   subscription: {
     status: string;
-    pricing_model: string;
+    alumni_bucket_quantity: number;
     sub_org_quantity: number | null;
-    alumni_tier: string;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
   } | null;
@@ -229,9 +228,7 @@ function EnterpriseRow({
         <td className="py-3 px-3">
           {sub ? (
             <span className="text-xs">
-              {sub.pricing_model === "per_sub_org"
-                ? `per_sub_org (${sub.sub_org_quantity ?? 0} seats)`
-                : `alumni_tier (${sub.alumni_tier})`}
+              {sub.alumni_bucket_quantity} bucket{sub.alumni_bucket_quantity !== 1 ? "s" : ""} / {sub.sub_org_quantity ?? 0} seats
             </span>
           ) : (
             <span className="text-gray-400 text-xs">None</span>

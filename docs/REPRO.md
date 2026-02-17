@@ -100,6 +100,8 @@ Always-on warnings appear regardless of debug mode as `console.warn(...)`.
 
 **Root cause:** Missing feature, not a bug. The `hasEditMembersUI: false` flag in debug output confirms there is no add/remove members UI.
 
+**Update (Feb 2026):** The `chat_group_members` table now has `removed_at` soft-deletion, `added_by` tracking, and a re-add via UPDATE pattern (migration `20260429100000_chat_group_member_management.sql`). The DB schema supports add/remove operations. UI implementation may still be pending.
+
 ---
 
 ## Issue #5: Forms Admin — Can't See Submission Results

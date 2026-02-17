@@ -1,6 +1,12 @@
+import { Button } from "@/components/ui";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import { formatBucketRange } from "@/lib/enterprise/pricing";
+
 interface AlumniUsageBarProps {
   currentCount: number;
-  limit: number | null;
+  bucketQuantity: number;
+  onUpgrade?: () => void;
+  isSalesManaged?: boolean;
   className?: string;
 }
 
@@ -24,46 +30,49 @@ function getUsageTextColor(percentage: number): string {
   return "text-green-600 dark:text-green-400";
 }
 
-export function AlumniUsageBar({ currentCount, limit, className = "" }: AlumniUsageBarProps) {
-  const isUnlimited = limit === null;
-  const percentage = isUnlimited ? 0 : Math.min((currentCount / limit) * 100, 100);
-  const displayPercentage = isUnlimited ? 0 : Math.round(percentage);
+export function AlumniUsageBar({ currentCount, bucketQuantity, onUpgrade, isSalesManaged, className = "" }: AlumniUsageBarProps) {
+  const limit = bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+  const percentage = Math.min((currentCount / limit) * 100, 100);
+  const displayPercentage = Math.round(percentage);
 
   return (
     <div className={`space-y-2 ${className}`}>
       <div className="flex items-center justify-between text-sm">
         <span className="text-foreground font-medium">Pooled Alumni Usage</span>
-        {isUnlimited ? (
-          <span className="text-muted-foreground">
-            {currentCount.toLocaleString()} alumni <span className="text-purple-600 dark:text-purple-400">(Unlimited)</span>
-          </span>
-        ) : (
-          <span className={getUsageTextColor(percentage)}>
-            {currentCount.toLocaleString()} / {limit.toLocaleString()} alumni ({displayPercentage}%)
-          </span>
-        )}
+        <span className={getUsageTextColor(percentage)}>
+          {currentCount.toLocaleString()} / {limit.toLocaleString()} alumni ({displayPercentage}%)
+        </span>
       </div>
 
       <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-        {isUnlimited ? (
-          <div
-            className="h-full bg-purple-500 transition-all duration-300"
-            style={{ width: "100%" }}
-          />
-        ) : (
-          <div
-            className={`h-full ${getUsageColor(percentage)} transition-all duration-300`}
-            style={{ width: `${percentage}%` }}
-          />
-        )}
+        <div
+          className={`h-full ${getUsageColor(percentage)} transition-all duration-300`}
+          style={{ width: `${percentage}%` }}
+        />
       </div>
 
-      {!isUnlimited && percentage >= 90 && (
+      <div className="text-xs text-muted-foreground">
+        {isSalesManaged
+          ? "Sales-managed plan"
+          : `Bucket ${bucketQuantity}: ${formatBucketRange(bucketQuantity)} alumni`}
+      </div>
+
+      {percentage >= 100 && onUpgrade && !isSalesManaged && (
+        <div className="flex items-center justify-between gap-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+          <p className="text-xs text-red-600 dark:text-red-400">
+            You have reached your alumni limit. Upgrade to add more capacity.
+          </p>
+          <Button variant="primary" size="sm" onClick={onUpgrade}>
+            Upgrade Bucket
+          </Button>
+        </div>
+      )}
+      {percentage >= 90 && percentage < 100 && (
         <p className="text-xs text-red-600 dark:text-red-400">
-          You are approaching your alumni limit. Consider upgrading your tier.
+          You are approaching your alumni limit. Consider upgrading your bucket.
         </p>
       )}
-      {!isUnlimited && percentage >= 70 && percentage < 90 && (
+      {percentage >= 70 && percentage < 90 && (
         <p className="text-xs text-yellow-600 dark:text-yellow-400">
           You are using {displayPercentage}% of your alumni quota.
         </p>

@@ -1,47 +1,20 @@
 import { Button } from "@/components/ui";
-import type { PricingModel } from "@/types/enterprise";
-import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import { ENTERPRISE_SEAT_PRICING, type BillingInterval } from "@/types/enterprise";
 
 interface SeatUsageBarProps {
   currentSeats: number;
-  maxSeats: number | null;
-  pricingModel: PricingModel;
+  billingInterval: BillingInterval;
   onAddSeats?: () => void;
   className?: string;
 }
 
-function getAlumniTierPercentage(current: number, max: number | null): number {
-  if (max === null || max === 0) {
-    return 0;
-  }
-  return Math.min((current / max) * 100, 100);
-}
-
-function getAlumniTierColor(percentage: number): string {
-  if (percentage >= 90) {
-    return "bg-red-500";
-  }
-  if (percentage >= 70) {
-    return "bg-yellow-500";
-  }
-  return "bg-green-500";
-}
-
-function getAlumniTierTextColor(percentage: number): string {
-  if (percentage >= 90) {
-    return "text-red-600 dark:text-red-400";
-  }
-  if (percentage >= 70) {
-    return "text-yellow-600 dark:text-yellow-400";
-  }
-  return "text-green-600 dark:text-green-400";
-}
-
 function PerSubOrgUsageBar({
   currentSeats,
+  billingInterval,
   onAddSeats,
 }: {
   currentSeats: number;
+  billingInterval: BillingInterval;
   onAddSeats?: () => void;
 }) {
   const freeOrgs = ENTERPRISE_SEAT_PRICING.freeSubOrgs;
@@ -96,7 +69,7 @@ function PerSubOrgUsageBar({
             </span>
             {paidOrgsUsed > 0 && (
               <span className="text-purple-600 dark:text-purple-400">
-                + {paidOrgsUsed} paid @ $150/yr each
+                + {paidOrgsUsed} paid @ {billingInterval === "month" ? "$15/mo" : "$150/yr"} each
               </span>
             )}
           </div>
@@ -114,82 +87,19 @@ function PerSubOrgUsageBar({
   );
 }
 
-function AlumniTierUsageBar({
-  currentSeats,
-  maxSeats,
-}: {
-  currentSeats: number;
-  maxSeats: number | null;
-}) {
-  const isUnlimited = maxSeats === null;
-  const percentage = getAlumniTierPercentage(currentSeats, maxSeats);
-  const displayPercentage = Math.round(percentage);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex-1">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-foreground font-medium">Enterprise-managed organizations</span>
-          {isUnlimited ? (
-            <span className="text-muted-foreground">
-              {currentSeats} <span className="text-purple-600 dark:text-purple-400">(unlimited)</span>
-            </span>
-          ) : (
-            <span className={getAlumniTierTextColor(percentage)}>
-              {currentSeats} of {maxSeats}
-            </span>
-          )}
-        </div>
-
-        <div className="w-full h-3 bg-muted rounded-full overflow-hidden">
-          {isUnlimited ? (
-            <div
-              className="h-full bg-purple-500 transition-all duration-300"
-              style={{ width: "100%" }}
-            />
-          ) : (
-            <div
-              className={`h-full ${getAlumniTierColor(percentage)} transition-all duration-300`}
-              style={{ width: `${percentage}%` }}
-            />
-          )}
-        </div>
-      </div>
-
-      {!isUnlimited && percentage >= 90 && (
-        <p className="text-xs text-red-600 dark:text-red-400">
-          You are approaching your seat limit. Consider adding more seats.
-        </p>
-      )}
-      {!isUnlimited && percentage >= 70 && percentage < 90 && (
-        <p className="text-xs text-yellow-600 dark:text-yellow-400">
-          You are using {displayPercentage}% of your organization seats.
-        </p>
-      )}
-    </div>
-  );
-}
-
 export function SeatUsageBar({
   currentSeats,
-  maxSeats,
-  pricingModel,
+  billingInterval,
   onAddSeats,
   className = "",
 }: SeatUsageBarProps) {
   return (
     <div className={className}>
-      {pricingModel === "per_sub_org" ? (
-        <PerSubOrgUsageBar
-          currentSeats={currentSeats}
-          onAddSeats={onAddSeats}
-        />
-      ) : (
-        <AlumniTierUsageBar
-          currentSeats={currentSeats}
-          maxSeats={maxSeats}
-        />
-      )}
+      <PerSubOrgUsageBar
+        currentSeats={currentSeats}
+        billingInterval={billingInterval}
+        onAddSeats={onAddSeats}
+      />
     </div>
   );
 }

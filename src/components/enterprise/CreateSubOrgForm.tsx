@@ -286,6 +286,7 @@ export function CreateSubOrgForm({
 
       {pendingFormData && upgradeInfo && (
         <OrgLimitUpgradeModal
+          upgradeType="sub_org"
           isOpen={showUpgradeModal}
           onClose={handleUpgradeModalClose}
           onConfirm={handleUpgradeConfirm}

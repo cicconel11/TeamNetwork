@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -15,9 +14,7 @@ import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
-import { getBillableOrgCount, getEnterpriseSubOrgPricing } from "@/lib/enterprise/pricing";
-import type { PricingModel } from "@/types/enterprise";
-import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import { getSubOrgPricing } from "@/lib/enterprise/pricing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,20 +27,6 @@ interface RouteParams {
 interface EnterpriseRow {
   id: string;
   primary_color: string | null;
-}
-
-// Type for enterprise subscription row (until types are regenerated)
-interface EnterpriseSubscriptionRow {
-  id: string;
-  enterprise_id: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-  billing_interval: "month" | "year";
-  pricing_model: PricingModel | null;
-  sub_org_quantity: number | null;
-  price_per_sub_org_cents: number | null;
-  status: string;
-  current_period_end: string | null;
 }
 
 const createOrgWithUpgradeSchema = z
@@ -100,7 +83,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     const body = await validateJson(req, createOrgWithUpgradeSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, primary_color, upgradeIfNeeded } = body;
+    const { name, slug, primary_color } = body;
 
     // Check slug uniqueness across both organizations and enterprises
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -137,173 +120,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Enterprise not found" }, 404);
     }
 
-    // Check current seat quota
+    // Check current seat quota (hybrid model: always allowed, billing kicks in after free tier)
     const seatQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
-
-    // If at limit and upgradeIfNeeded is false, return needsUpgrade: true
-    if (!seatQuota.allowed && !upgradeIfNeeded) {
-      return respond({
-        error: "Seat limit reached",
-        message: `You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Set upgradeIfNeeded to true to automatically upgrade.`,
-        currentCount: seatQuota.currentCount,
-        maxAllowed: seatQuota.maxAllowed,
-        needsUpgrade: true,
-      }, 400);
-    }
-
-    let upgraded = false;
-
-    // If at limit and upgradeIfNeeded is true, perform the upgrade
-    if (!seatQuota.allowed && upgradeIfNeeded) {
-      // Get current subscription for billing operations
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: subscription, error: subError } = await (serviceSupabase as any)
-        .from("enterprise_subscriptions")
-        .select("id, enterprise_id, stripe_customer_id, stripe_subscription_id, billing_interval, pricing_model, sub_org_quantity, price_per_sub_org_cents, status, current_period_end")
-        .eq("enterprise_id", resolvedEnterpriseId)
-        .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
-
-      if (subError) {
-        return respond({ error: subError.message }, 500);
-      }
-
-      if (!subscription) {
-        return respond({ error: "Enterprise subscription not found" }, 404);
-      }
-
-      // Verify pricing model is per_sub_org for seat-based billing
-      if (subscription.pricing_model !== "per_sub_org") {
-        return respond(
-          { error: "Seat quantity adjustment is only available for per-sub-org pricing. Please contact support to upgrade your pricing model." },
-          400
-        );
-      }
-
-      // Verify Stripe customer exists
-      if (!subscription.stripe_customer_id) {
-        return respond({ error: "Enterprise subscription is not linked to a Stripe customer" }, 400);
-      }
-
-      const currentQuantity = subscription.sub_org_quantity ?? 0;
-      const newQuantity = currentQuantity + 1;
-      const oldBillable = getBillableOrgCount(currentQuantity);
-      const newBillable = getBillableOrgCount(newQuantity);
-
-      try {
-        let stripeSubscriptionId = subscription.stripe_subscription_id;
-        let updatedStatus = subscription.status;
-        let periodEnd: string | null = null;
-
-        // Case 1: Was free, now needs subscription (crossing from 5 to 6 orgs)
-        if (oldBillable === 0 && newBillable > 0) {
-          // Determine price based on billing interval
-          const billingInterval = subscription.billing_interval;
-          const unitAmount = billingInterval === "month"
-            ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
-            : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
-
-          // Create a price for the subscription
-          const price = await stripe.prices.create({
-            currency: "usd",
-            unit_amount: unitAmount,
-            recurring: { interval: billingInterval },
-            product_data: {
-              name: "Enterprise Additional Organization",
-              metadata: {
-                description: `TeamNetwork Enterprise - Additional organizations beyond free tier (${ENTERPRISE_SEAT_PRICING.freeSubOrgs} free included)`,
-              },
-            },
-          });
-
-          // Create subscription with billable quantity
-          const newSub = await stripe.subscriptions.create({
-            customer: subscription.stripe_customer_id,
-            items: [
-              {
-                price: price.id,
-                quantity: newBillable,
-              },
-            ],
-            metadata: {
-              type: "enterprise",
-              pricing_model: "per_sub_org",
-              sub_org_quantity: newQuantity.toString(),
-              enterprise_id: resolvedEnterpriseId,
-            },
-          });
-
-          stripeSubscriptionId = newSub.id;
-          updatedStatus = newSub.status;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const periodEndVal = (newSub as any).current_period_end;
-          periodEnd = periodEndVal
-            ? new Date(periodEndVal * 1000).toISOString()
-            : null;
-        }
-
-        // Guard: If already in paid tier but no Stripe subscription, this is an invalid state
-        else if (oldBillable > 0 && !subscription.stripe_subscription_id) {
-          console.error("[create-with-upgrade] Invalid state: oldBillable > 0 but no stripe_subscription_id", {
-            enterpriseId: resolvedEnterpriseId,
-            oldBillable,
-            newBillable,
-            currentQuantity,
-          });
-          return respond({
-            error: "Enterprise subscription is in paid tier but missing Stripe subscription. Please contact support.",
-          }, 500);
-        }
-
-        // Case 2: Was paying, still paying (just increasing quantity)
-        else if (oldBillable > 0 && newBillable > 0 && subscription.stripe_subscription_id) {
-          const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
-          const itemId = stripeSub.items?.data?.[0]?.id;
-
-          if (!itemId) {
-            return respond({ error: "Stripe subscription items not found" }, 400);
-          }
-
-          const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
-            items: [{ id: itemId, quantity: newBillable }],
-            proration_behavior: "create_prorations",
-            metadata: {
-              sub_org_quantity: newQuantity.toString(),
-            },
-          });
-
-          updatedStatus = updated.status;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const updatedPeriodEnd = (updated as any).current_period_end;
-          periodEnd = updatedPeriodEnd
-            ? new Date(updatedPeriodEnd * 1000).toISOString()
-            : null;
-        }
-
-        // Update enterprise_subscriptions with new quantity
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (serviceSupabase as any)
-          .from("enterprise_subscriptions")
-          .update({
-            sub_org_quantity: newQuantity,
-            stripe_subscription_id: stripeSubscriptionId,
-            status: updatedStatus,
-            current_period_end: periodEnd,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("enterprise_id", resolvedEnterpriseId);
-
-        if (updateError) {
-          console.error("[create-with-upgrade] Failed to update subscription:", updateError);
-          return respond({ error: "Failed to update enterprise subscription" }, 500);
-        }
-
-        upgraded = true;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to upgrade subscription";
-        console.error("[create-with-upgrade] Stripe error:", error);
-        return respond({ error: message }, 500);
-      }
-    }
 
     // Create organization under enterprise
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -321,11 +139,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       .single() as { data: Record<string, unknown> | null; error: Error | null };
 
     if (orgError || !newOrg) {
-      // If org creation fails after upgrading, we should log but not rollback Stripe
-      // The extra seat can be used for future orgs
-      if (upgraded) {
-        console.error("[create-with-upgrade] Org creation failed after upgrade. Extra seat remains:", orgError);
-      }
       return respond({ error: orgError?.message ?? "Unable to create organization" }, 400);
     }
 
@@ -367,7 +180,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Get updated quota info for response
     const updatedQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
-    const pricing = getEnterpriseSubOrgPricing(updatedQuota.maxAllowed ?? updatedQuota.currentCount);
+    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year");
 
     logEnterpriseAuditAction({
       actorUserId: user.id,
@@ -376,13 +189,13 @@ export async function POST(req: Request, { params }: RouteParams) {
       enterpriseId: resolvedEnterpriseId,
       targetType: "organization",
       targetId: newOrg.id as string,
-      metadata: { name, slug, upgraded },
+      metadata: { name, slug },
       ...extractRequestContext(req),
     });
 
     return respond({
       organization: newOrg,
-      upgraded,
+      upgraded: false,
       subscription: {
         currentCount: updatedQuota.currentCount,
         maxAllowed: updatedQuota.maxAllowed,
@@ -391,7 +204,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           : null,
         freeOrgs: pricing.freeOrgs,
         billableOrgs: pricing.billableOrgs,
-        totalCentsYearly: pricing.totalCentsYearly,
+        totalCents: pricing.totalCents,
       },
     }, 201);
   } catch (error) {

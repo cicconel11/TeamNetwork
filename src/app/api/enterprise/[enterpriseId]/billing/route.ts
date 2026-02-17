@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { stripe } from "@/lib/stripe";
@@ -8,14 +7,11 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
 import { getEnterpriseQuota } from "@/lib/enterprise/quota";
-import { formatTierName, getEnterprisePricing, getEnterpriseTierLimit } from "@/lib/enterprise/pricing";
-import type { EnterpriseTier, BillingInterval, PricingModel } from "@/types/enterprise";
+import { getAlumniBucketPricing, getSubOrgPricing, isSalesLed } from "@/lib/enterprise/pricing";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import type { BillingInterval } from "@/types/enterprise";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
-
-// Extended Stripe type to include current_period_end
-type SubscriptionWithPeriod = Stripe.Subscription & {
-  current_period_end?: number | null;
-};
+import { requireEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,13 +20,6 @@ interface RouteParams {
   params: Promise<{ enterpriseId: string }>;
 }
 
-const updatePlanSchema = z
-  .object({
-    tier: z.enum(["tier_1", "tier_2", "tier_3", "custom"]),
-    interval: z.enum(["month", "year"]),
-  })
-  .strict();
-
 // Type for enterprise subscription row (until types are regenerated)
 interface EnterpriseSubscriptionRow {
   id: string;
@@ -38,11 +27,8 @@ interface EnterpriseSubscriptionRow {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   billing_interval: BillingInterval;
-  alumni_tier: EnterpriseTier;
-  pricing_model: PricingModel | null;
+  alumni_bucket_quantity: number;
   sub_org_quantity: number | null;
-  pooled_alumni_limit: number | null;
-  custom_price_cents: number | null;
   status: string;
   current_period_end: string | null;
   grace_period_ends_at: string | null;
@@ -112,18 +98,40 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Get quota info
   const quota = await getEnterpriseQuota(resolvedEnterpriseId);
 
+  // Calculate pricing
+  const bucketQuantity = subscription.alumni_bucket_quantity;
+  const salesManaged = isSalesLed(bucketQuantity);
+  const subOrgPricing = getSubOrgPricing(
+    subscription.sub_org_quantity ?? 0,
+    subscription.billing_interval
+  );
+
   // Build billing overview
   const billing = {
+    salesManaged,
     status: subscription.status,
-    tier: subscription.alumni_tier,
-    tierName: formatTierName(subscription.alumni_tier),
     billingInterval: subscription.billing_interval,
-    pricingModel: subscription.pricing_model ?? "alumni_tier",
+    alumniBucketQuantity: bucketQuantity,
+    alumniCapacity: bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket,
     subOrgQuantity: subscription.sub_org_quantity ?? null,
     stripeCustomerId: subscription.stripe_customer_id,
     stripeSubscriptionId: subscription.stripe_subscription_id,
     currentPeriodEnd: subscription.current_period_end,
     gracePeriodEndsAt: subscription.grace_period_ends_at,
+    pricing: salesManaged
+      ? {
+          alumni: { mode: "sales_managed" as const, unitCents: null, totalCents: null, capacity: null },
+          subOrgs: subOrgPricing,
+          totalCents: null,
+        }
+      : (() => {
+          const alumniPricing = getAlumniBucketPricing(bucketQuantity, subscription.billing_interval);
+          return {
+            alumni: { mode: "self_serve" as const, ...alumniPricing },
+            subOrgs: subOrgPricing,
+            totalCents: alumniPricing.totalCents + subOrgPricing.totalCents,
+          };
+        })(),
     usage: quota
       ? {
           alumniCount: quota.alumniCount,
@@ -140,6 +148,12 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   return respond({ billing });
 }
+
+const updateBucketSchema = z
+  .object({
+    alumniBucketQuantity: z.number().int().min(1).max(4),
+  })
+  .strict();
 
 export async function POST(req: Request, { params }: RouteParams) {
   const { enterpriseId } = await params;
@@ -184,9 +198,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  let body: z.infer<typeof updatePlanSchema>;
+  let body: z.infer<typeof updateBucketSchema>;
   try {
-    body = await validateJson(req, updatePlanSchema, { maxBodyBytes: 8_000 });
+    body = await validateJson(req, updateBucketSchema, { maxBodyBytes: 8_000 });
   } catch (error) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(error);
@@ -194,10 +208,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     throw error;
   }
 
-  const { tier, interval } = body;
-  const priceCents = getEnterprisePricing(tier, interval);
-  if (priceCents === null) {
-    return respond({ error: "This tier requires custom pricing. Please contact sales." }, 400);
+  const { alumniBucketQuantity } = body;
+
+  // Sales-led check
+  if (alumniBucketQuantity > ALUMNI_BUCKET_PRICING.maxSelfServeBuckets) {
+    return respond(
+      { error: "Enterprise plans with more than 4 alumni buckets require custom pricing. Please contact sales." },
+      400
+    );
   }
 
   const quota = await getEnterpriseQuota(resolvedEnterpriseId);
@@ -205,10 +223,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise subscription not found" }, 404);
   }
 
-  const targetLimit = getEnterpriseTierLimit(tier);
-  if (targetLimit !== null && quota.alumniCount > targetLimit) {
+  // Ensure new capacity covers current alumni count
+  const targetCapacity = alumniBucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+  if (quota.alumniCount > targetCapacity) {
     return respond(
-      { error: "Your current alumni count exceeds this tier's limit. Choose a higher tier." },
+      { error: `Your current alumni count (${quota.alumniCount}) exceeds this bucket's capacity (${targetCapacity}). Choose a higher bucket quantity.` },
       400,
     );
   }
@@ -217,7 +236,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: subscription, error: subError } = await (serviceSupabase as any)
     .from("enterprise_subscriptions")
-    .select("stripe_subscription_id, stripe_customer_id")
+    .select("stripe_subscription_id, stripe_customer_id, alumni_bucket_quantity, billing_interval")
     .eq("enterprise_id", resolvedEnterpriseId)
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
@@ -231,24 +250,25 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   try {
     const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
-    const itemId = stripeSub.items?.data?.[0]?.id;
-    if (!itemId) {
-      return respond({ error: "Stripe subscription items not found." }, 400);
-    }
 
-    const price = await stripe.prices.create({
-      currency: "usd",
-      unit_amount: priceCents,
-      recurring: { interval: interval === "year" ? "year" : "month" },
-      product_data: {
-        name: `Enterprise Plan - ${formatTierName(tier)}`,
-      },
+    // Find the alumni bucket line item
+    const alumniBucketItem = stripeSub.items?.data?.find((item) => {
+      const priceId = typeof item.price === "string" ? item.price : item.price.id;
+      return priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY") ||
+             priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY");
     });
 
-    const updated = (await stripe.subscriptions.update(subscription.stripe_subscription_id, {
-      items: [{ id: itemId, price: price.id }],
+    if (!alumniBucketItem) {
+      return respond({ error: "Alumni bucket line item not found in subscription." }, 400);
+    }
+
+    const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+      items: [{ id: alumniBucketItem.id, quantity: alumniBucketQuantity }],
       proration_behavior: "create_prorations",
-    })) as SubscriptionWithPeriod;
+      metadata: {
+        alumni_bucket_quantity: alumniBucketQuantity.toString(),
+      },
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedSub = updated as any;
@@ -260,10 +280,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const { error: updateError } = await (serviceSupabase as any)
       .from("enterprise_subscriptions")
       .update({
-        alumni_tier: tier,
-        billing_interval: interval,
-        pooled_alumni_limit: getEnterpriseTierLimit(tier),
-        custom_price_cents: null,
+        alumni_bucket_quantity: alumniBucketQuantity,
         status: updated.status,
         current_period_end: periodEnd,
         stripe_customer_id: stripeCustomerId ?? subscription.stripe_customer_id,

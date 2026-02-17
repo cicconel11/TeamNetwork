@@ -9,10 +9,10 @@ import { z } from "zod";
 import { Button, Input, Card } from "@/components/ui";
 import { useIdempotencyKey } from "@/hooks";
 import {
-  ENTERPRISE_TIER_LIMITS,
   ENTERPRISE_SEAT_PRICING,
-  type EnterpriseTier,
+  ALUMNI_BUCKET_PRICING,
 } from "@/types/enterprise";
+import { isSalesLed } from "@/lib/enterprise/pricing";
 
 const MIN_SEATS = 1;
 const MAX_SEATS = 100;
@@ -32,31 +32,49 @@ const createEnterpriseSchema = z.object({
     ),
   billingContactEmail: z.string().email("Invalid email address"),
   seatQuantity: z.number().min(MIN_SEATS).max(MAX_SEATS),
-  alumniTier: z.enum(["tier_1", "tier_2", "tier_3"]),
+  alumniBucketQuantity: z.number().min(1).max(5),
+  billingInterval: z.enum(["month", "year"]),
 });
 
 type CreateEnterpriseForm = z.infer<typeof createEnterpriseSchema>;
 
-const ALUMNI_TIER_INFO: Record<
-  Exclude<EnterpriseTier, "custom">,
-  { name: string; limit: number | null; description: string }
-> = {
-  tier_1: {
-    name: "Tier 1",
-    limit: 5000,
-    description: "Up to 5,000 pooled alumni",
+const ALUMNI_BUCKET_OPTIONS = [
+  {
+    buckets: 1,
+    capacity: ALUMNI_BUCKET_PRICING.capacityPerBucket,
+    monthlyPrice: ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket / 100,
+    yearlyPrice: ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket / 100,
+    description: "0 - 2,500 alumni",
   },
-  tier_2: {
-    name: "Tier 2",
-    limit: 10000,
-    description: "Up to 10,000 pooled alumni",
+  {
+    buckets: 2,
+    capacity: ALUMNI_BUCKET_PRICING.capacityPerBucket * 2,
+    monthlyPrice: (ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket * 2) / 100,
+    yearlyPrice: (ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket * 2) / 100,
+    description: "2,501 - 5,000 alumni",
   },
-  tier_3: {
-    name: "Tier 3",
-    limit: null,
-    description: "Unlimited alumni",
+  {
+    buckets: 3,
+    capacity: ALUMNI_BUCKET_PRICING.capacityPerBucket * 3,
+    monthlyPrice: (ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket * 3) / 100,
+    yearlyPrice: (ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket * 3) / 100,
+    description: "5,001 - 7,500 alumni",
   },
-};
+  {
+    buckets: 4,
+    capacity: ALUMNI_BUCKET_PRICING.capacityPerBucket * 4,
+    monthlyPrice: (ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket * 4) / 100,
+    yearlyPrice: (ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket * 4) / 100,
+    description: "7,501 - 10,000 alumni",
+  },
+  {
+    buckets: 5,
+    capacity: null,
+    monthlyPrice: null,
+    yearlyPrice: null,
+    description: "10,000+ alumni (Contact Sales)",
+  },
+] as const;
 
 function calculateSeatPrice(
   quantity: number,
@@ -89,12 +107,13 @@ export default function CreateEnterprisePage() {
       name: "",
       slug: "",
       billingContactEmail: "",
-      seatQuantity: 5, // Default to free tier
-      alumniTier: "tier_1",
+      seatQuantity: 3, // Default to free tier
+      alumniBucketQuantity: 1,
+      billingInterval: "year",
     },
   });
 
-  const { name, slug, billingContactEmail, seatQuantity, alumniTier } = watch();
+  const { name, slug, billingContactEmail, seatQuantity, alumniBucketQuantity, billingInterval } = watch();
 
   const fingerprint = useMemo(
     () =>
@@ -103,9 +122,10 @@ export default function CreateEnterprisePage() {
         slug: slug?.trim() || "",
         billingContactEmail: billingContactEmail?.trim() || "",
         seatQuantity,
-        alumniTier,
+        alumniBucketQuantity,
+        billingInterval,
       }),
-    [name, slug, billingContactEmail, seatQuantity, alumniTier],
+    [name, slug, billingContactEmail, seatQuantity, alumniBucketQuantity, billingInterval],
   );
 
   const { idempotencyKey } = useIdempotencyKey({
@@ -142,9 +162,8 @@ export default function CreateEnterprisePage() {
           name: data.name,
           slug: data.slug,
           billingContactEmail: data.billingContactEmail,
-          billingInterval: "year", // Always yearly for new pricing model
-          tier: data.alumniTier,
-          pricingModel: "per_sub_org",
+          billingInterval: data.billingInterval,
+          alumniBucketQuantity: data.alumniBucketQuantity,
           subOrgQuantity: data.seatQuantity,
           idempotencyKey,
         }),
@@ -187,9 +206,21 @@ export default function CreateEnterprisePage() {
     setValue("seatQuantity", newValue);
   };
 
-  const pricing = calculateSeatPrice(seatQuantity);
-  const selectedAlumniLimit =
-    ENTERPRISE_TIER_LIMITS[alumniTier as EnterpriseTier];
+  const seatPricing = calculateSeatPrice(seatQuantity);
+  const selectedBucket = ALUMNI_BUCKET_OPTIONS.find((opt) => opt.buckets === alumniBucketQuantity);
+  const isContactSales = isSalesLed(alumniBucketQuantity);
+
+  const alumniMonthlyPrice = selectedBucket?.monthlyPrice ?? 0;
+  const alumniYearlyPrice = selectedBucket?.yearlyPrice ?? 0;
+
+  const seatMonthlyPrice = seatPricing.billableOrgs * (ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly / 100);
+  const seatYearlyPrice = seatPricing.totalCentsYearly / 100;
+
+  const totalMonthly = alumniMonthlyPrice + seatMonthlyPrice;
+  const totalYearly = alumniYearlyPrice + seatYearlyPrice;
+
+  const displayTotal = billingInterval === "month" ? totalMonthly : totalYearly;
+  const displayInterval = billingInterval === "month" ? "/mo" : "/yr";
 
   return (
     <div className="min-h-screen bg-background">
@@ -291,6 +322,45 @@ export default function CreateEnterprisePage() {
                     {...register("billingContactEmail")}
                   />
 
+                  {/* Billing Interval Toggle */}
+                  <div className="space-y-3 p-5 rounded-xl border border-border bg-card">
+                    <div>
+                      <h3 className="text-base font-semibold text-foreground">
+                        Billing Frequency
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Choose monthly or yearly billing
+                      </p>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setValue("billingInterval", "month")}
+                        className={`flex-1 p-3 rounded-lg border transition-all ${
+                          billingInterval === "month"
+                            ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                            : "border-border hover:border-muted-foreground"
+                        }`}
+                      >
+                        <p className="font-semibold text-foreground">Monthly</p>
+                        <p className="text-xs text-muted-foreground">Billed monthly</p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setValue("billingInterval", "year")}
+                        className={`flex-1 p-3 rounded-lg border transition-all ${
+                          billingInterval === "year"
+                            ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
+                            : "border-border hover:border-muted-foreground"
+                        }`}
+                      >
+                        <p className="font-semibold text-foreground">Yearly</p>
+                        <p className="text-xs text-muted-foreground">Save 17%</p>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Section 1: Enterprise-Managed Org Seats */}
                   <div className="space-y-4 p-5 rounded-xl border border-border bg-card">
                     <div>
@@ -362,28 +432,27 @@ export default function CreateEnterprisePage() {
                     </div>
                   </div>
 
-                  {/* Section 2: Pooled Alumni Quota */}
+                  {/* Section 2: Alumni Bucket Selector */}
                   <div className="space-y-4 p-5 rounded-xl border border-border bg-card">
                     <div>
                       <h3 className="text-base font-semibold text-foreground">
-                        Pooled Alumni Quota
+                        Alumni Bucket Size
                       </h3>
                       <p className="text-sm text-muted-foreground mt-1">
-                        This enforces how many alumni enterprise-managed orgs
-                        can have total
+                        Each bucket provides 2,500 alumni capacity (minimum 1 bucket required)
                       </p>
                     </div>
 
                     <div className="grid gap-3">
-                      {(["tier_1", "tier_2", "tier_3"] as const).map((t) => {
-                        const info = ALUMNI_TIER_INFO[t];
-                        const isSelected = alumniTier === t;
+                      {ALUMNI_BUCKET_OPTIONS.map((option) => {
+                        const isSelected = alumniBucketQuantity === option.buckets;
+                        const isContactSales = option.buckets === 5;
 
                         return (
                           <button
-                            key={t}
+                            key={option.buckets}
                             type="button"
-                            onClick={() => setValue("alumniTier", t)}
+                            onClick={() => setValue("alumniBucketQuantity", option.buckets)}
                             className={`text-left p-4 rounded-xl border transition-all ${
                               isSelected
                                 ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
@@ -393,29 +462,33 @@ export default function CreateEnterprisePage() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="font-semibold text-foreground">
-                                  {info.name}
+                                  Bucket {option.buckets}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  {info.description}
+                                  {option.description}
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="font-medium text-foreground">
-                                  {info.limit
-                                    ? info.limit.toLocaleString()
-                                    : "Unlimited"}{" "}
-                                  alumni
-                                </p>
+                                {isContactSales ? (
+                                  <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                                    Contact Sales
+                                  </p>
+                                ) : (
+                                  <>
+                                    <p className="font-medium text-foreground">
+                                      ${billingInterval === "month" ? option.monthlyPrice : option.yearlyPrice}{displayInterval}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {option.capacity?.toLocaleString()} alumni
+                                    </p>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </button>
                         );
                       })}
                     </div>
-
-                    <p className="text-xs text-muted-foreground">
-                      Alumni quota is included at no extra cost
-                    </p>
                   </div>
 
                   <div className="flex gap-4 pt-4">
@@ -428,13 +501,23 @@ export default function CreateEnterprisePage() {
                         Cancel
                       </Button>
                     </Link>
-                    <Button
-                      type="submit"
-                      className="flex-1"
-                      isLoading={isLoading}
-                    >
-                      Continue to Checkout
-                    </Button>
+                    {isContactSales ? (
+                      <Button
+                        type="submit"
+                        className="flex-1"
+                        isLoading={isLoading}
+                      >
+                        Contact Sales
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        className="flex-1"
+                        isLoading={isLoading}
+                      >
+                        Continue to Checkout
+                      </Button>
+                    )}
                   </div>
                 </div>
               </form>
@@ -449,23 +532,44 @@ export default function CreateEnterprisePage() {
               </h3>
 
               <div className="space-y-3 text-sm">
+                {/* Alumni buckets */}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Alumni buckets</span>
+                  <span className="text-foreground font-medium">
+                    {isContactSales
+                      ? "Contact Sales"
+                      : `${alumniBucketQuantity} × $${billingInterval === "month" ? (ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket / 100) : (ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket / 100)}${displayInterval}`}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground pl-4">Capacity</span>
+                  <span className="text-muted-foreground">
+                    {isContactSales
+                      ? "Custom"
+                      : `${(alumniBucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()} alumni`}
+                  </span>
+                </div>
+
+                <div className="border-t border-border my-2"></div>
+
+                {/* Organizations */}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Organizations</span>
                   <span className="text-foreground font-medium">
                     {seatQuantity}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Free organizations</span>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground pl-4">Free</span>
                   <span className="text-green-600 dark:text-green-400 font-medium">
-                    {pricing.freeOrgs}
+                    {seatPricing.freeOrgs}
                   </span>
                 </div>
-                {pricing.billableOrgs > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Paid organizations</span>
+                {seatPricing.billableOrgs > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground pl-4">Paid</span>
                     <span className="text-foreground font-medium">
-                      {pricing.billableOrgs} @ {formatCents(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly)}/yr
+                      {seatPricing.billableOrgs} × ${billingInterval === "month" ? (ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly / 100) : (ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100)}{displayInterval}
                     </span>
                   </div>
                 )}
@@ -474,21 +578,13 @@ export default function CreateEnterprisePage() {
                   <div className="flex justify-between text-lg">
                     <span className="font-semibold text-foreground">Total</span>
                     <span className="font-bold text-foreground">
-                      {pricing.totalCentsYearly === 0 ? (
-                        <span className="text-green-600 dark:text-green-400">Free!</span>
-                      ) : (
-                        `${formatCents(pricing.totalCentsYearly)}/yr`
-                      )}
+                      {isContactSales ? "Contact Sales" : `$${displayTotal.toFixed(2)}${displayInterval}`}
                     </span>
                   </div>
-                  {pricing.billableOrgs > 0 && (
+                  {!isContactSales && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      {pricing.billableOrgs} paid org{pricing.billableOrgs !== 1 ? "s" : ""} x {formatCents(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly)}/yr
-                    </p>
-                  )}
-                  {pricing.totalCentsYearly === 0 && (
-                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      You will provide payment info for future use
+                      Alumni buckets: ${billingInterval === "month" ? alumniMonthlyPrice : alumniYearlyPrice}
+                      {seatPricing.billableOrgs > 0 && ` + Organizations: $${billingInterval === "month" ? seatMonthlyPrice : seatYearlyPrice}`}
                     </p>
                   )}
                 </div>
@@ -496,13 +592,17 @@ export default function CreateEnterprisePage() {
 
               <div className="mt-4 p-3 rounded-lg bg-muted/50 text-sm">
                 <p className="text-muted-foreground">
-                  Includes pooled alumni quota of{" "}
-                  <span className="font-medium text-foreground">
-                    {selectedAlumniLimit
-                      ? selectedAlumniLimit.toLocaleString()
-                      : "unlimited"}
-                  </span>{" "}
-                  across all enterprise-managed orgs
+                  {isContactSales ? (
+                    "Custom alumni quota — our sales team will tailor a plan for your needs"
+                  ) : (
+                    <>
+                      Pooled alumni quota of{" "}
+                      <span className="font-medium text-foreground">
+                        {(alumniBucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket).toLocaleString()}
+                      </span>{" "}
+                      alumni across all enterprise-managed organizations
+                    </>
+                  )}
                 </p>
               </div>
 

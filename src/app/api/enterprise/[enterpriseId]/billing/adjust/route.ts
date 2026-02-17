@@ -8,9 +8,9 @@ import { validateJson, ValidationError, validationErrorResponse } from "@/lib/se
 import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
 import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
-import { getBillableOrgCount, getEnterpriseSubOrgPricing } from "@/lib/enterprise/pricing";
-import type { PricingModel } from "@/types/enterprise";
-import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import { requireEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,6 +21,7 @@ interface RouteParams {
 
 const adjustQuantitySchema = z
   .object({
+    adjustType: z.enum(["sub_org", "alumni_bucket"]),
     newQuantity: z.number().int().min(1).max(1000),
     expectedCurrentQuantity: z.number().int().min(1).max(1000).optional(),
   })
@@ -33,9 +34,8 @@ interface EnterpriseSubscriptionRow {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   billing_interval: "month" | "year";
-  pricing_model: PricingModel | null;
+  alumni_bucket_quantity: number;
   sub_org_quantity: number | null;
-  price_per_sub_org_cents: number | null;
   status: string;
   current_period_end: string | null;
 }
@@ -99,13 +99,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     throw error;
   }
 
-  const { newQuantity, expectedCurrentQuantity } = body;
+  const { adjustType, newQuantity, expectedCurrentQuantity } = body;
 
   // Get current subscription
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: subscription, error: subError } = await (serviceSupabase as any)
     .from("enterprise_subscriptions")
-    .select("id, enterprise_id, stripe_customer_id, stripe_subscription_id, billing_interval, pricing_model, sub_org_quantity, price_per_sub_org_cents, status, current_period_end")
+    .select("id, enterprise_id, stripe_customer_id, stripe_subscription_id, billing_interval, alumni_bucket_quantity, sub_org_quantity, status, current_period_end")
     .eq("enterprise_id", resolvedEnterpriseId)
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
@@ -117,82 +117,215 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise subscription not found" }, 404);
   }
 
-  // Verify pricing model is per_sub_org
-  if (subscription.pricing_model !== "per_sub_org") {
-    return respond(
-      { error: "Seat quantity adjustment is only available for per-sub-org pricing. Please contact support to upgrade your pricing model." },
-      400
-    );
-  }
-
-  // Guard against stale UI state / concurrent updates
-  if (expectedCurrentQuantity !== undefined && subscription.sub_org_quantity !== expectedCurrentQuantity) {
-    return respond(
-      {
-        error: "Seat quantity changed. Please refresh and try again.",
-        currentQuantity: subscription.sub_org_quantity,
-      },
-      409
-    );
-  }
-
-  // Get current enterprise-managed org count
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: counts, error: countsError } = await (serviceSupabase as any)
-    .from("enterprise_alumni_counts")
-    .select("enterprise_managed_org_count")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .maybeSingle() as { data: EnterpriseManagedCountRow | null; error: Error | null };
-
-  if (countsError) {
-    return respond({ error: "Failed to fetch current usage" }, 500);
-  }
-
-  const currentManagedOrgCount = counts?.enterprise_managed_org_count ?? 0;
-
-  // Ensure new quantity is not below current usage
-  if (newQuantity < currentManagedOrgCount) {
-    return respond(
-      {
-        error: `Cannot reduce seat quantity below current usage. You currently have ${currentManagedOrgCount} enterprise-managed organization(s). Remove some organizations first or choose a quantity of at least ${currentManagedOrgCount}.`,
-        currentUsage: currentManagedOrgCount,
-        requestedQuantity: newQuantity,
-      },
-      400
-    );
-  }
-
-  // Calculate old and new billable counts
-  const oldBillable = getBillableOrgCount(subscription.sub_org_quantity ?? 0);
-  const newBillable = getBillableOrgCount(newQuantity);
-
-  // Verify Stripe customer exists (required for both setup mode and subscription mode)
+  // Verify Stripe customer exists (required for all adjustments)
   if (!subscription.stripe_customer_id) {
     return respond({ error: "Enterprise subscription is not linked to a Stripe customer" }, 400);
   }
 
-  try {
-    let periodEnd: string | null = null;
-    let updatedStatus = subscription.status;
-    let stripeSubscriptionId = subscription.stripe_subscription_id;
+  // ===== SUB-ORG ADJUSTMENT =====
+  if (adjustType === "sub_org") {
+    // Guard against stale UI state / concurrent updates
+    if (expectedCurrentQuantity !== undefined && subscription.sub_org_quantity !== expectedCurrentQuantity) {
+      return respond(
+        {
+          error: "Seat quantity changed. Please refresh and try again.",
+          currentQuantity: subscription.sub_org_quantity,
+        },
+        409
+      );
+    }
 
-    // Case 1: Was free, staying free (no Stripe subscription needed)
-    if (oldBillable === 0 && newBillable === 0) {
-      // Just update the quantity in database
+    // Get current enterprise-managed org count
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: counts, error: countsError } = await (serviceSupabase as any)
+      .from("enterprise_alumni_counts")
+      .select("enterprise_managed_org_count")
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .maybeSingle() as { data: EnterpriseManagedCountRow | null; error: Error | null };
+
+    if (countsError) {
+      return respond({ error: "Failed to fetch current usage" }, 500);
+    }
+
+    const currentManagedOrgCount = counts?.enterprise_managed_org_count ?? 0;
+
+    // Ensure new quantity is not below current usage
+    if (newQuantity < currentManagedOrgCount) {
+      return respond(
+        {
+          error: `Cannot reduce seat quantity below current usage. You currently have ${currentManagedOrgCount} enterprise-managed organization(s). Remove some organizations first or choose a quantity of at least ${currentManagedOrgCount}.`,
+          currentUsage: currentManagedOrgCount,
+          requestedQuantity: newQuantity,
+        },
+        400
+      );
+    }
+
+    // Calculate old and new billable counts
+    const oldBillable = getBillableOrgCount(subscription.sub_org_quantity ?? 0);
+    const newBillable = getBillableOrgCount(newQuantity);
+
+    try {
+      let periodEnd: string | null = null;
+      let updatedStatus = subscription.status;
+      let stripeSubscriptionId = subscription.stripe_subscription_id;
+
+      // Case 1: Was free, staying free (no Stripe subscription needed)
+      if (oldBillable === 0 && newBillable === 0) {
+        // Just update the quantity in database
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { error: updateError } = await (serviceSupabase as any)
+          .from("enterprise_subscriptions")
+          .update({
+            sub_org_quantity: newQuantity,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("enterprise_id", resolvedEnterpriseId);
+
+        if (updateError) {
+          console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
+        }
+
+        const pricing = getSubOrgPricing(newQuantity, subscription.billing_interval);
+
+        logEnterpriseAuditAction({
+          actorUserId: user.id,
+          actorEmail: user.email ?? "",
+          action: "adjust_billing",
+          enterpriseId: resolvedEnterpriseId,
+          targetType: "subscription",
+          targetId: resolvedEnterpriseId,
+          metadata: { adjustType, newQuantity, previousQuantity: subscription.sub_org_quantity },
+          ...extractRequestContext(req),
+        });
+
+        return respond({
+          success: true,
+          subscription: {
+            quantity: newQuantity,
+            currentUsage: currentManagedOrgCount,
+            availableSeats: newQuantity - currentManagedOrgCount,
+            freeOrgs: pricing.freeOrgs,
+            billableOrgs: pricing.billableOrgs,
+            totalCents: pricing.totalCents,
+            status: updatedStatus,
+            currentPeriodEnd: periodEnd,
+          },
+        });
+      }
+
+      // Case 2: Was free, now needs subscription (crossing from 3 to 4+ orgs)
+      if (oldBillable === 0 && newBillable > 0) {
+        // Get Stripe price ID from env vars
+        const priceId = subscription.billing_interval === "month"
+          ? requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY")
+          : requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+
+        // If there's already a Stripe subscription, add the sub-org line item
+        if (subscription.stripe_subscription_id) {
+          const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+            items: [
+              { price: priceId, quantity: newBillable },
+            ],
+            proration_behavior: "create_prorations",
+            metadata: {
+              sub_org_quantity: newQuantity.toString(),
+            },
+          });
+
+          updatedStatus = updated.status;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const updatedPeriodEnd = (updated as any).current_period_end;
+          periodEnd = updatedPeriodEnd
+            ? new Date(updatedPeriodEnd * 1000).toISOString()
+            : null;
+        } else {
+          // No subscription exists (edge case - should have alumni bucket subscription)
+          return respond({ error: "No Stripe subscription found. Please contact support." }, 400);
+        }
+      }
+
+      // Case 3: Was paying, now going back to free tier (3 or fewer orgs)
+      else if (oldBillable > 0 && newBillable === 0) {
+        // Remove the sub-org line item from subscription
+        if (subscription.stripe_subscription_id) {
+          const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+
+          // Find the sub-org line item
+          const subOrgItem = stripeSub.items?.data?.find((item) => {
+            const priceId = typeof item.price === "string" ? item.price : item.price.id;
+            return priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY") ||
+                   priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+          });
+
+          if (subOrgItem) {
+            await stripe.subscriptionItems.del(subOrgItem.id, {
+              proration_behavior: "create_prorations",
+            });
+          }
+
+          // Retrieve updated subscription
+          const updated = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+          updatedStatus = updated.status;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const updatedPeriodEnd = (updated as any).current_period_end;
+          periodEnd = updatedPeriodEnd
+            ? new Date(updatedPeriodEnd * 1000).toISOString()
+            : null;
+        }
+      }
+
+      // Case 4: Was paying, still paying (just changing quantity)
+      else if (oldBillable > 0 && newBillable > 0 && subscription.stripe_subscription_id) {
+        // Update existing subscription quantity
+        const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
+
+        // Find the sub-org line item
+        const subOrgItem = stripeSub.items?.data?.find((item) => {
+          const priceId = typeof item.price === "string" ? item.price : item.price.id;
+          return priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY") ||
+                 priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+        });
+
+        if (!subOrgItem) {
+          return respond({ error: "Sub-org line item not found in subscription" }, 400);
+        }
+
+        const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+          items: [{ id: subOrgItem.id, quantity: newBillable }],
+          proration_behavior: "create_prorations",
+          metadata: {
+            sub_org_quantity: newQuantity.toString(),
+          },
+        });
+
+        updatedStatus = updated.status;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const updatedPeriodEnd = (updated as any).current_period_end;
+        periodEnd = updatedPeriodEnd
+          ? new Date(updatedPeriodEnd * 1000).toISOString()
+          : null;
+      }
+
+      // Update database
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: updateError } = await (serviceSupabase as any)
         .from("enterprise_subscriptions")
         .update({
           sub_org_quantity: newQuantity,
+          status: updatedStatus,
+          current_period_end: periodEnd,
           updated_at: new Date().toISOString(),
         })
         .eq("enterprise_id", resolvedEnterpriseId);
 
       if (updateError) {
+        // Log error but don't fail - Stripe is source of truth
         console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
       }
 
-      const pricing = getEnterpriseSubOrgPricing(newQuantity);
+      // Calculate new pricing info
+      const pricing = getSubOrgPricing(newQuantity, subscription.billing_interval);
 
       logEnterpriseAuditAction({
         actorUserId: user.id,
@@ -201,7 +334,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         enterpriseId: resolvedEnterpriseId,
         targetType: "subscription",
         targetId: resolvedEnterpriseId,
-        metadata: { newQuantity, previousQuantity: subscription.sub_org_quantity },
+        metadata: { adjustType, newQuantity, previousQuantity: subscription.sub_org_quantity },
         ...extractRequestContext(req),
       });
 
@@ -213,85 +346,103 @@ export async function POST(req: Request, { params }: RouteParams) {
           availableSeats: newQuantity - currentManagedOrgCount,
           freeOrgs: pricing.freeOrgs,
           billableOrgs: pricing.billableOrgs,
-          totalCentsYearly: pricing.totalCentsYearly,
+          totalCents: pricing.totalCents,
           status: updatedStatus,
           currentPeriodEnd: periodEnd,
         },
       });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update subscription";
+      console.error("[enterprise-billing-adjust] Stripe error:", error);
+      return respond({ error: message }, 500);
+    }
+  }
+
+  // ===== ALUMNI BUCKET ADJUSTMENT =====
+  if (adjustType === "alumni_bucket") {
+    // Validate minimum 1 bucket
+    if (newQuantity < 1) {
+      return respond({ error: "Alumni bucket quantity must be at least 1" }, 400);
     }
 
-    // Case 2: Was free, now needs subscription (crossing from 5 to 6+ orgs)
-    if (oldBillable === 0 && newBillable > 0) {
-      // Determine price based on billing interval
-      const billingInterval = subscription.billing_interval;
-      const unitAmount = billingInterval === "month"
-        ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
-        : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
-
-      // Create a price for the subscription
-      const price = await stripe.prices.create({
-        currency: "usd",
-        unit_amount: unitAmount,
-        recurring: { interval: billingInterval },
-        product_data: {
-          name: "Enterprise Additional Organization",
-          metadata: {
-            description: `TeamNetwork Enterprise - Additional organizations beyond free tier (${ENTERPRISE_SEAT_PRICING.freeSubOrgs} free included)`,
-          },
+    // Sales-led check
+    if (newQuantity > ALUMNI_BUCKET_PRICING.maxSelfServeBuckets) {
+      return respond(
+        {
+          error: "For more than 4 alumni buckets (10,000+ alumni capacity), please contact sales.",
+          salesLed: true,
         },
-      });
-
-      // Create subscription with billable quantity
-      const newSub = await stripe.subscriptions.create({
-        customer: subscription.stripe_customer_id,
-        items: [
-          {
-            price: price.id,
-            quantity: newBillable,
-          },
-        ],
-        metadata: {
-          type: "enterprise",
-          pricing_model: "per_sub_org",
-          sub_org_quantity: newQuantity.toString(),
-          enterprise_id: resolvedEnterpriseId,
-        },
-      });
-
-      stripeSubscriptionId = newSub.id;
-      updatedStatus = newSub.status;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const periodEndVal = (newSub as any).current_period_end;
-      periodEnd = periodEndVal
-        ? new Date(periodEndVal * 1000).toISOString()
-        : null;
+        400
+      );
     }
 
-    // Case 3: Was paying, now going back to free tier (5 or fewer orgs)
-    else if (oldBillable > 0 && newBillable === 0) {
-      // Cancel the subscription
-      if (subscription.stripe_subscription_id) {
-        await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
-        stripeSubscriptionId = null;
-        updatedStatus = "active"; // Still active, just free now
+    // Guard against stale UI state
+    if (expectedCurrentQuantity !== undefined && subscription.alumni_bucket_quantity !== expectedCurrentQuantity) {
+      return respond(
+        {
+          error: "Alumni bucket quantity changed. Please refresh and try again.",
+          currentQuantity: subscription.alumni_bucket_quantity,
+        },
+        409
+      );
+    }
+
+    // Get current alumni count
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: counts, error: countsError } = await (serviceSupabase as any)
+      .from("enterprise_alumni_counts")
+      .select("total_alumni_count")
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .maybeSingle() as { data: { total_alumni_count: number } | null; error: Error | null };
+
+    if (countsError) {
+      return respond({ error: "Failed to fetch current alumni count" }, 500);
+    }
+
+    const currentAlumniCount = counts?.total_alumni_count ?? 0;
+    const newCapacity = newQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+
+    // Ensure new capacity is sufficient
+    if (newCapacity < currentAlumniCount) {
+      return respond(
+        {
+          error: `Cannot reduce alumni bucket capacity below current usage. You currently have ${currentAlumniCount} alumni. New capacity would be ${newCapacity}. Choose a quantity of at least ${Math.ceil(currentAlumniCount / ALUMNI_BUCKET_PRICING.capacityPerBucket)} bucket(s).`,
+          currentUsage: currentAlumniCount,
+          newCapacity,
+          requestedQuantity: newQuantity,
+        },
+        400
+      );
+    }
+
+    try {
+      let periodEnd: string | null = null;
+      let updatedStatus = subscription.status;
+
+      // Update Stripe subscription
+      if (!subscription.stripe_subscription_id) {
+        return respond({ error: "No Stripe subscription found. Please contact support." }, 400);
       }
-    }
 
-    // Case 4: Was paying, still paying (just changing quantity)
-    else if (oldBillable > 0 && newBillable > 0 && subscription.stripe_subscription_id) {
-      // Update existing subscription quantity
       const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
-      const itemId = stripeSub.items?.data?.[0]?.id;
 
-      if (!itemId) {
-        return respond({ error: "Stripe subscription items not found" }, 400);
+      // Find the alumni bucket line item
+      const alumniBucketItem = stripeSub.items?.data?.find((item) => {
+        const priceId = typeof item.price === "string" ? item.price : item.price.id;
+        return priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY") ||
+               priceId === requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY");
+      });
+
+      if (!alumniBucketItem) {
+        return respond({ error: "Alumni bucket line item not found in subscription" }, 400);
       }
 
+      // Update the alumni bucket quantity
       const updated = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
-        items: [{ id: itemId, quantity: newBillable }],
+        items: [{ id: alumniBucketItem.id, quantity: newQuantity }],
         proration_behavior: "create_prorations",
         metadata: {
-          sub_org_quantity: newQuantity.toString(),
+          alumni_bucket_quantity: newQuantity.toString(),
         },
       });
 
@@ -301,56 +452,57 @@ export async function POST(req: Request, { params }: RouteParams) {
       periodEnd = updatedPeriodEnd
         ? new Date(updatedPeriodEnd * 1000).toISOString()
         : null;
+
+      // Update database
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (serviceSupabase as any)
+        .from("enterprise_subscriptions")
+        .update({
+          alumni_bucket_quantity: newQuantity,
+          status: updatedStatus,
+          current_period_end: periodEnd,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("enterprise_id", resolvedEnterpriseId);
+
+      if (updateError) {
+        console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
+      }
+
+      logEnterpriseAuditAction({
+        actorUserId: user.id,
+        actorEmail: user.email ?? "",
+        action: "adjust_billing",
+        enterpriseId: resolvedEnterpriseId,
+        targetType: "subscription",
+        targetId: resolvedEnterpriseId,
+        metadata: { adjustType, newQuantity, previousQuantity: subscription.alumni_bucket_quantity },
+        ...extractRequestContext(req),
+      });
+
+      return respond({
+        success: true,
+        alumniBuckets: {
+          quantity: newQuantity,
+          capacity: newCapacity,
+          currentUsage: currentAlumniCount,
+          available: newCapacity - currentAlumniCount,
+          unitCents: subscription.billing_interval === "month"
+            ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
+            : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket,
+          totalCents: newQuantity * (subscription.billing_interval === "month"
+            ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
+            : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket),
+          status: updatedStatus,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update alumni bucket subscription";
+      console.error("[enterprise-billing-adjust] Stripe error:", error);
+      return respond({ error: message }, 500);
     }
-
-    // Update database
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (serviceSupabase as any)
-      .from("enterprise_subscriptions")
-      .update({
-        sub_org_quantity: newQuantity,
-        stripe_subscription_id: stripeSubscriptionId,
-        status: updatedStatus,
-        current_period_end: periodEnd,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("enterprise_id", resolvedEnterpriseId);
-
-    if (updateError) {
-      // Log error but don't fail - Stripe is source of truth
-      console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
-    }
-
-    // Calculate new pricing info
-    const pricing = getEnterpriseSubOrgPricing(newQuantity);
-
-    logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
-      action: "adjust_billing",
-      enterpriseId: resolvedEnterpriseId,
-      targetType: "subscription",
-      targetId: resolvedEnterpriseId,
-      metadata: { newQuantity, previousQuantity: subscription.sub_org_quantity },
-      ...extractRequestContext(req),
-    });
-
-    return respond({
-      success: true,
-      subscription: {
-        quantity: newQuantity,
-        currentUsage: currentManagedOrgCount,
-        availableSeats: newQuantity - currentManagedOrgCount,
-        freeOrgs: pricing.freeOrgs,
-        billableOrgs: pricing.billableOrgs,
-        totalCentsYearly: pricing.totalCentsYearly,
-        status: updatedStatus,
-        currentPeriodEnd: periodEnd,
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update subscription";
-    console.error("[enterprise-billing-adjust] Stripe error:", error);
-    return respond({ error: message }, 500);
   }
+
+  return respond({ error: "Invalid adjust type" }, 400);
 }

@@ -6,7 +6,7 @@ import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
 import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
 import { createServiceClient } from "@/lib/supabase/service";
-import { ENTERPRISE_TIER_LIMITS, type PricingModel } from "@/types/enterprise";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 
 interface EnterpriseDashboardProps {
   params: Promise<{ enterpriseSlug: string }>;
@@ -21,11 +21,7 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
   }
 
   const { enterprise, subscription, alumniCount, subOrgCount, enterpriseManagedOrgCount, role } = context;
-  const alumniLimit = subscription?.alumni_tier
-    ? ENTERPRISE_TIER_LIMITS[subscription.alumni_tier]
-    : null;
-  const pricingModel: PricingModel = subscription?.pricing_model ?? "alumni_tier";
-  const subOrgQuantity = subscription?.sub_org_quantity ?? null;
+  const bucketQuantity = subscription?.alumni_bucket_quantity ?? 1;
 
   // Fetch recent sub-organizations
   const serviceSupabase = createServiceClient();
@@ -129,7 +125,7 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
 
       {/* Alumni Usage Bar */}
       <Card className="p-6 mb-8">
-        <AlumniUsageBar currentCount={alumniCount} limit={alumniLimit} />
+        <AlumniUsageBar currentCount={alumniCount} bucketQuantity={bucketQuantity} />
         {role === "owner" || role === "billing_admin" ? (
           <div className="mt-4 flex justify-end">
             <Link href={`/enterprise/${enterpriseSlug}/billing`}>
@@ -145,10 +141,9 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
       <Card className="p-6 mb-8">
         <SeatUsageBar
           currentSeats={enterpriseManagedOrgCount}
-          maxSeats={subOrgQuantity}
-          pricingModel={pricingModel}
+          billingInterval={subscription?.billing_interval ?? "year"}
         />
-        {(role === "owner" || role === "billing_admin") && pricingModel === "per_sub_org" ? (
+        {(role === "owner" || role === "billing_admin") ? (
           <div className="mt-4 flex justify-end">
             <Link href={`/enterprise/${enterpriseSlug}/billing`}>
               <Button variant="secondary" size="sm">

@@ -1,7 +1,6 @@
 import type { AlumniBucket } from "@/types/database";
 import { createServiceClient } from "@/lib/supabase/service";
-import { getEnterpriseTierLimit } from "@/lib/enterprise/pricing";
-import type { EnterpriseTier } from "@/types/enterprise";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 
 export const ALUMNI_LIMITS: Record<AlumniBucket, number | null> = {
   none: 0,
@@ -30,8 +29,7 @@ interface OrgWithEnterprise {
 
 // Type for enterprise subscription (until types are regenerated)
 interface EnterpriseSubscriptionRow {
-  alumni_tier: string;
-  pooled_alumni_limit: number | null;
+  alumni_bucket_quantity: number;
 }
 
 /**
@@ -79,7 +77,7 @@ export async function getAlumniLimitForOrg(orgId: string): Promise<number | null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: subscription } = await (supabase as any)
       .from("enterprise_subscriptions")
-      .select("alumni_tier, pooled_alumni_limit")
+      .select("alumni_bucket_quantity")
       .eq("enterprise_id", org.enterprise_id)
       .single() as { data: EnterpriseSubscriptionRow | null };
 
@@ -87,12 +85,8 @@ export async function getAlumniLimitForOrg(orgId: string): Promise<number | null
       return 0;
     }
 
-    // Use custom pooled limit if set, otherwise use tier limit
-    if (subscription.pooled_alumni_limit != null) {
-      return subscription.pooled_alumni_limit;
-    }
-
-    return getEnterpriseTierLimit(subscription.alumni_tier as EnterpriseTier);
+    // Each bucket covers 2,500 alumni
+    return subscription.alumni_bucket_quantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
   }
 
   // Otherwise, use org's individual subscription

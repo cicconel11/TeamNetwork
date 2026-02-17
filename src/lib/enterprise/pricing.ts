@@ -1,100 +1,123 @@
-import type { EnterpriseTier, BillingInterval } from "@/types/enterprise";
-import { ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import { ALUMNI_BUCKET_PRICING, ENTERPRISE_SEAT_PRICING } from "@/types/enterprise";
+import type { BillingInterval } from "@/types/enterprise";
 
-export const ENTERPRISE_TIER_LIMITS: Record<EnterpriseTier, number | null> = {
-  tier_1: 5000,
-  tier_2: 10000,
-  tier_3: null,
-  custom: null,
-};
-
-export const ENTERPRISE_TIER_PRICING: Record<EnterpriseTier, { monthly: number; yearly: number } | null> = {
-  tier_1: { monthly: 10000, yearly: 100000 },
-  tier_2: { monthly: 15000, yearly: 150000 },
-  tier_3: null,
-  custom: null,
-};
-
-export function getEnterpriseTierLimit(tier: EnterpriseTier | null | undefined): number | null {
-  if (!tier || !(tier in ENTERPRISE_TIER_LIMITS)) return 5000; // default to tier_1
-  return ENTERPRISE_TIER_LIMITS[tier];
+/**
+ * Get the alumni capacity for a given bucket quantity.
+ * Each bucket covers 2,500 alumni.
+ */
+export function getAlumniBucketCapacity(bucketQuantity: number): number {
+  return bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
 }
 
-export function getEnterprisePricing(tier: EnterpriseTier, interval: BillingInterval): number | null {
-  const pricing = ENTERPRISE_TIER_PRICING[tier];
-  if (!pricing) return null;
-  return interval === "month" ? pricing.monthly : pricing.yearly;
+/**
+ * Get the minimum bucket quantity needed for a given alumni count.
+ * Always returns at least 1 (alumni pricing is mandatory).
+ */
+export function getRequiredBucketQuantity(alumniCount: number): number {
+  return Math.max(1, Math.ceil(alumniCount / ALUMNI_BUCKET_PRICING.capacityPerBucket));
 }
 
-export function getRequiredTierForAlumniCount(count: number): EnterpriseTier {
-  if (count <= 5000) return "tier_1";
-  if (count <= 10000) return "tier_2";
-  return "tier_3";
+/**
+ * Check if a bucket quantity is self-serve (1-4) or sales-led (5+).
+ */
+export function isSalesLed(bucketQuantity: number): boolean {
+  return bucketQuantity > ALUMNI_BUCKET_PRICING.maxSelfServeBuckets;
 }
 
-export function formatTierName(tier: EnterpriseTier): string {
-  switch (tier) {
-    case "tier_1": return "Tier 1 (Up to 5,000 alumni)";
-    case "tier_2": return "Tier 2 (Up to 10,000 alumni)";
-    case "tier_3": return "Tier 3 (Unlimited alumni)";
-    case "custom": return "Custom Plan";
-  }
+/**
+ * Get alumni bucket pricing for a given quantity and interval.
+ */
+export function getAlumniBucketPricing(
+  bucketQuantity: number,
+  interval: BillingInterval
+): { unitCents: number; totalCents: number; capacity: number } {
+  const unitCents = interval === "month"
+    ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
+    : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket;
+
+  return {
+    unitCents,
+    totalCents: bucketQuantity * unitCents,
+    capacity: getAlumniBucketCapacity(bucketQuantity),
+  };
 }
 
 /**
  * Calculate the number of billable organizations (those beyond the free tier).
- * First 5 organizations are free.
+ * First 3 organizations are included with any alumni bucket.
  */
 export function getBillableOrgCount(totalOrgs: number): number {
   return Math.max(0, totalOrgs - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
 }
 
 /**
- * Get detailed pricing breakdown for enterprise sub-org pricing.
- * First 5 orgs are free, then $150/year for each additional org.
+ * Get sub-org add-on pricing for a given total org count and interval.
  */
-export function getEnterpriseSubOrgPricing(totalOrgs: number): {
+export function getSubOrgPricing(
+  totalOrgs: number,
+  interval: BillingInterval
+): {
   totalOrgs: number;
   freeOrgs: number;
   billableOrgs: number;
-  totalCentsYearly: number;
+  unitCents: number;
+  totalCents: number;
 } {
   const billable = getBillableOrgCount(totalOrgs);
+  const unitCents = interval === "month"
+    ? ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly
+    : ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
+
   return {
     totalOrgs,
     freeOrgs: Math.min(totalOrgs, ENTERPRISE_SEAT_PRICING.freeSubOrgs),
     billableOrgs: billable,
-    totalCentsYearly: billable * ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly,
+    unitCents,
+    totalCents: billable * unitCents,
   };
 }
 
 /**
- * Legacy function - kept for compatibility but now simplified.
- * Returns yearly pricing since that's the only billing interval for the new model.
+ * Get combined enterprise pricing breakdown.
+ *
+ * Examples from pricing spec:
+ *   3 teams, 2,500 alumni → $50/mo ($500/yr)
+ *   5 teams, 5,000 alumni → $130/mo ($1,300/yr)
+ *   8 teams, 10,000 alumni → $275/mo ($2,750/yr)
  */
-export function getEnterpriseQuantityPricing(
-  quantity: number,
+export function getEnterpriseTotalPricing(
+  alumniBucketQuantity: number,
+  totalOrgs: number,
   interval: BillingInterval
-): { unitPrice: number; total: number; savings?: number } {
-  // With the new free tier model, billing is yearly-only
-  // quantity represents TOTAL orgs, billable = quantity - 5
-  const billable = getBillableOrgCount(quantity);
-  const yearlyUnitPrice = ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
-
-  // Always return yearly pricing (monthly interval is deprecated)
-  if (interval === "year" || interval === "month") {
-    return {
-      unitPrice: yearlyUnitPrice,
-      total: billable * yearlyUnitPrice,
-    };
-  }
+): {
+  alumni: ReturnType<typeof getAlumniBucketPricing>;
+  subOrgs: ReturnType<typeof getSubOrgPricing>;
+  totalCents: number;
+} {
+  const alumni = getAlumniBucketPricing(alumniBucketQuantity, interval);
+  const subOrgs = getSubOrgPricing(totalOrgs, interval);
 
   return {
-    unitPrice: yearlyUnitPrice,
-    total: billable * yearlyUnitPrice,
+    alumni,
+    subOrgs,
+    totalCents: alumni.totalCents + subOrgs.totalCents,
   };
 }
 
+/**
+ * Format a bucket quantity as a human-readable alumni range.
+ */
+export function formatBucketRange(bucketQuantity: number): string {
+  if (bucketQuantity <= 0) return "0";
+  const max = bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
+  const min = (bucketQuantity - 1) * ALUMNI_BUCKET_PRICING.capacityPerBucket + 1;
+  if (bucketQuantity === 1) return `0 - ${max.toLocaleString()}`;
+  return `${min.toLocaleString()} - ${max.toLocaleString()}`;
+}
+
+/**
+ * Format price in cents to dollars.
+ */
 export function formatSeatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(0)}`;
 }
