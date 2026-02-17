@@ -96,21 +96,31 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise not found" }, 404);
   }
 
-  // Get subscription info
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription } = await (serviceSupabase as any)
-    .from("enterprise_subscriptions")
-    .select("*")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .maybeSingle() as { data: EnterpriseSubscription | null };
+  // Parallelize subscription and alumni counts queries
+  const [
+    { data: subscription, error: subscriptionError },
+    { data: counts, error: countsError },
+  ] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("enterprise_subscriptions")
+      .select("*")
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .maybeSingle() as Promise<{ data: EnterpriseSubscription | null; error: Error | null }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("enterprise_alumni_counts")
+      .select("total_alumni_count, sub_org_count")
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .maybeSingle() as Promise<{ data: AlumniCountsRow | null; error: Error | null }>,
+  ]);
 
-  // Get alumni counts
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: counts } = await (serviceSupabase as any)
-    .from("enterprise_alumni_counts")
-    .select("total_alumni_count, sub_org_count")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .maybeSingle() as { data: AlumniCountsRow | null };
+  if (subscriptionError) {
+    console.error("[enterprise/route] subscription query failed:", subscriptionError);
+  }
+  if (countsError) {
+    console.error("[enterprise/route] alumni counts query failed:", countsError);
+  }
 
   return respond({
     enterprise,

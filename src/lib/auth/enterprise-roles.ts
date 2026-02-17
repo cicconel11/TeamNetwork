@@ -11,12 +11,17 @@ export async function getEnterpriseRole(
 
   if (!resolvedUserId) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("user_enterprise_roles")
     .select("role")
     .eq("enterprise_id", enterpriseId)
     .eq("user_id", resolvedUserId)
-    .single();
+    .maybeSingle();
+
+  if (error) {
+    console.error("[enterprise-roles] Failed to fetch enterprise role:", error);
+    return null;
+  }
 
   return data?.role as EnterpriseRole | null;
 }

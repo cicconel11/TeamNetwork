@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
+  sanitizeIlikeInput,
   validateJson,
   ValidationError,
   validationErrorResponse,
@@ -106,19 +107,23 @@ export async function GET(req: Request, { params }: RouteParams) {
   let userDetails: Record<string, { email: string; full_name: string | null }> = {};
 
   if (userIds.length > 0) {
-    // Using the auth.users table requires admin access
-    const { data: users } = await serviceSupabase.auth.admin.listUsers();
-    if (users?.users) {
-      userDetails = users.users.reduce((acc, u) => {
-        if (userIds.includes(u.id)) {
-          acc[u.id] = {
-            email: u.email ?? "",
-            full_name: (u.user_metadata?.full_name as string) ?? null,
-          };
-        }
+    // Using getUserById per user avoids unbounded listUsers() pagination
+    const userFetches = await Promise.all(
+      userIds.map((id) => serviceSupabase.auth.admin.getUserById(id))
+    );
+    userFetches.forEach((r, i) => {
+      if (r.error) console.error("[enterprise/admins] getUserById failed for", userIds[i], r.error);
+    });
+    userDetails = userFetches
+      .filter((r) => !r.error && r.data.user)
+      .map((r) => r.data.user!)
+      .reduce((acc, u) => {
+        acc[u.id] = {
+          email: u.email ?? "",
+          full_name: (u.user_metadata?.full_name as string) ?? null,
+        };
         return acc;
       }, {} as Record<string, { email: string; full_name: string | null }>);
-    }
   }
 
   const adminsWithDetails = (admins ?? []).map((admin) => ({
@@ -177,9 +182,24 @@ export async function POST(req: Request, { params }: RouteParams) {
     const body = await validateJson(req, inviteAdminSchema, { maxBodyBytes: 8_000 });
     const { email, role } = body;
 
-    // Find user by email
-    const { data: users } = await serviceSupabase.auth.admin.listUsers();
-    const targetUser = users?.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    // Direct Postgres lookup via service role — no pagination cap, no client-side scan
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: userRow, error: lookupError } = await (serviceSupabase as any)
+      .schema("auth")
+      .from("users")
+      .select("id, email, raw_user_meta_data")
+      .ilike("email", sanitizeIlikeInput(email))
+      .maybeSingle() as {
+        data: { id: string; email: string; raw_user_meta_data: Record<string, unknown> | null } | null;
+        error: { message: string } | null;
+      };
+    if (lookupError) {
+      console.error("[enterprise/admins] user lookup failed:", lookupError);
+      return respond({ error: "Failed to look up user" }, 500);
+    }
+    const targetUser = userRow
+      ? { id: userRow.id, email: userRow.email, user_metadata: userRow.raw_user_meta_data ?? {} }
+      : null;
 
     if (!targetUser) {
       return respond({ error: "User not found. They must create an account first." }, 404);

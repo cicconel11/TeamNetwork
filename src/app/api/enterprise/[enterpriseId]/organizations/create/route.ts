@@ -90,6 +90,12 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Check seat limit for enterprise-managed orgs
     const seatQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
+    if (seatQuota.error) {
+      return respond(
+        { error: "Unable to verify seat limit. Please try again." },
+        503
+      );
+    }
     if (!seatQuota.allowed) {
       return respond({
         error: "Seat limit reached",

@@ -41,20 +41,29 @@ export async function getEnterpriseQuota(enterpriseId: string) {
   const supabase = createServiceClient();
 
   // Fetch subscription and alumni counts in parallel (both only need enterpriseId)
-  const [{ data: subscription }, { data: counts }] = await Promise.all([
+  const [{ data: subscription, error: subscriptionError }, { data: counts, error: countsError }] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("enterprise_subscriptions")
       .select("alumni_bucket_quantity")
       .eq("enterprise_id", enterpriseId)
-      .single() as Promise<{ data: EnterpriseSubscriptionRow | null }>,
+      .single() as Promise<{ data: EnterpriseSubscriptionRow | null; error: unknown }>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from("enterprise_alumni_counts")
       .select("total_alumni_count, sub_org_count")
       .eq("enterprise_id", enterpriseId)
-      .single() as Promise<{ data: AlumniCountsRow | null }>,
+      .single() as Promise<{ data: AlumniCountsRow | null; error: unknown }>,
   ]);
+
+  if (subscriptionError) {
+    console.error("[enterprise-quota] Failed to fetch enterprise subscription:", subscriptionError);
+    return null;
+  }
+
+  if (countsError) {
+    console.error("[enterprise-quota] Failed to fetch enterprise alumni counts:", countsError);
+  }
 
   if (!subscription) return null;
 
@@ -79,11 +88,16 @@ export async function checkAdoptionQuota(
   if (!quota) return { allowed: false as const, error: "Enterprise subscription not found" };
 
   // Get org's alumni count
-  const { count: orgAlumniCount } = await supabase
+  const { count: orgAlumniCount, error: alumniCountError } = await supabase
     .from("alumni")
     .select("*", { count: "exact", head: true })
     .eq("organization_id", orgId)
     .is("deleted_at", null);
+
+  if (alumniCountError) {
+    console.error("[enterprise-quota] Failed to fetch org alumni count:", alumniCountError);
+    return { allowed: false as const, error: "Failed to verify alumni count" };
+  }
 
   return evaluateAdoptionQuota(quota, orgAlumniCount ?? 0);
 }
@@ -94,11 +108,16 @@ export async function canEnterpriseAddSubOrg(enterpriseId: string) {
   // Get current enterprise-managed org count from the view
   // Source of truth: organization_subscriptions.status = 'enterprise_managed'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: counts } = await (supabase as any)
+  const { data: counts, error: countsError } = await (supabase as any)
     .from("enterprise_alumni_counts")
     .select("enterprise_managed_org_count")
     .eq("enterprise_id", enterpriseId)
-    .single() as { data: EnterpriseManagedCountRow | null };
+    .single() as { data: EnterpriseManagedCountRow | null; error: unknown };
+
+  if (countsError) {
+    console.error("[enterprise-quota] Failed to fetch enterprise managed org count:", countsError);
+    return { allowed: false, currentCount: 0, maxAllowed: null, needsUpgrade: false, error: "internal_error" };
+  }
 
   const currentCount = counts?.enterprise_managed_org_count ?? 0;
 

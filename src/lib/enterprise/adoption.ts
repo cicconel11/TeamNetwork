@@ -102,7 +102,7 @@ export async function createAdoptionRequest(
 export async function acceptAdoptionRequest(
   requestId: string,
   respondedBy: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; status?: number }> {
   const supabase = createServiceClient();
 
   // Get request with org and enterprise info
@@ -146,11 +146,17 @@ export async function acceptAdoptionRequest(
   // Check alumni quota again
   const quotaCheck = await checkAdoptionQuota(request.enterprise_id, request.organization_id);
   if (!quotaCheck.allowed) {
+    if (quotaCheck.error === "Failed to verify alumni count") {
+      return { success: false, error: quotaCheck.error, status: 503 };
+    }
     return { success: false, error: quotaCheck.error };
   }
 
   // Check seat limit for enterprise-managed orgs
   const seatQuota = await canEnterpriseAddSubOrg(request.enterprise_id);
+  if (seatQuota.error) {
+    return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
+  }
   if (!seatQuota.allowed) {
     return {
       success: false,

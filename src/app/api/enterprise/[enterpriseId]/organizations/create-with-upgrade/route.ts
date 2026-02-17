@@ -122,6 +122,21 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Check current seat quota (hybrid model: always allowed, billing kicks in after free tier)
     const seatQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
+    if (seatQuota.error) {
+      return respond(
+        { error: "Unable to verify seat limit. Please try again." },
+        503
+      );
+    }
+    if (!seatQuota.allowed) {
+      return respond({
+        error: "Seat limit reached",
+        message: `You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Add more seats to create additional organizations.`,
+        currentCount: seatQuota.currentCount,
+        maxAllowed: seatQuota.maxAllowed,
+        needsUpgrade: true,
+      }, 400);
+    }
 
     // Create organization under enterprise
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,10 +193,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Failed to create organization subscription" }, 500);
     }
 
-    // Get updated quota info for response
-    const updatedQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
-    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year");
-
     logEnterpriseAuditAction({
       actorUserId: user.id,
       actorEmail: user.email ?? "",
@@ -192,6 +203,18 @@ export async function POST(req: Request, { params }: RouteParams) {
       metadata: { name, slug },
       ...extractRequestContext(req),
     });
+
+    // Get updated quota info for response
+    const updatedQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
+    if (updatedQuota.error) {
+      // Org was already created — return success with stale quota rather than failing
+      return respond({
+        organization: newOrg,
+        upgraded: false,
+        subscription: null,
+      }, 201);
+    }
+    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year");
 
     return respond({
       organization: newOrg,

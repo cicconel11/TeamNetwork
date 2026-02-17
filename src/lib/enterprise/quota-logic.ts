@@ -22,6 +22,7 @@ export interface SeatQuotaInfo {
   currentCount: number;  // enterprise-managed orgs only
   maxAllowed: number | null;  // sub_org_quantity (null = unlimited/legacy)
   needsUpgrade: boolean;
+  error?: string;  // present only on DB/infra failure
 }
 
 export interface AdoptionQuotaResult {

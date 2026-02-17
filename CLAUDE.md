@@ -430,7 +430,11 @@ tests/
 
 - `src/middleware.ts` - Request interception, auth, org validation
 - `src/app/[orgSlug]/layout.tsx` - Organization context provider
-- `src/lib/auth/roles.ts` - Role checking utilities
+- `src/lib/auth/roles.ts` - Role checking utilities (`getOrgContext()`, `isOrgAdmin()`)
+- `src/lib/auth/enterprise-roles.ts` - Enterprise role checking (`requireEnterpriseRole()`, `getEnterprisePermissions()`)
+- `src/lib/enterprise/quota.ts` - Enterprise seat/alumni quota enforcement (fail-closed pattern)
+- `src/lib/enterprise/adoption.ts` - Adoption request lifecycle with structured error status
+- `src/lib/security/validation.ts` - Zod schemas, `sanitizeIlikeInput()` for safe ilike queries
 - `src/lib/payments/idempotency.ts` - Payment deduplication logic
 - `src/lib/navigation/nav-items.tsx` - Navigation structure and role filtering
 - `src/lib/schedule-security/verifyAndEnroll.ts` - Domain verification and allowlist enrollment
@@ -454,20 +458,61 @@ Enterprise accounts allow managing multiple organizations under a single billing
 - `enterprise_subscriptions` - Billing & subscription (status, pricing_model, sub_org_quantity, alumni_tier)
 - `user_enterprise_roles` - User roles (owner, billing_admin, org_admin)
 - `enterprise_adoption_requests` - Pending requests for enterprises to adopt existing orgs
+- `enterprise_alumni_counts` (view) - Source of truth for org/alumni counts per enterprise
 
-**Pricing Models:**
-- `alumni_tier` - Legacy tier-based pricing (tier_1: 5000, tier_2: 10000, tier_3: unlimited)
-- `per_sub_org` - Quantity-based seat pricing ($150/seat default)
+**Pricing Models (Hybrid):**
+- `per_sub_org` - Current model: 3 free sub-orgs, paid at $150/yr each beyond free tier
+- Alumni capacity: 2,500 per bucket, self-serve up to 4 buckets (10,000), 5+ is sales-led
+- `alumni_tier` - Legacy tier-based pricing (tier_1: 5000, tier_2: 10000, tier_3/sentinel 999: unlimited)
 
 **RLS Helper Functions:**
 - `is_enterprise_member(ent_id)` - Check if current user has any role in enterprise
 - `is_enterprise_admin(ent_id)` - Check if user is owner/billing_admin/org_admin
 
-**Key Files:**
+**Key Library Modules:**
 - `src/lib/auth/enterprise-context.ts` - Enterprise context & `getUserEnterprises()`
-- `src/app/app/page.tsx` - Displays "Your Enterprises" section
-- `src/components/enterprise/EnterpriseCard.tsx` - Enterprise card component
-- `src/app/enterprise/[enterpriseSlug]/` - Enterprise dashboard routes
+- `src/lib/auth/enterprise-roles.ts` - `requireEnterpriseRole()`, `requireEnterpriseOwner()`, `getEnterprisePermissions()`
+- `src/lib/auth/enterprise-ownership-check.ts` - Block account deletion if user owns enterprise
+- `src/lib/enterprise/quota.ts` - DB layer for `canEnterpriseAddSubOrg()`, `checkAdoptionQuota()`
+- `src/lib/enterprise/quota-logic.ts` - Pure computation: `evaluateSubOrgCapacity()`, `evaluateAdoptionQuota()`, `SeatQuotaInfo` interface
+- `src/lib/enterprise/pricing.ts` - `getSubOrgPricing()`, `getAlumniBucketPricing()`, `isSalesLed()`
+- `src/lib/enterprise/adoption.ts` - `createAdoptionRequest()`, `acceptAdoptionRequest()`, `rejectAdoptionRequest()`
+- `src/lib/enterprise/resolve-enterprise.ts` - Resolves slug-or-UUID enterprise params
+
+**API Routes (`src/app/api/enterprise/[enterpriseId]/`):**
+- `route.ts` - GET/PATCH enterprise details
+- `admins/route.ts` - GET list admins, POST invite admin, DELETE remove admin
+- `settings/route.ts` - GET enterprise settings with admin details
+- `billing/route.ts` - GET billing info; `billing/adjust/route.ts` - POST adjust subscription; `billing/portal/route.ts` - POST Stripe portal
+- `organizations/route.ts` - GET sub-orgs; `organizations/create/route.ts` - POST create sub-org; `organizations/create-with-upgrade/route.ts` - POST create with seat upgrade
+- `adopt/route.ts` - POST create adoption request; `adopt/preview/route.ts` - POST preview adoption
+- `adoption-requests/route.ts` - GET list; `adoption-requests/[requestId]/route.ts` - GET/DELETE specific request
+- `alumni/route.ts` - GET alumni; `alumni/stats/route.ts` - GET alumni stats; `alumni/export/route.ts` - GET export
+- `invites/route.ts` - GET/POST; `invites/bulk/route.ts` - POST bulk upload; `invites/[inviteId]/route.ts` - DELETE
+- `navigation/route.ts` - GET/POST nav config; `navigation/sync/route.ts` - POST sync to sub-orgs
+- `audit-logs/route.ts` - GET audit trail
+- `by-slug/[slug]/route.ts` - GET resolve slug to UUID
+
+**UI Routes (`src/app/enterprise/[enterpriseSlug]/`):**
+- Server components with auth gates → client components for interactivity
+- Pages: dashboard, alumni, billing, invites, navigation, organizations, settings
+- Layout: `layout.tsx` provides sidebar + responsive header with enterprise context
+
+**Enterprise Error Handling Patterns:**
+
+1. **Fail-closed quota checks:** `SeatQuotaInfo` has `error?: string`. When DB errors occur, `canEnterpriseAddSubOrg()` returns `{ allowed: false, error: "internal_error" }`. Callers MUST check `seatQuota.error` before `seatQuota.allowed`:
+```typescript
+if (seatQuota.error) return respond({ error: "Unable to verify seat limit..." }, 503);
+if (!seatQuota.allowed) return respond({ error: "Seat limit reached", ... }, 400);
+```
+
+2. **Structured error status on adoption:** `acceptAdoptionRequest()` returns `{ success: boolean; error?: string; status?: number }`. Routes use `result.status ?? 400` — no string matching.
+
+3. **Case-insensitive email lookup:** Admin invite uses `(serviceSupabase as any).schema("auth").from("users").ilike("email", sanitizeIlikeInput(email))`. Always use `sanitizeIlikeInput()` from `src/lib/security/validation.ts` to escape `%`, `_`, `\` before `.ilike()`.
+
+4. **Enterprise `as any` cast pattern:** Enterprise tables aren't in generated types. Use `(supabase as any).from("enterprise_table").select("...") as { data: TypeHere | null }`.
+
+5. **getUserById logging:** GET handlers that fetch user details via `Promise.all(userIds.map(id => getUserById(id)))` log failures before filtering: `userFetches.forEach((r, i) => { if (r.error) console.error(...) })`.
 
 **Test Enterprise (Development):**
 A test enterprise exists for development without Stripe payment:
@@ -475,6 +520,12 @@ A test enterprise exists for development without Stripe payment:
 - ID: `aaaaaaaa-0000-0000-0000-000000000001`
 - Status: `active` with 10 sub-org seats
 - Created via: `supabase/migrations/20260202200000_seed_test_enterprise.sql`
+
+**Enterprise Tests:**
+```bash
+node --test --loader ./tests/ts-loader.js tests/enterprise/*.test.ts tests/routes/enterprise/*.test.ts
+```
+Coverage: quota logic, adoption flows, roles/permissions, billing adjustments, checkout, delete-account ownership, quantity pricing, admin invite lookup, create-with-upgrade quota.
 
 ### Enterprise Independent Billing (Incomplete)
 The "Independent Billing" option for enterprise sub-organizations is partially implemented but **not functional**. Current state:
@@ -486,12 +537,7 @@ The "Independent Billing" option for enterprise sub-organizations is partially i
 
 **Impact**: Users who select "Independent Billing" will get a non-functional organization.
 
-**Workaround**: Always select "Enterprise Billing (Recommended)" when creating sub-orgs.
-
-Files affected:
-- `src/components/enterprise/CreateSubOrgForm.tsx` - UI option marked as "Coming Soon"
-- `src/app/api/enterprise/[enterpriseId]/organizations/create/route.ts`
-- `src/app/api/stripe/webhook/route.ts`
+**Workaround**: Always select "Enterprise Billing (Recommended)" when creating sub-orgs. UI option is marked "Coming Soon" in `CreateSubOrgForm.tsx`.
 
 
 ## Bug Issues and Investigation

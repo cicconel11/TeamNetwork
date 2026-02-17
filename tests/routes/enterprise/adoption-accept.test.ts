@@ -476,9 +476,11 @@ function simulateAcceptAdoption(
     return { status: 400, error: "Organization already belongs to an enterprise" };
   }
 
-  // Check quota
+  // Check quota — distinguish infra errors (503) from client errors (400)
   if (ctx.quotaAllowed === false) {
-    return { status: 400, error: ctx.quotaError || "Quota exceeded" };
+    const errorMsg = ctx.quotaError || "Quota exceeded";
+    const isInfraError = errorMsg.includes("Unable to verify") || errorMsg.includes("Failed to verify");
+    return { status: isInfraError ? 503 : 400, error: errorMsg };
   }
 
   return { status: 200, success: true };
@@ -649,6 +651,64 @@ test("Accept adoption fails when quota would be exceeded", () => {
 
   assert.strictEqual(result.status, 400);
   assert.ok(result.error?.includes("exceed alumni limit"));
+});
+
+test("Accept adoption returns 503 on seat-limit infra failure", () => {
+  const supabase = createSupabaseStub();
+
+  const result = simulateAcceptAdoption(
+    {
+      auth: AuthPresets.orgAdmin("org-1"),
+      orgId: "org-1",
+      requestId: "request-1",
+    },
+    {
+      supabase,
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        status: "pending",
+        expires_at: null,
+      },
+      organization: { id: "org-1", name: "Test Org", slug: "test-org", enterprise_id: null },
+      quotaAllowed: false,
+      quotaError: "Unable to verify seat limit. Please try again.",
+    }
+  );
+
+  assert.strictEqual(result.status, 503);
+  assert.ok(result.error?.includes("Unable to verify"));
+});
+
+test("Accept adoption returns 503 on alumni-count infra failure", () => {
+  const supabase = createSupabaseStub();
+
+  const result = simulateAcceptAdoption(
+    {
+      auth: AuthPresets.orgAdmin("org-1"),
+      orgId: "org-1",
+      requestId: "request-1",
+    },
+    {
+      supabase,
+      request: {
+        id: "request-1",
+        enterprise_id: "enterprise-1",
+        organization_id: "org-1",
+        requested_by: "user-1",
+        status: "pending",
+        expires_at: null,
+      },
+      organization: { id: "org-1", name: "Test Org", slug: "test-org", enterprise_id: null },
+      quotaAllowed: false,
+      quotaError: "Failed to verify alumni count",
+    }
+  );
+
+  assert.strictEqual(result.status, 503);
+  assert.ok(result.error?.includes("Failed to verify"));
 });
 
 test("Accept adoption fails for already processed request", () => {

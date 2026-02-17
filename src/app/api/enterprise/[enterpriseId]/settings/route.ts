@@ -76,23 +76,28 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: enterprise, error: enterpriseError } = await (serviceSupabase as any)
-    .from("enterprises")
-    .select("*")
-    .eq("id", resolvedEnterpriseId)
-    .single() as { data: Enterprise | null; error: Error | null };
+  // Parallelize enterprise and admins queries
+  const [
+    { data: enterprise, error: enterpriseError },
+    { data: admins, error: adminsError },
+  ] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("enterprises")
+      .select("*")
+      .eq("id", resolvedEnterpriseId)
+      .single() as Promise<{ data: Enterprise | null; error: Error | null }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (serviceSupabase as any)
+      .from("user_enterprise_roles")
+      .select("id, user_id, role, created_at")
+      .eq("enterprise_id", resolvedEnterpriseId)
+      .order("created_at", { ascending: true }) as Promise<{ data: { user_id: string; role: string }[] | null; error: Error | null }>,
+  ]);
 
   if (enterpriseError || !enterprise) {
     return respond({ error: "Enterprise not found" }, 404);
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: admins, error: adminsError } = await (serviceSupabase as any)
-    .from("user_enterprise_roles")
-    .select("id, user_id, role, created_at")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .order("created_at", { ascending: true }) as { data: { user_id: string; role: string }[] | null; error: Error | null };
 
   if (adminsError) {
     return respond({ error: adminsError.message }, 400);
@@ -102,18 +107,23 @@ export async function GET(req: Request, { params }: RouteParams) {
   let userDetails: Record<string, { email: string; full_name: string | null }> = {};
 
   if (userIds.length > 0) {
-    const { data: users } = await serviceSupabase.auth.admin.listUsers();
-    if (users?.users) {
-      userDetails = users.users.reduce((acc, u) => {
-        if (userIds.includes(u.id)) {
-          acc[u.id] = {
-            email: u.email ?? "",
-            full_name: (u.user_metadata?.full_name as string) ?? null,
-          };
-        }
+    // Using getUserById per user avoids unbounded listUsers() pagination
+    const userFetches = await Promise.all(
+      userIds.map((id) => serviceSupabase.auth.admin.getUserById(id))
+    );
+    userFetches.forEach((r, i) => {
+      if (r.error) console.error("[enterprise/settings] getUserById failed for", userIds[i], r.error);
+    });
+    userDetails = userFetches
+      .filter((r) => !r.error && r.data.user)
+      .map((r) => r.data.user!)
+      .reduce((acc, u) => {
+        acc[u.id] = {
+          email: u.email ?? "",
+          full_name: (u.user_metadata?.full_name as string) ?? null,
+        };
         return acc;
       }, {} as Record<string, { email: string; full_name: string | null }>);
-    }
   }
 
   const adminsWithDetails = (admins ?? []).map((admin) => ({

@@ -17,11 +17,15 @@ export const getEnterpriseContext = cache(async function getEnterpriseContext(en
 
   // Get enterprise by slug
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: enterprise } = await (supabase as any)
+  const { data: enterprise, error: enterpriseError } = await (supabase as any)
     .from("enterprises")
     .select("*")
     .eq("slug", enterpriseSlug)
-    .single() as { data: EnterpriseRow | null };
+    .single() as { data: EnterpriseRow | null; error: unknown };
+
+  if (enterpriseError) {
+    console.error("[enterprise-context] Failed to fetch enterprise by slug:", enterpriseError);
+  }
 
   if (!enterprise) return null;
 
@@ -30,9 +34,9 @@ export const getEnterpriseContext = cache(async function getEnterpriseContext(en
   const serviceSupabase = createServiceClient();
 
   const [
-    { data: roleData },
-    { data: subscription },
-    { data: counts },
+    { data: roleData, error: roleError },
+    { data: subscription, error: subscriptionError },
+    { data: counts, error: countsError },
   ] = await Promise.all([
     // Get user's role
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,22 +45,32 @@ export const getEnterpriseContext = cache(async function getEnterpriseContext(en
       .select("role")
       .eq("enterprise_id", enterprise.id)
       .eq("user_id", user.id)
-      .single() as Promise<{ data: EnterpriseRoleRow | null }>,
+      .single() as Promise<{ data: EnterpriseRoleRow | null; error: unknown }>,
     // Get subscription (using service client for sensitive data)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (serviceSupabase as any)
       .from("enterprise_subscriptions")
       .select("*")
       .eq("enterprise_id", enterprise.id)
-      .single() as Promise<{ data: SubscriptionRow | null }>,
+      .single() as Promise<{ data: SubscriptionRow | null; error: unknown }>,
     // Get alumni counts
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (serviceSupabase as any)
       .from("enterprise_alumni_counts")
       .select("total_alumni_count, sub_org_count, enterprise_managed_org_count")
       .eq("enterprise_id", enterprise.id)
-      .single() as Promise<{ data: AlumniCountsRow | null }>,
+      .single() as Promise<{ data: AlumniCountsRow | null; error: unknown }>,
   ]);
+
+  if (roleError) {
+    console.error("[enterprise-context] Failed to fetch enterprise role:", roleError);
+  }
+  if (subscriptionError) {
+    console.error("[enterprise-context] Failed to fetch enterprise subscription:", subscriptionError);
+  }
+  if (countsError) {
+    console.error("[enterprise-context] Failed to fetch enterprise alumni counts:", countsError);
+  }
 
   if (!roleData) return null;
 
@@ -74,11 +88,15 @@ export async function getEnterpriseById(enterpriseId: string): Promise<Enterpris
   const serviceSupabase = createServiceClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: enterprise } = await (serviceSupabase as any)
+  const { data: enterprise, error: enterpriseError } = await (serviceSupabase as any)
     .from("enterprises")
     .select("*")
     .eq("id", enterpriseId)
-    .single() as { data: EnterpriseRow | null };
+    .single() as { data: EnterpriseRow | null; error: unknown };
+
+  if (enterpriseError) {
+    console.error("[enterprise-context] Failed to fetch enterprise by id:", enterpriseError);
+  }
 
   return enterprise;
 }
@@ -102,13 +120,17 @@ export async function getUserEnterprises(userId: string): Promise<UserEnterprise
   const supabase = await createClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("user_enterprise_roles")
     .select(`
       role,
       enterprise:enterprises(*)
     `)
     .eq("user_id", userId);
+
+  if (error) {
+    console.error("[enterprise-context] Failed to fetch user enterprises:", error);
+  }
 
   return (data as UserEnterpriseItem[] | null) ?? [];
 }

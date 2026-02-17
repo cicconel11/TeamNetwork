@@ -168,7 +168,6 @@ export async function POST(req: Request, { params }: RouteParams) {
     try {
       let periodEnd: string | null = null;
       let updatedStatus = subscription.status;
-      let stripeSubscriptionId = subscription.stripe_subscription_id;
 
       // Case 1: Was free, staying free (no Stripe subscription needed)
       if (oldBillable === 0 && newBillable === 0) {
@@ -183,7 +182,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           .eq("enterprise_id", resolvedEnterpriseId);
 
         if (updateError) {
-          console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
+          return respond({ error: "Failed to update subscription quantity" }, 500);
         }
 
         const pricing = getSubOrgPricing(newQuantity, subscription.billing_interval);
