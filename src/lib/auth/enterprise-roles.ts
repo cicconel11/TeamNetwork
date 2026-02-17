@@ -2,17 +2,20 @@ import { createClient } from "@/lib/supabase/server";
 import type { EnterpriseRole, EnterpriseRolePermissions } from "@/types/enterprise";
 import { getEnterprisePermissions } from "@/types/enterprise";
 
-export async function getEnterpriseRole(enterpriseId: string): Promise<EnterpriseRole | null> {
+export async function getEnterpriseRole(
+  enterpriseId: string,
+  userId?: string
+): Promise<EnterpriseRole | null> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const resolvedUserId = userId ?? (await supabase.auth.getUser()).data.user?.id;
 
-  if (!user) return null;
+  if (!resolvedUserId) return null;
 
   const { data } = await supabase
     .from("user_enterprise_roles")
     .select("role")
     .eq("enterprise_id", enterpriseId)
-    .eq("user_id", user.id)
+    .eq("user_id", resolvedUserId)
     .single();
 
   return data?.role as EnterpriseRole | null;
@@ -29,7 +32,7 @@ export async function requireEnterpriseRole(
     throw new Error("Unauthorized");
   }
 
-  const role = await getEnterpriseRole(enterpriseId);
+  const role = await getEnterpriseRole(enterpriseId, user.id);
 
   if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden");

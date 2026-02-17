@@ -91,34 +91,24 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   const validOrgIds = new Set(orgs?.map((o) => o.id) ?? []);
 
-  let success = 0;
-  let failed = 0;
+  const validInvites = invites.filter((i) => validOrgIds.has(i.organizationId));
+  const invalidCount = invites.length - validInvites.length;
 
-  // Process invites one by one using the RPC function
-  for (const invite of invites) {
-    if (!validOrgIds.has(invite.organizationId)) {
-      failed++;
-      continue;
-    }
-
-    try {
-      const { error: rpcError } = await supabase.rpc("create_enterprise_invite", {
+  // Process all valid invites in parallel
+  const results = await Promise.allSettled(
+    validInvites.map((invite) =>
+      supabase.rpc("create_enterprise_invite", {
         p_enterprise_id: resolvedEnterpriseId,
         p_organization_id: invite.organizationId,
         p_role: invite.role,
         p_uses: null,
         p_expires_at: null,
-      });
+      })
+    )
+  );
 
-      if (rpcError) {
-        failed++;
-      } else {
-        success++;
-      }
-    } catch {
-      failed++;
-    }
-  }
+  const success = results.filter((r) => r.status === "fulfilled" && !r.value.error).length;
+  const failed = invalidCount + (validInvites.length - success);
 
   logEnterpriseAuditAction({
     actorUserId: user.id,

@@ -69,27 +69,22 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ success: true, synced: 0, message: "No organizations to sync" });
   }
 
-  // Use the RPC function to sync each organization
-  let synced = 0;
-  let failed = 0;
-
-  for (const org of orgs) {
-    try {
-      const { data, error: syncError } = await supabase.rpc("sync_enterprise_nav_to_org", {
+  // Sync all organizations in parallel
+  const results = await Promise.allSettled(
+    orgs.map((org) =>
+      supabase.rpc("sync_enterprise_nav_to_org", {
         p_enterprise_id: resolvedEnterpriseId,
         p_organization_id: org.id,
-      });
+      })
+    )
+  );
 
-      if (syncError) {
-        console.error(`Failed to sync org ${org.id}:`, syncError);
-        failed++;
-      } else if (data) {
-        synced++;
-      } else {
-        failed++;
-      }
-    } catch (err) {
-      console.error(`Error syncing org ${org.id}:`, err);
+  let synced = 0;
+  let failed = 0;
+  for (const result of results) {
+    if (result.status === "fulfilled" && !result.value.error && result.value.data) {
+      synced++;
+    } else {
       failed++;
     }
   }

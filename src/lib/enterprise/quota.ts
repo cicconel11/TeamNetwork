@@ -40,23 +40,23 @@ interface AlumniCountsRow {
 export async function getEnterpriseQuota(enterpriseId: string) {
   const supabase = createServiceClient();
 
-  // Get subscription bucket quantity
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription } = await (supabase as any)
-    .from("enterprise_subscriptions")
-    .select("alumni_bucket_quantity")
-    .eq("enterprise_id", enterpriseId)
-    .single() as { data: EnterpriseSubscriptionRow | null };
+  // Fetch subscription and alumni counts in parallel (both only need enterpriseId)
+  const [{ data: subscription }, { data: counts }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("enterprise_subscriptions")
+      .select("alumni_bucket_quantity")
+      .eq("enterprise_id", enterpriseId)
+      .single() as Promise<{ data: EnterpriseSubscriptionRow | null }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from("enterprise_alumni_counts")
+      .select("total_alumni_count, sub_org_count")
+      .eq("enterprise_id", enterpriseId)
+      .single() as Promise<{ data: AlumniCountsRow | null }>,
+  ]);
 
   if (!subscription) return null;
-
-  // Get alumni count from view
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: counts } = await (supabase as any)
-    .from("enterprise_alumni_counts")
-    .select("total_alumni_count, sub_org_count")
-    .eq("enterprise_id", enterpriseId)
-    .single() as { data: AlumniCountsRow | null };
 
   const alumniCount = counts?.total_alumni_count ?? 0;
   const subOrgCount = counts?.sub_org_count ?? 0;
