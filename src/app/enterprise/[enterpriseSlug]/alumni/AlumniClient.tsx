@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniStatsHeader } from "@/components/enterprise/AlumniStatsHeader";
@@ -42,13 +42,14 @@ interface AlumniStats {
   topIndustries: { name: string; count: number }[];
 }
 
-export function AlumniClient() {
-  const params = useParams();
+interface AlumniClientProps {
+  enterpriseId: string;
+}
+
+export function AlumniClient({ enterpriseId }: AlumniClientProps) {
   const searchParams = useSearchParams();
-  const enterpriseSlug = params.enterpriseSlug as string;
 
   const [isLoading, setIsLoading] = useState(true);
-  const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [alumni, setAlumni] = useState<Alumni[]>([]);
   const [stats, setStats] = useState<AlumniStats>({
@@ -79,21 +80,11 @@ export function AlumniClient() {
     hasPhone: searchParams.get("hasPhone") || "",
   };
 
-  // Fetch enterprise data and initial stats
+  // Fetch initial stats
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        // Get enterprise info
-        const enterpriseRes = await fetch(`/api/enterprise/by-slug/${enterpriseSlug}`);
-        if (!enterpriseRes.ok) {
-          console.error("Failed to fetch enterprise");
-          return;
-        }
-        const enterpriseData = await enterpriseRes.json();
-        setEnterpriseId(enterpriseData.id);
-
-        // Fetch stats
-        const statsRes = await fetch(`/api/enterprise/${enterpriseData.id}/alumni/stats`);
+        const statsRes = await fetch(`/api/enterprise/${enterpriseId}/alumni/stats`);
         if (statsRes.ok) {
           const statsData = await statsRes.json();
           setStats(statsData);
@@ -106,19 +97,17 @@ export function AlumniClient() {
             positions: [],
           });
         }
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
+      } catch {
+        // Stats fetch failed silently — page still usable
       }
     };
 
     fetchInitialData();
-  }, [enterpriseSlug]);
+  }, [enterpriseId]);
 
   // Fetch filtered alumni when filters change
   useEffect(() => {
     const fetchAlumni = async () => {
-      if (!enterpriseId) return;
-
       setIsLoading(true);
       try {
         const params = new URLSearchParams();
@@ -133,8 +122,8 @@ export function AlumniClient() {
           const data = await res.json();
           setAlumni(data.alumni || []);
         }
-      } catch (error) {
-        console.error("Error fetching alumni:", error);
+      } catch {
+        // Alumni fetch failed — loading state will clear
       } finally {
         setIsLoading(false);
       }

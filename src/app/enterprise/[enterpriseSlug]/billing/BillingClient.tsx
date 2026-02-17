@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
 import { Card, Button, Badge, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
@@ -37,10 +36,7 @@ function formatBucketPrice(quantity: number, interval: BillingInterval): string 
   return `$${amount.toLocaleString()}/${interval === "month" ? "mo" : "yr"}`;
 }
 
-export function BillingClient() {
-  const params = useParams();
-  const enterpriseSlug = params.enterpriseSlug as string;
-
+export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: string; enterpriseSlug: string }) {
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +53,7 @@ export function BillingClient() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/billing`);
+      const response = await fetch(`/api/enterprise/${enterpriseId}/billing`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -81,7 +77,7 @@ export function BillingClient() {
     } finally {
       setIsLoading(false);
     }
-  }, [enterpriseSlug]);
+  }, [enterpriseId]);
 
   useEffect(() => {
     loadBilling();
@@ -101,7 +97,7 @@ export function BillingClient() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/billing/adjust`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -134,7 +130,7 @@ export function BillingClient() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/billing/portal`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/billing/portal`, {
         method: "POST",
       });
 
@@ -165,7 +161,7 @@ export function BillingClient() {
       const rawQuantity = billing?.subOrgQuantity;
       const currentQuantity = resolveCurrentQuantity(rawQuantity, billing?.subOrgCount ?? 0);
 
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/billing/adjust`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

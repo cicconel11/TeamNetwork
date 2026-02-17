@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Button, Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { EnterpriseInviteForm } from "@/components/enterprise/EnterpriseInviteForm";
@@ -31,11 +31,11 @@ interface Invite {
   is_enterprise_wide?: boolean;
 }
 
-export function InvitesClient() {
-  const params = useParams();
-  const enterpriseSlug = params.enterpriseSlug as string;
+interface InvitesClientProps {
+  enterpriseId: string;
+}
 
-  const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
+export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,19 +71,10 @@ export function InvitesClient() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Get enterprise info
-        const enterpriseRes = await fetch(`/api/enterprise/by-slug/${enterpriseSlug}`);
-        if (!enterpriseRes.ok) {
-          setError("Failed to load enterprise");
-          return;
-        }
-        const enterpriseData = await enterpriseRes.json();
-        setEnterpriseId(enterpriseData.id);
-
-        // Fetch organizations and invites in parallel (both only need enterpriseData.id)
+        // Fetch organizations and invites in parallel
         const [orgsRes, invitesRes] = await Promise.all([
-          fetch(`/api/enterprise/${enterpriseData.id}/organizations`),
-          fetch(`/api/enterprise/${enterpriseData.id}/invites`),
+          fetch(`/api/enterprise/${enterpriseId}/organizations`),
+          fetch(`/api/enterprise/${enterpriseId}/invites`),
         ]);
 
         if (orgsRes.ok) {
@@ -109,7 +100,7 @@ export function InvitesClient() {
     };
 
     fetchData();
-  }, [enterpriseSlug, fetchInvites]);
+  }, [enterpriseId, fetchInvites]);
 
   useEffect(() => {
     if (preselectedOrgId && organizations.some(o => o.id === preselectedOrgId)) {
@@ -139,8 +130,6 @@ export function InvitesClient() {
   };
 
   const handleRevoke = async (inviteId: string) => {
-    if (!enterpriseId) return;
-
     try {
       const res = await fetch(`/api/enterprise/${enterpriseId}/invites/${inviteId}`, {
         method: "PATCH",
@@ -161,8 +150,6 @@ export function InvitesClient() {
   };
 
   const handleDelete = async (inviteId: string) => {
-    if (!enterpriseId) return;
-
     if (!confirm("Are you sure you want to delete this invite?")) return;
 
     try {

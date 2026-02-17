@@ -14,5 +14,5 @@ export default async function AdoptOrganizationPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <AdoptClient />;
+  return <AdoptClient enterpriseSlug={enterpriseSlug} />;
 }

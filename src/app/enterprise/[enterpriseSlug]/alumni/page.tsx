@@ -14,5 +14,5 @@ export default async function EnterpriseAlumniPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <AlumniClient />;
+  return <AlumniClient enterpriseId={context.enterprise.id} />;
 }

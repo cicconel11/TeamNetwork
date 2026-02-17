@@ -14,5 +14,5 @@ export default async function EnterpriseNavigationPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <NavigationClient />;
+  return <NavigationClient enterpriseId={context.enterprise.id} />;
 }

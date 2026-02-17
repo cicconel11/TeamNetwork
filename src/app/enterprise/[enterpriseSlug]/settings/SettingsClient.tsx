@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
 import { Card, Button, Input, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
@@ -22,10 +21,7 @@ interface EnterpriseSettings {
   billing_contact_email: string | null;
 }
 
-export function SettingsClient() {
-  const params = useParams();
-  const enterpriseSlug = params.enterpriseSlug as string;
-
+export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId: string; enterpriseSlug: string }) {
   const [, setSettings] = useState<EnterpriseSettings | null>(null);
   const [admins, setAdmins] = useState<EnterpriseAdmin[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -51,7 +47,7 @@ export function SettingsClient() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/settings`);
+      const response = await fetch(`/api/enterprise/${enterpriseId}/settings`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -73,7 +69,7 @@ export function SettingsClient() {
     } finally {
       setIsLoading(false);
     }
-  }, [enterpriseSlug]);
+  }, [enterpriseId]);
 
   useEffect(() => {
     loadSettings();
@@ -85,7 +81,7 @@ export function SettingsClient() {
     setSuccessMessage(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/settings`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/settings`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -119,7 +115,7 @@ export function SettingsClient() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/admins`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/admins`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -148,7 +144,7 @@ export function SettingsClient() {
     if (!confirm("Are you sure you want to remove this admin?")) return;
 
     try {
-      const response = await fetch(`/api/enterprise/${enterpriseSlug}/admins/${userId}`, {
+      const response = await fetch(`/api/enterprise/${enterpriseId}/admins/${userId}`, {
         method: "DELETE",
       });
 

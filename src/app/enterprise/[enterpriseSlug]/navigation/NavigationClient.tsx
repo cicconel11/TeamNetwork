@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
 import { Card } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { EnterpriseNavEditor } from "@/components/enterprise/EnterpriseNavEditor";
@@ -20,59 +19,36 @@ interface NavigationData {
   organizations: Organization[];
 }
 
-export function NavigationClient() {
-  const params = useParams();
-  const enterpriseSlug = params.enterpriseSlug as string;
+interface NavigationClientProps {
+  enterpriseId: string;
+}
 
-  const [enterpriseId, setEnterpriseId] = useState<string | null>(null);
+export function NavigationClient({ enterpriseId }: NavigationClientProps) {
   const [data, setData] = useState<NavigationData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const fetchData = useCallback(async (entId: string) => {
+  const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/enterprise/${entId}/navigation`);
+      const res = await fetch(`/api/enterprise/${enterpriseId}/navigation`);
       if (res.ok) {
         const navData = await res.json();
         setData(navData);
       } else {
         setError("Failed to load navigation settings");
       }
-    } catch (err) {
-      console.error("Error fetching navigation:", err);
+    } catch {
       setError("Failed to load navigation settings");
     }
-  }, []);
+  }, [enterpriseId]);
 
   useEffect(() => {
-    const init = async () => {
-      try {
-        // Get enterprise info
-        const enterpriseRes = await fetch(`/api/enterprise/by-slug/${enterpriseSlug}`);
-        if (!enterpriseRes.ok) {
-          setError("Failed to load enterprise");
-          return;
-        }
-        const enterpriseData = await enterpriseRes.json();
-        setEnterpriseId(enterpriseData.id);
-
-        await fetchData(enterpriseData.id);
-      } catch (err) {
-        console.error("Error loading data:", err);
-        setError("Failed to load data");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    init();
-  }, [enterpriseSlug, fetchData]);
+    fetchData().finally(() => setIsLoading(false));
+  }, [fetchData]);
 
   const handleSave = async (navConfig: NavConfig, lockedItems: string[]) => {
-    if (!enterpriseId) return;
-
     setSaveError(null);
     setSaveSuccess(false);
 
@@ -91,16 +67,13 @@ export function NavigationClient() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
 
-      // Refresh data
-      await fetchData(enterpriseId);
+      await fetchData();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to save");
     }
   };
 
   const handleSync = async () => {
-    if (!enterpriseId) return;
-
     try {
       const res = await fetch(`/api/enterprise/${enterpriseId}/navigation/sync`, {
         method: "POST",
@@ -111,8 +84,7 @@ export function NavigationClient() {
         throw new Error(data.error || "Failed to sync");
       }
 
-      // Refresh data to show updated sync times
-      await fetchData(enterpriseId);
+      await fetchData();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Failed to sync");
     }
@@ -161,8 +133,7 @@ export function NavigationClient() {
         </div>
       )}
 
-      {enterpriseId && (
-        <EnterpriseNavEditor
+      <EnterpriseNavEditor
           enterpriseId={enterpriseId}
           initialNavConfig={data.navConfig}
           initialLockedItems={data.lockedItems}
@@ -170,7 +141,6 @@ export function NavigationClient() {
           onSave={handleSave}
           onSync={handleSync}
         />
-      )}
     </div>
   );
 }

@@ -14,5 +14,5 @@ export default async function BillingPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <BillingClient />;
+  return <BillingClient enterpriseId={context.enterprise.id} enterpriseSlug={enterpriseSlug} />;
 }

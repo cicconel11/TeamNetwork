@@ -14,5 +14,5 @@ export default async function SettingsPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <SettingsClient />;
+  return <SettingsClient enterpriseId={context.enterprise.id} enterpriseSlug={enterpriseSlug} />;
 }

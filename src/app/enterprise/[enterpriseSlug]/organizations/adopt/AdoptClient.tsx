@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card, Button, Input, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
@@ -21,10 +21,8 @@ interface AdoptionRequest {
   requested_at: string;
 }
 
-export function AdoptClient() {
-  const params = useParams();
+export function AdoptClient({ enterpriseSlug }: { enterpriseSlug: string }) {
   const router = useRouter();
-  const enterpriseSlug = params.enterpriseSlug as string;
 
   const [orgSlug, setOrgSlug] = useState("");
   const [preview, setPreview] = useState<OrgPreview | null>(null);

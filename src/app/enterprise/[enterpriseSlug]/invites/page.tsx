@@ -14,5 +14,5 @@ export default async function EnterpriseInvitesPage({ params }: PageProps) {
     redirect("/app?error=no_enterprise_access");
   }
 
-  return <InvitesClient />;
+  return <InvitesClient enterpriseId={context.enterprise.id} />;
 }

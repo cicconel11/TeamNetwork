@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { EnterpriseContext, EnterpriseRole, Enterprise, EnterpriseSubscription } from "@/types/enterprise";
@@ -8,7 +9,7 @@ interface EnterpriseRoleRow { role: string }
 type SubscriptionRow = EnterpriseSubscription;
 interface AlumniCountsRow { total_alumni_count: number; sub_org_count: number; enterprise_managed_org_count: number }
 
-export async function getEnterpriseContext(enterpriseSlug: string): Promise<EnterpriseContext | null> {
+export const getEnterpriseContext = cache(async function getEnterpriseContext(enterpriseSlug: string): Promise<EnterpriseContext | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -67,7 +68,7 @@ export async function getEnterpriseContext(enterpriseSlug: string): Promise<Ente
     subOrgCount: counts?.sub_org_count ?? 0,
     enterpriseManagedOrgCount: counts?.enterprise_managed_org_count ?? 0,
   };
-}
+});
 
 export async function getEnterpriseById(enterpriseId: string): Promise<Enterprise | null> {
   const serviceSupabase = createServiceClient();
