@@ -116,7 +116,7 @@ export async function canEnterpriseAddSubOrg(enterpriseId: string) {
 
   if (countsError) {
     console.error("[enterprise-quota] Failed to fetch enterprise managed org count:", countsError);
-    return { allowed: false, currentCount: 0, maxAllowed: null, needsUpgrade: false, error: "internal_error" };
+    return { currentCount: 0, maxAllowed: null, error: "internal_error" };
   }
 
   const currentCount = counts?.enterprise_managed_org_count ?? 0;

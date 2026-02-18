@@ -18,10 +18,8 @@ export interface EnterpriseQuotaInfo {
 }
 
 export interface SeatQuotaInfo {
-  allowed: boolean;
   currentCount: number;  // enterprise-managed orgs only
   maxAllowed: number | null;  // sub_org_quantity (null = unlimited/legacy)
-  needsUpgrade: boolean;
   error?: string;  // present only on DB/infra failure
 }
 
@@ -91,17 +89,16 @@ export function evaluateAdoptionQuota(
 }
 
 /**
- * Evaluate sub-org capacity. In the hybrid model, creation is always allowed.
+ * Evaluate sub-org capacity. In the hybrid model, creation is always allowed
+ * — billing kicks in after the free tier, but there is no hard cap.
  * Pure function — no I/O required.
  */
 export function evaluateSubOrgCapacity(
   enterpriseManagedOrgCount: number
 ): SeatQuotaInfo {
   return {
-    allowed: true,
     currentCount: enterpriseManagedOrgCount,
     maxAllowed: null,
-    needsUpgrade: false,
   };
 }
 

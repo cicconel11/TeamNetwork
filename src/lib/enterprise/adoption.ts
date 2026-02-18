@@ -157,12 +157,6 @@ export async function acceptAdoptionRequest(
   if (seatQuota.error) {
     return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
   }
-  if (!seatQuota.allowed) {
-    return {
-      success: false,
-      error: `Seat limit reached. You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Add more seats to adopt additional organizations.`,
-    };
-  }
 
   // Get org's current subscription for preservation
   const { data: orgSub } = await supabase

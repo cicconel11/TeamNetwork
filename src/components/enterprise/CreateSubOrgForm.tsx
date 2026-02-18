@@ -143,7 +143,6 @@ export function CreateSubOrgForm({
           slug: pendingFormData.slug,
           primary_color: pendingFormData.primaryColor,
           billingType: pendingFormData.billingType,
-          upgradeIfNeeded: true,
         }),
       });
 

@@ -202,30 +202,27 @@ describe("evaluateAdoptionQuota", () => {
 // ── evaluateSubOrgCapacity ──
 
 describe("evaluateSubOrgCapacity", () => {
-  it("always allows adding sub-orgs (billing kicks in after free tier)", () => {
+  it("returns current count and null maxAllowed (no hard cap in hybrid model)", () => {
     const result = evaluateSubOrgCapacity(5);
-    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 5);
     assert.strictEqual(result.maxAllowed, null);
-    assert.strictEqual(result.needsUpgrade, false);
+    assert.strictEqual(result.error, undefined);
   });
 
   it("returns correct current count", () => {
     const result = evaluateSubOrgCapacity(10);
     assert.strictEqual(result.currentCount, 10);
-    assert.strictEqual(result.allowed, true);
   });
 
   it("handles zero current count", () => {
     const result = evaluateSubOrgCapacity(0);
     assert.strictEqual(result.currentCount, 0);
-    assert.strictEqual(result.allowed, true);
-    assert.strictEqual(result.needsUpgrade, false);
+    assert.strictEqual(result.error, undefined);
   });
 
   it("handles large counts without limit", () => {
     const result = evaluateSubOrgCapacity(100);
     assert.strictEqual(result.currentCount, 100);
-    assert.strictEqual(result.allowed, true);
     assert.strictEqual(result.maxAllowed, null);
   });
 });

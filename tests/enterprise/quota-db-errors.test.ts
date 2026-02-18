@@ -39,15 +39,13 @@ import {
 function simulateCanEnterpriseAddSubOrg(params: {
   counts: { enterprise_managed_org_count: number } | null;
   countsError: unknown;
-}): SeatQuotaInfo & { error?: string } {
+}): SeatQuotaInfo {
   const { counts, countsError } = params;
 
   if (countsError) {
     return {
-      allowed: false,
       currentCount: 0,
       maxAllowed: null,
-      needsUpgrade: false,
       error: "internal_error",
     };
   }
@@ -119,23 +117,14 @@ function simulateGetEnterpriseQuota(params: {
 // ── canEnterpriseAddSubOrg ────────────────────────────────────────────────────
 
 describe("canEnterpriseAddSubOrg — DB error path", () => {
-  it("returns { error: 'internal_error', allowed: false } when DB query fails", () => {
+  it("returns { error: 'internal_error' } when DB query fails", () => {
     const result = simulateCanEnterpriseAddSubOrg({
       counts: null,
       countsError: new Error("connection timeout"),
     });
 
-    assert.strictEqual(result.allowed, false);
     assert.strictEqual(result.error, "internal_error");
-  });
-
-  it("needsUpgrade is false on DB error (not true)", () => {
-    const result = simulateCanEnterpriseAddSubOrg({
-      counts: null,
-      countsError: new Error("DB unavailable"),
-    });
-
-    assert.strictEqual(result.needsUpgrade, false);
+    assert.strictEqual(result.currentCount, 0);
   });
 
   it("currentCount is 0 on DB error", () => {
@@ -147,15 +136,13 @@ describe("canEnterpriseAddSubOrg — DB error path", () => {
     assert.strictEqual(result.currentCount, 0);
   });
 
-  it("returns { allowed: true } with correct currentCount when query succeeds", () => {
+  it("returns correct currentCount when query succeeds", () => {
     const result = simulateCanEnterpriseAddSubOrg({
       counts: { enterprise_managed_org_count: 7 },
       countsError: null,
     });
 
-    assert.strictEqual(result.allowed, true);
     assert.strictEqual(result.currentCount, 7);
-    assert.strictEqual(result.needsUpgrade, false);
     assert.strictEqual(result.error, undefined);
   });
 
@@ -166,7 +153,6 @@ describe("canEnterpriseAddSubOrg — DB error path", () => {
     });
 
     assert.strictEqual(result.currentCount, 0);
-    assert.strictEqual(result.allowed, true);
     assert.strictEqual(result.error, undefined);
   });
 
@@ -178,7 +164,7 @@ describe("canEnterpriseAddSubOrg — DB error path", () => {
 
     // evaluateSubOrgCapacity always returns maxAllowed: null in hybrid model
     assert.strictEqual(result.maxAllowed, null);
-    assert.strictEqual(result.allowed, true);
+    assert.strictEqual(result.currentCount, 15);
   });
 });
 

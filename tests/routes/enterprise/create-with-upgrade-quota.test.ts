@@ -4,17 +4,14 @@ import assert from "node:assert";
 /**
  * Tests for create-with-upgrade route quota handling:
  * - Pre-creation seatQuota.error → 503
- * - Pre-creation seatQuota.allowed === false → 400 with upgrade info
  * - Post-creation updatedQuota.error → 201 with subscription: null fallback
  *
  * Simulates the logic in create-with-upgrade/route.ts
  */
 
 interface SeatQuotaInfo {
-  allowed: boolean;
   currentCount: number;
   maxAllowed: number | null;
-  needsUpgrade: boolean;
   error?: string;
 }
 
@@ -31,23 +28,11 @@ function simulateCreateWithUpgrade(
   preCreationQuota: SeatQuotaInfo,
   postCreationQuota: SeatQuotaInfo | null
 ): CreateWithUpgradeResult {
-  // Pre-creation check (lines 123-136 in route)
+  // Pre-creation check: only error means infra failure (503)
   if (preCreationQuota.error) {
     return {
       status: 503,
       body: { error: "Unable to verify seat limit. Please try again." },
-    };
-  }
-  if (!preCreationQuota.allowed) {
-    return {
-      status: 400,
-      body: {
-        error: "Seat limit reached",
-        message: `You have used all ${preCreationQuota.maxAllowed} enterprise-managed org seats. Add more seats to create additional organizations.`,
-        currentCount: preCreationQuota.currentCount,
-        maxAllowed: preCreationQuota.maxAllowed,
-        needsUpgrade: true,
-      },
     };
   }
 
@@ -80,27 +65,17 @@ function simulateCreateWithUpgrade(
 
 test("returns 503 when pre-creation quota check has infra error", () => {
   const result = simulateCreateWithUpgrade(
-    { allowed: false, currentCount: 0, maxAllowed: null, needsUpgrade: false, error: "internal_error" },
+    { currentCount: 0, maxAllowed: null, error: "internal_error" },
     null
   );
   assert.strictEqual(result.status, 503);
   assert.ok((result.body.error as string).includes("Unable to verify"));
 });
 
-test("returns 400 with upgrade info when seat limit reached", () => {
-  const result = simulateCreateWithUpgrade(
-    { allowed: false, currentCount: 5, maxAllowed: 5, needsUpgrade: true },
-    null
-  );
-  assert.strictEqual(result.status, 400);
-  assert.strictEqual(result.body.needsUpgrade, true);
-  assert.ok((result.body.message as string).includes("5"));
-});
-
 test("returns 201 with subscription: null when post-creation quota fetch fails", () => {
   const result = simulateCreateWithUpgrade(
-    { allowed: true, currentCount: 3, maxAllowed: null, needsUpgrade: false },
-    { allowed: true, currentCount: 4, maxAllowed: null, needsUpgrade: false, error: "internal_error" }
+    { currentCount: 3, maxAllowed: null },
+    { currentCount: 4, maxAllowed: null, error: "internal_error" }
   );
   assert.strictEqual(result.status, 201);
   assert.strictEqual(result.body.subscription, null);
@@ -109,8 +84,8 @@ test("returns 201 with subscription: null when post-creation quota fetch fails",
 
 test("returns 201 with full subscription info on success", () => {
   const result = simulateCreateWithUpgrade(
-    { allowed: true, currentCount: 3, maxAllowed: null, needsUpgrade: false },
-    { allowed: true, currentCount: 4, maxAllowed: null, needsUpgrade: false }
+    { currentCount: 3, maxAllowed: null },
+    { currentCount: 4, maxAllowed: null }
   );
   assert.strictEqual(result.status, 201);
   assert.ok(result.body.subscription !== null);
@@ -123,8 +98,8 @@ test("returns 201 with full subscription info on success", () => {
 test("pre-creation check runs before post-creation check", () => {
   // Even if post-creation would succeed, a pre-creation error blocks creation
   const result = simulateCreateWithUpgrade(
-    { allowed: false, currentCount: 0, maxAllowed: null, needsUpgrade: false, error: "internal_error" },
-    { allowed: true, currentCount: 1, maxAllowed: null, needsUpgrade: false }
+    { currentCount: 0, maxAllowed: null, error: "internal_error" },
+    { currentCount: 1, maxAllowed: null }
   );
   assert.strictEqual(result.status, 503);
 });

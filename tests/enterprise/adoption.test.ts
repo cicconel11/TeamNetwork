@@ -44,10 +44,9 @@ interface MockQuotaCheck {
 }
 
 interface MockSeatQuotaCheck {
-  allowed: boolean;
   currentCount: number;
   maxAllowed: number | null;
-  needsUpgrade: boolean;
+  error?: string;
 }
 
 interface CreateAdoptionContext {
@@ -146,10 +145,11 @@ function simulateAcceptAdoptionRequest(
   }
 
   // Check seat limit for enterprise-managed orgs
-  if (ctx.seatQuotaCheck && !ctx.seatQuotaCheck.allowed) {
+  if (ctx.seatQuotaCheck?.error) {
     return {
       success: false,
-      error: `Seat limit reached. You have used all ${ctx.seatQuotaCheck.maxAllowed} enterprise-managed org seats. Add more seats to adopt additional organizations.`,
+      error: "Unable to verify seat limit. Please try again.",
+      status: 503,
     };
   }
 
@@ -537,7 +537,7 @@ describe("acceptAdoptionRequest", () => {
     assert.strictEqual(result.success, true);
   });
 
-  it("returns error when seat limit is reached", () => {
+  it("returns error when seat quota check has infra error", () => {
     const futureDate = new Date(Date.now() + 86400000 * 7);
 
     const ctx: AcceptAdoptionContext = {
@@ -555,18 +555,16 @@ describe("acceptAdoptionRequest", () => {
       organization: { id: "org-1", name: "Test Org", enterprise_id: null },
       quotaCheck: { allowed: true },
       seatQuotaCheck: {
-        allowed: false,
         currentCount: 5,
         maxAllowed: 5,
-        needsUpgrade: true,
+        error: "internal_error",
       },
     };
 
     const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
 
     assert.strictEqual(result.success, false);
-    assert.ok(result.error?.includes("Seat limit reached"));
-    assert.ok(result.error?.includes("5 enterprise-managed org seats"));
+    assert.ok(result.error?.includes("Unable to verify seat limit"));
   });
 
   it("succeeds when seat limit has room", () => {
@@ -587,10 +585,8 @@ describe("acceptAdoptionRequest", () => {
       organization: { id: "org-1", name: "Test Org", enterprise_id: null },
       quotaCheck: { allowed: true },
       seatQuotaCheck: {
-        allowed: true,
         currentCount: 3,
         maxAllowed: 5,
-        needsUpgrade: false,
       },
     };
 
@@ -617,10 +613,8 @@ describe("acceptAdoptionRequest", () => {
       organization: { id: "org-1", name: "Test Org", enterprise_id: null },
       quotaCheck: { allowed: true },
       seatQuotaCheck: {
-        allowed: true,
         currentCount: 0,
         maxAllowed: null,
-        needsUpgrade: false,
       },
     };
 
