@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import {
-  requireEnterpriseRole,
-  requireEnterpriseOwner,
-} from "@/lib/auth/enterprise-roles";
+  getEnterpriseApiContext,
+  ENTERPRISE_ANY_ROLE,
+  ENTERPRISE_OWNER_ROLE,
+} from "@/lib/auth/enterprise-api-context";
 import type { AdoptionRequestStatus } from "@/types/enterprise";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
@@ -61,34 +60,14 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Check enterprise membership (any role can view)
-    await requireEnterpriseRole(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: request, error } = await (serviceSupabase as any)
+  const { data: request, error } = await (ctx.serviceSupabase as any)
     .from("enterprise_adoption_requests")
     .select(`
       id,
@@ -103,7 +82,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       organization:organizations(id, name, slug, description, primary_color)
     `)
     .eq("id", requestId)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .single() as { data: AdoptionRequestRow | null; error: Error | null };
 
   if (error || !request) {
@@ -136,39 +115,19 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_OWNER_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Only owner can cancel/withdraw adoption requests
-    await requireEnterpriseOwner(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Check request exists and is pending
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: request } = await (serviceSupabase as any)
+  const { data: request } = await (ctx.serviceSupabase as any)
     .from("enterprise_adoption_requests")
     .select("status")
     .eq("id", requestId)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .single() as { data: { status: AdoptionRequestStatus } | null };
 
   if (!request) {
@@ -181,7 +140,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
 
   // Delete the request
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (serviceSupabase as any)
+  const { error: deleteError } = await (ctx.serviceSupabase as any)
     .from("enterprise_adoption_requests")
     .delete()
     .eq("id", requestId) as { error: Error | null };
@@ -191,10 +150,10 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   }
 
   logEnterpriseAuditAction({
-    actorUserId: user.id,
-    actorEmail: user.email ?? "",
+    actorUserId: ctx.userId,
+    actorEmail: ctx.userEmail,
     action: "withdraw_adoption",
-    enterpriseId: resolvedEnterpriseId,
+    enterpriseId: ctx.enterpriseId,
     targetType: "adoption_request",
     targetId: requestId,
     ...extractRequestContext(req),

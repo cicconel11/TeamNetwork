@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
@@ -87,30 +85,11 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseRole(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
 
   // Parse and validate export parameters
   const rawParams = Object.fromEntries(
@@ -131,10 +110,10 @@ export async function GET(req: Request, { params }: RouteParams) {
     : Object.keys(FIELD_LABELS);
 
   // Get organization IDs for this enterprise
-  const { data: orgs } = await serviceSupabase
+  const { data: orgs } = await ctx.serviceSupabase
     .from("organizations")
     .select("id, name, slug")
-    .eq("enterprise_id", resolvedEnterpriseId);
+    .eq("enterprise_id", ctx.enterpriseId);
 
   if (!orgs || orgs.length === 0) {
     return respond({ error: "No organizations found" }, 404);
@@ -144,7 +123,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const orgMap = new Map(orgs.map((o) => [o.id, o.name]));
 
   // Build query
-  let query = serviceSupabase
+  let query = ctx.serviceSupabase
     .from("alumni")
     .select("*")
     .in("organization_id", orgIds)
@@ -231,12 +210,12 @@ export async function GET(req: Request, { params }: RouteParams) {
     const filename = `alumni-export-${now}.csv`;
 
     logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
+      actorUserId: ctx.userId,
+      actorEmail: ctx.userEmail,
       action: "export_alumni_data",
-      enterpriseId: resolvedEnterpriseId,
+      enterpriseId: ctx.enterpriseId,
       targetType: "alumni",
-      targetId: resolvedEnterpriseId,
+      targetId: ctx.enterpriseId,
       metadata: { format: filters.format, recordCount: alumniWithOrg.length, fields: validFields },
       ...extractRequestContext(req),
     });
@@ -271,12 +250,12 @@ export async function GET(req: Request, { params }: RouteParams) {
     const filename = `alumni-export-${now}.xls`;
 
     logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
+      actorUserId: ctx.userId,
+      actorEmail: ctx.userEmail,
       action: "export_alumni_data",
-      enterpriseId: resolvedEnterpriseId,
+      enterpriseId: ctx.enterpriseId,
       targetType: "alumni",
-      targetId: resolvedEnterpriseId,
+      targetId: ctx.enterpriseId,
       metadata: { format: filters.format, recordCount: alumniWithOrg.length, fields: validFields },
       ...extractRequestContext(req),
     });

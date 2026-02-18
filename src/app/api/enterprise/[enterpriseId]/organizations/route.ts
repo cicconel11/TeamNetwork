@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import type { EnterpriseRelationshipType } from "@/types/enterprise";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,37 +42,15 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  // Check enterprise membership via service client (bypasses RLS)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: userRole } = await (serviceSupabase as any)
-    .from("user_enterprise_roles")
-    .select("role")
-    .eq("enterprise_id", resolvedEnterpriseId)
-    .eq("user_id", user.id)
-    .single() as { data: { role: string } | null };
-
-  if (!userRole) {
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Get all organizations belonging to this enterprise with subscription status
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: organizations, error } = await (serviceSupabase as any)
+  const { data: organizations, error } = await (ctx.serviceSupabase as any)
     .from("organizations")
     .select(`
       id,
@@ -89,7 +66,7 @@ export async function GET(req: Request, { params }: RouteParams) {
         status
       )
     `)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .order("name", { ascending: true }) as { data: OrganizationRow[] | null; error: Error | null };
 
   if (error) {
@@ -101,7 +78,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   let alumniCounts: Record<string, number> = {};
   if (orgIds.length > 0) {
-    const { data: counts } = await serviceSupabase
+    const { data: counts } = await ctx.serviceSupabase
       .from("alumni")
       .select("organization_id")
       .in("organization_id", orgIds)

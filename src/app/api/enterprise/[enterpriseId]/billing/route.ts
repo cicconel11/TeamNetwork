@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
-import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
+import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { getEnterpriseQuota } from "@/lib/enterprise/quota";
 import { getAlumniBucketPricing, getSubOrgPricing, isSalesLed } from "@/lib/enterprise/pricing";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import type { BillingInterval } from "@/types/enterprise";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 import { requireEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -53,38 +51,18 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_BILLING_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Require owner or billing_admin role
-    await requireEnterpriseBillingAccess(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Get subscription details
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (serviceSupabase as any)
+  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
     .from("enterprise_subscriptions")
     .select("*")
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
@@ -96,7 +74,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 
   // Get quota info
-  const quota = await getEnterpriseQuota(resolvedEnterpriseId);
+  const quota = await getEnterpriseQuota(ctx.enterpriseId);
 
   // Calculate pricing
   const bucketQuantity = subscription.alumni_bucket_quantity;
@@ -172,31 +150,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_BILLING_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Require owner or billing_admin role
-    await requireEnterpriseBillingAccess(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
 
   let body: z.infer<typeof updateBucketSchema>;
   try {
@@ -218,7 +176,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     );
   }
 
-  const quota = await getEnterpriseQuota(resolvedEnterpriseId);
+  const quota = await getEnterpriseQuota(ctx.enterpriseId);
   if (!quota) {
     return respond({ error: "Enterprise subscription not found" }, 404);
   }
@@ -234,10 +192,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Load current subscription info
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (serviceSupabase as any)
+  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
     .from("enterprise_subscriptions")
     .select("stripe_subscription_id, stripe_customer_id, alumni_bucket_quantity, billing_interval")
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
@@ -277,7 +235,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       typeof updatedSub.customer === "string" ? updatedSub.customer : updatedSub.customer?.id || null;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (serviceSupabase as any)
+    const { error: updateError } = await (ctx.serviceSupabase as any)
       .from("enterprise_subscriptions")
       .update({
         alumni_bucket_quantity: alumniBucketQuantity,
@@ -286,7 +244,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         stripe_customer_id: stripeCustomerId ?? subscription.stripe_customer_id,
         updated_at: new Date().toISOString(),
       })
-      .eq("enterprise_id", resolvedEnterpriseId);
+      .eq("enterprise_id", ctx.enterpriseId);
 
     if (updateError) {
       console.error("[enterprise-billing] Failed to update subscription record", updateError);
@@ -299,6 +257,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to update subscription";
-    return respond({ error: message }, 400);
+    console.error("[enterprise-billing] Stripe error:", error);
+    return respond({ error: message }, 500);
   }
 }

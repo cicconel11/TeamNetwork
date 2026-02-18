@@ -50,12 +50,17 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   // Verify user has access to this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: role } = await (serviceSupabase as any)
+  const { data: role, error: roleError } = await (serviceSupabase as any)
     .from("user_enterprise_roles")
     .select("role")
     .eq("enterprise_id", enterprise.id)
     .eq("user_id", user.id)
     .single() as { data: { role: string } | null; error: Error | null };
+
+  if (roleError) {
+    console.error("[by-slug] role query failed:", roleError);
+    return respond({ error: "Internal server error" }, 500);
+  }
 
   if (!role) {
     return respond({ error: "Forbidden" }, 403);

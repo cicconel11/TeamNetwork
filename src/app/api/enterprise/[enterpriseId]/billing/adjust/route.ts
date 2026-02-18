@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
-import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
@@ -62,31 +60,11 @@ export async function POST(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_BILLING_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Require owner or billing_admin role
-    await requireEnterpriseBillingAccess(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
 
   // Validate request body
   let body: z.infer<typeof adjustQuantitySchema>;
@@ -103,10 +81,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Get current subscription
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (serviceSupabase as any)
+  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
     .from("enterprise_subscriptions")
     .select("id, enterprise_id, stripe_customer_id, stripe_subscription_id, billing_interval, alumni_bucket_quantity, sub_org_quantity, status, current_period_end")
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
@@ -137,10 +115,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Get current enterprise-managed org count
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: counts, error: countsError } = await (serviceSupabase as any)
+    const { data: counts, error: countsError } = await (ctx.serviceSupabase as any)
       .from("enterprise_alumni_counts")
       .select("enterprise_managed_org_count")
-      .eq("enterprise_id", resolvedEnterpriseId)
+      .eq("enterprise_id", ctx.enterpriseId)
       .maybeSingle() as { data: EnterpriseManagedCountRow | null; error: Error | null };
 
     if (countsError) {
@@ -173,13 +151,13 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (oldBillable === 0 && newBillable === 0) {
         // Just update the quantity in database
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: updateError } = await (serviceSupabase as any)
+        const { error: updateError } = await (ctx.serviceSupabase as any)
           .from("enterprise_subscriptions")
           .update({
             sub_org_quantity: newQuantity,
             updated_at: new Date().toISOString(),
           })
-          .eq("enterprise_id", resolvedEnterpriseId);
+          .eq("enterprise_id", ctx.enterpriseId);
 
         if (updateError) {
           return respond({ error: "Failed to update subscription quantity" }, 500);
@@ -188,12 +166,12 @@ export async function POST(req: Request, { params }: RouteParams) {
         const pricing = getSubOrgPricing(newQuantity, subscription.billing_interval);
 
         logEnterpriseAuditAction({
-          actorUserId: user.id,
-          actorEmail: user.email ?? "",
+          actorUserId: ctx.userId,
+          actorEmail: ctx.userEmail,
           action: "adjust_billing",
-          enterpriseId: resolvedEnterpriseId,
+          enterpriseId: ctx.enterpriseId,
           targetType: "subscription",
-          targetId: resolvedEnterpriseId,
+          targetId: ctx.enterpriseId,
           metadata: { adjustType, newQuantity, previousQuantity: subscription.sub_org_quantity },
           ...extractRequestContext(req),
         });
@@ -308,7 +286,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
       // Update database
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (serviceSupabase as any)
+      const { error: updateError } = await (ctx.serviceSupabase as any)
         .from("enterprise_subscriptions")
         .update({
           sub_org_quantity: newQuantity,
@@ -316,7 +294,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           current_period_end: periodEnd,
           updated_at: new Date().toISOString(),
         })
-        .eq("enterprise_id", resolvedEnterpriseId);
+        .eq("enterprise_id", ctx.enterpriseId);
 
       if (updateError) {
         // Log error but don't fail - Stripe is source of truth
@@ -327,12 +305,12 @@ export async function POST(req: Request, { params }: RouteParams) {
       const pricing = getSubOrgPricing(newQuantity, subscription.billing_interval);
 
       logEnterpriseAuditAction({
-        actorUserId: user.id,
-        actorEmail: user.email ?? "",
+        actorUserId: ctx.userId,
+        actorEmail: ctx.userEmail,
         action: "adjust_billing",
-        enterpriseId: resolvedEnterpriseId,
+        enterpriseId: ctx.enterpriseId,
         targetType: "subscription",
-        targetId: resolvedEnterpriseId,
+        targetId: ctx.enterpriseId,
         metadata: { adjustType, newQuantity, previousQuantity: subscription.sub_org_quantity },
         ...extractRequestContext(req),
       });
@@ -388,10 +366,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Get current alumni count
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: counts, error: countsError } = await (serviceSupabase as any)
+    const { data: counts, error: countsError } = await (ctx.serviceSupabase as any)
       .from("enterprise_alumni_counts")
       .select("total_alumni_count")
-      .eq("enterprise_id", resolvedEnterpriseId)
+      .eq("enterprise_id", ctx.enterpriseId)
       .maybeSingle() as { data: { total_alumni_count: number } | null; error: Error | null };
 
     if (countsError) {
@@ -454,7 +432,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
       // Update database
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (serviceSupabase as any)
+      const { error: updateError } = await (ctx.serviceSupabase as any)
         .from("enterprise_subscriptions")
         .update({
           alumni_bucket_quantity: newQuantity,
@@ -462,19 +440,19 @@ export async function POST(req: Request, { params }: RouteParams) {
           current_period_end: periodEnd,
           updated_at: new Date().toISOString(),
         })
-        .eq("enterprise_id", resolvedEnterpriseId);
+        .eq("enterprise_id", ctx.enterpriseId);
 
       if (updateError) {
         console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
       }
 
       logEnterpriseAuditAction({
-        actorUserId: user.id,
-        actorEmail: user.email ?? "",
+        actorUserId: ctx.userId,
+        actorEmail: ctx.userEmail,
         action: "adjust_billing",
-        enterpriseId: resolvedEnterpriseId,
+        enterpriseId: ctx.enterpriseId,
         targetType: "subscription",
-        targetId: resolvedEnterpriseId,
+        targetId: ctx.enterpriseId,
         metadata: { adjustType, newQuantity, previousQuantity: subscription.alumni_bucket_quantity },
         ...extractRequestContext(req),
       });

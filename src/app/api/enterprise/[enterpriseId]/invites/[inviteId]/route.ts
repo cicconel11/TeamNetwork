@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError } from "@/lib/security/validation";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 const invitePatchSchema = z.object({
@@ -36,38 +34,19 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_CREATE_ORG_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseRole(resolvedEnterpriseId, ["owner", "org_admin"]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Verify invite belongs to this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invite } = await (serviceSupabase as any)
+  const { data: invite } = await (ctx.serviceSupabase as any)
     .from("enterprise_invites")
     .select("*")
     .eq("id", inviteId)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .single();
 
   if (!invite) {
@@ -86,7 +65,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
   if (body.revoked === true) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (serviceSupabase as any)
+    const { error: updateError } = await (ctx.serviceSupabase as any)
       .from("enterprise_invites")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", inviteId);
@@ -96,10 +75,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
+      actorUserId: ctx.userId,
+      actorEmail: ctx.userEmail,
       action: "revoke_invite",
-      enterpriseId: resolvedEnterpriseId,
+      enterpriseId: ctx.enterpriseId,
       targetType: "invite",
       targetId: inviteId,
       ...extractRequestContext(req),
@@ -128,38 +107,19 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_CREATE_ORG_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseRole(resolvedEnterpriseId, ["owner", "org_admin"]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Verify invite belongs to this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invite } = await (serviceSupabase as any)
+  const { data: invite } = await (ctx.serviceSupabase as any)
     .from("enterprise_invites")
     .select("id")
     .eq("id", inviteId)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .single();
 
   if (!invite) {
@@ -167,7 +127,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (serviceSupabase as any)
+  const { error: deleteError } = await (ctx.serviceSupabase as any)
     .from("enterprise_invites")
     .delete()
     .eq("id", inviteId);
@@ -177,10 +137,10 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   }
 
   logEnterpriseAuditAction({
-    actorUserId: user.id,
-    actorEmail: user.email ?? "",
+    actorUserId: ctx.userId,
+    actorEmail: ctx.userEmail,
     action: "delete_invite",
-    enterpriseId: resolvedEnterpriseId,
+    enterpriseId: ctx.enterpriseId,
     targetType: "invite",
     targetId: inviteId,
     ...extractRequestContext(req),

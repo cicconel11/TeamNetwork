@@ -1,21 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
-  baseSchemas,
-  validateJson,
-  ValidationError,
-  validationErrorResponse,
-} from "@/lib/security/validation";
-import {
-  requireEnterpriseRole,
-  requireEnterpriseOwner,
-} from "@/lib/auth/enterprise-roles";
-import { createAdoptionRequest } from "@/lib/enterprise/adoption";
+  getEnterpriseApiContext,
+  ENTERPRISE_ANY_ROLE,
+} from "@/lib/auth/enterprise-api-context";
 import type { AdoptionRequestStatus } from "@/types/enterprise";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,12 +32,6 @@ interface AdoptionRequestRow {
   };
 }
 
-const createRequestSchema = z
-  .object({
-    organizationId: baseSchemas.uuid,
-  })
-  .strict();
-
 export async function GET(req: Request, { params }: RouteParams) {
   const { enterpriseId } = await params;
 
@@ -65,35 +49,15 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Check enterprise membership (any role can view)
-    await requireEnterpriseRole(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Get adoption requests with organization details
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: requests, error } = await (serviceSupabase as any)
+  const { data: requests, error } = await (ctx.serviceSupabase as any)
     .from("enterprise_adoption_requests")
     .select(`
       id,
@@ -107,7 +71,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       expires_at,
       organization:organizations(id, name, slug)
     `)
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .order("requested_at", { ascending: false }) as { data: AdoptionRequestRow[] | null; error: Error | null };
 
   if (error) {
@@ -115,66 +79,4 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 
   return respond({ requests: requests ?? [] });
-}
-
-export async function POST(req: Request, { params }: RouteParams) {
-  try {
-    const { enterpriseId } = await params;
-
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const rateLimit = checkRateLimit(req, {
-      userId: user?.id ?? null,
-      feature: "create adoption request",
-      limitPerIp: 20,
-      limitPerUser: 10,
-    });
-
-    if (!rateLimit.ok) {
-      return buildRateLimitResponse(rateLimit);
-    }
-
-    const respond = (payload: unknown, status = 200) =>
-      NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-    if (!user) {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-
-    const serviceSupabase = createServiceClient();
-    const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-    if (resolveError) {
-      return respond({ error: resolveError.message }, resolveError.status);
-    }
-
-    const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-    try {
-      // Only owner can create adoption requests
-      await requireEnterpriseOwner(resolvedEnterpriseId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Forbidden";
-      if (message === "Unauthorized") {
-        return respond({ error: "Unauthorized" }, 401);
-      }
-      return respond({ error: "Forbidden" }, 403);
-    }
-
-    const body = await validateJson(req, createRequestSchema, { maxBodyBytes: 8_000 });
-    const { organizationId } = body;
-
-    const result = await createAdoptionRequest(resolvedEnterpriseId, organizationId, user.id);
-
-    if (!result.success) {
-      return respond({ error: result.error }, 400);
-    }
-
-    return respond({ requestId: result.requestId }, 201);
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      return validationErrorResponse(error);
-    }
-    throw error;
-  }
 }

@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,31 +54,12 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  // Only owner or billing_admin can view audit logs
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_BILLING_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    // Only owner or billing_admin can view audit logs
-    await requireEnterpriseRole(resolvedEnterpriseId, ["owner", "billing_admin"]);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
 
   // Parse query parameters
   const rawParams = Object.fromEntries(
@@ -99,10 +78,10 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   // Build query — exclude ip_address and user_agent to minimize PII exposure
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let query = (serviceSupabase as any)
+  let query = (ctx.serviceSupabase as any)
     .from("enterprise_audit_logs")
     .select("id, actor_user_id, actor_email_redacted, action, target_type, target_id, enterprise_id, organization_id, request_path, request_method, metadata, created_at", { count: "exact" })
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .order("created_at", { ascending: false })
     .range(filters.offset, filters.offset + filters.limit - 1);
 

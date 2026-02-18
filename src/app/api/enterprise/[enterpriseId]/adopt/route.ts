@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -9,9 +8,8 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import { requireEnterpriseOwner } from "@/lib/auth/enterprise-roles";
+import { getEnterpriseApiContext, ENTERPRISE_OWNER_ROLE } from "@/lib/auth/enterprise-api-context";
 import { createAdoptionRequest } from "@/lib/enterprise/adoption";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
@@ -45,36 +43,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       return buildRateLimitResponse(rateLimit);
     }
 
+    const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_OWNER_ROLE);
+    if (!ctx.ok) return ctx.response;
+
     const respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-    if (!user) {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-
-    const serviceSupabase = createServiceClient();
-    const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-    if (resolveError) {
-      return respond({ error: resolveError.message }, resolveError.status);
-    }
-
-    const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-    try {
-      await requireEnterpriseOwner(resolvedEnterpriseId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Forbidden";
-      if (message === "Unauthorized") {
-        return respond({ error: "Unauthorized" }, 401);
-      }
-      return respond({ error: "Forbidden" }, 403);
-    }
 
     const body = await validateJson(req, adoptSchema, { maxBodyBytes: 8_000 });
     const { organizationSlug } = body;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: org } = await (serviceSupabase as any)
+    const { data: org } = await (ctx.serviceSupabase as any)
       .from("organizations")
       .select("id")
       .eq("slug", organizationSlug)
@@ -84,16 +63,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Organization not found" }, 404);
     }
 
-    const result = await createAdoptionRequest(resolvedEnterpriseId, org.id, user.id);
+    const result = await createAdoptionRequest(ctx.enterpriseId, org.id, ctx.userId);
     if (!result.success) {
       return respond({ error: result.error }, 400);
     }
 
     logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
+      actorUserId: ctx.userId,
+      actorEmail: ctx.userEmail,
       action: "adopt_organization",
-      enterpriseId: resolvedEnterpriseId,
+      enterpriseId: ctx.enterpriseId,
       targetType: "organization",
       targetId: org.id,
       metadata: { organizationSlug, requestId: result.requestId },

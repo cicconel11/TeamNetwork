@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { requireEnterpriseBillingAccess } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
@@ -31,36 +29,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_BILLING_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseBillingAccess(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (serviceSupabase as any)
+  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
     .from("enterprise_subscriptions")
     .select("stripe_customer_id, stripe_subscription_id")
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .maybeSingle() as { data: { stripe_customer_id: string | null; stripe_subscription_id: string | null } | null; error: Error | null };
 
   if (subError) {
@@ -76,10 +55,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
       if (stripeCustomerId) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (serviceSupabase as any)
+        await (ctx.serviceSupabase as any)
           .from("enterprise_subscriptions")
           .update({ stripe_customer_id: stripeCustomerId, updated_at: new Date().toISOString() })
-          .eq("enterprise_id", resolvedEnterpriseId);
+          .eq("enterprise_id", ctx.enterpriseId);
       }
     } catch (error) {
       console.error("[enterprise-billing-portal] Failed to retrieve Stripe customer", error);
@@ -90,16 +69,15 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise billing is not linked to Stripe yet." }, 400);
   }
 
-  let enterpriseSlug = resolved?.enterpriseSlug;
-  if (!enterpriseSlug) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: enterprise } = await (serviceSupabase as any)
-      .from("enterprises")
-      .select("slug")
-      .eq("id", resolvedEnterpriseId)
-      .maybeSingle() as { data: { slug: string } | null };
-    enterpriseSlug = enterprise?.slug ?? null;
-  }
+  // Look up enterprise slug for the return URL
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: enterprise } = await (ctx.serviceSupabase as any)
+    .from("enterprises")
+    .select("slug")
+    .eq("id", ctx.enterpriseId)
+    .maybeSingle() as { data: { slug: string } | null };
+
+  const enterpriseSlug = enterprise?.slug ?? null;
 
   if (!enterpriseSlug) {
     return respond({ error: "Enterprise not found" }, 404);
@@ -112,12 +90,12 @@ export async function POST(req: Request, { params }: RouteParams) {
   });
 
   logEnterpriseAuditAction({
-    actorUserId: user.id,
-    actorEmail: user.email ?? "",
+    actorUserId: ctx.userId,
+    actorEmail: ctx.userEmail,
     action: "open_billing_portal",
-    enterpriseId: resolvedEnterpriseId,
+    enterpriseId: ctx.enterpriseId,
     targetType: "billing",
-    targetId: resolvedEnterpriseId,
+    targetId: ctx.enterpriseId,
     ...extractRequestContext(req),
   });
 

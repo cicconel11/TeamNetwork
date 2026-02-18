@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 const alumniSearchSchema = z.object({
@@ -45,36 +43,17 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseRole(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // Get organization IDs for this enterprise
-  const { data: orgs } = await serviceSupabase
+  const { data: orgs } = await ctx.serviceSupabase
     .from("organizations")
     .select("id, name, slug")
-    .eq("enterprise_id", resolvedEnterpriseId);
+    .eq("enterprise_id", ctx.enterpriseId);
 
   if (!orgs || orgs.length === 0) {
     return respond({ alumni: [], total: 0 });
@@ -99,7 +78,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   const filters = parsed.data;
 
   // Build query
-  let query = serviceSupabase
+  let query = ctx.serviceSupabase
     .from("alumni")
     .select("*", { count: "exact" })
     .is("deleted_at", null);

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -11,8 +10,7 @@ import {
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
-import { requireEnterpriseRole } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
 
@@ -59,56 +57,27 @@ export async function POST(req: Request, { params }: RouteParams) {
       return buildRateLimitResponse(rateLimit);
     }
 
+    const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_CREATE_ORG_ROLE);
+    if (!ctx.ok) return ctx.response;
+
     const respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-    if (!user) {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-
-    const serviceSupabase = createServiceClient();
-    const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-    if (resolveError) {
-      return respond({ error: resolveError.message }, resolveError.status);
-    }
-
-    const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-    try {
-      // Require owner or org_admin role to create sub-organizations
-      await requireEnterpriseRole(resolvedEnterpriseId, ["owner", "org_admin"]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Forbidden";
-      if (message === "Unauthorized") {
-        return respond({ error: "Unauthorized" }, 401);
-      }
-      return respond({ error: "Forbidden" }, 403);
-    }
 
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
     const { name, slug, description, primary_color, primaryColor } = body;
 
     // Check seat limit for enterprise-managed orgs
-    const seatQuota = await canEnterpriseAddSubOrg(resolvedEnterpriseId);
+    const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
     if (seatQuota.error) {
       return respond(
         { error: "Unable to verify seat limit. Please try again." },
         503
       );
     }
-    if (!seatQuota.allowed) {
-      return respond({
-        error: "Seat limit reached",
-        message: `You have used all ${seatQuota.maxAllowed} enterprise-managed org seats. Add more seats to create additional organizations.`,
-        currentCount: seatQuota.currentCount,
-        maxAllowed: seatQuota.maxAllowed,
-        needsUpgrade: true,
-      }, 400);
-    }
 
     // Check slug uniqueness across both organizations and enterprises
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingOrg } = await (serviceSupabase as any)
+    const { data: existingOrg } = await (ctx.serviceSupabase as any)
       .from("organizations")
       .select("id")
       .eq("slug", slug)
@@ -119,7 +88,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingEnterprise } = await (serviceSupabase as any)
+    const { data: existingEnterprise } = await (ctx.serviceSupabase as any)
       .from("enterprises")
       .select("id")
       .eq("slug", slug)
@@ -131,10 +100,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Check enterprise exists
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: enterprise } = await (serviceSupabase as any)
+    const { data: enterprise } = await (ctx.serviceSupabase as any)
       .from("enterprises")
       .select("id, primary_color")
-      .eq("id", resolvedEnterpriseId)
+      .eq("id", ctx.enterpriseId)
       .single() as { data: EnterpriseRow | null };
 
     if (!enterprise) {
@@ -143,14 +112,14 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     // Create organization under enterprise
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newOrg, error: orgError } = await (serviceSupabase as any)
+    const { data: newOrg, error: orgError } = await (ctx.serviceSupabase as any)
       .from("organizations")
       .insert({
         name,
         slug,
         description: description ?? null,
         primary_color: primary_color ?? primaryColor ?? enterprise.primary_color ?? "#1e3a5f",
-        enterprise_id: resolvedEnterpriseId,
+        enterprise_id: ctx.enterpriseId,
         enterprise_relationship_type: "created",
       })
       .select()
@@ -161,10 +130,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // Grant creator admin role on new organization
-    const { error: roleError } = await serviceSupabase
+    const { error: roleError } = await ctx.serviceSupabase
       .from("user_organization_roles")
       .insert({
-        user_id: user.id,
+        user_id: ctx.userId,
         organization_id: newOrg.id as string,
         role: "admin",
       });
@@ -172,7 +141,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (roleError) {
       // Cleanup if role assignment fails
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
+      await (ctx.serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
       return respond({ error: roleError.message }, 400);
     }
 
@@ -180,7 +149,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     // Uses pooled alumni quota, placeholder values for required fields
     // (billing is handled at enterprise level, alumni quota is pooled)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: subError } = await (serviceSupabase as any)
+    const { error: subError } = await (ctx.serviceSupabase as any)
       .from("organization_subscriptions")
       .insert({
         organization_id: newOrg.id,
@@ -192,17 +161,17 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (subError) {
       // Cleanup if subscription creation fails - org needs subscription to function
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (serviceSupabase as any).from("user_organization_roles").delete().eq("organization_id", newOrg.id);
+      await (ctx.serviceSupabase as any).from("user_organization_roles").delete().eq("organization_id", newOrg.id);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
+      await (ctx.serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
       return respond({ error: "Failed to create organization subscription" }, 500);
     }
 
     logEnterpriseAuditAction({
-      actorUserId: user.id,
-      actorEmail: user.email ?? "",
+      actorUserId: ctx.userId,
+      actorEmail: ctx.userEmail,
       action: "create_sub_org",
-      enterpriseId: resolvedEnterpriseId,
+      enterpriseId: ctx.enterpriseId,
       targetType: "organization",
       targetId: newOrg.id as string,
       metadata: { name, slug },

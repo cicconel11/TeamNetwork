@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
-import { requireEnterpriseOwner } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import { getEnterpriseApiContext, ENTERPRISE_OWNER_ROLE } from "@/lib/auth/enterprise-api-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,30 +28,11 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_OWNER_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
-
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseOwner(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
 
   const url = new URL(req.url);
   const slugParam = url.searchParams.get("slug") ?? "";
@@ -63,7 +42,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (serviceSupabase as any)
+  const { data: org } = await (ctx.serviceSupabase as any)
     .from("organizations")
     .select("id, name, slug, enterprise_id")
     .eq("slug", slugParsed.data)
@@ -77,7 +56,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Organization already belongs to an enterprise" }, 400);
   }
 
-  const { count: alumniCount } = await serviceSupabase
+  const { count: alumniCount } = await ctx.serviceSupabase
     .from("alumni")
     .select("*", { count: "exact", head: true })
     .eq("organization_id", org.id)

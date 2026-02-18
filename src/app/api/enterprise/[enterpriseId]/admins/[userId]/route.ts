@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
-import { requireEnterpriseOwner } from "@/lib/auth/enterprise-roles";
-import { resolveEnterpriseParam } from "@/lib/enterprise/resolve-enterprise";
+import {
+  getEnterpriseApiContext,
+  ENTERPRISE_OWNER_ROLE,
+} from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
 export const dynamic = "force-dynamic";
@@ -45,36 +46,17 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_OWNER_ROLE);
+  if (!ctx.ok) return ctx.response;
+
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  if (!user) {
-    return respond({ error: "Unauthorized" }, 401);
-  }
-
-  const serviceSupabase = createServiceClient();
-  const { data: resolved, error: resolveError } = await resolveEnterpriseParam(enterpriseId, serviceSupabase);
-  if (resolveError) {
-    return respond({ error: resolveError.message }, resolveError.status);
-  }
-
-  const resolvedEnterpriseId = resolved?.enterpriseId ?? enterpriseId;
-
-  try {
-    await requireEnterpriseOwner(resolvedEnterpriseId);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Forbidden";
-    if (message === "Unauthorized") {
-      return respond({ error: "Unauthorized" }, 401);
-    }
-    return respond({ error: "Forbidden" }, 403);
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: targetRole } = await (serviceSupabase as any)
+  const { data: targetRole } = await (ctx.serviceSupabase as any)
     .from("user_enterprise_roles")
     .select("id, role")
-    .eq("enterprise_id", resolvedEnterpriseId)
+    .eq("enterprise_id", ctx.enterpriseId)
     .eq("user_id", userId)
     .single() as { data: UserEnterpriseRoleRow | null };
 
@@ -84,10 +66,10 @@ export async function DELETE(req: Request, { params }: RouteParams) {
 
   if (targetRole.role === "owner") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { count: ownerCount } = await (serviceSupabase as any)
+    const { count: ownerCount } = await (ctx.serviceSupabase as any)
       .from("user_enterprise_roles")
       .select("*", { count: "exact", head: true })
-      .eq("enterprise_id", resolvedEnterpriseId)
+      .eq("enterprise_id", ctx.enterpriseId)
       .eq("role", "owner") as { count: number | null };
 
     if ((ownerCount ?? 0) <= 1) {
@@ -96,7 +78,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (serviceSupabase as any)
+  const { error: deleteError } = await (ctx.serviceSupabase as any)
     .from("user_enterprise_roles")
     .delete()
     .eq("id", targetRole.id);
@@ -106,10 +88,10 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   }
 
   logEnterpriseAuditAction({
-    actorUserId: user.id,
-    actorEmail: user.email ?? "",
+    actorUserId: ctx.userId,
+    actorEmail: ctx.userEmail,
     action: "remove_admin",
-    enterpriseId: resolvedEnterpriseId,
+    enterpriseId: ctx.enterpriseId,
     targetType: "user",
     targetId: userId,
     metadata: { removedRole: targetRole.role },
