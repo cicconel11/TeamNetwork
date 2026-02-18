@@ -431,7 +431,7 @@ tests/
 - `src/middleware.ts` - Request interception, auth, org validation
 - `src/app/[orgSlug]/layout.tsx` - Organization context provider
 - `src/lib/auth/roles.ts` - Role checking utilities (`getOrgContext()`, `isOrgAdmin()`)
-- `src/lib/auth/enterprise-roles.ts` - Enterprise role checking (`requireEnterpriseRole()`, `getEnterprisePermissions()`)
+- `src/lib/auth/enterprise-api-context.ts` - Enterprise API auth helper (`getEnterpriseApiContext()`, role presets)
 - `src/lib/enterprise/quota.ts` - Enterprise seat/alumni quota enforcement (fail-closed pattern)
 - `src/lib/enterprise/adoption.ts` - Adoption request lifecycle with structured error status
 - `src/lib/security/validation.ts` - Zod schemas, `sanitizeIlikeInput()` for safe ilike queries
@@ -471,7 +471,7 @@ Enterprise accounts allow managing multiple organizations under a single billing
 
 **Key Library Modules:**
 - `src/lib/auth/enterprise-context.ts` - Enterprise context & `getUserEnterprises()`
-- `src/lib/auth/enterprise-roles.ts` - `requireEnterpriseRole()`, `requireEnterpriseOwner()`, `getEnterprisePermissions()`
+- `src/lib/auth/enterprise-api-context.ts` - `getEnterpriseApiContext()` consolidated auth helper with role presets (`ENTERPRISE_ANY_ROLE`, `ENTERPRISE_BILLING_ROLE`, `ENTERPRISE_CREATE_ORG_ROLE`, `ENTERPRISE_OWNER_ROLE`)
 - `src/lib/auth/enterprise-ownership-check.ts` - Block account deletion if user owns enterprise
 - `src/lib/enterprise/quota.ts` - DB layer for `canEnterpriseAddSubOrg()`, `checkAdoptionQuota()`
 - `src/lib/enterprise/quota-logic.ts` - Pure computation: `evaluateSubOrgCapacity()`, `evaluateAdoptionQuota()`, `SeatQuotaInfo` interface
@@ -500,10 +500,9 @@ Enterprise accounts allow managing multiple organizations under a single billing
 
 **Enterprise Error Handling Patterns:**
 
-1. **Fail-closed quota checks:** `SeatQuotaInfo` has `error?: string`. When DB errors occur, `canEnterpriseAddSubOrg()` returns `{ allowed: false, error: "internal_error" }`. Callers MUST check `seatQuota.error` before `seatQuota.allowed`:
+1. **Fail-closed quota checks:** `SeatQuotaInfo` has `error?: string`. When DB errors occur, `canEnterpriseAddSubOrg()` returns `{ currentCount: 0, maxAllowed: null, error: "internal_error" }`. Callers check only `seatQuota.error` (there is no hard cap — `allowed` was removed in the hybrid pricing model):
 ```typescript
 if (seatQuota.error) return respond({ error: "Unable to verify seat limit..." }, 503);
-if (!seatQuota.allowed) return respond({ error: "Seat limit reached", ... }, 400);
 ```
 
 2. **Structured error status on adoption:** `acceptAdoptionRequest()` returns `{ success: boolean; error?: string; status?: number }`. Routes use `result.status ?? 400` — no string matching.
