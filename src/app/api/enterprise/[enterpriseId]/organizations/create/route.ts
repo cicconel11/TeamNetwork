@@ -33,7 +33,6 @@ const createOrgSchema = z
     slug: baseSchemas.slug,
     description: optionalSafeString(800),
     primary_color: baseSchemas.hexColor.optional(),
-    primaryColor: baseSchemas.hexColor.optional(),
     // Independent billing is not yet implemented - only enterprise_managed is supported
     billingType: z.literal("enterprise_managed").default("enterprise_managed"),
   })
@@ -64,7 +63,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
     const body = await validateJson(req, createOrgSchema, { maxBodyBytes: 16_000 });
-    const { name, slug, description, primary_color, primaryColor } = body;
+    const { name, slug, description, primary_color } = body;
 
     // Check seat limit for enterprise-managed orgs
     const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
@@ -118,7 +117,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         name,
         slug,
         description: description ?? null,
-        primary_color: primary_color ?? primaryColor ?? enterprise.primary_color ?? "#1e3a5f",
+        primary_color: primary_color ?? enterprise.primary_color ?? "#1e3a5f",
         enterprise_id: ctx.enterpriseId,
         enterprise_relationship_type: "created",
       })

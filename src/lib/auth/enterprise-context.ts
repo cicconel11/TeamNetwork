@@ -9,6 +9,10 @@ interface EnterpriseRoleRow { role: string }
 type SubscriptionRow = EnterpriseSubscription;
 interface AlumniCountsRow { total_alumni_count: number; sub_org_count: number; enterprise_managed_org_count: number }
 
+// SAFETY: React cache() is request-scoped in Next.js App Router — each HTTP request gets
+// its own cache instance. This deduplicates calls within a single user's render tree
+// (e.g., layout + page). Do NOT use this function in API route handlers, middleware,
+// or background jobs where cache() may not be request-scoped.
 export const getEnterpriseContext = cache(async function getEnterpriseContext(enterpriseSlug: string): Promise<EnterpriseContext | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -67,9 +71,11 @@ export const getEnterpriseContext = cache(async function getEnterpriseContext(en
   }
   if (subscriptionError) {
     console.error("[enterprise-context] Failed to fetch enterprise subscription:", subscriptionError);
+    // Continue with null subscription — user retains access, dashboard shows limited data
   }
   if (countsError) {
     console.error("[enterprise-context] Failed to fetch enterprise alumni counts:", countsError);
+    // Continue with zeroed counts — user retains access, counts temporarily show 0
   }
 
   if (!roleData) return null;
@@ -116,6 +122,13 @@ export interface UserEnterpriseItem {
   } | null;
 }
 
+/**
+ * Get all enterprises for a user.
+ *
+ * SECURITY: Callers MUST pass the authenticated user's own ID.
+ * Do NOT pass arbitrary user IDs — RLS may not enforce auth.uid() = user_id,
+ * which would allow enumeration of another user's enterprise memberships (IDOR).
+ */
 export async function getUserEnterprises(userId: string): Promise<UserEnterpriseItem[]> {
   const supabase = await createClient();
 

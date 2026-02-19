@@ -44,7 +44,6 @@ function simulateCreateWithUpgrade(
       status: 201,
       body: {
         organization: { id: "new-org" },
-        upgraded: false,
         subscription: null,
       },
     };
@@ -54,10 +53,15 @@ function simulateCreateWithUpgrade(
     status: 201,
     body: {
       organization: { id: "new-org" },
-      upgraded: false,
       subscription: {
         currentCount: postCreationQuota.currentCount,
         maxAllowed: postCreationQuota.maxAllowed,
+        availableSeats: postCreationQuota.maxAllowed !== null
+          ? postCreationQuota.maxAllowed - postCreationQuota.currentCount
+          : null,
+        freeOrgs: 3,
+        billableOrgs: Math.max(0, postCreationQuota.currentCount - 3),
+        totalCents: Math.max(0, postCreationQuota.currentCount - 3) * 15000,
       },
     },
   };
@@ -89,10 +93,12 @@ test("returns 201 with full subscription info on success", () => {
   );
   assert.strictEqual(result.status, 201);
   assert.ok(result.body.subscription !== null);
-  assert.strictEqual(
-    (result.body.subscription as Record<string, unknown>).currentCount,
-    4
-  );
+  const sub = result.body.subscription as Record<string, unknown>;
+  assert.strictEqual(sub.currentCount, 4);
+  assert.strictEqual(sub.freeOrgs, 3);
+  assert.strictEqual(sub.billableOrgs, 1);
+  assert.strictEqual(sub.totalCents, 15000);
+  assert.strictEqual(sub.availableSeats, null); // maxAllowed is null
 });
 
 test("pre-creation check runs before post-creation check", () => {

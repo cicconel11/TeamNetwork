@@ -63,6 +63,7 @@ export async function getEnterpriseQuota(enterpriseId: string) {
 
   if (countsError) {
     console.error("[enterprise-quota] Failed to fetch enterprise alumni counts:", countsError);
+    return null;
   }
 
   if (!subscription) return null;

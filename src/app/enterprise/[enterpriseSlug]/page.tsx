@@ -6,7 +6,7 @@ import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
 import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
 import { getEnterpriseContext } from "@/lib/auth/enterprise-context";
 import { createServiceClient } from "@/lib/supabase/service";
-import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import { ALUMNI_BUCKET_PRICING, getEnterprisePermissions } from "@/types/enterprise";
 
 interface EnterpriseDashboardProps {
   params: Promise<{ enterpriseSlug: string }>;
@@ -21,6 +21,7 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
   }
 
   const { enterprise, subscription, alumniCount, subOrgCount, enterpriseManagedOrgCount, role } = context;
+  const permissions = getEnterprisePermissions(role);
   const bucketQuantity = subscription?.alumni_bucket_quantity ?? 1;
 
   // Fetch recent sub-organizations
@@ -69,12 +70,14 @@ export default async function EnterpriseDashboardPage({ params }: EnterpriseDash
         title={`Welcome to ${enterprise.name}`}
         description="Enterprise dashboard overview"
         actions={
-          <Link href={`/enterprise/${enterpriseSlug}/organizations/new`}>
-            <Button>
-              <PlusIcon className="h-4 w-4" />
-              New Organization
-            </Button>
-          </Link>
+          permissions.canCreateSubOrg ? (
+            <Link href={`/enterprise/${enterpriseSlug}/organizations/new`}>
+              <Button>
+                <PlusIcon className="h-4 w-4" />
+                New Organization
+              </Button>
+            </Link>
+          ) : null
         }
       />
 

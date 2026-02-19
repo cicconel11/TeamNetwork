@@ -59,7 +59,8 @@ describe("buildQuotaInfo", () => {
 
   it("has all required fields", () => {
     const quota = buildQuotaInfo(1, 1000, 2);
-    assert.ok("allowed" in quota);
+    // Note: 'allowed' was removed from EnterpriseQuotaInfo in Wave 1 simplification.
+    // The hybrid pricing model removed the hard cap, so 'allowed' was dead code.
     assert.ok("bucketQuantity" in quota);
     assert.ok("alumniLimit" in quota);
     assert.ok("alumniCount" in quota);

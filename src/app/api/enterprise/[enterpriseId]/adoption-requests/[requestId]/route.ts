@@ -146,7 +146,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     .eq("id", requestId) as { error: Error | null };
 
   if (deleteError) {
-    return respond({ error: deleteError.message }, 400);
+    console.error("[enterprise/adoption-requests/[requestId] DELETE] DB error:", deleteError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   logEnterpriseAuditAction({

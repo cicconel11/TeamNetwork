@@ -126,7 +126,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data: alumni, count, error } = await query;
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/alumni GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   // Add organization info to each alumni

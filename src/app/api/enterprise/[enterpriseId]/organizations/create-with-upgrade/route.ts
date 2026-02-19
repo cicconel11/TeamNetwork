@@ -179,7 +179,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       // Org was already created — return success with stale quota rather than failing
       return respond({
         organization: newOrg,
-        upgraded: false,
         subscription: null,
       }, 201);
     }
@@ -187,7 +186,6 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     return respond({
       organization: newOrg,
-      upgraded: false,
       subscription: {
         currentCount: updatedQuota.currentCount,
         maxAllowed: updatedQuota.maxAllowed,

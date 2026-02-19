@@ -11,6 +11,10 @@ import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/ent
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// NOTE: admins/route.ts also has a DELETE handler (body-based: { userId }).
+// This [userId] path variant is the one used by SettingsClient.tsx.
+// Both implement identical owner-count protection and audit logging.
+
 interface RouteParams {
   params: Promise<{ enterpriseId: string; userId: string }>;
 }
@@ -84,7 +88,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     .eq("id", targetRole.id);
 
   if (deleteError) {
-    return respond({ error: deleteError.message }, 400);
+    console.error("[enterprise/admins/[userId] DELETE] DB error:", deleteError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   logEnterpriseAuditAction({

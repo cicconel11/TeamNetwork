@@ -9,7 +9,6 @@ import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
  */
 
 export interface EnterpriseQuotaInfo {
-  allowed: boolean;
   bucketQuantity: number;
   alumniLimit: number;
   alumniCount: number;
@@ -41,7 +40,6 @@ export function buildQuotaInfo(
 ): EnterpriseQuotaInfo {
   const limit = bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket;
   return {
-    allowed: true,
     bucketQuantity,
     alumniLimit: limit,
     alumniCount,

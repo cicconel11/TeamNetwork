@@ -5,7 +5,7 @@ import { stripe } from "@/lib/stripe";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
-import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { logEnterpriseAuditAction, logEnterpriseAuditActionAwaited, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import { requireEnv } from "@/lib/env";
@@ -88,7 +88,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
-    return respond({ error: subError.message }, 500);
+    console.error("[billing/adjust] DB error fetching subscription:", subError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   if (!subscription) {
@@ -297,8 +298,24 @@ export async function POST(req: Request, { params }: RouteParams) {
         .eq("enterprise_id", ctx.enterpriseId);
 
       if (updateError) {
-        // Log error but don't fail - Stripe is source of truth
-        console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
+        console.error("[billing/adjust] DB write failed after Stripe update:", updateError);
+        // TODO: Enterprise subscription reconciler needed — Stripe was updated but DB is stale.
+        // On retry, stale DB data could cause a second Stripe adjustment (double-charge risk).
+        try {
+          await logEnterpriseAuditActionAwaited({
+            actorUserId: ctx.userId,
+            actorEmail: ctx.userEmail,
+            action: "billing_db_sync_failure",
+            enterpriseId: ctx.enterpriseId,
+            targetType: "subscription",
+            targetId: ctx.enterpriseId,
+            metadata: { adjustType, newQuantity, stripeSubscriptionId: subscription.stripe_subscription_id },
+            ...extractRequestContext(req),
+          });
+        } catch (auditError) {
+          console.error("[billing/adjust] Failed to record billing_db_sync_failure audit:", auditError);
+        }
+        return respond({ error: "Billing updated but failed to save. Please contact support." }, 500);
       }
 
       // Calculate new pricing info
@@ -329,9 +346,8 @@ export async function POST(req: Request, { params }: RouteParams) {
         },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update subscription";
-      console.error("[enterprise-billing-adjust] Stripe error:", error);
-      return respond({ error: message }, 500);
+      console.error("[billing/adjust] Stripe error (sub_org):", error);
+      return respond({ error: "Failed to update subscription" }, 500);
     }
   }
 
@@ -443,7 +459,24 @@ export async function POST(req: Request, { params }: RouteParams) {
         .eq("enterprise_id", ctx.enterpriseId);
 
       if (updateError) {
-        console.error("[enterprise-billing-adjust] Failed to update database:", updateError);
+        console.error("[billing/adjust] DB write failed after Stripe update:", updateError);
+        // TODO: Enterprise subscription reconciler needed — Stripe was updated but DB is stale.
+        // On retry, stale DB data could cause a second Stripe adjustment (double-charge risk).
+        try {
+          await logEnterpriseAuditActionAwaited({
+            actorUserId: ctx.userId,
+            actorEmail: ctx.userEmail,
+            action: "billing_db_sync_failure",
+            enterpriseId: ctx.enterpriseId,
+            targetType: "subscription",
+            targetId: ctx.enterpriseId,
+            metadata: { adjustType, newQuantity, stripeSubscriptionId: subscription.stripe_subscription_id },
+            ...extractRequestContext(req),
+          });
+        } catch (auditError) {
+          console.error("[billing/adjust] Failed to record billing_db_sync_failure audit:", auditError);
+        }
+        return respond({ error: "Billing updated but failed to save. Please contact support." }, 500);
       }
 
       logEnterpriseAuditAction({
@@ -475,9 +508,8 @@ export async function POST(req: Request, { params }: RouteParams) {
         },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to update alumni bucket subscription";
-      console.error("[enterprise-billing-adjust] Stripe error:", error);
-      return respond({ error: message }, 500);
+      console.error("[billing/adjust] Stripe error (alumni_bucket):", error);
+      return respond({ error: "Failed to update alumni bucket subscription" }, 500);
     }
   }
 

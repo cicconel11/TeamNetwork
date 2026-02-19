@@ -108,7 +108,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   };
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/audit-logs GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   return respond({

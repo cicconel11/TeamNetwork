@@ -233,7 +233,9 @@ describe("getEnterpriseApiContext", () => {
   // ── Role DB query error (fail-closed) ──
 
   describe("role DB query error", () => {
-    it("returns { ok: false } with 403 on DB error (fail-closed)", async () => {
+    it("returns { ok: false } with 503 on DB error (fail-closed as internal error)", async () => {
+      // Wave 1 fix: DB errors on the role query return 503 (internal server error),
+      // not 403 (forbidden) — to distinguish infra failures from permission denials.
       const user = makeUser();
       const result = await getEnterpriseApiContext(
         "ent-uuid-123",
@@ -251,7 +253,7 @@ describe("getEnterpriseApiContext", () => {
 
       assert.strictEqual(result.ok, false);
       if (!result.ok) {
-        assert.strictEqual(result.response.status, 403);
+        assert.strictEqual(result.response.status, 503);
       }
     });
   });

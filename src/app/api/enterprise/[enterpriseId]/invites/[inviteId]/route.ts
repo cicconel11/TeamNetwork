@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { validateJson, ValidationError } from "@/lib/security/validation";
+import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 
@@ -40,6 +40,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
+  if (!baseSchemas.uuid.safeParse(inviteId).success) {
+    return respond({ error: "Invalid invite ID" }, 400);
+  }
+
   // Verify invite belongs to this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invite } = await (ctx.serviceSupabase as any)
@@ -71,7 +75,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       .eq("id", inviteId);
 
     if (updateError) {
-      return respond({ error: updateError.message }, 400);
+      console.error("[enterprise/invites PATCH] DB error:", updateError);
+      return respond({ error: "Failed to revoke invite" }, 500);
     }
 
     logEnterpriseAuditAction({
@@ -113,6 +118,10 @@ export async function DELETE(req: Request, { params }: RouteParams) {
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
+  if (!baseSchemas.uuid.safeParse(inviteId).success) {
+    return respond({ error: "Invalid invite ID" }, 400);
+  }
+
   // Verify invite belongs to this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invite } = await (ctx.serviceSupabase as any)
@@ -133,7 +142,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     .eq("id", inviteId);
 
   if (deleteError) {
-    return respond({ error: deleteError.message }, 400);
+    console.error("[enterprise/invites DELETE] DB error:", deleteError);
+    return respond({ error: "Failed to delete invite" }, 500);
   }
 
   logEnterpriseAuditAction({

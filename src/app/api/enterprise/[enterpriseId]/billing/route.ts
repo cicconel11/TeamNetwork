@@ -66,7 +66,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
-    return respond({ error: subError.message }, 400);
+    console.error("[billing] DB error fetching subscription:", subError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   if (!subscription) {
@@ -199,7 +200,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
 
   if (subError) {
-    return respond({ error: subError.message }, 400);
+    console.error("[billing] DB error fetching subscription for update:", subError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   if (!subscription?.stripe_subscription_id) {
@@ -256,8 +258,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     return respond({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update subscription";
-    console.error("[enterprise-billing] Stripe error:", error);
-    return respond({ error: message }, 500);
+    console.error("[billing] Stripe error:", error);
+    return respond({ error: "Failed to update subscription" }, 500);
   }
 }

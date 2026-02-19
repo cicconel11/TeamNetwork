@@ -71,7 +71,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .order("created_at", { ascending: false }) as { data: EnterpriseInviteRow[] | null; error: Error | null };
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/invites GET] DB error:", error);
+    return respond({ error: "Failed to fetch invites" }, 500);
   }
 
   // Count current admins across all enterprise orgs (for admin cap display)
@@ -119,7 +120,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   let body;
   try {
-    body = await validateJson(req, createInviteSchema);
+    body = await validateJson(req, createInviteSchema, { maxBodyBytes: 8_000 });
   } catch (error) {
     if (error instanceof ValidationError) {
       return respond({ error: error.message, details: error.details }, 400);
@@ -174,7 +175,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Use the RPC function to create invite
-  const { data: invite, error: rpcError } = await supabase.rpc("create_enterprise_invite", {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: invite, error: rpcError } = await (ctx.serviceSupabase as any).rpc("create_enterprise_invite", {
     p_enterprise_id: ctx.enterpriseId,
     p_organization_id: organizationId ?? null,
     p_role: role,
@@ -183,7 +185,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   });
 
   if (rpcError) {
-    return respond({ error: rpcError.message }, 400);
+    console.error("[enterprise/invites POST] RPC error:", rpcError);
+    return respond({ error: "Failed to create invite" }, 500);
   }
 
   logEnterpriseAuditAction({

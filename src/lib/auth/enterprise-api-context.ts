@@ -97,7 +97,7 @@ export async function getEnterpriseApiContext(
 
   if (roleError) {
     console.error("[enterprise-api-context] role query failed:", roleError);
-    return { ok: false, response: respond({ error: "Forbidden" }, 403) };
+    return { ok: false, response: respond({ error: "Internal server error" }, 503) };
   }
 
   const role = roleRow?.role as EnterpriseRole | undefined;

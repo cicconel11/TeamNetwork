@@ -170,7 +170,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   const { data: alumni, error } = await query;
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/alumni/export GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   if (!alumni || alumni.length === 0) {
@@ -264,7 +265,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       status: 200,
       headers: {
         ...rateLimit.headers,
-        "Content-Type": "application/vnd.ms-excel",
+        "Content-Type": "text/tab-separated-values; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });

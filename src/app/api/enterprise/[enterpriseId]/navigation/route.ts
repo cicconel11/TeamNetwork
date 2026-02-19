@@ -128,7 +128,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     .eq("id", ctx.enterpriseId);
 
   if (updateError) {
-    return respond({ error: updateError.message }, 400);
+    console.error("[enterprise/navigation PATCH] DB error:", updateError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   logEnterpriseAuditAction({

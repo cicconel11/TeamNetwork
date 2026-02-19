@@ -485,7 +485,7 @@ Enterprise accounts allow managing multiple organizations under a single billing
 - `settings/route.ts` - GET enterprise settings with admin details
 - `billing/route.ts` - GET billing info; `billing/adjust/route.ts` - POST adjust subscription; `billing/portal/route.ts` - POST Stripe portal
 - `organizations/route.ts` - GET sub-orgs; `organizations/create/route.ts` - POST create sub-org; `organizations/create-with-upgrade/route.ts` - POST create with seat upgrade
-- `adopt/route.ts` - POST create adoption request; `adopt/preview/route.ts` - POST preview adoption
+- `adopt/route.ts` - POST create adoption request; `adopt/preview/route.ts` - GET preview adoption (accepts `?slug=` query param)
 - `adoption-requests/route.ts` - GET list; `adoption-requests/[requestId]/route.ts` - GET/DELETE specific request
 - `alumni/route.ts` - GET alumni; `alumni/stats/route.ts` - GET alumni stats; `alumni/export/route.ts` - GET export
 - `invites/route.ts` - GET/POST; `invites/bulk/route.ts` - POST bulk upload; `invites/[inviteId]/route.ts` - DELETE

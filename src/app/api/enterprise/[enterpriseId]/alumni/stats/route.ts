@@ -59,11 +59,13 @@ export async function GET(req: Request, { params }: RouteParams) {
   const orgIds = orgs.map((o) => o.id);
 
   // Get all alumni for these organizations (select only needed fields for stats)
+  // Limit prevents unbounded full-table scans on large enterprises
   const { data: alumni } = await ctx.serviceSupabase
     .from("alumni")
     .select("id, organization_id, graduation_year, industry, current_company, current_city, position_title")
     .in("organization_id", orgIds)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .limit(10000);
 
   const alumniList = alumni ?? [];
   const totalCount = alumniList.length;

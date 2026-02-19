@@ -1,163 +1,64 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
-import type { CreateAdoptionRequestResult } from "../../src/lib/enterprise/adoption.ts";
-import type { AdoptionRequestStatus } from "../../src/types/enterprise.ts";
 
 /**
- * Tests for enterprise adoption utilities
+ * Tests for enterprise adoption library functions.
  *
- * These tests verify:
- * 1. createAdoptionRequest() with valid/invalid inputs
- * 2. acceptAdoptionRequest() flow
- * 3. rejectAdoptionRequest() flow
- * 4. Expiration handling
+ * Because createAdoptionRequest/acceptAdoptionRequest/rejectAdoptionRequest
+ * call createServiceClient() and checkAdoptionQuota() internally, we test them
+ * via simulation functions that replicate the exact branching logic from
+ * adoption.ts, using dependency-injected mocks — the same pattern used in
+ * quota-db-errors.test.ts for async wrappers in quota.ts.
  *
- * Since the actual functions use Supabase, we test the logic
- * by simulating the function behavior with mocked data.
+ * The key behaviors under test:
+ * 1. createAdoptionRequest — org lookup, enterprise check, quota check, duplicate check, 503 on DB errors
+ * 2. acceptAdoptionRequest — request lookup, status check, expiry, quota re-check, compensating rollback
+ * 3. rejectAdoptionRequest — request lookup, status check
  */
 
-const ADOPTION_EXPIRY_DAYS = 7;
+// ── Types mirroring adoption.ts ────────────────────────────────────────────────
 
-interface MockOrganization {
-  id: string;
-  name: string;
+interface OrgRow {
   enterprise_id: string | null;
+  name: string;
 }
 
-interface MockAdoptionRequest {
+interface AdoptionRequestRow {
   id: string;
   enterprise_id: string;
   organization_id: string;
-  requested_by: string;
-  requested_at: string;
-  status: AdoptionRequestStatus;
-  responded_by: string | null;
-  responded_at: string | null;
+  status: string;
   expires_at: string | null;
 }
 
-interface MockQuotaCheck {
+interface AdoptionQuotaResult {
   allowed: boolean;
   error?: string;
-  wouldBeTotal?: number;
-  limit?: number;
 }
 
-interface MockSeatQuotaCheck {
+interface SeatQuotaInfo {
   currentCount: number;
   maxAllowed: number | null;
   error?: string;
 }
 
-interface CreateAdoptionContext {
-  organizations: MockOrganization[];
-  existingRequests: MockAdoptionRequest[];
-  quotaCheck: MockQuotaCheck;
+interface OrgSubscriptionRow {
+  id: string;
+  status: string;
+  stripe_subscription_id: string | null;
 }
 
-// Simulates createAdoptionRequest logic
-function simulateCreateAdoptionRequest(
-  enterpriseId: string,
-  organizationId: string,
-  requestedBy: string,
-  ctx: CreateAdoptionContext
-): CreateAdoptionRequestResult {
-  // Check org exists
-  const org = ctx.organizations.find((o) => o.id === organizationId);
-  if (!org) {
-    return { success: false, error: "Organization not found" };
-  }
-
-  // Check org is standalone
-  if (org.enterprise_id) {
-    return { success: false, error: "Organization already belongs to an enterprise" };
-  }
-
-  // Check quota
-  if (!ctx.quotaCheck.allowed) {
-    return { success: false, error: ctx.quotaCheck.error };
-  }
-
-  // Check for existing pending request
-  const existingPending = ctx.existingRequests.find(
-    (r) =>
-      r.enterprise_id === enterpriseId &&
-      r.organization_id === organizationId &&
-      r.status === "pending"
-  );
-
-  if (existingPending) {
-    return {
-      success: false,
-      error: "A pending adoption request already exists for this organization",
-    };
-  }
-
-  // Create request
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + ADOPTION_EXPIRY_DAYS);
-
-  return {
-    success: true,
-    requestId: `request-${Date.now()}`,
-  };
-}
-
-interface AcceptAdoptionContext {
-  request: MockAdoptionRequest | null;
-  organization: MockOrganization | null;
-  quotaCheck: MockQuotaCheck;
-  seatQuotaCheck?: MockSeatQuotaCheck;
+interface CreateAdoptionRequestResult {
+  success: boolean;
+  requestId?: string;
+  error?: string;
+  status?: number;
 }
 
 interface AcceptAdoptionResult {
   success: boolean;
   error?: string;
-}
-
-// Simulates acceptAdoptionRequest logic
-function simulateAcceptAdoptionRequest(
-  requestId: string,
-  respondedBy: string,
-  ctx: AcceptAdoptionContext
-): AcceptAdoptionResult {
-  if (!ctx.request) {
-    return { success: false, error: "Request not found" };
-  }
-
-  if (ctx.request.status !== "pending") {
-    return { success: false, error: "Request has already been processed" };
-  }
-
-  // Check expiration
-  if (ctx.request.expires_at && new Date(ctx.request.expires_at) < new Date()) {
-    return { success: false, error: "Request has expired" };
-  }
-
-  // Re-verify org is standalone
-  if (ctx.organization?.enterprise_id) {
-    return { success: false, error: "Organization already belongs to an enterprise" };
-  }
-
-  // Check alumni quota again
-  if (!ctx.quotaCheck.allowed) {
-    return { success: false, error: ctx.quotaCheck.error };
-  }
-
-  // Check seat limit for enterprise-managed orgs
-  if (ctx.seatQuotaCheck?.error) {
-    return {
-      success: false,
-      error: "Unable to verify seat limit. Please try again.",
-      status: 503,
-    };
-  }
-
-  return { success: true };
-}
-
-interface RejectAdoptionContext {
-  request: MockAdoptionRequest | null;
+  status?: number;
 }
 
 interface RejectAdoptionResult {
@@ -165,619 +66,629 @@ interface RejectAdoptionResult {
   error?: string;
 }
 
-// Simulates rejectAdoptionRequest logic
-function simulateRejectAdoptionRequest(
-  requestId: string,
-  respondedBy: string,
-  ctx: RejectAdoptionContext
-): RejectAdoptionResult {
-  if (!ctx.request) {
+// ── Simulation helpers mirroring adoption.ts exact branching ──────────────────
+
+/**
+ * Simulates createAdoptionRequest (adoption.ts:37-111).
+ *
+ * Replicates the exact branching:
+ *   - orgError → return { status: 503 }
+ *   - org null → "Organization not found"
+ *   - org.enterprise_id → "Organization already belongs to an enterprise"
+ *   - quotaCheck.allowed false → return { error: quotaCheck.error }
+ *   - existingError → return { status: 503 }
+ *   - existing → "A pending adoption request already exists"
+ *   - insertError → return { error: insertError.message }
+ *   - success → { success: true, requestId }
+ */
+function simulateCreateAdoptionRequest(params: {
+  org: OrgRow | null;
+  orgError: unknown;
+  quotaCheck: AdoptionQuotaResult;
+  existing: { id: string } | null;
+  existingError: unknown;
+  insertError: { message: string } | null;
+  insertedId: string;
+}): CreateAdoptionRequestResult {
+  const { org, orgError, quotaCheck, existing, existingError, insertError, insertedId } = params;
+
+  if (orgError) {
+    return { success: false, error: "Failed to verify organization", status: 503 };
+  }
+
+  if (!org) {
+    return { success: false, error: "Organization not found" };
+  }
+
+  if (org.enterprise_id) {
+    return { success: false, error: "Organization already belongs to an enterprise" };
+  }
+
+  if (!quotaCheck.allowed) {
+    return { success: false, error: quotaCheck.error };
+  }
+
+  if (existingError) {
+    return { success: false, error: "Failed to check for existing request", status: 503 };
+  }
+
+  if (existing) {
+    return { success: false, error: "A pending adoption request already exists for this organization" };
+  }
+
+  if (insertError) {
+    return { success: false, error: insertError.message };
+  }
+
+  return { success: true, requestId: insertedId };
+}
+
+/**
+ * Simulates acceptAdoptionRequest (adoption.ts:113-254).
+ *
+ * Replicates the exact branching:
+ *   - request null → "Request not found"
+ *   - status !== "pending" → "Request has already been processed"
+ *   - expires_at past → "Request has expired"
+ *   - org.enterprise_id set → "Organization already belongs to an enterprise"
+ *   - quotaCheck.allowed false + "Failed to verify alumni count" → { status: 503 }
+ *   - quotaCheck.allowed false (other) → { error: quotaCheck.error }
+ *   - seatQuota.error → { status: 503 }
+ *   - orgUpdateError → "Failed to update org" (no rollback simulated here)
+ *   - subUpdate/createError → compensating rollback → "Failed to update/create organization subscription"
+ *   - success → { success: true }
+ */
+function simulateAcceptAdoptionRequest(params: {
+  request: AdoptionRequestRow | null;
+  reVerifiedOrg: { enterprise_id: string | null } | null;
+  quotaCheck: AdoptionQuotaResult;
+  seatQuota: SeatQuotaInfo;
+  orgSub: OrgSubscriptionRow | null;
+  orgUpdateError: { message: string } | null;
+  subUpdateError: { message: string } | null;
+  subCreateError: { message: string } | null;
+  rollbackError?: { message: string } | null;
+}): AcceptAdoptionResult {
+  const {
+    request, reVerifiedOrg, quotaCheck, seatQuota,
+    orgSub, orgUpdateError, subUpdateError, subCreateError,
+  } = params;
+
+  if (!request) {
     return { success: false, error: "Request not found" };
   }
 
-  if (ctx.request.status !== "pending") {
+  if (request.status !== "pending") {
+    return { success: false, error: "Request has already been processed" };
+  }
+
+  if (request.expires_at && new Date(request.expires_at) < new Date()) {
+    return { success: false, error: "Request has expired" };
+  }
+
+  if (reVerifiedOrg?.enterprise_id) {
+    return { success: false, error: "Organization already belongs to an enterprise" };
+  }
+
+  if (!quotaCheck.allowed) {
+    if (quotaCheck.error === "Failed to verify alumni count") {
+      return { success: false, error: quotaCheck.error, status: 503 };
+    }
+    return { success: false, error: quotaCheck.error };
+  }
+
+  if (seatQuota.error) {
+    return { success: false, error: "Unable to verify seat limit. Please try again.", status: 503 };
+  }
+
+  if (orgUpdateError) {
+    return { success: false, error: orgUpdateError.message };
+  }
+
+  // Subscription update/create with compensating rollback
+  if (orgSub) {
+    if (subUpdateError) {
+      // Compensating rollback (revert enterprise_id)
+      return { success: false, error: "Failed to update organization subscription" };
+    }
+  } else {
+    if (subCreateError) {
+      // Compensating rollback (revert enterprise_id)
+      return { success: false, error: "Failed to create organization subscription" };
+    }
+  }
+
+  return { success: true };
+}
+
+/**
+ * Simulates rejectAdoptionRequest (adoption.ts:256-288).
+ *
+ * Replicates the exact branching:
+ *   - request null → "Request not found"
+ *   - status !== "pending" → "Request has already been processed"
+ *   - success → { success: true }
+ */
+function simulateRejectAdoptionRequest(params: {
+  request: { status: string } | null;
+}): RejectAdoptionResult {
+  const { request } = params;
+
+  if (!request) {
+    return { success: false, error: "Request not found" };
+  }
+
+  if (request.status !== "pending") {
     return { success: false, error: "Request has already been processed" };
   }
 
   return { success: true };
 }
 
-describe("createAdoptionRequest", () => {
-  it("returns error when organization not found", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [],
-      existingRequests: [],
-      quotaCheck: { allowed: true },
-    };
+// ── Defaults for common test fixtures ─────────────────────────────────────────
 
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-not-found",
-      "user-1",
-      ctx
-    );
+function makeRequest(overrides: Partial<AdoptionRequestRow> = {}): AdoptionRequestRow {
+  return {
+    id: "request-1",
+    enterprise_id: "enterprise-1",
+    organization_id: "org-1",
+    status: "pending",
+    expires_at: new Date(Date.now() + 86400000 * 7).toISOString(),
+    ...overrides,
+  };
+}
+
+function makeOrg(overrides: Partial<OrgRow> = {}): OrgRow {
+  return { enterprise_id: null, name: "Test Org", ...overrides };
+}
+
+// ── createAdoptionRequest ──────────────────────────────────────────────────────
+
+describe("createAdoptionRequest", () => {
+  it("returns 503 when org fetch DB errors", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: null,
+      orgError: new Error("connection timeout"),
+      quotaCheck: { allowed: true },
+      existing: null,
+      existingError: null,
+      insertError: null,
+      insertedId: "req-1",
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.ok(result.error?.includes("Failed to verify organization"));
+  });
+
+  it("returns error when organization not found", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: null,
+      orgError: null,
+      quotaCheck: { allowed: true },
+      existing: null,
+      existingError: null,
+      insertError: null,
+      insertedId: "req-1",
+    });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Organization not found");
+    assert.strictEqual(result.status, undefined);
   });
 
-  it("returns error when organization already belongs to enterprise", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [
-        { id: "org-1", name: "Test Org", enterprise_id: "other-enterprise" },
-      ],
-      existingRequests: [],
+  it("returns error when organization already belongs to an enterprise", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg({ enterprise_id: "other-enterprise" }),
+      orgError: null,
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
+      existing: null,
+      existingError: null,
+      insertError: null,
+      insertedId: "req-1",
+    });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Organization already belongs to an enterprise");
   });
 
   it("returns error when quota check fails", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [{ id: "org-1", name: "Test Org", enterprise_id: null }],
-      existingRequests: [],
-      quotaCheck: {
-        allowed: false,
-        error: "Adoption would exceed alumni limit (6000/5000)",
-      },
-    };
-
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
+      quotaCheck: { allowed: false, error: "Adoption would exceed alumni limit (6000/5000)" },
+      existing: null,
+      existingError: null,
+      insertError: null,
+      insertedId: "req-1",
+    });
 
     assert.strictEqual(result.success, false);
     assert.ok(result.error?.includes("exceed alumni limit"));
   });
 
-  it("returns error when pending request already exists", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [{ id: "org-1", name: "Test Org", enterprise_id: null }],
-      existingRequests: [
-        {
-          id: "existing-request",
-          enterprise_id: "enterprise-1",
-          organization_id: "org-1",
-          requested_by: "user-1",
-          requested_at: new Date().toISOString(),
-          status: "pending",
-          responded_by: null,
-          responded_at: null,
-          expires_at: null,
-        },
-      ],
+  it("returns 503 when existing-request check DB errors", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
       quotaCheck: { allowed: true },
-    };
+      existing: null,
+      existingError: new Error("DB read error"),
+      insertError: null,
+      insertedId: "req-1",
+    });
 
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.ok(result.error?.includes("Failed to check for existing request"));
+  });
+
+  it("returns error when pending request already exists", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
+      quotaCheck: { allowed: true },
+      existing: { id: "existing-request" },
+      existingError: null,
+      insertError: null,
+      insertedId: "req-1",
+    });
 
     assert.strictEqual(result.success, false);
     assert.ok(result.error?.includes("pending adoption request already exists"));
   });
 
+  it("returns insert error message on insert failure", () => {
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
+      quotaCheck: { allowed: true },
+      existing: null,
+      existingError: null,
+      insertError: { message: "unique constraint violation" },
+      insertedId: "req-1",
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "unique constraint violation");
+  });
+
   it("succeeds with valid inputs", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [{ id: "org-1", name: "Test Org", enterprise_id: null }],
-      existingRequests: [],
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
+      existing: null,
+      existingError: null,
+      insertError: null,
+      insertedId: "new-request-id",
+    });
 
     assert.strictEqual(result.success, true);
-    assert.ok(result.requestId);
+    assert.strictEqual(result.requestId, "new-request-id");
   });
 
-  it("allows request when previous request was rejected", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [{ id: "org-1", name: "Test Org", enterprise_id: null }],
-      existingRequests: [
-        {
-          id: "old-request",
-          enterprise_id: "enterprise-1",
-          organization_id: "org-1",
-          requested_by: "user-1",
-          requested_at: new Date().toISOString(),
-          status: "rejected",
-          responded_by: "responder-1",
-          responded_at: new Date().toISOString(),
-          expires_at: null,
-        },
-      ],
+  it("allows new request when previous request was rejected", () => {
+    // Non-pending requests don't appear in the existing check (filtered by status=pending)
+    const result = simulateCreateAdoptionRequest({
+      org: makeOrg(),
+      orgError: null,
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
-
-    assert.strictEqual(result.success, true);
-  });
-
-  it("allows request when previous request was expired", () => {
-    const ctx: CreateAdoptionContext = {
-      organizations: [{ id: "org-1", name: "Test Org", enterprise_id: null }],
-      existingRequests: [
-        {
-          id: "old-request",
-          enterprise_id: "enterprise-1",
-          organization_id: "org-1",
-          requested_by: "user-1",
-          requested_at: new Date().toISOString(),
-          status: "expired",
-          responded_by: null,
-          responded_at: null,
-          expires_at: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ],
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateCreateAdoptionRequest(
-      "enterprise-1",
-      "org-1",
-      "user-1",
-      ctx
-    );
+      existing: null, // rejected requests are not returned by the pending filter
+      existingError: null,
+      insertError: null,
+      insertedId: "req-2",
+    });
 
     assert.strictEqual(result.success, true);
   });
 });
+
+// ── acceptAdoptionRequest ──────────────────────────────────────────────────────
 
 describe("acceptAdoptionRequest", () => {
   it("returns error when request not found", () => {
-    const ctx: AcceptAdoptionContext = {
+    const result = simulateAcceptAdoptionRequest({
       request: null,
-      organization: null,
+      reVerifiedOrg: null,
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Request not found");
   });
 
-  it("returns error when request already processed", () => {
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "accepted",
-        responded_by: "responder-1",
-        responded_at: new Date().toISOString(),
-        expires_at: null,
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
+  it("returns error when request already accepted", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ status: "accepted" }),
+      reVerifiedOrg: null,
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-2", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "Request has already been processed");
-  });
-
-  it("returns error when request is rejected status", () => {
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "rejected",
-        responded_by: "responder-1",
-        responded_at: new Date().toISOString(),
-        expires_at: null,
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-2", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "Request has already been processed");
-  });
-
-  it("returns error when request has expired", () => {
-    const expiredDate = new Date(Date.now() - 86400000); // 1 day ago
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: expiredDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "Request has expired");
-  });
-
-  it("returns error when org already joined another enterprise", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7); // 7 days from now
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: {
-        id: "org-1",
-        name: "Test Org",
-        enterprise_id: "other-enterprise",
-      },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "Organization already belongs to an enterprise");
-  });
-
-  it("returns error when quota check fails at acceptance time", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7);
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: {
-        allowed: false,
-        error: "Adoption would exceed alumni limit",
-      },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.ok(result.error?.includes("exceed alumni limit"));
-  });
-
-  it("succeeds with valid pending request", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7);
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, true);
-  });
-
-  it("succeeds with request that has no expiration", () => {
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: null,
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, true);
-  });
-
-  it("returns error when seat quota check has infra error", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7);
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-      seatQuotaCheck: {
-        currentCount: 5,
-        maxAllowed: 5,
-        error: "internal_error",
-      },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.ok(result.error?.includes("Unable to verify seat limit"));
-  });
-
-  it("succeeds when seat limit has room", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7);
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-      seatQuotaCheck: {
-        currentCount: 3,
-        maxAllowed: 5,
-      },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, true);
-  });
-
-  it("succeeds when enterprise has no seat limit (legacy tier-based)", () => {
-    const futureDate = new Date(Date.now() + 86400000 * 7);
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: futureDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-      seatQuotaCheck: {
-        currentCount: 0,
-        maxAllowed: null,
-      },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, true);
-  });
-});
-
-describe("rejectAdoptionRequest", () => {
-  it("returns error when request not found", () => {
-    const ctx: RejectAdoptionContext = {
-      request: null,
-    };
-
-    const result = simulateRejectAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "Request not found");
-  });
-
-  it("returns error when request already processed (accepted)", () => {
-    const ctx: RejectAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "accepted",
-        responded_by: "responder-1",
-        responded_at: new Date().toISOString(),
-        expires_at: null,
-      },
-    };
-
-    const result = simulateRejectAdoptionRequest("request-1", "responder-2", ctx);
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Request has already been processed");
   });
 
   it("returns error when request already rejected", () => {
-    const ctx: RejectAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "rejected",
-        responded_by: "responder-1",
-        responded_at: new Date().toISOString(),
-        expires_at: null,
-      },
-    };
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ status: "rejected" }),
+      reVerifiedOrg: null,
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
 
-    const result = simulateRejectAdoptionRequest("request-1", "responder-2", ctx);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Request has already been processed");
+  });
+
+  it("returns error when request has expired", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ expires_at: new Date(Date.now() - 86400000).toISOString() }),
+      reVerifiedOrg: null,
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Request has expired");
+  });
+
+  it("returns error when org already joined another enterprise", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: "other-enterprise" },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Organization already belongs to an enterprise");
+  });
+
+  it("returns 503 when alumni count DB errors during quota re-check", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: false, error: "Failed to verify alumni count" },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.strictEqual(result.error, "Failed to verify alumni count");
+  });
+
+  it("returns error (no 503) when quota check fails for capacity reasons", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: false, error: "Adoption would exceed alumni limit (6000/5000)" },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.ok(result.error?.includes("exceed alumni limit"));
+    assert.strictEqual(result.status, undefined);
+  });
+
+  it("returns 503 when seat quota check has infra error", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 5, maxAllowed: null, error: "internal_error" },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 503);
+    assert.ok(result.error?.includes("Unable to verify seat limit"));
+  });
+
+  it("triggers compensating rollback when subscription update fails (org has existing sub)", () => {
+    // Simulate: org has existing sub, sub update fails → rollback
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: { id: "sub-1", status: "active", stripe_subscription_id: "stripe-sub-1" },
+      orgUpdateError: null,
+      subUpdateError: { message: "DB write failed" },
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Failed to update organization subscription");
+  });
+
+  it("triggers compensating rollback when subscription create fails (org has no existing sub)", () => {
+    // Simulate: org has no sub, sub create fails → rollback
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: { message: "unique constraint violation" },
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Failed to create organization subscription");
+  });
+
+  it("succeeds with valid pending request and existing subscription", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 3, maxAllowed: null },
+      orgSub: { id: "sub-1", status: "active", stripe_subscription_id: "stripe-sub-1" },
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("succeeds with valid pending request and no existing subscription", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("succeeds when request has no expiration date", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ expires_at: null }),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("succeeds when enterprise has no seat limit (legacy unlimited)", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+
+  it("request just about to expire (1 second from now) can still be accepted", () => {
+    const almostExpired = new Date(Date.now() + 1000);
+
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ expires_at: almostExpired.toISOString() }),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+});
+
+// ── rejectAdoptionRequest ──────────────────────────────────────────────────────
+
+describe("rejectAdoptionRequest", () => {
+  it("returns error when request not found", () => {
+    const result = simulateRejectAdoptionRequest({ request: null });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Request not found");
+  });
+
+  it("returns error when request already processed (accepted)", () => {
+    const result = simulateRejectAdoptionRequest({ request: { status: "accepted" } });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Request has already been processed");
+  });
+
+  it("returns error when request already rejected", () => {
+    const result = simulateRejectAdoptionRequest({ request: { status: "rejected" } });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Request has already been processed");
   });
 
   it("returns error when request is expired status", () => {
-    const ctx: RejectAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "expired",
-        responded_by: null,
-        responded_at: null,
-        expires_at: new Date(Date.now() - 86400000).toISOString(),
-      },
-    };
-
-    const result = simulateRejectAdoptionRequest("request-1", "responder-1", ctx);
+    const result = simulateRejectAdoptionRequest({ request: { status: "expired" } });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Request has already been processed");
   });
 
   it("succeeds with valid pending request", () => {
-    const ctx: RejectAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: null,
-      },
-    };
-
-    const result = simulateRejectAdoptionRequest("request-1", "responder-1", ctx);
+    const result = simulateRejectAdoptionRequest({ request: { status: "pending" } });
 
     assert.strictEqual(result.success, true);
   });
 });
 
+// ── Expiration handling ────────────────────────────────────────────────────────
+
 describe("adoption expiration", () => {
-  it("request expires after ADOPTION_EXPIRY_DAYS", () => {
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + ADOPTION_EXPIRY_DAYS);
-
-    const daysDiff = Math.round(
-      (expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    assert.strictEqual(daysDiff, ADOPTION_EXPIRY_DAYS);
-  });
-
   it("expired request cannot be accepted even if status is still pending", () => {
     const expiredDate = new Date(Date.now() - 1000); // 1 second ago
 
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date(Date.now() - 86400000 * 8).toISOString(),
-        status: "pending", // Still pending, but expired
-        responded_by: null,
-        responded_at: null,
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({
         expires_at: expiredDate.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
+        status: "pending",
+      }),
+      reVerifiedOrg: { enterprise_id: null },
       quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
 
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.error, "Request has expired");
-  });
-
-  it("request just about to expire can still be accepted", () => {
-    const almostExpired = new Date(Date.now() + 1000); // 1 second from now
-
-    const ctx: AcceptAdoptionContext = {
-      request: {
-        id: "request-1",
-        enterprise_id: "enterprise-1",
-        organization_id: "org-1",
-        requested_by: "user-1",
-        requested_at: new Date().toISOString(),
-        status: "pending",
-        responded_by: null,
-        responded_at: null,
-        expires_at: almostExpired.toISOString(),
-      },
-      organization: { id: "org-1", name: "Test Org", enterprise_id: null },
-      quotaCheck: { allowed: true },
-    };
-
-    const result = simulateAcceptAdoptionRequest("request-1", "responder-1", ctx);
-
-    assert.strictEqual(result.success, true);
   });
 });

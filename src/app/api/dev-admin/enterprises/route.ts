@@ -207,15 +207,17 @@ export async function GET(req: Request) {
 
     const emailMap = new Map<string, string | null>();
     if (uniqueUserIds.length > 0) {
-      const {
-        data: { users: authUsers },
-      } = await serviceClient.auth.admin.listUsers({ perPage: 1000 });
-
-      for (const authUser of authUsers) {
-        if (uniqueUserIds.includes(authUser.id)) {
-          emailMap.set(authUser.id, authUser.email ?? null);
+      // Using getUserById per user avoids unbounded listUsers() pagination cap
+      const userFetches = await Promise.all(
+        uniqueUserIds.map((id) => serviceClient.auth.admin.getUserById(id))
+      );
+      userFetches.forEach((r, i) => {
+        if (r.error) {
+          console.error("[dev-admin/enterprises] getUserById failed for", uniqueUserIds[i], r.error);
+        } else if (r.data.user) {
+          emailMap.set(r.data.user.id, r.data.user.email ?? null);
         }
-      }
+      });
     }
 
     // 7. Get subscription status for each sub-org

@@ -78,7 +78,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .order("created_at", { ascending: true }) as { data: UserEnterpriseRoleRow[] | null; error: Error | null };
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/admins GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   // Fetch user details for each admin
@@ -190,7 +191,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       .single() as { data: UserEnterpriseRoleRow | null; error: Error | null };
 
     if (roleError) {
-      return respond({ error: roleError.message }, 400);
+      console.error("[enterprise/admins POST] DB error:", roleError);
+      return respond({ error: "Internal server error" }, 500);
     }
 
     logEnterpriseAuditAction({
@@ -281,7 +283,8 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       .eq("id", targetRole.id) as { error: Error | null };
 
     if (deleteError) {
-      return respond({ error: deleteError.message }, 400);
+      console.error("[enterprise/admins DELETE] DB error:", deleteError);
+      return respond({ error: "Internal server error" }, 500);
     }
 
     logEnterpriseAuditAction({

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
     "test": "npm run test:unit && npm run test:security && npm run test:payments && npm run test:routes",
-    "test:unit": "node --test --loader ./tests/ts-loader.js tests/subscription.test.ts tests/calendar-ics-sync.test.ts tests/schedule-connectors.test.ts tests/alumni-edit-roles.test.ts tests/forgot-password.test.ts tests/enterprise/*.test.ts tests/enterprise-quantity-pricing.test.ts",
+    "test:unit": "node --test --loader ./tests/ts-loader.js tests/subscription.test.ts tests/calendar-ics-sync.test.ts tests/schedule-connectors.test.ts tests/alumni-edit-roles.test.ts tests/forgot-password.test.ts tests/enterprise/*.test.ts tests/enterprise-quantity-pricing.test.ts tests/embed-url-policy.test.ts",
     "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts tests/platform-fee.test.ts",
     "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts",
     "test:schedules": "node --test --loader ./tests/ts-loader.js tests/schedule-domain.test.ts",

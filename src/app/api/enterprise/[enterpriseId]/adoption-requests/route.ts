@@ -75,7 +75,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .order("requested_at", { ascending: false }) as { data: AdoptionRequestRow[] | null; error: Error | null };
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/adoption-requests GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   return respond({ requests: requests ?? [] });

@@ -52,7 +52,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   let body;
   try {
-    body = await validateJson(req, bulkInvitesSchema);
+    body = await validateJson(req, bulkInvitesSchema, { maxBodyBytes: 16_000 });
   } catch (error) {
     if (error instanceof ValidationError) {
       return respond({ error: error.message, details: error.details }, 400);
@@ -75,8 +75,9 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   // Process all valid invites in parallel
   const results = await Promise.allSettled(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validInvites.map((invite) =>
-      supabase.rpc("create_enterprise_invite", {
+      (ctx.serviceSupabase as any).rpc("create_enterprise_invite", {
         p_enterprise_id: ctx.enterpriseId,
         p_organization_id: invite.organizationId,
         p_role: invite.role,

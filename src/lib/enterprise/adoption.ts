@@ -31,6 +31,7 @@ export interface CreateAdoptionRequestResult {
   success: boolean;
   requestId?: string;
   error?: string;
+  status?: number;
 }
 
 export async function createAdoptionRequest(
@@ -42,11 +43,16 @@ export async function createAdoptionRequest(
 
   // Check org is standalone
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: org } = await (supabase as any)
+  const { data: org, error: orgError } = await (supabase as any)
     .from("organizations")
     .select("enterprise_id, name")
     .eq("id", organizationId)
-    .single() as { data: OrgRow | null };
+    .single() as { data: OrgRow | null; error: unknown };
+
+  if (orgError) {
+    console.error("[createAdoptionRequest] Failed to fetch organization:", orgError);
+    return { success: false, error: "Failed to verify organization", status: 503 };
+  }
 
   if (!org) {
     return { success: false, error: "Organization not found" };
@@ -64,13 +70,18 @@ export async function createAdoptionRequest(
 
   // Check for existing pending request
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await (supabase as any)
+  const { data: existing, error: existingError } = await (supabase as any)
     .from("enterprise_adoption_requests")
     .select("id, status")
     .eq("enterprise_id", enterpriseId)
     .eq("organization_id", organizationId)
     .eq("status", "pending")
     .maybeSingle();
+
+  if (existingError) {
+    console.error("[createAdoptionRequest] Failed to check for existing request:", existingError);
+    return { success: false, error: "Failed to check for existing request", status: 503 };
+  }
 
   if (existing) {
     return { success: false, error: "A pending adoption request already exists for this organization" };
@@ -185,10 +196,30 @@ export async function acceptAdoptionRequest(
   // Ensure org has a subscription row so the enterprise_alumni_counts view can
   // correctly include it for pooled alumni/seat enforcement.
   if (orgSub) {
-    await supabase
+    const { error: updateSubError } = await supabase
       .from("organization_subscriptions")
       .update({ status: "enterprise_managed" })
       .eq("id", orgSub.id);
+
+    if (updateSubError) {
+      console.error("[acceptAdoptionRequest] Failed to update organization subscription:", updateSubError);
+      // Compensating rollback: revert enterprise_id on subscription failure
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rollbackError } = await (supabase as any)
+        .from("organizations")
+        .update({
+          enterprise_id: null,
+          enterprise_relationship_type: null,
+          enterprise_adopted_at: null,
+          original_subscription_id: null,
+          original_subscription_status: null,
+        })
+        .eq("id", request.organization_id);
+      if (rollbackError) {
+        console.error("[acceptAdoptionRequest] rollback failed:", rollbackError);
+      }
+      return { success: false, error: "Failed to update organization subscription" };
+    }
   } else {
     const { error: createSubError } = await supabase
       .from("organization_subscriptions")
@@ -200,6 +231,22 @@ export async function acceptAdoptionRequest(
       });
 
     if (createSubError) {
+      console.error("[acceptAdoptionRequest] Failed to create organization subscription:", createSubError);
+      // Compensating rollback: revert enterprise_id on subscription failure
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rollbackError } = await (supabase as any)
+        .from("organizations")
+        .update({
+          enterprise_id: null,
+          enterprise_relationship_type: null,
+          enterprise_adopted_at: null,
+          original_subscription_id: null,
+          original_subscription_status: null,
+        })
+        .eq("id", request.organization_id);
+      if (rollbackError) {
+        console.error("[acceptAdoptionRequest] rollback failed:", rollbackError);
+      }
       return { success: false, error: "Failed to create organization subscription" };
     }
   }

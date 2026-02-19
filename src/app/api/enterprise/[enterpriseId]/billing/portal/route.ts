@@ -43,7 +43,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     .maybeSingle() as { data: { stripe_customer_id: string | null; stripe_subscription_id: string | null } | null; error: Error | null };
 
   if (subError) {
-    return respond({ error: subError.message }, 400);
+    console.error("[billing/portal] DB error fetching subscription:", subError);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   let stripeCustomerId = subscription?.stripe_customer_id ?? null;

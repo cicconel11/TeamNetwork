@@ -15,7 +15,8 @@ import {
   ENTERPRISE_OWNER_ROLE,
 } from "@/lib/auth/enterprise-api-context";
 import type { Enterprise, EnterpriseSubscription } from "@/types/enterprise";
-import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { updateEnterprise, isUpdateError } from "@/lib/enterprise/update-enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -135,42 +136,21 @@ export async function PATCH(req: Request, { params }: RouteParams) {
 
     const body = await validateJson(req, patchSchema, { maxBodyBytes: 16_000 });
 
-    // Build update payload with only provided fields
-    const updatePayload: Record<string, unknown> = {};
-    if (body.name !== undefined) updatePayload.name = body.name;
-    if (body.description !== undefined) updatePayload.description = body.description;
-    if (body.logo_url !== undefined) updatePayload.logo_url = body.logo_url;
-    if (body.primary_color !== undefined) updatePayload.primary_color = body.primary_color;
-    if (body.billing_contact_email !== undefined) updatePayload.billing_contact_email = body.billing_contact_email;
+    const result = await updateEnterprise(
+      ctx.serviceSupabase,
+      ctx.enterpriseId,
+      body,
+      ctx.userId,
+      ctx.userEmail,
+      "update_enterprise",
+      extractRequestContext(req)
+    );
 
-    if (Object.keys(updatePayload).length === 0) {
-      return respond({ error: "No valid fields to update" }, 400);
+    if (isUpdateError(result)) {
+      return respond({ error: result.error }, result.status);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updated, error: updateError } = await (ctx.serviceSupabase as any)
-      .from("enterprises")
-      .update(updatePayload)
-      .eq("id", ctx.enterpriseId)
-      .select()
-      .single() as { data: Enterprise | null; error: Error | null };
-
-    if (updateError) {
-      return respond({ error: updateError.message }, 400);
-    }
-
-    logEnterpriseAuditAction({
-      actorUserId: ctx.userId,
-      actorEmail: ctx.userEmail,
-      action: "update_enterprise",
-      enterpriseId: ctx.enterpriseId,
-      targetType: "enterprise",
-      targetId: ctx.enterpriseId,
-      metadata: { updatedFields: Object.keys(updatePayload) },
-      ...extractRequestContext(req),
-    });
-
-    return respond({ enterprise: updated });
+    return respond({ enterprise: result.enterprise });
   } catch (error) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(error);

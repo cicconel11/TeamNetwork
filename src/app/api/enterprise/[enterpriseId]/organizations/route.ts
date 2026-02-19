@@ -70,7 +70,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .order("name", { ascending: true }) as { data: OrganizationRow[] | null; error: Error | null };
 
   if (error) {
-    return respond({ error: error.message }, 400);
+    console.error("[enterprise/organizations GET] DB error:", error);
+    return respond({ error: "Internal server error" }, 500);
   }
 
   // Get alumni counts for each organization
