@@ -200,6 +200,8 @@ export async function POST(request: NextRequest) {
         userId: user.id,
       });
       if (linkResult.error) {
+        // Clean up orphaned post to prevent duplicates on retry
+        await serviceClient.from("feed_posts").update({ deleted_at: new Date().toISOString() }).eq("id", post.id);
         return NextResponse.json({ error: linkResult.error }, { status: 400, headers: rateLimit.headers });
       }
     }
