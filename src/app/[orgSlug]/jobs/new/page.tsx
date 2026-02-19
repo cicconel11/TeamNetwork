@@ -15,8 +15,9 @@ export default async function NewJobPage({ params }: PageProps) {
     return notFound();
   }
 
-  // Only alumni and admins can post jobs
-  const canPost = orgCtx.isAdmin || orgCtx.role === "alumni";
+  // Check configurable job posting roles
+  const jobPostRoles = (orgCtx.organization as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"];
+  const canPost = orgCtx.role ? jobPostRoles.includes(orgCtx.role) : false;
   if (!canPost) {
     return notFound();
   }

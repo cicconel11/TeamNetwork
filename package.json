@@ -13,6 +13,7 @@
     "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts",
     "test:schedules": "node --test --loader ./tests/ts-loader.js tests/schedule-domain.test.ts",
     "test:jobs": "node --test --loader ./tests/ts-loader.js tests/routes/jobs/*.test.ts",
+    "test:media": "node --test --loader ./tests/ts-loader.js tests/media-upload.test.ts tests/media-link.test.ts",
     "test:qrcode": "node --test --loader ./tests/ts-loader.js tests/qrcode-display.test.ts",
     "test:routes": "node --test --loader ./tests/ts-loader.js tests/routes/stripe/*.test.ts tests/routes/organizations/*.test.ts tests/routes/enterprise/*.test.ts tests/routes/admin/*.test.ts tests/routes/schedules/*.test.ts tests/routes/calendar/*.test.ts tests/routes/feedback/*.test.ts tests/routes/notifications/*.test.ts tests/routes/dev-admin/*.test.ts tests/routes/jobs/*.test.ts",
     "test:e2e": "playwright test --project=e2e",
@@ -40,6 +41,7 @@
     "react-dom": "^18",
     "react-hook-form": "^7.71.1",
     "resend": "^6.6.0",
+    "sonner": "^2.0.7",
     "strip": "^3.0.0",
     "stripe": "^20.1.2",
     "zod": "^4.3.5"

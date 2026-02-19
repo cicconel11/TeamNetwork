@@ -10,6 +10,9 @@ const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 
 export type DeliveryChannel = "email" | "sms";
 
+export type NotificationCategory =
+  | "announcement" | "discussion" | "event" | "workout" | "competition";
+
 export interface NotificationTarget {
   email?: string | null;
   phone?: string | null;
@@ -26,6 +29,8 @@ export interface NotificationBlastInput {
   title: string;
   body: string;
   targetUserIds?: string[] | null;
+  /** Optional notification category for per-category preference filtering. */
+  category?: NotificationCategory;
   /** Optional custom email sender (e.g., Resend). Falls back to stub if not provided. */
   sendEmailFn?: (params: EmailParams) => Promise<NotificationResult>;
 }
@@ -146,6 +151,14 @@ export async function sendSMS(params: SMSParams): Promise<NotificationResult> {
 
 type PreferenceRow = Database["public"]["Tables"]["notification_preferences"]["Row"];
 
+const CATEGORY_PREF_COLUMN: Record<NotificationCategory, keyof PreferenceRow> = {
+  announcement: "announcement_emails_enabled",
+  discussion: "discussion_emails_enabled",
+  event: "event_emails_enabled",
+  workout: "workout_emails_enabled",
+  competition: "competition_emails_enabled",
+};
+
 const getChannelsForContact = ({
   desired,
   pref,
@@ -175,8 +188,9 @@ export async function buildNotificationTargets(params: {
   audience: NotificationAudience;
   channel: NotificationChannel;
   targetUserIds?: string[] | null;
+  category?: NotificationCategory;
 }): Promise<{ targets: NotificationTarget[]; stats: { total: number; emailCount: number; smsCount: number; skippedMissingContact: number } }> {
-  const { supabase, organizationId, audience, channel, targetUserIds } = params;
+  const { supabase, organizationId, audience, channel, targetUserIds, category } = params;
   const desired = DESIRED_CHANNELS[channel];
 
   // Include legacy role aliases so older memberships still receive blasts
@@ -228,7 +242,7 @@ export async function buildNotificationTargets(params: {
   const [prefsRes, usersRes] = await Promise.all([
     supabase
       .from("notification_preferences")
-      .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id")
+      .select("email_enabled,email_address,sms_enabled,phone_number,user_id,organization_id,announcement_emails_enabled,discussion_emails_enabled,event_emails_enabled,workout_emails_enabled,competition_emails_enabled")
       .eq("organization_id", organizationId)
       .in("user_id", memberUserIds),
     supabase
@@ -264,6 +278,15 @@ export async function buildNotificationTargets(params: {
       email: user?.email || null,
     });
 
+    // Per-category opt-out: remove email channel if user disabled this email category
+    if (category && pref) {
+      const col = CATEGORY_PREF_COLUMN[category];
+      if (col && pref[col] === false) {
+        const emailIdx = channels.indexOf("email");
+        if (emailIdx !== -1) channels.splice(emailIdx, 1);
+      }
+    }
+
     if (channels.length === 0) {
       skippedMissingContact += 1;
       return;
@@ -293,13 +316,14 @@ export async function buildNotificationTargets(params: {
 }
 
 export async function sendNotificationBlast(input: NotificationBlastInput): Promise<NotificationBlastResult> {
-  const { supabase, organizationId, audience, channel, title, body, targetUserIds, sendEmailFn } = input;
+  const { supabase, organizationId, audience, channel, title, body, targetUserIds, category, sendEmailFn } = input;
   const { targets, stats } = await buildNotificationTargets({
     supabase,
     organizationId,
     audience,
     channel,
     targetUserIds: targetUserIds || undefined,
+    category,
   });
 
   const errors: string[] = [];

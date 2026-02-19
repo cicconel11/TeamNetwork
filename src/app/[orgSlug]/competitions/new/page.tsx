@@ -125,6 +125,7 @@ export default function NewCompetitionPage() {
             channel: formData.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
+            category: "competition",
           }),
         });
       } catch (notifError) {

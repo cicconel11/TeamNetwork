@@ -39,6 +39,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/discussions", label: "Discussions", icon: DiscussionIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/jobs", label: "Jobs", icon: BriefcaseIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/forms", label: "Forms", icon: ClipboardIcon, roles: ["admin", "active_member", "alumni"] },
+  { href: "/media", label: "Media Archive", icon: GridIcon, roles: ["admin", "active_member", "alumni"] },
   { href: "/customization", label: "Customization", icon: SettingsIcon, roles: ["admin", "active_member", "alumni"], configurable: false },
   { href: "/settings/invites", label: "Settings", icon: InviteIcon, roles: ["admin"] },
   { href: "/settings/navigation", label: "Navigation", icon: SettingsIcon, roles: ["admin"], configurable: false },

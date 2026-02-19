@@ -57,3 +57,6 @@ export * from "./mentorship";
 
 // Feed schemas
 export * from "./feed";
+
+// Media schemas
+export * from "./media";

@@ -20,6 +20,8 @@ export default async function DiscussionsPage({
   }
 
   const supabase = await createClient();
+  const discussionPostRoles = (orgCtx.organization as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni"];
+  const canPost = orgCtx.role ? discussionPostRoles.includes(orgCtx.role) : false;
 
   // Parse pagination params
   const page = parseInt(searchParams.page || "1", 10);
@@ -53,7 +55,7 @@ export default async function DiscussionsPage({
       <PageHeader
         title="Discussions"
         description="Join the conversation with your team"
-        actions={<ButtonLink href={`/${orgSlug}/discussions/new`}>New Thread</ButtonLink>}
+        actions={canPost && <ButtonLink href={`/${orgSlug}/discussions/new`}>New Thread</ButtonLink>}
       />
       <ThreadList
         threads={threads || []}

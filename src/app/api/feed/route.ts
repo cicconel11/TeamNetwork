@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createPostSchema } from "@/lib/schemas/feed";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { linkMediaToEntity } from "@/lib/media/link";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
@@ -89,10 +92,17 @@ export async function GET(request: NextRequest) {
       userLikedPostIds = new Set((likes || []).map((l) => l.post_id));
     }
 
-    // Augment posts with liked_by_user
+    // Fetch media attachments for all posts
+    const serviceClient = createServiceClient();
+    const mediaMap = postIds.length > 0
+      ? await fetchMediaForEntities(serviceClient, "feed_post", postIds)
+      : new Map();
+
+    // Augment posts with liked_by_user and media
     const augmentedPosts = (posts || []).map((post) => ({
       ...post,
       liked_by_user: userLikedPostIds.has(post.id),
+      media: mediaMap.get(post.id) ?? [],
     }));
 
     const total = count || 0;
@@ -141,9 +151,10 @@ export async function POST(request: NextRequest) {
     const bodySchema = z.object({
       orgId: baseSchemas.uuid,
       body: createPostSchema.shape.body,
+      mediaIds: createPostSchema.shape.mediaIds,
     });
 
-    const { orgId, body } = await validateJson(request, bodySchema);
+    const { orgId, body, mediaIds } = await validateJson(request, bodySchema);
 
     // Check org membership
     const membership = await getOrgMembership(supabase, user.id, orgId);
@@ -176,6 +187,23 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: "Failed to create post" }, { status: 500 });
+    }
+
+    // Link media attachments if provided
+    if (mediaIds && mediaIds.length > 0) {
+      const serviceClient = createServiceClient();
+      const linkResult = await linkMediaToEntity(serviceClient, {
+        mediaIds,
+        entityType: "feed_post",
+        entityId: post.id,
+        orgId,
+        userId: user.id,
+      });
+      if (linkResult.error) {
+        // Clean up orphaned post to prevent duplicates on retry
+        await serviceClient.from("feed_posts").update({ deleted_at: new Date().toISOString() }).eq("id", post.id);
+        return NextResponse.json({ error: linkResult.error }, { status: 400, headers: rateLimit.headers });
+      }
     }
 
     return NextResponse.json({ data: post }, { status: 201, headers: rateLimit.headers });

@@ -11,4 +11,7 @@ export { SoftDeleteButton } from "./SoftDeleteButton";
 export { HCaptcha } from "./HCaptcha";
 export type { HCaptchaProps, HCaptchaRef } from "./HCaptcha";
 export { Skeleton } from "./Skeleton";
+export { PermissionRoleCard } from "./PermissionRoleCard";
+export { ProgressBar } from "./ProgressBar";
+export { ToggleSwitch } from "./ToggleSwitch";
 

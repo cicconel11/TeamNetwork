@@ -152,6 +152,7 @@ export default function NewWorkoutPage() {
             channel: data.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
+            category: "workout",
           }),
         });
       } catch (notifError) {
