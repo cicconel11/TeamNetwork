@@ -13,4 +13,5 @@ export type { HCaptchaProps, HCaptchaRef } from "./HCaptcha";
 export { Skeleton } from "./Skeleton";
 export { PermissionRoleCard } from "./PermissionRoleCard";
 export { ProgressBar } from "./ProgressBar";
+export { ToggleSwitch } from "./ToggleSwitch";
 

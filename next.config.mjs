@@ -170,7 +170,7 @@ const nextConfig = {
             : []),
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), microphone=(self \"https://newassets.hcaptcha.com\" \"https://hcaptcha.com\"), geolocation=()",
           },
           {
             key: "Content-Security-Policy",

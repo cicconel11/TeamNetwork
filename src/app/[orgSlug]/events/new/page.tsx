@@ -299,6 +299,7 @@ export default function NewEventPage() {
             channel: data.channel,
             audience: audienceValue,
             targetUserIds: targetIds,
+            category: "event",
           }),
         });
       } catch (notifError) {

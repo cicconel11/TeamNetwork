@@ -96,6 +96,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Parse actual file size from Content-Range header (bytes 0-11/<total>)
+    let actualFileSize: number | null = null;
+    const contentRange = headRes.headers.get("Content-Range");
+    if (contentRange) {
+      const match = contentRange.match(/\/(\d+)$/);
+      if (match) actualFileSize = parseInt(match[1], 10);
+    }
+
+    // Fall back to HEAD request if Content-Range didn't include total size
+    if (actualFileSize === null) {
+      const headOnly = await fetch(signedData.signedUrl, { method: "HEAD" });
+      const cl = headOnly.headers.get("Content-Length");
+      if (cl) actualFileSize = parseInt(cl, 10);
+    }
+
     const arrayBuffer = await headRes.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
@@ -119,9 +134,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const membership = await getOrgMembership(supabase, user.id, item.organization_id);
     const finalStatus = membership?.role === "admin" ? "approved" : "pending";
 
+    const updatePayload: Record<string, unknown> = { status: finalStatus };
+    if (actualFileSize !== null && actualFileSize > 0) {
+      updatePayload.file_size_bytes = actualFileSize;
+    }
+
     const { data: updated, error: updateError } = await serviceClient
       .from("media_items")
-      .update({ status: finalStatus })
+      .update(updatePayload)
       .eq("id", mediaId)
       .eq("status", "uploading") // Optimistic lock
       .select("id, status")

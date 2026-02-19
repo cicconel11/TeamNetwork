@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
-import type { EmailParams, NotificationResult } from "@/lib/notifications";
+import type { EmailParams, NotificationResult, NotificationCategory } from "@/lib/notifications";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
   baseSchemas,
@@ -46,6 +46,7 @@ const notificationSchema = z
     channel: z.enum(["email", "sms", "both"]).optional(),
     targetUserIds: uuidArray(500).optional(),
     persistNotification: z.boolean().optional(),
+    category: z.enum(["announcement", "discussion", "event", "workout", "competition"]).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
     let targetUserIds: string[] | null = body.targetUserIds ?? null;
     let resolvedNotificationId: string | null = notificationId ?? null;
     let persistNotification = body.persistNotification !== false;
+    let category: NotificationCategory | undefined = body.category;
 
     if (announcementId) {
       const { data: announcement, error: announcementError } = await service
@@ -165,6 +167,9 @@ export async function POST(request: Request) {
         audience = (existingNotification.audience as NotificationAudience) || audience;
         targetUserIds = existingNotification.target_user_ids || targetUserIds;
       }
+
+      // Default to announcement category for announcement-based flows
+      category = category || "announcement";
     } else if (notificationId) {
       const { data: notification, error: notificationError } = await service
         .from("notifications")
@@ -262,6 +267,7 @@ export async function POST(request: Request) {
       title,
       body: bodyText,
       targetUserIds: targetUserIds || undefined,
+      category,
       sendEmailFn: async (params: EmailParams): Promise<NotificationResult> => {
         return sendEmailWithFallback(params.to, params.subject, params.body);
       },

@@ -2602,40 +2602,52 @@ export type Database = {
       }
       notification_preferences: {
         Row: {
+          announcement_emails_enabled: boolean
+          competition_emails_enabled: boolean
           created_at: string | null
           discussion_emails_enabled: boolean
           email_address: string | null
           email_enabled: boolean | null
+          event_emails_enabled: boolean
           id: string
           organization_id: string
           phone_number: string | null
           sms_enabled: boolean | null
           updated_at: string | null
           user_id: string
+          workout_emails_enabled: boolean
         }
         Insert: {
+          announcement_emails_enabled?: boolean
+          competition_emails_enabled?: boolean
           created_at?: string | null
           discussion_emails_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
+          event_emails_enabled?: boolean
           id?: string
           organization_id: string
           phone_number?: string | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
+          workout_emails_enabled?: boolean
         }
         Update: {
+          announcement_emails_enabled?: boolean
+          competition_emails_enabled?: boolean
           created_at?: string | null
           discussion_emails_enabled?: boolean
           email_address?: string | null
           email_enabled?: boolean | null
+          event_emails_enabled?: boolean
           id?: string
           organization_id?: string
           phone_number?: string | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
+          workout_emails_enabled?: boolean
         }
         Relationships: [
           {
@@ -4526,7 +4538,6 @@ export const Constants = {
   },
 } as const
 
-// Table type exports
 export type AcademicSchedule = Tables<'academic_schedules'>;
 export type Alumni = Tables<'alumni'>;
 export type Announcement = Tables<'announcements'>;
