@@ -3,6 +3,7 @@ import { Plus_Jakarta_Sans, Bitter, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import { Toaster } from "sonner";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
@@ -45,6 +46,7 @@ export default function RootLayout({
           <ErrorBoundaryProvider>
             {children}
           </ErrorBoundaryProvider>
+          <Toaster position="bottom-right" richColors closeButton />
         </ThemeProvider>
       </body>
     </html>

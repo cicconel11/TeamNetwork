@@ -9,9 +9,17 @@ import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button, Badge, Input } from "@/components/ui";
+import { PermissionRoleCard } from "@/components/ui/PermissionRoleCard";
 import { PageHeader } from "@/components/layout";
 import { validateOrgName } from "@/lib/validation/org-name";
 import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0)} ${units[i]}`;
+}
 
 export default function OrgSettingsPage() {
   return (
@@ -71,6 +79,26 @@ function OrgSettingsContent() {
   const [feedSaving, setFeedSaving] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [feedSuccess, setFeedSuccess] = useState<string | null>(null);
+  const [jobPostRoles, setJobPostRoles] = useState<string[]>(["admin", "alumni"]);
+  const [jobSaving, setJobSaving] = useState(false);
+  const [jobError, setJobError] = useState<string | null>(null);
+  const [jobSuccess, setJobSuccess] = useState<string | null>(null);
+  const [discussionPostRoles, setDiscussionPostRoles] = useState<string[]>(["admin", "active_member", "alumni"]);
+  const [discussionSaving, setDiscussionSaving] = useState(false);
+  const [discussionError, setDiscussionError] = useState<string | null>(null);
+  const [discussionSuccess, setDiscussionSuccess] = useState<string | null>(null);
+  const [mediaUploadRoles, setMediaUploadRoles] = useState<string[]>(["admin"]);
+  const [mediaSaving, setMediaSaving] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [mediaSuccess, setMediaSuccess] = useState<string | null>(null);
+  const [storageStats, setStorageStats] = useState<{
+    total_bytes: number;
+    quota_bytes: number | null;
+    usage_percent: number;
+    over_quota: boolean;
+    media_items_count: number;
+    media_uploads_count: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!selectedLogo) return;
@@ -93,7 +121,7 @@ function OrgSettingsContent() {
 
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles")
+        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles")
         .eq("slug", orgSlug)
         .maybeSingle();
 
@@ -110,6 +138,9 @@ function OrgSettingsContent() {
       setPrimaryColor(org.primary_color || "#1e3a5f");
       setSecondaryColor(org.secondary_color || "#10b981");
       setFeedPostRoles((org as Record<string, unknown>).feed_post_roles as string[] || ["admin", "active_member", "alumni"]);
+      setJobPostRoles((org as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"]);
+      setDiscussionPostRoles((org as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni"]);
+      setMediaUploadRoles((org as Record<string, unknown>).media_upload_roles as string[] || ["admin"]);
 
       const {
         data: { user },
@@ -156,6 +187,30 @@ function OrgSettingsContent() {
     load();
   }, [orgSlug, router, supabase]);
 
+  // Fetch storage stats for admins
+  useEffect(() => {
+    if (!orgId || role !== "admin") return;
+
+    const fetchStats = async () => {
+      const { data, error } = await supabase.rpc("get_media_storage_stats", {
+        p_org_id: orgId,
+      });
+      if (!error && data && typeof data === "object" && "allowed" in (data as Record<string, unknown>) && (data as Record<string, unknown>).allowed) {
+        const d = data as Record<string, unknown>;
+        setStorageStats({
+          total_bytes: (d.total_bytes as number) ?? 0,
+          quota_bytes: (d.quota_bytes as number) ?? null,
+          usage_percent: (d.usage_percent as number) ?? 0,
+          over_quota: (d.over_quota as boolean) ?? false,
+          media_items_count: (d.media_items_count as number) ?? 0,
+          media_uploads_count: (d.media_uploads_count as number) ?? 0,
+        });
+      }
+    };
+
+    fetchStats();
+  }, [orgId, role, supabase]);
+
   useEffect(() => {
     if (loading) return;
     const animation = animate(".org-settings-card", {
@@ -182,9 +237,6 @@ function OrgSettingsContent() {
   }, [primaryColor, secondaryColor, logoPreview, logoUrl, loading]);
 
   const applyThemeLocally = (nextPrimary: string, nextSecondary: string) => {
-    // Instead of setting inline styles (which override :root.dark stylesheet rules
-    // and break theme toggling), inject a scoped <style> tag that mirrors the
-    // dual-mode approach used in the org layout.
     const lightVars = computeOrgThemeVariables(nextPrimary, nextSecondary, false);
     const darkVars = computeOrgThemeVariables(nextPrimary, nextSecondary, true);
 
@@ -309,47 +361,76 @@ function OrgSettingsContent() {
     }
   };
 
-  const handleFeedRolesSave = async () => {
-    if (!orgId) return;
-    if (role !== "admin") {
-      setFeedError("Only admins can change feed permissions.");
-      return;
-    }
+  // --- Permission role save helpers ---
 
-    setFeedSaving(true);
-    setFeedError(null);
-    setFeedSuccess(null);
-
-    try {
-      const res = await fetch(`/api/organizations/${orgId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feed_post_roles: feedPostRoles }),
-      });
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Unable to update feed permissions");
+  const makeRoleSaveHandler = (
+    field: string,
+    roles: string[],
+    setSaving: (v: boolean) => void,
+    setErr: (v: string | null) => void,
+    setSucc: (v: string | null) => void,
+    setRoles: (v: string[]) => void,
+    label: string,
+  ) => {
+    return async () => {
+      if (!orgId) return;
+      if (role !== "admin") {
+        setErr(`Only admins can change ${label} permissions.`);
+        return;
       }
 
-      if (data?.feed_post_roles) {
-        setFeedPostRoles(data.feed_post_roles);
+      setSaving(true);
+      setErr(null);
+      setSucc(null);
+
+      try {
+        const res = await fetch(`/api/organizations/${orgId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ [field]: roles }),
+        });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          throw new Error(data?.error || `Unable to update ${label} permissions`);
+        }
+
+        if (data?.[field]) {
+          setRoles(data[field]);
+        }
+        setSucc(`${label} permissions updated.`);
+      } catch (err) {
+        setErr(err instanceof Error ? err.message : `Unable to update ${label} permissions`);
+      } finally {
+        setSaving(false);
       }
-      setFeedSuccess("Feed posting permissions updated.");
-    } catch (err) {
-      setFeedError(err instanceof Error ? err.message : "Unable to update feed permissions");
-    } finally {
-      setFeedSaving(false);
-    }
+    };
   };
 
-  const toggleFeedRole = (toggleRole: string) => {
-    if (toggleRole === "admin") return; // Admin always included
-    setFeedPostRoles((prev) =>
-      prev.includes(toggleRole) ? prev.filter((r) => r !== toggleRole) : [...prev, toggleRole],
-    );
-    setFeedSuccess(null);
+  const makeToggleHandler = (
+    setRoles: React.Dispatch<React.SetStateAction<string[]>>,
+    setSucc: (v: string | null) => void,
+  ) => {
+    return (toggleRole: string) => {
+      if (toggleRole === "admin") return;
+      setRoles((prev) =>
+        prev.includes(toggleRole) ? prev.filter((r) => r !== toggleRole) : [...prev, toggleRole],
+      );
+      setSucc(null);
+    };
   };
+
+  const handleFeedRolesSave = makeRoleSaveHandler("feed_post_roles", feedPostRoles, setFeedSaving, setFeedError, setFeedSuccess, setFeedPostRoles, "Feed posting");
+  const toggleFeedRole = makeToggleHandler(setFeedPostRoles, setFeedSuccess);
+
+  const handleDiscussionRolesSave = makeRoleSaveHandler("discussion_post_roles", discussionPostRoles, setDiscussionSaving, setDiscussionError, setDiscussionSuccess, setDiscussionPostRoles, "Discussion posting");
+  const toggleDiscussionRole = makeToggleHandler(setDiscussionPostRoles, setDiscussionSuccess);
+
+  const handleJobRolesSave = makeRoleSaveHandler("job_post_roles", jobPostRoles, setJobSaving, setJobError, setJobSuccess, setJobPostRoles, "Job posting");
+  const toggleJobRole = makeToggleHandler(setJobPostRoles, setJobSuccess);
+
+  const handleMediaRolesSave = makeRoleSaveHandler("media_upload_roles", mediaUploadRoles, setMediaSaving, setMediaError, setMediaSuccess, setMediaUploadRoles, "Media upload");
+  const toggleMediaRole = makeToggleHandler(setMediaUploadRoles, setMediaSuccess);
 
   const displayLogo = logoPreview || logoUrl;
   const isAdmin = role === "admin";
@@ -393,6 +474,15 @@ function OrgSettingsContent() {
       setNameSaving(false);
     }
   };
+
+  // Storage usage progress bar color
+  const storageBarColor = storageStats
+    ? storageStats.usage_percent > 90
+      ? "bg-red-500"
+      : storageStats.usage_percent > 80
+        ? "bg-yellow-500"
+        : "bg-green-500"
+    : "bg-green-500";
 
   return (
     <div className="space-y-6">
@@ -681,61 +771,115 @@ function OrgSettingsContent() {
             </Link>
           </Card>
 
-          {/* Feed Posting Permissions Card (admin-only) */}
+          {/* Posting & Upload Permission Cards (admin-only) */}
           {isAdmin && (
-            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
+            <PermissionRoleCard
+              title="Feed posting permissions"
+              description="Control which roles can create posts in the Feed."
+              featureVerb="create feed posts"
+              roles={feedPostRoles}
+              onToggleRole={toggleFeedRole}
+              onSave={handleFeedRolesSave}
+              saving={feedSaving}
+              error={feedError}
+              success={feedSuccess}
+            />
+          )}
+
+          {isAdmin && (
+            <PermissionRoleCard
+              title="Discussion posting permissions"
+              description="Control which roles can create threads in Discussions."
+              featureVerb="create discussion threads"
+              roles={discussionPostRoles}
+              onToggleRole={toggleDiscussionRole}
+              onSave={handleDiscussionRolesSave}
+              saving={discussionSaving}
+              error={discussionError}
+              success={discussionSuccess}
+            />
+          )}
+
+          {isAdmin && (
+            <PermissionRoleCard
+              title="Job posting permissions"
+              description="Control which roles can post jobs in the Jobs board."
+              featureVerb="post jobs"
+              roles={jobPostRoles}
+              onToggleRole={toggleJobRole}
+              onSave={handleJobRolesSave}
+              saving={jobSaving}
+              error={jobError}
+              success={jobSuccess}
+            />
+          )}
+
+          {isAdmin && (
+            <PermissionRoleCard
+              title="Media upload permissions"
+              description="Control which roles can upload media to the Media Archive."
+              featureVerb="upload media"
+              roles={mediaUploadRoles}
+              onToggleRole={toggleMediaRole}
+              onSave={handleMediaRolesSave}
+              saving={mediaSaving}
+              error={mediaError}
+              success={mediaSuccess}
+            />
+          )}
+
+          {/* Storage Usage Card (admin-only) */}
+          {isAdmin && storageStats && (
+            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2 lg:col-span-2">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-foreground">Feed posting permissions</p>
+                  <p className="font-semibold text-foreground">Media storage usage</p>
                   <p className="text-sm text-muted-foreground">
-                    Control which roles can create posts in the Feed.
+                    Storage consumed by gallery items and feature uploads.
                   </p>
                 </div>
-                <Badge variant="muted">Admin</Badge>
+                <Badge variant={storageStats.over_quota || storageStats.usage_percent > 90 ? "warning" : "muted"}>
+                  {storageStats.quota_bytes === null ? "Unlimited" : `${Math.round(storageStats.usage_percent)}%`}
+                </Badge>
               </div>
 
-              <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-not-allowed opacity-60">
-                  <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
-                  <div>
-                    <span className="font-medium text-sm text-foreground">Admin</span>
-                    <p className="text-xs text-muted-foreground">Admins can always post.</p>
+              {/* Progress bar */}
+              {storageStats.quota_bytes !== null && (
+                <div className="space-y-2">
+                  <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${storageBarColor}`}
+                      style={{ width: `${Math.min(storageStats.usage_percent, 100)}%` }}
+                    />
                   </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={feedPostRoles.includes("active_member")}
-                    onChange={() => toggleFeedRole("active_member")}
-                  />
-                  <div>
-                    <span className="font-medium text-sm text-foreground">Active Members</span>
-                    <p className="text-xs text-muted-foreground">Allow active members to create feed posts.</p>
-                  </div>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-border"
-                    checked={feedPostRoles.includes("alumni")}
-                    onChange={() => toggleFeedRole("alumni")}
-                  />
-                  <div>
-                    <span className="font-medium text-sm text-foreground">Alumni</span>
-                    <p className="text-xs text-muted-foreground">Allow alumni to create feed posts.</p>
-                  </div>
-                </label>
-              </div>
+                  <p className="text-sm text-foreground">
+                    {formatBytes(storageStats.total_bytes)} of {formatBytes(storageStats.quota_bytes)} used
+                  </p>
+                </div>
+              )}
 
-              {feedSuccess && <div className="text-sm text-green-600 dark:text-green-400">{feedSuccess}</div>}
-              {feedError && <div className="text-sm text-red-600 dark:text-red-400">{feedError}</div>}
+              {storageStats.quota_bytes === null && (
+                <p className="text-sm text-foreground">
+                  {formatBytes(storageStats.total_bytes)} used (unlimited plan)
+                </p>
+              )}
 
-              <div className="flex justify-end pt-1">
-                <Button onClick={handleFeedRolesSave} isLoading={feedSaving}>
-                  Save permissions
-                </Button>
-              </div>
+              {/* Warning messages */}
+              {storageStats.over_quota && (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  Storage quota exceeded. Consider removing unused media or upgrading your plan.
+                </p>
+              )}
+              {!storageStats.over_quota && storageStats.usage_percent > 80 && storageStats.quota_bytes !== null && (
+                <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                  Approaching storage limit. Consider removing unused media or upgrading your plan.
+                </p>
+              )}
+
+              {/* Item counts */}
+              <p className="text-xs text-muted-foreground">
+                {storageStats.media_items_count} gallery item{storageStats.media_items_count !== 1 ? "s" : ""}, {storageStats.media_uploads_count} feature upload{storageStats.media_uploads_count !== 1 ? "s" : ""}
+              </p>
             </Card>
           )}
         </div>

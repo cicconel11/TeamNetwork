@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { safeString } from "@/lib/security/validation";
 import { optionalSafeString, optionalEmail, optionalHttpsUrlSchema } from "./common";
+import { mediaIdsSchema } from "./media";
 
 export const createJobSchema = z.object({
   title: safeString(200, 3),
@@ -12,6 +13,7 @@ export const createJobSchema = z.object({
   contact_email: optionalEmail,
   industry: optionalSafeString(200),
   experience_level: z.enum(["entry", "mid", "senior", "lead", "executive"]).optional(),
+  mediaIds: mediaIdsSchema.optional(),
 });
 
 export type CreateJobForm = z.infer<typeof createJobSchema>;

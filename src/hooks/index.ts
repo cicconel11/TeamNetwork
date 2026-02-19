@@ -21,6 +21,8 @@ export type {
   VerificationResponse,
 } from "./useSchedulePreview";
 export { useGoogleCalendarSync } from "./useGoogleCalendarSync";
+export { useGalleryUpload } from "./useGalleryUpload";
+export type { UploadFileEntry, FileUploadStatus } from "./useGalleryUpload";
 
 
 

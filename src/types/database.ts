@@ -964,6 +964,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "discussion_replies_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "discussion_replies_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1023,6 +1030,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "discussion_threads_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "discussion_threads_organization_id_fkey"
             columns: ["organization_id"]
@@ -1706,6 +1720,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "feed_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "feed_comments_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1795,6 +1816,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "feed_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "feed_posts_organization_id_fkey"
             columns: ["organization_id"]
@@ -2094,6 +2122,268 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "job_postings_posted_by_fkey"
+            columns: ["posted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_album_items: {
+        Row: {
+          added_at: string
+          album_id: string
+          id: string
+          media_item_id: string
+          sort_order: number
+        }
+        Insert: {
+          added_at?: string
+          album_id: string
+          id?: string
+          media_item_id: string
+          sort_order?: number
+        }
+        Update: {
+          added_at?: string
+          album_id?: string
+          id?: string
+          media_item_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_album_items_album_id_fkey"
+            columns: ["album_id"]
+            isOneToOne: false
+            referencedRelation: "media_albums"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_album_items_media_item_id_fkey"
+            columns: ["media_item_id"]
+            isOneToOne: false
+            referencedRelation: "media_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_albums: {
+        Row: {
+          cover_media_id: string | null
+          created_at: string
+          created_by: string
+          deleted_at: string | null
+          description: string | null
+          id: string
+          item_count: number
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          cover_media_id?: string | null
+          created_at?: string
+          created_by: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          item_count?: number
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          cover_media_id?: string | null
+          created_at?: string
+          created_by?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          item_count?: number
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_albums_cover_media_id_fkey"
+            columns: ["cover_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_albums_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_items: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          duration_seconds: number | null
+          external_url: string | null
+          file_name: string | null
+          file_size_bytes: number | null
+          height: number | null
+          id: string
+          media_type: string
+          mime_type: string | null
+          moderated_at: string | null
+          moderated_by: string | null
+          organization_id: string
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["media_status"]
+          storage_path: string | null
+          tags: string[]
+          taken_at: string | null
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string
+          visibility: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          external_url?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          height?: number | null
+          id?: string
+          media_type: string
+          mime_type?: string | null
+          moderated_at?: string | null
+          moderated_by?: string | null
+          organization_id: string
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["media_status"]
+          storage_path?: string | null
+          tags?: string[]
+          taken_at?: string | null
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by: string
+          visibility?: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          external_url?: string | null
+          file_name?: string | null
+          file_size_bytes?: number | null
+          height?: number | null
+          id?: string
+          media_type?: string
+          mime_type?: string | null
+          moderated_at?: string | null
+          moderated_by?: string | null
+          organization_id?: string
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["media_status"]
+          storage_path?: string | null
+          tags?: string[]
+          taken_at?: string | null
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string
+          visibility?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_items_uploaded_by_users_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_uploads: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          entity_id: string | null
+          entity_type: Database["public"]["Enums"]["media_entity_type"] | null
+          file_name: string
+          file_size: number | null
+          finalized_at: string | null
+          id: string
+          mime_type: string
+          organization_id: string
+          status: Database["public"]["Enums"]["media_upload_status"]
+          storage_path: string
+          uploader_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string | null
+          entity_type?: Database["public"]["Enums"]["media_entity_type"] | null
+          file_name: string
+          file_size?: number | null
+          finalized_at?: string | null
+          id?: string
+          mime_type: string
+          organization_id: string
+          status?: Database["public"]["Enums"]["media_upload_status"]
+          storage_path: string
+          uploader_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          entity_id?: string | null
+          entity_type?: Database["public"]["Enums"]["media_entity_type"] | null
+          file_name?: string
+          file_size?: number | null
+          finalized_at?: string | null
+          id?: string
+          mime_type?: string
+          organization_id?: string
+          status?: Database["public"]["Enums"]["media_upload_status"]
+          storage_path?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_uploads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_uploads_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
         ]
       }
       members: {
@@ -2210,6 +2500,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mentor_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -2695,6 +2992,7 @@ export type Database = {
           current_period_end: string | null
           grace_period_ends_at: string | null
           id: string
+          media_storage_quota_bytes: number | null
           organization_id: string
           status: string
           stripe_customer_id: string | null
@@ -2709,6 +3007,7 @@ export type Database = {
           current_period_end?: string | null
           grace_period_ends_at?: string | null
           id?: string
+          media_storage_quota_bytes?: number | null
           organization_id: string
           status?: string
           stripe_customer_id?: string | null
@@ -2723,6 +3022,7 @@ export type Database = {
           current_period_end?: string | null
           grace_period_ends_at?: string | null
           id?: string
+          media_storage_quota_bytes?: number | null
           organization_id?: string
           status?: string
           stripe_customer_id?: string | null
@@ -2743,16 +3043,17 @@ export type Database = {
         Row: {
           created_at: string | null
           description: string | null
+          discussion_post_roles: string[]
           donation_embed_url: string | null
           enterprise_adopted_at: string | null
           enterprise_id: string | null
           enterprise_nav_synced_at: string | null
           enterprise_relationship_type: string | null
-          discussion_post_roles: string[]
           feed_post_roles: string[]
           id: string
           job_post_roles: string[]
           logo_url: string | null
+          media_upload_roles: string[]
           name: string
           nav_config: Json | null
           org_type: string
@@ -2766,16 +3067,17 @@ export type Database = {
         Insert: {
           created_at?: string | null
           description?: string | null
+          discussion_post_roles?: string[]
           donation_embed_url?: string | null
           enterprise_adopted_at?: string | null
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
-          discussion_post_roles?: string[]
           feed_post_roles?: string[]
           id?: string
           job_post_roles?: string[]
           logo_url?: string | null
+          media_upload_roles?: string[]
           name: string
           nav_config?: Json | null
           org_type?: string
@@ -2789,16 +3091,17 @@ export type Database = {
         Update: {
           created_at?: string | null
           description?: string | null
+          discussion_post_roles?: string[]
           donation_embed_url?: string | null
           enterprise_adopted_at?: string | null
           enterprise_id?: string | null
           enterprise_nav_synced_at?: string | null
           enterprise_relationship_type?: string | null
-          discussion_post_roles?: string[]
           feed_post_roles?: string[]
           id?: string
           job_post_roles?: string[]
           logo_url?: string | null
+          media_upload_roles?: string[]
           name?: string
           nav_config?: Json | null
           org_type?: string
@@ -3902,6 +4205,7 @@ export type Database = {
       debug_user_org_access: { Args: { target_org_id?: string }; Returns: Json }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_media_storage_stats: { Args: { p_org_id: string }; Returns: Json }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
       get_subscription_status: {
         Args: { p_org_id: string }
@@ -4034,6 +4338,9 @@ export type Database = {
         | "meeting"
         | "social"
         | "fundraiser"
+      media_entity_type: "feed_post" | "discussion_thread" | "job_posting"
+      media_status: "uploading" | "pending" | "approved" | "rejected"
+      media_upload_status: "pending" | "ready" | "failed" | "orphaned"
       member_status: "active" | "inactive" | "pending"
       membership_status: "active" | "revoked" | "pending"
       ops_event_name:
@@ -4203,6 +4510,9 @@ export const Constants = {
         "social",
         "fundraiser",
       ],
+      media_entity_type: ["feed_post", "discussion_thread", "job_posting"],
+      media_status: ["uploading", "pending", "approved", "rejected"],
+      media_upload_status: ["pending", "ready", "failed", "orphaned"],
       member_status: ["active", "inactive", "pending"],
       membership_status: ["active", "revoked", "pending"],
       ops_event_name: [

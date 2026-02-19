@@ -45,6 +45,9 @@ const patchSchema = z
     nav_config: z.record(z.string(), navEntrySchema).optional(),
     name: z.string().max(100).optional(),
     feed_post_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
+    job_post_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
+    discussion_post_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
+    media_upload_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
   })
   .strict();
 const ALLOWED_NAV_PATHS = new Set([...ORG_NAV_ITEMS.map((item) => item.href), "dashboard"]);
@@ -160,7 +163,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const serviceSupabase = createServiceClient();
 
     // Build update payload - only include fields that were provided
-    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[] } = {};
+    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[] } = {};
 
     // Only update nav_config if navConfig or nav_config was provided in the request
     if (parsedBody.navConfig !== undefined || parsedBody.nav_config !== undefined) {
@@ -178,6 +181,24 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       updatePayload.feed_post_roles = roles;
     }
 
+    // Only update job_post_roles if provided, ensuring admin is always included
+    if (parsedBody.job_post_roles !== undefined) {
+      const roles = Array.from(new Set(["admin", ...parsedBody.job_post_roles]));
+      updatePayload.job_post_roles = roles;
+    }
+
+    // Only update discussion_post_roles if provided, ensuring admin is always included
+    if (parsedBody.discussion_post_roles !== undefined) {
+      const roles = Array.from(new Set(["admin", ...parsedBody.discussion_post_roles]));
+      updatePayload.discussion_post_roles = roles;
+    }
+
+    // Only update media_upload_roles if provided, ensuring admin is always included
+    if (parsedBody.media_upload_roles !== undefined) {
+      const roles = Array.from(new Set(["admin", ...parsedBody.media_upload_roles]));
+      updatePayload.media_upload_roles = roles;
+    }
+
     // If nothing to update, return early
     if (Object.keys(updatePayload).length === 0) {
       return respond({ error: "No valid fields to update" }, 400);
@@ -187,7 +208,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       .from("organizations")
       .update(updatePayload)
       .eq("id", organizationId)
-      .select("id, name, nav_config, feed_post_roles")
+      .select("id, name, nav_config, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles")
       .maybeSingle();
 
     if (updateError) {
@@ -199,7 +220,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     // Return response with updated fields
-    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[] } = {};
+    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[] } = {};
     if (updatePayload.nav_config !== undefined) {
       response.navConfig = navConfig;
     }
@@ -208,6 +229,15 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
     if (updatePayload.feed_post_roles !== undefined) {
       response.feed_post_roles = updatedOrg.feed_post_roles as string[];
+    }
+    if (updatePayload.job_post_roles !== undefined) {
+      response.job_post_roles = updatedOrg.job_post_roles as string[];
+    }
+    if (updatePayload.discussion_post_roles !== undefined) {
+      response.discussion_post_roles = updatedOrg.discussion_post_roles as string[];
+    }
+    if (updatePayload.media_upload_roles !== undefined) {
+      response.media_upload_roles = updatedOrg.media_upload_roles as string[];
     }
 
     return respond(response);

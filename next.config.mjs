@@ -181,6 +181,7 @@ const nextConfig = {
               "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co",
               "font-src 'self'",
               "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
+              "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",
               "connect-src 'self' https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://connect.stripe.com",
             ].join("; "),
           },
