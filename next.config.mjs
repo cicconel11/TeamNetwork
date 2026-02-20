@@ -32,6 +32,13 @@ const priceEnvKeys = [
   "STRIPE_PRICE_ALUMNI_2500_5000_YEARLY",
 ];
 
+const enterprisePriceEnvKeys = [
+  "STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY",
+  "STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY",
+  "STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY",
+  "STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY",
+];
+
 const googleCalendarEnv = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
@@ -60,6 +67,13 @@ function validateBuildEnv() {
     stripeEnv.forEach((key) => assertEnv(key, true));
     
     priceEnvKeys.forEach((key) => {
+      const value = assertEnv(key, true);
+      if (!value.startsWith("price_") || value.startsWith("cs_") || value.startsWith("prod_")) {
+        throw new Error(`Invalid Stripe price id for ${key}: ${value}`);
+      }
+    });
+
+    enterprisePriceEnvKeys.forEach((key) => {
       const value = assertEnv(key, true);
       if (!value.startsWith("price_") || value.startsWith("cs_") || value.startsWith("prod_")) {
         throw new Error(`Invalid Stripe price id for ${key}: ${value}`);
@@ -177,9 +191,9 @@ const nextConfig = {
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
-              "style-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co",
-              "font-src 'self'",
+              "font-src 'self' https://fonts.gstatic.com",
               "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
               "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",
               "connect-src 'self' https://rytsziwekhtjdqzzpdso.supabase.co https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://connect.stripe.com",

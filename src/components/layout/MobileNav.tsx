@@ -11,9 +11,10 @@ interface MobileNavProps {
   organization: Organization;
   role: OrgRole | null;
   isDevAdmin?: boolean;
+  hasAlumniAccess?: boolean;
 }
 
-export function MobileNav({ organization, role, isDevAdmin = false }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const basePath = `/${organization.slug}`;
 
@@ -84,11 +85,12 @@ export function MobileNav({ organization, role, isDevAdmin = false }: MobileNavP
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <OrgSidebar 
-          organization={organization} 
-          role={role} 
+        <OrgSidebar
+          organization={organization}
+          role={role}
           isDevAdmin={isDevAdmin}
-          className="h-full border-r border-border" 
+          hasAlumniAccess={hasAlumniAccess}
+          className="h-full border-r border-border"
           onClose={closeMenu}
         />
       </div>

@@ -1,7 +1,7 @@
 # Supabase Schema Audit
 
-**Last Updated**: January 2026
-**Scope**: All migrations through `20260425100000_push_notifications.sql` (45 migration files)
+**Last Updated**: February 2026
+**Scope**: All migrations through `20260515100000_enterprise_hybrid_pricing.sql` (59 migration files)
 
 ---
 
@@ -119,6 +119,27 @@
 |-------|---------|-------------|
 | `expenses` | Organization expense tracking | `id`, `organization_id` |
 
+### Enterprise Accounts
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `enterprises` | Top-level enterprise entity | `id`, `name`, `slug`, `description`, `logo_url`, `primary_color`, `billing_contact_email`, `created_at`, `updated_at` |
+| `enterprise_subscriptions` | Enterprise billing & subscription | `id`, `enterprise_id`, `stripe_customer_id`, `stripe_subscription_id`, `billing_interval` (month/year), `alumni_bucket_quantity` (int, >= 1), `sub_org_quantity` (int, billing-only — not a hard cap), `status`, `current_period_end`, `grace_period_ends_at` |
+| `user_enterprise_roles` | Enterprise admin roles | `id`, `user_id`, `enterprise_id`, `role` (enterprise_role enum), `created_at`, unique on `(user_id, enterprise_id)` |
+| `enterprise_adoption_requests` | Pending org adoption requests | `id`, `enterprise_id`, `organization_id`, `requested_by`, `status` (pending/accepted/rejected/expired), `responded_by`, `responded_at`, `expires_at` |
+| `enterprise_alumni_counts` | Materialized view: alumni counts per enterprise | `enterprise_id`, `total_alumni_count`, `sub_org_count`, `enterprise_managed_org_count` |
+| `enterprise_invites` | Enterprise admin invitations | `id`, `enterprise_id`, `email`, `role` (enterprise_role), `token` (unique), `expires_at`, `accepted_at`, `revoked_at`, `created_by` |
+| `enterprise_audit_logs` | Enterprise action audit trail | `id`, `enterprise_id`, `actor_user_id`, `actor_email`, `action`, `target_type`, `target_id`, `metadata` (jsonb), `ip_address`, `user_agent`, `created_at` |
+
+**Enterprise pricing model (hybrid):**
+- Alumni buckets: each bucket covers 2,500 alumni. Buckets 1-4 are self-serve ($50/mo or $500/yr per bucket). Bucket 5+ is sales-led.
+- Team add-ons: first 3 sub-organizations are free. Additional orgs are $15/mo or $150/yr each. `sub_org_quantity` is billing-only (no DB-level hard cap).
+
+**Organization enterprise columns (added to `organizations`):**
+- `enterprise_id` (uuid, nullable FK) — links org to enterprise
+- `enterprise_relationship_type` (text: `created` or `adopted`)
+- `enterprise_adopted_at` (timestamptz)
+
 ---
 
 ## Enum Types
@@ -129,6 +150,8 @@
 | `membership_status` | `active`, `revoked`, `pending` |
 | `chat_message_status` | `pending`, `approved`, `rejected` |
 | `chat_group_role` | `admin`, `moderator`, `member` |
+| `enterprise_role` | `owner`, `billing_admin`, `org_admin` |
+| `adoption_request_status` | `pending`, `accepted`, `rejected`, `expired` |
 
 ---
 
@@ -185,6 +208,13 @@
 | `payment_attempts` | Service only | Service only | Service only | Service only |
 | `stripe_events` | Service only | Service only | Service only | Service only |
 | `expenses` | Org members | Page editors | Page editors | Page editors |
+| `enterprises` | Enterprise member | -- | Enterprise owner | -- |
+| `enterprise_subscriptions` | Enterprise member | Service only | Service only | -- |
+| `user_enterprise_roles` | Enterprise member or self | Enterprise owner | -- | Enterprise owner |
+| `enterprise_adoption_requests` | Enterprise member or org admin | Enterprise admin | Enterprise admin | -- |
+| `enterprise_alumni_counts` | Enterprise member | -- | -- | -- |
+| `enterprise_invites` | Enterprise admin | Enterprise admin | Enterprise admin | Enterprise admin |
+| `enterprise_audit_logs` | Enterprise owner | Service only | -- | -- |
 
 ---
 
@@ -206,6 +236,14 @@
 |----------|-----------|---------|
 | `is_chat_group_member` | `(group_id uuid) -> boolean` | Checks if current user belongs to the chat group |
 | `is_chat_group_moderator` | `(group_id uuid) -> boolean` | Checks if current user is admin or moderator in the chat group |
+
+### Enterprise Helpers
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `is_enterprise_member` | `(ent_id uuid) -> boolean` | Checks if current user has any role in enterprise (uses initplan pattern) |
+| `is_enterprise_owner` | `(ent_id uuid) -> boolean` | Checks if current user is owner in enterprise (uses initplan pattern) |
+| `can_enterprise_add_alumni` | `(p_enterprise_id uuid) -> boolean` | Returns true if enterprise has alumni capacity (bucket_qty * 2500 > current count) |
 
 ### Alumni Quota Functions
 
@@ -518,3 +556,17 @@ Issues identified in the original December 2025 audit and their resolution statu
 | `20260421140000` | Apr 2026 | Fix chat function permissions: GRANT EXECUTE, recreate with SECURITY DEFINER |
 | `20260422100000` | Apr 2026 | Fix chat group visibility: COALESCE in membership checks, refined SELECT policies |
 | `20260425100000` | Apr 2026 | Push notifications: `user_push_tokens` table, `push_enabled` on notification_preferences |
+| `20260430100000` | Apr 2026 | Enterprise security fixes: RLS hardening, function search_path fixes |
+| `20260501100000` | May 2026 | Enterprise audit logs table |
+| `20260201100000` | Feb 2026 | Enterprise accounts: `enterprises`, `enterprise_subscriptions`, `user_enterprise_roles`, `enterprise_adoption_requests`, `enterprise_alumni_counts` view |
+| `20260202100000` | Feb 2026 | Enterprise quantity pricing: `pricing_model`, `sub_org_quantity`, `price_per_sub_org_cents` columns |
+| `20260202200000` | Feb 2026 | Seed test enterprise (`test-enterprise`, ID `aaaaaaaa-0000-0000-0000-000000000001`) |
+| `20260203120000` | Feb 2026 | Revoke anon/authenticated SELECT on `enterprise_alumni_counts` |
+| `20260204100000` | Feb 2026 | Enterprise management features: settings, navigation sync, org removal |
+| `20260204150000` | Feb 2026 | Enterprise org limit trigger (later dropped in hybrid pricing migration) |
+| `20260205100000` | Feb 2026 | Enterprise service-role RLS policies |
+| `20260206100000` | Feb 2026 | Fix enterprise roles RLS for owner self-management |
+| `20260207110000` | Feb 2026 | Enterprise invite system: `enterprise_invites` table |
+| `20260208100000` | Feb 2026 | Enterprise-wide invites (cross-org invite codes) |
+| `20260209100000` | Feb 2026 | Enterprise admin cap (max 20 admins per enterprise) |
+| `20260515100000` | May 2026 | **Enterprise hybrid pricing**: adds `alumni_bucket_quantity`, backfills from legacy `alumni_tier`, drops `pricing_model`/`alumni_tier`/`pooled_alumni_limit`/`custom_price_cents`/`price_per_sub_org_cents`, drops `enforce_enterprise_org_limit` trigger, rewrites `can_enterprise_add_alumni()` for bucket model |

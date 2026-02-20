@@ -6,6 +6,9 @@ import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { AppPageAnimations } from "@/components/app/AppPageAnimations";
 import { AppBackgroundEffects } from "@/components/app/AppBackgroundEffects";
 import { CheckoutSuccessBanner } from "@/components/app/CheckoutSuccessBanner";
+import { EnterpriseCard } from "@/components/enterprise";
+import { getUserEnterprises } from "@/lib/auth/enterprise-context";
+import { SeedEnterpriseButton } from "@/components/dev/SeedEnterpriseButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +20,7 @@ type OrganizationSummary = {
   description: string | null;
   logo_url: string | null;
   primary_color: string | null;
+  enterprise_id: string | null;
 };
 
 type Membership = {
@@ -41,10 +45,15 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
   }
 
   let loadError: string | null = null;
-  const { data: membershipsData, error: membershipsError } = await supabase
-    .from("user_organization_roles")
-    .select("organization_id, organization:organizations(id, name, slug, description, logo_url, primary_color), role, status")
-    .eq("user_id", user.id);
+
+  // Fetch user's enterprises and organizations in parallel
+  const [{ data: membershipsData, error: membershipsError }, enterprises] = await Promise.all([
+    supabase
+      .from("user_organization_roles")
+      .select("organization_id, organization:organizations(id, name, slug, description, logo_url, primary_color, enterprise_id), role, status")
+      .eq("user_id", user.id),
+    getUserEnterprises(user.id),
+  ]);
 
   let memberships = (membershipsData as Membership[] | null) ?? [];
 
@@ -102,13 +111,25 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     }
   }
 
-  const orgs = activeMemberships
+  const allOrgs = activeMemberships
     .map((m) => {
       const org = orgLookup.get(m.organization_id);
       if (!org) return null;
       return { ...org, role: m.role ?? "member" };
     })
     .filter(Boolean) as Array<OrganizationSummary & { role: string }>;
+
+  // Split into regular orgs and enterprise sub-orgs
+  const orgs = allOrgs.filter((o) => !o.enterprise_id);
+  const knownEnterpriseIds = new Set(
+    enterprises.map((e) => e.enterprise?.id).filter(Boolean)
+  );
+  const enterpriseSubOrgs = allOrgs
+    .filter((o) => o.enterprise_id && knownEnterpriseIds.has(o.enterprise_id))
+    .reduce<Record<string, typeof allOrgs>>((acc, org) => ({
+      ...acc,
+      [org.enterprise_id!]: [...(acc[org.enterprise_id!] ?? []), org],
+    }), {});
 
   // Get pending memberships for display
   const pendingDisplayMemberships = pendingMemberships
@@ -154,7 +175,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             <Link href="/app/join">
               <Button variant="ghost" size="sm">Join Org</Button>
             </Link>
-            <Link href="/app/create-org">
+            <Link href="/app/create">
               <Button size="sm">Create Org</Button>
             </Link>
           </div>
@@ -215,7 +236,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             <Link href="/app/join">
               <Button variant="secondary" size="sm">Join existing</Button>
             </Link>
-            <Link href="/app/create-org">
+            <Link href="/app/create">
               <Button size="sm">Create new</Button>
             </Link>
           </div>
@@ -231,13 +252,20 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             title="No organizations yet"
             description="Create a new organization or join one you were invited to."
             action={
-              <div className="flex gap-3">
-                <Link href="/app/create-org">
-                  <Button>Create organization</Button>
-                </Link>
-                <Link href="/app/join">
-                  <Button variant="secondary">Join organization</Button>
-                </Link>
+              <div className="flex flex-col gap-3">
+                <div className="flex gap-3">
+                  <Link href="/app/create">
+                    <Button>Create organization</Button>
+                  </Link>
+                  <Link href="/app/join">
+                    <Button variant="secondary">Join organization</Button>
+                  </Link>
+                </div>
+                {enterprises.length === 0 && (
+                  <Link href="/app/create-enterprise" className="text-sm text-purple-600 hover:text-purple-700 text-center">
+                    Or create an enterprise to manage multiple organizations
+                  </Link>
+                )}
               </div>
             }
           />
@@ -279,6 +307,98 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             ))}
           </div>
         )}
+
+        {/* Your Enterprises Section */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="app-hero-animate" style={{ opacity: 0 }}>
+              <h2 className="text-xl font-semibold text-foreground">Your Enterprises</h2>
+            </div>
+            <Link href="/app/create-enterprise" className="app-hero-animate text-sm text-purple-600 hover:text-purple-700" style={{ opacity: 0 }}>
+              Create Enterprise
+            </Link>
+          </div>
+          {enterprises.length > 0 ? (
+            <div className="space-y-4">
+              {enterprises
+                .filter((item) => item.enterprise !== null)
+                .map((item) => {
+                  const entId = item.enterprise!.id;
+                  const subOrgs = enterpriseSubOrgs[entId] ?? [];
+                  return (
+                    <div key={entId}>
+                      <div>
+                        <EnterpriseCard
+                          name={item.enterprise!.name}
+                          slug={item.enterprise!.slug}
+                          logoUrl={item.enterprise!.logo_url}
+                          role={item.role}
+                          subOrgCount={subOrgs.length}
+                          alumniCount={0}
+                        />
+                      </div>
+                      {subOrgs.length > 0 && (
+                        <div className="mt-2 pl-4 border-l-2 border-purple-200 dark:border-purple-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {subOrgs.map((org) => (
+                            <Link key={org.id} href={`/${org.slug}`}>
+                              <Card interactive className="p-3 space-y-1">
+                                <div className="flex items-center gap-2">
+                                  {org.logo_url ? (
+                                    <div className="relative h-8 w-8 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                                      <Image
+                                        src={org.logo_url}
+                                        alt={org.name}
+                                        fill
+                                        className="object-cover"
+                                        sizes="32px"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                                      style={{ backgroundColor: org.primary_color || "#1e3a5f" }}
+                                    >
+                                      {org.name.charAt(0)}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-foreground truncate">{org.name}</p>
+                                    <p className="text-xs text-muted-foreground truncate">/{org.slug}</p>
+                                  </div>
+                                  <Badge variant="muted" className="ml-auto capitalize text-xs">{org.role}</Badge>
+                                </div>
+                              </Card>
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+            </div>
+          ) : (
+            <Card className="app-hero-animate p-6 text-center" style={{ opacity: 0 }}>
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <svg className="h-6 w-6 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">
+                    Manage multiple organizations under one billing account
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Link href="/app/create-enterprise">
+                    <Button variant="secondary" size="sm">Create your first enterprise</Button>
+                  </Link>
+                  {process.env.NODE_ENV === "development" && <SeedEnterpriseButton />}
+                </div>
+              </div>
+            </Card>
+          )}
+        </section>
 
         {/* Pending memberships section */}
         {pendingDisplayMemberships.length > 0 && (

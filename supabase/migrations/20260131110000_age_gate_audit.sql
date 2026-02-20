@@ -17,17 +17,18 @@ CREATE TABLE IF NOT EXISTS compliance_audit_log (
 );
 
 -- Index for querying by IP and time (rate limiting, abuse detection)
-CREATE INDEX idx_compliance_audit_ip_time
+CREATE INDEX IF NOT EXISTS idx_compliance_audit_ip_time
   ON compliance_audit_log (ip_hash, created_at);
 
 -- Index for analytics queries by event type
-CREATE INDEX idx_compliance_audit_event_type
+CREATE INDEX IF NOT EXISTS idx_compliance_audit_event_type
   ON compliance_audit_log (event_type, created_at);
 
 -- Enable RLS - only service role can access this table
 ALTER TABLE compliance_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- No access for regular users - service role only
+DROP POLICY IF EXISTS "Service role only" ON compliance_audit_log;
 CREATE POLICY "Service role only" ON compliance_audit_log
   FOR ALL USING (false);
 

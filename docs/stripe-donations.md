@@ -101,6 +101,13 @@ See [Stripe Testing Documentation](https://stripe.com/docs/testing) for more tes
 2. Check that your platform has Connect enabled
 3. Look for errors in the server console
 
+### Console errors about CSP or frame-ancestors
+
+1. Stripe-hosted pages (for example, `stripe.com`, `connect.stripe.com`, `docs.stripe.com`) cannot be embedded in iframes by design.
+2. If a Stripe URL is added as an embed, the browser console may show `frame-ancestors` / CSP violations.
+3. Use Link mode for Stripe URLs instead of iframe embeds.
+4. `chrome-extension://...` console errors come from browser extensions and are not TeamNetwork app failures.
+
 ### Donation checkout fails
 
 1. Ensure the organization has completed Connect onboarding

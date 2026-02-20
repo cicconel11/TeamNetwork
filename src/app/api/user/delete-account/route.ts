@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import {
   checkRateLimit,
   buildRateLimitResponse,
 } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { deleteAccountSchema } from "@/lib/schemas/auth";
+import { resolveEnterpriseOwnershipCheck } from "@/lib/auth/enterprise-ownership-check";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +62,8 @@ export async function DELETE(request: Request) {
     | null = null;
 
   try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const { createServiceClient } = await import("@/lib/supabase/service");
     const supabase = await createClient();
     const serviceSupabase = createServiceClient();
 
@@ -121,6 +122,43 @@ export async function DELETE(request: Request) {
         {
           error: "Cannot delete account while you are an admin of organizations",
           details: `Please transfer admin role or delete these organizations first: ${orgNames}`,
+        },
+        400
+      );
+    }
+
+    // Check if user is owner of any enterprise
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: enterpriseRoles, error: enterpriseRolesError } = await (serviceSupabase as any)
+      .from("user_enterprise_roles")
+      .select("enterprise_id, role")
+      .eq("user_id", user.id)
+      .eq("role", "owner")
+      .limit(1) as {
+      data: Array<{ enterprise_id: string; role: string }> | null;
+      error: { code?: string; message: string } | null;
+    };
+
+    const ownershipCheck = resolveEnterpriseOwnershipCheck({
+      enterpriseRoles,
+      error: enterpriseRolesError,
+    });
+
+    if (ownershipCheck.error) {
+      console.error("[delete-account] Failed enterprise ownership check", {
+        userId: user.id,
+        code: enterpriseRolesError?.code,
+        message: enterpriseRolesError?.message,
+      });
+      return respond({ error: ownershipCheck.error }, 500);
+    }
+
+    if (ownershipCheck.isOwner) {
+      return respond(
+        {
+          error: "Cannot delete account while you are an owner of enterprises",
+          details:
+            "Please transfer enterprise ownership before deleting your account.",
         },
         400
       );
@@ -234,6 +272,8 @@ Thank you for using TeamNetwork.
  */
 export async function GET(request: Request) {
   try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const { createServiceClient } = await import("@/lib/supabase/service");
     const supabase = await createClient();
     const serviceSupabase = createServiceClient();
 
@@ -312,6 +352,8 @@ export async function POST(request: Request) {
     | null = null;
 
   try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const { createServiceClient } = await import("@/lib/supabase/service");
     const supabase = await createClient();
     const serviceSupabase = createServiceClient();
 

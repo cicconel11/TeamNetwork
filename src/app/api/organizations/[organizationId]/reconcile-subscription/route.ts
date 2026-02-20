@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { stripe } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import {
@@ -11,6 +8,11 @@ import {
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
 import type { Database } from "@/types/database";
+import {
+  pickMostRecentRecoverableAttempt,
+  resolveRecoverableAttemptLookup,
+  type RecoverableAttempt,
+} from "@/lib/payments/reconcile-helpers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -39,6 +41,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
+  const { createClient } = await import("@/lib/supabase/server");
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const { stripe } = await import("@/lib/stripe");
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -170,15 +175,48 @@ export async function POST(req: Request, { params }: RouteParams) {
     "complete", "completed",
   ];
   
-  const { data: paymentAttempts } = await serviceSupabase
-    .from("payment_attempts")
-    .select("id, stripe_checkout_session_id, status, organization_id, metadata")
-    .in("status", recoverableStatuses)
-    .or(`organization_id.eq.${organizationId},metadata->>pending_org_id.eq.${organizationId}`)
-    .order("created_at", { ascending: false })
-    .limit(1);
+  const [byOrgId, byPendingOrgId] = await Promise.all([
+    serviceSupabase
+      .from("payment_attempts")
+      .select("id, stripe_checkout_session_id, status, organization_id, metadata, created_at")
+      .eq("organization_id", organizationId)
+      .in("status", recoverableStatuses)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    serviceSupabase
+      .from("payment_attempts")
+      .select("id, stripe_checkout_session_id, status, organization_id, metadata, created_at")
+      .eq("metadata->>pending_org_id", organizationId)
+      .in("status", recoverableStatuses)
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
 
-  const attempt = paymentAttempts?.[0];
+  const lookup = resolveRecoverableAttemptLookup({
+    byOrgId: {
+      data: byOrgId.data as RecoverableAttempt[] | null,
+      error: byOrgId.error ? { code: byOrgId.error.code, message: byOrgId.error.message } : null,
+    },
+    byPendingOrgId: {
+      data: byPendingOrgId.data as RecoverableAttempt[] | null,
+      error: byPendingOrgId.error
+        ? { code: byPendingOrgId.error.code, message: byPendingOrgId.error.message }
+        : null,
+    },
+  });
+
+  if (lookup.error) {
+    console.error("[reconcile-subscription] Failed payment_attempts lookup", {
+      organizationId,
+      byOrgIdError: byOrgId.error ? { code: byOrgId.error.code, message: byOrgId.error.message } : null,
+      byPendingOrgIdError: byPendingOrgId.error
+        ? { code: byPendingOrgId.error.code, message: byPendingOrgId.error.message }
+        : null,
+    });
+    return respond({ error: lookup.error }, 500);
+  }
+
+  const attempt = lookup.attempt;
   if (!attempt?.stripe_checkout_session_id) {
     return respond({ error: "No completed checkout session found for this organization." }, 404);
   }

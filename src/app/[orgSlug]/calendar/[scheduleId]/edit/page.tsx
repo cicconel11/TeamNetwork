@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { editScheduleSchema, type EditScheduleForm } from "@/lib/schemas/schedule";
-import type { OccurrenceType } from "@/types/database";
+import type { OccurrenceType } from "@/lib/schemas/common";
 
 const DAYS_OF_WEEK = [
   { label: "Sunday", value: "0" },
