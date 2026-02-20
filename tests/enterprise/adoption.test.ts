@@ -117,7 +117,7 @@ function simulateCreateAdoptionRequest(params: {
   }
 
   if (insertError) {
-    return { success: false, error: insertError.message };
+    return { success: false, error: "Failed to create adoption request", status: 500 };
   }
 
   return { success: true, requestId: insertedId };
@@ -182,7 +182,7 @@ function simulateAcceptAdoptionRequest(params: {
   }
 
   if (orgUpdateError) {
-    return { success: false, error: orgUpdateError.message };
+    return { success: false, error: "Failed to update organization", status: 500 };
   }
 
   // Subscription update/create with compensating rollback
@@ -338,7 +338,7 @@ describe("createAdoptionRequest", () => {
     assert.ok(result.error?.includes("pending adoption request already exists"));
   });
 
-  it("returns insert error message on insert failure", () => {
+  it("returns generic error message on insert failure (no DB detail leak)", () => {
     const result = simulateCreateAdoptionRequest({
       org: makeOrg(),
       orgError: null,
@@ -350,7 +350,10 @@ describe("createAdoptionRequest", () => {
     });
 
     assert.strictEqual(result.success, false);
-    assert.strictEqual(result.error, "unique constraint violation");
+    assert.strictEqual(result.error, "Failed to create adoption request");
+    assert.strictEqual(result.status, 500);
+    // Must NOT contain the raw DB error message
+    assert.ok(!result.error?.includes("unique constraint"));
   });
 
   it("succeeds with valid inputs", () => {
@@ -516,6 +519,25 @@ describe("acceptAdoptionRequest", () => {
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.status, 503);
     assert.ok(result.error?.includes("Unable to verify seat limit"));
+  });
+
+  it("returns generic error on org update failure (no DB detail leak)", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: { message: "column enterprise_id violates not-null constraint" },
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Failed to update organization");
+    assert.strictEqual(result.status, 500);
+    // Must NOT contain the raw DB error message
+    assert.ok(!result.error?.includes("violates not-null"));
   });
 
   it("triggers compensating rollback when subscription update fails (org has existing sub)", () => {

@@ -48,12 +48,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     .eq("slug", slugParsed.data)
     .maybeSingle() as { data: { id: string; name: string; slug: string; enterprise_id: string | null } | null };
 
-  if (!org) {
-    return respond({ error: "Organization not found" }, 404);
-  }
-
-  if (org.enterprise_id) {
-    return respond({ error: "Organization already belongs to an enterprise" }, 400);
+  if (!org || org.enterprise_id) {
+    return respond({ error: "Organization not available for adoption" }, 404);
   }
 
   const { count: alumniCount } = await ctx.serviceSupabase

@@ -125,7 +125,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Build query
   let query = ctx.serviceSupabase
     .from("alumni")
-    .select("*")
+    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, major, industry, current_company, current_city, position_title, job_title")
     .in("organization_id", orgIds)
     .is("deleted_at", null);
 
@@ -178,9 +178,24 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "No alumni found matching criteria" }, 404);
   }
 
-  // Add organization name to alumni
+  // Add organization name to alumni (explicit fields — no spread)
   const alumniWithOrg = alumni.map((alum) => ({
-    ...alum,
+    id: alum.id,
+    organization_id: alum.organization_id,
+    first_name: alum.first_name,
+    last_name: alum.last_name,
+    email: alum.email,
+    phone_number: alum.phone_number,
+    photo_url: alum.photo_url,
+    linkedin_url: alum.linkedin_url,
+    notes: alum.notes,
+    graduation_year: alum.graduation_year,
+    major: alum.major,
+    industry: alum.industry,
+    current_company: alum.current_company,
+    current_city: alum.current_city,
+    position_title: alum.position_title,
+    job_title: alum.job_title,
     organization_name: orgMap.get(alum.organization_id) ?? "Unknown",
   }));
 

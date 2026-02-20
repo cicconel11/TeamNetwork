@@ -84,7 +84,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Enterprise not found" }, 404);
   }
 
-  const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
   const session = await stripe.billingPortal.sessions.create({
     customer: stripeCustomerId,
     return_url: `${origin}/enterprise/${enterpriseSlug}/billing`,

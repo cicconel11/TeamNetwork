@@ -104,7 +104,8 @@ export async function createAdoptionRequest(
     .single() as { data: { id: string } | null; error: { message: string } | null };
 
   if (error) {
-    return { success: false, error: error.message };
+    console.error("[createAdoptionRequest] Insert failed:", error);
+    return { success: false, error: "Failed to create adoption request", status: 500 };
   }
 
   return { success: true, requestId: request?.id };
@@ -190,7 +191,8 @@ export async function acceptAdoptionRequest(
     .eq("id", request.organization_id);
 
   if (updateError) {
-    return { success: false, error: updateError.message };
+    console.error("[acceptAdoptionRequest] Org update failed:", updateError);
+    return { success: false, error: "Failed to update organization", status: 500 };
   }
 
   // Ensure org has a subscription row so the enterprise_alumni_counts view can

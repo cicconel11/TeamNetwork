@@ -108,13 +108,13 @@ function simulateCreateOrgRoute(
 
   // Create org
   if (orgInsertError) {
-    return { status: 400, body: { error: orgInsertError.message } };
+    return { status: 400, body: { error: "Unable to create organization" } };
   }
 
   // Grant creator admin role
   if (roleError) {
     // Cleanup: delete new org
-    return { status: 400, body: { error: roleError.message } };
+    return { status: 400, body: { error: "Failed to assign admin role" } };
   }
 
   // Create subscription
@@ -357,7 +357,7 @@ test("create org returns 404 when enterprise not found", () => {
 
 // ── Partial failure cleanup tests ─────────────────────────────────────────────
 
-test("create org returns 400 when org insert fails", () => {
+test("create org returns 400 with generic error when org insert fails (no DB detail leak)", () => {
   const result = simulateCreateOrgRoute(
     { name: "New Org", slug: "new-org", enterprise_id: "ent-1" },
     {
@@ -373,10 +373,12 @@ test("create org returns 400 when org insert fails", () => {
   );
 
   assert.strictEqual(result.status, 400);
-  assert.ok(result.body.error);
+  assert.strictEqual(result.body.error, "Unable to create organization");
+  // Must NOT contain the raw DB error message
+  assert.ok(!(result.body.error as string).includes("duplicate key"));
 });
 
-test("create org returns 400 and cleans up org when role assignment fails", () => {
+test("create org returns 400 with generic error and cleans up org when role assignment fails", () => {
   const result = simulateCreateOrgRoute(
     { name: "New Org", slug: "new-org", enterprise_id: "ent-1" },
     {
@@ -391,9 +393,11 @@ test("create org returns 400 and cleans up org when role assignment fails", () =
     }
   );
 
-  // Role error → org deleted, 400 returned
+  // Role error → org deleted, 400 returned with generic message
   assert.strictEqual(result.status, 400);
-  assert.ok(result.body.error);
+  assert.strictEqual(result.body.error, "Failed to assign admin role");
+  // Must NOT contain the raw DB error message
+  assert.ok(!(result.body.error as string).includes("constraint violation"));
 });
 
 test("create org returns 500 and cleans up org+role when subscription creation fails", () => {

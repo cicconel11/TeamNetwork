@@ -80,7 +80,7 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Build query
   let query = ctx.serviceSupabase
     .from("alumni")
-    .select("*", { count: "exact" })
+    .select("id, organization_id, first_name, last_name, email, phone_number, photo_url, linkedin_url, notes, graduation_year, major, industry, current_company, current_city, position_title, job_title", { count: "exact" })
     .is("deleted_at", null);
 
   // Filter by organization(s)
@@ -130,11 +130,26 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Internal server error" }, 500);
   }
 
-  // Add organization info to each alumni
+  // Add organization info to each alumni (explicit fields — no spread)
   const alumniWithOrg = (alumni ?? []).map((alum) => {
     const org = orgMap.get(alum.organization_id);
     return {
-      ...alum,
+      id: alum.id,
+      organization_id: alum.organization_id,
+      first_name: alum.first_name,
+      last_name: alum.last_name,
+      email: alum.email,
+      phone_number: alum.phone_number,
+      photo_url: alum.photo_url,
+      linkedin_url: alum.linkedin_url,
+      notes: alum.notes,
+      graduation_year: alum.graduation_year,
+      major: alum.major,
+      industry: alum.industry,
+      current_company: alum.current_company,
+      current_city: alum.current_city,
+      position_title: alum.position_title,
+      job_title: alum.job_title,
       organization_name: org?.name ?? "Unknown",
       organization_slug: org?.slug ?? "",
     };

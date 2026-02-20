@@ -51,7 +51,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // Sync all organizations in parallel
   const results = await Promise.allSettled(
     orgs.map((org) =>
-      supabase.rpc("sync_enterprise_nav_to_org", {
+      ctx.serviceSupabase.rpc("sync_enterprise_nav_to_org", {
         p_enterprise_id: ctx.enterpriseId,
         p_organization_id: org.id,
       })

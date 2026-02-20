@@ -65,7 +65,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     const result = await createAdoptionRequest(ctx.enterpriseId, org.id, ctx.userId);
     if (!result.success) {
-      return respond({ error: result.error }, 400);
+      return respond({ error: result.error }, result.status ?? 400);
     }
 
     logEnterpriseAuditAction({

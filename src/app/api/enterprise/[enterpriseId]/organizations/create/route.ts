@@ -125,7 +125,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       .single() as { data: Record<string, unknown> | null; error: Error | null };
 
     if (orgError || !newOrg) {
-      return respond({ error: orgError?.message ?? "Unable to create organization" }, 400);
+      if (orgError) console.error("[enterprise-create-org] Insert failed:", orgError);
+      return respond({ error: "Unable to create organization" }, 400);
     }
 
     // Grant creator admin role on new organization
@@ -139,9 +140,10 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     if (roleError) {
       // Cleanup if role assignment fails
+      console.error("[enterprise-create-org] Role insert failed:", roleError);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (ctx.serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
-      return respond({ error: roleError.message }, 400);
+      return respond({ error: "Failed to assign admin role" }, 400);
     }
 
     // Create subscription record for enterprise-managed org
