@@ -175,7 +175,7 @@ export async function POST(req: Request) {
 
     try {
       const { basePrice, alumniPrice } = getPriceIds(interval, bucket);
-      const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+      const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
       const pendingOrgIdSeed = randomUUID();
       const fingerprint = hashFingerprint({
         userId: user.id,

@@ -6,6 +6,7 @@ import { JobList } from "@/components/jobs/JobList";
 import { JobsFilters } from "@/components/jobs/JobsFilters";
 import Link from "next/link";
 import { Button } from "@/components/ui";
+import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 interface PageProps {
   params: Promise<{ orgSlug: string }>;
@@ -68,7 +69,8 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
 
   // Apply filters
   if (q) {
-    query = query.or(`title.ilike.%${q}%,company.ilike.%${q}%`);
+    const sanitizedQ = sanitizeIlikeInput(q).replace(/,/g, "");
+    query = query.or(`title.ilike.%${sanitizedQ}%,company.ilike.%${sanitizedQ}%`);
   }
   if (type) {
     query = query.eq("location_type", type);
@@ -77,13 +79,13 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
     query = query.eq("experience_level", level);
   }
   if (location) {
-    query = query.ilike("location", location);
+    query = query.ilike("location", sanitizeIlikeInput(location));
   }
   if (company) {
-    query = query.ilike("company", company);
+    query = query.ilike("company", sanitizeIlikeInput(company));
   }
   if (industry) {
-    query = query.ilike("industry", industry);
+    query = query.ilike("industry", sanitizeIlikeInput(industry));
   }
 
   const { data: jobs, count } = await query

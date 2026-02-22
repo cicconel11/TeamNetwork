@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     }
 
     const { organizationId, orgSlug } = await validateJson(req, requestSchema);
-    const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
 
     const orgQuery = supabase
       .from("organizations")

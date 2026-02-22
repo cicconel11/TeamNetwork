@@ -96,3 +96,10 @@ export function validationErrorResponse(error: ValidationError) {
     { status: 400 },
   );
 }
+
+export function sanitizeIlikeInput(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\") // backslash first (escape order matters)
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}

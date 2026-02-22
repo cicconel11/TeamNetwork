@@ -12,6 +12,7 @@ import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
+import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 interface AlumniPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -85,19 +86,19 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   }
   const industry = normalize(filters.industry);
   if (industry) {
-    query = query.ilike("industry", industry);
+    query = query.ilike("industry", sanitizeIlikeInput(industry));
   }
   const company = normalize(filters.company);
   if (company) {
-    query = query.ilike("current_company", company);
+    query = query.ilike("current_company", sanitizeIlikeInput(company));
   }
   const city = normalize(filters.city);
   if (city) {
-    query = query.ilike("current_city", city);
+    query = query.ilike("current_city", sanitizeIlikeInput(city));
   }
   const position = normalize(filters.position);
   if (position) {
-    query = query.ilike("position_title", position);
+    query = query.ilike("position_title", sanitizeIlikeInput(position));
   }
 
   // Apply ordering after all filters

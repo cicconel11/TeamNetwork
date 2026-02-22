@@ -115,7 +115,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       .eq("organization_id", organizationId);
 
     const { stripe } = await import("@/lib/stripe");
-    const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+    const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
 
     const metadata = {
       organization_id: org.id,

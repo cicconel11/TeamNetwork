@@ -102,7 +102,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+      const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
       const refreshUrl = `${origin}/${org.slug}/philanthropy?onboarding=refresh`;
       const returnUrl = `${origin}/${org.slug}/philanthropy?onboarding=success`;
 

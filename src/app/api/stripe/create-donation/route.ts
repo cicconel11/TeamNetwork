@@ -152,7 +152,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+  const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
   const donorName = body.donorName?.trim();
   const donorEmail = body.donorEmail?.trim();
   const purpose = body.purpose?.trim();
