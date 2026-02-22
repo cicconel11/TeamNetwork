@@ -4,16 +4,15 @@ import { normalizeRole } from "./auth/role-utils";
 
 export async function getCurrentUser() {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.user ?? null;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
+  return user;
 }
 
 export async function getUserProfile() {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  
-  if (!user) return null;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
 
   const { data: profile } = await supabase
     .from("users")
@@ -26,10 +25,8 @@ export async function getUserProfile() {
 
 export async function getUserRoleForOrg(organizationId: string): Promise<UserRole | null> {
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user;
-  
-  if (!user) return null;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return null;
 
   const { data } = await supabase
     .from("user_organization_roles")

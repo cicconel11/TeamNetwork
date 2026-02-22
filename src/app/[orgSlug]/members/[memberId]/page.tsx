@@ -66,10 +66,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   }
 
   const isAdmin = await isOrgAdmin(org.id);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const currentUserId = session?.user?.id ?? null;
+  const currentUserId = user?.id ?? null;
   const canEdit = isAdmin || (currentUserId && memberUserId === currentUserId);
 
   return (

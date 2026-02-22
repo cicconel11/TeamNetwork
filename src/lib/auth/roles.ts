@@ -24,13 +24,11 @@ export type OrgContextResult = {
 
 export async function getOrgRole(params: { orgId: string; userId?: string }): Promise<OrgRoleResult> {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const uid = params.userId ?? session?.user?.id ?? null;
+  let uid = params.userId ?? null;
   if (!uid) {
-    return { role: null, status: null, userId: null };
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return { role: null, status: null, userId: null };
+    uid = user.id;
   }
 
   const { data } = await supabase
@@ -67,10 +65,8 @@ export async function requireOrgRole(params: {
 
 export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> {
   const supabase = await createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const userId = session?.user?.id ?? null;
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  const userId = userError ? null : (user?.id ?? null);
 
   const { data: org } = await supabase
     .from("organizations")
