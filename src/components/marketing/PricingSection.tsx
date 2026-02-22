@@ -68,7 +68,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
 
         <div className="grid md:grid-cols-2 gap-8 mb-12">
           {/* Base Plan */}
-          <div className="pricing-card rounded-2xl p-8 pt-10 relative overflow-hidden">
+          <div className="pricing-card rounded-2xl p-8 pt-10 relative">
             {/* Pick badge */}
             <div className="pick-badge">Starter Pick</div>
 
@@ -122,7 +122,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           </div>
 
           {/* Alumni Add-on */}
-          <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-8 pt-10 relative overflow-hidden pulse-glow">
+          <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-8 pt-10 relative pulse-glow">
             {/* Pick badge */}
             <div className="pick-badge" style={{ background: "linear-gradient(135deg, #059669 0%, #34d399 100%)" }}>Pro Pick</div>
 
