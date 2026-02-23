@@ -983,6 +983,58 @@ noscript~.scroll-reveal {
   box-shadow: 0 4px 12px rgba(52, 211, 153, 0.3);
 }
 
+/* Modal panel — solid opaque background so page content doesn't bleed through on scroll */
+.modal-panel {
+  background: #0d1b35;
+  border: 1px solid rgba(250, 246, 240, 0.12);
+  box-shadow:
+    0 25px 60px -12px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(250, 246, 240, 0.06);
+  overscroll-behavior: contain;
+}
+
+/* Enterprise badge — amber/gold accent */
+.enterprise-badge {
+  background: linear-gradient(135deg, #b45309 0%, #d4a853 100%);
+  box-shadow: 0 4px 12px rgba(212, 168, 83, 0.3);
+}
+
+/* Enterprise teaser card hover — amber border instead of green */
+.enterprise-card:hover {
+  border-color: rgba(212, 168, 83, 0.3);
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.5),
+    0 0 30px rgba(212, 168, 83, 0.08);
+}
+
+/* Bucket row selected state */
+.bucket-row-selected {
+  border-color: var(--landing-green);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+/* Modal entrance animation */
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-enter {
+  animation: modalSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-enter {
+    animation: none;
+  }
+}
+
 /* Microphone icon for FAQ */
 .mic-icon {
   width: 1.25rem;
