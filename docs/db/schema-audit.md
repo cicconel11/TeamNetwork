@@ -1,6 +1,6 @@
 # Supabase Schema Audit
 
-**Last Updated**: February 2026
+**Last Updated**: February 23, 2026
 **Scope**: All migrations through `20260515100000_enterprise_hybrid_pricing.sql` (59 migration files)
 
 ---
