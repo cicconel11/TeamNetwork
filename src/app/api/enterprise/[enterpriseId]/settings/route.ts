@@ -1,0 +1,161 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import {
+  validateJson,
+  ValidationError,
+  validationErrorResponse,
+} from "@/lib/security/validation";
+import {
+  getEnterpriseApiContext,
+  ENTERPRISE_ANY_ROLE,
+  ENTERPRISE_OWNER_ROLE,
+} from "@/lib/auth/enterprise-api-context";
+import { extractRequestContext } from "@/lib/audit/enterprise-audit";
+import type { Enterprise } from "@/types/enterprise";
+import { updateEnterprise, isUpdateError } from "@/lib/enterprise/update-enterprise";
+import { enterprisePatchSchema } from "@/lib/schemas/enterprise";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ enterpriseId: string }>;
+}
+
+export async function GET(req: Request, { params }: RouteParams) {
+  const { enterpriseId } = await params;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const rateLimit = checkRateLimit(req, {
+    userId: user?.id ?? null,
+    feature: "enterprise settings",
+    limitPerIp: 60,
+    limitPerUser: 40,
+  });
+
+  if (!rateLimit.ok) {
+    return buildRateLimitResponse(rateLimit);
+  }
+
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  if (!ctx.ok) return ctx.response;
+
+  const respond = (payload: unknown, status = 200) =>
+    NextResponse.json(payload, { status, headers: rateLimit.headers });
+
+  // Parallelize enterprise and admins queries
+  const [
+    { data: enterprise, error: enterpriseError },
+    { data: admins, error: adminsError },
+  ] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (ctx.serviceSupabase as any)
+      .from("enterprises")
+      .select("*")
+      .eq("id", ctx.enterpriseId)
+      .single() as Promise<{ data: Enterprise | null; error: Error | null }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (ctx.serviceSupabase as any)
+      .from("user_enterprise_roles")
+      .select("id, user_id, role, created_at")
+      .eq("enterprise_id", ctx.enterpriseId)
+      .order("created_at", { ascending: true }) as Promise<{ data: { user_id: string; role: string }[] | null; error: Error | null }>,
+  ]);
+
+  if (enterpriseError || !enterprise) {
+    return respond({ error: "Enterprise not found" }, 404);
+  }
+
+  if (adminsError) {
+    console.error("[enterprise/settings GET] DB error:", adminsError);
+    return respond({ error: "Internal server error" }, 500);
+  }
+
+  const userIds = (admins ?? []).map((admin) => admin.user_id);
+  let userDetails: Record<string, { email: string; full_name: string | null }> = {};
+
+  if (userIds.length > 0) {
+    // Using getUserById per user avoids unbounded listUsers() pagination
+    const userFetches = await Promise.all(
+      userIds.map((id) => ctx.serviceSupabase.auth.admin.getUserById(id))
+    );
+    userFetches.forEach((r, i) => {
+      if (r.error) console.error("[enterprise/settings] getUserById failed for", userIds[i], r.error);
+    });
+    userDetails = userFetches
+      .filter((r) => !r.error && r.data.user)
+      .map((r) => r.data.user!)
+      .reduce((acc, u) => {
+        acc[u.id] = {
+          email: u.email ?? "",
+          full_name: (u.user_metadata?.full_name as string) ?? null,
+        };
+        return acc;
+      }, {} as Record<string, { email: string; full_name: string | null }>);
+  }
+
+  const adminsWithDetails = (admins ?? []).map((admin) => ({
+    user_id: admin.user_id,
+    role: admin.role,
+    user_name: userDetails[admin.user_id]?.full_name ?? null,
+    user_email: userDetails[admin.user_id]?.email ?? null,
+  }));
+
+  return respond({
+    enterprise,
+    admins: adminsWithDetails,
+    userRole: ctx.role,
+  });
+}
+
+export async function PATCH(req: Request, { params }: RouteParams) {
+  try {
+    const { enterpriseId } = await params;
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const rateLimit = checkRateLimit(req, {
+      userId: user?.id ?? null,
+      feature: "enterprise settings update",
+      limitPerIp: 30,
+      limitPerUser: 20,
+    });
+
+    if (!rateLimit.ok) {
+      return buildRateLimitResponse(rateLimit);
+    }
+
+    const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_OWNER_ROLE);
+    if (!ctx.ok) return ctx.response;
+
+    const respond = (payload: unknown, status = 200) =>
+      NextResponse.json(payload, { status, headers: rateLimit.headers });
+
+    const body = await validateJson(req, enterprisePatchSchema, { maxBodyBytes: 16_000 });
+
+    const result = await updateEnterprise(
+      ctx.serviceSupabase,
+      ctx.enterpriseId,
+      body,
+      ctx.userId,
+      ctx.userEmail,
+      "update_settings",
+      extractRequestContext(req)
+    );
+
+    if (isUpdateError(result)) {
+      return respond({ error: result.error }, result.status);
+    }
+
+    return respond({ enterprise: result.enterprise });
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      return validationErrorResponse(error);
+    }
+    throw error;
+  }
+}

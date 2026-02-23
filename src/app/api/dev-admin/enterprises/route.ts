@@ -6,30 +6,15 @@ import {
   logDevAdminAction,
   extractRequestContext,
 } from "@/lib/auth/dev-admin";
+import type {
+  Enterprise,
+  EnterpriseSubscription,
+  EnterpriseRole,
+} from "@/types/enterprise";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type EnterpriseRole = string;
-
-interface Enterprise {
-  id: string;
-  name: string;
-  slug: string;
-  billing_contact_email: string | null;
-  created_at: string | null;
-}
-
-interface EnterpriseSubscription {
-  enterprise_id: string;
-  status: string;
-  pricing_model: string;
-  sub_org_quantity: number | null;
-  alumni_tier: string | null;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-}
 
 interface AlumniCountsRow {
   enterprise_id: string;
@@ -71,9 +56,8 @@ interface EnterpriseResponse {
   created_at: string | null;
   subscription: {
     status: string;
-    pricing_model: string;
+    alumni_bucket_quantity: number;
     sub_org_quantity: number | null;
-    alumni_tier: string | null;
     stripe_customer_id: string | null;
     stripe_subscription_id: string | null;
   } | null;
@@ -137,8 +121,8 @@ export async function GET(req: Request) {
       logDevAdminAction({
         adminUserId: user.id,
         adminEmail: user.email ?? "",
-        action: "view_org",
-        targetType: "organization",
+        action: "view_enterprise",
+        targetType: "enterprise",
         ...extractRequestContext(req),
         metadata: { listAll: true },
       });
@@ -184,10 +168,10 @@ export async function GET(req: Request) {
       (serviceClient as any)
         .from("enterprise_subscriptions")
         .select(
-          "enterprise_id, status, pricing_model, sub_org_quantity, alumni_tier, stripe_customer_id, stripe_subscription_id"
+          "enterprise_id, status, alumni_bucket_quantity, sub_org_quantity, stripe_customer_id, stripe_subscription_id"
         )
         .in("enterprise_id", enterpriseIds) as Promise<{
-        data: EnterpriseSubscription[] | null;
+        data: (EnterpriseSubscription & { enterprise_id: string })[] | null;
       }>,
       // Alumni counts view
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -223,15 +207,17 @@ export async function GET(req: Request) {
 
     const emailMap = new Map<string, string | null>();
     if (uniqueUserIds.length > 0) {
-      const {
-        data: { users: authUsers },
-      } = await serviceClient.auth.admin.listUsers({ perPage: 1000 });
-
-      for (const authUser of authUsers) {
-        if (uniqueUserIds.includes(authUser.id)) {
-          emailMap.set(authUser.id, authUser.email ?? null);
+      // Using getUserById per user avoids unbounded listUsers() pagination cap
+      const userFetches = await Promise.all(
+        uniqueUserIds.map((id) => serviceClient.auth.admin.getUserById(id))
+      );
+      userFetches.forEach((r, i) => {
+        if (r.error) {
+          console.error("[dev-admin/enterprises] getUserById failed for", uniqueUserIds[i], r.error);
+        } else if (r.data.user) {
+          emailMap.set(r.data.user.id, r.data.user.email ?? null);
         }
-      }
+      });
     }
 
     // 7. Get subscription status for each sub-org
@@ -308,9 +294,8 @@ export async function GET(req: Request) {
         subscription: sub
           ? {
               status: sub.status,
-              pricing_model: sub.pricing_model,
+              alumni_bucket_quantity: sub.alumni_bucket_quantity,
               sub_org_quantity: sub.sub_org_quantity,
-              alumni_tier: sub.alumni_tier,
               stripe_customer_id: sub.stripe_customer_id,
               stripe_subscription_id: sub.stripe_subscription_id,
             }

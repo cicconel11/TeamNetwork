@@ -2,8 +2,8 @@
 
 This document catalogs all personally identifiable information (PII) and education-related data collected by TeamNetwork to support FERPA compliance assessments.
 
-**Last Updated:** January 2026
-**Source:** Codebase analysis of `src/types/database.ts` (Supabase schema)
+**Last Updated:** February 2026
+**Source:** Codebase analysis of `src/types/database.ts` and `src/types/enterprise.ts` (Supabase schema)
 
 ---
 
@@ -48,11 +48,12 @@ Data requiring heightened protection:
 | Data Type | Source Table | Sensitivity Reason |
 |-----------|--------------|-------------------|
 | `chat_messages.body` | `chat_messages` | Private student communications |
-| `form_submissions.data` | `form_submissions` | Variable - may contain any user input |
+| `form_submissions.responses` | `form_submissions` | Variable — may contain any user input |
 | `workout_logs` | `workout_logs` | Athletic performance metrics |
 | `competition_points` | `competition_points` | Performance/ranking data |
-| `contact_name`, `contact_email`, `contact_phone` | `leads` | Parent/guardian PII |
 | `current_city` | `alumni` | Location data |
+| `billing_contact_email` | `enterprises` | Enterprise billing contact PII |
+| `enterprise_audit_logs` (actor_email, ip_address, user_agent) | `enterprise_audit_logs` | Admin activity audit trail |
 
 ---
 
@@ -75,21 +76,37 @@ TeamNetwork explicitly does **not** collect the following sensitive education re
 
 ---
 
+## Enterprise Data
+
+Enterprise accounts manage multiple organizations under a single billing entity. The following tables store enterprise-scoped PII:
+
+| Data Type | Source Table | Classification | Notes |
+|-----------|-------------|----------------|-------|
+| `billing_contact_email` | `enterprises` | Direct Identifier | Enterprise billing contact |
+| `actor_email`, `ip_address`, `user_agent` | `enterprise_audit_logs` | Direct/Indirect Identifier | Admin action audit trail |
+| `email` | `enterprise_invites` | Direct Identifier | Invited admin email |
+| `user_id` + `role` | `user_enterprise_roles` | Indirect Identifier | Links user identity to enterprise admin role |
+
+**Enterprise access control:**
+- Enterprise RLS uses `is_enterprise_member()` and `is_enterprise_owner()` helper functions
+- Roles: `owner` (full access), `billing_admin` (billing only), `org_admin` (org management)
+- Audit logs capture actor email, IP, and user agent for all administrative actions
+
 ## Data Flow Summary
 
 ```
 User Registration
        ↓
-Organization Membership Request
-       ↓
-Admin Approval (role assignment)
-       ↓
-User gains access to org-scoped data
-       ↓
-All access governed by:
-  - Supabase Row-Level Security (RLS)
-  - Middleware membership validation
-  - Role-based access control (admin/active_member/alumni)
+Organization Membership Request  ─OR─  Enterprise Admin Invite
+       ↓                                       ↓
+Admin Approval (role assignment)        Accept invite (enterprise role)
+       ↓                                       ↓
+User gains access to org-scoped data    User gains access to enterprise dashboard
+       ↓                                       ↓
+All access governed by:                 Enterprise access governed by:
+  - Supabase Row-Level Security (RLS)    - Enterprise RLS policies
+  - Middleware membership validation      - Enterprise role checks
+  - Role-based access control             - Audit logging
 ```
 
 ---
@@ -129,12 +146,14 @@ Although TeamNetwork does not store traditional "education records" (grades, tra
 
 ## Recommendations
 
-1. **Password Policy Enhancement**: Current minimum is 6 characters (`src/lib/auth/password.ts`). Recommend increasing to 12+ with complexity requirements.
+1. ~~**Password Policy Enhancement**~~: Resolved — password policy upgraded to NIST standards (12+ chars). See FERPA_COMPLIANCE.md.
 
-2. **Multi-Factor Authentication**: Not currently implemented. Recommend adding TOTP/backup codes for admin accounts.
+2. **Multi-Factor Authentication**: Not currently implemented. Recommend adding TOTP/backup codes for admin and enterprise owner accounts.
 
-3. **Security Headers**: Add Content-Security-Policy, HSTS, X-Frame-Options headers in `next.config.mjs`.
+3. ~~**Security Headers**~~: Resolved — CSP, HSTS, X-Frame-Options headers added in `next.config.mjs`.
 
 4. **Account Lockout**: Implement brute-force protection after failed login attempts.
 
 5. **Vulnerability Scanning**: Schedule regular automated security scans.
+
+6. **Enterprise Data Retention**: Define retention policy for `enterprise_audit_logs` (currently unbounded). Consider 90-day or 1-year rolling purge.

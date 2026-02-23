@@ -92,7 +92,7 @@ export default function EditMemberPage() {
         last_name: m.last_name || "",
         email: m.email || "",
         role: m.role || "",
-        status: m.status || "active",
+        status: (m.status === "pending" ? "active" : m.status) || "active",
         graduation_year: m.graduation_year?.toString() || "",
         expected_graduation_date: m.expected_graduation_date || "",
         photo_url: m.photo_url || "",

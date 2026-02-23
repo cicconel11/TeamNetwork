@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select } from "@/components/ui";
+import { canRenderAsIframe, isHttpsUrl } from "@/lib/security/embed-url-policy";
 import type { EmbedType } from "@/types/database";
 
 export interface Embed {
@@ -52,22 +53,21 @@ export function EmbedsManager({
     setError(null);
   };
 
-  const validateUrl = (url: string): boolean => {
-    try {
-      const parsed = new URL(url);
-      return parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (!validateUrl(formData.url)) {
+    if (!isHttpsUrl(formData.url)) {
       setError("URL must be a valid https:// URL");
       return;
+    }
+
+    if (formData.embed_type === "iframe") {
+      const iframePolicy = canRenderAsIframe(formData.url);
+      if (!iframePolicy.ok) {
+        setError(iframePolicy.reason || "This URL cannot be embedded in an iframe.");
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -264,7 +264,6 @@ export function EmbedsManager({
     </Card>
   );
 }
-
 
 
 

@@ -1,26 +1,14 @@
-const PASSWORD_MIN_LENGTH = 12;
-const PASSWORD_REGEX = {
-  uppercase: /[A-Z]/,
-  lowercase: /[a-z]/,
-  number: /[0-9]/,
-  special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/,
-};
+const PASSWORD_MIN_LENGTH = 6;
 
 export const PASSWORD_REQUIREMENTS =
-  "Password must be at least 12 characters and include uppercase, lowercase, number, and special character";
+  `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
 
 /**
- * Checks if a password meets NIST-compliant complexity requirements.
+ * Checks if a password meets minimum length requirements.
  * Used by Zod schemas for validation.
  */
 export function isStrongPassword(password: string): boolean {
-  return (
-    password.length >= PASSWORD_MIN_LENGTH &&
-    PASSWORD_REGEX.uppercase.test(password) &&
-    PASSWORD_REGEX.lowercase.test(password) &&
-    PASSWORD_REGEX.number.test(password) &&
-    PASSWORD_REGEX.special.test(password)
-  );
+  return password.length >= PASSWORD_MIN_LENGTH;
 }
 
 /**
@@ -33,18 +21,6 @@ export function validateNewPassword(
 ): string | null {
   if (password.length < PASSWORD_MIN_LENGTH) {
     return `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
-  }
-  if (!PASSWORD_REGEX.uppercase.test(password)) {
-    return "Password must contain at least one uppercase letter";
-  }
-  if (!PASSWORD_REGEX.lowercase.test(password)) {
-    return "Password must contain at least one lowercase letter";
-  }
-  if (!PASSWORD_REGEX.number.test(password)) {
-    return "Password must contain at least one number";
-  }
-  if (!PASSWORD_REGEX.special.test(password)) {
-    return "Password must contain at least one special character";
   }
   if (password !== confirmPassword) {
     return "Passwords do not match";

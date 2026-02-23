@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -7,7 +8,7 @@ import { AlumniFilters } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
-import { getOrgRole } from "@/lib/auth/roles";
+import { getOrgContext, getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
@@ -40,6 +41,13 @@ interface AlumniRecord {
 
 export default async function AlumniPage({ params, searchParams }: AlumniPageProps) {
   const { orgSlug } = await params;
+
+  // Check alumni access before rendering the page
+  const orgContext = await getOrgContext(orgSlug);
+  if (!orgContext.hasAlumniAccess) {
+    redirect(`/${orgSlug}`);
+  }
+
   const filters = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
