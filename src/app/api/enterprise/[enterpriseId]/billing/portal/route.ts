@@ -85,10 +85,17 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
-  const session = await stripe.billingPortal.sessions.create({
-    customer: stripeCustomerId,
-    return_url: `${origin}/enterprise/${enterpriseSlug}/billing`,
-  });
+
+  let session: { url: string };
+  try {
+    session = await stripe.billingPortal.sessions.create({
+      customer: stripeCustomerId,
+      return_url: `${origin}/enterprise/${enterpriseSlug}/billing`,
+    });
+  } catch (err) {
+    console.error("[billing/portal] Stripe portal session creation failed:", err);
+    return respond({ error: "Failed to open billing portal. Please try again or contact support." }, 500);
+  }
 
   logEnterpriseAuditAction({
     actorUserId: ctx.userId,

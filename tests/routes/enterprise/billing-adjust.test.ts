@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
@@ -495,4 +497,54 @@ test("alumni_bucket: max self-serve is 4 buckets", () => {
 
   assert.strictEqual(result.status, 200);
   assert.strictEqual(ALUMNI_BUCKET_PRICING.maxSelfServeBuckets, 4);
+});
+
+// ── Bug regression: alumni_bucket_quantity column missing from schema ──────────
+//
+// Root cause: billing/adjust/route.ts line 201 explicitly SELECTs
+// alumni_bucket_quantity. The enterprise_subscriptions table never had this
+// column — the column only has alumni_tier and pooled_alumni_limit. The SELECT
+// fails with a DB error, and the route returns 500 (via the subError branch).
+//
+// Fix: migration 20260607000000_add_alumni_bucket_quantity.sql that adds the
+// column. These tests FAIL before the migration exists and PASS after.
+
+test("enterprise_subscriptions migration for alumni_bucket_quantity exists", () => {
+  const migrationFile = path.join(
+    process.cwd(),
+    "supabase/migrations/20260607000000_add_alumni_bucket_quantity.sql"
+  );
+  assert.ok(
+    existsSync(migrationFile),
+    "Migration 20260607000000_add_alumni_bucket_quantity.sql must exist — without it, " +
+      "billing/adjust SELECT alumni_bucket_quantity fails with 500"
+  );
+});
+
+test("alumni_bucket_quantity migration targets enterprise_subscriptions with correct type", () => {
+  const migrationFile = path.join(
+    process.cwd(),
+    "supabase/migrations/20260607000000_add_alumni_bucket_quantity.sql"
+  );
+  if (!existsSync(migrationFile)) {
+    // Already covered by the previous test; skip gracefully
+    return;
+  }
+  const sql = readFileSync(migrationFile, "utf-8");
+  assert.ok(
+    sql.toLowerCase().includes("alumni_bucket_quantity"),
+    "Migration must define alumni_bucket_quantity column"
+  );
+  assert.ok(
+    sql.toLowerCase().includes("enterprise_subscriptions"),
+    "Migration must target enterprise_subscriptions table"
+  );
+  assert.ok(
+    sql.toLowerCase().includes("integer") || sql.toLowerCase().includes("int"),
+    "alumni_bucket_quantity must be an integer column"
+  );
+  assert.ok(
+    sql.toLowerCase().includes("default 1"),
+    "alumni_bucket_quantity must default to 1 so existing rows are not broken"
+  );
 });

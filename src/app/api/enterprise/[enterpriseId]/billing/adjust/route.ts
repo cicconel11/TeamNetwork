@@ -22,6 +22,7 @@ const adjustQuantitySchema = z
     adjustType: z.enum(["sub_org", "alumni_bucket"]),
     newQuantity: z.number().int().min(1).max(1000),
     expectedCurrentQuantity: z.number().int().min(1).max(1000).optional(),
+    billingInterval: z.enum(["month", "year"]).optional(),
   })
   .strict();
 
@@ -192,7 +193,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     throw error;
   }
 
-  const { adjustType, newQuantity, expectedCurrentQuantity } = body;
+  const { adjustType, newQuantity, expectedCurrentQuantity, billingInterval } = body;
 
   // Get current subscription
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -554,9 +555,40 @@ export async function POST(req: Request, { params }: RouteParams) {
         return respond({ error: "Alumni bucket line item not found in subscription" }, 400);
       }
 
-      // Update the alumni bucket quantity
+      // Determine effective billing interval (use requested change or keep current)
+      const effectiveInterval = billingInterval ?? reconciledSubscription.billing_interval;
+      const intervalChanged = billingInterval !== undefined && billingInterval !== reconciledSubscription.billing_interval;
+
+      // Build items array: always update alumni bucket; optionally swap price for interval change
+      const updatedItems: { id: string; price?: string; quantity?: number }[] = [];
+
+      if (intervalChanged) {
+        // Swap alumni bucket line item to the new interval's price ID
+        const newAlumniPriceId = effectiveInterval === "month"
+          ? requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY")
+          : requireEnv("STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY");
+
+        updatedItems.push({ id: alumniBucketItem.id, price: newAlumniPriceId, quantity: newQuantity });
+
+        // Also swap any sub-org line item to the new interval's price ID
+        const subOrgItem = stripeSub.items?.data?.find((item) => {
+          const itemPriceId = typeof item.price === "string" ? item.price : item.price.id;
+          return itemPriceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY") ||
+                 itemPriceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+        });
+        if (subOrgItem) {
+          const newSubOrgPriceId = effectiveInterval === "month"
+            ? requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY")
+            : requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+          updatedItems.push({ id: subOrgItem.id, price: newSubOrgPriceId });
+        }
+      } else {
+        updatedItems.push({ id: alumniBucketItem.id, quantity: newQuantity });
+      }
+
+      // Update the alumni bucket quantity (and optionally billing interval)
       const updated = await stripe.subscriptions.update(reconciledSubscription.stripe_subscription_id, {
-        items: [{ id: alumniBucketItem.id, quantity: newQuantity }],
+        items: updatedItems,
         proration_behavior: "create_prorations",
         metadata: {
           alumni_bucket_quantity: newQuantity.toString(),
@@ -571,16 +603,21 @@ export async function POST(req: Request, { params }: RouteParams) {
         : null;
 
       // Update database (with single retry for transient failures)
+      const dbUpdates: Record<string, unknown> = {
+        alumni_bucket_quantity: newQuantity,
+        status: updatedStatus,
+        current_period_end: periodEnd,
+        updated_at: new Date().toISOString(),
+      };
+      if (intervalChanged) {
+        dbUpdates.billing_interval = effectiveInterval;
+      }
+
       const dbWriteFn = () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (ctx.serviceSupabase as any)
           .from("enterprise_subscriptions")
-          .update({
-            alumni_bucket_quantity: newQuantity,
-            status: updatedStatus,
-            current_period_end: periodEnd,
-            updated_at: new Date().toISOString(),
-          })
+          .update(dbUpdates)
           .eq("enterprise_id", ctx.enterpriseId) as Promise<{ error: Error | null }>;
 
       const { error: updateError } = await retryDbWrite(dbWriteFn);
@@ -611,7 +648,12 @@ export async function POST(req: Request, { params }: RouteParams) {
         enterpriseId: ctx.enterpriseId,
         targetType: "subscription",
         targetId: ctx.enterpriseId,
-        metadata: { adjustType, newQuantity, previousQuantity: reconciledSubscription.alumni_bucket_quantity },
+        metadata: {
+          adjustType,
+          newQuantity,
+          previousQuantity: reconciledSubscription.alumni_bucket_quantity,
+          ...(intervalChanged ? { previousInterval: reconciledSubscription.billing_interval, newInterval: effectiveInterval } : {}),
+        },
         ...extractRequestContext(req),
       });
 
@@ -622,12 +664,13 @@ export async function POST(req: Request, { params }: RouteParams) {
           capacity: newCapacity,
           currentUsage: currentAlumniCount,
           available: newCapacity - currentAlumniCount,
-          unitCents: reconciledSubscription.billing_interval === "month"
+          unitCents: effectiveInterval === "month"
             ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
             : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket,
-          totalCents: newQuantity * (reconciledSubscription.billing_interval === "month"
+          totalCents: newQuantity * (effectiveInterval === "month"
             ? ALUMNI_BUCKET_PRICING.monthlyCentsPerBucket
             : ALUMNI_BUCKET_PRICING.yearlyCentsPerBucket),
+          billingInterval: effectiveInterval,
           status: updatedStatus,
           currentPeriodEnd: periodEnd,
         },
