@@ -132,6 +132,10 @@ export function getEnterprisePermissions(role: EnterpriseRole): EnterpriseRolePe
         canManageBilling: false,
         canInviteAdmins: false,
       };
+    default: {
+      const _exhaustive: never = role;
+      return _exhaustive;
+    }
   }
 }
 

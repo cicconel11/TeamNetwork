@@ -25,6 +25,7 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
           enterpriseSlug={enterprise.slug}
           enterpriseName={enterprise.name}
           logoUrl={enterprise.logo_url}
+          primaryColor={enterprise.primary_color}
           role={role}
         />
       </div>
@@ -42,7 +43,10 @@ export default async function EnterpriseLayout({ children, params }: EnterpriseL
               />
             </div>
           ) : (
-            <div className="h-8 w-8 rounded-lg flex items-center justify-center bg-purple-600 text-white font-bold">
+            <div
+              className="h-8 w-8 rounded-lg flex items-center justify-center text-white font-bold"
+              style={{ backgroundColor: enterprise.primary_color || "#6B21A8" }}
+            >
               {enterprise.name.charAt(0)}
             </div>
           )}

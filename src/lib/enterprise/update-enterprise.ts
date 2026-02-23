@@ -7,7 +7,7 @@ interface UpdateEnterprisePayload {
   description?: string | null;
   logo_url?: string | null;
   primary_color?: string | null;
-  billing_contact_email?: string;
+  billing_contact_email?: string | null;
 }
 
 interface UpdateEnterpriseResult {

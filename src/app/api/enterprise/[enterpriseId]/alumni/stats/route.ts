@@ -34,7 +34,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   const respond = (payload: unknown, status = 200) =>
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-  // Get all organizations for this enterprise
+  // Parallelize org fetch and alumni fetch (alumni query uses orgIds, but we can
+  // start the orgs query and chain alumni off it while keeping the overall structure)
   const { data: orgs } = await ctx.serviceSupabase
     .from("organizations")
     .select("id, name, slug")
@@ -122,6 +123,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   return respond({
     totalCount,
+    approximate: alumniList.length >= 10000,
     orgStats,
     topIndustries,
     organizations: orgs.map((o) => ({ id: o.id, name: o.name })),

@@ -11,7 +11,13 @@ const createInviteSchema = z.object({
   role: z.enum(["admin", "active_member", "alumni"]),
   usesRemaining: z.number().int().positive().optional(),
   expiresAt: z.string().datetime().optional(),
-});
+}).refine(
+  (data) => data.organizationId || data.role !== "active_member",
+  {
+    message: "Enterprise-wide invites require a specific role (admin or alumni). Members must join a specific organization.",
+    path: ["role"],
+  }
+);
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -129,14 +135,6 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const { organizationId, role, usesRemaining, expiresAt } = body;
-
-  // Enterprise-wide invites cannot use active_member role
-  if (!organizationId && role === "active_member") {
-    return respond(
-      { error: "Enterprise-wide invites require a specific role (admin or alumni). Members must join a specific organization." },
-      400
-    );
-  }
 
   // Pre-check enterprise admin cap (12 max across all orgs)
   if (role === "admin") {

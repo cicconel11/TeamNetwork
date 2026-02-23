@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, Button, Input, Badge, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
@@ -22,6 +23,7 @@ interface EnterpriseSettings {
 }
 
 export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId: string; enterpriseSlug: string }) {
+  const router = useRouter();
   const [, setSettings] = useState<EnterpriseSettings | null>(null);
   const [admins, setAdmins] = useState<EnterpriseAdmin[]>([]);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export function SettingsClient({ enterpriseId, enterpriseSlug }: { enterpriseId:
 
       setSuccessMessage("Settings saved successfully");
       setSettings(data.enterprise);
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings");
     } finally {

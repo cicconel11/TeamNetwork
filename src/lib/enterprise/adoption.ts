@@ -3,6 +3,43 @@ import { checkAdoptionQuota, canEnterpriseAddSubOrg } from "./quota";
 
 const ADOPTION_EXPIRY_DAYS = 7;
 
+/**
+ * Compensating rollback: clear enterprise_id on org.
+ * Retries once on failure since a transient error leaving the org
+ * orphaned is worse than a slight delay.
+ */
+async function rollbackOrgEnterprise(
+  supabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  orgId: string
+): Promise<void> {
+  const rollbackPayload = {
+    enterprise_id: null,
+    enterprise_relationship_type: null,
+    enterprise_adopted_at: null,
+    original_subscription_id: null,
+    original_subscription_status: null,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("organizations")
+    .update(rollbackPayload)
+    .eq("id", orgId);
+
+  if (error) {
+    console.error("[acceptAdoptionRequest] rollback failed, retrying:", error);
+    // Single retry
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: retryError } = await (supabase as any)
+      .from("organizations")
+      .update(rollbackPayload)
+      .eq("id", orgId);
+    if (retryError) {
+      console.error("[acceptAdoptionRequest] CRITICAL: rollback retry also failed:", retryError);
+    }
+  }
+}
+
 // Type for org with enterprise info (until types regenerated)
 interface OrgRow {
   enterprise_id: string | null;
@@ -158,8 +195,8 @@ export async function acceptAdoptionRequest(
   // Check alumni quota again
   const quotaCheck = await checkAdoptionQuota(request.enterprise_id, request.organization_id);
   if (!quotaCheck.allowed) {
-    if (quotaCheck.error === "Failed to verify alumni count") {
-      return { success: false, error: quotaCheck.error, status: 503 };
+    if (quotaCheck.status) {
+      return { success: false, error: quotaCheck.error, status: quotaCheck.status };
     }
     return { success: false, error: quotaCheck.error };
   }
@@ -205,21 +242,8 @@ export async function acceptAdoptionRequest(
 
     if (updateSubError) {
       console.error("[acceptAdoptionRequest] Failed to update organization subscription:", updateSubError);
-      // Compensating rollback: revert enterprise_id on subscription failure
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: rollbackError } = await (supabase as any)
-        .from("organizations")
-        .update({
-          enterprise_id: null,
-          enterprise_relationship_type: null,
-          enterprise_adopted_at: null,
-          original_subscription_id: null,
-          original_subscription_status: null,
-        })
-        .eq("id", request.organization_id);
-      if (rollbackError) {
-        console.error("[acceptAdoptionRequest] rollback failed:", rollbackError);
-      }
+      // Compensating rollback: revert enterprise_id on subscription failure (with retry)
+      await rollbackOrgEnterprise(supabase, request.organization_id);
       return { success: false, error: "Failed to update organization subscription" };
     }
   } else {
@@ -234,28 +258,15 @@ export async function acceptAdoptionRequest(
 
     if (createSubError) {
       console.error("[acceptAdoptionRequest] Failed to create organization subscription:", createSubError);
-      // Compensating rollback: revert enterprise_id on subscription failure
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: rollbackError } = await (supabase as any)
-        .from("organizations")
-        .update({
-          enterprise_id: null,
-          enterprise_relationship_type: null,
-          enterprise_adopted_at: null,
-          original_subscription_id: null,
-          original_subscription_status: null,
-        })
-        .eq("id", request.organization_id);
-      if (rollbackError) {
-        console.error("[acceptAdoptionRequest] rollback failed:", rollbackError);
-      }
+      // Compensating rollback: revert enterprise_id on subscription failure (with retry)
+      await rollbackOrgEnterprise(supabase, request.organization_id);
       return { success: false, error: "Failed to create organization subscription" };
     }
   }
 
-  // Mark request as accepted
+  // Step 3: Mark request as accepted
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase as any)
+  const { error: markAcceptedError } = await (supabase as any)
     .from("enterprise_adoption_requests")
     .update({
       status: "accepted",
@@ -263,6 +274,54 @@ export async function acceptAdoptionRequest(
       responded_at: new Date().toISOString(),
     })
     .eq("id", requestId);
+
+  if (markAcceptedError) {
+    console.error("[acceptAdoptionRequest] Step 3 (mark accepted) failed:", markAcceptedError);
+
+    // Rollback step 1: revert org enterprise_id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: rollbackOrgError } = await (supabase as any)
+      .from("organizations")
+      .update({
+        enterprise_id: null,
+        enterprise_relationship_type: null,
+        enterprise_adopted_at: null,
+        original_subscription_id: null,
+        original_subscription_status: null,
+      })
+      .eq("id", request.organization_id);
+
+    if (rollbackOrgError) {
+      console.error("[acceptAdoptionRequest] CRITICAL: step-3 rollback of org failed:", rollbackOrgError);
+    }
+
+    // Rollback step 2: revert subscription
+    if (orgSub) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rollbackSubError } = await (supabase as any)
+        .from("organization_subscriptions")
+        .update({ status: orgSub.status })
+        .eq("id", orgSub.id);
+
+      if (rollbackSubError) {
+        console.error("[acceptAdoptionRequest] CRITICAL: step-3 rollback of subscription failed:", rollbackSubError);
+      }
+    } else {
+      // Remove the subscription row we created
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: rollbackSubError } = await (supabase as any)
+        .from("organization_subscriptions")
+        .delete()
+        .eq("organization_id", request.organization_id)
+        .eq("status", "enterprise_managed");
+
+      if (rollbackSubError) {
+        console.error("[acceptAdoptionRequest] CRITICAL: step-3 rollback of new subscription failed:", rollbackSubError);
+      }
+    }
+
+    return { success: false, error: "Failed to finalize adoption request", status: 500 };
+  }
 
   return { success: true };
 }

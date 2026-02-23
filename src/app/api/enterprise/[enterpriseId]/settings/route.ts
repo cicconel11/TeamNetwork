@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
-  baseSchemas,
-  optionalSafeString,
   validateJson,
   ValidationError,
   validationErrorResponse,
@@ -17,6 +14,7 @@ import {
 import { extractRequestContext } from "@/lib/audit/enterprise-audit";
 import type { Enterprise } from "@/types/enterprise";
 import { updateEnterprise, isUpdateError } from "@/lib/enterprise/update-enterprise";
+import { enterprisePatchSchema } from "@/lib/schemas/enterprise";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,16 +22,6 @@ export const runtime = "nodejs";
 interface RouteParams {
   params: Promise<{ enterpriseId: string }>;
 }
-
-const patchSchema = z
-  .object({
-    name: z.string().trim().min(1).max(120).optional(),
-    description: optionalSafeString(800),
-    logo_url: z.string().url().max(500).optional().nullable(),
-    primary_color: baseSchemas.hexColor.optional().nullable(),
-    billing_contact_email: baseSchemas.email.optional(),
-  })
-  .strict();
 
 export async function GET(req: Request, { params }: RouteParams) {
   const { enterpriseId } = await params;
@@ -147,7 +135,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const respond = (payload: unknown, status = 200) =>
       NextResponse.json(payload, { status, headers: rateLimit.headers });
 
-    const body = await validateJson(req, patchSchema, { maxBodyBytes: 16_000 });
+    const body = await validateJson(req, enterprisePatchSchema, { maxBodyBytes: 16_000 });
 
     const result = await updateEnterprise(
       ctx.serviceSupabase,

@@ -64,6 +64,7 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
     cities: [] as string[],
     positions: [] as string[],
   });
+  const [statsError, setStatsError] = useState(false);
   const [selectedAlumni, setSelectedAlumni] = useState<Alumni | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -96,9 +97,11 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
             cities: [],
             positions: [],
           });
+        } else {
+          setStatsError(true);
         }
       } catch {
-        // Stats fetch failed silently — page still usable
+        setStatsError(true);
       }
     };
 
@@ -155,6 +158,13 @@ export function AlumniClient({ enterpriseId }: AlumniClientProps) {
           )
         }
       />
+
+      {/* Stats Error */}
+      {statsError && (
+        <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+          Unable to load stats. Filters and alumni data may still be available.
+        </div>
+      )}
 
       {/* Stats Header */}
       <AlumniStatsHeader

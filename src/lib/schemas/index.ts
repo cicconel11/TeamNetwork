@@ -60,3 +60,6 @@ export * from "./feed";
 
 // Media schemas
 export * from "./media";
+
+// Enterprise schemas
+export * from "./enterprise";

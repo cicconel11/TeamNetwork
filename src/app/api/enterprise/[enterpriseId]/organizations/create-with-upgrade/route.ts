@@ -13,6 +13,7 @@ import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { canEnterpriseAddSubOrg } from "@/lib/enterprise/quota";
 import { getSubOrgPricing } from "@/lib/enterprise/pricing";
+import { createEnterpriseSubOrg } from "@/lib/enterprise/create-sub-org";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,30 +64,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const body = await validateJson(req, createOrgWithUpgradeSchema, { maxBodyBytes: 16_000 });
     const { name, slug, primary_color } = body;
 
-    // Check slug uniqueness across both organizations and enterprises
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingOrg } = await (ctx.serviceSupabase as any)
-      .from("organizations")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle() as { data: { id: string } | null };
-
-    if (existingOrg) {
-      return respond({ error: "Slug is already taken" }, 409);
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingEnterprise } = await (ctx.serviceSupabase as any)
-      .from("enterprises")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle() as { data: { id: string } | null };
-
-    if (existingEnterprise) {
-      return respond({ error: "Slug is already taken" }, 409);
-    }
-
-    // Check enterprise exists and get its details
+    // Fetch enterprise to get primary_color fallback
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: enterprise } = await (ctx.serviceSupabase as any)
       .from("enterprises")
@@ -107,61 +85,18 @@ export async function POST(req: Request, { params }: RouteParams) {
       );
     }
 
-    // Create organization under enterprise
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newOrg, error: orgError } = await (ctx.serviceSupabase as any)
-      .from("organizations")
-      .insert({
-        name,
-        slug,
-        description: null,
-        primary_color: primary_color ?? enterprise.primary_color ?? "#1e3a5f",
-        enterprise_id: ctx.enterpriseId,
-        enterprise_relationship_type: "created",
-      })
-      .select()
-      .single() as { data: Record<string, unknown> | null; error: Error | null };
+    const result = await createEnterpriseSubOrg({
+      serviceSupabase: ctx.serviceSupabase,
+      enterpriseId: ctx.enterpriseId,
+      userId: ctx.userId,
+      name,
+      slug,
+      primaryColor: primary_color,
+      enterprisePrimaryColor: enterprise.primary_color,
+    });
 
-    if (orgError || !newOrg) {
-      if (orgError) console.error("[enterprise-create-org] Insert failed:", orgError);
-      return respond({ error: "Unable to create organization" }, 400);
-    }
-
-    // Grant creator admin role on new organization
-    const { error: roleError } = await ctx.serviceSupabase
-      .from("user_organization_roles")
-      .insert({
-        user_id: ctx.userId,
-        organization_id: newOrg.id as string,
-        role: "admin",
-      });
-
-    if (roleError) {
-      // Cleanup if role assignment fails
-      console.error("[enterprise-create-org] Role insert failed:", roleError);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (ctx.serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
-      return respond({ error: "Failed to assign admin role" }, 400);
-    }
-
-    // Create subscription record for enterprise-managed org
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: subError } = await (ctx.serviceSupabase as any)
-      .from("organization_subscriptions")
-      .insert({
-        organization_id: newOrg.id,
-        status: "enterprise_managed",
-        base_plan_interval: "month",
-        alumni_bucket: "none",
-      }) as { error: Error | null };
-
-    if (subError) {
-      // Cleanup if subscription creation fails
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (ctx.serviceSupabase as any).from("user_organization_roles").delete().eq("organization_id", newOrg.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (ctx.serviceSupabase as any).from("organizations").delete().eq("id", newOrg.id);
-      return respond({ error: "Failed to create organization subscription" }, 500);
+    if (!result.ok) {
+      return respond({ error: result.error }, result.status);
     }
 
     logEnterpriseAuditAction({
@@ -170,7 +105,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       action: "create_sub_org_with_upgrade",
       enterpriseId: ctx.enterpriseId,
       targetType: "organization",
-      targetId: newOrg.id as string,
+      targetId: result.org.id as string,
       metadata: { name, slug },
       ...extractRequestContext(req),
     });
@@ -180,14 +115,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     if (updatedQuota.error) {
       // Org was already created — return success with stale quota rather than failing
       return respond({
-        organization: newOrg,
+        organization: result.org,
         subscription: null,
       }, 201);
     }
     const pricing = getSubOrgPricing(updatedQuota.currentCount, "year");
 
     return respond({
-      organization: newOrg,
+      organization: result.org,
       subscription: {
         currentCount: updatedQuota.currentCount,
         maxAllowed: updatedQuota.maxAllowed,

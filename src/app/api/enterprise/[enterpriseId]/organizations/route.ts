@@ -74,24 +74,23 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Internal server error" }, 500);
   }
 
-  // Get alumni counts for each organization
+  // Get alumni counts for each organization (parallel count-only queries)
   const orgIds = (organizations ?? []).map((org) => org.id);
 
-  let alumniCounts: Record<string, number> = {};
+  const alumniCounts: Record<string, number> = {};
   if (orgIds.length > 0) {
-    const { data: counts } = await ctx.serviceSupabase
-      .from("alumni")
-      .select("organization_id")
-      .in("organization_id", orgIds)
-      .is("deleted_at", null);
-
-    if (counts) {
-      alumniCounts = counts.reduce((acc, row) => {
-        const orgId = row.organization_id;
-        acc[orgId] = (acc[orgId] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-    }
+    const countResults = await Promise.all(
+      orgIds.map((orgId) =>
+        ctx.serviceSupabase
+          .from("alumni")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+      )
+    );
+    orgIds.forEach((orgId, i) => {
+      alumniCounts[orgId] = countResults[i].count ?? 0;
+    });
   }
 
   // Combine organizations with their alumni counts and billing status

@@ -16,6 +16,7 @@ import {
 } from "@/lib/auth/enterprise-api-context";
 import type { EnterpriseRole } from "@/types/enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { removeEnterpriseAdmin } from "@/lib/enterprise/admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -248,43 +249,9 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     const body = await validateJson(req, removeAdminSchema, { maxBodyBytes: 4_000 });
     const { userId: targetUserId } = body;
 
-    // Check target user's role
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: targetRole } = await (ctx.serviceSupabase as any)
-      .from("user_enterprise_roles")
-      .select("id, role")
-      .eq("enterprise_id", ctx.enterpriseId)
-      .eq("user_id", targetUserId)
-      .single() as { data: UserEnterpriseRoleRow | null };
-
-    if (!targetRole) {
-      return respond({ error: "User is not an admin of this enterprise" }, 404);
-    }
-
-    // If removing an owner, ensure there's at least one other owner
-    if (targetRole.role === "owner") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { count: ownerCount } = await (ctx.serviceSupabase as any)
-        .from("user_enterprise_roles")
-        .select("*", { count: "exact", head: true })
-        .eq("enterprise_id", ctx.enterpriseId)
-        .eq("role", "owner") as { count: number | null };
-
-      if ((ownerCount ?? 0) <= 1) {
-        return respond({ error: "Cannot remove the last owner. Transfer ownership first." }, 400);
-      }
-    }
-
-    // Remove the role
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: deleteError } = await (ctx.serviceSupabase as any)
-      .from("user_enterprise_roles")
-      .delete()
-      .eq("id", targetRole.id) as { error: Error | null };
-
-    if (deleteError) {
-      console.error("[enterprise/admins DELETE] DB error:", deleteError);
-      return respond({ error: "Internal server error" }, 500);
+    const result = await removeEnterpriseAdmin(ctx.serviceSupabase, ctx.enterpriseId, targetUserId);
+    if ("error" in result) {
+      return respond({ error: result.error }, result.status);
     }
 
     logEnterpriseAuditAction({
@@ -294,7 +261,7 @@ export async function DELETE(req: Request, { params }: RouteParams) {
       enterpriseId: ctx.enterpriseId,
       targetType: "user",
       targetId: targetUserId,
-      metadata: { removedRole: targetRole.role },
+      metadata: { removedRole: result.removedRole },
       ...extractRequestContext(req),
     });
 

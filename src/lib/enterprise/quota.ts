@@ -97,7 +97,7 @@ export async function checkAdoptionQuota(
 
   if (alumniCountError) {
     console.error("[enterprise-quota] Failed to fetch org alumni count:", alumniCountError);
-    return { allowed: false as const, error: "Failed to verify alumni count" };
+    return { allowed: false as const, error: "Failed to verify alumni count", status: 503 };
   }
 
   return evaluateAdoptionQuota(quota, orgAlumniCount ?? 0);

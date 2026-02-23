@@ -68,3 +68,7 @@ opencode-auth/
 .claude/
 .beads/
 .logs/
+
+# Workspace apps and shared packages (separate projects)
+apps/
+packages/

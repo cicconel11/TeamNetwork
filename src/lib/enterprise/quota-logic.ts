@@ -25,6 +25,7 @@ export interface SeatQuotaInfo {
 export interface AdoptionQuotaResult {
   allowed: boolean;
   error?: string;
+  status?: number;
   wouldBeTotal?: number;
   limit?: number;
 }

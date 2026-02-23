@@ -119,6 +119,7 @@ interface EnterpriseSidebarProps {
   enterpriseSlug: string;
   enterpriseName: string;
   logoUrl?: string | null;
+  primaryColor?: string | null;
   role: EnterpriseRole;
   className?: string;
   onClose?: () => void;
@@ -145,6 +146,7 @@ export function EnterpriseSidebar({
   enterpriseSlug,
   enterpriseName,
   logoUrl,
+  primaryColor,
   role,
   className = "",
   onClose,
@@ -176,7 +178,10 @@ export function EnterpriseSidebar({
               />
             </div>
           ) : (
-            <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-purple-600 text-white font-bold text-lg">
+            <div
+              className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+              style={{ backgroundColor: primaryColor || "#6B21A8" }}
+            >
               {enterpriseName.charAt(0)}
             </div>
           )}
@@ -211,10 +216,16 @@ export function EnterpriseSidebar({
                   href={href}
                   onClick={onClose}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 shadow-soft"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    isActive ? "shadow-soft" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
+                  style={
+                    isActive
+                      ? {
+                          backgroundColor: `${primaryColor || "#6B21A8"}1F`,
+                          color: primaryColor || "#6B21A8",
+                        }
+                      : {}
+                  }
                 >
                   <Icon className="h-5 w-5 flex-shrink-0" />
                   {item.label}

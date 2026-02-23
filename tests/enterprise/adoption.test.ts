@@ -34,6 +34,7 @@ interface AdoptionRequestRow {
 interface AdoptionQuotaResult {
   allowed: boolean;
   error?: string;
+  status?: number;
 }
 
 interface SeatQuotaInfo {
@@ -124,18 +125,19 @@ function simulateCreateAdoptionRequest(params: {
 }
 
 /**
- * Simulates acceptAdoptionRequest (adoption.ts:113-254).
+ * Simulates acceptAdoptionRequest (adoption.ts:113-296).
  *
  * Replicates the exact branching:
  *   - request null → "Request not found"
  *   - status !== "pending" → "Request has already been processed"
  *   - expires_at past → "Request has expired"
  *   - org.enterprise_id set → "Organization already belongs to an enterprise"
- *   - quotaCheck.allowed false + "Failed to verify alumni count" → { status: 503 }
+ *   - quotaCheck.allowed false + status → { status: quotaCheck.status }
  *   - quotaCheck.allowed false (other) → { error: quotaCheck.error }
  *   - seatQuota.error → { status: 503 }
  *   - orgUpdateError → "Failed to update org" (no rollback simulated here)
  *   - subUpdate/createError → compensating rollback → "Failed to update/create organization subscription"
+ *   - markAcceptedError → rollback org + subscription → "Failed to finalize adoption request"
  *   - success → { success: true }
  */
 function simulateAcceptAdoptionRequest(params: {
@@ -147,11 +149,13 @@ function simulateAcceptAdoptionRequest(params: {
   orgUpdateError: { message: string } | null;
   subUpdateError: { message: string } | null;
   subCreateError: { message: string } | null;
+  markAcceptedError?: { message: string } | null;
   rollbackError?: { message: string } | null;
 }): AcceptAdoptionResult {
   const {
     request, reVerifiedOrg, quotaCheck, seatQuota,
     orgSub, orgUpdateError, subUpdateError, subCreateError,
+    markAcceptedError,
   } = params;
 
   if (!request) {
@@ -171,8 +175,8 @@ function simulateAcceptAdoptionRequest(params: {
   }
 
   if (!quotaCheck.allowed) {
-    if (quotaCheck.error === "Failed to verify alumni count") {
-      return { success: false, error: quotaCheck.error, status: 503 };
+    if (quotaCheck.status) {
+      return { success: false, error: quotaCheck.error, status: quotaCheck.status };
     }
     return { success: false, error: quotaCheck.error };
   }
@@ -196,6 +200,12 @@ function simulateAcceptAdoptionRequest(params: {
       // Compensating rollback (revert enterprise_id)
       return { success: false, error: "Failed to create organization subscription" };
     }
+  }
+
+  // Step 3: Mark request as accepted
+  if (markAcceptedError) {
+    // Rollback both org enterprise_id and subscription
+    return { success: false, error: "Failed to finalize adoption request", status: 500 };
   }
 
   return { success: true };
@@ -474,7 +484,7 @@ describe("acceptAdoptionRequest", () => {
     const result = simulateAcceptAdoptionRequest({
       request: makeRequest(),
       reVerifiedOrg: { enterprise_id: null },
-      quotaCheck: { allowed: false, error: "Failed to verify alumni count" },
+      quotaCheck: { allowed: false, error: "Failed to verify alumni count", status: 503 },
       seatQuota: { currentCount: 0, maxAllowed: null },
       orgSub: null,
       orgUpdateError: null,
@@ -646,6 +656,60 @@ describe("acceptAdoptionRequest", () => {
       orgUpdateError: null,
       subUpdateError: null,
       subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, true);
+  });
+
+  // ── Step-3 failure tests (Issue 10) ──
+
+  it("step-3 (mark accepted) DB error → rollback org + subscription, error returned", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: { id: "sub-1", status: "active", stripe_subscription_id: "stripe-sub-1" },
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+      markAcceptedError: { message: "constraint violation" },
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 500);
+    assert.ok(result.error?.includes("Failed to finalize adoption request"));
+  });
+
+  it("step-3 failure when org had no existing subscription → rollback still returns error", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null, // no existing subscription
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+      markAcceptedError: { message: "DB timeout" },
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.status, 500);
+    assert.ok(result.error?.includes("Failed to finalize adoption request"));
+  });
+
+  it("step-3 succeeds (no markAcceptedError) → adoption completes", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest(),
+      reVerifiedOrg: { enterprise_id: null },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+      markAcceptedError: null,
     });
 
     assert.strictEqual(result.success, true);

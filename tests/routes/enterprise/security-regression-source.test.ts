@@ -1,3 +1,19 @@
+/**
+ * SOURCE-LEVEL SECURITY REGRESSION TESTS
+ *
+ * These tests intentionally assert against source code patterns (not runtime behavior)
+ * to catch security regressions that could be introduced by refactoring:
+ * - No select('*') on alumni routes (prevents leaking new columns)
+ * - No spread operators on DB rows (prevents leaking internal fields)
+ * - No attacker-controlled Origin header in billing portal
+ * - No DB error message leakage in response bodies
+ *
+ * FRAGILITY: These tests will break on column reordering, whitespace changes, or
+ * variable renames. When they break, verify the security property still holds and
+ * update the assertion string. Do NOT delete these tests without replacing the
+ * security check with an equivalent behavioral test.
+ */
+
 import test from "node:test";
 import assert from "node:assert";
 import fs from "node:fs";
@@ -64,17 +80,28 @@ test("alumni export route uses explicit column list and no spread", () => {
   );
 });
 
-test("create-with-upgrade route returns generic org/role errors", () => {
-  const source = readSource("src/app/api/enterprise/[enterpriseId]/organizations/create-with-upgrade/route.ts");
+test("createEnterpriseSubOrg helper returns generic org/role errors (no DB detail leak)", () => {
+  const source = readSource("src/lib/enterprise/create-sub-org.ts");
 
   assert.strictEqual(source.includes("orgError?.message"), false, "org insert DB error must not leak");
   assert.strictEqual(source.includes("roleError.message"), false, "role insert DB error must not leak");
   assert.ok(
-    source.includes('return respond({ error: "Unable to create organization" }, 400);'),
-    "route must return generic organization creation failure message"
+    source.includes('error: "Unable to create organization"'),
+    "helper must return generic organization creation failure message"
   );
   assert.ok(
-    source.includes('return respond({ error: "Failed to assign admin role" }, 400);'),
-    "route must return generic role assignment failure message"
+    source.includes('error: "Failed to assign admin role"'),
+    "helper must return generic role assignment failure message"
+  );
+});
+
+test("create-with-upgrade route delegates to shared helper (no inline DB writes)", () => {
+  const source = readSource("src/app/api/enterprise/[enterpriseId]/organizations/create-with-upgrade/route.ts");
+
+  assert.strictEqual(source.includes("orgError?.message"), false, "route must not contain DB error references");
+  assert.strictEqual(source.includes("roleError.message"), false, "route must not contain DB error references");
+  assert.ok(
+    source.includes("createEnterpriseSubOrg"),
+    "route must delegate org creation to shared helper"
   );
 });

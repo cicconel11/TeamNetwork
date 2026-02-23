@@ -84,7 +84,11 @@ export async function getEnterpriseApiContext(
     };
   }
 
-  const enterpriseId = resolved?.enterpriseId ?? idOrSlug;
+  if (!resolved) {
+    return { ok: false, response: respond({ error: "Enterprise not found" }, 404) };
+  }
+
+  const enterpriseId = resolved.enterpriseId;
 
   // 3. Check enterprise role (single query via service client, fail-closed)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
