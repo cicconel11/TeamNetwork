@@ -154,7 +154,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
                 return (
                   <div key={tier} className="flex justify-between items-center text-sm py-1">
                     <span className="text-landing-cream/60">{ALUMNI_BUCKET_LABELS[tier]}</span>
-                    <span className="font-mono font-semibold text-landing-cream">
+                    <span className="font-semibold text-landing-cream">
                       {prices ? (
                         <>+{formatPrice(prices[interval], interval)}</>
                       ) : (
@@ -211,10 +211,10 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
                     <span className="text-landing-green font-semibold">3 orgs free</span>
                   </span>
                   <span className="text-landing-cream/50 text-sm">
-                    <span className="font-mono font-semibold text-landing-cream">$150/yr</span> per additional org
+                    <span className="font-semibold text-landing-cream">$150/yr</span> per additional org
                   </span>
                   <span className="text-landing-cream/50 text-sm">
-                    <span className="font-mono font-semibold text-landing-cream">$500/yr</span> per 2,500 alumni
+                    <span className="font-semibold text-landing-cream">$500/yr</span> per 2,500 alumni
                   </span>
                 </div>
               </div>
@@ -240,7 +240,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
         <div suppressHydrationWarning className="scroll-reveal text-center p-6 rounded-xl bg-landing-navy-light/50 border border-landing-cream/10">
           <p className="text-landing-cream/60">
             <span className="text-landing-cream font-semibold">Example:</span> Active Team + 251–500 alumni ={" "}
-            <span className="font-mono font-bold text-landing-cream text-lg">
+            <span className="font-bold text-landing-cream text-lg">
               {formatPrice(getTotalPrice(interval, "251-500")!, interval)}
             </span>
           </p>

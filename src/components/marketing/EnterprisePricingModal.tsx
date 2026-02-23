@@ -171,7 +171,7 @@ export function EnterprisePricingModal({
                 >
                   &minus;
                 </button>
-                <span className="font-mono text-landing-cream text-xl w-7 text-center">
+                <span className="text-landing-cream text-xl w-7 text-center">
                   {orgCount}
                 </span>
                 <button
@@ -182,7 +182,7 @@ export function EnterprisePricingModal({
                   +
                 </button>
                 <span
-                  className={`font-mono text-sm min-w-[72px] text-right ${
+                  className={`text-sm min-w-[72px] text-right ${
                     billableOrgs === 0
                       ? "text-landing-green"
                       : "text-landing-cream"
@@ -240,7 +240,7 @@ export function EnterprisePricingModal({
                         </span>
                       </div>
                       <span
-                        className={`font-mono font-semibold ${
+                        className={`font-semibold ${
                           salesBucket ? "text-amber-400" : "text-landing-cream"
                         }`}
                       >
@@ -260,11 +260,11 @@ export function EnterprisePricingModal({
                 Total
               </p>
               {salesLed ? (
-                <p className="font-mono text-xl font-bold text-amber-400">
+                <p className="text-xl font-bold text-amber-400">
                   Contact Sales
                 </p>
               ) : (
-                <p className="font-mono text-2xl font-bold text-landing-cream">
+                <p className="text-2xl font-bold text-landing-cream">
                   {formatTotal(pricing.totalCents, interval)}
                 </p>
               )}
