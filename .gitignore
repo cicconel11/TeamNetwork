@@ -41,8 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 # audit artifacts (keep templates)
-audit/
-!audit/*.template.*
+/audit/
+!/audit/*.template.*
 
 # playwright
 playwright/.auth/state.json

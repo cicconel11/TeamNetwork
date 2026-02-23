@@ -97,14 +97,20 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
     setSuccessMessage(null);
 
     try {
+      const adjustBody: Record<string, unknown> = {
+        adjustType: "alumni_bucket",
+        newQuantity: selectedBucketQuantity,
+        expectedCurrentQuantity: billing.alumniBucketQuantity,
+      };
+      // Only include billingInterval if the user is changing it
+      if (selectedInterval !== billing.billingInterval) {
+        adjustBody.billingInterval = selectedInterval;
+      }
+
       const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          adjustType: "alumni_bucket",
-          newQuantity: selectedBucketQuantity,
-          expectedCurrentQuantity: billing.alumniBucketQuantity,
-        }),
+        body: JSON.stringify(adjustBody),
       });
 
       const data = await response.json();
@@ -383,7 +389,6 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
                     { value: "month", label: "Monthly" },
                     { value: "year", label: "Yearly (save ~17%)" },
                   ]}
-                  disabled
                 />
               </div>
             </div>
@@ -426,10 +431,15 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
             variant="secondary"
             onClick={handleOpenPortal}
             isLoading={isOpeningPortal}
-            disabled={!billing?.stripeCustomerId}
+            disabled={isOpeningPortal}
           >
             Open Portal
           </Button>
+          {!billing?.stripeCustomerId && !isLoading && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Stripe billing is not yet configured for this enterprise.
+            </p>
+          )}
         </div>
       </Card>
     </div>
