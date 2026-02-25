@@ -1217,6 +1217,7 @@ export type Database = {
       }
       enterprise_subscriptions: {
         Row: {
+          alumni_bucket_quantity: number
           alumni_tier: string
           billing_interval: string
           created_at: string
@@ -1235,6 +1236,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          alumni_bucket_quantity?: number
           alumni_tier?: string
           billing_interval: string
           created_at?: string
@@ -1253,6 +1255,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          alumni_bucket_quantity?: number
           alumni_tier?: string
           billing_interval?: string
           created_at?: string
@@ -4222,6 +4225,7 @@ export type Database = {
       get_subscription_status: {
         Args: { p_org_id: string }
         Returns: {
+          alumni_bucket: string
           current_period_end: string
           grace_period_ends_at: string
           status: string
