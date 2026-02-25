@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import { Users, GraduationCap, CalendarClock, HandHeart } from "lucide-react";
+import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -33,6 +33,8 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   const [
     { count: membersCount },
     { count: alumniCount },
+    { count: parentsCount },
+    { data: subscriptionRows },
     { count: eventsCount },
     { data: recentAnnouncements },
     { data: upcomingEvents },
@@ -41,12 +43,17 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   ] = await Promise.all([
     supabase.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     supabase.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    supabase.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    supabase.rpc("get_subscription_status", { p_org_id: org.id }),
     supabase.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     supabase.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
     supabase.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
     supabase.from("organization_donations").select("*").eq("organization_id", org.id).order("created_at", { ascending: false }).limit(5),
     supabase.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
   ]);
+
+  const parentsBucket = (subscriptionRows as { parents_bucket?: string }[] | null)?.[0]?.parents_bucket ?? "none";
+  const hasParentsAccess = parentsBucket !== "none";
 
   const visibleAnnouncements = filterAnnouncementsForUser(recentAnnouncements, {
     role: membership.role,
@@ -82,6 +89,14 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
       accentFrom: "var(--color-org-secondary-light)",
       accentTo: "var(--color-org-secondary)",
     },
+    ...(hasParentsAccess && (membership?.role === "admin" || membership?.role === "active_member") ? [{
+      label: "Parents",
+      value: parentsCount || 0,
+      href: `/${orgSlug}/parents`,
+      icon: Heart,
+      accentFrom: "var(--color-org-secondary)",
+      accentTo: "var(--color-org-secondary-dark)",
+    }] : []),
     {
       label: "Events",
       value: eventsCount || 0,

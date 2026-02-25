@@ -17,6 +17,7 @@ interface PermissionRoleCardProps {
 const ROLE_OPTIONS = [
   { value: "active_member", label: "Active Members" },
   { value: "alumni", label: "Alumni" },
+  { value: "parent", label: "Parents" },
 ];
 
 export function PermissionRoleCard({

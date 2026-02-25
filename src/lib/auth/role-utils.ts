@@ -1,12 +1,12 @@
 import type { UserRole } from "@/types/database";
 
-export type OrgRole = "admin" | "active_member" | "alumni";
+export type OrgRole = "admin" | "active_member" | "alumni" | "parent";
 
 export function normalizeRole(role?: UserRole | null): OrgRole | null {
   if (!role) return null;
   if (role === "member") return "active_member";
   if (role === "viewer") return "alumni";
-  if (role === "admin" || role === "active_member" || role === "alumni") {
+  if (role === "admin" || role === "active_member" || role === "alumni" || role === "parent") {
     return role;
   }
   return null;
@@ -18,6 +18,7 @@ export function roleFlags(role: OrgRole | null) {
     isAdmin: role === "admin",
     isActiveMember: role === "active_member",
     isAlumni: role === "alumni",
+    isParent: role === "parent",
   };
 }
 

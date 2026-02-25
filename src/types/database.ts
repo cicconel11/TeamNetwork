@@ -3009,6 +3009,7 @@ export type Database = {
           id: string
           media_storage_quota_bytes: number | null
           organization_id: string
+          parents_bucket: string
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -3024,6 +3025,7 @@ export type Database = {
           id?: string
           media_storage_quota_bytes?: number | null
           organization_id: string
+          parents_bucket?: string
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -3039,6 +3041,7 @@ export type Database = {
           id?: string
           media_storage_quota_bytes?: number | null
           organization_id?: string
+          parents_bucket?: string
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -3140,6 +3143,68 @@ export type Database = {
             columns: ["enterprise_id"]
             isOneToOne: false
             referencedRelation: "enterprises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parents: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          first_name: string
+          id: string
+          last_name: string
+          linkedin_url: string | null
+          notes: string | null
+          organization_id: string
+          phone_number: string | null
+          photo_url: string | null
+          relationship: string | null
+          student_name: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          first_name: string
+          id?: string
+          last_name: string
+          linkedin_url?: string | null
+          notes?: string | null
+          organization_id: string
+          phone_number?: string | null
+          photo_url?: string | null
+          relationship?: string | null
+          student_name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          first_name?: string
+          id?: string
+          last_name?: string
+          linkedin_url?: string | null
+          notes?: string | null
+          organization_id?: string
+          phone_number?: string | null
+          photo_url?: string | null
+          relationship?: string | null
+          student_name?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4219,6 +4284,7 @@ export type Database = {
       }
       debug_user_org_access: { Args: { target_org_id?: string }; Returns: Json }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
+      get_parents_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
       get_media_storage_stats: { Args: { p_org_id: string }; Returns: Json }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
@@ -4228,6 +4294,7 @@ export type Database = {
           alumni_bucket: string
           current_period_end: string
           grace_period_ends_at: string
+          parents_bucket: string
           status: string
         }[]
       }
@@ -4364,7 +4431,7 @@ export type Database = {
         | "client_error"
         | "auth_fail"
         | "rate_limited"
-      user_role: "admin" | "member" | "viewer" | "active_member" | "alumni"
+      user_role: "admin" | "member" | "viewer" | "active_member" | "alumni" | "parent"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4537,7 +4604,7 @@ export const Constants = {
         "auth_fail",
         "rate_limited",
       ],
-      user_role: ["admin", "member", "viewer", "active_member", "alumni"],
+      user_role: ["admin", "member", "viewer", "active_member", "alumni", "parent"],
     },
   },
 } as const
@@ -4577,6 +4644,7 @@ export type NotificationAudience = "members" | "alumni" | "both";
 export type NotificationChannel = "email" | "sms" | "both";
 export type WorkoutStatus = "not_started" | "in_progress" | "completed";
 export type AlumniBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
+export type ParentsBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
 export type SubscriptionInterval = "month" | "year";
 export type EmbedType = "link" | "iframe";
 export type OccurrenceType = "single" | "daily" | "weekly" | "monthly";

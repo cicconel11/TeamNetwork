@@ -28,7 +28,7 @@ interface RouteParams {
   params: Promise<{ organizationId: string }>;
 }
 
-const ALLOWED_ROLES = ["admin", "active_member", "alumni"] as const;
+const ALLOWED_ROLES = ["admin", "active_member", "alumni", "parent"] as const;
 const navEntrySchema = z
   .object({
     label: optionalSafeString(80),

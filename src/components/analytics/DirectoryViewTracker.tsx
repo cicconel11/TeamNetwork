@@ -5,7 +5,7 @@ import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface DirectoryViewTrackerProps {
   organizationId: string;
-  directoryType: "active_members" | "alumni";
+  directoryType: "active_members" | "alumni" | "parents";
 }
 
 export function DirectoryViewTracker({ organizationId, directoryType }: DirectoryViewTrackerProps) {

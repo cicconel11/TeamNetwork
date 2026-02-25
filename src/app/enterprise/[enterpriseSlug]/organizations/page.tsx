@@ -59,10 +59,24 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
         .is("deleted_at", null)
     : { data: [] };
 
-  // Build count map
+  // Build alumni count map
   const countMap: Record<string, number> = {};
   (alumniCounts ?? []).forEach((a: { organization_id: string }) => {
     countMap[a.organization_id] = (countMap[a.organization_id] || 0) + 1;
+  });
+
+  // Get parents counts for each org
+  const { data: parentsCounts } = orgIds.length > 0
+    ? await serviceSupabase
+        .from("parents")
+        .select("organization_id")
+        .in("organization_id", orgIds)
+        .is("deleted_at", null)
+    : { data: [] };
+
+  const parentsCountMap: Record<string, number> = {};
+  (parentsCounts ?? []).forEach((p: { organization_id: string }) => {
+    parentsCountMap[p.organization_id] = (parentsCountMap[p.organization_id] || 0) + 1;
   });
 
   // Transform for SubOrgList
@@ -77,6 +91,7 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
       name: org.name,
       slug: org.slug,
       alumniCount: countMap[org.id] || 0,
+      parentsCount: parentsCountMap[org.id] || 0,
       relationshipType: (org.enterprise_relationship_type || "created") as EnterpriseRelationshipType,
       billingType,
     };

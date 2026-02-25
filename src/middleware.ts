@@ -10,7 +10,7 @@ const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
 // Routes that don't require authentication
-const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy"];
+const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy", "/app/parents-join"];
 
 // Enterprise public routes that don't require enterprise membership
 const enterprisePublicSlugs = ["pricing", "features"];
@@ -32,6 +32,14 @@ export async function middleware(request: NextRequest) {
     "/api/telemetry/error", // Error tracking from unauthenticated contexts
   ];
   if (publicApiRoutes.includes(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Dynamic public API routes (unauthenticated endpoints with dynamic path segments)
+  const isPublicApiPattern =
+    // Parent invite acceptance — called from /app/parents-join before account exists
+    (pathname.startsWith("/api/organizations/") && pathname.endsWith("/parents/invite/accept"));
+  if (isPublicApiPattern) {
     return NextResponse.next();
   }
 

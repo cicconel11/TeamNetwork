@@ -18,9 +18,11 @@ export type OrgContextResult = {
   isAdmin: boolean;
   isActiveMember: boolean;
   isAlumni: boolean;
+  isParent: boolean;
   subscription: SubscriptionStatus | null;
   gracePeriod: GracePeriodInfo;
   hasAlumniAccess: boolean;
+  hasParentsAccess: boolean;
 };
 
 export async function getOrgRole(params: { orgId: string; userId?: string }): Promise<OrgRoleResult> {
@@ -84,6 +86,7 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
       subscription: null,
       gracePeriod: getGracePeriodInfo(null),
       hasAlumniAccess: false,
+      hasParentsAccess: false,
       ...flags,
     };
   }
@@ -107,6 +110,11 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
     subscriptionData?.status === "enterprise_managed" ||
     (subscriptionData?.alumni_bucket != null && subscriptionData.alumni_bucket !== "none");
 
+  // Determine parents access based on subscription status and parents_bucket
+  const hasParentsAccess =
+    subscriptionData?.status === "enterprise_managed" ||
+    (subscriptionData?.parents_bucket != null && subscriptionData.parents_bucket !== "none");
+
   const gracePeriod = getGracePeriodInfo(subscription);
 
   const membership = await getOrgRole({ orgId: org.id, userId: userId ?? undefined });
@@ -118,6 +126,7 @@ export async function getOrgContext(orgSlug: string): Promise<OrgContextResult> 
     subscription,
     gracePeriod,
     hasAlumniAccess,
+    hasParentsAccess,
     ...flags,
   };
 }

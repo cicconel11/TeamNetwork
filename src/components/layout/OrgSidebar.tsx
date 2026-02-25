@@ -15,11 +15,12 @@ interface OrgSidebarProps {
   role: OrgRole | null;
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
+  hasParentsAccess?: boolean;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -39,6 +40,9 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
       // Alumni access check - hide items that require alumni access when org doesn't have it
       if (item.requiresAlumni && !hasAlumniAccess) return false;
+
+      // Parents access check - hide items that require parents access when org doesn't have it
+      if (item.requiresParents && !hasParentsAccess) return false;
 
       // Config check (hide if hidden is true)
       const configKey = getConfigKey(item.href);

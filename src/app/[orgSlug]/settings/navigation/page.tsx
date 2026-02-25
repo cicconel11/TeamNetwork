@@ -11,7 +11,7 @@ import type { OrgRole } from "@/lib/auth/role-utils";
 import { setConsentState as setAnalyticsConsentState } from "@/lib/analytics/events";
 
 const CONFIGURABLE_ITEMS = ORG_NAV_ITEMS.filter((item) => item.configurable !== false);
-const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni"];
+const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni", "parent"];
 
 function NavigationSettingsContent() {
   const params = useParams();
@@ -277,7 +277,7 @@ function NavigationSettingsContent() {
     <div className="space-y-6">
       <PageHeader
         title="Navigation"
-        description="Use arrows to reorder tabs, rename them, or hide them from members and alumni."
+        description="Use arrows to reorder tabs, rename them, or hide them from members, alumni, and parents."
         backHref={`/${orgSlug}`}
         actions={
           <Button onClick={handleSave} isLoading={isSaving} disabled={!orgId}>
@@ -396,6 +396,10 @@ function NavigationSettingsContent() {
                         Hide from alumni
                       </label>
                       <label className="flex items-center gap-2 text-sm text-foreground">
+                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("parent")} onChange={() => toggleRoleHidden(item.href, "parent")} />
+                        Hide from parents
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-foreground">
                         <input type="checkbox" className="h-4 w-4 rounded border-border" checked={isHiddenEverywhere} onChange={() => toggleHiddenEverywhere(item.href)} />
                         Disable for everyone
                       </label>
@@ -415,6 +419,10 @@ function NavigationSettingsContent() {
                       <label className="flex items-center gap-2 text-sm text-foreground">
                         <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("alumni")} onChange={() => toggleEditRole(item.href, "alumni")} />
                         Alumni
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-foreground">
+                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("parent")} onChange={() => toggleEditRole(item.href, "parent")} />
+                        Parents
                       </label>
                     </div>
                   </div>

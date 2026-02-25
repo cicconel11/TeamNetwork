@@ -8,6 +8,7 @@ import { Button, Card, Input, Select, Badge } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
 import type { AlumniBucket } from "@/types/database";
 import { ALUMNI_LIMITS } from "@/lib/alumni-quota";
+import { buildInviteLink } from "@/lib/invites/buildInviteLink";
 
 interface Invite {
   id: string;
@@ -18,6 +19,29 @@ interface Invite {
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;
+}
+
+interface ParentInvite {
+  id: string;
+  email: string;
+  code: string;
+  status: "pending" | "accepted" | "revoked";
+  expires_at: string | null;
+  created_at: string;
+}
+
+interface InviteItem {
+  kind: "org" | "parent";
+  id: string;
+  code: string;
+  created_at: string;
+  expires_at: string | null;
+  token?: string | null;
+  role?: string;
+  uses_remaining?: number | null;
+  revoked_at?: string | null;
+  status?: "pending" | "accepted" | "revoked";
+  email?: string;
 }
 
 interface Membership {
@@ -51,7 +75,8 @@ export default function InvitesPage() {
   const params = useParams();
   const orgSlug = params.orgSlug as string;
 
-  const [invites, setInvites] = useState<Invite[]>([]);
+  const [orgInvites, setOrgInvites] = useState<Invite[]>([]);
+  const [parentInvites, setParentInvites] = useState<ParentInvite[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -69,9 +94,10 @@ export default function InvitesPage() {
 
   // New invite form state
   const [showForm, setShowForm] = useState(false);
-  const [newRole, setNewRole] = useState<"active_member" | "admin" | "alumni">("active_member");
+  const [newRole, setNewRole] = useState<"active_member" | "admin" | "alumni" | "parent">("active_member");
   const [newUses, setNewUses] = useState<string>("");
   const [newExpires, setNewExpires] = useState<string>("");
+  const [parentEmail, setParentEmail] = useState<string>("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -138,7 +164,19 @@ export default function InvitesPage() {
           console.error("Failed to fetch invites:", inviteError.message);
         }
 
-        setInvites(inviteData || []);
+        setOrgInvites(inviteData || []);
+
+        const { data: parentInviteData, error: parentInviteError } = await (supabase as any)
+          .from("parent_invites")
+          .select("id,email,code,expires_at,status,created_at")
+          .eq("organization_id", org.id)
+          .order("created_at", { ascending: false });
+
+        if (parentInviteError) {
+          console.error("Failed to fetch parent invites:", parentInviteError.message);
+        }
+
+        setParentInvites((parentInviteData as ParentInvite[] | null) || []);
 
         // Get memberships
         const { data: membershipRows } = await supabase
@@ -177,6 +215,59 @@ export default function InvitesPage() {
 
   const handleCreateInvite = async () => {
     if (!orgId) return;
+
+    if (newRole === "parent") {
+      const email = parentEmail.trim().toLowerCase();
+      if (!email) {
+        setError("Parent invites require an email address.");
+        return;
+      }
+
+      setIsCreating(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/organizations/${orgId}/parents/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Unable to create parent invite");
+        }
+
+        const invite = data.invite as ParentInvite | undefined;
+        if (invite) {
+          const normalizedInvite: ParentInvite = {
+            id: invite.id,
+            email: invite.email,
+            code: invite.code,
+            status: invite.status,
+            expires_at: invite.expires_at ?? null,
+            created_at: invite.created_at ?? new Date().toISOString(),
+          };
+          setParentInvites((prev) => [
+            normalizedInvite,
+            ...prev.filter((item) => item.id !== normalizedInvite.id),
+          ]);
+        }
+
+        setShowForm(false);
+        setNewRole("active_member");
+        setNewUses("");
+        setNewExpires("");
+        setParentEmail("");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unable to create parent invite");
+      } finally {
+        setIsCreating(false);
+      }
+
+      return;
+    }
+
     if (
       newRole === "alumni" &&
       quota &&
@@ -207,11 +298,12 @@ export default function InvitesPage() {
       setError(rpcError.message);
     } else if (data) {
       // RPC returns the created invite
-      setInvites([data as Invite, ...invites]);
+      setOrgInvites((prev) => [data as Invite, ...prev]);
       setShowForm(false);
       setNewRole("active_member");
       setNewUses("");
       setNewExpires("");
+      setParentEmail("");
     }
 
     setIsCreating(false);
@@ -224,7 +316,7 @@ export default function InvitesPage() {
       .delete()
       .eq("id", inviteId);
 
-    setInvites(invites.filter(i => i.id !== inviteId));
+    setOrgInvites((prev) => prev.filter(i => i.id !== inviteId));
   };
 
   const handleRevokeInvite = async (inviteId: string) => {
@@ -234,9 +326,11 @@ export default function InvitesPage() {
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", inviteId);
 
-    setInvites(invites.map(i => 
-      i.id === inviteId ? { ...i, revoked_at: new Date().toISOString() } : i
-    ));
+    setOrgInvites((prev) =>
+      prev.map((i) =>
+        i.id === inviteId ? { ...i, revoked_at: new Date().toISOString() } : i
+      )
+    );
   };
 
   const cancelSubscription = async () => {
@@ -394,12 +488,15 @@ export default function InvitesPage() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const getInviteLink = (invite: Invite) => {
+  const getInviteLink = (invite: InviteItem) => {
     const base = typeof window !== "undefined" ? window.location.origin : "";
-    if (invite.token) {
-      return `${base}/app/join?token=${invite.token}`;
-    }
-    return `${base}/app/join?code=${invite.code}`;
+    return buildInviteLink({
+      kind: invite.kind,
+      baseUrl: base,
+      orgId: orgId ?? undefined,
+      code: invite.code,
+      token: invite.token ?? undefined,
+    });
   };
 
   const formatDate = (dateStr: string) => {
@@ -440,7 +537,7 @@ export default function InvitesPage() {
     return quota.remaining !== null && quota.remaining > 0;
   }, [quota]);
 
-  const updateRole = async (userId: string, newRole: "admin" | "active_member" | "alumni") => {
+  const updateRole = async (userId: string, newRole: "admin" | "active_member" | "alumni" | "parent") => {
     if (!orgId) return;
 
     // Find current role to check if actually changing
@@ -515,6 +612,7 @@ export default function InvitesPage() {
     switch (role) {
       case "admin": return "warning";
       case "alumni": return "muted";
+      case "parent": return "primary";
       default: return "primary";
     }
   };
@@ -523,11 +621,40 @@ export default function InvitesPage() {
     switch (role) {
       case "admin": return "Admin";
       case "alumni": return "Alumni";
+      case "parent": return "Parent";
       case "active_member": return "Active Member";
       case "member": return "Member";
       default: return role;
     }
   };
+
+  const inviteFormLayout =
+    newRole === "parent"
+      ? "grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"
+      : "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4";
+
+  const allInvites: InviteItem[] = [
+    ...orgInvites.map((invite) => ({
+      kind: "org" as const,
+      id: invite.id,
+      code: invite.code,
+      created_at: invite.created_at,
+      expires_at: invite.expires_at,
+      token: invite.token,
+      role: invite.role,
+      uses_remaining: invite.uses_remaining,
+      revoked_at: invite.revoked_at,
+    })),
+    ...parentInvites.map((invite) => ({
+      kind: "parent" as const,
+      id: invite.id,
+      code: invite.code,
+      created_at: invite.created_at,
+      expires_at: invite.expires_at,
+      status: invite.status,
+      email: invite.email,
+    })),
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   if (isLoading) {
     return (
@@ -678,31 +805,45 @@ export default function InvitesPage() {
       {showForm && (
         <Card className="p-6 mb-6">
           <h3 className="font-semibold text-foreground mb-4">Create New Invite</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div className={inviteFormLayout}>
             <Select
               label="Role"
               value={newRole}
-              onChange={(e) => setNewRole(e.target.value as "active_member" | "admin" | "alumni")}
+              onChange={(e) => setNewRole(e.target.value as "active_member" | "admin" | "alumni" | "parent")}
               options={[
                 { value: "active_member", label: "Active Member" },
                 { value: "admin", label: "Admin" },
                 { value: "alumni", label: "Alumni" },
+                { value: "parent", label: "Parent" },
               ]}
             />
-            <Input
-              label="Max Uses"
-              type="number"
-              value={newUses}
-              onChange={(e) => setNewUses(e.target.value)}
-              placeholder="Unlimited"
-              min={1}
-            />
-            <Input
-              label="Expires On"
-              type="date"
-              value={newExpires}
-              onChange={(e) => setNewExpires(e.target.value)}
-            />
+            {newRole === "parent" ? (
+              <Input
+                label="Parent Email"
+                type="email"
+                value={parentEmail}
+                onChange={(e) => setParentEmail(e.target.value)}
+                placeholder="parent@example.com"
+                autoComplete="email"
+              />
+            ) : (
+              <>
+                <Input
+                  label="Max Uses"
+                  type="number"
+                  value={newUses}
+                  onChange={(e) => setNewUses(e.target.value)}
+                  placeholder="Unlimited"
+                  min={1}
+                />
+                <Input
+                  label="Expires On"
+                  type="date"
+                  value={newExpires}
+                  onChange={(e) => setNewExpires(e.target.value)}
+                />
+              </>
+            )}
           </div>
           {newRole === "alumni" && quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit && (
             <p className="text-xs text-amber-600">
@@ -721,55 +862,65 @@ export default function InvitesPage() {
       )}
 
       {/* Invites List */}
-      {invites.length > 0 ? (
+      {allInvites.length > 0 ? (
         <div className="space-y-4">
-          {invites.map((invite) => {
-            const expired = isExpired(invite.expires_at);
-            const revoked = isRevoked(invite.revoked_at);
-            const exhausted = invite.uses_remaining !== null && invite.uses_remaining <= 0;
+          {allInvites.map((invite) => {
+            const inviteKey = `${invite.kind}-${invite.id}`;
+            const role = invite.kind === "parent" ? "parent" : invite.role ?? "active_member";
+            const isExpiredInvite = isExpired(invite.expires_at);
+            const expired = invite.kind === "org" ? isExpiredInvite : invite.status === "pending" && isExpiredInvite;
+            const revoked = invite.kind === "org" ? isRevoked(invite.revoked_at ?? null) : invite.status === "revoked";
+            const exhausted = invite.kind === "org" && invite.uses_remaining != null && invite.uses_remaining <= 0;
+            const accepted = invite.kind === "parent" && invite.status === "accepted";
             const invalid = expired || exhausted || revoked;
             const inviteLink = getInviteLink(invite);
 
             return (
-              <Card key={invite.id} className={`p-6 ${invalid ? "opacity-60" : ""}`}>
+              <Card key={inviteKey} className={`p-6 ${invalid ? "opacity-60" : ""}`}>
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4 flex-wrap">
-                      <div
-                        className="font-mono text-xl font-bold tracking-wider cursor-pointer hover:text-emerald-500 transition-colors"
-                        onClick={() => copyToClipboard(invite.code, `code-${invite.id}`)}
-                        title="Click to copy code"
-                      >
-                        {invite.code}
-                        {copied === `code-${invite.id}` && (
-                          <span className="ml-2 text-xs text-emerald-500 font-normal">Copied!</span>
+                      <div>
+                        <div
+                          className="font-mono text-xl font-bold tracking-wider cursor-pointer hover:text-emerald-500 transition-colors"
+                          onClick={() => copyToClipboard(invite.code, `code-${inviteKey}`)}
+                          title="Click to copy code"
+                        >
+                          {invite.code}
+                          {copied === `code-${inviteKey}` && (
+                            <span className="ml-2 text-xs text-emerald-500 font-normal">Copied!</span>
+                          )}
+                        </div>
+                        {invite.kind === "parent" && invite.email && (
+                          <div className="text-xs text-muted-foreground">{invite.email}</div>
                         )}
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        <Badge variant={getRoleBadgeVariant(invite.role)}>
-                          {getRoleLabel(invite.role)}
+                        <Badge variant={getRoleBadgeVariant(role)}>
+                          {getRoleLabel(role)}
                         </Badge>
                         {expired && <Badge variant="error">Expired</Badge>}
                         {exhausted && <Badge variant="error">No uses left</Badge>}
                         {revoked && <Badge variant="error">Revoked</Badge>}
+                        {accepted && <Badge variant="success">Accepted</Badge>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => copyToClipboard(inviteLink, `link-${invite.id}`)}
+                        onClick={() => copyToClipboard(inviteLink, `link-${inviteKey}`)}
                         className="text-emerald-600 hover:text-emerald-700"
                       >
                         <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                         </svg>
-                        {copied === `link-${invite.id}` ? "Copied!" : "Copy Link"}
+                        {copied === `link-${inviteKey}` ? "Copied!" : "Copy Link"}
                       </Button>
                       <Button
                         variant="secondary"
                         size="sm"
-                        onClick={() => setShowQR(showQR === invite.id ? null : invite.id)}
+                        onClick={() => setShowQR(showQR === inviteKey ? null : inviteKey)}
                       >
                         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
@@ -777,16 +928,20 @@ export default function InvitesPage() {
                         </svg>
                       </Button>
                       <div className="text-sm text-muted-foreground text-right hidden sm:block">
-                        <div>
-                          {invite.uses_remaining !== null
-                            ? `${invite.uses_remaining} uses left`
-                            : "Unlimited uses"}
-                        </div>
+                        {invite.kind === "org" ? (
+                          <div>
+                            {invite.uses_remaining !== null
+                              ? `${invite.uses_remaining} uses left`
+                              : "Unlimited uses"}
+                          </div>
+                        ) : (
+                          <div>Parent invite</div>
+                        )}
                         {invite.expires_at && (
                           <div>Expires {formatDate(invite.expires_at)}</div>
                         )}
                       </div>
-                      {!revoked && !expired && !exhausted && (
+                      {invite.kind === "org" && !revoked && !expired && !exhausted && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -796,21 +951,23 @@ export default function InvitesPage() {
                           Revoke
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteInvite(invite.id)}
-                        className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                        </svg>
-                      </Button>
+                      {invite.kind === "org" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteInvite(invite.id)}
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </Button>
+                      )}
                     </div>
                   </div>
                   
                   {/* QR Code Section */}
-                  {showQR === invite.id && (
+                  {showQR === inviteKey && (
                     <div className="border-t border-border pt-4 flex justify-center">
                       <QRCodeDisplay url={inviteLink} size={180} />
                     </div>
@@ -870,11 +1027,14 @@ export default function InvitesPage() {
                   <div className="w-36">
                     <Select
                       value={m.role === "member" ? "active_member" : m.role}
-                      onChange={(e) => updateRole(m.user_id, e.target.value as "admin" | "active_member" | "alumni")}
+                      onChange={(e) =>
+                        updateRole(m.user_id, e.target.value as "admin" | "active_member" | "alumni" | "parent")
+                      }
                       disabled={isChangingRole && roleChangeUserId === m.user_id}
                       options={[
                         { value: "active_member", label: "Active Member" },
                         { value: "alumni", label: "Alumni", disabled: m.role !== "alumni" && !canChangeToAlumni() },
+                        { value: "parent", label: "Parent" },
                         { value: "admin", label: "Admin" },
                       ]}
                     />

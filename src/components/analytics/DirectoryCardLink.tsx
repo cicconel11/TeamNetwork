@@ -7,7 +7,7 @@ import { trackBehavioralEvent } from "@/lib/analytics/events";
 interface DirectoryCardLinkProps {
   href: string;
   organizationId: string;
-  directoryType: "active_members" | "alumni";
+  directoryType: "active_members" | "alumni" | "parents";
   children: ReactNode;
 }
 

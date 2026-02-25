@@ -48,3 +48,20 @@ export type NewAlumniForm = z.infer<typeof newAlumniSchema>;
 
 export const editAlumniSchema = newAlumniSchema;
 export type EditAlumniForm = z.infer<typeof editAlumniSchema>;
+
+// Parent/guardian form
+export const newParentSchema = z.object({
+  first_name: safeString(100),
+  last_name: safeString(100),
+  email: optionalEmail,
+  phone_number: optionalSafeString(50),
+  photo_url: optionalHttpsUrlSchema,
+  linkedin_url: optionalHttpsUrlSchema,
+  student_name: optionalSafeString(200),
+  relationship: optionalSafeString(100),
+  notes: optionalSafeString(1000),
+});
+export type NewParentForm = z.infer<typeof newParentSchema>;
+
+export const editParentSchema = newParentSchema;
+export type EditParentForm = z.infer<typeof editParentSchema>;

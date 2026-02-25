@@ -25,12 +25,20 @@ interface PatchOrgRequest {
   organizationId?: string;
   name?: string;
   navConfig?: Record<string, unknown>;
+  feed_post_roles?: string[];
+  job_post_roles?: string[];
+  discussion_post_roles?: string[];
+  media_upload_roles?: string[];
 }
 
 interface PatchOrgResult {
   status: number;
   name?: string;
   navConfig?: Record<string, unknown>;
+  feed_post_roles?: string[];
+  job_post_roles?: string[];
+  discussion_post_roles?: string[];
+  media_upload_roles?: string[];
   error?: string;
 }
 
@@ -80,7 +88,14 @@ function simulatePatchOrganization(
   }
 
   // Check if there's anything to update
-  if (request.name === undefined && request.navConfig === undefined) {
+  if (
+    request.name === undefined &&
+    request.navConfig === undefined &&
+    request.feed_post_roles === undefined &&
+    request.job_post_roles === undefined &&
+    request.discussion_post_roles === undefined &&
+    request.media_upload_roles === undefined
+  ) {
     return { status: 400, error: "No valid fields to update" };
   }
 
@@ -94,6 +109,19 @@ function simulatePatchOrganization(
   }
   if (request.navConfig !== undefined) {
     result.navConfig = request.navConfig;
+  }
+  // Mirror route.ts behavior: force "admin" into any provided role array
+  if (request.feed_post_roles !== undefined) {
+    result.feed_post_roles = Array.from(new Set(["admin", ...request.feed_post_roles]));
+  }
+  if (request.job_post_roles !== undefined) {
+    result.job_post_roles = Array.from(new Set(["admin", ...request.job_post_roles]));
+  }
+  if (request.discussion_post_roles !== undefined) {
+    result.discussion_post_roles = Array.from(new Set(["admin", ...request.discussion_post_roles]));
+  }
+  if (request.media_upload_roles !== undefined) {
+    result.media_upload_roles = Array.from(new Set(["admin", ...request.media_upload_roles]));
   }
 
   return result;
@@ -303,4 +331,70 @@ test("DELETE organization rejects users from different org", () => {
     { supabase, organization: { id: "org-1" } }
   );
   assert.strictEqual(result.status, 403);
+});
+
+// ==============================================================
+// PATCH /api/organizations/[orgId] — post-role fields with parent
+// ==============================================================
+
+test("PATCH feed_post_roles with parent accepted and admin forced", () => {
+  const supabase = createSupabaseStub();
+  const result = simulatePatchOrganization(
+    { auth: AuthPresets.orgAdmin("org-1"), organizationId: "org-1", feed_post_roles: ["parent"] },
+    { supabase, organization: { id: "org-1", name: "Test Org" } }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.feed_post_roles?.includes("parent"), "parent should be in feed_post_roles");
+  assert.ok(result.feed_post_roles?.includes("admin"), "admin should be forced into feed_post_roles");
+});
+
+test("PATCH job_post_roles with parent accepted and admin forced", () => {
+  const supabase = createSupabaseStub();
+  const result = simulatePatchOrganization(
+    { auth: AuthPresets.orgAdmin("org-1"), organizationId: "org-1", job_post_roles: ["parent"] },
+    { supabase, organization: { id: "org-1", name: "Test Org" } }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.job_post_roles?.includes("parent"), "parent should be in job_post_roles");
+  assert.ok(result.job_post_roles?.includes("admin"), "admin should be forced into job_post_roles");
+});
+
+test("PATCH discussion_post_roles with parent accepted and admin forced", () => {
+  const supabase = createSupabaseStub();
+  const result = simulatePatchOrganization(
+    { auth: AuthPresets.orgAdmin("org-1"), organizationId: "org-1", discussion_post_roles: ["parent"] },
+    { supabase, organization: { id: "org-1", name: "Test Org" } }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.discussion_post_roles?.includes("parent"), "parent should be in discussion_post_roles");
+  assert.ok(result.discussion_post_roles?.includes("admin"), "admin should be forced into discussion_post_roles");
+});
+
+test("PATCH media_upload_roles with parent accepted and admin forced", () => {
+  const supabase = createSupabaseStub();
+  const result = simulatePatchOrganization(
+    { auth: AuthPresets.orgAdmin("org-1"), organizationId: "org-1", media_upload_roles: ["parent"] },
+    { supabase, organization: { id: "org-1", name: "Test Org" } }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.media_upload_roles?.includes("parent"), "parent should be in media_upload_roles");
+  assert.ok(result.media_upload_roles?.includes("admin"), "admin should be forced into media_upload_roles");
+});
+
+test("PATCH feed_post_roles with parent and alumni all preserved, admin forced once", () => {
+  const supabase = createSupabaseStub();
+  const result = simulatePatchOrganization(
+    {
+      auth: AuthPresets.orgAdmin("org-1"),
+      organizationId: "org-1",
+      feed_post_roles: ["parent", "alumni"],
+    },
+    { supabase, organization: { id: "org-1", name: "Test Org" } }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.feed_post_roles?.includes("parent"), "parent should be in feed_post_roles");
+  assert.ok(result.feed_post_roles?.includes("alumni"), "alumni should be in feed_post_roles");
+  assert.ok(result.feed_post_roles?.includes("admin"), "admin should be forced");
+  const adminCount = (result.feed_post_roles ?? []).filter((r) => r === "admin").length;
+  assert.strictEqual(adminCount, 1, "admin should appear exactly once");
 });

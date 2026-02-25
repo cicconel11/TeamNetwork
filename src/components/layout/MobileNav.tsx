@@ -12,9 +12,10 @@ interface MobileNavProps {
   role: OrgRole | null;
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
+  hasParentsAccess?: boolean;
 }
 
-export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const basePath = `/${organization.slug}`;
 
@@ -90,6 +91,7 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
           role={role}
           isDevAdmin={isDevAdmin}
           hasAlumniAccess={hasAlumniAccess}
+          hasParentsAccess={hasParentsAccess}
           className="h-full border-r border-border"
           onClose={closeMenu}
         />

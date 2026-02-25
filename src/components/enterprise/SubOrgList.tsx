@@ -7,6 +7,7 @@ interface SubOrg {
   name: string;
   slug: string;
   alumniCount: number;
+  parentsCount: number;
   relationshipType: EnterpriseRelationshipType;
   billingType: SubOrgBillingType;
 }
@@ -44,6 +45,9 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
               Alumni
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
+              Parents
+            </th>
+            <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
               Relationship
             </th>
             <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
@@ -67,6 +71,9 @@ export function SubOrgList({ orgs, enterpriseSlug }: SubOrgListProps) {
               </td>
               <td className="py-4 px-4">
                 <span className="text-sm text-foreground">{org.alumniCount.toLocaleString()}</span>
+              </td>
+              <td className="py-4 px-4">
+                <span className="text-sm text-foreground">{org.parentsCount.toLocaleString()}</span>
               </td>
               <td className="py-4 px-4">
                 <Badge variant={org.relationshipType === "created" ? "primary" : "success"}>
