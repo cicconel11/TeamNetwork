@@ -4,7 +4,12 @@ import { isOrgReadOnly, type SubscriptionStatus } from "@/lib/subscription/grace
 /**
  * Check if an organization is in read-only mode (grace period).
  * Use this in API routes to block mutations during grace period.
- * 
+ *
+ * Uses the get_subscription_status RPC (SECURITY DEFINER) so that all
+ * authenticated org members can check status — not just admins.
+ * Querying organization_subscriptions directly would be blocked by
+ * admin-only RLS for active_member / alumni callers.
+ *
  * @returns { isReadOnly: boolean, subscription: SubscriptionStatus | null, error?: string }
  */
 export async function checkOrgReadOnly(organizationId: string): Promise<{
@@ -13,23 +18,22 @@ export async function checkOrgReadOnly(organizationId: string): Promise<{
   error?: string;
 }> {
   const supabase = await createClient();
-  
-  const { data: subscriptionData, error: queryError } = await supabase
-    .from("organization_subscriptions")
-    .select("status, grace_period_ends_at, current_period_end")
-    .eq("organization_id", organizationId)
-    .maybeSingle();
 
-  // If query fails (RLS blocked, network error, etc.), fail closed (read-only)
+  const { data: subscriptionRows, error: queryError } = await supabase
+    .rpc("get_subscription_status", { p_org_id: organizationId });
+
+  // If query fails (network error, etc.), fail closed (read-only)
   // to prevent writes when we can't verify subscription status
   if (queryError) {
-    console.error("[checkOrgReadOnly] Query error, failing closed:", queryError.message);
+    console.error("[checkOrgReadOnly] RPC error, failing closed:", queryError.message);
     return {
       isReadOnly: true,
       subscription: null,
       error: queryError.message,
     };
   }
+
+  const subscriptionData = subscriptionRows?.[0] ?? null;
 
   const subscription: SubscriptionStatus | null = subscriptionData
     ? {
