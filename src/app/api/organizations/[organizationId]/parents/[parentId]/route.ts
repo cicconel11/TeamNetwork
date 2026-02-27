@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -68,8 +69,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 
   const isAdmin = rawRole === "admin";
-  // isSelf requires an active membership row AND the parent record being linked to this user
-  const isSelf = rawRole !== null && existing.user_id !== null && existing.user_id === user.id;
+  // isSelf is restricted to parent-role users: active_member/alumni/member have no business
+  // editing a parent record even if their user_id was incidentally linked to one.
+  const isSelf = rawRole === "parent" && existing.user_id !== null && existing.user_id === user.id;
   if (!isAdmin && !isSelf) {
     return respond({ error: "Forbidden" }, 403);
   }
@@ -107,6 +109,18 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   if (updateError || !parent) {
     console.error("[org/parents PATCH] DB error:", updateError);
     return respond({ error: "Internal server error" }, 500);
+  }
+
+  // Invalidate router cache so the parents list and dashboard show fresh data
+  const { data: orgSlugRow } = await serviceSupabase
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single();
+  if (orgSlugRow?.slug) {
+    revalidatePath(`/${orgSlugRow.slug}`);
+    revalidatePath(`/${orgSlugRow.slug}/parents`);
+    revalidatePath(`/${orgSlugRow.slug}/parents/${parentId}`);
   }
 
   return respond({ parent });
@@ -167,16 +181,35 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return respond({ error: "Parent not found" }, 404);
   }
 
+  const deleteNow = new Date().toISOString();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: deleteError } = await (serviceSupabase as any)
+  const { data: deletedRows, error: deleteError } = await (serviceSupabase as any)
     .from("parents")
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({ deleted_at: deleteNow, updated_at: deleteNow })
     .eq("id", parentId)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .select("id");
 
   if (deleteError) {
     console.error("[org/parents DELETE] DB error:", deleteError);
     return respond({ error: "Internal server error" }, 500);
+  }
+
+  if (!deletedRows || deletedRows.length === 0) {
+    // Concurrent deletion already completed — end state is correct, return idempotent success.
+    console.warn("[org/parents DELETE] Concurrent soft-delete detected for parentId:", parentId);
+  }
+
+  // Invalidate router cache so the parents list and dashboard show fresh data
+  const { data: orgSlugRow } = await serviceSupabase
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single();
+  if (orgSlugRow?.slug) {
+    revalidatePath(`/${orgSlugRow.slug}`);
+    revalidatePath(`/${orgSlugRow.slug}/parents`);
   }
 
   return respond({ success: true });

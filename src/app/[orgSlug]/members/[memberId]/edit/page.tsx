@@ -229,8 +229,8 @@ export default function EditMemberPage() {
       return;
     }
 
-    router.push(`/${orgSlug}/members/${memberId}`);
     router.refresh();
+    router.push(`/${orgSlug}/members/${memberId}`);
   };
 
   if (isFetching) {
@@ -423,6 +423,7 @@ export default function EditMemberPage() {
                     { value: "active_member", label: "Active Member" },
                     { value: "admin", label: "Admin" },
                     { value: "alumni", label: "Alumni" },
+                    { value: "parent", label: "Parent" },
                   ]}
                 />
 

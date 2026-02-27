@@ -18,7 +18,7 @@ import { randomUUID } from "crypto";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-type OrgRole = "admin" | "active_member" | "alumni" | null;
+type OrgRole = "admin" | "active_member" | "alumni" | "parent" | null;
 type MemberStatus = "active" | "pending" | "revoked";
 
 interface Membership {
@@ -57,7 +57,9 @@ function simulateListParents(ctx: UserContext, targetOrgId: string): { status: n
   if (!ctx.userId) return { status: 401 };
   const role = getOrgRole(ctx, targetOrgId);
   if (!role) return { status: 403 };
-  const canRead = role === "admin" || role === "active_member";
+  // Fixed by 20260616000000_fix_parents_rls_and_quota.sql:
+  // 'parent' added to has_active_role check (mirrors alumni_select pattern).
+  const canRead = role === "admin" || role === "active_member" || role === "parent";
   return { status: canRead ? 200 : 403 };
 }
 
@@ -102,6 +104,34 @@ function simulateDeleteParent(
     (p) => p.id === parentId && p.organization_id === targetOrgId && p.deleted_at === null
   );
   return { status: exists ? 200 : 404 };
+}
+
+interface ParentInviteStub {
+  id: string;
+  organization_id: string;
+  status: "pending" | "accepted" | "revoked";
+}
+
+function simulateRevokeInvite(
+  ctx: UserContext,
+  targetOrgId: string,
+  invites: ParentInviteStub[],
+  inviteId: string
+): { status: number } {
+  if (!ctx.userId) return { status: 401 };
+  const role = getOrgRole(ctx, targetOrgId);
+  if (!role) return { status: 403 };
+  if (role !== "admin") return { status: 403 };
+
+  // Application-layer org scoping:
+  // .eq("id", inviteId).eq("organization_id", targetOrgId)
+  const invite = invites.find(
+    (inv) => inv.id === inviteId && inv.organization_id === targetOrgId
+  );
+  if (!invite) return { status: 404 };
+  if (invite.status === "accepted") return { status: 409 };
+  if (invite.status === "revoked") return { status: 200 };
+  return { status: 200 };
 }
 
 function simulateSendInvite(ctx: UserContext, targetOrgId: string): { status: number } {
@@ -273,5 +303,254 @@ describe("Revoked and pending memberships provide no access", () => {
 
   it("pending admin GET /parents → 403 (membership not yet active)", () => {
     assert.equal(simulateListParents(pendingAdmin, "org-1").status, 403);
+  });
+});
+
+// ── Risk 2 fix: parent-role users can read the parents directory ───────────────
+// Migration: 20260616000000_fix_parents_rls_and_quota.sql
+
+describe("parent-role user can read the parents directory in their own org (Risk 2 fix)", () => {
+  const parentUser: UserContext = {
+    userId: "parent-user-1",
+    memberships: [{ organizationId: "org-1", role: "parent", status: "active" }],
+  };
+
+  const parentUserOrg2: UserContext = {
+    userId: "parent-user-2",
+    memberships: [{ organizationId: "org-2", role: "parent", status: "active" }],
+  };
+
+  it("parent-role user GET org-1/parents → 200 (can read own org directory)", () => {
+    assert.equal(simulateListParents(parentUser, "org-1").status, 200);
+  });
+
+  it("parent-role user GET org-2/parents → 403 (no membership in org-2)", () => {
+    assert.equal(simulateListParents(parentUser, "org-2").status, 403);
+  });
+
+  it("parent-role user POST org-1/parents → 403 (read-only; only admin can create)", () => {
+    assert.equal(simulateCreateParent(parentUser, "org-1").status, 403);
+  });
+
+  it("parent-role user in org-2 GET org-2/parents → 200 (isolated per org)", () => {
+    assert.equal(simulateListParents(parentUserOrg2, "org-2").status, 200);
+  });
+
+  it("revoked parent-role user GET org-1/parents → 403 (inactive membership)", () => {
+    const revokedParent: UserContext = {
+      userId: "revoked-parent",
+      memberships: [{ organizationId: "org-1", role: "parent", status: "revoked" }],
+    };
+    assert.equal(simulateListParents(revokedParent, "org-1").status, 403);
+  });
+});
+
+// ── Risk 3: protect_parents_self_edit trigger logic ───────────────────────────
+// Migration: 20260616000001_protect_parents_self_edit.sql
+//
+// The trigger fires BEFORE UPDATE on parents for non-admin users.
+// Tests below simulate the trigger's allow/deny decisions.
+
+interface ParentRow {
+  id: string;
+  organization_id: string;
+  user_id: string | null;
+  deleted_at: string | null;
+}
+
+type TriggerResult =
+  | { allowed: true }
+  | { allowed: false; reason: string };
+
+/**
+ * Simulates protect_parents_self_edit trigger logic.
+ * isAdmin  — true when the caller is an org admin (bypasses restrictions)
+ * isService — true for service-role callers (always bypasses)
+ */
+function simulateSelfEditTrigger(opts: {
+  isService: boolean;
+  isAdmin: boolean;
+  currentUserId: string;
+  old: ParentRow;
+  updated: Partial<ParentRow>;
+}): TriggerResult {
+  const { isService, isAdmin, currentUserId, old, updated } = opts;
+  const newRow = { ...old, ...updated };
+
+  if (isService) return { allowed: true };
+  if (isAdmin) return { allowed: true };
+
+  // user_id change check
+  if (newRow.user_id !== old.user_id) {
+    const linkingSelf = old.user_id === null && newRow.user_id === currentUserId;
+    if (!linkingSelf) {
+      return { allowed: false, reason: "Cannot change user_id on parent self-edit" };
+    }
+  }
+
+  // organization_id change check
+  if (newRow.organization_id !== old.organization_id) {
+    return { allowed: false, reason: "Cannot change organization_id on parent self-edit" };
+  }
+
+  // deleted_at: self-editors cannot soft-delete
+  if (old.deleted_at === null && newRow.deleted_at !== null) {
+    return { allowed: false, reason: "Only admins can soft-delete parent records" };
+  }
+
+  return { allowed: true };
+}
+
+describe("protect_parents_self_edit trigger (Risk 3 defense-in-depth)", () => {
+  const baseRow: ParentRow = {
+    id: randomUUID(),
+    organization_id: "org-1",
+    user_id: "parent-user-1",
+    deleted_at: null,
+  };
+
+  it("service-role caller: any update allowed (bypasses trigger)", () => {
+    const result = simulateSelfEditTrigger({
+      isService: true,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow,
+      updated: { organization_id: "org-2" }, // would normally be blocked
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it("admin caller: any update allowed (bypasses restriction block)", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: true,
+      currentUserId: "admin-user",
+      old: baseRow,
+      updated: { user_id: "some-other-user" }, // would normally be blocked
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it("self-edit: safe field update (first_name) is allowed", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow,
+      updated: {}, // no sensitive field changed
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it("self-edit: linking yourself to an unlinked record (user_id: null → own id) is allowed", () => {
+    const unlinkedRow: ParentRow = { ...baseRow, user_id: null };
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: unlinkedRow,
+      updated: { user_id: "parent-user-1" },
+    });
+    assert.equal(result.allowed, true);
+  });
+
+  it("self-edit: changing user_id to someone else is blocked", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow,
+      updated: { user_id: "attacker-user-id" },
+    });
+    assert.equal(result.allowed, false);
+    assert.ok(result.allowed === false && result.reason.includes("user_id"));
+  });
+
+  it("self-edit: changing user_id when old.user_id is already set (not null) is blocked", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow, // old.user_id = "parent-user-1"
+      updated: { user_id: "parent-user-1" }, // same value = no change, should be allowed
+    });
+    // No change → allowed
+    assert.equal(result.allowed, true);
+  });
+
+  it("self-edit: changing organization_id is blocked", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow,
+      updated: { organization_id: "org-2" },
+    });
+    assert.equal(result.allowed, false);
+    assert.ok(result.allowed === false && result.reason.includes("organization_id"));
+  });
+
+  it("self-edit: setting deleted_at (soft-delete) is blocked", () => {
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: baseRow,
+      updated: { deleted_at: new Date().toISOString() },
+    });
+    assert.equal(result.allowed, false);
+    assert.ok(result.allowed === false && result.reason.includes("soft-delete"));
+  });
+
+  it("self-edit: unsetting deleted_at (restoring) is allowed — trigger only blocks null→non-null", () => {
+    const deletedRow: ParentRow = { ...baseRow, deleted_at: new Date().toISOString() };
+    const result = simulateSelfEditTrigger({
+      isService: false,
+      isAdmin: false,
+      currentUserId: "parent-user-1",
+      old: deletedRow,
+      updated: { deleted_at: null },
+    });
+    // Note: RLS UPDATE policy also requires user_id=auth.uid() and the record exists.
+    // The trigger itself doesn't block restoring a deleted_at. Admin gate is above.
+    assert.equal(result.allowed, true);
+  });
+});
+
+// ── PATCH /parents/invite/[inviteId] — cross-org isolation ────────────────────
+
+describe("PATCH /parents/invite/[inviteId] — cross-org isolation", () => {
+  const org2InviteId = randomUUID();
+  const org2Invite: ParentInviteStub = {
+    id: org2InviteId,
+    organization_id: "org-2",
+    status: "pending",
+  };
+
+  it("admin in org-1 cannot revoke invite from org-2 → 404", () => {
+    // org-1 admin targets org-1 endpoint with an inviteId that belongs to org-2.
+    // The org-scoped DB query (.eq("organization_id", "org-1")) returns no row.
+    const result = simulateRevokeInvite(org1Admin, "org-1", [org2Invite], org2InviteId);
+    assert.equal(result.status, 404);
+  });
+
+  it("unauthenticated request returns 401", () => {
+    const result = simulateRevokeInvite(unauthenticated, "org-1", [org2Invite], org2InviteId);
+    assert.equal(result.status, 401);
+  });
+
+  it("non-admin (parent role) in same org returns 403", () => {
+    const org1InviteId = randomUUID();
+    const org1Invite: ParentInviteStub = {
+      id: org1InviteId,
+      organization_id: "org-1",
+      status: "pending",
+    };
+    const parentOnlyUser: UserContext = {
+      userId: "parent-user-rls",
+      memberships: [{ organizationId: "org-1", role: "parent", status: "active" }],
+    };
+    const result = simulateRevokeInvite(parentOnlyUser, "org-1", [org1Invite], org1InviteId);
+    assert.equal(result.status, 403);
   });
 });

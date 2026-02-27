@@ -89,7 +89,7 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
       accentFrom: "var(--color-org-secondary-light)",
       accentTo: "var(--color-org-secondary)",
     },
-    ...(hasParentsAccess && (membership?.role === "admin" || membership?.role === "active_member") ? [{
+    ...(hasParentsAccess && (parentsCount ?? 0) > 0 && (membership?.role === "admin" || membership?.role === "active_member" || membership?.role === "parent") ? [{
       label: "Parents",
       value: parentsCount || 0,
       href: `/${orgSlug}/parents`,

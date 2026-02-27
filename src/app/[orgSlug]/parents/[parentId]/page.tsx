@@ -88,6 +88,45 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
   const isSelf = Boolean(currentUserId && parent.user_id === currentUserId);
   const canEdit = canEditPage || isSelf;
 
+  // For admins: look up system access data when the parent has a linked user
+  let systemAccess: { role: string; status: string } | null = null;
+  let memberRecordId: string | null = null;
+  if (canEditPage && parent.user_id) {
+    const [accessResult, memberResult] = await Promise.all([
+      dataClient
+        .from("user_organization_roles")
+        .select("role, status")
+        .eq("organization_id", orgId)
+        .eq("user_id", parent.user_id)
+        .maybeSingle(),
+      dataClient
+        .from("members")
+        .select("id")
+        .eq("organization_id", orgId)
+        .eq("user_id", parent.user_id)
+        .is("deleted_at", null)
+        .maybeSingle(),
+    ]);
+    if (accessResult.data) {
+      systemAccess = { role: accessResult.data.role, status: accessResult.data.status };
+    }
+    if (memberResult.data) {
+      memberRecordId = memberResult.data.id;
+    }
+  }
+
+  const roleLabels: Record<string, string> = {
+    admin: "Admin",
+    active_member: "Active Member",
+    alumni: "Alumni",
+    parent: "Parent",
+  };
+  const statusLabels: Record<string, string> = {
+    active: "Active",
+    pending: "Pending",
+    revoked: "Revoked",
+  };
+
   return (
     <div className="animate-fade-in">
       <PageHeader
@@ -218,6 +257,40 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
           )}
         </Card>
       </div>
+
+      {/* System Access — admin only, shown when parent has a linked user account */}
+      {canEditPage && systemAccess && (
+        <Card className="p-6 mt-6 max-w-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-foreground">System Access</h3>
+              <p className="text-sm text-muted-foreground">This parent has a linked user account</p>
+            </div>
+            {systemAccess.status === "revoked" && (
+              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-lg text-sm font-medium">
+                Access Revoked
+              </span>
+            )}
+          </div>
+          <dl className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <dt className="text-sm text-muted-foreground">System Role</dt>
+              <dd className="text-foreground font-medium">{roleLabels[systemAccess.role] ?? systemAccess.role}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">Access Status</dt>
+              <dd className="text-foreground font-medium">{statusLabels[systemAccess.status] ?? systemAccess.status}</dd>
+            </div>
+          </dl>
+          {memberRecordId && (
+            <div className="pt-4 border-t border-border flex justify-end">
+              <Link href={`/${orgSlug}/members/${memberRecordId}/edit`}>
+                <Button variant="secondary">Manage Access</Button>
+              </Link>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

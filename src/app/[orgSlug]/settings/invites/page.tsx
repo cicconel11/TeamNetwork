@@ -23,7 +23,7 @@ interface Invite {
 
 interface ParentInvite {
   id: string;
-  email: string;
+  email: string | null;
   code: string;
   status: "pending" | "accepted" | "revoked";
   expires_at: string | null;
@@ -97,7 +97,6 @@ export default function InvitesPage() {
   const [newRole, setNewRole] = useState<"active_member" | "admin" | "alumni" | "parent">("active_member");
   const [newUses, setNewUses] = useState<string>("");
   const [newExpires, setNewExpires] = useState<string>("");
-  const [parentEmail, setParentEmail] = useState<string>("");
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -217,12 +216,6 @@ export default function InvitesPage() {
     if (!orgId) return;
 
     if (newRole === "parent") {
-      const email = parentEmail.trim().toLowerCase();
-      if (!email) {
-        setError("Parent invites require an email address.");
-        return;
-      }
-
       setIsCreating(true);
       setError(null);
 
@@ -230,7 +223,7 @@ export default function InvitesPage() {
         const res = await fetch(`/api/organizations/${orgId}/parents/invite`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ expires_at: newExpires ? new Date(newExpires).toISOString() : null }),
         });
 
         const data = await res.json();
@@ -242,7 +235,7 @@ export default function InvitesPage() {
         if (invite) {
           const normalizedInvite: ParentInvite = {
             id: invite.id,
-            email: invite.email,
+            email: invite.email ?? null,
             code: invite.code,
             status: invite.status,
             expires_at: invite.expires_at ?? null,
@@ -258,7 +251,6 @@ export default function InvitesPage() {
         setNewRole("active_member");
         setNewUses("");
         setNewExpires("");
-        setParentEmail("");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to create parent invite");
       } finally {
@@ -303,7 +295,6 @@ export default function InvitesPage() {
       setNewRole("active_member");
       setNewUses("");
       setNewExpires("");
-      setParentEmail("");
     }
 
     setIsCreating(false);
@@ -329,6 +320,23 @@ export default function InvitesPage() {
     setOrgInvites((prev) =>
       prev.map((i) =>
         i.id === inviteId ? { ...i, revoked_at: new Date().toISOString() } : i
+      )
+    );
+  };
+
+  const handleRevokeParentInvite = async (inviteId: string) => {
+    if (!orgId) return;
+    const res = await fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, {
+      method: "PATCH",
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Failed to revoke parent invite");
+      return;
+    }
+    setParentInvites((prev) =>
+      prev.map((i) =>
+        i.id === inviteId ? { ...i, status: "revoked" as const } : i
       )
     );
   };
@@ -518,16 +526,19 @@ export default function InvitesPage() {
 
   const updateAccess = async (userId: string, status: "active" | "revoked") => {
     if (!orgId) return;
-    const supabase = createClient();
-    await supabase
-      .from("user_organization_roles")
-      .update({ status })
-      .eq("organization_id", orgId)
-      .eq("user_id", userId);
-
-    setMemberships((prev) =>
-      prev.map((m) => (m.user_id === userId ? { ...m, status } : m))
-    );
+    const res = await fetch(`/api/organizations/${orgId}/members/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError((data as { error?: string }).error || "Failed to update access");
+    } else {
+      setMemberships((prev) =>
+        prev.map((m) => (m.user_id === userId ? { ...m, status } : m))
+      );
+    }
   };
 
   const canChangeToAlumni = useCallback(() => {
@@ -557,15 +568,14 @@ export default function InvitesPage() {
     setRoleChangeUserId(userId);
     setError(null);
 
-    const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("user_organization_roles")
-      .update({ role: newRole })
-      .eq("organization_id", orgId)
-      .eq("user_id", userId);
-
-    if (updateError) {
-      setError(updateError.message);
+    const res = await fetch(`/api/organizations/${orgId}/members/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError((data as { error?: string }).error || "Failed to update role");
     } else {
       setMemberships((prev) =>
         prev.map((m) => (m.user_id === userId ? { ...m, role: newRole } : m))
@@ -587,15 +597,14 @@ export default function InvitesPage() {
     setRoleChangeUserId(pendingAdminUserId);
     setError(null);
 
-    const supabase = createClient();
-    const { error: updateError } = await supabase
-      .from("user_organization_roles")
-      .update({ role: "admin" })
-      .eq("organization_id", orgId)
-      .eq("user_id", pendingAdminUserId);
-
-    if (updateError) {
-      setError(updateError.message);
+    const res = await fetch(`/api/organizations/${orgId}/members/${pendingAdminUserId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: "admin" }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError((data as { error?: string }).error || "Failed to update role");
     } else {
       setMemberships((prev) =>
         prev.map((m) => (m.user_id === pendingAdminUserId ? { ...m, role: "admin" } : m))
@@ -628,10 +637,7 @@ export default function InvitesPage() {
     }
   };
 
-  const inviteFormLayout =
-    newRole === "parent"
-      ? "grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"
-      : "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4";
+  const inviteFormLayout = "grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4";
 
   const allInvites: InviteItem[] = [
     ...orgInvites.map((invite) => ({
@@ -652,7 +658,6 @@ export default function InvitesPage() {
       created_at: invite.created_at,
       expires_at: invite.expires_at,
       status: invite.status,
-      email: invite.email,
     })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
@@ -817,33 +822,22 @@ export default function InvitesPage() {
                 { value: "parent", label: "Parent" },
               ]}
             />
-            {newRole === "parent" ? (
+            {newRole !== "parent" && (
               <Input
-                label="Parent Email"
-                type="email"
-                value={parentEmail}
-                onChange={(e) => setParentEmail(e.target.value)}
-                placeholder="parent@example.com"
-                autoComplete="email"
+                label="Max Uses"
+                type="number"
+                value={newUses}
+                onChange={(e) => setNewUses(e.target.value)}
+                placeholder="Unlimited"
+                min={1}
               />
-            ) : (
-              <>
-                <Input
-                  label="Max Uses"
-                  type="number"
-                  value={newUses}
-                  onChange={(e) => setNewUses(e.target.value)}
-                  placeholder="Unlimited"
-                  min={1}
-                />
-                <Input
-                  label="Expires On"
-                  type="date"
-                  value={newExpires}
-                  onChange={(e) => setNewExpires(e.target.value)}
-                />
-              </>
             )}
+            <Input
+              label="Expires On"
+              type="date"
+              value={newExpires}
+              onChange={(e) => setNewExpires(e.target.value)}
+            />
           </div>
           {newRole === "alumni" && quota && quota.alumniLimit !== null && quota.alumniCount >= quota.alumniLimit && (
             <p className="text-xs text-amber-600">
@@ -891,9 +885,6 @@ export default function InvitesPage() {
                             <span className="ml-2 text-xs text-emerald-500 font-normal">Copied!</span>
                           )}
                         </div>
-                        {invite.kind === "parent" && invite.email && (
-                          <div className="text-xs text-muted-foreground">{invite.email}</div>
-                        )}
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         <Badge variant={getRoleBadgeVariant(role)}>
@@ -946,6 +937,16 @@ export default function InvitesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRevokeInvite(invite.id)}
+                          className="text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                        >
+                          Revoke
+                        </Button>
+                      )}
+                      {invite.kind === "parent" && !revoked && !expired && !accepted && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRevokeParentInvite(invite.id)}
                           className="text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
                         >
                           Revoke

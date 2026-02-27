@@ -60,10 +60,9 @@ export function SoftDeleteButton({
       }
     }
 
+    router.refresh();
     if (redirectTo) {
       router.push(redirectTo);
-    } else {
-      router.refresh();
     }
   };
 

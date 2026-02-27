@@ -7,6 +7,7 @@ import { safeString } from "@/lib/schemas";
 
 const acceptInviteSchema = z.object({
   code: z.string().min(1).max(200),
+  email: z.string().trim().email().max(320).transform(v => v.toLowerCase()),
   first_name: safeString(100),
   last_name: safeString(100),
   password: z.string().min(8).max(128),
@@ -53,14 +54,14 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Invalid request" }, 400);
   }
 
-  const { code, first_name, last_name, password } = body;
+  const { code, email, first_name, last_name, password } = body;
   const serviceSupabase = createServiceClient();
 
   // Look up invite by code using service client (bypasses RLS)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: invite, error: inviteError } = await (serviceSupabase as any)
     .from("parent_invites")
-    .select("id,organization_id,email,status,expires_at")
+    .select("id,organization_id,status,expires_at")
     .eq("code", code)
     .maybeSingle();
 
@@ -85,40 +86,72 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Invite has expired" }, 410);
   }
 
-  // Create or look up auth user
+  // Atomically claim the invite before any state mutations (TOCTOU protection).
+  // If two concurrent requests both read status='pending' and pass the checks above,
+  // this UPDATE WHERE status='pending' AND expires_at > now() ensures only one proceeds:
+  // the other gets 0 rows back and returns the right status via re-fetch below.
+  // The expiry guard is included here so a race between the read and the claim cannot
+  // result in an expired invite being accepted.
+  const claimNow = new Date().toISOString();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: claimedRows, error: claimError } = await (serviceSupabase as any)
+    .from("parent_invites")
+    .update({ status: "accepted", accepted_at: claimNow })
+    .eq("id", invite.id)
+    .eq("status", "pending")
+    .gt("expires_at", claimNow)
+    .select("id");
+
+  if (claimError) {
+    console.error("[org/parents/invite/accept] Invite claim error:", claimError);
+    return respond({ error: "Failed to process invite" }, 500);
+  }
+
+  if (!claimedRows || claimedRows.length === 0) {
+    // Re-fetch to return an accurate status code (expired vs. already accepted vs. revoked)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: current } = await (serviceSupabase as any)
+      .from("parent_invites")
+      .select("status,expires_at")
+      .eq("id", invite.id)
+      .single();
+    if (current?.status === "accepted") return respond({ error: "Invite already accepted" }, 409);
+    if (current?.status === "revoked")  return respond({ error: "Invite has been revoked" }, 410);
+    return respond({ error: "Invite has expired" }, 410);
+  }
+
+  // Create or look up auth user using the email supplied by the parent at redemption time
   let userId: string;
 
   const { data: createResult, error: createError } = await serviceSupabase.auth.admin.createUser({
-    email: invite.email,
+    email,
     password,
     email_confirm: true,
   });
 
   if (createError) {
-    // AuthApiError status 422 indicates the email is already registered
     const isEmailExists =
       (createError as { status?: number }).status === 422 ||
       createError.code === "email_exists" ||
       createError.code === "user_already_exists";
     if (isEmailExists) {
-      // Look up user by email via auth schema (exact match — auth emails are lowercase)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: existingUsers } = await (serviceSupabase as any)
-        .schema("auth")
-        .from("users")
-        .select("id")
-        .eq("email", invite.email.toLowerCase())
-        .maybeSingle();
-
-      if (!existingUsers?.id) {
-        console.error("[org/parents/invite/accept] Could not find existing user:", invite.email);
-        return respond({ error: "Failed to create user account" }, 500);
-      }
-      userId = existingUsers.id;
-    } else {
-      console.error("[org/parents/invite/accept] Auth user creation error:", createError);
-      return respond({ error: "Failed to create user account" }, 500);
+      // Reject rather than silently granting org membership to an email the caller may not own.
+      // An existing user must sign in and accept the invite via an authenticated endpoint.
+      return respond(
+        { error: "This email is already registered. Please sign in to accept this invite." },
+        409
+      );
     }
+    // Transient/unexpected error — roll back the invite claim so the parent can retry.
+    // Best-effort: if the rollback itself fails we still return 500 (no nested error handling).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("parent_invites")
+      .update({ status: "pending", accepted_at: null })
+      .eq("id", invite.id)
+      .eq("status", "accepted");
+    console.error("[org/parents/invite/accept] Auth user creation error:", createError);
+    return respond({ error: "Failed to create user account. Please try again." }, 500);
   } else {
     userId = createResult.user.id;
   }
@@ -131,7 +164,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     .from("parents")
     .select("id")
     .eq("organization_id", invite.organization_id)
-    .ilike("email", sanitizeIlikeInput(invite.email))
+    .ilike("email", sanitizeIlikeInput(email))
     .is("deleted_at", null)
     .maybeSingle();
 
@@ -159,7 +192,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         user_id: userId,
         first_name,
         last_name,
-        email: invite.email,
+        email,
       })
       .select("id")
       .single();
@@ -203,18 +236,6 @@ export async function POST(req: Request, { params }: RouteParams) {
       console.error("[org/parents/invite/accept] Role insert error:", roleError);
       return respond({ error: "Failed to create membership" }, 500);
     }
-  }
-
-  // Mark invite as accepted
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateError } = await (serviceSupabase as any)
-    .from("parent_invites")
-    .update({ status: "accepted", accepted_at: new Date().toISOString() })
-    .eq("id", invite.id);
-
-  if (updateError) {
-    // Non-fatal: parent record already created; log but don't fail
-    console.error("[org/parents/invite/accept] Invite update error:", updateError);
   }
 
   return respond({ success: true, parentId });

@@ -172,9 +172,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     orgName = org.name;
   }
 
-  // Use the RPC function to create invite
+  // Use the RPC function to create invite (user-authenticated client so auth.uid() works)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invite, error: rpcError } = await (ctx.serviceSupabase as any).rpc("create_enterprise_invite", {
+  const { data: invite, error: rpcError } = await (supabase as any).rpc("create_enterprise_invite", {
     p_enterprise_id: ctx.enterpriseId,
     p_organization_id: organizationId ?? null,
     p_role: role,
@@ -184,7 +184,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (rpcError) {
     console.error("[enterprise/invites POST] RPC error:", rpcError);
-    return respond({ error: "Failed to create invite" }, 500);
+    return respond({ error: rpcError.message || "Failed to create invite" }, 400);
   }
 
   logEnterpriseAuditAction({

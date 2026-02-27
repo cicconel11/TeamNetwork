@@ -3,7 +3,7 @@
  *
  * Key divergence from alumni directory:
  * - alumni role CANNOT read parents list (alumni directory allows alumni to read alumni)
- * - parent role CANNOT read parents list (maps to alumni-level; no special perms)
+ * - parent role CAN read parents list (added to SELECT policy in migration 20260616)
  * - Legacy "member" role CAN read parents list (raw DB value before normalization)
  *
  * Run: node --test --loader ./tests/ts-loader.js tests/parents-access.test.ts
@@ -31,7 +31,10 @@ function canReadParents(req: AccessRequest): { status: number } {
   if (!req.userId) return { status: 401 };
   if (req.status !== "active") return { status: 403 };
   const allowed =
-    req.role === "admin" || req.role === "active_member" || req.role === "member";
+    req.role === "admin" ||
+    req.role === "active_member" ||
+    req.role === "member" ||
+    req.role === "parent";
   return { status: allowed ? 200 : 403 };
 }
 
@@ -110,11 +113,11 @@ describe("GET /parents — access control matrix", () => {
     );
   });
 
-  it("returns 403 for parent role — parent cannot view the parents directory", () => {
-    // parent role maps to alumni-level access; no special read perms on parents table
+  it("returns 200 for parent role — parents can read their own org's directory", () => {
+    // parent role was added to the SELECT policy in migration 20260616
     assert.equal(
       canReadParents({ userId: "u1", role: "parent", status: "active" }).status,
-      403
+      200
     );
   });
 

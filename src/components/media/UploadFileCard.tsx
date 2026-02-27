@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Input, ProgressBar } from "@/components/ui";
+import { ProgressBar } from "@/components/ui";
 import { TagInput } from "./TagInput";
 import type { UploadFileEntry, FileUploadStatus } from "@/hooks/useGalleryUpload";
 
@@ -108,17 +108,6 @@ export function UploadFileCard({
             )}
           </div>
         </div>
-
-        {/* Title input */}
-        {isEditable && (
-          <Input
-            value={entry.title}
-            onChange={(e) => onUpdateField(entry.id, "title", e.target.value)}
-            placeholder="Title"
-            maxLength={200}
-            className="!py-1.5 !px-2.5 !text-xs !rounded-lg"
-          />
-        )}
 
         {/* Tags */}
         {isEditable && (

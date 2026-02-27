@@ -104,8 +104,9 @@ interface GetParentsResult {
 function simulateGetParents(req: GetParentsRequest): GetParentsResult {
   if (!req.userId) return { status: 401, error: "Unauthorized" };
 
+  // Mirrors route: admin, active_member, and parent can read the parents directory.
   const canRead =
-    req.role === "admin" || req.role === "active_member";
+    req.role === "admin" || req.role === "active_member" || req.role === "parent";
   if (!canRead) return { status: 403, error: "Forbidden" };
 
   const limit = req.limit ?? 50;
@@ -315,6 +316,56 @@ function simulateCreateInvite(req: CreateInviteRequest): CreateInviteResult {
   return { status: 200, invite };
 }
 
+// ── PATCH /parents/invite/[inviteId] simulation ───────────────────────────────
+
+type InviteOrFetchError = ParentInviteRow | null | "fetch_error";
+
+interface RevokeInviteRequest {
+  organizationId: string;
+  inviteId: string;
+  userId: string | null;
+  role: OrgRole;
+  invite: InviteOrFetchError;
+  updateError?: boolean;
+}
+
+interface RevokeInviteResult {
+  status: number;
+  success?: boolean;
+  error?: string;
+}
+
+function simulateRevokeInvite(req: RevokeInviteRequest): RevokeInviteResult {
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!UUID_PATTERN.test(req.organizationId)) {
+    return { status: 400, error: "Invalid organization id" };
+  }
+  if (!UUID_PATTERN.test(req.inviteId)) {
+    return { status: 400, error: "Invalid invite id" };
+  }
+
+  if (!req.userId) return { status: 401, error: "Unauthorized" };
+  if (req.role !== "admin") return { status: 403, error: "Forbidden" };
+
+  if (req.invite === "fetch_error") {
+    return { status: 500, error: "Failed to fetch invite" };
+  }
+  if (!req.invite) return { status: 404, error: "Invite not found" };
+
+  if (req.invite.status === "accepted") {
+    return { status: 409, error: "Invite already accepted — cannot revoke" };
+  }
+  if (req.invite.status === "revoked") {
+    return { status: 200, success: true };
+  }
+
+  if (req.updateError) return { status: 500, error: "Failed to revoke invite" };
+
+  return { status: 200, success: true };
+}
+
 // ── POST /parents/invite/accept simulation ────────────────────────────────────
 
 interface AcceptInviteRequest {
@@ -379,8 +430,17 @@ describe("GET /api/organizations/[organizationId]/parents", () => {
     assert.strictEqual(result.error, "Forbidden");
   });
 
-  it("returns 403 for parent role (maps to alumni-level)", () => {
+  it("returns 200 for parent role (parent-role user can read the parents directory)", () => {
+    // RLS fix 20260616000000 added 'parent' to the SELECT policy; route must match.
     const result = simulateGetParents({ userId: "u1", role: "parent", parents: [] });
+    assert.strictEqual(result.status, 200);
+    assert.deepStrictEqual(result.parents, []);
+    assert.strictEqual(result.total, 0);
+  });
+
+  it("returns 403 for authenticated user with no membership in this org (role=null)", () => {
+    // Covers Scenario 1 cross-org attack: user from org-A tries org-B; getOrgMemberRole returns null.
+    const result = simulateGetParents({ userId: "u1", role: null, parents: [] });
     assert.strictEqual(result.status, 403);
     assert.strictEqual(result.error, "Forbidden");
   });
@@ -878,5 +938,266 @@ describe("POST /api/organizations/[organizationId]/parents/invite/accept", () =>
     });
     assert.strictEqual(result.status, 500);
     assert.strictEqual(result.error, "Failed to create parent record");
+  });
+});
+
+// ── PATCH /parents/invite/[inviteId] tests ────────────────────────────────────
+
+describe("PATCH /api/organizations/[organizationId]/parents/invite/[inviteId]", () => {
+  const validOrgId = randomUUID();
+  const validInviteId = randomUUID();
+
+  it("returns 401 for unauthenticated", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: null,
+      role: null,
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 401);
+  });
+
+  it("returns 403 for active_member", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "m1",
+      role: "active_member",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 403);
+  });
+
+  it("returns 403 for parent role", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "p1",
+      role: "parent",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 403);
+  });
+
+  it("returns 400 for invalid organizationId UUID", () => {
+    const result = simulateRevokeInvite({
+      organizationId: "not-a-uuid",
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 400);
+    assert.strictEqual(result.error, "Invalid organization id");
+  });
+
+  it("returns 400 for invalid inviteId UUID", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: "not-a-uuid",
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 400);
+    assert.strictEqual(result.error, "Invalid invite id");
+  });
+
+  it("returns 404 if invite not found", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: null,
+    });
+    assert.strictEqual(result.status, 404);
+  });
+
+  it("returns 404 if invite belongs to a different org (org-scoped DB query returns nothing)", () => {
+    // Route queries .eq("organization_id", organizationId) — cross-org invite is invisible.
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: null, // org-scoped query returns no row for an invite owned by another org
+    });
+    assert.strictEqual(result.status, 404);
+  });
+
+  it("returns 409 if invite already accepted", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "accepted" }),
+    });
+    assert.strictEqual(result.status, 409);
+    assert.ok(
+      result.error?.includes("cannot revoke"),
+      `expected 'cannot revoke' in error, got: ${result.error}`
+    );
+  });
+
+  it("returns 200 (idempotent) if invite already revoked", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "revoked" }),
+    });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns 200 and revokes a pending invite", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "pending" }),
+    });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns 500 on DB fetch error", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: "fetch_error",
+    });
+    assert.strictEqual(result.status, 500);
+  });
+
+  it("returns 500 on DB update error", () => {
+    const result = simulateRevokeInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "pending" }),
+      updateError: true,
+    });
+    assert.strictEqual(result.status, 500);
+  });
+});
+
+// ── get_parents_relationship_options RPC simulation ───────────────────────────
+
+/**
+ * Simulates the get_parents_relationship_options DB function:
+ *   SELECT DISTINCT relationship FROM parents
+ *   WHERE organization_id = p_org_id AND deleted_at IS NULL AND relationship IS NOT NULL
+ *   ORDER BY 1;
+ */
+function simulateGetRelationshipOptions(
+  parents: Array<{ relationship: string | null; deleted_at: string | null }>
+): string[] {
+  const seen = new Set<string>();
+  for (const p of parents) {
+    if (p.deleted_at === null && p.relationship !== null) {
+      seen.add(p.relationship);
+    }
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+describe("get_parents_relationship_options RPC", () => {
+  it("returns empty array when no parents exist", () => {
+    const result = simulateGetRelationshipOptions([]);
+    assert.deepStrictEqual(result, []);
+  });
+
+  it("returns empty array when all relationships are null", () => {
+    const rows = [
+      { relationship: null, deleted_at: null },
+      { relationship: null, deleted_at: null },
+    ];
+    const result = simulateGetRelationshipOptions(rows);
+    assert.deepStrictEqual(result, []);
+  });
+
+  it("excludes soft-deleted rows from relationship options", () => {
+    const rows = [
+      { relationship: "mother", deleted_at: new Date().toISOString() },
+      { relationship: "father", deleted_at: null },
+    ];
+    const result = simulateGetRelationshipOptions(rows);
+    assert.deepStrictEqual(result, ["father"]);
+  });
+
+  it("deduplicates relationship values (DISTINCT)", () => {
+    const rows = [
+      { relationship: "mother", deleted_at: null },
+      { relationship: "father", deleted_at: null },
+      { relationship: "mother", deleted_at: null },
+      { relationship: "mother", deleted_at: null },
+    ];
+    const result = simulateGetRelationshipOptions(rows);
+    assert.deepStrictEqual(result, ["father", "mother"]);
+  });
+
+  it("returns values sorted alphabetically (ORDER BY 1)", () => {
+    const rows = [
+      { relationship: "stepfather", deleted_at: null },
+      { relationship: "aunt", deleted_at: null },
+      { relationship: "mother", deleted_at: null },
+      { relationship: "guardian", deleted_at: null },
+    ];
+    const result = simulateGetRelationshipOptions(rows);
+    assert.deepStrictEqual(result, ["aunt", "guardian", "mother", "stepfather"]);
+  });
+
+  it("does not include null-relationship rows in the result", () => {
+    const rows = [
+      { relationship: "mother", deleted_at: null },
+      { relationship: null, deleted_at: null },
+      { relationship: "father", deleted_at: null },
+    ];
+    const result = simulateGetRelationshipOptions(rows);
+    assert.ok(!result.includes("null" as string), "null strings must not appear");
+    assert.strictEqual(result.length, 2);
+  });
+});
+
+// ── Pagination (first page) ───────────────────────────────────────────────────
+
+describe("GET /api/organizations/[organizationId]/parents — first-page pagination", () => {
+  it("returns first page with correct slice and total count", () => {
+    const parents = Array.from({ length: 5 }, (_, i) =>
+      makeParent({ last_name: `Person${i}` })
+    );
+    const result = simulateGetParents({ userId: "u1", role: "admin", parents, limit: 2, offset: 0 });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.total, 5, "total should reflect all matching rows");
+    assert.strictEqual(result.parents!.length, 2, "page should contain limit rows");
+  });
+
+  it("total reflects full count regardless of page size", () => {
+    const parents = Array.from({ length: 10 }, () => makeParent());
+    // Fetch page 1 (limit=3, offset=0)
+    const page1 = simulateGetParents({ userId: "u1", role: "admin", parents, limit: 3, offset: 0 });
+    assert.strictEqual(page1.total, 10);
+    assert.strictEqual(page1.parents!.length, 3);
+
+    // Fetch page 4 (limit=3, offset=9) — last page has only 1 row
+    const page4 = simulateGetParents({ userId: "u1", role: "admin", parents, limit: 3, offset: 9 });
+    assert.strictEqual(page4.total, 10);
+    assert.strictEqual(page4.parents!.length, 1);
+  });
+
+  it("returns empty array for offset beyond total count", () => {
+    const parents = Array.from({ length: 3 }, () => makeParent());
+    const result = simulateGetParents({ userId: "u1", role: "admin", parents, limit: 50, offset: 100 });
+    assert.strictEqual(result.total, 3);
+    assert.deepStrictEqual(result.parents, []);
   });
 });

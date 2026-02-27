@@ -27,7 +27,7 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/chat", label: "Chat", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/feed", label: "Feed", icon: FeedIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni", "parent"], requiresAlumni: true },
-  { href: "/parents", label: "Parents", icon: ParentsIcon, roles: ["admin", "active_member"], requiresParents: true },
+  { href: "/parents", label: "Parents", icon: ParentsIcon, roles: ["admin", "active_member", "parent"], requiresParents: true },
   { href: "/mentorship", label: "Mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/workouts", label: "Workouts", icon: DumbbellIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/competition", label: "Competition", icon: AwardIcon, roles: ["admin", "active_member", "alumni", "parent"] },

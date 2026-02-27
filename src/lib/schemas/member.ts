@@ -49,6 +49,19 @@ export type NewAlumniForm = z.infer<typeof newAlumniSchema>;
 export const editAlumniSchema = newAlumniSchema;
 export type EditAlumniForm = z.infer<typeof editAlumniSchema>;
 
+// Valid relationship types for parents/guardians.
+// Matches the Select options in NewParentForm and EditParentForm.
+export const PARENT_RELATIONSHIPS = [
+  "Mother",
+  "Father",
+  "Guardian",
+  "Stepmother",
+  "Stepfather",
+  "Grandparent",
+  "Other",
+] as const;
+export type ParentRelationship = (typeof PARENT_RELATIONSHIPS)[number];
+
 // Parent/guardian form
 export const newParentSchema = z.object({
   first_name: safeString(100),
@@ -58,7 +71,19 @@ export const newParentSchema = z.object({
   photo_url: optionalHttpsUrlSchema,
   linkedin_url: optionalHttpsUrlSchema,
   student_name: optionalSafeString(200),
-  relationship: optionalSafeString(100),
+  // Accepts null (API sends null for empty fields) or "" (react-hook-form Select value).
+  // Runtime refine enforces that non-empty values must match a PARENT_RELATIONSHIPS option.
+  // Using string|null|undefined avoids react-hook-form generic inference issues with literal unions.
+  relationship: z
+    .string()
+    .trim()
+    .max(100)
+    .nullable()
+    .optional()
+    .refine(
+      (v) => !v || (PARENT_RELATIONSHIPS as readonly string[]).includes(v),
+      { message: "Please select a valid relationship type" }
+    ),
   notes: optionalSafeString(1000),
 });
 export type NewParentForm = z.infer<typeof newParentSchema>;

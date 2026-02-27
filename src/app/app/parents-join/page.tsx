@@ -10,6 +10,7 @@ import { Button, Input, Card } from "@/components/ui";
 import { safeString } from "@/lib/schemas";
 
 const parentsJoinSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address").max(320).transform(v => v.toLowerCase()),
   first_name: safeString(100),
   last_name: safeString(100),
   password: z.string().min(8, "Password must be at least 8 characters").max(128),
@@ -56,7 +57,7 @@ function ParentsJoinFormComponent() {
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Invalid Link</h2>
             <p className="text-muted-foreground">
-              This invite link is missing required information. Please use the link sent to your email.
+              This invite link is missing required information. Please use the link provided by your organization.
             </p>
           </Card>
         </main>
@@ -106,6 +107,7 @@ function ParentsJoinFormComponent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
+          email: data.email,
           first_name: data.first_name,
           last_name: data.last_name,
           password: data.password,
@@ -161,6 +163,13 @@ function ParentsJoinFormComponent() {
 
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-4">
+              <Input
+                label="Email"
+                type="email"
+                autoComplete="email"
+                error={errors.email?.message}
+                {...register("email")}
+              />
               <Input
                 label="First Name"
                 type="text"

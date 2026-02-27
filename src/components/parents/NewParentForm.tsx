@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card, Button, Input, Textarea } from "@/components/ui";
+import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { newParentSchema, type NewParentForm as NewParentFormData } from "@/lib/schemas/member";
+import { newParentSchema, type NewParentForm as NewParentFormData, PARENT_RELATIONSHIPS } from "@/lib/schemas/member";
 
 interface NewParentFormProps {
   orgId: string;
@@ -113,10 +113,13 @@ export function NewParentForm({ orgId, orgSlug }: NewParentFormProps) {
               error={errors.student_name?.message}
               {...register("student_name")}
             />
-            <Input
+            <Select
               label="Relationship"
-              placeholder="e.g., Mother, Father, Guardian"
               error={errors.relationship?.message}
+              options={[
+                { value: "", label: "Select relationship" },
+                ...PARENT_RELATIONSHIPS.map((r) => ({ value: r, label: r })),
+              ]}
               {...register("relationship")}
             />
           </div>

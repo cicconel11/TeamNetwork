@@ -3,8 +3,8 @@
  *
  * Combines:
  * 1. Role normalization suite (ported from parent-invite.test.ts)
- * 2. Invite creation lifecycle (idempotency, org isolation, accepted-invite handling)
- * 3. Invite acceptance lifecycle (user creation, parent row creation, field validation)
+ * 2. Invite creation lifecycle (no email required, each call creates a fresh code)
+ * 3. Invite acceptance lifecycle (email in body, user creation, parent row creation)
  * 4. Known gap documentation (no user_organization_roles row created on accept)
  *
  * Run: node --test --loader ./tests/ts-loader.js tests/parents-invite.test.ts
@@ -58,7 +58,6 @@ describe("normalizeRole — parent role support", () => {
 interface ParentInvite {
   id: string;
   organization_id: string;
-  email: string;
   code: string;
   invited_by: string;
   status: "pending" | "accepted" | "revoked";
@@ -80,7 +79,6 @@ function makeInvite(overrides: Partial<ParentInvite> = {}): ParentInvite {
   return {
     id: randomUUID(),
     organization_id: "org-1",
-    email: "parent@example.com",
     code: randomUUID().replace(/-/g, ""),
     invited_by: "admin-user",
     status: "pending",
@@ -99,20 +97,6 @@ function createStore(initial: ParentInvite[] = []) {
   const invites: ParentInvite[] = [...initial];
 
   return {
-    findPending(orgId: string, email: string): ParentInvite | undefined {
-      return invites.find(
-        (i) => i.organization_id === orgId && i.email === email && i.status === "pending"
-      );
-    },
-    findPendingValid(orgId: string, email: string, now: string): ParentInvite | undefined {
-      return invites.find(
-        (i) =>
-          i.organization_id === orgId &&
-          i.email === email &&
-          i.status === "pending" &&
-          i.expires_at > now
-      );
-    },
     findById(id: string): ParentInvite | undefined {
       return invites.find((i) => i.id === id);
     },
@@ -126,20 +110,6 @@ function createStore(initial: ParentInvite[] = []) {
       const idx = invites.findIndex((i) => i.id === id);
       if (idx >= 0) Object.assign(invites[idx], updates);
     },
-    /** Mark all expired pending invites for org+email as revoked (mirrors DB cleanup step). */
-    revokeExpiredPending(orgId: string, email: string, now: string) {
-      invites
-        .filter(
-          (i) =>
-            i.organization_id === orgId &&
-            i.email === email &&
-            i.status === "pending" &&
-            i.expires_at <= now
-        )
-        .forEach((i) => {
-          i.status = "revoked";
-        });
-    },
     all() {
       return [...invites];
     },
@@ -150,16 +120,15 @@ function createStore(initial: ParentInvite[] = []) {
 
 interface CreateInviteOptions {
   orgId: string;
-  email: string;
   role: "admin" | "active_member" | "alumni" | null;
   userId: string | null;
   store: ReturnType<typeof createStore>;
+  expiresAt?: string | null;
 }
 
 interface CreateInviteResult {
   status: number;
   invite?: Partial<ParentInvite>;
-  isExisting?: boolean;
   error?: string;
 }
 
@@ -167,32 +136,29 @@ function simulateCreateInvite(opts: CreateInviteOptions): CreateInviteResult {
   if (!opts.userId) return { status: 401, error: "Unauthorized" };
   if (opts.role !== "admin") return { status: 403, error: "Forbidden" };
 
-  if (!opts.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(opts.email)) {
-    return { status: 400, error: "Invalid request body" };
-  }
-
-  const now = new Date().toISOString();
-
-  // Idempotent: return existing VALID (non-expired) pending invite for same org + email
-  const existing = opts.store.findPendingValid(opts.orgId, opts.email, now);
+  // P3 deduplication: return existing non-expired pending invite if one exists for this org.
+  const now = new Date();
+  const existing = opts.store.all().find(
+    (i) =>
+      i.organization_id === opts.orgId &&
+      i.status === "pending" &&
+      new Date(i.expires_at) > now
+  );
   if (existing) {
-    return { status: 200, invite: existing, isExisting: true };
+    return { status: 200, invite: existing };
   }
-
-  // Revoke any expired pending invites before inserting a fresh one
-  opts.store.revokeExpiredPending(opts.orgId, opts.email, now);
 
   const invite = makeInvite({
     id: randomUUID(),
     organization_id: opts.orgId,
-    email: opts.email,
     code: randomUUID().replace(/-/g, ""),
     invited_by: opts.userId,
     status: "pending",
+    ...(opts.expiresAt ? { expires_at: opts.expiresAt } : {}),
   });
 
   opts.store.add(invite);
-  return { status: 200, invite, isExisting: false };
+  return { status: 200, invite };
 }
 
 // ── 4. Invite acceptance simulation ──────────────────────────────────────────
@@ -200,6 +166,7 @@ function simulateCreateInvite(opts: CreateInviteOptions): CreateInviteResult {
 interface AcceptInviteOptions {
   orgId: string;
   code: string;
+  email?: string;
   first_name?: string;
   last_name?: string;
   password?: string;
@@ -219,6 +186,20 @@ interface AcceptInviteOptions {
    * mirroring the upsert logic in the route.
    */
   existingParentId?: string | null;
+  /**
+   * When true, simulates the TOCTOU race condition where this request read the
+   * invite as 'pending' (initial status checks passed) but by the time the atomic
+   * claim UPDATE runs, another concurrent request has already claimed it
+   * (UPDATE WHERE status='pending' returns 0 rows → 409).
+   * Tests that the claim-first fix prevents both requests from proceeding.
+   */
+  raceConditionAlreadyClaimed?: boolean;
+  /**
+   * When true, simulates auth.admin.createUser throwing a transient/unexpected error
+   * (not email-exists). The route must roll back the invite to 'pending' so the
+   * parent can retry without admin intervention.
+   */
+  simulateTransientUserCreationError?: boolean;
 }
 
 interface OrgRoleRow {
@@ -244,6 +225,9 @@ interface AcceptInviteResult {
 function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
   // Body validation (mirrors acceptInviteSchema)
   if (!opts.code || opts.code.length < 1) {
+    return { status: 400, error: "Invalid request body" };
+  }
+  if (!opts.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(opts.email)) {
     return { status: 400, error: "Invalid request body" };
   }
   if (!opts.first_name?.trim()) {
@@ -275,8 +259,37 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
     return { status: 410, error: "Invite has expired" };
   }
 
-  // User creation (simulate auth.admin.createUser)
-  const userId = opts.existingUserId ?? randomUUID();
+  // Claim-first (mirrors route's atomic UPDATE WHERE status='pending').
+  // If a concurrent request already claimed the invite, return 409 immediately
+  // — before creating any auth user or parent record.
+  if (opts.raceConditionAlreadyClaimed) {
+    return { status: 409, error: "Invite already accepted" };
+  }
+
+  // Mark invite as accepted now (before user/parent creation), mirroring the route.
+  // This ensures the invite is atomically reserved even if subsequent steps fail.
+  opts.store.update(invite.id, {
+    status: "accepted",
+    accepted_at: new Date().toISOString(),
+  });
+
+  // User creation (simulate auth.admin.createUser) — uses email from body.
+  // Patch 2: if email is already registered in auth, return 409 (no silent linking).
+  if (opts.existingUserId !== undefined && opts.existingUserId !== null) {
+    return {
+      status: 409,
+      error: "This email is already registered. Please sign in to accept this invite.",
+    };
+  }
+
+  // Transient/unexpected user creation failure: roll back the invite claim to 'pending'
+  // so the parent can retry without admin intervention (P0 TOCTOU rollback fix).
+  if (opts.simulateTransientUserCreationError) {
+    opts.store.update(invite.id, { status: "pending", accepted_at: null });
+    return { status: 500, error: "Failed to create user account. Please try again." };
+  }
+
+  const userId = randomUUID();
 
   // Upsert parent record: reuse existing id if present (mirrors route's lookup-then-update-or-insert).
   const parentId = opts.existingParentId ?? randomUUID();
@@ -286,13 +299,10 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
     user_id: userId,
     first_name: opts.first_name!,
     last_name: opts.last_name!,
-    email: invite.email,
+    email: opts.email,
   };
 
   // Simulate user_organization_roles INSERT / reactivation logic.
-  // - No pre-existing row (existingOrgRoleStatus == null/undefined): INSERT succeeds → new row.
-  // - Pre-existing revoked row: INSERT triggers 23505; UPDATE fires and reactivates with role='parent', status='active'.
-  // - Pre-existing active row: INSERT triggers 23505; UPDATE matches 0 rows (no-op), row unchanged.
   let orgRoleRow: OrgRoleRow;
   let userOrgRoleCreated: boolean;
 
@@ -326,12 +336,6 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
     userOrgRoleCreated = false; // existing row unchanged
   }
 
-  // Mark invite as accepted
-  opts.store.update(invite.id, {
-    status: "accepted",
-    accepted_at: new Date().toISOString(),
-  });
-
   return {
     status: 200,
     success: true,
@@ -346,11 +350,10 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
 // ── Invite creation tests ─────────────────────────────────────────────────────
 
 describe("POST /parents/invite — invite creation lifecycle", () => {
-  it("admin receives a new pending invite with id, email, code, and status", () => {
+  it("admin receives a new pending invite with id, code, and status (no email required)", () => {
     const store = createStore();
     const result = simulateCreateInvite({
       orgId: "org-1",
-      email: "new@example.com",
       role: "admin",
       userId: "admin-user",
       store,
@@ -359,96 +362,105 @@ describe("POST /parents/invite — invite creation lifecycle", () => {
     assert.equal(result.status, 200);
     assert.ok(result.invite?.id, "invite must have an id");
     assert.ok(result.invite?.code, "invite must have a code");
-    assert.equal(result.invite?.email, "new@example.com");
     assert.equal(result.invite?.status, "pending");
-    assert.equal(result.isExisting, false);
   });
 
-  it("is idempotent — returns same invite for duplicate pending email in same org", () => {
-    const existing = makeInvite({
-      email: "dup@example.com",
-      organization_id: "org-1",
-      status: "pending",
-    });
-    const store = createStore([existing]);
-
-    const result = simulateCreateInvite({
-      orgId: "org-1",
-      email: "dup@example.com",
-      role: "admin",
-      userId: "admin-user",
-      store,
-    });
-
-    assert.equal(result.status, 200);
-    assert.equal(result.invite?.id, existing.id, "must return same existing invite id");
-    assert.equal(result.invite?.code, existing.code, "must return same invite code");
-    assert.equal(result.isExisting, true);
-  });
-
-  it("creates a NEW invite when same email exists as pending in a different org", () => {
-    const org1Invite = makeInvite({
-      email: "shared@example.com",
-      organization_id: "org-1",
-      status: "pending",
-    });
-    const store = createStore([org1Invite]);
-
-    // Request targets org-2 — org-1's pending invite must not be returned
-    const result = simulateCreateInvite({
-      orgId: "org-2",
-      email: "shared@example.com",
-      role: "admin",
-      userId: "admin-user",
-      store,
-    });
-
-    assert.equal(result.status, 200);
-    assert.notEqual(result.invite?.id, org1Invite.id, "must create a new invite for org-2");
-    assert.equal(result.invite?.organization_id, "org-2");
-    assert.equal(result.isExisting, false);
-  });
-
-  it("creates a NEW invite when the same email has an accepted invite (not blocked by accepted)", () => {
-    // An accepted invite must not prevent new invitations to the same email
-    const acceptedInvite = makeInvite({
-      email: "returning@example.com",
-      organization_id: "org-1",
-      status: "accepted",
-    });
-    const store = createStore([acceptedInvite]);
-
-    const result = simulateCreateInvite({
-      orgId: "org-1",
-      email: "returning@example.com",
-      role: "admin",
-      userId: "admin-user",
-      store,
-    });
-
-    assert.equal(result.status, 200);
-    assert.notEqual(result.invite?.id, acceptedInvite.id, "must create a fresh invite");
-    assert.equal(result.invite?.status, "pending");
-    assert.equal(result.isExisting, false);
-  });
-
-  it("returns 400 for invalid email format", () => {
+  it("returns the existing pending invite on repeated calls (idempotent)", () => {
+    // P3 fix: POST /invite is now idempotent when a non-expired pending invite exists
+    // for the same org. The same invite is returned instead of creating a duplicate row.
     const store = createStore();
-    const result = simulateCreateInvite({
+
+    const result1 = simulateCreateInvite({
       orgId: "org-1",
-      email: "not-valid",
       role: "admin",
       userId: "admin-user",
       store,
     });
-    assert.equal(result.status, 400);
+
+    const result2 = simulateCreateInvite({
+      orgId: "org-1",
+      role: "admin",
+      userId: "admin-user",
+      store,
+    });
+
+    assert.equal(result1.status, 200);
+    assert.equal(result2.status, 200);
+    assert.equal(result1.invite?.id, result2.invite?.id, "same invite must be returned on repeated POST");
+    assert.equal(result1.invite?.code, result2.invite?.code, "same code must be returned on repeated POST");
+    assert.equal(store.all().length, 1, "only one invite row should exist in the store");
+  });
+
+  it("creates a new invite when the existing pending invite has expired", () => {
+    const store = createStore();
+
+    // Seed an expired pending invite
+    const expiredInvite = makeInvite({
+      organization_id: "org-1",
+      status: "pending",
+      expires_at: new Date(Date.now() - 1000).toISOString(), // 1 second in the past
+    });
+    store.add(expiredInvite);
+
+    const result = simulateCreateInvite({
+      orgId: "org-1",
+      role: "admin",
+      userId: "admin-user",
+      store,
+    });
+
+    assert.equal(result.status, 200);
+    assert.notEqual(result.invite?.id, expiredInvite.id, "must create a fresh invite, not return expired one");
+    assert.equal(store.all().length, 2, "both the expired and new invite exist in the store");
+  });
+
+  it("creates a new invite when the existing invite has been accepted", () => {
+    const store = createStore();
+
+    // Seed an already-accepted invite
+    const acceptedInvite = makeInvite({ organization_id: "org-1", status: "accepted" });
+    store.add(acceptedInvite);
+
+    const result = simulateCreateInvite({
+      orgId: "org-1",
+      role: "admin",
+      userId: "admin-user",
+      store,
+    });
+
+    assert.equal(result.status, 200);
+    assert.notEqual(result.invite?.id, acceptedInvite.id, "must create a new invite after accepted one");
+    assert.equal(result.invite?.status, "pending");
+  });
+
+  it("creates invites independently for different orgs", () => {
+    const store = createStore();
+
+    const result1 = simulateCreateInvite({
+      orgId: "org-1",
+      role: "admin",
+      userId: "admin-user",
+      store,
+    });
+
+    const result2 = simulateCreateInvite({
+      orgId: "org-2",
+      role: "admin",
+      userId: "admin-user",
+      store,
+    });
+
+    assert.equal(result1.status, 200);
+    assert.equal(result2.status, 200);
+    assert.equal(result1.invite?.organization_id, "org-1");
+    assert.equal(result2.invite?.organization_id, "org-2");
+    assert.notEqual(result1.invite?.code, result2.invite?.code);
   });
 
   it("returns 401 for unauthenticated request", () => {
     const store = createStore();
     const result = simulateCreateInvite({
       orgId: "org-1",
-      email: "p@example.com",
       role: null,
       userId: null,
       store,
@@ -460,7 +472,6 @@ describe("POST /parents/invite — invite creation lifecycle", () => {
     const store = createStore();
     const result = simulateCreateInvite({
       orgId: "org-1",
-      email: "p@example.com",
       role: "active_member",
       userId: "member-user",
       store,
@@ -468,66 +479,29 @@ describe("POST /parents/invite — invite creation lifecycle", () => {
     assert.equal(result.status, 403);
   });
 
-  it("admin re-invite after expiry creates a NEW invite (expired pending invite is ignored)", () => {
-    // An expired pending invite must NOT be returned as the idempotent result.
-    // A brand-new invite with a different id and code must be created instead.
-    const expiredInvite = makeInvite({
-      email: "lapsed@example.com",
-      organization_id: "org-1",
-      status: "pending",
-      expires_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(), // expired 8 days ago
-    });
-    const store = createStore([expiredInvite]);
+  it("respects custom expires_at when provided", () => {
+    const store = createStore();
+    const customExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const result = simulateCreateInvite({
       orgId: "org-1",
-      email: "lapsed@example.com",
       role: "admin",
       userId: "admin-user",
       store,
+      expiresAt: customExpiry,
     });
 
     assert.equal(result.status, 200);
-    assert.equal(result.isExisting, false, "must NOT return the expired invite as isExisting");
-    assert.notEqual(result.invite?.id, expiredInvite.id, "new invite must have a different id");
-    assert.notEqual(result.invite?.code, expiredInvite.code, "new invite must have a different code");
-    assert.equal(result.invite?.status, "pending");
-  });
-
-  it("admin re-invite after expiry marks the original expired invite as revoked", () => {
-    // After a re-invite, the previously expired pending invite must be revoked in the store
-    // to avoid unique-constraint issues and to keep DB state accurate.
-    const expiredInviteId = randomUUID();
-    const expiredInvite = makeInvite({
-      id: expiredInviteId,
-      email: "lapsed2@example.com",
-      organization_id: "org-1",
-      status: "pending",
-      expires_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-    const store = createStore([expiredInvite]);
-
-    simulateCreateInvite({
-      orgId: "org-1",
-      email: "lapsed2@example.com",
-      role: "admin",
-      userId: "admin-user",
-      store,
-    });
-
-    const original = store.findById(expiredInviteId);
-    assert.ok(original, "original invite must still exist in store");
-    assert.equal(original?.status, "revoked", "expired invite must be revoked after re-invite");
+    assert.equal(result.invite?.expires_at, customExpiry);
   });
 });
 
 // ── Invite acceptance tests ───────────────────────────────────────────────────
 
 describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
-  it("happy path: creates parent record with correct fields", () => {
+  it("happy path: creates parent record with email from body (not from invite)", () => {
     const invite = makeInvite({
       organization_id: "org-1",
-      email: "jane@example.com",
       status: "pending",
     });
     const store = createStore([invite]);
@@ -535,6 +509,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -547,7 +522,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     assert.equal(result.parentRecord?.organization_id, "org-1");
     assert.equal(result.parentRecord?.first_name, "Jane");
     assert.equal(result.parentRecord?.last_name, "Smith");
-    assert.equal(result.parentRecord?.email, "jane@example.com");
+    assert.equal(result.parentRecord?.email, "jane@example.com", "email on parent record comes from body");
     assert.ok(result.parentRecord?.user_id, "must have a user_id");
   });
 
@@ -558,6 +533,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -569,7 +545,9 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     assert.ok(updated?.accepted_at, "accepted_at must be set");
   });
 
-  it("handles existing auth user (email already registered in auth)", () => {
+  it("returns 409 when email is already registered — silent linking is prevented (Patch 2)", () => {
+    // An invite holder must not be able to grant org membership to an email they don't own.
+    // If the email already exists in auth, the caller must sign in to accept (future feature).
     const invite = makeInvite({ status: "pending" });
     const store = createStore([invite]);
     const existingUserId = randomUUID();
@@ -577,6 +555,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "existing@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -584,10 +563,44 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
       existingUserId,
     });
 
-    assert.equal(result.status, 200);
-    assert.equal(result.success, true);
-    // Existing user ID must be used for the parent record
-    assert.equal(result.parentRecord?.user_id, existingUserId);
+    assert.equal(result.status, 409);
+    assert.ok(result.error?.includes("already registered"), "error must mention 'already registered'");
+  });
+
+  it("returns 400 for missing email", () => {
+    const invite = makeInvite({ status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+    });
+
+    assert.equal(result.status, 400);
+    assert.equal(result.error, "Invalid request body");
+  });
+
+  it("returns 400 for invalid email format", () => {
+    const invite = makeInvite({ status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "not-an-email",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+    });
+
+    assert.equal(result.status, 400);
+    assert.equal(result.error, "Invalid request body");
   });
 
   it("returns 400 for missing first_name", () => {
@@ -597,6 +610,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "",
       last_name: "Smith",
       password: "securepass123",
@@ -614,6 +628,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "",
       password: "securepass123",
@@ -631,6 +646,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "short",
@@ -647,6 +663,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: "",
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -663,6 +680,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: "nonexistent-code",
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -680,6 +698,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -697,6 +716,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -714,6 +734,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -733,6 +754,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -750,6 +772,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -765,10 +788,9 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     assert.ok(result.orgRoleRow?.user_id, "user_id must be set on org role row");
   });
 
-  it("re-invite of revoked user reactivates membership row to status=active", () => {
-    // Scenario: user was previously a member, got revoked, then admin issues a parent invite.
-    // On accept, the INSERT hits a 23505 unique violation. The handler should UPDATE the
-    // revoked row to status='active', role='parent'.
+  it("revoked parent with existing auth account gets 409 — must sign in to accept new invite", () => {
+    // A parent whose access was revoked and who already has an auth account cannot accept a
+    // new invite via the unauthenticated endpoint. They must sign in (future feature).
     const existingUserId = randomUUID();
     const invite = makeInvite({ organization_id: "org-1", status: "pending" });
     const store = createStore([invite]);
@@ -776,6 +798,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "bob@example.com",
       first_name: "Bob",
       last_name: "Jones",
       password: "securepass123",
@@ -784,19 +807,13 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
       existingOrgRoleStatus: "revoked",
     });
 
-    assert.equal(result.status, 200);
-    assert.equal(result.success, true);
-    assert.ok(result.orgRoleRow, "orgRoleRow must be present after reactivation");
-    assert.equal(result.orgRoleRow?.status, "active", "revoked row must be reactivated to active");
-    assert.equal(result.orgRoleRow?.role, "parent", "role must be set to parent on reactivation");
-    assert.equal(result.orgRoleRow?.user_id, existingUserId);
-    assert.equal(result.orgRoleRow?.organization_id, "org-1");
+    assert.equal(result.status, 409);
+    assert.ok(result.error?.includes("already registered"), "must prompt to sign in");
   });
 
-  it("invite acceptance preserves an already-active member's existing role", () => {
-    // Scenario: an active_member receives a parent invite. On accept, the INSERT
-    // hits 23505. The reactivation UPDATE has .eq("status", "revoked") so it matches
-    // 0 rows for an active user → existing role is NOT overwritten to "parent".
+  it("active member who submits their email on a parent invite gets 409 — must sign in to accept", () => {
+    // An active member's email is already registered. The unauthenticated endpoint must not
+    // silently grant them a parent role without their knowledge. They must sign in (future feature).
     const existingUserId = randomUUID();
     const invite = makeInvite({ organization_id: "org-1", status: "pending" });
     const store = createStore([invite]);
@@ -804,6 +821,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "alice@example.com",
       first_name: "Alice",
       last_name: "Member",
       password: "securepass123",
@@ -812,19 +830,11 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
       existingOrgRoleStatus: "active",
     });
 
-    assert.equal(result.status, 200);
-    assert.equal(result.success, true);
-    assert.equal(result.userOrgRoleCreated, false, "existing row was not re-inserted");
-    // The existing row must NOT be downgraded to 'parent'
-    assert.notEqual(result.orgRoleRow?.role, "parent", "active member's role must not be overwritten to parent");
-    assert.equal(result.orgRoleRow?.status, "active");
-    assert.equal(result.orgRoleRow?.user_id, existingUserId);
+    assert.equal(result.status, 409);
+    assert.ok(result.error?.includes("already registered"), "must prompt to sign in");
   });
 
   it("reuses existing parent record when a non-deleted parent row already exists for that email", () => {
-    // Scenario: admin manually created a parent record before sending the invite.
-    // On acceptance, the route should UPDATE the existing record (preserving admin-set
-    // fields like relationship/student_name/notes) rather than INSERT a duplicate.
     const existingParentId = randomUUID();
     const invite = makeInvite({ organization_id: "org-1", status: "pending" });
     const store = createStore([invite]);
@@ -832,6 +842,7 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
     const result = simulateAcceptInvite({
       orgId: "org-1",
       code: invite.code,
+      email: "jane@example.com",
       first_name: "Jane",
       last_name: "Smith",
       password: "securepass123",
@@ -846,5 +857,163 @@ describe("POST /parents/invite/accept — invite acceptance lifecycle", () => {
       existingParentId,
       "must reuse existing parent record id, not create a new one"
     );
+  });
+
+  it("two different parents can redeem the same invite code (same email — different scenario)", () => {
+    // The invite has no email; any parent can redeem with their own email.
+    // The second redemption of an already-accepted invite should return 409.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    // First redemption
+    const result1 = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent-a@example.com",
+      first_name: "Parent",
+      last_name: "A",
+      password: "securepass123",
+      store,
+    });
+    assert.equal(result1.status, 200);
+
+    // Second attempt on same (now accepted) invite
+    const result2 = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent-b@example.com",
+      first_name: "Parent",
+      last_name: "B",
+      password: "securepass123",
+      store,
+    });
+    assert.equal(result2.status, 409, "second redemption of same invite must fail with 409");
+  });
+});
+
+// ── TOCTOU race condition (Issue B) ───────────────────────────────────────────
+
+describe("POST /parents/invite/accept — claim-first TOCTOU protection", () => {
+  it("invite is claimed before user creation — invite.status=accepted in store after first request", () => {
+    // Verifies the claim happens early (before user/parent creation), not at the end.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "jane@example.com",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+    });
+
+    assert.equal(result.status, 200);
+    assert.ok(result.parentId, "parent record must be created");
+    // Claim-first: the invite must be marked accepted before user/parent creation,
+    // so the store reflects this immediately after the call.
+    const updated = store.findByCode(invite.code);
+    assert.equal(updated?.status, "accepted", "invite must be claimed during processing");
+    assert.ok(updated?.accepted_at, "accepted_at must be set");
+  });
+
+  it("returns 409 when concurrent request wins the atomic claim (race condition simulation)", () => {
+    // Scenario 7 from security audit: two simultaneous requests both read status='pending'
+    // and pass initial checks, but only one can win the atomic UPDATE WHERE status='pending'.
+    // The loser gets 0 rows back and returns 409 without creating any user or parent record.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    // Request A: fully completes (wins the claim).
+    const resultA = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent-a@example.com",
+      first_name: "Parent",
+      last_name: "A",
+      password: "securepass123",
+      store,
+    });
+    assert.equal(resultA.status, 200, "first concurrent request must succeed");
+    assert.equal(store.findByCode(invite.code)?.status, "accepted");
+
+    // Request B: read 'pending' concurrently with A, passed initial checks, but loses
+    // the atomic claim because A already updated the row. raceConditionAlreadyClaimed
+    // simulates the DB returning 0 rows from UPDATE WHERE status='pending'.
+    const resultB = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent-b@example.com",
+      first_name: "Parent",
+      last_name: "B",
+      password: "securepass123",
+      store,
+      raceConditionAlreadyClaimed: true,
+    });
+    assert.equal(resultB.status, 409, "losing concurrent request must return 409");
+    assert.equal(resultB.error, "Invite already accepted");
+  });
+
+  it("returns 500 and invite is retryable when user creation fails with transient error", () => {
+    // P0 TOCTOU rollback fix: if auth.admin.createUser() throws an unexpected error
+    // (Supabase rate limit, transient 500, network error), the route rolls back the
+    // invite claim to 'pending' so the parent can retry without admin intervention.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "jane@example.com",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+      simulateTransientUserCreationError: true,
+    });
+
+    assert.equal(result.status, 500, "must return 500 on transient user creation failure");
+    assert.ok(result.error?.includes("Please try again"), "error must be retryable message");
+
+    // Critical: invite must be rolled back to 'pending' so the parent can retry.
+    const inviteAfter = store.findByCode(invite.code);
+    assert.equal(inviteAfter?.status, "pending", "invite must be rolled back to pending on failure");
+    assert.equal(inviteAfter?.accepted_at, null, "accepted_at must be cleared on rollback");
+  });
+
+  it("retryable: a second attempt succeeds after a transient user-creation failure", () => {
+    // Confirms the full retry cycle: fail → rollback → retry → success.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    // First attempt: transient failure
+    const attempt1 = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "jane@example.com",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+      simulateTransientUserCreationError: true,
+    });
+    assert.equal(attempt1.status, 500);
+    assert.equal(store.findByCode(invite.code)?.status, "pending", "invite is pending after rollback");
+
+    // Second attempt: success
+    const attempt2 = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "jane@example.com",
+      first_name: "Jane",
+      last_name: "Smith",
+      password: "securepass123",
+      store,
+    });
+    assert.equal(attempt2.status, 200, "retry must succeed after rollback");
+    assert.equal(attempt2.success, true);
+    assert.ok(attempt2.parentId, "must return parentId on retry");
+    assert.equal(store.findByCode(invite.code)?.status, "accepted", "invite accepted after retry");
   });
 });

@@ -73,11 +73,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   const validInvites = invites.filter((i) => validOrgIds.has(i.organizationId));
   const invalidCount = invites.length - validInvites.length;
 
-  // Process all valid invites in parallel
+  // Process all valid invites in parallel (user-authenticated client so auth.uid() works)
   const results = await Promise.allSettled(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     validInvites.map((invite) =>
-      (ctx.serviceSupabase as any).rpc("create_enterprise_invite", {
+      (supabase as any).rpc("create_enterprise_invite", {
         p_enterprise_id: ctx.enterpriseId,
         p_organization_id: invite.organizationId,
         p_role: invite.role,

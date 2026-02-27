@@ -50,21 +50,26 @@ type Action =
   | { type: "SET_STATUS"; id: string; status: FileUploadStatus; error?: string }
   | { type: "SET_PROGRESS"; id: string; progress: number }
   | { type: "SET_MEDIA_ID"; id: string; mediaId: string }
-  | { type: "MARK_DONE"; id: string }
+  | { type: "MARK_DONE"; id: string; mediaId: string }
   | { type: "REMOVE_FILE"; id: string }
-  | { type: "CLEAR_ALL" };
+  | { type: "CLEAR_ALL" }
+  | { type: "SET_ALBUM_NAME"; name: string }
+  | { type: "CLEAR_ALBUM" };
 
 interface State {
   files: UploadFileEntry[];
+  completedMediaIds: string[];
+  pendingAlbumName: string | null;
 }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "ADD_FILES":
-      return { files: [...state.files, ...action.entries] };
+      return { ...state, files: [...state.files, ...action.entries] };
 
     case "UPDATE_FIELD":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id ? { ...f, [action.field]: action.value } : f,
         ),
@@ -72,6 +77,7 @@ function reducer(state: State, action: Action): State {
 
     case "UPDATE_TAGS":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id ? { ...f, tags: action.tags } : f,
         ),
@@ -79,6 +85,7 @@ function reducer(state: State, action: Action): State {
 
     case "SET_STATUS":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id
             ? {
@@ -93,6 +100,7 @@ function reducer(state: State, action: Action): State {
 
     case "SET_PROGRESS":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id ? { ...f, progress: action.progress } : f,
         ),
@@ -100,6 +108,7 @@ function reducer(state: State, action: Action): State {
 
     case "SET_MEDIA_ID":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id ? { ...f, mediaId: action.mediaId } : f,
         ),
@@ -107,18 +116,26 @@ function reducer(state: State, action: Action): State {
 
     case "MARK_DONE":
       return {
+        ...state,
         files: state.files.map((f) =>
           f.id === action.id
             ? { ...f, status: "done", progress: 100, file: null, error: null }
             : f,
         ),
+        completedMediaIds: [...state.completedMediaIds, action.mediaId],
       };
 
     case "REMOVE_FILE":
-      return { files: state.files.filter((f) => f.id !== action.id) };
+      return { ...state, files: state.files.filter((f) => f.id !== action.id) };
 
     case "CLEAR_ALL":
-      return { files: [] };
+      return { files: [], completedMediaIds: [], pendingAlbumName: null };
+
+    case "SET_ALBUM_NAME":
+      return { ...state, pendingAlbumName: action.name };
+
+    case "CLEAR_ALBUM":
+      return { ...state, pendingAlbumName: null, completedMediaIds: [] };
 
     default:
       return state;
@@ -143,7 +160,11 @@ interface UseGalleryUploadOptions {
 }
 
 export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOptions) {
-  const [state, dispatch] = useReducer(reducer, { files: [] });
+  const [state, dispatch] = useReducer(reducer, {
+    files: [],
+    completedMediaIds: [],
+    pendingAlbumName: null,
+  });
   const xhrRefs = useRef<Map<string, XMLHttpRequest>>(new Map());
   const processingRef = useRef<Set<string>>(new Set());
   const lastDispatchTime = useRef(0);
@@ -155,7 +176,6 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
     (newFiles: File[]) => {
       const batchCheck = checkBatchLimit(newFiles.length);
       if (!batchCheck.valid) {
-        // Return rejected info for caller to display
         return { rejected: newFiles.map((f) => ({ name: f.name, error: batchCheck.error! })) };
       }
 
@@ -213,12 +233,20 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
     [state.files],
   );
 
+  // ------- Set pending album name (from folder upload) -------
+  const setPendingAlbumName = useCallback((name: string) => {
+    dispatch({ type: "SET_ALBUM_NAME", name });
+  }, []);
+
+  const clearPendingAlbum = useCallback(() => {
+    dispatch({ type: "CLEAR_ALBUM" });
+  }, []);
+
   // ------- Process a single file -------
   const processFile = useCallback(
     async (entry: UploadFileEntry) => {
       if (!entry.file) return;
 
-      // 1. Request upload intent
       dispatch({ type: "SET_STATUS", id: entry.id, status: "requesting" });
 
       try {
@@ -246,7 +274,6 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
         const { mediaId, signedUrl, token } = await intentRes.json();
         dispatch({ type: "SET_MEDIA_ID", id: entry.id, mediaId });
 
-        // 2. Upload via XHR for progress tracking
         dispatch({ type: "SET_STATUS", id: entry.id, status: "uploading" });
 
         await new Promise<void>((resolve, reject) => {
@@ -285,7 +312,6 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
           xhr.send(entry.file);
         });
 
-        // 3. Finalize
         dispatch({ type: "SET_STATUS", id: entry.id, status: "finalizing" });
         dispatch({ type: "SET_PROGRESS", id: entry.id, progress: 100 });
 
@@ -298,12 +324,11 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
           throw new Error(data?.error || "Failed to finalize upload");
         }
 
-        dispatch({ type: "MARK_DONE", id: entry.id });
+        dispatch({ type: "MARK_DONE", id: entry.id, mediaId });
         onFileCompleteRef.current?.(entry, mediaId);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Upload failed";
         if (message === "Upload cancelled") {
-          // Don't mark as error on cancel, just remove
           return;
         }
         dispatch({
@@ -333,13 +358,11 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
 
     if (!nextQueued) return;
 
-    // Stagger: ensure minimum delay between dispatches
     const now = Date.now();
     const elapsed = now - lastDispatchTime.current;
     const delay = elapsed >= STAGGER_MS ? 0 : STAGGER_MS - elapsed;
 
     const timer = setTimeout(() => {
-      // Re-check to avoid race conditions (React strict mode)
       if (processingRef.current.has(nextQueued.id)) return;
       processingRef.current.add(nextQueued.id);
       lastDispatchTime.current = Date.now();
@@ -356,15 +379,12 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
       if (!entry || entry.status !== "error") return;
       if (entry.retryCount >= MAX_RETRIES) return;
 
-      // Increment retry count and re-queue
       dispatch({
         type: "SET_STATUS",
         id,
         status: "queued",
         error: undefined,
       });
-      // Manually bump retry count via a status update trick —
-      // we need to set it back to queued so the dispatcher picks it up
       dispatch({
         type: "SET_PROGRESS",
         id,
@@ -396,11 +416,9 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   );
 
   const cancelAll = useCallback(() => {
-    // Abort all active XHRs
     xhrRefs.current.forEach((xhr) => xhr.abort());
     xhrRefs.current.clear();
 
-    // Revoke all preview URLs
     state.files.forEach((f) => {
       if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
     });
@@ -475,6 +493,8 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
   return {
     files: state.files,
     stats,
+    completedMediaIds: state.completedMediaIds,
+    pendingAlbumName: state.pendingAlbumName,
     addFiles,
     removeFile,
     cancelAll,
@@ -482,5 +502,7 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
     retryAll,
     updateField,
     updateTags,
+    setPendingAlbumName,
+    clearPendingAlbum,
   };
 }

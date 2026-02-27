@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -99,8 +100,10 @@ export async function GET(req: Request, { params }: RouteParams) {
     dataQuery,
   ]);
 
-  // Only admin or active_member can read parents
-  const canRead = rawRole === "admin" || rawRole === "active_member" || rawRole === "member";
+  // Admin, active members, and parent-role users can read the parents directory.
+  // parent role was added to the RLS SELECT policy in 20260616000000_fix_parents_rls_and_quota.sql;
+  // this app-layer check must stay in sync.
+  const canRead = rawRole === "admin" || rawRole === "active_member" || rawRole === "member" || rawRole === "parent";
   if (!canRead) {
     return respond({ error: "Forbidden" }, 403);
   }
@@ -186,6 +189,17 @@ export async function POST(req: Request, { params }: RouteParams) {
   if (insertError || !parent) {
     console.error("[org/parents POST] DB error:", insertError);
     return respond({ error: "Internal server error" }, 500);
+  }
+
+  // Invalidate router cache so the dashboard and parents list show fresh data
+  const { data: orgSlugRow } = await serviceSupabase
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single();
+  if (orgSlugRow?.slug) {
+    revalidatePath(`/${orgSlugRow.slug}`);
+    revalidatePath(`/${orgSlugRow.slug}/parents`);
   }
 
   return respond({ parent }, 201);
