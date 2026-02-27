@@ -25,21 +25,36 @@ export interface MediaItem {
 interface MediaCardProps {
   item: MediaItem;
   onClick: () => void;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: () => void;
 }
 
-export function MediaCard({ item, onClick }: MediaCardProps) {
+export function MediaCard({ item, onClick, selectable, selected, onToggle }: MediaCardProps) {
   const displayUrl = getCardDisplayUrl(item);
   const uploaderName = item.users?.name || "Unknown";
   const displayDate = item.taken_at
     ? new Date(item.taken_at).toLocaleDateString()
     : new Date(item.created_at).toLocaleDateString();
 
+  const handleClick = () => {
+    if (selectable) {
+      onToggle?.();
+    } else {
+      onClick();
+    }
+  };
+
   return (
     <Card
       interactive
       padding="none"
-      className="group overflow-hidden"
-      onClick={onClick}
+      className={`group overflow-hidden transition-all duration-150 ${
+        selected
+          ? "ring-2 ring-[var(--color-org-secondary)] ring-offset-1 scale-[0.97]"
+          : ""
+      }`}
+      onClick={handleClick}
     >
       {/* Image/Video container */}
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
@@ -61,6 +76,27 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
           </div>
         )}
 
+        {/* Selection checkbox */}
+        {selectable && (
+          <div
+            className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+              selected
+                ? "bg-[var(--color-org-secondary)] border-[var(--color-org-secondary)]"
+                : "bg-white/80 border-[var(--border)] backdrop-blur-sm opacity-0 group-hover:opacity-100"
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle?.();
+            }}
+          >
+            {selected && (
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+        )}
+
         {/* Video overlay */}
         {item.media_type === "video" && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -74,7 +110,7 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
 
         {/* Status badge for non-approved items */}
         {item.status !== "approved" && (
-          <div className="absolute top-2 left-2">
+          <div className={`absolute top-2 ${selectable ? "left-9" : "left-2"}`}>
             <Badge variant={item.status === "pending" ? "warning" : "muted"}>
               {item.status}
             </Badge>
@@ -91,7 +127,6 @@ export function MediaCard({ item, onClick }: MediaCardProps) {
 
       {/* Info */}
       <div className="p-3 space-y-1.5">
-        <p className="text-sm font-medium text-foreground truncate">{item.title}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="truncate">{uploaderName}</span>
           <span className="shrink-0">{displayDate}</span>
