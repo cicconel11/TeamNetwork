@@ -4,14 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { Button, Badge, Input } from "@/components/ui";
 import type { MediaItem } from "./MediaCard";
+import { AddToAlbumPanel } from "./AddToAlbumPanel";
 
 interface MediaDetailModalProps {
   item: MediaItem;
   isAdmin: boolean;
   currentUserId?: string;
+  orgId?: string;
   onClose: () => void;
   onDelete: (id: string) => void;
-  onUpdate: (id: string, data: { title?: string; description?: string; tags?: string[] }) => void;
+  onUpdate: (id: string, data: { description?: string; tags?: string[] }) => void;
   onModerate?: (id: string, action: "approve" | "reject", rejectionReason?: string) => void;
 }
 
@@ -19,13 +21,13 @@ export function MediaDetailModal({
   item,
   isAdmin,
   currentUserId,
+  orgId,
   onClose,
   onDelete,
   onUpdate,
   onModerate,
 }: MediaDetailModalProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(item.title);
   const [editDescription, setEditDescription] = useState(item.description || "");
   const [editTags, setEditTags] = useState(item.tags.join(", "));
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -61,7 +63,6 @@ export function MediaDetailModal({
       .map((t) => t.trim())
       .filter(Boolean);
     onUpdate(item.id, {
-      title: editTitle,
       description: editDescription || undefined,
       tags,
     });
@@ -131,12 +132,6 @@ export function MediaDetailModal({
           <div className="p-6 overflow-y-auto max-h-[90vh] space-y-5 border-l border-border">
             {isEditing ? (
               <>
-                <Input
-                  label="Title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  maxLength={200}
-                />
                 <div className="space-y-1.5">
                   <label className="block text-sm font-medium text-foreground">Description</label>
                   <textarea
@@ -163,14 +158,13 @@ export function MediaDetailModal({
               </>
             ) : (
               <>
-                <div>
-                  <h2 className="text-lg font-semibold text-foreground">{item.title}</h2>
-                  {item.status !== "approved" && (
-                    <Badge variant={item.status === "pending" ? "warning" : "muted"} className="mt-1">
+                {item.status !== "approved" && (
+                  <div>
+                    <Badge variant={item.status === "pending" ? "warning" : "muted"}>
                       {item.status}
                     </Badge>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 <div className="space-y-3 text-sm">
                   <div>
@@ -202,6 +196,17 @@ export function MediaDetailModal({
                     </div>
                   )}
                 </div>
+
+                {/* Albums panel */}
+                {orgId && (
+                  <div className="border-t border-border pt-4">
+                    <AddToAlbumPanel
+                      mediaId={item.id}
+                      orgId={orgId}
+                      canManage={isAdmin || item.uploaded_by === currentUserId}
+                    />
+                  </div>
+                )}
 
                 {/* Moderation actions for admins */}
                 {isAdmin && item.status === "pending" && onModerate && (
