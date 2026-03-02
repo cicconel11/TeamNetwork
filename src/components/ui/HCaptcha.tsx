@@ -85,6 +85,16 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
       setIsLoading(false);
     }, []);
 
+    // Development mode bypass — only when no real site key is configured
+    // (mirrors server-side bypass condition: development && !secretKey)
+    if (process.env.NODE_ENV === "development" && !resolvedSiteKey) {
+      return (
+        <div className={`text-xs text-muted-foreground ${className}`}>
+          Captcha bypassed (dev mode)
+        </div>
+      );
+    }
+
     // Show error if site key is missing
     if (!resolvedSiteKey) {
       return (

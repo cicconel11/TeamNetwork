@@ -34,6 +34,17 @@ export function useCaptcha(): UseCaptchaReturn {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    // Development mode bypass — only when no real site key is configured
+    // (mirrors server-side bypass condition: development && !secretKey)
+    useEffect(() => {
+        if (
+            process.env.NODE_ENV === "development" &&
+            !process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY
+        ) {
+            setToken("dev-bypass-token");
+        }
+    }, []);
+
     // E2E test bypass: automatically set token when bypass is enabled
     useEffect(() => {
         if (process.env.NEXT_PUBLIC_E2E_CAPTCHA_BYPASS === "true") {

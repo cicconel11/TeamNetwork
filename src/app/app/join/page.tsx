@@ -35,7 +35,7 @@ interface RedeemResult {
   invite_token?: string;
 }
 
-type InviteFlow = "org" | "enterprise";
+type InviteFlow = "org" | "parent" | "enterprise";
 type SupabaseBrowserClient = ReturnType<typeof createClient>;
 
 function normalizeRedeemResult(data: unknown): RedeemResult {
@@ -54,8 +54,8 @@ async function redeemInviteWithFallback(
 ): Promise<{ result: RedeemResult | null; rpcError: string | null }> {
   const trimmedCode = codeOrToken.trim();
   const flows: InviteFlow[] = preferredFlow === "enterprise"
-    ? ["enterprise", "org"]
-    : ["org", "enterprise"];
+    ? ["enterprise", "org", "parent"]
+    : ["org", "parent", "enterprise"];
 
   let lastResult: RedeemResult | null = null;
   let lastRpcError: string | null = null;
@@ -64,6 +64,24 @@ async function redeemInviteWithFallback(
     if (flow === "enterprise") {
       const { data, error } = await supabase.rpc("redeem_enterprise_invite", {
         p_code_or_token: trimmedCode,
+      });
+
+      if (error) {
+        lastRpcError = error.message;
+        continue;
+      }
+
+      const normalized = normalizeRedeemResult(data);
+      lastResult = normalized;
+      if (normalized.success) {
+        return { result: normalized, rpcError: null };
+      }
+      continue;
+    }
+
+    if (flow === "parent") {
+      const { data, error } = await supabase.rpc("redeem_parent_invite", {
+        p_code: trimmedCode,
       });
 
       if (error) {
@@ -99,7 +117,7 @@ async function redeemInviteWithFallback(
     return { result: lastResult, rpcError: null };
   }
 
-  return { result: null, rpcError: lastRpcError };
+  return { result: null, rpcError: "Invalid invite code. Please check the code and try again." };
 }
 
 function JoinOrgFormComponent() {
