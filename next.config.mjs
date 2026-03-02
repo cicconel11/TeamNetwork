@@ -81,9 +81,15 @@ function validateBuildEnv() {
     });
   }
 
-  // Warn if Connect webhook secret is missing (donation events won't be processed)
+  // Vercel production detection (used for stricter validation below)
+  const isVercelProduction = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
+
+  // Require Connect webhook secret on Vercel production (donations fail silently without it)
   if (!process.env.STRIPE_WEBHOOK_SECRET_CONNECT && !skipStripe) {
-    console.warn("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation events will not be processed");
+    if (isVercelProduction) {
+      throw new Error("Missing required environment variable: STRIPE_WEBHOOK_SECRET_CONNECT (required for donation webhooks)");
+    }
+    console.warn("⚠️  STRIPE_WEBHOOK_SECRET_CONNECT not set — Connect donation webhooks will return 503");
   }
 
   // Optional: warn if Google Calendar env vars are missing (feature will be disabled)
@@ -94,7 +100,6 @@ function validateBuildEnv() {
 
   // Require CRON_SECRET on Vercel production deploys, warn otherwise
   // (Local `next build` runs with NODE_ENV=production, so we key off Vercel env vars instead.)
-  const isVercelProduction = process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
   const cronSecret = process.env.CRON_SECRET;
   if (isVercelProduction && (!cronSecret || cronSecret.trim() === "")) {
     throw new Error("Missing required environment variable: CRON_SECRET (required on Vercel production)");

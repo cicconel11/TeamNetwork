@@ -368,13 +368,13 @@ Required variables (validated at build time in `next.config.mjs`):
 - `STRIPE_SECRET_KEY`
 - `STRIPE_BASE_PLAN_MONTHLY_PRICE_ID` (+ 7 more tier/billing variants)
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_WEBHOOK_SECRET_CONNECT` - Stripe Connect webhook secret for donation events
 - `RESEND_API_KEY`
 - `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
 - `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
 - `CRON_SECRET` - Secret for authenticating Vercel cron job requests (required in production)
 
 Optional variables:
-- `STRIPE_WEBHOOK_SECRET_CONNECT` - Stripe Connect webhook secret for donation events
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
 - `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
 

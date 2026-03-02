@@ -17,7 +17,7 @@ The Stripe CLI can forward webhook events from Stripe to your local development 
 ### 1. Start webhook forwarding
 
 ```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-connect-to localhost:3000/api/stripe/webhook-connect
 ```
 
 When you run this command, the CLI will output a webhook signing secret like:
@@ -124,6 +124,8 @@ STRIPE_SECRET_KEY=sk_test_xxxxx
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxxxx
 STRIPE_WEBHOOK_SECRET=whsec_xxxxx
 
-# No additional variables needed for Connect donations
-# The same webhook endpoint handles both subscription and donation events
+# Required for Connect donation webhooks (separate endpoint from subscriptions)
+STRIPE_WEBHOOK_SECRET_CONNECT=whsec_xxxxx
 ```
+
+> **Important:** Donations use a separate webhook endpoint (`/api/stripe/webhook-connect`) from subscriptions (`/api/stripe/webhook`). You must configure a Connect webhook in Stripe pointing to `/api/stripe/webhook-connect` and set `STRIPE_WEBHOOK_SECRET_CONNECT` to its signing secret. Without this, donation events return 503 and are never recorded.
