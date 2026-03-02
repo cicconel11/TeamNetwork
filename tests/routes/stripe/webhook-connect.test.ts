@@ -166,6 +166,13 @@ async function simulateDonationCheckout(
     }
   }
 
+  // Resolve donor info from payment attempt (includes anonymous flag)
+  const paymentAttemptForDonor = paymentAttemptId
+    ? ctx.supabase.getRows("payment_attempts").find((a) => a.id === paymentAttemptId)
+    : null;
+  const attemptMeta = (paymentAttemptForDonor?.metadata || {}) as Record<string, string>;
+  const isAnonymous = attemptMeta.anonymous === "true";
+
   // Upsert donation record
   const donationPayload = {
     organization_id: orgId,
@@ -173,8 +180,9 @@ async function simulateDonationCheckout(
     stripe_checkout_session_id: session.id,
     amount_cents: amountCents,
     currency: (session.currency || "usd").toLowerCase(),
-    donor_name: session.customer_details?.name || null,
-    donor_email: session.customer_details?.email || null,
+    donor_name: session.customer_details?.name || attemptMeta.donor_name || null,
+    donor_email: session.customer_details?.email || attemptMeta.donor_email || null,
+    anonymous: isAnonymous,
     event_id: metadata.event_id || null,
     purpose: metadata.purpose || null,
     metadata: metadata,
@@ -796,6 +804,71 @@ test("Connect webhook signature verification works correctly", () => {
   const missingResult = verifyWebhookSignature("{}", "", "whsec_connect_test");
   assert.strictEqual(missingResult.valid, false);
   assert.strictEqual(missingResult.error, "No signature provided");
+});
+
+test("checkout.session.completed passes anonymous flag from payment attempt metadata", async () => {
+  const supabase = createSupabaseStub();
+  seedOrgWithConnectAccount(supabase, "org_anon", "acct_anon_123");
+  seedPaymentAttempt(supabase, "pa_anon_test", {
+    metadata: { donor_name: "Secret Donor", donor_email: "secret@example.com", anonymous: "true" },
+  });
+
+  const result = await simulateDonationCheckout({
+    supabase,
+    session: {
+      id: "cs_anon_123",
+      mode: "payment",
+      payment_status: "paid",
+      payment_intent: "pi_anon_123",
+      amount_total: 2500,
+      currency: "usd",
+      metadata: {
+        organization_id: "org_anon",
+        payment_attempt_id: "pa_anon_test",
+      },
+    },
+    connectedAccountId: "acct_anon_123",
+  });
+
+  assert.strictEqual(result.status, 200);
+
+  const donations = supabase.getRows("organization_donations");
+  assert.strictEqual(donations.length, 1);
+  assert.strictEqual(donations[0].anonymous, true);
+  assert.strictEqual(donations[0].donor_name, "Secret Donor");
+  assert.strictEqual(donations[0].donor_email, "secret@example.com");
+});
+
+test("checkout.session.completed sets anonymous=false when not in metadata", async () => {
+  const supabase = createSupabaseStub();
+  seedOrgWithConnectAccount(supabase, "org_named", "acct_named_123");
+  seedPaymentAttempt(supabase, "pa_named_test", {
+    metadata: { donor_name: "Public Donor", donor_email: "public@example.com" },
+  });
+
+  const result = await simulateDonationCheckout({
+    supabase,
+    session: {
+      id: "cs_named_123",
+      mode: "payment",
+      payment_status: "paid",
+      payment_intent: "pi_named_123",
+      amount_total: 3000,
+      currency: "usd",
+      metadata: {
+        organization_id: "org_named",
+        payment_attempt_id: "pa_named_test",
+      },
+    },
+    connectedAccountId: "acct_named_123",
+  });
+
+  assert.strictEqual(result.status, 200);
+
+  const donations = supabase.getRows("organization_donations");
+  assert.strictEqual(donations.length, 1);
+  assert.strictEqual(donations[0].anonymous, false);
+  assert.strictEqual(donations[0].donor_name, "Public Donor");
 });
 
 test("createMockWebhookEvent generates valid Connect event structure", () => {

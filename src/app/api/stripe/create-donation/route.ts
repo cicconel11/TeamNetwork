@@ -41,6 +41,7 @@ const donationSchema = z
     mode: z.enum(["checkout", "payment_intent"]).optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
+    anonymous: z.boolean().optional(),
     captchaToken: z.string().min(1, "Captcha verification required"),
     // SECURITY: platformFeeAmountCents is accepted but IGNORED - fee is calculated server-side
     // This field is deprecated and will be removed in a future version
@@ -184,6 +185,7 @@ export async function POST(req: Request) {
   const paymentAttemptMetadata: Record<string, string> = { ...metadata };
   if (donorName) paymentAttemptMetadata.donor_name = donorName;
   if (donorEmail) paymentAttemptMetadata.donor_email = donorEmail;
+  if (body.anonymous) paymentAttemptMetadata.anonymous = "true";
 
   try {
     const { attempt } = await ensurePaymentAttempt({

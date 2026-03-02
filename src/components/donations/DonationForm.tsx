@@ -29,6 +29,7 @@ export function DonationForm({
   const [donorName, setDonorName] = useState("");
   const [donorEmail, setDonorEmail] = useState("");
   const [note, setNote] = useState("");
+  const [anonymous, setAnonymous] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +116,7 @@ export function DonationForm({
             ? "Directed donation"
             : "General support"),
       mode: "checkout",
+      anonymous,
       idempotencyKey,
       captchaToken,
     };
@@ -227,6 +229,17 @@ export function DonationForm({
             required
           />
         )}
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={anonymous}
+            onChange={(e) => setAnonymous(e.target.checked)}
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          />
+          <span className="text-sm text-foreground">Donate anonymously</span>
+          <span className="text-xs text-muted-foreground">(your name will be hidden on the donations page)</span>
+        </label>
 
         <Textarea
           label="Note or purpose (optional)"

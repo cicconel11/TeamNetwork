@@ -5,7 +5,7 @@ import type { Database } from "@/types/database";
 type DbClient = SupabaseClient<Database, "public">;
 
 export type DonationInsert = Database["public"]["Tables"]["organization_donations"]["Insert"];
-export type DonorInfo = { donorName: string | null; donorEmail: string | null };
+export type DonorInfo = { donorName: string | null; donorEmail: string | null; anonymous: boolean };
 
 export type UpsertDonationParams = {
   organizationId: string;
@@ -15,6 +15,7 @@ export type UpsertDonationParams = {
   currency?: string | null;
   donorName?: string | null;
   donorEmail?: string | null;
+  anonymous?: boolean;
   eventId?: string | null;
   purpose?: string | null;
   metadata?: Stripe.Metadata | null;
@@ -38,6 +39,9 @@ export async function upsertDonationRecord(
     metadata: params.metadata ?? null,
     status: params.status,
   };
+
+  // anonymous column added via migration but not yet in generated types
+  (payload as Record<string, unknown>).anonymous = params.anonymous ?? false;
 
   const conflictTarget = payload.stripe_payment_intent_id
     ? "stripe_payment_intent_id"
@@ -114,7 +118,7 @@ export async function resolveDonorFromPaymentAttempt(
   supabase: DbClient,
   paymentAttemptId: string | null
 ): Promise<DonorInfo> {
-  if (!paymentAttemptId) return { donorName: null, donorEmail: null };
+  if (!paymentAttemptId) return { donorName: null, donorEmail: null, anonymous: false };
 
   const { data } = await supabase
     .from("payment_attempts")
@@ -126,6 +130,7 @@ export async function resolveDonorFromPaymentAttempt(
   return {
     donorName: meta?.donor_name ?? null,
     donorEmail: meta?.donor_email ?? null,
+    anonymous: meta?.anonymous === "true",
   };
 }
 

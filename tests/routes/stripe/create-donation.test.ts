@@ -29,6 +29,7 @@ interface DonationRequest {
   currency?: string;
   donorName?: string;
   donorEmail?: string;
+  anonymous?: boolean;
   eventId?: string;
   idempotencyKey: string;
   mode?: "checkout" | "payment_intent";
@@ -532,6 +533,50 @@ test("platform fee is calculated server-side (client value ignored)", () => {
   // The request succeeds, but internally the platform fee would be
   // calculated as 3% = $3 = 300 cents, regardless of client value
   assert.strictEqual(result.status, 200);
+});
+
+test("create-donation accepts anonymous flag in request body", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-anon",
+      donorName: "Secret Person",
+      donorEmail: "secret@example.com",
+      anonymous: true,
+    },
+    {
+      supabase,
+      organization: { id: "org-1", stripe_connect_account_id: "acct_123" },
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.checkoutUrl);
+});
+
+test("create-donation defaults anonymous to false when not provided", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateCreateDonation(
+    {
+      auth: AuthPresets.unauthenticated,
+      captchaToken: "valid_token",
+      organizationId: "org-1",
+      amountCents: 5000,
+      idempotencyKey: "key-not-anon",
+      donorName: "Public Person",
+    },
+    {
+      supabase,
+      organization: { id: "org-1", stripe_connect_account_id: "acct_123" },
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.ok(result.checkoutUrl);
 });
 
 test("create-donation accepts valid currencies", () => {

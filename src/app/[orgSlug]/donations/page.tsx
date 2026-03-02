@@ -166,11 +166,13 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {donationRows.map((donation) => (
+                  {donationRows.map((donation) => {
+                    const isAnonymous = (donation as Record<string, unknown>).anonymous === true;
+                    return (
                     <tr key={donation.id} className="hover:bg-muted/50 transition-colors">
                       <td className="p-4">
-                        <p className="font-medium text-foreground">{donation.donor_name || "Anonymous"}</p>
-                        {donation.donor_email && (
+                        <p className="font-medium text-foreground">{isAnonymous ? "Anonymous" : (donation.donor_name || "Anonymous")}</p>
+                        {!isAnonymous && donation.donor_email && (
                           <p className="text-sm text-muted-foreground">{donation.donor_email}</p>
                         )}
                       </td>
@@ -192,7 +194,8 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                         </Badge>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
