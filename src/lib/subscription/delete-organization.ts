@@ -5,6 +5,131 @@ import { stripe } from "@/lib/stripe";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
+ * Complete deletion order for all tables with organization_id FK.
+ * Leaf tables first, respecting foreign key constraints.
+ */
+const DELETION_ORDER = [
+  // Chat
+  "chat_messages",
+  "chat_group_members",
+  "chat_groups",
+
+  // Feed
+  "feed_comments",
+  "feed_likes",
+  "feed_posts",
+
+  // Discussions
+  "discussion_replies",
+  "discussion_threads",
+
+  // Competition
+  "competition_points",
+  "competition_teams",
+  "competitions",
+
+  // Calendar
+  "event_calendar_entries",
+  "calendar_events",
+  "calendar_feeds",
+  "calendar_sync_preferences",
+
+  // Events
+  "event_rsvps",
+  "events",
+
+  // Forms
+  "form_document_submissions",
+  "form_submissions",
+  "form_documents",
+  "forms",
+
+  // Donations & Philanthropy
+  "donations",
+  "organization_donation_stats",
+  "organization_donations",
+  "org_donation_embeds",
+  "philanthropy_events",
+  "org_philanthropy_embeds",
+
+  // Jobs
+  "job_postings",
+
+  // Media
+  "media_items",
+  "media_uploads",
+  "media_albums",
+
+  // Mentorship
+  "mentorship_logs",
+  "mentorship_pairs",
+  "mentor_profiles",
+
+  // Workouts
+  "workout_logs",
+  "workouts",
+
+  // Members & Alumni
+  "parent_invites",
+  "parents",
+  "members",
+  "alumni",
+
+  // Schedules
+  "schedule_files",
+  "academic_schedules",
+
+  // Records & Expenses
+  "records",
+  "expenses",
+
+  // Announcements
+  "announcements",
+
+  // Notifications
+  "notifications",
+  "notification_preferences",
+
+  // Analytics (nullable org_id — delete where matching)
+  "usage_events",
+  "usage_summaries",
+  "analytics_ops_events",
+
+  // UI
+  "ui_profiles",
+
+  // Payment
+  "payment_attempts",
+
+  // Invites & Roles
+  "organization_invites",
+  "user_organization_roles",
+
+  // Subscription (last before org)
+  "organization_subscriptions",
+] as const;
+
+/**
+ * Deletes all data belonging to an organization across all related tables.
+ * Must be called with a service-role client (bypasses RLS).
+ */
+export async function deleteOrganizationData(
+  db: SupabaseClient<any>,
+  organizationId: string
+): Promise<void> {
+  for (const table of DELETION_ORDER) {
+    const { error } = await (db as any)
+      .from(table)
+      .delete()
+      .eq("organization_id", organizationId);
+
+    if (error) {
+      throw new Error(`Failed to delete from ${table}: ${error.message}`);
+    }
+  }
+}
+
+/**
  * Deletes an organization and all its related data.
  * This is called when the grace period expires.
  */
@@ -28,10 +153,10 @@ export async function deleteExpiredOrganization(organizationId: string): Promise
         }
       } catch (stripeError) {
         // Check if this is a "resource not found" error (subscription doesn't exist in Stripe)
-        const isNotFound = stripeError instanceof Error && 
-          (stripeError.message.includes("No such subscription") || 
+        const isNotFound = stripeError instanceof Error &&
+          (stripeError.message.includes("No such subscription") ||
            stripeError.message.includes("resource_missing"));
-        
+
         if (!isNotFound) {
           // Real error - halt deletion to prevent billing the user after data is deleted
           console.error("[deleteExpiredOrganization] Stripe subscription cancel failed:", stripeError);
@@ -44,31 +169,9 @@ export async function deleteExpiredOrganization(organizationId: string): Promise
       }
     }
 
-    // Delete all related records in order (respecting foreign key constraints)
-    // Using explicit table calls to satisfy TypeScript
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabase as SupabaseClient<any>;
-
-    await db.from("competition_points").delete().eq("organization_id", organizationId);
-    await db.from("competitions").delete().eq("organization_id", organizationId);
-    await db.from("members").delete().eq("organization_id", organizationId);
-    await db.from("alumni").delete().eq("organization_id", organizationId);
-    await db.from("event_rsvps").delete().eq("organization_id", organizationId);
-    await db.from("events").delete().eq("organization_id", organizationId);
-    await db.from("announcements").delete().eq("organization_id", organizationId);
-    await db.from("organization_donations").delete().eq("organization_id", organizationId);
-    await db.from("records").delete().eq("organization_id", organizationId);
-    await db.from("philanthropy_events").delete().eq("organization_id", organizationId);
-    await db.from("notifications").delete().eq("organization_id", organizationId);
-    await db.from("notification_preferences").delete().eq("organization_id", organizationId);
-    await db.from("organization_invites").delete().eq("organization_id", organizationId);
-    await db.from("user_organization_roles").delete().eq("organization_id", organizationId);
-    await db.from("organization_subscriptions").delete().eq("organization_id", organizationId);
-    await db.from("form_responses").delete().eq("organization_id", organizationId);
-    await db.from("form_documents").delete().eq("organization_id", organizationId);
-    await db.from("forms").delete().eq("organization_id", organizationId);
-    await db.from("schedule_files").delete().eq("organization_id", organizationId);
-    await db.from("academic_schedules").delete().eq("organization_id", organizationId);
+    await deleteOrganizationData(db, organizationId);
 
     // Finally, delete the organization itself
     const { error: orgError } = await supabase
