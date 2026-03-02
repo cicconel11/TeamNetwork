@@ -2,9 +2,11 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgRole } from "@/lib/auth/roles";
+import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import { SuggestedFeatures } from "@/components/analytics/SuggestedFeatures";
 
@@ -15,9 +17,14 @@ interface DashboardPageProps {
 export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   const { orgSlug } = await params;
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const isDevAdmin = canDevAdminPerform(user, "view_org");
+
+  // Use service client for dev admins to bypass RLS
+  const queryClient = isDevAdmin ? createServiceClient() : supabase;
 
   // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
+  const { data: orgs, error: orgError } = await queryClient
     .from("organizations")
     .select("*")
     .eq("slug", orgSlug)
@@ -41,15 +48,15 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     { data: recentDonations },
     { data: donationStat },
   ] = await Promise.all([
-    supabase.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
-    supabase.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
-    supabase.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
-    supabase.rpc("get_subscription_status", { p_org_id: org.id }),
-    supabase.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
-    supabase.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
-    supabase.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
-    supabase.from("organization_donations").select("*").eq("organization_id", org.id).order("created_at", { ascending: false }).limit(5),
-    supabase.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
+    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    queryClient.rpc("get_subscription_status", { p_org_id: org.id }),
+    queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    queryClient.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
+    queryClient.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
+    queryClient.from("organization_donations").select("*").eq("organization_id", org.id).order("created_at", { ascending: false }).limit(5),
+    queryClient.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
   ]);
 
   const parentsBucket = (subscriptionRows as { parents_bucket?: string }[] | null)?.[0]?.parents_bucket ?? "none";
@@ -255,7 +262,7 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
                   {recentDonations && recentDonations.length > 0 ? (
                     recentDonations.map((donation) => (
                       <tr key={donation.id}>
-                        <td className="p-4 text-foreground">{donation.donor_name}</td>
+                        <td className="p-4 text-foreground">{(donation as Record<string, unknown>).anonymous === true ? "Anonymous" : donation.donor_name}</td>
                         <td className="p-4 text-muted-foreground">{donation.purpose || "General support"}</td>
                         <td className="p-4 text-muted-foreground">
                         {donation.created_at ? new Date(donation.created_at).toLocaleDateString() : "—"}
