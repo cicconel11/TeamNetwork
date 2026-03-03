@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, EmptyState } from "@/components/ui";
+import { Button, Card, EmptyState } from "@/components/ui";
 import { MediaFilters } from "./MediaFilters";
 import { MediaCard, type MediaItem } from "./MediaCard";
 import { MediaDetailModal } from "./MediaDetailModal";
@@ -274,17 +274,18 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   return (
     <div>
       {/* Top bar: tab switcher + upload button */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div className="flex flex-wrap items-center gap-3 mb-5">
         {/* Tab pills */}
         <div className="flex items-center rounded-full bg-muted p-1 gap-0.5">
           {(["albums", "photos"] as GalleryView[]).map((v) => (
             <button
               key={v}
+              type="button"
               onClick={() => {
                 setView(v);
                 setSelectedAlbum(null);
               }}
-              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors capitalize ${
+              className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                 view === v
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
@@ -305,8 +306,9 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                   {(["all", "pending", "approved", "rejected"] as StatusFilter[]).map((s) => (
                     <button
                       key={s}
+                      type="button"
                       onClick={() => setStatusFilter(s)}
-                      className={`px-3 py-1 text-xs font-medium rounded-full transition-colors capitalize ${
+                      className={`px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 capitalize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                         statusFilter === s
                           ? "bg-org-secondary text-org-secondary-foreground shadow-sm"
                           : "text-muted-foreground hover:text-foreground"
@@ -326,6 +328,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
               {/* Select mode toggle */}
               {items.length > 0 && (
                 <button
+                  type="button"
                   onClick={() => {
                     if (selectMode) {
                       exitSelectMode();
@@ -333,7 +336,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                       setSelectMode(true);
                     }
                   }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
                     selectMode
                       ? "bg-[var(--color-org-secondary)] text-white border-[var(--color-org-secondary)]"
                       : "border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--color-org-secondary)] hover:text-[var(--color-org-secondary)]"
@@ -347,15 +350,17 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
               {selectMode && items.length > 0 && (
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => setSelectedIds(new Set(items.map((i) => i.id)))}
-                    className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors"
+                    className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     All
                   </button>
                   {selectedIds.size > 0 && (
                     <button
+                      type="button"
                       onClick={() => setSelectedIds(new Set())}
-                      className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors"
+                      className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       None
                     </button>
@@ -375,10 +380,10 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
 
       {/* Error state */}
       {error && (
-        <div className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
+        <Card className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
-        </div>
+          <button type="button" onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+        </Card>
       )}
 
       {/* ── Albums view ── */}
@@ -423,7 +428,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
           </div>
 
           {loading && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-border overflow-hidden">
                   <div className="aspect-[4/3] bg-muted animate-pulse" />
@@ -436,6 +441,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
           )}
 
           {!loading && items.length === 0 && (
+            <Card>
             <EmptyState
               icon={
                 <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -451,11 +457,12 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                 ) : undefined
               }
             />
+            </Card>
           )}
 
           {!loading && items.length > 0 && (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
                 {items.map((item) => (
                   <MediaCard
                     key={item.id}
@@ -492,7 +499,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
 
           {/* Floating action bar */}
           {selectedIds.size > 0 && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[var(--card)] border border-[var(--border)] shadow-2xl rounded-2xl px-4 py-3 animate-in slide-in-from-bottom-4 duration-200">
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[var(--card)]/95 backdrop-blur-sm border border-[var(--border)] shadow-2xl rounded-2xl px-4 py-3 animate-in slide-in-from-bottom-4 duration-200">
               <span className="text-sm font-medium text-[var(--foreground)] mr-1">
                 {selectedIds.size} selected
               </span>

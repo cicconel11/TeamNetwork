@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { EmptyState } from "@/components/ui";
+import { Card, EmptyState } from "@/components/ui";
 import { AlbumCard, type MediaAlbum } from "./AlbumCard";
 import { CreateAlbumModal } from "./CreateAlbumModal";
 
@@ -41,7 +41,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="rounded-xl border border-border overflow-hidden">
             <div className="aspect-[4/3] bg-muted animate-pulse" />
@@ -53,16 +53,17 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
 
   if (error) {
     return (
-      <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
+      <Card className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20">
         {error}
-        <button onClick={fetchAlbums} className="ml-2 underline">Retry</button>
-      </div>
+        <button type="button" onClick={fetchAlbums} className="ml-2 underline">Retry</button>
+      </Card>
     );
   }
 
   return (
     <>
       {albums.length === 0 && !canCreate ? (
+        <Card>
         <EmptyState
           icon={
             <svg className="w-16 h-16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -72,8 +73,9 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
           title="No albums yet"
           description="Albums let you group photos and videos together."
         />
+        </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 stagger-children">
           {/* Create album card */}
           {canCreate && (
             <button

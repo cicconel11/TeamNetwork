@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { MediaGallery } from "@/components/media/MediaGallery";
+import { resolveLabel } from "@/lib/navigation/label-resolver";
+import type { NavConfig } from "@/lib/navigation/nav-items";
 
 export default async function MediaArchivePage({
   params,
@@ -18,12 +20,14 @@ export default async function MediaArchivePage({
   const mediaUploadRoles = (orgCtx.organization as Record<string, unknown>).media_upload_roles as string[] || ["admin"];
   const canUpload = orgCtx.role ? mediaUploadRoles.includes(orgCtx.role) : false;
   const isAdmin = orgCtx.role === "admin";
+  const navConfig = orgCtx.organization.nav_config as NavConfig | null;
+  const pageLabel = resolveLabel("/media", navConfig);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="animate-fade-in">
       <PageHeader
-        title="Media Archive"
-        description="Browse and share photos and videos with your organization"
+        title={pageLabel}
+        description="Browse and share photos and videos"
       />
       <MediaGallery
         orgId={orgCtx.organization.id}

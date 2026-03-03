@@ -34,6 +34,13 @@ type MessageWithAuthor = ChatMessage & {
   author?: User;
 };
 
+const DELETED_USER_SENTINEL: User = {
+  id: "",
+  name: "Deleted User",
+  email: "",
+  avatar_url: null,
+} as User;
+
 export function ChatRoom({
   group,
   orgSlug,
@@ -106,9 +113,9 @@ export function ChatRoom({
 
   // Fetch user info for unknown authors.
   // Returns the merged map immediately so callers can use fresh data without waiting for a re-render.
-  const fetchUnknownUsers = useCallback(async (authorIds: string[]): Promise<Map<string, User>> => {
+  const fetchUnknownUsers = useCallback(async (authorIds: (string | null)[]): Promise<Map<string, User>> => {
     const currentMap = userMapRef.current;
-    const unknownIds = authorIds.filter(id => !currentMap.has(id));
+    const unknownIds = authorIds.filter((id): id is string => id != null && !currentMap.has(id));
     if (unknownIds.length === 0) return currentMap;
 
     const { data } = await supabase
@@ -134,7 +141,7 @@ export function ChatRoom({
   useEffect(() => {
     setMessages(prev => prev.map(msg => ({
       ...msg,
-      author: userMap.get(msg.author_id) || msg.author,
+      author: msg.author_id ? (userMap.get(msg.author_id) || msg.author) : msg.author,
     })));
   }, [userMap]);
 
@@ -169,7 +176,7 @@ export function ChatRoom({
 
         const messagesWithAuthors = data.map((msg) => ({
           ...msg,
-          author: resolvedMap.get(msg.author_id),
+          author: msg.author_id ? resolvedMap.get(msg.author_id) : DELETED_USER_SENTINEL,
         }));
         setMessages(messagesWithAuthors);
 
@@ -408,7 +415,7 @@ export function ChatRoom({
         .limit(100);
 
       if (data) {
-        setMessages(data.map((msg) => ({ ...msg, author: userMap.get(msg.author_id) })));
+        setMessages(data.map((msg) => ({ ...msg, author: msg.author_id ? userMap.get(msg.author_id) : DELETED_USER_SENTINEL })));
       }
     }
   };

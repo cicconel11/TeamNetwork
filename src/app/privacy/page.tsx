@@ -160,8 +160,8 @@ const privacySections: PrivacySection[] = [
     number: "11",
     title: "Children's Privacy",
     paragraphs: [
-      "The Service is not intended for children under 16 years of age. We do not knowingly collect personal information from children under 16. If we learn that we have collected personal information from a child under 16, we will take steps to delete that information promptly.",
-      "If you believe we have collected information from a child under 16, please contact us at support@myteamnetwork.com.",
+      "The Service is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If we learn that we have collected personal information from a child under 13, we will take steps to delete that information promptly.",
+      "If you believe we have collected information from a child under 13, please contact us at support@myteamnetwork.com.",
     ],
   },
   {
@@ -229,7 +229,7 @@ export default function PrivacyPage() {
             Legal
           </div>
           <h1 className="font-display text-4xl sm:text-5xl font-bold mb-4">Privacy Policy</h1>
-          <p className="text-landing-cream/50">Last Updated: February 10, 2026</p>
+          <p className="text-landing-cream/50">Last Updated: March 3, 2026</p>
         </div>
 
         <div className="grid lg:grid-cols-[280px_1fr] gap-12">

@@ -43,8 +43,9 @@ export function MediaFilters({
         {TYPE_OPTIONS.map((opt) => (
           <button
             key={opt.value}
+            type="button"
             onClick={() => onMediaTypeChange(opt.value)}
-            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
+            className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
               mediaType === opt.value
                 ? "bg-org-secondary text-org-secondary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -71,8 +72,9 @@ export function MediaFilters({
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           {tag && (
             <button
+              type="button"
               onClick={() => onTagChange("")}
-              className="shrink-0 px-3 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="shrink-0 px-3 py-1 text-xs font-medium rounded-full bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Clear
             </button>
@@ -80,8 +82,9 @@ export function MediaFilters({
           {availableTags.map((t) => (
             <button
               key={t}
+              type="button"
               onClick={() => onTagChange(tag === t ? "" : t)}
-              className={`shrink-0 px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+              className={`shrink-0 px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 tag === t
                   ? "bg-org-secondary text-org-secondary-foreground"
                   : "bg-muted text-muted-foreground hover:text-foreground"

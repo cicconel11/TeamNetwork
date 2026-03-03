@@ -49,7 +49,7 @@ export function MediaCard({ item, onClick, selectable, selected, onToggle }: Med
     <Card
       interactive
       padding="none"
-      className={`group overflow-hidden transition-all duration-150 ${
+      className={`group overflow-hidden transition-all duration-150 hover:shadow-md touch-manipulation ${
         selected
           ? "ring-2 ring-[var(--color-org-secondary)] ring-offset-1 scale-[0.97]"
           : ""
@@ -78,8 +78,9 @@ export function MediaCard({ item, onClick, selectable, selected, onToggle }: Med
 
         {/* Selection checkbox */}
         {selectable && (
-          <div
-            className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+          <button
+            type="button"
+            className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer ${
               selected
                 ? "bg-[var(--color-org-secondary)] border-[var(--color-org-secondary)]"
                 : "bg-white/80 border-[var(--border)] backdrop-blur-sm opacity-0 group-hover:opacity-100"
@@ -89,12 +90,13 @@ export function MediaCard({ item, onClick, selectable, selected, onToggle }: Med
               onToggle?.();
             }}
           >
+            <span className="sr-only">{selected ? "Deselect" : "Select"} {item.title}</span>
             {selected && (
               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             )}
-          </div>
+          </button>
         )}
 
         {/* Video overlay */}

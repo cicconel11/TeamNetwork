@@ -16,7 +16,7 @@ interface AdoptionRequestRow {
   id: string;
   enterprise_id: string;
   organization_id: string;
-  requested_by: string;
+  requested_by: string | null;
   requested_at: string;
   status: string;
   expires_at: string | null;
@@ -110,12 +110,16 @@ export async function GET(req: Request, { params }: RouteParams) {
     .eq("id", request.enterprise_id)
     .single() as { data: EnterpriseRow | null };
 
-  // Get requester details
-  const { data: requester } = await serviceSupabase
-    .from("users")
-    .select("id, name, email")
-    .eq("id", request.requested_by)
-    .single() as { data: UserRow | null };
+  // Get requester details (requested_by may be null if the user account was deleted)
+  let requester: UserRow | null = null;
+  if (request.requested_by) {
+    const { data: requesterData } = await serviceSupabase
+      .from("users")
+      .select("id, name, email")
+      .eq("id", request.requested_by)
+      .single() as { data: UserRow | null };
+    requester = requesterData;
+  }
 
   return respond({
     id: request.id,

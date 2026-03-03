@@ -174,9 +174,10 @@ export function MediaUploadPanel({
         tabIndex={-1}
         role="dialog"
         aria-label="Upload media"
-        className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[420px] bg-[var(--card)] border-l border-[var(--border)] shadow-xl flex flex-col outline-none transition-transform duration-300 ease-out ${
-          open ? "translate-x-0" : "translate-x-full"
+        className={`fixed top-0 right-0 bottom-0 z-50 w-full sm:w-[420px] bg-[var(--card)] border-l border-[var(--border)] flex flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring transition-[transform,opacity] duration-300 ease-out ${
+          open ? "translate-x-0 opacity-100 shadow-xl" : "translate-x-full opacity-0 pointer-events-none"
         }`}
+        aria-hidden={!open}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)] shrink-0">

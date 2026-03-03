@@ -66,6 +66,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Cron routes use their own validateCronAuth() — bypass middleware auth
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   // Canonical host redirect: ensure cookies stay scoped to www domain
   if (host === "myteamnetwork.com") {
     const url = request.nextUrl.clone();
