@@ -688,10 +688,12 @@ noscript~.scroll-reveal {
 
 /* Scoreboard */
 .scoreboard {
-  background: linear-gradient(180deg, #0a0f18 0%, #070b12 100%);
-  border: 4px solid #1a2232;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5),
-    0 0 30px rgba(52, 211, 153, 0.2);
+  background: linear-gradient(135deg, #0d1f3c 0%, #12172e 60%, #0a0f18 100%);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(251, 191, 36, 0.12),
+    0 0 40px rgba(251, 191, 36, 0.07),
+    0 20px 40px -15px rgba(0, 0, 0, 0.6);
   position: relative;
   overflow: hidden;
 }
@@ -699,21 +701,20 @@ noscript~.scroll-reveal {
 .scoreboard::before {
   content: '';
   position: absolute;
-  inset: 0;
-  background: repeating-linear-gradient(0deg,
-      transparent,
-      transparent 2px,
-      rgba(0, 0, 0, 0.1) 2px,
-      rgba(0, 0, 0, 0.1) 4px);
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.5) 50%, transparent 100%);
   pointer-events: none;
   z-index: 1;
 }
 
 .scoreboard-number {
   font-family: var(--font-mono), monospace;
-  color: var(--landing-green);
-  text-shadow: 0 0 10px var(--landing-green),
-    0 0 20px rgba(52, 211, 153, 0.5);
+  color: #fbbf24;
+  text-shadow: 0 0 20px rgba(251, 191, 36, 0.7),
+    0 0 40px rgba(251, 191, 36, 0.3);
 }
 
 /* Championship Banner */
@@ -1090,7 +1091,7 @@ noscript~.scroll-reveal {
 
 /* Leaderboard row hover */
 .leaderboard-row {
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .leaderboard-row:hover {
@@ -1106,9 +1107,9 @@ noscript~.scroll-reveal {
 
 /* Progress bar for standings */
 .standings-bar {
-  height: 8px;
+  height: 6px;
   border-radius: 4px;
-  background: var(--muted);
+  background: rgba(148, 163, 184, 0.15);
   overflow: hidden;
 }
 
@@ -1116,7 +1117,7 @@ noscript~.scroll-reveal {
   height: 100%;
   border-radius: 4px;
   background: linear-gradient(90deg, var(--color-org-secondary), var(--color-org-secondary-light));
-  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Rank glow effects */
@@ -1141,7 +1142,7 @@ noscript~.scroll-reveal {
   bottom: 1.5rem;
   right: 1.5rem;
   z-index: 50;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .fab:hover {
@@ -1172,13 +1173,17 @@ noscript~.scroll-reveal {
 @keyframes heroGlow {
   0%, 100% {
     box-shadow:
-      inset 0 0 20px rgba(0, 0, 0, 0.5),
-      0 0 30px rgba(52, 211, 153, 0.2);
+      inset 0 1px 0 rgba(251, 191, 36, 0.12),
+      0 0 40px rgba(251, 191, 36, 0.07),
+      0 20px 40px -15px rgba(0, 0, 0, 0.6);
+    border-color: rgba(251, 191, 36, 0.25);
   }
   50% {
     box-shadow:
-      inset 0 0 20px rgba(0, 0, 0, 0.5),
-      0 0 50px rgba(52, 211, 153, 0.35);
+      inset 0 1px 0 rgba(251, 191, 36, 0.18),
+      0 0 60px rgba(251, 191, 36, 0.13),
+      0 20px 40px -15px rgba(0, 0, 0, 0.6);
+    border-color: rgba(251, 191, 36, 0.4);
   }
 }
 
