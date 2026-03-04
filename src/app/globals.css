@@ -1269,3 +1269,28 @@ noscript~.scroll-reveal {
     animation: none;
   }
 }
+
+/* ========================================
+   Chat Composer Slide-Up Animation
+   ======================================== */
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up {
+    animation: fadeIn 200ms ease-out;
+  }
+}

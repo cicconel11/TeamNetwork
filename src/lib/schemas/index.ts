@@ -31,6 +31,9 @@ export * from "./form-builder";
 // Chat schemas
 export * from "./chat";
 
+// Chat polls & forms schemas
+export * from "./chat-polls";
+
 // Competition schemas
 export * from "./competition";
 

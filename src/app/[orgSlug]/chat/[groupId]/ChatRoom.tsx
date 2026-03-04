@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Badge, Avatar } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ManageMembersPanel } from "@/components/chat/ManageMembersPanel";
-import type { ChatGroup, ChatGroupMember, ChatMessage, User, ChatMessageStatus } from "@/types/database";
+import { MessageBody } from "@/components/chat/MessageBody";
+import { AttachmentMenu } from "@/components/chat/AttachmentMenu";
+import { PollComposer } from "@/components/chat/PollComposer";
+import { FormComposer } from "@/components/chat/FormComposer";
+import { useChatRealtime } from "@/hooks/useChatRealtime";
+import type { ChatGroup, ChatGroupMember, ChatMessage, ChatPollVote, ChatFormResponse, User, ChatMessageStatus } from "@/types/database";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { debugLog } from "@/lib/debug";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
@@ -50,6 +55,11 @@ export function ChatRoom({
   const [showMembersPanel, setShowMembersPanel] = useState(false);
   const [members, setMembers] = useState(initialMembers);
   const [userCache, setUserCache] = useState<Map<string, User>>(new Map());
+  const [composerMode, setComposerMode] = useState<"text" | "poll" | "form">("text");
+  const [pollVotesMap, setPollVotesMap] = useState<Map<string, ChatPollVote[]>>(new Map());
+  const [formResponsesMap, setFormResponsesMap] = useState<Map<string, ChatFormResponse[]>>(new Map());
+  const [isCreatingPoll, setIsCreatingPoll] = useState(false);
+  const [isCreatingForm, setIsCreatingForm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
@@ -142,93 +152,58 @@ export function ChatRoom({
         // Fetch user info for any unknown authors
         const authorIds = [...new Set(data.map(msg => msg.author_id))];
         await fetchUnknownUsers(authorIds);
-        
+
         const messagesWithAuthors = data.map((msg) => ({
           ...msg,
           author: userMap.get(msg.author_id),
         }));
         setMessages(messagesWithAuthors);
+
+        // Load poll votes and form responses for special message types
+        const pollMessageIds = data
+          .filter((msg) => msg.message_type === "poll")
+          .map((msg) => msg.id);
+        const formMessageIds = data
+          .filter((msg) => msg.message_type === "form")
+          .map((msg) => msg.id);
+
+        if (pollMessageIds.length > 0) {
+          const { data: votes } = await supabase
+            .from("chat_poll_votes")
+            .select("*")
+            .in("message_id", pollMessageIds);
+
+          if (votes) {
+            const votesMap = new Map<string, ChatPollVote[]>();
+            votes.forEach((v) => {
+              const existing = votesMap.get(v.message_id) ?? [];
+              votesMap.set(v.message_id, [...existing, v]);
+            });
+            setPollVotesMap(votesMap);
+          }
+        }
+
+        if (formMessageIds.length > 0) {
+          const { data: responses } = await supabase
+            .from("chat_form_responses")
+            .select("*")
+            .in("message_id", formMessageIds);
+
+          if (responses) {
+            const responsesMap = new Map<string, ChatFormResponse[]>();
+            responses.forEach((r) => {
+              const existing = responsesMap.get(r.message_id) ?? [];
+              responsesMap.set(r.message_id, [...existing, r]);
+            });
+            setFormResponsesMap(responsesMap);
+          }
+        }
       }
       setIsLoading(false);
       setTimeout(scrollToBottom, 100);
     }
     loadMessages();
   }, [group.id, supabase, scrollToBottom, userMap, fetchUnknownUsers, memberJoinedAt]);
-
-  // Subscribe to real-time updates
-  useEffect(() => {
-    const channel = supabase
-      .channel(`chat_messages:${group.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_messages",
-          filter: `chat_group_id=eq.${group.id}`,
-        },
-        async (payload: RealtimePostgresChangesPayload<ChatMessage>) => {
-          if (payload.eventType === "INSERT") {
-            const newMsg = payload.new as ChatMessage;
-            // Fetch user info if unknown
-            if (!userMap.has(newMsg.author_id)) {
-              await fetchUnknownUsers([newMsg.author_id]);
-            }
-            // Only add if we should see it (approved, or our own, or we can moderate)
-            if (
-              newMsg.status === "approved" ||
-              newMsg.author_id === currentUserId ||
-              canModerate
-            ) {
-              setMessages((prev) => {
-                // Avoid duplicates - check by id
-                if (prev.some((m) => m.id === newMsg.id)) return prev;
-                // Also check if we already have this message as a temp (optimistic) one
-                // by matching author + body + similar timestamp (within 5 seconds)
-                const hasTempVersion = prev.some(
-                  (m) =>
-                    m.id.startsWith("temp-") &&
-                    m.author_id === newMsg.author_id &&
-                    m.body === newMsg.body
-                );
-                if (hasTempVersion) {
-                  // Replace temp with real message
-                  return prev.map((m) =>
-                    m.id.startsWith("temp-") &&
-                    m.author_id === newMsg.author_id &&
-                    m.body === newMsg.body
-                      ? { ...newMsg, author: userMap.get(newMsg.author_id) }
-                      : m
-                  );
-                }
-                return [
-                  ...prev,
-                  { ...newMsg, author: userMap.get(newMsg.author_id) },
-                ];
-              });
-              setTimeout(scrollToBottom, 100);
-            }
-          } else if (payload.eventType === "UPDATE") {
-            const updated = payload.new as ChatMessage;
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === updated.id
-                  ? { ...updated, author: userMap.get(updated.author_id) }
-                  : m
-              )
-            );
-          } else if (payload.eventType === "DELETE") {
-            const deleted = payload.old as { id: string };
-            setMessages((prev) => prev.filter((m) => m.id !== deleted.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [group.id, supabase, currentUserId, canModerate, scrollToBottom, userMap, fetchUnknownUsers]);
 
   const canManage = canModerate || isCreator;
 
@@ -252,43 +227,42 @@ export function ChatRoom({
     }
   }, [supabase, group.id]);
 
-  // Subscribe to real-time member changes
-  useEffect(() => {
-    const channel = supabase
-      .channel(`chat_group_members:${group.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_group_members",
-          filter: `chat_group_id=eq.${group.id}`,
-        },
-        (payload) => {
-          if (payload.eventType === "DELETE") {
-            const deleted = payload.old as { user_id?: string };
-            if (deleted.user_id === currentUserId) {
-              router.push(`/${orgSlug}/chat`);
-              return;
-            }
-          }
-          // Handle soft-delete: member removal is an UPDATE setting removed_at
-          if (payload.eventType === "UPDATE") {
-            const updated = payload.new as { user_id?: string; removed_at?: string | null };
-            if (updated.user_id === currentUserId && updated.removed_at) {
-              router.push(`/${orgSlug}/chat`);
-              return;
-            }
-          }
-          refreshMembers();
+  // Handle member changes: redirect if current user removed, otherwise refresh
+  const onMemberChange = useCallback(
+    (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
+      if (payload.eventType === "DELETE") {
+        const deleted = payload.old as { user_id?: string };
+        if (deleted.user_id === currentUserId) {
+          router.push(`/${orgSlug}/chat`);
+          return;
         }
-      )
-      .subscribe();
+      }
+      if (payload.eventType === "UPDATE") {
+        const updated = payload.new as { user_id?: string; removed_at?: string | null };
+        if (updated.user_id === currentUserId && updated.removed_at) {
+          router.push(`/${orgSlug}/chat`);
+          return;
+        }
+      }
+      refreshMembers();
+    },
+    [currentUserId, orgSlug, router, refreshMembers]
+  );
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [group.id, supabase, currentUserId, orgSlug, router, refreshMembers]);
+  // Subscribe to all real-time changes (messages, poll votes, form responses, members)
+  useChatRealtime({
+    supabase,
+    groupId: group.id,
+    currentUserId,
+    canModerate,
+    userMap,
+    fetchUnknownUsers,
+    setMessages,
+    setPollVotesMap,
+    setFormResponsesMap,
+    scrollToBottom,
+    onMemberChange,
+  });
 
   // Send message with optimistic UI
   const handleSend = async (e: React.FormEvent) => {
@@ -310,6 +284,8 @@ export function ChatRoom({
       organization_id: organizationId,
       author_id: currentUserId,
       body: messageBody,
+      message_type: null,
+      metadata: null,
       status: initialStatus,
       approved_by: null,
       approved_at: null,
@@ -410,6 +386,118 @@ export function ChatRoom({
     }
   };
 
+  // Handle poll vote
+  const handleVote = useCallback(async (messageId: string, optionIndex: number) => {
+    try {
+      const res = await fetch(`/api/chat/${group.id}/polls/${messageId}/votes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ option_index: optionIndex }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("Vote failed:", err);
+      }
+    } catch (error) {
+      console.error("Vote failed:", error);
+    }
+  }, [group.id]);
+
+  // Retract poll vote
+  const handleRetractVote = useCallback(async (messageId: string) => {
+    try {
+      const res = await fetch(`/api/chat/${group.id}/polls/${messageId}/votes`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("Retract vote failed:", err);
+      }
+    } catch (error) {
+      console.error("Retract vote failed:", error);
+    }
+  }, [group.id]);
+
+  // Submit form response
+  const handleFormSubmit = useCallback(async (messageId: string, responses: Record<string, string>) => {
+    try {
+      const res = await fetch(`/api/chat/${group.id}/forms/${messageId}/responses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responses }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        console.error("Form submit failed:", err);
+      }
+    } catch (error) {
+      console.error("Form submit failed:", error);
+    }
+  }, [group.id]);
+
+  // Create poll
+  const handleCreatePoll = useCallback(async (data: { question: string; options: string[]; allow_change: boolean }) => {
+    setIsCreatingPoll(true);
+    try {
+      const res = await fetch(`/api/chat/${group.id}/polls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        setComposerMode("text");
+        trackBehavioralEvent("chat_message_send", {
+          thread_id: group.id,
+          message_type: "poll",
+          result: "success",
+        }, organizationId);
+      } else {
+        const err = await res.json();
+        console.error("Create poll failed:", err);
+      }
+    } catch (error) {
+      console.error("Create poll failed:", error);
+    } finally {
+      setIsCreatingPoll(false);
+    }
+  }, [group.id, organizationId]);
+
+  // Create form
+  const handleCreateForm = useCallback(async (data: {
+    title: string;
+    fields: Array<{
+      id: string;
+      label: string;
+      type: "text" | "select" | "radio";
+      required: boolean;
+      options?: string[];
+    }>;
+  }) => {
+    setIsCreatingForm(true);
+    try {
+      const res = await fetch(`/api/chat/${group.id}/forms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        setComposerMode("text");
+        trackBehavioralEvent("chat_message_send", {
+          thread_id: group.id,
+          message_type: "form",
+          result: "success",
+        }, organizationId);
+      } else {
+        const err = await res.json();
+        console.error("Create form failed:", err);
+      }
+    } catch (error) {
+      console.error("Create form failed:", error);
+    } finally {
+      setIsCreatingForm(false);
+    }
+  }, [group.id, organizationId]);
+
   // Filter messages for display
   const visibleMessages = messages.filter((m) => {
     if (showPendingQueue) {
@@ -506,12 +594,26 @@ export function ChatRoom({
                     </div>
                     <div
                       className={`rounded-lg px-4 py-2 ${
-                        isOwn
+                        isOwn && !message.message_type
                           ? "bg-[var(--color-org-secondary)] text-[var(--color-org-secondary-foreground)]"
-                          : "bg-muted"
+                          : message.message_type ? "" : "bg-muted"
                       } ${isPending ? "opacity-70 border border-dashed border-yellow-500" : ""}`}
                     >
-                      <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                      <MessageBody
+                        message={message}
+                        currentUserId={currentUserId}
+                        votes={pollVotesMap.get(message.id) ?? []}
+                        userMap={userMap}
+                        ownFormResponse={
+                          (formResponsesMap.get(message.id) ?? []).find(
+                            (r) => r.user_id === currentUserId
+                          ) ?? null
+                        }
+                        responseCount={(formResponsesMap.get(message.id) ?? []).length}
+                        onVote={handleVote}
+                        onRetractVote={handleRetractVote}
+                        onFormSubmit={handleFormSubmit}
+                      />
                     </div>
 
                     {/* Moderation actions */}
@@ -541,10 +643,30 @@ export function ChatRoom({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Poll/Form composer panels */}
+        {!showPendingQueue && composerMode === "poll" && (
+          <PollComposer
+            onCreatePoll={handleCreatePoll}
+            onCancel={() => setComposerMode("text")}
+            isSubmitting={isCreatingPoll}
+          />
+        )}
+        {!showPendingQueue && composerMode === "form" && (
+          <FormComposer
+            onCreateForm={handleCreateForm}
+            onCancel={() => setComposerMode("text")}
+            isSubmitting={isCreatingForm}
+          />
+        )}
+
         {/* Message composer */}
-        {!showPendingQueue && (
+        {!showPendingQueue && composerMode === "text" && (
           <form onSubmit={handleSend} className="p-4 border-t border-border">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <AttachmentMenu
+                onSelectPoll={() => setComposerMode("poll")}
+                onSelectForm={() => setComposerMode("form")}
+              />
               <input
                 type="text"
                 value={newMessage}

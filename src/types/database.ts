@@ -543,6 +543,58 @@ export type Database = {
           },
         ]
       }
+      chat_form_responses: {
+        Row: {
+          chat_group_id: string
+          id: string
+          message_id: string
+          organization_id: string
+          responses: Json
+          submitted_at: string
+          user_id: string
+        }
+        Insert: {
+          chat_group_id: string
+          id?: string
+          message_id: string
+          organization_id: string
+          responses?: Json
+          submitted_at?: string
+          user_id: string
+        }
+        Update: {
+          chat_group_id?: string
+          id?: string
+          message_id?: string
+          organization_id?: string
+          responses?: Json
+          submitted_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_form_responses_chat_group_id_fkey"
+            columns: ["chat_group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_form_responses_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_form_responses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_group_members: {
         Row: {
           added_by: string | null
@@ -659,6 +711,8 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           id: string
+          message_type: string | null
+          metadata: Json | null
           organization_id: string
           rejected_at: string | null
           rejected_by: string | null
@@ -674,6 +728,8 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          message_type?: string | null
+          metadata?: Json | null
           organization_id: string
           rejected_at?: string | null
           rejected_by?: string | null
@@ -689,6 +745,8 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          message_type?: string | null
+          metadata?: Json | null
           organization_id?: string
           rejected_at?: string | null
           rejected_by?: string | null
@@ -704,6 +762,61 @@ export type Database = {
           },
           {
             foreignKeyName: "chat_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_poll_votes: {
+        Row: {
+          chat_group_id: string
+          created_at: string
+          id: string
+          message_id: string
+          option_index: number
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          chat_group_id: string
+          created_at?: string
+          id?: string
+          message_id: string
+          option_index: number
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          chat_group_id?: string
+          created_at?: string
+          id?: string
+          message_id?: string
+          option_index?: number
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_poll_votes_chat_group_id_fkey"
+            columns: ["chat_group_id"]
+            isOneToOne: false
+            referencedRelation: "chat_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_poll_votes_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_poll_votes_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3147,6 +3260,50 @@ export type Database = {
           },
         ]
       }
+      parent_invites: {
+        Row: {
+          accepted_at: string | null
+          code: string
+          created_at: string
+          email: string | null
+          expires_at: string
+          id: string
+          invited_by: string
+          organization_id: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          code?: string
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_by: string
+          organization_id: string
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          code?: string
+          created_at?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_by?: string
+          organization_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parent_invites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       parents: {
         Row: {
           created_at: string
@@ -4196,7 +4353,9 @@ export type Database = {
       }
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
+      assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       can_add_alumni: { Args: { p_org_id: string }; Returns: boolean }
+      can_add_parents: { Args: { p_org_id: string }; Returns: boolean }
       can_edit_page: {
         Args: { org_id: string; path: string }
         Returns: boolean
@@ -4284,7 +4443,6 @@ export type Database = {
       }
       debug_user_org_access: { Args: { target_org_id?: string }; Returns: Json }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
-      get_parents_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
       get_media_storage_stats: { Args: { p_org_id: string }; Returns: Json }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
@@ -4363,6 +4521,7 @@ export type Database = {
           similarity: number
         }[]
       }
+      parents_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       purge_analytics_events: { Args: never; Returns: Json }
       purge_expired_usage_events: { Args: never; Returns: Json }
       purge_ops_events: { Args: never; Returns: Json }
@@ -4372,6 +4531,7 @@ export type Database = {
       }
       redeem_org_invite: { Args: { p_code: string }; Returns: Json }
       redeem_org_invite_by_token: { Args: { p_token: string }; Returns: Json }
+      redeem_parent_invite: { Args: { p_code: string }; Returns: Json }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean
@@ -4431,7 +4591,13 @@ export type Database = {
         | "client_error"
         | "auth_fail"
         | "rate_limited"
-      user_role: "admin" | "member" | "viewer" | "active_member" | "alumni" | "parent"
+      user_role:
+        | "admin"
+        | "member"
+        | "viewer"
+        | "active_member"
+        | "alumni"
+        | "parent"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4604,10 +4770,18 @@ export const Constants = {
         "auth_fail",
         "rate_limited",
       ],
-      user_role: ["admin", "member", "viewer", "active_member", "alumni", "parent"],
+      user_role: [
+        "admin",
+        "member",
+        "viewer",
+        "active_member",
+        "alumni",
+        "parent",
+      ],
     },
   },
 } as const
+
 
 export type AcademicSchedule = Tables<'academic_schedules'>;
 export type Alumni = Tables<'alumni'>;
@@ -4615,6 +4789,8 @@ export type Announcement = Tables<'announcements'>;
 export type ChatGroup = Tables<'chat_groups'>;
 export type ChatGroupMember = Tables<'chat_group_members'>;
 export type ChatMessage = Tables<'chat_messages'>;
+export type ChatPollVote = Tables<'chat_poll_votes'>;
+export type ChatFormResponse = Tables<'chat_form_responses'>;
 export type Event = Tables<'events'>;
 export type Form = Tables<'forms'>;
 export type FormDocument = Tables<'form_documents'>;
