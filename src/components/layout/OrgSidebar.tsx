@@ -1,14 +1,16 @@
 "use client";
 
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
-import { ORG_NAV_ITEMS, type NavConfig, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
+import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavGroupId, GridIcon, LogOutIcon } from "@/lib/navigation/nav-items";
+import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
+import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
-import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -24,7 +26,9 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
-  
+
+  const [openGroups, setOpenGroups] = useState<Set<NavGroupId>>(new Set());
+
   // Parse nav_config
   const navConfig = (organization.nav_config && typeof organization.nav_config === "object" && !Array.isArray(organization.nav_config)
     ? (organization.nav_config as NavConfig)
@@ -33,23 +37,15 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
   // Helper to get config key - Dashboard has empty href, so use "dashboard" as key
   const getConfigKey = (href: string) => href === "" ? "dashboard" : href;
 
-  const visibleNav = ORG_NAV_ITEMS
+  const visibleNav: VisibleNavItem[] = useMemo(() => ORG_NAV_ITEMS
     .filter((item) => {
-      // Role check
       if (role && !item.roles.includes(role)) return false;
-
-      // Alumni access check - hide items that require alumni access when org doesn't have it
       if (item.requiresAlumni && !hasAlumniAccess) return false;
-
-      // Parents access check - hide items that require parents access when org doesn't have it
       if (item.requiresParents && !hasParentsAccess) return false;
-
-      // Config check (hide if hidden is true)
       const configKey = getConfigKey(item.href);
       const config = navConfig[configKey];
       if (config?.hidden) return false;
       if (role && Array.isArray(config?.hiddenForRoles) && config.hiddenForRoles.includes(role)) return false;
-
       return true;
     })
     .map((item) => {
@@ -62,30 +58,45 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       };
     })
     .sort((a, b) => {
-      // If both have explicit orders from nav_config, compare them
-      if (a.order !== undefined && b.order !== undefined) {
-        return a.order - b.order;
-      }
-      // If only one has an explicit order, it comes first
+      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
       if (a.order !== undefined) return -1;
       if (b.order !== undefined) return 1;
-
-      // Fall back to LLM-generated profile nav_order (if available)
       if (profile?.nav_order && profile.nav_order.length > 0) {
         const aKey = a.href === "" ? "dashboard" : a.href.replace(/^\//, "");
         const bKey = b.href === "" ? "dashboard" : b.href.replace(/^\//, "");
         const aIdx = profile.nav_order.indexOf(aKey);
         const bIdx = profile.nav_order.indexOf(bKey);
-        // Both in profile → sort by profile order
         if (aIdx >= 0 && bIdx >= 0) return aIdx - bIdx;
-        // Only one in profile → it comes first
         if (aIdx >= 0) return -1;
         if (bIdx >= 0) return 1;
       }
-
-      // Default position from ORG_NAV_ITEMS
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
+    }), [role, hasAlumniAccess, hasParentsAccess, navConfig, profile]);
+
+  // Auto-expand active group on navigation
+  useEffect(() => {
+    const activeGroupId = getActiveGroup(pathname, basePath, visibleNav);
+    if (activeGroupId) {
+      setOpenGroups(prev => {
+        if (prev.has(activeGroupId)) return prev;
+        return new Set([...prev, activeGroupId]);
+      });
+    }
+  }, [pathname, basePath, visibleNav]);
+
+  const toggleGroup = useCallback((groupId: NavGroupId) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
     });
+  }, []);
+
+  // Sort-then-bucket: bucket already-sorted items
+  const buckets = bucketItemsByGroup(visibleNav);
+  const sections = buildSectionOrder(buckets, ORG_NAV_GROUPS);
+  const globalIndexMap = buildGlobalIndexMap(visibleNav);
 
   return (
     <aside className={`flex flex-col bg-card border-r border-border h-full ${className}`}>
@@ -122,51 +133,64 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
-        <ul className="space-y-1">
-          {visibleNav.map((item, index) => {
-            const href = `${basePath}${item.href}`;
-            // Check for exact match first
-            let isActive = pathname === href;
-            // For non-root items, check if pathname starts with href
-            // but only if there's no more specific nav item that matches
-            if (!isActive && item.href !== "") {
-              const isPathMatch = pathname.startsWith(href + "/") || pathname === href;
-              // Ensure we don't highlight parent items when a child item should be active
-              // e.g., don't highlight /settings when on /settings/invites
-              const hasMoreSpecificMatch = visibleNav.some(
-                (other) => other.href !== item.href && 
-                           other.href.startsWith(item.href + "/") && 
-                           pathname.startsWith(`${basePath}${other.href}`)
+        <div className="space-y-3">
+          {sections.map((section, sectionIndex) => {
+            if (section.type === "dashboard") {
+              return (
+                <ul key="dashboard">
+                  <NavItemLink
+                    item={section.item}
+                    basePath={basePath}
+                    pathname={pathname}
+                    visibleNav={visibleNav}
+                    organizationId={organization.id}
+                    globalIndex={globalIndexMap.get(section.item.href) ?? 0}
+                    onClose={onClose}
+                  />
+                </ul>
               );
-              isActive = isPathMatch && !hasMoreSpecificMatch;
             }
-            const Icon = item.icon;
-
-            return (
-              <li key={item.href}>
-                <Link
-                  href={href}
-                  onClick={() => {
-                    trackBehavioralEvent("nav_click", {
-                      destination_route: href,
-                      nav_surface: "sidebar",
-                      position: index,
-                    }, organization.id);
-                    onClose?.();
-                  }}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? "bg-org-secondary text-org-secondary-foreground shadow-soft"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  {item.label}
-                </Link>
-              </li>
-            );
+            if (section.type === "group") {
+              return (
+                <NavGroupSection
+                  key={section.group.id}
+                  group={section.group}
+                  items={section.items}
+                  isOpen={openGroups.has(section.group.id)}
+                  onToggle={() => toggleGroup(section.group.id)}
+                  basePath={basePath}
+                  pathname={pathname}
+                  visibleNav={visibleNav}
+                  organizationId={organization.id}
+                  globalIndexMap={globalIndexMap}
+                  onClose={onClose}
+                />
+              );
+            }
+            if (section.type === "standalone") {
+              return (
+                <ul key="standalone" className="space-y-0.5">
+                  {section.items.map((item) => (
+                    <NavItemLink
+                      key={item.href}
+                      item={item}
+                      basePath={basePath}
+                      pathname={pathname}
+                      visibleNav={visibleNav}
+                      organizationId={organization.id}
+                      globalIndex={globalIndexMap.get(item.href) ?? 0}
+                      onClose={onClose}
+                    />
+                  ))}
+                </ul>
+              );
+            }
+            if (section.type === "divider") {
+              return <hr key={`divider-${sectionIndex}`} className="border-border" />;
+            }
+            return null;
           })}
-        </ul>
+        </div>
       </nav>
 
       {/* User Section */}
@@ -178,7 +202,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
 
         <Link
           href="/app"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
         >
           <GridIcon className="h-5 w-5" />
           Switch Organization
@@ -187,7 +211,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
         <form action="/auth/signout" method="POST">
           <button
             type="submit"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           >
             <LogOutIcon className="h-5 w-5" />
             Sign Out
