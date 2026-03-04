@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Input, Badge } from "@/components/ui";
 import { AdminGuard } from "@/components/auth";
-import { ORG_NAV_ITEMS, type NavConfig, type NavConfigEntry } from "@/lib/navigation/nav-items";
+import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavConfigEntry, type NavGroupId } from "@/lib/navigation/nav-items";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { setConsentState as setAnalyticsConsentState } from "@/lib/analytics/events";
 
@@ -199,17 +199,32 @@ function NavigationSettingsContent() {
   };
 
   const moveItem = (href: string, direction: "up" | "down") => {
-    const currentIndex = orderedItems.findIndex(item => item.href === href);
-    if (currentIndex === -1) return;
-    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= orderedItems.length) return;
+    const item = orderedItems.find(i => i.href === href);
+    if (!item) return;
+    const itemGroup = item.href === "" ? undefined : item.group;
+    const groupItems = orderedItems.filter(i => {
+      const g = i.href === "" ? undefined : i.group;
+      return g === itemGroup;
+    });
+    const groupIndex = groupItems.findIndex(i => i.href === href);
+    if (groupIndex === -1) return;
+    const newGroupIndex = direction === "up" ? groupIndex - 1 : groupIndex + 1;
+    if (newGroupIndex < 0 || newGroupIndex >= groupItems.length) return;
+    const swapItem = groupItems[newGroupIndex];
+    const globalCurrentIndex = orderedItems.findIndex(i => i.href === href);
+    const globalSwapIndex = orderedItems.findIndex(i => i.href === swapItem.href);
     const newItems = [...orderedItems];
-    [newItems[currentIndex], newItems[newIndex]] = [newItems[newIndex], newItems[currentIndex]];
+    [newItems[globalCurrentIndex], newItems[globalSwapIndex]] = [newItems[globalSwapIndex], newItems[globalCurrentIndex]];
     setOrderedItems(newItems);
     setNavConfig(prev => {
       const updated = { ...prev };
-      newItems.forEach((item, index) => {
-        const key = getConfigKey(item.href);
+      // Re-index only items in the affected group
+      const updatedGroupItems = newItems.filter(i => {
+        const g = i.href === "" ? undefined : i.group;
+        return g === itemGroup;
+      });
+      updatedGroupItems.forEach((gi, index) => {
+        const key = getConfigKey(gi.href);
         if (!updated[key]) updated[key] = {};
         updated[key] = { ...updated[key], order: index };
       });
@@ -277,7 +292,7 @@ function NavigationSettingsContent() {
     <div className="space-y-6">
       <PageHeader
         title="Navigation"
-        description="Use arrows to reorder tabs, rename them, or hide them from members, alumni, and parents."
+        description="Items are organized in sidebar sections. Rename items, adjust visibility, or reorder within each section."
         backHref={`/${orgSlug}`}
         actions={
           <Button onClick={handleSave} isLoading={isSaving} disabled={!orgId}>
@@ -330,107 +345,147 @@ function NavigationSettingsContent() {
         </div>
       )}
       <div className="space-y-2">
-        {orderedItems.map((item, index) => {
-          const configKey = getConfigKey(item.href);
-          const entry = navConfig[configKey];
-          const labelValue = typeof entry?.label === "string" ? entry.label : "";
-          const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
-          const isHiddenEverywhere = entry?.hidden === true;
-          const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
-          const isExpanded = expandedItem === item.href;
-          const isFirst = index === 0;
-          const isLast = index === orderedItems.length - 1;
+        {(() => {
+          const groupOrder: (NavGroupId | "standalone" | "dashboard")[] = [
+            "dashboard",
+            ...ORG_NAV_GROUPS.filter(g => g.id !== "admin").map(g => g.id),
+            "standalone",
+            "admin",
+          ];
+          const groupedItems = new Map<NavGroupId | "standalone" | "dashboard", typeof orderedItems>();
+          for (const item of orderedItems) {
+            const key: NavGroupId | "standalone" | "dashboard" =
+              item.href === "" ? "dashboard" : item.group ?? "standalone";
+            const bucket = groupedItems.get(key) ?? [];
+            bucket.push(item);
+            groupedItems.set(key, bucket);
+          }
+          return groupOrder.map((groupKey) => {
+            const items = groupedItems.get(groupKey);
+            if (!items || items.length === 0) return null;
+            const groupLabel =
+              groupKey === "dashboard" ? "Dashboard" :
+              groupKey === "standalone" ? "Other" :
+              ORG_NAV_GROUPS.find(g => g.id === groupKey)?.label ?? groupKey;
+            return (
+              <div key={groupKey}>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pt-4 pb-2">
+                  {groupLabel}
+                </h3>
+                {items.map((item) => {
+                  const configKey = getConfigKey(item.href);
+                  const entry = navConfig[configKey];
+                  const labelValue = typeof entry?.label === "string" ? entry.label : "";
+                  const hiddenForRoles = Array.isArray(entry?.hiddenForRoles) ? (entry.hiddenForRoles as OrgRole[]) : [];
+                  const isHiddenEverywhere = entry?.hidden === true;
+                  const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
+                  const isExpanded = expandedItem === item.href;
+                  // Within-group boundary checks
+                  const itemGroup = item.href === "" ? "dashboard" as const : (item.group ?? "standalone") as NavGroupId | "standalone" | "dashboard";
+                  const groupSiblings = orderedItems.filter(i => {
+                    const g = i.href === "" ? "dashboard" as const : (i.group ?? "standalone") as NavGroupId | "standalone" | "dashboard";
+                    return g === itemGroup;
+                  });
+                  const groupIndex = groupSiblings.findIndex(i => i.href === item.href);
+                  const isFirst = groupIndex === 0;
+                  const isLast = groupIndex === groupSiblings.length - 1;
 
-          return (
-            <Card key={configKey} className={`p-3 transition-all duration-200 ${isHiddenEverywhere ? "border-red-200 dark:border-red-900/40 opacity-60" : ""}`}>
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-0.5">
-                  <button
-                    onClick={() => moveItem(item.href, "up")}
-                    disabled={isFirst}
-                    className={`p-1 rounded transition-colors ${isFirst ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                    title="Move up"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => moveItem(item.href, "down")}
-                    disabled={isLast}
-                    className={`p-1 rounded transition-colors ${isLast ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
-                    title="Move down"
-                  >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                    </svg>
-                  </button>
-                </div>
-                <item.icon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium text-foreground">{labelValue?.trim() || item.label}</span>
-                  {labelValue && labelValue !== item.label && <span className="text-xs text-muted-foreground ml-2">({item.label})</span>}
-                </div>
-                <div className="flex items-center gap-2">
-                  {isHiddenEverywhere && <Badge variant="error">Disabled</Badge>}
-                  {hiddenForRoles.length > 0 && !isHiddenEverywhere && <Badge variant="warning">Partial</Badge>}
-                </div>
-                <button onClick={() => setExpandedItem(isExpanded ? null : item.href)} className="p-1 hover:bg-muted rounded transition-colors">
-                  <svg className={`h-5 w-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                  </svg>
-                </button>
+                  return (
+                    <Card key={configKey} className={`p-3 transition-all duration-200 ${isHiddenEverywhere ? "border-red-200 dark:border-red-900/40 opacity-60" : ""}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            onClick={() => moveItem(item.href, "up")}
+                            disabled={isFirst}
+                            className={`p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isFirst ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                            title="Move up"
+                            aria-label="Move item up"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => moveItem(item.href, "down")}
+                            disabled={isLast}
+                            className={`p-1 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isLast ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}
+                            title="Move down"
+                            aria-label="Move item down"
+                          >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          </button>
+                        </div>
+                        <item.icon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-foreground">{labelValue?.trim() || item.label}</span>
+                          {labelValue && labelValue !== item.label && <span className="text-xs text-muted-foreground ml-2">({item.label})</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isHiddenEverywhere && <Badge variant="error">Disabled</Badge>}
+                          {hiddenForRoles.length > 0 && !isHiddenEverywhere && <Badge variant="warning">Partial</Badge>}
+                        </div>
+                        <button onClick={() => setExpandedItem(isExpanded ? null : item.href)} className="p-1 hover:bg-muted rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1" aria-label={isExpanded ? "Collapse settings" : "Expand settings"}>
+                          <svg className={`h-5 w-5 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="mt-4 pt-4 border-t border-border space-y-4 animate-in slide-in-from-top-2 duration-200">
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <Input id={`${item.href || "root"}-label`} label="Display name" value={labelValue} onChange={(e) => handleLabelChange(item.href, e.target.value)} placeholder={item.label} />
+                            <div className="space-y-2">
+                              <p className="text-sm font-medium text-foreground">Visibility</p>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("active_member")} onChange={() => toggleRoleHidden(item.href, "active_member")} />
+                                Hide from members
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("alumni")} onChange={() => toggleRoleHidden(item.href, "alumni")} />
+                                Hide from alumni
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("parent")} onChange={() => toggleRoleHidden(item.href, "parent")} />
+                                Hide from parents
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={isHiddenEverywhere} onChange={() => toggleHiddenEverywhere(item.href)} />
+                                Disable for everyone
+                              </label>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium text-foreground">Who can edit?</p>
+                            <div className="flex flex-wrap gap-4">
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
+                                Admins
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("active_member")} onChange={() => toggleEditRole(item.href, "active_member")} />
+                                Members
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("alumni")} onChange={() => toggleEditRole(item.href, "alumni")} />
+                                Alumni
+                              </label>
+                              <label className="flex items-center gap-2 text-sm text-foreground">
+                                <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("parent")} onChange={() => toggleEditRole(item.href, "parent")} />
+                                Parents
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
               </div>
-              {isExpanded && (
-                <div className="mt-4 pt-4 border-t border-border space-y-4 animate-in slide-in-from-top-2 duration-200">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Input id={`${item.href || "root"}-label`} label="Display name" value={labelValue} onChange={(e) => handleLabelChange(item.href, e.target.value)} placeholder={item.label} />
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-foreground">Visibility</p>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("active_member")} onChange={() => toggleRoleHidden(item.href, "active_member")} />
-                        Hide from members
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("alumni")} onChange={() => toggleRoleHidden(item.href, "alumni")} />
-                        Hide from alumni
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={hiddenForRoles.includes("parent")} onChange={() => toggleRoleHidden(item.href, "parent")} />
-                        Hide from parents
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={isHiddenEverywhere} onChange={() => toggleHiddenEverywhere(item.href)} />
-                        Disable for everyone
-                      </label>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">Who can edit?</p>
-                    <div className="flex flex-wrap gap-4">
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked disabled />
-                        Admins
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("active_member")} onChange={() => toggleEditRole(item.href, "active_member")} />
-                        Members
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("alumni")} onChange={() => toggleEditRole(item.href, "alumni")} />
-                        Alumni
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-foreground">
-                        <input type="checkbox" className="h-4 w-4 rounded border-border" checked={editRoles.includes("parent")} onChange={() => toggleEditRole(item.href, "parent")} />
-                        Parents
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Card>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
       <div className="flex items-center justify-end gap-3 pt-4">
         {saved && <p className="text-sm text-muted-foreground">Saved</p>}
