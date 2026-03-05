@@ -41,7 +41,22 @@ export async function registerStripeEvent(params: {
       throw error;
     }
 
-    return { eventRow: existing, alreadyProcessed: Boolean(existing.processed_at) };
+    // Already fully processed — skip
+    if (existing.processed_at) {
+      return { eventRow: existing, alreadyProcessed: true };
+    }
+
+    // Active lease: another worker inserted recently and is still processing — skip
+    const STALE_LEASE_MS = 5 * 60 * 1000; // 5 minutes
+    const createdAt = new Date(existing.created_at as string).getTime();
+    const isStale = Date.now() - createdAt > STALE_LEASE_MS;
+
+    if (!isStale) {
+      return { eventRow: existing, alreadyProcessed: true };
+    }
+
+    // Stale lease: original worker likely crashed — allow re-processing
+    return { eventRow: existing, alreadyProcessed: false };
   }
 
   return { eventRow: data, alreadyProcessed: false };
