@@ -165,6 +165,7 @@ export default function InvitesPage() {
 
         setOrgInvites(inviteData || []);
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: parentInviteData, error: parentInviteError } = await (supabase as any)
           .from("parent_invites")
           .select("id,email,code,expires_at,status,created_at")
@@ -260,44 +261,46 @@ export default function InvitesPage() {
       return;
     }
 
-    if (
-      newRole === "alumni" &&
-      quota &&
-      quota.alumniLimit !== null &&
-      quota.alumniCount >= quota.alumniLimit
-    ) {
-      setError("Alumni quota reached. Upgrade your plan to invite more alumni.");
-      return;
-    }
-
     setIsCreating(true);
     setError(null);
+    const creatingRole = newRole;
 
-    const supabase = createClient();
-    
-    // Use server-side RPC to generate invite (secure code generation)
-    const usesRemaining = newUses ? parseInt(newUses) : null;
-    const expiresAt = newExpires ? new Date(newExpires).toISOString() : null;
+    try {
+      const usesRemaining = newUses ? parseInt(newUses, 10) : null;
+      const expiresAt = newExpires ? new Date(newExpires).toISOString() : null;
 
-    const { data, error: rpcError } = await supabase.rpc("create_org_invite", {
-      p_organization_id: orgId,
-      p_role: newRole,
-      p_uses: usesRemaining,
-      p_expires_at: expiresAt,
-    });
+      const res = await fetch(`/api/organizations/${orgId}/invites`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: newRole,
+          uses: usesRemaining,
+          expiresAt,
+        }),
+      });
 
-    if (rpcError) {
-      setError(rpcError.message);
-    } else if (data) {
-      // RPC returns the created invite
-      setOrgInvites((prev) => [data as Invite, ...prev]);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Unable to create invite");
+      }
+
+      const invite = (data as { invite?: Invite }).invite;
+      if (invite) {
+        setOrgInvites((prev) => [invite, ...prev]);
+      }
+
       setShowForm(false);
       setNewRole("active_member");
       setNewUses("");
       setNewExpires("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create invite");
+    } finally {
+      setIsCreating(false);
+      if (creatingRole === "alumni") {
+        void loadQuota(orgId);
+      }
     }
-
-    setIsCreating(false);
   };
 
   const handleDeleteInvite = async (inviteId: string) => {
