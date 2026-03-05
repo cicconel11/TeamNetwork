@@ -230,9 +230,17 @@ export async function POST(req: Request, { params }: RouteParams) {
       },
     });
 
+    // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedSub = updated as any;
-    const periodEnd = updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000).toISOString() : null;
+    const subLevelPeriodEnd = updatedSub.current_period_end ? Number(updatedSub.current_period_end) : null;
+    const itemLevelPeriodEnd = updated.items?.data
+      ?.map((item) => item.current_period_end)
+      .filter((v): v is number => typeof v === "number")
+      .sort((a, b) => a - b)?.[0] ?? null;
+    const periodEnd = (subLevelPeriodEnd ?? itemLevelPeriodEnd)
+      ? new Date((subLevelPeriodEnd ?? itemLevelPeriodEnd)! * 1000).toISOString()
+      : null;
     const stripeCustomerId =
       typeof updatedSub.customer === "string" ? updatedSub.customer : updatedSub.customer?.id || null;
 

@@ -16,6 +16,7 @@ import { canEditNavItem } from "@/lib/navigation/permissions";
 import { normalizeRole } from "@/lib/auth/role-utils";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { UserRole } from "@/types/database";
+import { canDevAdminPerform, logDevAdminAction, extractRequestContext } from "@/lib/auth/dev-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -140,12 +141,21 @@ async function ensureStripePlan(params: {
 
     const bucket = detectedBucket ?? params.currentBucket;
     const baseInterval = detectedInterval ?? params.currentBaseInterval;
+
+    // Backfill current_period_end from item-level data (Clover API moved it from Subscription to SubscriptionItem)
+    const itemPeriodEnd = items
+      .map((item) => (item as unknown as { current_period_end?: number | null }).current_period_end)
+      .filter((v): v is number => typeof v === "number")
+      .sort((a, b) => a - b)[0] ?? null;
+    const currentPeriodEnd = itemPeriodEnd ? new Date(itemPeriodEnd * 1000).toISOString() : null;
+
     await params.serviceSupabase
       .from("organization_subscriptions")
       .update({
         alumni_bucket: bucket,
         base_plan_interval: baseInterval ?? undefined,
         alumni_plan_interval: bucket === "none" ? null : baseInterval,
+        ...(currentPeriodEnd ? { current_period_end: currentPeriodEnd } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("organization_id", params.organizationId);
@@ -179,7 +189,7 @@ async function requireAdmin(
   req: Request,
   orgId: string,
   rateLimitLabel: string,
-  options?: { allowNavEditPath?: string }
+  options?: { allowNavEditPath?: string; allowDevAdmin?: boolean }
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -202,18 +212,25 @@ async function requireAdmin(
     return { error: respond({ error: "Unauthorized" }, 401) };
   }
 
-  const { data: roleData } = await supabase
+  const serviceSupabase = createServiceClient();
+  const { data: roleData, error: roleError } = await serviceSupabase
     .from("user_organization_roles")
-    .select("role")
+    .select("role, status")
     .eq("organization_id", orgId)
     .eq("user_id", user.id)
+    .eq("status", "active")
     .maybeSingle();
 
-  const isAdmin = roleData?.role === "admin";
+  if (roleError) {
+    console.error("[requireAdmin] Failed to fetch role:", roleError);
+    return { error: respond({ error: "Unable to verify permissions" }, 500) };
+  }
 
-  if (!isAdmin) {
+  const isAdmin = roleData?.role === "admin";
+  const isDevAdminAllowed = options?.allowDevAdmin === true && canDevAdminPerform(user, "view_billing");
+
+  if (!isAdmin && !isDevAdminAllowed) {
     if (options?.allowNavEditPath) {
-      const serviceSupabase = createServiceClient();
       const { data: org } = await serviceSupabase
         .from("organizations")
         .select("nav_config")
@@ -230,7 +247,18 @@ async function requireAdmin(
     return { error: respond({ error: "Forbidden" }, 403) };
   }
 
-  return { supabase, user, respond, rateLimit, isAdmin };
+  if (isDevAdminAllowed && !isAdmin) {
+    logDevAdminAction({
+      adminUserId: user.id,
+      adminEmail: user.email ?? "",
+      action: "view_billing",
+      targetType: "subscription",
+      targetId: orgId,
+      ...extractRequestContext(req),
+    });
+  }
+
+  return { supabase, user, respond, rateLimit, isAdmin: isAdmin || isDevAdminAllowed };
 }
 
 function buildQuotaResponse(params: {
@@ -268,6 +296,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   const auth = await requireAdmin(req, organizationId, "subscription lookup", {
     allowNavEditPath: "/alumni",
+    allowDevAdmin: true,
   });
   if ("error" in auth) return auth.error;
 

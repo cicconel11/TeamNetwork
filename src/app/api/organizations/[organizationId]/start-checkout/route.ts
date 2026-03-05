@@ -54,12 +54,17 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     if (!user) return respond({ error: "Unauthorized" }, 401);
 
-    const { data: role } = await supabase
+    const { data: role, error: roleError } = await serviceSupabase
       .from("user_organization_roles")
-      .select("role")
+      .select("role, status")
       .eq("organization_id", organizationId)
       .eq("user_id", user.id)
+      .eq("status", "active")
       .maybeSingle();
+    if (roleError) {
+      console.error("[start-checkout] Failed to fetch role:", roleError);
+      return respond({ error: "Unable to verify permissions" }, 500);
+    }
     if (role?.role !== "admin") return respond({ error: "Forbidden" }, 403);
 
     let body: z.infer<typeof bodySchema>;

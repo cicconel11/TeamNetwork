@@ -122,12 +122,21 @@ export async function POST(req: Request, { params }: RouteParams) {
   // If we have Stripe IDs but invalid status, fetch directly from Stripe to reconcile
   if (subscriptionRow.stripe_subscription_id) {
     try {
-      const subscription = (await stripe.subscriptions.retrieve(subscriptionRow.stripe_subscription_id)) as SubscriptionWithPeriod;
+      const subscription = (await stripe.subscriptions.retrieve(subscriptionRow.stripe_subscription_id, {
+        expand: ["items.data"],
+      })) as SubscriptionWithPeriod;
       const customerId = typeof subscription.customer === "string"
         ? subscription.customer
         : (subscription.customer as { id?: string })?.id || subscriptionRow.stripe_customer_id;
-      const currentPeriodEnd = subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
+      // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
+      const subLevelPeriodEnd = subscription.current_period_end ? Number(subscription.current_period_end) : null;
+      const itemLevelPeriodEnd = subscription.items?.data
+        ?.map((item) => item.current_period_end)
+        .filter((v): v is number => typeof v === "number")
+        .sort((a, b) => a - b)?.[0] ?? null;
+      const periodEndEpoch = subLevelPeriodEnd ?? itemLevelPeriodEnd;
+      const currentPeriodEnd = periodEndEpoch
+        ? new Date(periodEndEpoch * 1000).toISOString()
         : null;
       const status = normalizeSubscriptionStatus({
         status: subscription.status,
@@ -237,9 +246,18 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Checkout session missing subscription or customer details." }, 400);
     }
 
-    const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as SubscriptionWithPeriod;
-    const currentPeriodEnd = subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000).toISOString()
+    const subscription = (await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ["items.data"],
+    })) as SubscriptionWithPeriod;
+    // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
+    const subLevel = subscription.current_period_end ? Number(subscription.current_period_end) : null;
+    const itemLevel = subscription.items?.data
+      ?.map((item) => item.current_period_end)
+      .filter((v): v is number => typeof v === "number")
+      .sort((a, b) => a - b)?.[0] ?? null;
+    const periodEnd = subLevel ?? itemLevel;
+    const currentPeriodEnd = periodEnd
+      ? new Date(periodEnd * 1000).toISOString()
       : null;
     const status = normalizeSubscriptionStatus({
       status: subscription.status,

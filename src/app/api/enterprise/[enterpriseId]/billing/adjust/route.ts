@@ -336,10 +336,16 @@ export async function POST(req: Request, { params }: RouteParams) {
           });
 
           updatedStatus = updated.status;
+          // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const updatedPeriodEnd = (updated as any).current_period_end;
-          periodEnd = updatedPeriodEnd
-            ? new Date(updatedPeriodEnd * 1000).toISOString()
+          const subLevelEnd2 = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
+          const itemLevelEnd2 = updated.items?.data
+            ?.map((item) => item.current_period_end)
+            .filter((v): v is number => typeof v === "number")
+            .sort((a, b) => a - b)?.[0] ?? null;
+          const resolvedEnd2 = subLevelEnd2 ?? itemLevelEnd2;
+          periodEnd = resolvedEnd2
+            ? new Date(resolvedEnd2 * 1000).toISOString()
             : null;
         } else {
           // No subscription exists (edge case - should have alumni bucket subscription)
@@ -367,12 +373,20 @@ export async function POST(req: Request, { params }: RouteParams) {
           }
 
           // Retrieve updated subscription
-          const updated = await stripe.subscriptions.retrieve(reconciledSubscription.stripe_subscription_id);
+          const updated = await stripe.subscriptions.retrieve(reconciledSubscription.stripe_subscription_id, {
+            expand: ["items.data"],
+          });
           updatedStatus = updated.status;
+          // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const updatedPeriodEnd = (updated as any).current_period_end;
-          periodEnd = updatedPeriodEnd
-            ? new Date(updatedPeriodEnd * 1000).toISOString()
+          const subLevelEnd3 = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
+          const itemLevelEnd3 = updated.items?.data
+            ?.map((item) => item.current_period_end)
+            .filter((v): v is number => typeof v === "number")
+            .sort((a, b) => a - b)?.[0] ?? null;
+          const resolvedEnd3 = subLevelEnd3 ?? itemLevelEnd3;
+          periodEnd = resolvedEnd3
+            ? new Date(resolvedEnd3 * 1000).toISOString()
             : null;
         }
       }
@@ -402,10 +416,16 @@ export async function POST(req: Request, { params }: RouteParams) {
         });
 
         updatedStatus = updated.status;
+        // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const updatedPeriodEnd = (updated as any).current_period_end;
-        periodEnd = updatedPeriodEnd
-          ? new Date(updatedPeriodEnd * 1000).toISOString()
+        const subLevelEnd4 = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
+        const itemLevelEnd4 = updated.items?.data
+          ?.map((item) => item.current_period_end)
+          .filter((v): v is number => typeof v === "number")
+          .sort((a, b) => a - b)?.[0] ?? null;
+        const resolvedEnd4 = subLevelEnd4 ?? itemLevelEnd4;
+        periodEnd = resolvedEnd4
+          ? new Date(resolvedEnd4 * 1000).toISOString()
           : null;
       }
 
@@ -596,10 +616,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       });
 
       updatedStatus = updated.status;
+      // Handle Clover API: current_period_end moved from Subscription to SubscriptionItem
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const updatedPeriodEnd = (updated as any).current_period_end;
-      periodEnd = updatedPeriodEnd
-        ? new Date(updatedPeriodEnd * 1000).toISOString()
+      const subLevelEnd5 = (updated as any).current_period_end ? Number((updated as any).current_period_end) : null;
+      const itemLevelEnd5 = updated.items?.data
+        ?.map((item) => item.current_period_end)
+        .filter((v): v is number => typeof v === "number")
+        .sort((a, b) => a - b)?.[0] ?? null;
+      const resolvedEnd5 = subLevelEnd5 ?? itemLevelEnd5;
+      periodEnd = resolvedEnd5
+        ? new Date(resolvedEnd5 * 1000).toISOString()
         : null;
 
       // Update database (with single retry for transient failures)
