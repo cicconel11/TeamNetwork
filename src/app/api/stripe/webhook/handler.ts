@@ -949,6 +949,12 @@ export async function handleStripeWebhookPost(
           const subscriptionId = typeof invoice.subscription === "string"
             ? invoice.subscription : null;
 
+          // Skip partial refunds — only cancel on full refund
+          if (!charge.refunded) {
+            debugLog("stripe-webhook", "Partial refund — not canceling subscription:", subscriptionId);
+            break;
+          }
+
           if (subscriptionId) {
             try {
               await stripeClient.subscriptions.cancel(subscriptionId);
