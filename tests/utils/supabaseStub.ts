@@ -37,7 +37,9 @@ type TableName =
   | "feed_likes"
   | "media_uploads"
   | "parents"
-  | "parent_invites";
+  | "parent_invites"
+  | "chat_poll_votes"
+  | "chat_form_responses";
 
 type Row = Record<string, unknown>;
 
@@ -89,6 +91,8 @@ const uniqueKeys: Record<TableName, string[]> = {
   media_uploads: [],
   parents: [],
   parent_invites: ["code"],
+  chat_poll_votes: ["message_id,user_id"],
+  chat_form_responses: ["message_id,user_id"],
 };
 
 function nowIso() {
@@ -134,6 +138,8 @@ export function createSupabaseStub() {
     media_uploads: [],
     parents: [],
     parent_invites: [],
+    chat_poll_votes: [],
+    chat_form_responses: [],
   };
 
   // RPC handler registry
