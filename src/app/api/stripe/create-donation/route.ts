@@ -187,6 +187,9 @@ export async function POST(req: Request) {
   if (donorEmail) paymentAttemptMetadata.donor_email = donorEmail;
   if (body.anonymous) paymentAttemptMetadata.anonymous = "true";
 
+  let resolvedAttemptId: string | undefined;
+  let stripeResourceCreated = false;
+
   try {
     const { attempt } = await ensurePaymentAttempt({
       supabase,
@@ -201,6 +204,7 @@ export async function POST(req: Request) {
       metadata: paymentAttemptMetadata, // Includes donor PII for webhook retrieval
     });
 
+    resolvedAttemptId = attempt.id;
     metadata.payment_attempt_id = attempt.id;
 
     const { attempt: claimedAttempt, claimed } = await claimPaymentAttempt({
@@ -281,6 +285,8 @@ export async function POST(req: Request) {
         { idempotencyKey: claimedAttempt.idempotency_key, ...stripeOptions },
       );
 
+      stripeResourceCreated = true;
+
       await updatePaymentAttempt(supabase, claimedAttempt.id, {
         stripe_payment_intent_id: paymentIntent.id,
         status: "processing",
@@ -326,6 +332,8 @@ export async function POST(req: Request) {
       { idempotencyKey: claimedAttempt.idempotency_key, ...stripeOptions },
     );
 
+    stripeResourceCreated = true;
+
     if (session.payment_intent && typeof session.payment_intent === "string") {
       await stripe.paymentIntents.update(
         session.payment_intent,
@@ -356,10 +364,12 @@ export async function POST(req: Request) {
     }
 
     const message = error instanceof Error ? error.message : "Unable to start donation checkout";
-    if (paymentAttemptId) {
-      await supabase.from("payment_attempts").update({ last_error: message }).eq("id", paymentAttemptId);
-    } else if (idempotencyKey) {
-      await supabase.from("payment_attempts").update({ last_error: message }).eq("idempotency_key", idempotencyKey);
+    if (resolvedAttemptId) {
+      const errorUpdate: Record<string, unknown> = { last_error: message };
+      if (!stripeResourceCreated) {
+        errorUpdate.status = "initiated";
+      }
+      await supabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
     }
     console.error("[create-donation] Error:", message);
     return respond({ error: message }, 400);

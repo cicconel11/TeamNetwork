@@ -173,6 +173,9 @@ export async function POST(req: Request) {
       }
     }
 
+    let resolvedAttemptId: string | undefined;
+    let stripeResourceCreated = false;
+
     try {
       const { basePrice, alumniPrice } = getPriceIds(interval, bucket);
       const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
@@ -204,6 +207,8 @@ export async function POST(req: Request) {
         requestFingerprint: fingerprint,
         metadata: attemptMetadata,
       });
+
+      resolvedAttemptId = attempt.id;
 
       const storedMetadata = (attempt.metadata as Record<string, string> | null) ?? {};
       const pendingOrgId = storedMetadata.pending_org_id || pendingOrgIdSeed;
@@ -281,6 +286,8 @@ export async function POST(req: Request) {
         { idempotencyKey: claimedAttempt.idempotency_key },
       );
 
+      stripeResourceCreated = true;
+
       await updatePaymentAttempt(serviceSupabase, claimedAttempt.id, {
         stripe_checkout_session_id: session.id,
         checkout_url: session.url,
@@ -316,10 +323,12 @@ export async function POST(req: Request) {
       });
 
       const lastError = stripeErr?.message || stripeErr?.raw?.message || "checkout_failed";
-      if (paymentAttemptId) {
-        await serviceSupabase.from("payment_attempts").update({ last_error: lastError }).eq("id", paymentAttemptId);
-      } else if (idempotencyKey) {
-        await serviceSupabase.from("payment_attempts").update({ last_error: lastError }).eq("idempotency_key", idempotencyKey);
+      if (resolvedAttemptId) {
+        const errorUpdate: Record<string, unknown> = { last_error: lastError };
+        if (!stripeResourceCreated) {
+          errorUpdate.status = "initiated";
+        }
+        await serviceSupabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
       }
 
       const message = error instanceof Error ? error.message : "Unable to start checkout";
