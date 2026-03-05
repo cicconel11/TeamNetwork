@@ -9,7 +9,10 @@ interface InlineFormMessageProps {
   currentUserId: string;
   ownResponse?: ChatFormResponse | null;
   responseCount?: number;
-  onSubmit?: (messageId: string, responses: Record<string, string>) => void;
+  onSubmit?: (
+    messageId: string,
+    responses: Record<string, string>
+  ) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
 }
 
 function getSubmittedValues(
@@ -42,6 +45,7 @@ export function InlineFormMessage({
 
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (!metadata) {
     return (
@@ -58,8 +62,14 @@ export function InlineFormMessage({
   const handleSubmit = async () => {
     if (!isValid || isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
-      await onSubmit?.(message.id, values);
+      const result = await onSubmit?.(message.id, values);
+      if (result && typeof result === "object" && "ok" in result && !result.ok) {
+        setSubmitError(result.error || "Failed to submit response");
+      }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Failed to submit response");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,6 +138,7 @@ export function InlineFormMessage({
                 aria-required={field.required}
                 autoComplete="off"
                 spellCheck={false}
+                maxLength={2000}
                 className="w-full px-3 py-2 rounded-lg bg-muted border border-[var(--border)] focus:ring-2 focus:ring-[var(--color-org-primary)] focus:outline-none text-sm"
               />
             )}
@@ -196,6 +207,9 @@ export function InlineFormMessage({
           </span>
         )}
       </div>
+      {submitError && (
+        <p className="px-3 pb-3 text-xs text-red-500">{submitError}</p>
+      )}
     </div>
   );
 }

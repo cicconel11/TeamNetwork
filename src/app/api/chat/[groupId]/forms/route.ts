@@ -55,6 +55,10 @@ export async function POST(req: Request, { params }: RouteParams) {
   const ctx = await getChatGroupContext(supabase, user.id, groupId);
   if (!ctx.ok) return respond({ error: ctx.error }, ctx.status);
 
+  if (!ctx.membership) {
+    return respond({ error: "Forbidden" }, 403);
+  }
+
   // Determine message status based on group approval requirement
   const status = ctx.group.require_approval && !ctx.canModerate ? "pending" : "approved";
 

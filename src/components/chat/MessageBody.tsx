@@ -13,7 +13,10 @@ interface MessageBodyProps {
   responseCount?: number;
   onVote?: (messageId: string, optionIndex: number) => void;
   onRetractVote?: (messageId: string) => void;
-  onFormSubmit?: (messageId: string, responses: Record<string, string>) => void;
+  onFormSubmit?: (
+    messageId: string,
+    responses: Record<string, string>
+  ) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
 }
 
 export function MessageBody({

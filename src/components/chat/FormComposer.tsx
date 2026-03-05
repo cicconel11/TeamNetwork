@@ -45,11 +45,15 @@ function createEmptyField(): FieldState {
 export function FormComposer({ onCreateForm, onCancel, isSubmitting }: FormComposerProps) {
   const [title, setTitle] = useState("");
   const [fields, setFields] = useState<FieldState[]>([createEmptyField()]);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   const isValid =
     title.trim().length > 0 && fields.some((f) => f.label.trim().length > 0);
 
   const updateField = (index: number, updates: Partial<FieldState>) => {
+    if ("optionsText" in updates) {
+      setOptionsError(null);
+    }
     setFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...updates } : f)));
   };
 
@@ -63,25 +67,47 @@ export function FormComposer({ onCreateForm, onCancel, isSubmitting }: FormCompo
 
   const handleSubmit = () => {
     if (!isValid || isSubmitting) return;
+    const cleanedFields: Array<{
+      id: string;
+      label: string;
+      type: "text" | "select" | "radio";
+      required: boolean;
+      options?: string[];
+    }> = [];
+
+    for (const field of fields.filter((f) => f.label.trim().length > 0)) {
+      const cleanedField = {
+        id: field.id,
+        label: field.label.trim(),
+        type: field.type,
+        required: field.required,
+      } as {
+        id: string;
+        label: string;
+        type: "text" | "select" | "radio";
+        required: boolean;
+        options?: string[];
+      };
+
+      if (field.type === "select" || field.type === "radio") {
+        const options = field.optionsText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (options.length > 20) {
+          setOptionsError(`"${field.label.trim() || "Field"}" has too many options (max 20).`);
+          return;
+        }
+        cleanedField.options = options;
+      }
+
+      cleanedFields.push(cleanedField);
+    }
+
+    setOptionsError(null);
     onCreateForm({
       title: title.trim(),
-      fields: fields
-        .filter((f) => f.label.trim().length > 0)
-        .map((f) => ({
-          id: f.id,
-          label: f.label.trim(),
-          type: f.type,
-          required: f.required,
-          ...(f.type === "select" || f.type === "radio"
-            ? {
-                options: f.optionsText
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean)
-                  .slice(0, 20),
-              }
-            : {}),
-        })),
+      fields: cleanedFields,
     });
   };
 
@@ -236,6 +262,9 @@ export function FormComposer({ onCreateForm, onCancel, isSubmitting }: FormCompo
           )}
         </button>
       </div>
+      {optionsError && (
+        <p className="mt-2 text-xs text-red-500">{optionsError}</p>
+      )}
     </div>
   );
 }

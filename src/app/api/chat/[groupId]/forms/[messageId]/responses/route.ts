@@ -47,15 +47,14 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (!user) return respond({ error: "Unauthorized" }, 401);
 
-  // Preserve body-size enforcement that validateJson provides
-  const contentLength = parseInt(req.headers.get("content-length") ?? "", 10);
-  if (contentLength > 25_000) {
-    return respond({ error: "Payload too large" }, 413);
-  }
-
   let rawBody: unknown;
   try {
-    rawBody = await req.json();
+    const bodyBuffer = await req.arrayBuffer();
+    if (bodyBuffer.byteLength > 25_000) {
+      return respond({ error: "Payload too large" }, 413);
+    }
+    const rawText = new TextDecoder().decode(bodyBuffer);
+    rawBody = rawText.length ? JSON.parse(rawText) : {};
   } catch {
     return respond({ error: "Invalid JSON payload" }, 400);
   }

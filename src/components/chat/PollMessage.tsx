@@ -28,6 +28,7 @@ export function PollMessage({
 
   const userVote = votes.find((v) => v.user_id === currentUserId);
   const totalVotes = votes.length;
+  const voteLocked = metadata.allow_change === false && !!userVote;
 
   const voteCounts = votes.reduce<Record<number, number>>((acc, vote) => {
     return { ...acc, [vote.option_index]: (acc[vote.option_index] ?? 0) + 1 };
@@ -63,12 +64,14 @@ export function PollMessage({
               key={index}
               type="button"
               onClick={() => onVote?.(message.id, index)}
+              disabled={voteLocked}
               aria-pressed={isSelected}
               title={voterSummary ?? undefined}
               className={[
                 "px-3 py-2.5 w-full flex items-center gap-3 text-sm text-left",
                 "hover:bg-muted transition-colors duration-200",
                 "focus-visible:ring-2 focus-visible:ring-[var(--color-org-primary)] focus-visible:outline-none",
+                "disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-transparent",
                 isSelected
                   ? "bg-[var(--color-org-secondary)]/10 border-l-2 border-l-[var(--color-org-secondary)]"
                   : "",
@@ -116,7 +119,7 @@ export function PollMessage({
         <span style={{ fontVariantNumeric: "tabular-nums" }}>
           {totalVotes} vote{totalVotes !== 1 ? "s" : ""}
         </span>
-        {userVote && onRetractVote && (
+        {userVote && onRetractVote && !voteLocked && (
           <button
             type="button"
             onClick={(e) => {
@@ -128,6 +131,7 @@ export function PollMessage({
             Retract vote
           </button>
         )}
+        {voteLocked && <span>Vote locked</span>}
       </div>
     </div>
   );

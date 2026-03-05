@@ -75,13 +75,28 @@ export function useChatRealtime({
         }
       } else if (payload.eventType === "UPDATE") {
         const updated = payload.new as ChatMessage;
-        setMessages((prev) =>
-          prev.map((m) =>
+        const shouldBeVisible =
+          updated.status === "approved" ||
+          updated.author_id === currentUserId ||
+          canModerate;
+
+        if (!shouldBeVisible) {
+          setMessages((prev) => prev.filter((m) => m.id !== updated.id));
+          return;
+        }
+
+        const resolvedMap = await fetchUnknownUsers([updated.author_id]);
+        setMessages((prev) => {
+          const existingIndex = prev.findIndex((m) => m.id === updated.id);
+          if (existingIndex === -1) {
+            return [...prev, { ...updated, author: resolvedMap.get(updated.author_id) }];
+          }
+          return prev.map((m) =>
             m.id === updated.id
-              ? { ...updated, author: userMapRef.current.get(updated.author_id) }
+              ? { ...updated, author: resolvedMap.get(updated.author_id) }
               : m
-          )
-        );
+          );
+        });
       } else if (payload.eventType === "DELETE") {
         const deleted = payload.old as { id: string };
         setMessages((prev) => prev.filter((m) => m.id !== deleted.id));
