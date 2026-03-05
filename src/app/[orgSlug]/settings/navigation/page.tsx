@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Input, Badge } from "@/components/ui";
 import { AdminGuard } from "@/components/auth";
-import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavConfigEntry, type NavGroupId } from "@/lib/navigation/nav-items";
+import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavConfigEntry, type NavGroupId, getConfigKey } from "@/lib/navigation/nav-items";
+import { bucketItemsByGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { setConsentState as setAnalyticsConsentState } from "@/lib/analytics/events";
 
@@ -30,9 +31,6 @@ function NavigationSettingsContent() {
   const [consentLoading, setConsentLoading] = useState(true);
   const [consentSaving, setConsentSaving] = useState(false);
   const [consentMessage, setConsentMessage] = useState<string | null>(null);
-
-  // Use a unique key for nav config - Dashboard has empty href, so use "dashboard" as key
-  const getConfigKey = (href: string) => href === "" ? "dashboard" : href;
 
   const sortItemsByOrder = useCallback((items: typeof CONFIGURABLE_ITEMS, config: NavConfig) => {
     return [...items].sort((a, b) => {
@@ -352,14 +350,7 @@ function NavigationSettingsContent() {
             "standalone",
             "admin",
           ];
-          const groupedItems = new Map<NavGroupId | "standalone" | "dashboard", typeof orderedItems>();
-          for (const item of orderedItems) {
-            const key: NavGroupId | "standalone" | "dashboard" =
-              item.href === "" ? "dashboard" : item.group ?? "standalone";
-            const bucket = groupedItems.get(key) ?? [];
-            bucket.push(item);
-            groupedItems.set(key, bucket);
-          }
+          const groupedItems = bucketItemsByGroup(orderedItems as VisibleNavItem[]);
           return groupOrder.map((groupKey) => {
             const items = groupedItems.get(groupKey);
             if (!items || items.length === 0) return null;
