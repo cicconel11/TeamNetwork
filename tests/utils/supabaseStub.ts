@@ -39,7 +39,9 @@ type TableName =
   | "parents"
   | "parent_invites"
   | "chat_poll_votes"
-  | "chat_form_responses";
+  | "chat_form_responses"
+  | "enterprise_subscriptions"
+  | "user_enterprise_roles";
 
 type Row = Record<string, unknown>;
 
@@ -95,6 +97,8 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   parent_invites: ["code"],
   chat_poll_votes: [["message_id", "user_id"]],
   chat_form_responses: [["message_id", "user_id"]],
+  enterprise_subscriptions: ["enterprise_id"],
+  user_enterprise_roles: [["user_id", "enterprise_id"]],
 };
 
 function nowIso() {
@@ -142,6 +146,8 @@ export function createSupabaseStub() {
     parent_invites: [],
     chat_poll_votes: [],
     chat_form_responses: [],
+    enterprise_subscriptions: [],
+    user_enterprise_roles: [],
   };
 
   // RPC handler registry
