@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
-import { isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
+import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -17,6 +17,29 @@ const enterprisePublicSlugs = ["pricing", "features"];
 
 // Routes that should redirect to /app if user is already authenticated
 const authOnlyRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
+
+function fireMiddlewareAudit(params: {
+  userId: string;
+  userEmail: string;
+  action: "view_org" | "view_enterprise";
+  targetSlug: string;
+  pathname: string;
+  method: string;
+  request: NextRequest;
+}) {
+  const entry = createMiddlewareAuditEntry({
+    userId: params.userId,
+    userEmail: params.userEmail,
+    action: params.action,
+    targetSlug: params.targetSlug,
+    pathname: params.pathname,
+    method: params.method,
+    headers: params.request.headers,
+  });
+
+  if (!entry) return;
+  void fireAndForgetDevAdminAudit(entry);
+}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -280,13 +303,24 @@ export async function middleware(request: NextRequest) {
           }
           return NextResponse.redirect(new URL("/app?error=enterprise_error", request.url));
         }
-      } else if (shouldLog) {
-        // Log dev-admin access for debugging (email redacted for privacy)
-        console.log("[AUTH-MW] Dev-admin bypassing enterprise membership check", {
-          email: userEmail ? redactEmail(userEmail) : null,
-          enterpriseSlug,
+      } else {
+        // Audit dev-admin bypass
+        fireMiddlewareAudit({
+          userId: user.id,
+          userEmail: userEmail ?? "",
+          action: "view_enterprise",
+          targetSlug: enterpriseSlug,
           pathname,
+          method: request.method,
+          request,
         });
+        if (shouldLog) {
+          console.log("[AUTH-MW] Dev-admin bypassing enterprise membership check", {
+            email: userEmail ? redactEmail(userEmail) : null,
+            enterpriseSlug,
+            pathname,
+          });
+        }
       }
     }
   }
@@ -349,13 +383,24 @@ export async function middleware(request: NextRequest) {
             console.error("[AUTH-MW] Error checking membership status:", e);
           }
         }
-      } else if (shouldLog) {
-        // Log dev-admin access for debugging (email redacted for privacy)
-        console.log("[AUTH-MW] Dev-admin bypassing membership check", {
-          email: userEmail ? redactEmail(userEmail) : null,
-          orgSlug,
+      } else {
+        // Audit dev-admin bypass
+        fireMiddlewareAudit({
+          userId: user.id,
+          userEmail: userEmail ?? "",
+          action: "view_org",
+          targetSlug: orgSlug,
           pathname,
+          method: request.method,
+          request,
         });
+        if (shouldLog) {
+          console.log("[AUTH-MW] Dev-admin bypassing membership check", {
+            email: userEmail ? redactEmail(userEmail) : null,
+            orgSlug,
+            pathname,
+          });
+        }
       }
     }
   }

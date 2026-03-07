@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isDevAdminEmail } from "@/lib/auth/dev-admin";
+import { canDevAdminPerform, logDevAdminAction, extractRequestContext } from "@/lib/auth/dev-admin";
 import { updateErrorGroupStatus } from "@/lib/error-alerts/queries";
 
 const VALID_STATUSES = ["open", "resolved", "ignored", "muted"] as const;
@@ -16,7 +16,7 @@ export async function POST(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user || !isDevAdminEmail(user.email)) {
+  if (!user || !canDevAdminPerform(user, "manage_error_groups")) {
     return NextResponse.json(
       { error: "Forbidden" },
       { status: 403 }
@@ -64,6 +64,16 @@ export async function POST(
       { status: 404 }
     );
   }
+
+  logDevAdminAction({
+    adminUserId: user.id,
+    adminEmail: user.email ?? "",
+    action: "manage_error_groups",
+    targetType: "error_group",
+    targetId: groupId,
+    ...extractRequestContext(request),
+    metadata: { newStatus: status },
+  });
 
   return NextResponse.json(data);
 }

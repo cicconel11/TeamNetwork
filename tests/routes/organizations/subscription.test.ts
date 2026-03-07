@@ -457,7 +457,7 @@ function simulateReconcileSubscription(
   }
 
   const isAdmin = isOrgAdmin(request.auth, request.organizationId);
-  const isDevAdminAllowed = ctx.devAdmin && canDevAdminPerform(ctx.devAdmin, "reconcile_subscription" as never);
+  const isDevAdminAllowed = ctx.devAdmin && canDevAdminPerform(ctx.devAdmin, "reconcile_subscription");
 
   if (!isAdmin && !isDevAdminAllowed) {
     return { status: 403, error: "Forbidden" };
