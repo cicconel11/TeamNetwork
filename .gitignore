@@ -72,3 +72,6 @@ opencode-auth/
 # Workspace apps and shared packages (separate projects)
 apps/
 packages/
+
+# Real CSV test data with PII
+teamnetwork_linkedin_import_real.csv
