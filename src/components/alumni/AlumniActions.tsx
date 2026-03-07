@@ -3,29 +3,35 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
 import { AddAlumniMenu } from "./AddAlumniMenu";
 import { BulkLinkedInImporter } from "./BulkLinkedInImporter";
+import { BulkCsvImporter } from "./BulkCsvImporter";
 
 // ─── Context to decouple menu (in header) from panel (in body) ───────────────
 
+type ImportMode = "linkedin" | "csv" | null;
+
 interface ImporterContextValue {
-  showImporter: boolean;
-  openImporter: () => void;
+  importMode: ImportMode;
+  openLinkedInImporter: () => void;
+  openCsvImporter: () => void;
   closeImporter: () => void;
 }
 
 const ImporterContext = createContext<ImporterContextValue>({
-  showImporter: false,
-  openImporter: () => {},
+  importMode: null,
+  openLinkedInImporter: () => {},
+  openCsvImporter: () => {},
   closeImporter: () => {},
 });
 
 // Provider wraps the entire alumni page section
 export function AlumniActionsProvider({ children }: { children: ReactNode }) {
-  const [showImporter, setShowImporter] = useState(false);
-  const openImporter = useCallback(() => setShowImporter(true), []);
-  const closeImporter = useCallback(() => setShowImporter(false), []);
+  const [importMode, setImportMode] = useState<ImportMode>(null);
+  const openLinkedInImporter = useCallback(() => setImportMode("linkedin"), []);
+  const openCsvImporter = useCallback(() => setImportMode("csv"), []);
+  const closeImporter = useCallback(() => setImportMode(null), []);
 
   return (
-    <ImporterContext.Provider value={{ showImporter, openImporter, closeImporter }}>
+    <ImporterContext.Provider value={{ importMode, openLinkedInImporter, openCsvImporter, closeImporter }}>
       {children}
     </ImporterContext.Provider>
   );
@@ -38,13 +44,14 @@ interface AlumniActionsMenuProps {
 }
 
 export function AlumniActionsMenu({ orgSlug, actionLabel }: AlumniActionsMenuProps) {
-  const { openImporter } = useContext(ImporterContext);
+  const { openLinkedInImporter, openCsvImporter } = useContext(ImporterContext);
 
   return (
     <AddAlumniMenu
       orgSlug={orgSlug}
       actionLabel={actionLabel}
-      onImportClick={openImporter}
+      onImportClick={openLinkedInImporter}
+      onCsvImportClick={openCsvImporter}
     />
   );
 }
@@ -55,14 +62,25 @@ interface AlumniImportPanelProps {
 }
 
 export function AlumniImportPanel({ organizationId }: AlumniImportPanelProps) {
-  const { showImporter, closeImporter } = useContext(ImporterContext);
+  const { importMode, closeImporter } = useContext(ImporterContext);
 
-  if (!showImporter) return null;
+  if (importMode === "linkedin") {
+    return (
+      <BulkLinkedInImporter
+        organizationId={organizationId}
+        onClose={closeImporter}
+      />
+    );
+  }
 
-  return (
-    <BulkLinkedInImporter
-      organizationId={organizationId}
-      onClose={closeImporter}
-    />
-  );
+  if (importMode === "csv") {
+    return (
+      <BulkCsvImporter
+        organizationId={organizationId}
+        onClose={closeImporter}
+      />
+    );
+  }
+
+  return null;
 }
