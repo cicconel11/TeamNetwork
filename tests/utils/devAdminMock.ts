@@ -3,11 +3,7 @@
  * Simulates the dev admin permission system for routes that support it.
  */
 
-export type DevAdminAction =
-  | "delete_org"
-  | "view_all_orgs"
-  | "impersonate_user"
-  | "access_billing_portal";
+import type { DevAdminAction } from "@/lib/auth/dev-admin";
 
 export interface DevAdminContext {
   isDevAdmin: boolean;
@@ -55,6 +51,6 @@ export const DevAdminPresets = {
   /** Dev admin that can view all orgs */
   viewOrgsOnly: (): DevAdminContext => ({
     isDevAdmin: true,
-    allowedActions: ["view_all_orgs"],
+    allowedActions: ["view_org"],
   }),
 };
