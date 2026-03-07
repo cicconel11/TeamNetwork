@@ -10,6 +10,10 @@ import { PageHeader } from "@/components/layout";
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
 import type { Alumni } from "@/types/database";
 
+interface SubscriptionInfo {
+  status?: string;
+}
+
 export default function EditAlumniPage() {
   const router = useRouter();
   const params = useParams();
@@ -19,6 +23,8 @@ export default function EditAlumniPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFetching, setIsFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
 
   const {
     register,
@@ -61,6 +67,18 @@ export default function EditAlumniPage() {
         return;
       }
 
+      setOrgId(org.id);
+
+      const { data: subscriptionRows, error: subscriptionError } = await supabase
+        .rpc("get_subscription_status", { p_org_id: org.id });
+      if (subscriptionError) {
+        setError("Unable to verify billing status");
+        setSubscription({ status: "canceled" });
+      } else {
+        const subscriptionRow = subscriptionRows?.[0] ?? null;
+        setSubscription(subscriptionRow ? { status: subscriptionRow.status ?? undefined } : null);
+      }
+
       const { data: alumni } = await supabase
         .from("alumni")
         .select("*")
@@ -99,47 +117,53 @@ export default function EditAlumniPage() {
   }, [orgSlug, alumniId, reset]);
 
   const onSubmit = async (data: EditAlumniForm) => {
+    if (subscription?.status === "canceled") {
+      setError("This organization is in its billing grace period. Existing alumni cannot be edited until billing is restored.");
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     const supabase = createClient();
 
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("id")
-      .eq("slug", orgSlug)
-      .single();
+    let organizationId = orgId;
+    if (!organizationId) {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("id")
+        .eq("slug", orgSlug)
+        .single();
 
-    if (!org) {
-      setError("Organization not found");
-      setIsLoading(false);
-      return;
+      if (!org) {
+        setError("Organization not found");
+        setIsLoading(false);
+        return;
+      }
+
+      organizationId = org.id;
+      setOrgId(org.id);
     }
 
-    const { error: updateError } = await supabase
-      .from("alumni")
-      .update({
-        first_name: data.first_name,
-        last_name: data.last_name,
-        email: data.email || null,
-        graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
-        major: data.major || null,
-        job_title: data.job_title || null,
-        photo_url: data.photo_url || null,
-        notes: data.notes || null,
-        linkedin_url: data.linkedin_url || null,
-        phone_number: data.phone_number || null,
-        industry: data.industry || null,
-        current_company: data.current_company || null,
-        current_city: data.current_city || null,
-        position_title: data.position_title || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", alumniId)
-      .eq("organization_id", org.id);
+    try {
+      const response = await fetch(`/api/organizations/${organizationId}/alumni/${alumniId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const payload = await response.json().catch(() => ({}));
 
-    if (updateError) {
-      setError(updateError.message);
+      if (!response.ok) {
+        if (payload.code === "ORG_READ_ONLY") {
+          setError("This organization is in its billing grace period. Existing alumni cannot be edited until billing is restored.");
+        } else {
+          setError(payload.error || "Unable to update alumni");
+        }
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      setError("Unable to update alumni");
       setIsLoading(false);
       return;
     }
@@ -171,9 +195,15 @@ export default function EditAlumniPage() {
     <div className="animate-fade-in">
       <PageHeader
         title="Edit Alumni"
-        description="Update alumni information"
+        description={subscription?.status === "canceled" ? "Viewing alumni information during grace period" : "Update alumni information"}
         backHref={`/${orgSlug}/alumni/${alumniId}`}
       />
+
+      {subscription?.status === "canceled" && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+          Alumni editing is disabled while this organization is in its billing grace period. You can still add new alumni, but existing records cannot be changed until billing is restored.
+        </div>
+      )}
 
       <Card className="max-w-2xl">
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
@@ -183,122 +213,128 @@ export default function EditAlumniPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <fieldset disabled={subscription?.status === "canceled" || isLoading} className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="First Name"
+                error={errors.first_name?.message}
+                {...register("first_name")}
+              />
+              <Input
+                label="Last Name"
+                error={errors.last_name?.message}
+                {...register("last_name")}
+              />
+            </div>
+
             <Input
-              label="First Name"
-              error={errors.first_name?.message}
-              {...register("first_name")}
+              label="Email"
+              type="email"
+              placeholder="alumni@example.com"
+              error={errors.email?.message}
+              {...register("email")}
             />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Graduation Year"
+                type="number"
+                placeholder="2020"
+                min={1900}
+                max={2100}
+                error={errors.graduation_year?.message}
+                {...register("graduation_year")}
+              />
+              <Input
+                label="Major"
+                placeholder="e.g., Finance, Computer Science"
+                error={errors.major?.message}
+                {...register("major")}
+              />
+            </div>
+
             <Input
-              label="Last Name"
-              error={errors.last_name?.message}
-              {...register("last_name")}
+              label="Current Position (Legacy)"
+              placeholder="e.g., Software Engineer at Google"
+              helperText="Optional - use Position Title and Company below for better filtering"
+              error={errors.job_title?.message}
+              {...register("job_title")}
             />
-          </div>
 
-          <Input
-            label="Email"
-            type="email"
-            placeholder="alumni@example.com"
-            error={errors.email?.message}
-            {...register("email")}
-          />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Position Title"
+                placeholder="e.g., Software Engineer"
+                error={errors.position_title?.message}
+                {...register("position_title")}
+              />
+              <Input
+                label="Current Company"
+                placeholder="e.g., Google"
+                error={errors.current_company?.message}
+                {...register("current_company")}
+              />
+            </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input
+                label="Industry"
+                placeholder="e.g., Technology, Finance, Healthcare"
+                error={errors.industry?.message}
+                {...register("industry")}
+              />
+              <Input
+                label="Current City"
+                placeholder="e.g., San Francisco, CA"
+                error={errors.current_city?.message}
+                {...register("current_city")}
+              />
+            </div>
+
             <Input
-              label="Graduation Year"
-              type="number"
-              placeholder="2020"
-              min={1900}
-              max={2100}
-              error={errors.graduation_year?.message}
-              {...register("graduation_year")}
+              label="Phone Number"
+              type="tel"
+              placeholder="e.g., +1 (555) 123-4567"
+              error={errors.phone_number?.message}
+              {...register("phone_number")}
             />
+
             <Input
-              label="Major"
-              placeholder="e.g., Finance, Computer Science"
-              error={errors.major?.message}
-              {...register("major")}
+              label="Photo URL"
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              helperText="Direct link to alumni photo"
+              error={errors.photo_url?.message}
+              {...register("photo_url")}
             />
-          </div>
 
-          <Input
-            label="Current Position (Legacy)"
-            placeholder="e.g., Software Engineer at Google"
-            helperText="Optional - use Position Title and Company below for better filtering"
-            error={errors.job_title?.message}
-            {...register("job_title")}
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Position Title"
-              placeholder="e.g., Software Engineer"
-              error={errors.position_title?.message}
-              {...register("position_title")}
+              label="LinkedIn profile (optional)"
+              type="url"
+              placeholder="https://www.linkedin.com/in/username"
+              helperText="Must be a valid https:// URL"
+              error={errors.linkedin_url?.message}
+              {...register("linkedin_url")}
             />
-            <Input
-              label="Current Company"
-              placeholder="e.g., Google"
-              error={errors.current_company?.message}
-              {...register("current_company")}
+
+            <Textarea
+              label="Notes"
+              placeholder="Any additional notes about this alumni..."
+              rows={3}
+              error={errors.notes?.message}
+              {...register("notes")}
             />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Industry"
-              placeholder="e.g., Technology, Finance, Healthcare"
-              error={errors.industry?.message}
-              {...register("industry")}
-            />
-            <Input
-              label="Current City"
-              placeholder="e.g., San Francisco, CA"
-              error={errors.current_city?.message}
-              {...register("current_city")}
-            />
-          </div>
-
-          <Input
-            label="Phone Number"
-            type="tel"
-            placeholder="e.g., +1 (555) 123-4567"
-            error={errors.phone_number?.message}
-            {...register("phone_number")}
-          />
-
-          <Input
-            label="Photo URL"
-            type="url"
-            placeholder="https://example.com/photo.jpg"
-            helperText="Direct link to alumni photo"
-            error={errors.photo_url?.message}
-            {...register("photo_url")}
-          />
-
-          <Input
-            label="LinkedIn profile (optional)"
-            type="url"
-            placeholder="https://www.linkedin.com/in/username"
-            helperText="Must be a valid https:// URL"
-            error={errors.linkedin_url?.message}
-            {...register("linkedin_url")}
-          />
-
-          <Textarea
-            label="Notes"
-            placeholder="Any additional notes about this alumni..."
-            rows={3}
-            error={errors.notes?.message}
-            {...register("notes")}
-          />
+          </fieldset>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-border">
             <Button type="button" variant="secondary" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button
+              type="submit"
+              isLoading={isLoading}
+              disabled={subscription?.status === "canceled"}
+            >
               Save Changes
             </Button>
           </div>

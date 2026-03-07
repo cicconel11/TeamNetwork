@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { AlumniFilters } from "@/components/alumni";
+import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
@@ -138,7 +138,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const pageLabel = resolveLabel("/alumni", navConfig);
   const actionLabel = resolveActionLabel("/alumni", navConfig);
 
-  return (
+  const pageContent = (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
       <PageHeader
@@ -146,14 +146,11 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
         description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? " (filtered)" : " in our network"}`}
         actions={
           canEdit && (
-            <Link href={`/${orgSlug}/alumni/new`}>
-              <Button>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                {actionLabel}
-              </Button>
-            </Link>
+            <AlumniActionsMenu
+              orgSlug={orgSlug}
+              organizationId={org.id}
+              actionLabel={actionLabel}
+            />
           )
         }
       />
@@ -167,6 +164,9 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
         cities={cities}
         positions={positions}
       />
+
+      {/* Import panel (admin only, toggled from dropdown) */}
+      {canEdit && <AlumniImportPanel organizationId={org.id} />}
 
       {/* Alumni Grid */}
       {alumni && alumni.length > 0 ? (
@@ -236,4 +236,11 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       )}
     </div>
   );
+
+  // Wrap with provider so the menu (in header) can toggle the import panel (in body)
+  if (canEdit) {
+    return <AlumniActionsProvider>{pageContent}</AlumniActionsProvider>;
+  }
+
+  return pageContent;
 }

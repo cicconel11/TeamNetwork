@@ -15,6 +15,7 @@ interface SubscriptionInfo {
   alumniLimit: number | null;
   alumniCount: number;
   remaining: number | null;
+  status?: string;
 }
 
 export default function NewAlumniPage() {
@@ -124,26 +125,21 @@ export default function NewAlumniPage() {
       setOrgId(org.id);
     }
 
-    const { error: insertError } = await supabase.from("alumni").insert({
-      organization_id: organizationId,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email || null,
-      graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
-      major: data.major || null,
-      job_title: data.job_title || null,
-      photo_url: data.photo_url || null,
-      notes: data.notes || null,
-      linkedin_url: data.linkedin_url || null,
-      phone_number: data.phone_number || null,
-      industry: data.industry || null,
-      current_company: data.current_company || null,
-      current_city: data.current_city || null,
-      position_title: data.position_title || null,
-    });
+    try {
+      const response = await fetch(`/api/organizations/${organizationId}/alumni`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const payload = await response.json();
 
-    if (insertError) {
-      setError(insertError.message);
+      if (!response.ok) {
+        setError(payload.error || "Unable to create alumni");
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      setError("Unable to create alumni");
       setIsLoading(false);
       return;
     }
@@ -171,6 +167,12 @@ export default function NewAlumniPage() {
           <Link href={`/${orgSlug}/settings/invites`} className="text-sm text-emerald-600 hover:text-emerald-700">
             Manage subscription
           </Link>
+        </div>
+      )}
+
+      {quota?.status === "canceled" && (
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm">
+          This organization is in its billing grace period. You can still add alumni here, but editing and deleting existing alumni stay locked until billing is restored.
         </div>
       )}
 

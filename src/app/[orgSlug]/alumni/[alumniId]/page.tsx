@@ -2,13 +2,15 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { Card, Badge, Avatar, Button, SoftDeleteButton } from "@/components/ui";
+import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Organization, Alumni } from "@/types/database";
+import { checkOrgReadOnly } from "@/lib/subscription/read-only-guard";
+import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -63,6 +65,9 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const alumUserId = (alum as Alumni & { user_id?: string | null }).user_id || null;
   const isSelf = Boolean(currentUserId && alumUserId === currentUserId);
   const canEdit = canEditPage || isSelf;
+  const { isReadOnly } = await checkOrgReadOnly(orgId);
+  const canModifyExisting = canEdit && !isReadOnly;
+  const canDelete = canEditPage && !isReadOnly;
 
   return (
     <div className="animate-fade-in">
@@ -72,27 +77,39 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
         actions={
           canEdit && (
             <div className="flex items-center gap-2">
-              <Link href={`/${orgSlug}/alumni/${alumniId}/edit`}>
-                <Button variant="secondary">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                  </svg>
-                  Edit
+              {canModifyExisting ? (
+                <Link href={`/${orgSlug}/alumni/${alumniId}/edit`}>
+                  <Button variant="secondary">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                    </svg>
+                    Edit
+                  </Button>
+                </Link>
+              ) : (
+                <Button variant="secondary" disabled>
+                  Edit Disabled
                 </Button>
-              </Link>
-              {canEditPage && (
-                <SoftDeleteButton
-                  table="alumni"
-                  id={alumniId}
-                  organizationField="organization_id"
+              )}
+              {canDelete ? (
+                <DeleteAlumniButton
                   organizationId={orgId}
+                  alumniId={alumniId}
                   redirectTo={`/${orgSlug}/alumni`}
                 />
+              ) : (
+                canEditPage && <Button variant="danger" disabled>Delete Disabled</Button>
               )}
             </div>
           )
         }
       />
+
+      {isReadOnly && (
+        <div className="mb-6 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+          This organization is in its billing grace period. You can still add new alumni, but editing and deleting existing alumni are disabled until billing is restored.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Profile Card */}
