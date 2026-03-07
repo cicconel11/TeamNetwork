@@ -169,19 +169,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const { rows, overwrite, dryRun } = body;
-  const uniqueRows = rows.reduce<typeof rows>((acc, row) => {
-    if (acc.some((existing) => existing.email.toLowerCase() === row.email.toLowerCase())) {
-      return acc;
-    }
-    acc.push({
-      ...row,
-      email: row.email.toLowerCase(),
-    });
-    return acc;
-  }, []);
+
+  // Deduplication is handled by planLinkedInImport via normalizeLinkedInImportRows
 
   // Fetch alumni by email for this org (Layer 3: org-scoped query)
-  const emails = uniqueRows.map((r) => r.email);
+  const emails = [...new Set(rows.map((r) => r.email.toLowerCase()))];
   const { data: alumniData, error: alumniError } = await serviceSupabase
     .from("alumni")
     .select("id, email, linkedin_url")
@@ -248,7 +240,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Failed to verify alumni capacity" }, 500);
   }
   const importPlan = planLinkedInImport({
-    rows: uniqueRows,
+    rows,
     overwrite,
     dryRun,
     alumniByEmail,
