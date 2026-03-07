@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
-import { isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
+import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
 
 // Validate AUTH_TEST_MODE at module load
 validateAuthTestMode();
@@ -21,32 +21,24 @@ const authOnlyRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 function fireMiddlewareAudit(params: {
   userId: string;
   userEmail: string;
-  action: string;
+  action: "view_org" | "view_enterprise";
   targetSlug: string;
   pathname: string;
   method: string;
   request: NextRequest;
 }) {
-  const url = new URL("/api/dev-admin/audit", params.request.url);
-  fetch(url.toString(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      adminUserId: params.userId,
-      adminEmail: params.userEmail,
-      action: params.action,
-      targetType: params.action === "view_enterprise" ? "enterprise" : "organization",
-      targetSlug: params.targetSlug,
-      requestPath: params.pathname,
-      requestMethod: params.method,
-      ipAddress: params.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-        params.request.headers.get("x-real-ip") ?? undefined,
-      userAgent: params.request.headers.get("user-agent") ?? undefined,
-      metadata: { source: "middleware" },
-    }),
-  }).catch(() => {
-    // Fire-and-forget: silently ignore failures
+  const entry = createMiddlewareAuditEntry({
+    userId: params.userId,
+    userEmail: params.userEmail,
+    action: params.action,
+    targetSlug: params.targetSlug,
+    pathname: params.pathname,
+    method: params.method,
+    headers: params.request.headers,
   });
+
+  if (!entry) return;
+  void fireAndForgetDevAdminAudit(entry);
 }
 
 export async function middleware(request: NextRequest) {
