@@ -86,7 +86,8 @@ export type DevAdminAction =
   | "reconcile_subscription"
   | "open_billing_portal"
   | "delete_org"
-  | "view_stripe_details";
+  | "view_stripe_details"
+  | "manage_error_groups";
 
 /**
  * Actions that dev-admins are NOT allowed to perform
@@ -115,8 +116,27 @@ export function canDevAdminPerform(
     "open_billing_portal",
     "delete_org",
     "view_stripe_details",
+    "manage_error_groups",
   ];
   return allowedActions.includes(action as DevAdminAction);
+}
+
+/**
+ * Resolve the appropriate Supabase client for data queries.
+ * Dev-admins get a service client (bypasses RLS), others keep the regular client.
+ */
+export function resolveDataClient<T>(
+  user: { email?: string | null } | null | undefined,
+  regularClient: T,
+  action: DevAdminAction
+): T {
+  if (!canDevAdminPerform(user, action)) return regularClient;
+  try {
+    return createServiceClient() as unknown as T;
+  } catch (error) {
+    console.warn("DevAdmin: Failed to create service client (missing key?)", error);
+    return regularClient;
+  }
 }
 
 /**
