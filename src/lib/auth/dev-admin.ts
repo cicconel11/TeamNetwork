@@ -146,7 +146,7 @@ export interface DevAdminAuditLogEntry {
   adminUserId: string;
   adminEmail: string;
   action: DevAdminAction;
-  targetType?: "organization" | "member" | "subscription" | "billing" | "enterprise";
+  targetType?: "organization" | "member" | "subscription" | "billing" | "enterprise" | "error_group";
   targetId?: string;
   targetSlug?: string;
   requestPath?: string;
@@ -154,6 +154,16 @@ export interface DevAdminAuditLogEntry {
   ipAddress?: string;
   userAgent?: string;
   metadata?: Record<string, unknown>;
+}
+
+export interface MiddlewareAuditInput {
+  userId: string;
+  userEmail: string;
+  action: "view_org" | "view_enterprise";
+  targetSlug: string;
+  pathname: string;
+  method: string;
+  headers: Headers;
 }
 
 /**
@@ -177,6 +187,27 @@ export function extractRequestContext(req: Request): {
   };
 }
 
+export function createMiddlewareAuditEntry(
+  input: MiddlewareAuditInput
+): DevAdminAuditLogEntry | null {
+  if (!isDevAdminEmail(input.userEmail)) return null;
+  return {
+    adminUserId: input.userId,
+    adminEmail: input.userEmail,
+    action: input.action,
+    targetType: input.action === "view_enterprise" ? "enterprise" : "organization",
+    targetSlug: input.targetSlug,
+    requestPath: input.pathname,
+    requestMethod: input.method,
+    ipAddress:
+      input.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      input.headers.get("x-real-ip") ??
+      undefined,
+    userAgent: input.headers.get("user-agent") ?? undefined,
+    metadata: { source: "middleware" },
+  };
+}
+
 /**
  * Log a dev-admin action (for audit purposes)
  * Fire-and-forget: returns immediately, logging happens asynchronously
@@ -184,18 +215,28 @@ export function extractRequestContext(req: Request): {
  */
 export function logDevAdminAction(entry: DevAdminAuditLogEntry): void {
   // Fire-and-forget: call async but don't await
-  logDevAdminActionAsync(entry).catch((error) => {
+  void fireAndForgetDevAdminAudit(entry);
+}
+
+export async function fireAndForgetDevAdminAudit(
+  entry: DevAdminAuditLogEntry,
+  writer: (entry: DevAdminAuditLogEntry) => Promise<void> = writeDevAdminAuditLog
+): Promise<void> {
+  try {
+    await writer(entry);
+  } catch (error) {
     console.error("[dev-admin-audit] Failed to log:", {
       action: entry.action,
       error: error instanceof Error ? error.message : "Unknown error",
     });
-  });
+  }
 }
 
-async function logDevAdminActionAsync(
-  entry: DevAdminAuditLogEntry
+export async function writeDevAdminAuditLog(
+  entry: DevAdminAuditLogEntry,
+  createServiceClientFn: typeof createServiceClient = createServiceClient
 ): Promise<void> {
-  const serviceSupabase = createServiceClient();
+  const serviceSupabase = createServiceClientFn();
   // Cast to bypass type checking since the table may not be in generated types yet
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (serviceSupabase as any)
