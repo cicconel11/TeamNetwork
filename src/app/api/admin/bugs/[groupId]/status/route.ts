@@ -69,7 +69,7 @@ export async function POST(
     adminUserId: user.id,
     adminEmail: user.email ?? "",
     action: "manage_error_groups",
-    targetType: "organization",
+    targetType: "error_group",
     targetId: groupId,
     ...extractRequestContext(request),
     metadata: { newStatus: status },
