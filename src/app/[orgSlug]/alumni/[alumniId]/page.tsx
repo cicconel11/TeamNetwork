@@ -1,10 +1,9 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -20,15 +19,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const { orgSlug, alumniId } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const isDevAdmin = canDevAdminPerform(user, "view_members");
-  let dataClient = supabase;
-  if (isDevAdmin) {
-    try {
-      dataClient = createServiceClient();
-    } catch {
-      // Falls back to regular supabase client if service key is missing
-    }
-  }
+  const dataClient = resolveDataClient(user, supabase, "view_members");
 
   // Fetch organization
   const { data: orgData, error: orgError } = await dataClient

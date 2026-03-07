@@ -2,11 +2,10 @@ import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgRole } from "@/lib/auth/roles";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import { SuggestedFeatures } from "@/components/analytics/SuggestedFeatures";
 
@@ -18,10 +17,7 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   const { orgSlug } = await params;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const isDevAdmin = canDevAdminPerform(user, "view_org");
-
-  // Use service client for dev admins to bypass RLS
-  const queryClient = isDevAdmin ? createServiceClient() : supabase;
+  const queryClient = resolveDataClient(user, supabase, "view_org");
 
   // Fetch organization
   const { data: orgs, error: orgError } = await queryClient

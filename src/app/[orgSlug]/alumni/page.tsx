@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
-import { canDevAdminPerform } from "@/lib/auth/dev-admin";
+import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -44,17 +43,8 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const filters = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const isDevAdmin = canDevAdminPerform(user, "view_members");
-
   // Alumni access gate removed — all org members can view the alumni directory
-  let dataClient = supabase;
-  if (isDevAdmin) {
-    try {
-      dataClient = createServiceClient();
-    } catch {
-      // Falls back to regular supabase client if service key is missing
-    }
-  }
+  const dataClient = resolveDataClient(user, supabase, "view_members");
 
   const normalize = (value?: string) => value?.trim() || "";
 

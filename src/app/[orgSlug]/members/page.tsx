@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { isOrgAdmin } from "@/lib/auth";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
-import { canDevAdminPerform, getDevAdminEmails } from "@/lib/auth/dev-admin";
+import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
@@ -34,15 +33,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const filters = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const isDevAdmin = canDevAdminPerform(user, "view_members");
-  let dataClient = supabase;
-  if (isDevAdmin) {
-    try {
-      dataClient = createServiceClient();
-    } catch (error) {
-      console.warn("DevAdmin: Failed to create service client (missing key?)", error);
-    }
-  }
+  const dataClient = resolveDataClient(user, supabase, "view_members");
 
   // Fetch organization
   const { data: orgs, error: orgError } = await dataClient
