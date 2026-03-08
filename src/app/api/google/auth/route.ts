@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthorizationUrl } from "@/lib/google/oauth";
+import { getAppUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
     const url = new URL(request.url);
     const redirectPath = url.searchParams.get("redirect") || "/settings/notifications";
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const appUrl = getAppUrl();
 
     try {
         // Get the authenticated user

@@ -1,6 +1,7 @@
 import type { GraduatingMember, OrgWithSlug } from "./queries";
+import { getAppUrl } from "@/lib/url";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://www.myteamnetwork.com";
+const APP_URL = getAppUrl();
 
 interface EmailTemplate {
   subject: string;

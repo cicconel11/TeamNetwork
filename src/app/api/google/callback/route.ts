@@ -6,10 +6,11 @@ import {
     storeCalendarConnection,
     getOAuthErrorMessage,
 } from "@/lib/google/oauth";
+import { getAppUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const APP_URL = getAppUrl();
 const DEFAULT_REDIRECT = "/settings/notifications";
 
 /**

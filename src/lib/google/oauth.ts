@@ -2,6 +2,7 @@ import { google } from "googleapis";
 import crypto from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { getAppUrl } from "@/lib/url";
 
 // Environment variable helpers
 function getGoogleClientId(): string {
@@ -21,8 +22,7 @@ function getGoogleClientSecret(): string {
 }
 
 function getGoogleRedirectUri(): string {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    return `${appUrl}/api/google/callback`;
+    return `${getAppUrl()}/api/google/callback`;
 }
 
 function getEncryptionKey(): Buffer {
