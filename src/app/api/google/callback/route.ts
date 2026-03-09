@@ -10,7 +10,6 @@ import { getAppUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
 
-const APP_URL = getAppUrl();
 const DEFAULT_REDIRECT = "/settings/notifications";
 
 /**
@@ -60,7 +59,7 @@ export async function GET(request: Request) {
     // Parse state to get redirect path (use default if parsing fails)
     const parsedState = state ? parseState(state) : null;
     const redirectPath = parsedState?.redirectPath || DEFAULT_REDIRECT;
-    const settingsUrl = `${APP_URL}${redirectPath}`;
+    const settingsUrl = `${getAppUrl()}${redirectPath}`;
 
     // Handle OAuth errors from Google
     if (error) {
@@ -108,7 +107,7 @@ export async function GET(request: Request) {
         if (authError || !user) {
             console.error("[google-callback] User not authenticated");
             return NextResponse.redirect(
-                new URL(`/auth/login?error=unauthorized&next=${encodeURIComponent(redirectPath)}`, APP_URL)
+                new URL(`/auth/login?error=unauthorized&next=${encodeURIComponent(redirectPath)}`, getAppUrl())
             );
         }
 

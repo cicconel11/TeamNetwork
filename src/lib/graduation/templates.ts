@@ -1,8 +1,6 @@
 import type { GraduatingMember, OrgWithSlug } from "./queries";
 import { getAppUrl } from "@/lib/url";
 
-const APP_URL = getAppUrl();
-
 interface EmailTemplate {
   subject: string;
   body: string;
@@ -23,7 +21,7 @@ export function build30DayWarningEmail(
     month: "long",
     day: "numeric",
   });
-  const memberEditUrl = `${APP_URL}/${org.slug}/members/${member.id}/edit`;
+  const memberEditUrl = `${getAppUrl()}/${org.slug}/members/${member.id}/edit`;
 
   return {
     subject: `Member Graduating Soon: ${fullName}`,
@@ -77,7 +75,7 @@ export function buildNoCapacityEmail(
   const firstName = member.first_name || "Member";
   const lastName = member.last_name || "";
   const fullName = `${firstName} ${lastName}`.trim();
-  const billingUrl = `${APP_URL}/${org.slug}/settings/billing`;
+  const billingUrl = `${getAppUrl()}/${org.slug}/settings/billing`;
 
   return {
     subject: `[Action Required] Alumni Limit Reached - Access Revoked`,
@@ -108,7 +106,7 @@ export function buildReinstatementEmail(
     month: "long",
     day: "numeric",
   });
-  const memberEditUrl = `${APP_URL}/${org.slug}/members/${member.id}/edit`;
+  const memberEditUrl = `${getAppUrl()}/${org.slug}/members/${member.id}/edit`;
 
   return {
     subject: `Member Auto-Reinstated: ${fullName}`,
