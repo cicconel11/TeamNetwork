@@ -6,9 +6,8 @@ import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
 import { CancelingBanner } from "@/components/layout/CancelingBanner";
 import { BillingGate } from "@/components/layout/BillingGate";
 import { DevPanel } from "@/components/layout/DevPanel";
-import { getOrgContext } from "@/lib/auth/roles";
+import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
 import { ConsentModal } from "@/components/analytics/ConsentModal";
@@ -26,8 +25,8 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   if (!orgContext.organization) notFound();
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Reuse cached user from getOrgContext — no extra auth.getUser() call
+  const user = await getCurrentUser();
   const isDevAdmin = canDevAdminPerform(user, "view_org");
   const isAdmin = orgContext.role === "admin" || isDevAdmin;
 
