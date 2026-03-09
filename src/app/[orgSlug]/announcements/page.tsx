@@ -2,8 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
-import { getOrgRole } from "@/lib/auth/roles";
+import { getOrgContext } from "@/lib/auth/roles";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -14,21 +13,14 @@ interface AnnouncementsPageProps {
 
 export default async function AnnouncementsPage({ params }: AnnouncementsPageProps) {
   const { orgSlug } = await params;
+
+  // Single cached call — eliminates 2 redundant auth.getUser() + 2 membership queries
+  const orgCtx = await getOrgContext(orgSlug);
+  if (!orgCtx.organization) return null;
+  const org = orgCtx.organization;
+  const isAdmin = orgCtx.isAdmin;
+
   const supabase = await createClient();
-
-  // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
-  const membership = await getOrgRole({ orgId: org.id });
 
   // Fetch announcements, pinned first, then by date
   const { data: announcements } = await supabase
@@ -40,9 +32,9 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
     .order("published_at", { ascending: false });
 
   const visibleAnnouncements = filterAnnouncementsForUser(announcements, {
-    role: membership.role,
-    status: membership.status,
-    userId: membership.userId,
+    role: orgCtx.role,
+    status: orgCtx.status,
+    userId: orgCtx.userId,
   });
 
   const navConfig = org.nav_config as NavConfig | null;

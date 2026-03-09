@@ -25,7 +25,8 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const canEdit = canEditNavItem(org.nav_config as NavConfig, "/donations", orgCtx.role, ["admin"]);
   const supabase = await createClient();
 
-  const [{ data: donationStats }, { data: donations }, { data: philanthropyEvents }] = await Promise.all([
+  // Include Stripe Connect status check in the parallel fetch
+  const [{ data: donationStats }, { data: donations }, { data: philanthropyEvents }, connectStatus] = await Promise.all([
     supabase
       .from("organization_donation_stats")
       .select("*")
@@ -42,11 +43,10 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
       .eq("organization_id", org.id)
       .or("is_philanthropy.eq.true,event_type.eq.philanthropy")
       .order("start_date"),
+    org.stripe_connect_account_id
+      ? getConnectAccountStatus(org.stripe_connect_account_id)
+      : Promise.resolve(null),
   ]);
-
-  const connectStatus = org.stripe_connect_account_id
-    ? await getConnectAccountStatus(org.stripe_connect_account_id)
-    : null;
 
   const stats = (donationStats || null) as OrganizationDonationStat | null;
   const donationRows = (donations || []) as OrganizationDonation[];

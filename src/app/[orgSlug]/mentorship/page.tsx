@@ -22,11 +22,27 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
 
   const orgId = orgCtx.organization.id;
 
-  const { data: pairs } = await supabase
-    .from("mentorship_pairs")
-    .select("*")
-    .eq("organization_id", orgId)
-    .order("created_at", { ascending: false });
+  // Stage 1: pairs + currentUserProfile + mentorProfiles in parallel (all independent)
+  const [{ data: pairs }, { data: currentUserProfile }, { data: mentorProfiles }] = await Promise.all([
+    supabase
+      .from("mentorship_pairs")
+      .select("*")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false }),
+    orgCtx.userId
+      ? supabase
+          .from("mentor_profiles")
+          .select("id")
+          .eq("organization_id", orgId)
+          .eq("user_id", orgCtx.userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("mentor_profiles")
+      .select("*, users!mentor_profiles_user_id_fkey(id, name, email)")
+      .eq("organization_id", orgId)
+      .eq("is_active", true),
+  ]);
 
   const pairIds = pairs?.map((p) => p.id) || [];
 
@@ -36,34 +52,17 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
     userIds.add(p.mentee_user_id);
   });
 
-  // Check if current user has a mentor profile
-  const { data: currentUserProfile } = await supabase
-    .from("mentor_profiles")
-    .select("id")
-    .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId!)
-    .maybeSingle();
-
-  // Query active mentor profiles with users data
-  const { data: mentorProfiles } = await supabase
-    .from("mentor_profiles")
-    .select("*, users!mentor_profiles_user_id_fkey(id, name, email)")
-    .eq("organization_id", orgId)
-    .eq("is_active", true);
-
-  // Get alumni data for mentors
+  // Stage 2: alumni data + logs + users in parallel (depend on mentorProfiles / pairs)
   const mentorUserIds = mentorProfiles?.map((p) => p.user_id) || [];
-  const { data: mentorAlumni } = mentorUserIds.length > 0
-    ? await supabase
-        .from("alumni")
-        .select("user_id, first_name, last_name, photo_url, industry, graduation_year, current_company, current_city")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .in("user_id", mentorUserIds)
-    : { data: [] };
-
-  // Run logs and users queries in parallel
-  const [{ data: logs }, { data: users }] = await Promise.all([
+  const [{ data: mentorAlumni }, { data: logs }, { data: users }] = await Promise.all([
+    mentorUserIds.length > 0
+      ? supabase
+          .from("alumni")
+          .select("user_id, first_name, last_name, photo_url, industry, graduation_year, current_company, current_city")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .in("user_id", mentorUserIds)
+      : Promise.resolve({ data: [] as never[] }),
     pairIds.length > 0
       ? supabase
           .from("mentorship_logs")
@@ -72,10 +71,10 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
           .in("pair_id", pairIds)
           .order("entry_date", { ascending: false })
           .order("created_at", { ascending: false })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as never[] }),
     userIds.size > 0
       ? supabase.from("users").select("id,name,email").in("id", Array.from(userIds))
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [] as never[] }),
   ]);
 
   const filteredPairs =

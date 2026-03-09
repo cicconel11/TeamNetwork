@@ -21,21 +21,22 @@ export default async function WorkoutsPage({ params }: WorkoutsPageProps) {
 
   const orgId = orgCtx.organization.id;
 
-  const { data: workouts } = await supabase
-    .from("workouts")
-    .select("*")
-    .eq("organization_id", orgId)
-    .order("workout_date", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false });
-
-  const { data: userLogs } =
+  // Parallelize workout + user logs queries (independent of each other)
+  const [{ data: workouts }, { data: userLogs }] = await Promise.all([
+    supabase
+      .from("workouts")
+      .select("*")
+      .eq("organization_id", orgId)
+      .order("workout_date", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
     orgCtx.userId && orgCtx.role
-      ? await supabase
+      ? supabase
           .from("workout_logs")
           .select("*")
           .eq("organization_id", orgId)
           .eq("user_id", orgCtx.userId)
-      : { data: [] };
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
 
   const userLogsList: WorkoutLog[] = (userLogs as WorkoutLog[]) || [];
   const logByWorkout = new Map<string, WorkoutLog>();

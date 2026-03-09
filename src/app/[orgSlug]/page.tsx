@@ -4,7 +4,7 @@ import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-re
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { getOrgRole } from "@/lib/auth/roles";
+import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import { SuggestedFeatures } from "@/components/analytics/SuggestedFeatures";
@@ -15,29 +15,22 @@ interface DashboardPageProps {
 
 export default async function OrgDashboardPage({ params }: DashboardPageProps) {
   const { orgSlug } = await params;
+
+  // Single cached call — layout already called getOrgContext(orgSlug),
+  // so this returns the cached result (0 extra DB round-trips)
+  const orgCtx = await getOrgContext(orgSlug);
+  if (!orgCtx.organization) return null;
+  const org = orgCtx.organization;
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser(); // cached — no extra DB call
   const queryClient = resolveDataClient(user, supabase, "view_org");
 
-  // Fetch organization
-  const { data: orgs, error: orgError } = await queryClient
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return null;
-
-  const membership = await getOrgRole({ orgId: org.id });
-
-  // Fetch counts and recent data in parallel
+  // Fetch counts and recent data in parallel — subscription + role already in orgCtx
   const [
     { count: membersCount },
     { count: alumniCount },
     { count: parentsCount },
-    { data: subscriptionRows },
     { count: eventsCount },
     { data: recentAnnouncements },
     { data: upcomingEvents },
@@ -47,7 +40,6 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
-    queryClient.rpc("get_subscription_status", { p_org_id: org.id }),
     queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()),
     queryClient.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
     queryClient.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
@@ -55,17 +47,10 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     queryClient.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
   ]);
 
-  const subscriptionStatus = (subscriptionRows as { status?: string }[] | null)?.[0]?.status;
-  const alumniBucket = (subscriptionRows as { alumni_bucket?: string }[] | null)?.[0]?.alumni_bucket ?? "none";
-  const hasAlumniAccess = subscriptionStatus === "enterprise_managed" || alumniBucket !== "none";
-
-  const parentsBucket = (subscriptionRows as { parents_bucket?: string }[] | null)?.[0]?.parents_bucket ?? "none";
-  const hasParentsAccess = parentsBucket !== "none";
-
   const visibleAnnouncements = filterAnnouncementsForUser(recentAnnouncements, {
-    role: membership.role,
-    status: membership.status,
-    userId: membership.userId,
+    role: orgCtx.role,
+    status: orgCtx.status,
+    userId: orgCtx.userId,
   });
 
   const totalDonations = ((donationStat as { total_amount_cents?: number } | null)?.total_amount_cents ?? 0) / 100;
@@ -96,7 +81,7 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
       accentFrom: "var(--color-org-secondary-light)",
       accentTo: "var(--color-org-secondary)",
     },
-    ...(hasParentsAccess && (parentsCount ?? 0) > 0 && (membership?.role === "admin" || membership?.role === "active_member" || membership?.role === "parent") ? [{
+    ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent") ? [{
       label: "Parents",
       value: parentsCount || 0,
       href: `/${orgSlug}/parents`,

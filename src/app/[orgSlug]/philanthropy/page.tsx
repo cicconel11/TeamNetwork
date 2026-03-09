@@ -40,7 +40,8 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
     eventsQuery = eventsQuery.gte("start_date", new Date().toISOString()).order("start_date");
   }
 
-  const [{ data: events }, { data: donationStats }, { data: allPhilanthropyEvents }] = await Promise.all([
+  // Include Stripe Connect status check in the parallel fetch
+  const [{ data: events }, { data: donationStats }, { data: allPhilanthropyEvents }, connectStatus] = await Promise.all([
     eventsQuery,
     supabase
       .from("organization_donation_stats")
@@ -52,6 +53,9 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       .select("*")
       .eq("organization_id", org.id)
       .or("is_philanthropy.eq.true,event_type.eq.philanthropy"),
+    org.stripe_connect_account_id
+      ? getConnectAccountStatus(org.stripe_connect_account_id)
+      : Promise.resolve(null),
   ]);
 
   const donationStat = (donationStats || null) as OrganizationDonationStat | null;
@@ -62,9 +66,6 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const upcomingCount = allPhilanthropyEvents?.filter((e) => new Date(e.start_date) >= new Date()).length || 0;
   const pastCount = totalEvents - upcomingCount;
   const eventsForForm = (allPhilanthropyEvents || []).map((evt) => ({ id: evt.id, title: evt.title }));
-  const connectStatus = org.stripe_connect_account_id
-    ? await getConnectAccountStatus(org.stripe_connect_account_id)
-    : null;
   const isConnected = Boolean(connectStatus?.isReady);
 
   const navConfig = org.nav_config as NavConfig | null;
