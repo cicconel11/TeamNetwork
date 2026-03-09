@@ -13,6 +13,7 @@ import {
 import { calculateGracePeriodEnd } from "@/lib/subscription/grace-period";
 import { createTelemetryReporter, reportExternalServiceWarning } from "@/lib/telemetry/server";
 import { debugLog, maskPII } from "@/lib/debug";
+import { extractSubscriptionPeriodEndIso } from "@/lib/stripe/subscription-period";
 import { resolveAdminsForSubscription } from "@/lib/stripe/billing-admin-resolver";
 import {
   buildRenewalReminderEmail,
@@ -454,19 +455,6 @@ export async function handleStripeWebhookPost(
     subscription?: string | Stripe.Subscription | null;
     customer?: string | Stripe.Customer | Stripe.DeletedCustomer | string | null;
   };
-  /** Extract current_period_end from subscription — handles Clover API where field moved to items */
-  const extractPeriodEnd = (sub: SubscriptionWithPeriod): string | null => {
-    // Try subscription-level first (pre-Clover API versions)
-    const subLevel = sub.current_period_end ? Number(sub.current_period_end) : null;
-    if (subLevel) return new Date(subLevel * 1000).toISOString();
-    // Fall back to earliest item-level period end (Clover+)
-    const itemLevel = sub.items?.data
-      ?.map((item) => item.current_period_end)
-      .filter((v): v is number => typeof v === "number")
-      .sort((a, b) => a - b)?.[0] ?? null;
-    return itemLevel ? new Date(itemLevel * 1000).toISOString() : null;
-  };
-
   const normalizeSubscriptionStatus = (
     subscription: Pick<SubscriptionWithPeriod, "status" | "cancel_at_period_end">,
     eventType?: Stripe.Event.Type
@@ -508,7 +496,7 @@ export async function handleStripeWebhookPost(
 
     if (!data) return null; // Not an enterprise subscription
 
-    const currentPeriodEnd = extractPeriodEnd(subscription);
+    const currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
 
     // Build update payload — only include quantities when metadata keys are
     // explicitly present.  When metadata is missing (e.g. Stripe dashboard edits
@@ -781,7 +769,7 @@ export async function handleStripeWebhookPost(
               })) as SubscriptionWithPeriod;
               // Always use the actual subscription status from Stripe
               status = normalizeSubscriptionStatus(subscription);
-              currentPeriodEnd = extractPeriodEnd(subscription);
+              currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
             } catch (error) {
               console.error("[stripe-webhook] Failed to retrieve subscription:", maskPII(subscriptionId), error);
               await reportExternalServiceWarning(
@@ -829,7 +817,7 @@ export async function handleStripeWebhookPost(
           typeof subscription.customer === "string"
             ? subscription.customer
             : subscription.customer?.id || null;
-        const currentPeriodEnd = extractPeriodEnd(subscription);
+        const currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
         const status = normalizeSubscriptionStatus(subscription, event.type);
 
 
@@ -902,7 +890,7 @@ export async function handleStripeWebhookPost(
           }
 
           // Fall back to organization subscription
-          const currentPeriodEnd = extractPeriodEnd(subscription);
+          const currentPeriodEnd = extractSubscriptionPeriodEndIso(subscription);
           await updateBySubscriptionId(subscriptionId, {
             status: subscription.status,
             current_period_end: currentPeriodEnd,
