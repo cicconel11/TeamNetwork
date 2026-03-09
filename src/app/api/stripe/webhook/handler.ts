@@ -529,7 +529,7 @@ export async function handleStripeWebhookPost(
       if (parsed > 0) updatePayload.sub_org_quantity = parsed;
     }
 
-    console.log("[stripe-webhook] Updating enterprise subscription:", {
+    debugLog("stripe-webhook", "Updating enterprise subscription:", {
       enterpriseSubId: data.id,
       ...(updatePayload.alumni_bucket_quantity != null && { alumniBucketQuantity: updatePayload.alumni_bucket_quantity }),
       ...(updatePayload.sub_org_quantity != null && { subOrgQuantity: updatePayload.sub_org_quantity }),
@@ -836,7 +836,7 @@ export async function handleStripeWebhookPost(
         // Check if this is an enterprise subscription first
         const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);
         if (enterpriseSubId) {
-          console.log("[stripe-webhook] Enterprise subscription updated:", enterpriseSubId, { status });
+          debugLog("stripe-webhook", "Enterprise subscription updated:", enterpriseSubId, { status });
           break;
         }
 
@@ -897,7 +897,7 @@ export async function handleStripeWebhookPost(
           // Check if this is an enterprise subscription first
           const enterpriseSubId = await handleEnterpriseSubscriptionUpdate(subscription);
           if (enterpriseSubId) {
-            console.log("[stripe-webhook] Enterprise invoice paid, subscription updated:", enterpriseSubId);
+            debugLog("stripe-webhook", "Enterprise invoice paid, subscription updated:", enterpriseSubId);
             break;
           }
 
@@ -918,7 +918,7 @@ export async function handleStripeWebhookPost(
           // Check if this is an enterprise subscription first
           const enterpriseSubId = await handleEnterprisePaymentFailed(subscriptionId);
           if (enterpriseSubId) {
-            console.log("[stripe-webhook] Enterprise payment failed, marked past_due:", enterpriseSubId);
+            debugLog("stripe-webhook", "Enterprise payment failed, marked past_due:", enterpriseSubId);
             break;
           }
           // Fall back to organization subscription
