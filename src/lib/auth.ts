@@ -2,12 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/database";
 import { normalizeRole } from "./auth/role-utils";
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
-  return user;
-}
+// Re-export the cached version from roles.ts — all callers get deduplication
+export { getCurrentUser } from "./auth/roles";
 
 export async function getUserProfile() {
   const supabase = await createClient();
