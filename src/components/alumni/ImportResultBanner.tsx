@@ -21,12 +21,12 @@ export function ImportResultBanner({ result, onReset, onClose, extraDetail }: Im
               result.created > 0 ? `${result.created} created` : null,
               result.updated > 0 ? `${result.updated} updated` : null,
             ].filter(Boolean).join(", ")
-          : (result.quotaBlocked ?? 0) > 0
+          : result.quotaBlocked > 0
             ? `${result.quotaBlocked} quota blocked`
             : "No records changed"}
       </p>
       <p className="text-xs text-muted-foreground mt-1">
-        {result.created} created, {result.updated} updated, {result.skipped} skipped, {result.quotaBlocked ?? 0} quota blocked
+        {result.created} created, {result.updated} updated, {result.skipped} skipped, {result.quotaBlocked} quota blocked
       </p>
       {extraDetail}
       {result.errors.length > 0 && (
