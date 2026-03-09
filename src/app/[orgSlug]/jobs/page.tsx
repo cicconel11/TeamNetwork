@@ -39,67 +39,73 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
   }
 
   const supabase = await createClient();
-  const jobPostRoles = (orgCtx.organization as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"];
+  const org = orgCtx.organization;
+  const jobPostRoles = (org as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"];
   const canPost = orgCtx.role ? jobPostRoles.includes(orgCtx.role) : false;
-
-  // Fetch ALL active jobs (for extracting unique filter values)
-  const { data: allJobs } = await supabase
-    .from("job_postings")
-    .select("location, company, industry")
-    .eq("organization_id", orgCtx.organization.id)
-    .eq("is_active", true)
-    .is("deleted_at", null);
-
-  const allJobRows = allJobs || [];
-  const uniqueLocations = allJobRows.map((j) => j.location);
-  const uniqueCompanies = allJobRows.map((j) => j.company);
-  const uniqueIndustries = allJobRows.map((j) => j.industry);
 
   // Build filtered query with pagination
   const page = parseInt(pageParam || "1", 10);
   const limit = 20;
   const offset = (page - 1) * limit;
 
-  let query = supabase
+  const applyStructuredFilters = (query: any) => {
+    let nextQuery = query
+      .eq("organization_id", org.id)
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .or("expires_at.is.null,expires_at.gt.now()");
+
+    if (q) {
+      const sanitizedQ = sanitizeIlikeInput(q).replace(/,/g, "");
+      nextQuery = nextQuery.or(`title.ilike.%${sanitizedQ}%,company.ilike.%${sanitizedQ}%`);
+    }
+
+    if (type) {
+      nextQuery = nextQuery.eq("location_type", type);
+    }
+    if (level) {
+      nextQuery = nextQuery.eq("experience_level", level);
+    }
+    if (location) {
+      nextQuery = nextQuery.ilike("location", sanitizeIlikeInput(location));
+    }
+    if (company) {
+      nextQuery = nextQuery.ilike("company", sanitizeIlikeInput(company));
+    }
+    if (industry) {
+      nextQuery = nextQuery.ilike("industry", sanitizeIlikeInput(industry));
+    }
+
+    return nextQuery;
+  };
+
+  // Run filter-options and main query in parallel
+  const filterOptionsPromise = supabase
     .from("job_postings")
-    .select("*, users!job_postings_posted_by_fkey(name)", { count: "exact", head: false })
-    .eq("organization_id", orgCtx.organization.id)
+    .select("location, company, industry")
+    .eq("organization_id", org.id)
     .eq("is_active", true)
-    .is("deleted_at", null);
+    .is("deleted_at", null)
+    .or("expires_at.is.null,expires_at.gt.now()");
 
-  // Apply filters
-  if (q) {
-    const sanitizedQ = sanitizeIlikeInput(q).replace(/,/g, "");
-    query = query.or(`title.ilike.%${sanitizedQ}%,company.ilike.%${sanitizedQ}%`);
-  }
-  if (type) {
-    query = query.eq("location_type", type);
-  }
-  if (level) {
-    query = query.eq("experience_level", level);
-  }
-  if (location) {
-    query = query.ilike("location", sanitizeIlikeInput(location));
-  }
-  if (company) {
-    query = query.ilike("company", sanitizeIlikeInput(company));
-  }
-  if (industry) {
-    query = query.ilike("industry", sanitizeIlikeInput(industry));
-  }
-
-  const { data: jobs, count } = await query
+  const mainQueryPromise = applyStructuredFilters(
+    supabase
+      .from("job_postings")
+      .select("*, users!job_postings_posted_by_fkey(name)", { count: "exact", head: false })
+  )
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
-  // Filter out expired jobs
-  const now = new Date();
-  const activeJobs = (jobs || []).filter((job) => {
-    if (!job.expires_at) return true;
-    return new Date(job.expires_at) > now;
-  });
+  const [{ data: allJobs }, mainResult] = await Promise.all([filterOptionsPromise, mainQueryPromise]);
 
-  const total = count || 0;
+  const allJobRows = allJobs || [];
+  const uniqueLocations = [...new Set(allJobRows.map((j) => j.location).filter(Boolean))];
+  const uniqueCompanies = [...new Set(allJobRows.map((j) => j.company).filter(Boolean))];
+  const uniqueIndustries = [...new Set(allJobRows.map((j) => j.industry).filter(Boolean))];
+
+  const activeJobs = mainResult.data || [];
+  const total = mainResult.count || 0;
+
   const totalPages = Math.ceil(total / limit);
 
   // Build filter params string for pagination links
@@ -127,7 +133,7 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
       />
 
       <JobsFilters
-        orgId={orgCtx.organization.id}
+        orgId={org.id}
         locations={uniqueLocations}
         companies={uniqueCompanies}
         industries={uniqueIndustries}

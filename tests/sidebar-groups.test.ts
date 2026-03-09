@@ -32,13 +32,14 @@ describe("bucketItemsByGroup", () => {
     assert.equal(buckets.get("people")?.length, 1);
   });
 
-  it("buckets ungrouped items as standalone", () => {
+  it("buckets community-grouped items into community bucket", () => {
     const items = [
-      makeItem({ href: "/jobs", label: "Jobs" }),
-      makeItem({ href: "/media", label: "Media Archive" }),
+      makeItem({ href: "/jobs", label: "Jobs", group: "community" }),
+      makeItem({ href: "/media", label: "Media Archive", group: "community" }),
     ];
     const buckets = bucketItemsByGroup(items);
-    assert.equal(buckets.get("standalone")?.length, 2);
+    assert.equal(buckets.get("community")?.length, 2);
+    assert.equal(buckets.has("standalone"), false);
     assert.equal(buckets.has("people"), false);
   });
 
@@ -75,7 +76,7 @@ describe("getActiveGroup", () => {
     makeItem({ href: "/members", label: "Members", group: "people" }),
     makeItem({ href: "/events", label: "Events", group: "schedule" }),
     makeItem({ href: "/workouts", label: "Workouts", group: "activity" }),
-    makeItem({ href: "/jobs", label: "Jobs" }),
+    makeItem({ href: "/jobs", label: "Jobs", group: "community" }),
   ];
 
   it("returns group for exact match", () => {
@@ -92,8 +93,8 @@ describe("getActiveGroup", () => {
     assert.equal(getActiveGroup("/org", "/org", items), null);
   });
 
-  it("returns null for ungrouped item", () => {
-    assert.equal(getActiveGroup("/org/jobs", "/org", items), null);
+  it("returns community for jobs item", () => {
+    assert.equal(getActiveGroup("/org/jobs", "/org", items), "community");
   });
 
   it("returns null when no match", () => {
@@ -102,7 +103,7 @@ describe("getActiveGroup", () => {
 });
 
 describe("buildSectionOrder", () => {
-  it("renders in correct order: dashboard > groups > standalone > admin", () => {
+  it("renders in correct order: dashboard > groups > admin", () => {
     const items = [
       makeItem({ href: "", label: "Dashboard" }),
       makeItem({ href: "/members", label: "Members", group: "people" }),
@@ -110,7 +111,7 @@ describe("buildSectionOrder", () => {
       makeItem({ href: "/events", label: "Events", group: "schedule" }),
       makeItem({ href: "/workouts", label: "Workouts", group: "activity" }),
       makeItem({ href: "/donations", label: "Donations", group: "finance" }),
-      makeItem({ href: "/jobs", label: "Jobs" }),
+      makeItem({ href: "/jobs", label: "Jobs", group: "community" }),
       makeItem({ href: "/customization", label: "Customization", group: "admin" }),
     ];
     const buckets = bucketItemsByGroup(items);
@@ -127,10 +128,9 @@ describe("buildSectionOrder", () => {
     assert.equal((sections[4] as any).group.id, "activity");
     assert.equal(sections[5].type, "group");
     assert.equal((sections[5] as any).group.id, "finance");
-    assert.equal(sections[6].type, "standalone");
-    assert.equal(sections[7].type, "divider");
-    assert.equal(sections[8].type, "group");
-    assert.equal((sections[8] as any).group.id, "admin");
+    assert.equal(sections[6].type, "divider");
+    assert.equal(sections[7].type, "group");
+    assert.equal((sections[7] as any).group.id, "admin");
   });
 
   it("excludes empty groups", () => {
@@ -151,7 +151,7 @@ describe("buildSectionOrder", () => {
     const items = [
       makeItem({ href: "", label: "Dashboard" }),
       makeItem({ href: "/members", label: "Members", group: "people" }),
-      makeItem({ href: "/jobs", label: "Jobs" }),
+      makeItem({ href: "/jobs", label: "Jobs", group: "community" }),
     ];
     const buckets = bucketItemsByGroup(items);
     const sections = buildSectionOrder(buckets, ORG_NAV_GROUPS);

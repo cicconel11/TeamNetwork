@@ -37,6 +37,8 @@ interface JobPostingRow {
   company: string;
   location: string | null;
   location_type: "remote" | "hybrid" | "onsite" | null;
+  industry: string | null;
+  experience_level: "entry" | "mid" | "senior" | "lead" | "executive" | null;
   description: string;
   application_url: string | null;
   contact_email: string | null;
@@ -52,9 +54,13 @@ interface JobFormData {
   company?: string;
   location?: string;
   location_type?: "remote" | "hybrid" | "onsite";
+  industry?: string;
+  experience_level?: "entry" | "mid" | "senior" | "lead" | "executive";
   description?: string;
   application_url?: string;
   contact_email?: string;
+  expires_at?: string;
+  is_active?: boolean;
 }
 
 interface ListJobsRequest {
@@ -244,11 +250,13 @@ function simulateCreateJob(
     company: request.data.company!,
     location: request.data.location || null,
     location_type: request.data.location_type || null,
+    industry: request.data.industry || null,
+    experience_level: request.data.experience_level || null,
     description: request.data.description!,
     application_url: request.data.application_url || null,
     contact_email: request.data.contact_email || null,
     is_active: true,
-    expires_at: null,
+    expires_at: request.data.expires_at || null,
     deleted_at: null,
     created_at: now,
     updated_at: now,
@@ -298,10 +306,28 @@ function simulateUpdateJob(
     return { status: 401, error: "Unauthorized" };
   }
 
-  // Validate body
-  const validation = validateJobData(request.data);
-  if (!validation.valid) {
-    return { status: 400, error: validation.error };
+  // Partial validation: only validate fields that are present
+  const hasRequiredFields = request.data.title !== undefined
+    || request.data.company !== undefined
+    || request.data.description !== undefined;
+
+  if (hasRequiredFields) {
+    // Only validate fields that are provided
+    if (request.data.title !== undefined) {
+      if (!request.data.title || request.data.title.length < 3 || request.data.title.length > 200) {
+        return { status: 400, error: "title must be 3-200 characters" };
+      }
+    }
+    if (request.data.company !== undefined) {
+      if (!request.data.company || request.data.company.length < 2 || request.data.company.length > 200) {
+        return { status: 400, error: "company must be 2-200 characters" };
+      }
+    }
+    if (request.data.description !== undefined) {
+      if (!request.data.description || request.data.description.length < 10 || request.data.description.length > 10000) {
+        return { status: 400, error: "description must be 10-10000 characters" };
+      }
+    }
   }
 
   // Fetch existing job
@@ -326,16 +352,20 @@ function simulateUpdateJob(
     return { status: 403, error: "Forbidden" };
   }
 
-  // Update job
+  // Partial update: only override fields that are provided
   const updatedJob: JobPostingRow = {
     ...job,
-    title: request.data.title!,
-    company: request.data.company!,
-    location: request.data.location || null,
-    location_type: request.data.location_type || null,
-    description: request.data.description!,
-    application_url: request.data.application_url || null,
-    contact_email: request.data.contact_email || null,
+    ...(request.data.title !== undefined && { title: request.data.title }),
+    ...(request.data.company !== undefined && { company: request.data.company }),
+    ...(request.data.location !== undefined && { location: request.data.location || null }),
+    ...(request.data.location_type !== undefined && { location_type: request.data.location_type || null }),
+    ...(request.data.industry !== undefined && { industry: request.data.industry || null }),
+    ...(request.data.experience_level !== undefined && { experience_level: request.data.experience_level || null }),
+    ...(request.data.description !== undefined && { description: request.data.description }),
+    ...(request.data.application_url !== undefined && { application_url: request.data.application_url || null }),
+    ...(request.data.contact_email !== undefined && { contact_email: request.data.contact_email || null }),
+    ...(request.data.is_active !== undefined && { is_active: request.data.is_active }),
+    ...(request.data.expires_at !== undefined && { expires_at: request.data.expires_at || null }),
     updated_at: new Date().toISOString(),
   };
 
@@ -437,6 +467,8 @@ const validJobData: JobFormData = {
   description: "We are looking for an experienced engineer to join our team.",
   location: "New York, NY",
   location_type: "hybrid",
+  industry: "Technology",
+  experience_level: "senior",
   application_url: "https://example.com/apply",
   contact_email: "jobs@example.com",
 };
@@ -1149,4 +1181,262 @@ test("DELETE /api/jobs/[jobId] - soft deletes (sets deleted_at, not hard delete)
 
   assert.ok(deletedJob);
   assert.ok(deletedJob.deleted_at !== null);
+});
+
+// ─── Tests: New fields and partial PATCH ──────────────────────────────────────
+
+test("POST /api/jobs - creates job with industry and experience_level", () => {
+  const ctx = createTestContext();
+  const result = simulateCreateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      orgId: ctx.organizationId,
+      data: {
+        ...validJobData,
+        industry: "Healthcare",
+        experience_level: "entry",
+      },
+    },
+    ctx
+  );
+  assert.strictEqual(result.status, 201);
+  assert.strictEqual(result.job!.industry, "Healthcare");
+  assert.strictEqual(result.job!.experience_level, "entry");
+});
+
+test("POST /api/jobs - creates job with expires_at", () => {
+  const ctx = createTestContext();
+  const future = new Date(Date.now() + 7 * 86400000).toISOString();
+  const result = simulateCreateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      orgId: ctx.organizationId,
+      data: { ...validJobData, expires_at: future },
+    },
+    ctx
+  );
+  assert.strictEqual(result.status, 201);
+  assert.strictEqual(result.job!.expires_at, future);
+});
+
+test("POST /api/jobs - ignores client-provided is_active and creates active job", () => {
+  const ctx = createTestContext();
+  const result = simulateCreateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      orgId: ctx.organizationId,
+      data: { ...validJobData, is_active: false },
+    },
+    ctx
+  );
+  assert.strictEqual(result.status, 201);
+  assert.strictEqual(result.job!.is_active, true);
+});
+
+test("PATCH /api/jobs/[jobId] - partial update only changes title", () => {
+  const ctx = createTestContext();
+
+  ctx.supabase.seed("job_postings", [
+    {
+      id: "job-partial",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Original Title",
+      company: "Original Company",
+      location: "NYC",
+      location_type: "onsite",
+      industry: "Finance",
+      experience_level: "mid",
+      description: "Original description text here.",
+      application_url: "https://example.com/apply",
+      contact_email: "jobs@example.com",
+      is_active: true,
+      deleted_at: null,
+      expires_at: null,
+      created_at: "2026-02-10T00:00:00Z",
+      updated_at: "2026-02-10T00:00:00Z",
+    },
+  ]);
+
+  const result = simulateUpdateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      jobId: "job-partial",
+      data: { title: "New Title" },
+    },
+    ctx
+  );
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.job!.title, "New Title");
+  // Other fields should remain unchanged
+  assert.strictEqual(result.job!.company, "Original Company");
+  assert.strictEqual(result.job!.industry, "Finance");
+  assert.strictEqual(result.job!.experience_level, "mid");
+  assert.strictEqual(result.job!.description, "Original description text here.");
+});
+
+test("PATCH /api/jobs/[jobId] - update industry and experience_level persists", () => {
+  const ctx = createTestContext();
+
+  ctx.supabase.seed("job_postings", [
+    {
+      id: "job-fields",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Developer",
+      company: "Corp",
+      industry: "Tech",
+      experience_level: "entry",
+      description: "A developer role for entry level.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: null,
+      created_at: "2026-02-10T00:00:00Z",
+      updated_at: "2026-02-10T00:00:00Z",
+    },
+  ]);
+
+  const result = simulateUpdateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      jobId: "job-fields",
+      data: { industry: "Healthcare", experience_level: "senior" },
+    },
+    ctx
+  );
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.job!.industry, "Healthcare");
+  assert.strictEqual(result.job!.experience_level, "senior");
+  // Original fields unchanged
+  assert.strictEqual(result.job!.title, "Developer");
+});
+
+test("PATCH /api/jobs/[jobId] - is_active false excludes from list", () => {
+  const ctx = createTestContext();
+
+  ctx.supabase.seed("job_postings", [
+    {
+      id: "job-deactivate",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Active Job",
+      company: "Corp",
+      description: "A job that will be deactivated.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: null,
+      created_at: "2026-02-10T00:00:00Z",
+      updated_at: "2026-02-10T00:00:00Z",
+    },
+  ]);
+
+  // Deactivate the job
+  const updateResult = simulateUpdateJob(
+    {
+      auth: AuthPresets.orgAlumni(ctx.organizationId),
+      jobId: "job-deactivate",
+      data: { is_active: false },
+    },
+    ctx
+  );
+  assert.strictEqual(updateResult.status, 200);
+  assert.strictEqual(updateResult.job!.is_active, false);
+
+  // List should not include the deactivated job
+  const listResult = simulateListJobs(
+    { auth: AuthPresets.orgMember(ctx.organizationId), orgId: ctx.organizationId },
+    ctx
+  );
+  assert.strictEqual(listResult.status, 200);
+  assert.strictEqual(listResult.jobs!.length, 0);
+});
+
+test("GET /api/jobs - expired jobs excluded from list at DB level", () => {
+  const ctx = createTestContext();
+
+  const past = new Date(Date.now() - 86400000).toISOString();
+  const future = new Date(Date.now() + 86400000).toISOString();
+
+  ctx.supabase.seed("job_postings", [
+    {
+      id: "job-expired",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Expired Job",
+      company: "Corp",
+      description: "This job has expired.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: past,
+      created_at: "2026-02-10T00:00:00Z",
+    },
+    {
+      id: "job-valid",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Valid Job",
+      company: "Corp",
+      description: "This job is still valid.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: future,
+      created_at: "2026-02-11T00:00:00Z",
+    },
+    {
+      id: "job-no-expiry",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "No Expiry Job",
+      company: "Corp",
+      description: "This job has no expiry.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: null,
+      created_at: "2026-02-12T00:00:00Z",
+    },
+  ]);
+
+  const result = simulateListJobs(
+    { auth: AuthPresets.orgMember(ctx.organizationId), orgId: ctx.organizationId },
+    ctx
+  );
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.jobs!.length, 2);
+  const jobIds = result.jobs!.map(j => j.id);
+  assert.ok(jobIds.includes("job-valid"));
+  assert.ok(jobIds.includes("job-no-expiry"));
+  assert.ok(!jobIds.includes("job-expired"));
+});
+
+test("DELETE /api/jobs/[jobId] - soft deleted job not returned in list", () => {
+  const ctx = createTestContext();
+
+  ctx.supabase.seed("job_postings", [
+    {
+      id: "job-to-delete",
+      organization_id: ctx.organizationId,
+      posted_by: "alumni-user",
+      title: "Job to Delete",
+      company: "Corp",
+      description: "This job will be deleted.",
+      is_active: true,
+      deleted_at: null,
+      expires_at: null,
+      created_at: "2026-02-10T00:00:00Z",
+    },
+  ]);
+
+  // Delete the job
+  simulateDeleteJob(
+    { auth: AuthPresets.orgAlumni(ctx.organizationId), jobId: "job-to-delete" },
+    ctx
+  );
+
+  // List should not include the deleted job
+  const listResult = simulateListJobs(
+    { auth: AuthPresets.orgMember(ctx.organizationId), orgId: ctx.organizationId },
+    ctx
+  );
+  assert.strictEqual(listResult.status, 200);
+  assert.strictEqual(listResult.jobs!.length, 0);
 });

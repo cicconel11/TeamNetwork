@@ -3,6 +3,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { JobForm } from "@/components/jobs/JobForm";
+import type { CreateJobForm } from "@/lib/schemas/jobs";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; jobId: string }>;
@@ -58,6 +59,9 @@ export default async function EditJobPage({ params }: PageProps) {
             description: job.description,
             application_url: job.application_url,
             contact_email: job.contact_email,
+            industry: job.industry,
+            experience_level: job.experience_level as CreateJobForm["experience_level"],
+            expires_at: job.expires_at ?? undefined,
           }}
         />
       </div>

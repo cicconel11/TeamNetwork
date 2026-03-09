@@ -8,13 +8,17 @@ import { createJobSchema, type CreateJobForm } from "@/lib/schemas/jobs";
 interface JobFormProps {
   orgId: string;
   orgSlug: string;
-  initialData?: CreateJobForm & { id?: string };
+  initialData?: CreateJobForm & { id?: string; expires_at?: string };
 }
 
 export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const [expiresAt, setExpiresAt] = useState<string>(
+    initialData?.expires_at ? initialData.expires_at.slice(0, 10) : ""
+  );
 
   const [formData, setFormData] = useState<CreateJobForm>({
     title: initialData?.title || "",
@@ -34,8 +38,14 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
     setIsSubmitting(true);
 
     try {
+      // Build payload with optional expires_at
+      const payload = {
+        ...formData,
+        ...(expiresAt ? { expires_at: `${expiresAt}T23:59:59.000Z` } : { expires_at: null }),
+      };
+
       // Validate with Zod
-      const validationResult = createJobSchema.safeParse(formData);
+      const validationResult = createJobSchema.safeParse(payload);
       if (!validationResult.success) {
         const fieldErrors: Record<string, string> = {};
         for (const err of validationResult.error.issues) {
@@ -236,6 +246,21 @@ export function JobForm({ orgId, orgSlug, initialData }: JobFormProps) {
           />
           <p className="text-sm text-gray-500 mt-1">
             Email for applicants to reach out
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="expires_at" className="block text-sm font-medium mb-2">
+            Listing Expiration
+          </label>
+          <Input
+            id="expires_at"
+            type="date"
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+          />
+          <p className="text-sm text-gray-500 mt-1">
+            Optional. The job listing will be hidden after this date.
           </p>
         </div>
 

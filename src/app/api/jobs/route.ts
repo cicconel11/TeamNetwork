@@ -46,13 +46,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
-    // Fetch active, non-deleted jobs with pagination
-    const { data: jobs, error } = await supabase
+    // Fetch active, non-deleted, non-expired jobs with pagination
+    const { data: jobs, error, count } = await supabase
       .from("job_postings")
-      .select("*, users!job_postings_posted_by_fkey(name)")
+      .select("*, users!job_postings_posted_by_fkey(name)", { count: "exact" })
       .eq("organization_id", orgId)
       .eq("is_active", true)
       .is("deleted_at", null)
+      .or("expires_at.is.null,expires_at.gt.now()")
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -60,22 +61,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch jobs" }, { status: 500 });
     }
 
-    // Filter out expired jobs (client-side filtering after DB query)
-    const now = new Date();
-    const activeJobs = (jobs || []).filter(job => {
-      if (!job.expires_at) return true;
-      return new Date(job.expires_at) > now;
-    });
-
     // Fetch media attachments for all jobs
-    const jobIds = activeJobs.map(j => j.id);
+    const jobIds = (jobs || []).map(j => j.id);
     const serviceClient = createServiceClient();
     const mediaMap = jobIds.length > 0
       ? await fetchMediaForEntities(serviceClient, "job_posting", jobIds)
       : new Map();
 
     // Augment jobs with media
-    const augmentedJobs = activeJobs.map(job => ({
+    const augmentedJobs = (jobs || []).map(job => ({
       ...job,
       media: mediaMap.get(job.id) ?? [],
     }));
@@ -86,7 +80,7 @@ export async function GET(request: NextRequest) {
         pagination: {
           page,
           limit,
-          total: augmentedJobs.length,
+          total: count ?? 0,
         },
       },
       { headers: rateLimit.headers },

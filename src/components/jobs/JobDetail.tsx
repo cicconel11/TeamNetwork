@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button, Badge } from "@/components/ui";
 
@@ -23,6 +23,7 @@ type Job = {
   description: string;
   application_url: string | null;
   contact_email: string | null;
+  is_active: boolean;
   created_at: string;
   expires_at: string | null;
   users?: {
@@ -40,6 +41,12 @@ interface JobDetailProps {
 export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isToggling, setIsToggling] = useState(false);
+  const [isActive, setIsActive] = useState(job.is_active);
+
+  useEffect(() => {
+    setIsActive(job.is_active);
+  }, [job.is_active]);
 
   const handleDelete = async () => {
     if (!confirm("Are you sure you want to delete this job posting?")) {
@@ -65,6 +72,29 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
     }
   };
 
+  const handleToggleActive = async () => {
+    setIsToggling(true);
+    try {
+      const response = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !isActive }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to update job");
+      }
+
+      setIsActive(!isActive);
+      router.refresh();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Failed to update job");
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   const isExpired = job.expires_at && new Date(job.expires_at) < new Date();
 
   return (
@@ -85,6 +115,12 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
               </div>
               {canEdit && (
                 <div className="flex gap-2">
+                  <Button
+                    onClick={handleToggleActive}
+                    disabled={isToggling || isDeleting}
+                  >
+                    {isToggling ? "Updating..." : isActive ? "Deactivate" : "Reactivate"}
+                  </Button>
                   <Button
                     onClick={() => router.push(`/${orgSlug}/jobs/${job.id}/edit`)}
                     disabled={isDeleting}
@@ -123,6 +159,9 @@ export function JobDetail({ job, orgSlug, canEdit }: JobDetailProps) {
                 <Badge variant="primary">
                   {EXPERIENCE_LABELS[job.experience_level]}
                 </Badge>
+              )}
+              {!isActive && (
+                <Badge variant="error">Inactive</Badge>
               )}
               {isExpired && (
                 <Badge variant="error">Expired</Badge>

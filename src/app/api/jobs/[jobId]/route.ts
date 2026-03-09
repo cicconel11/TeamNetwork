@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createJobSchema } from "@/lib/schemas/jobs";
+import { updateJobSchema } from "@/lib/schemas/jobs";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 
@@ -83,8 +83,9 @@ export async function PATCH(
     const body = await request.json();
 
     // Validate job fields
-    const validationResult = createJobSchema.safeParse(body);
+    const validationResult = updateJobSchema.safeParse(body);
     if (!validationResult.success) {
+      console.error("PATCH /api/jobs validation error:", validationResult.error.issues);
       return NextResponse.json(
         { error: "Validation failed", details: validationResult.error.issues },
         { status: 400 }
@@ -136,11 +137,13 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: "Failed to update job" }, { status: 500 });
+      console.error("PATCH /api/jobs update error:", JSON.stringify(error));
+      return NextResponse.json({ error: `Failed to update job: ${error.message} (${error.code})` }, { status: 500 });
     }
 
     return NextResponse.json({ job }, { headers: rateLimit.headers });
   } catch (error) {
+    console.error("PATCH /api/jobs uncaught error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

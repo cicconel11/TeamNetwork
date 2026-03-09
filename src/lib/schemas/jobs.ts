@@ -13,7 +13,13 @@ export const createJobSchema = z.object({
   contact_email: optionalEmail,
   industry: optionalSafeString(200),
   experience_level: z.enum(["entry", "mid", "senior", "lead", "executive"]).optional(),
+  expires_at: z.string().datetime().optional().nullable(),
   mediaIds: mediaIdsSchema.optional(),
 });
 
 export type CreateJobForm = z.infer<typeof createJobSchema>;
+
+export const updateJobSchema = createJobSchema.partial().extend({
+  is_active: z.boolean().optional(),
+});
+export type UpdateJobForm = z.infer<typeof updateJobSchema>;
