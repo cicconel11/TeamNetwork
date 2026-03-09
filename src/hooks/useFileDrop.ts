@@ -4,7 +4,6 @@ import { useState, useCallback, useRef } from "react";
 
 interface UseFileDropOptions {
   onFile: (file: File) => void;
-  accept?: string;
 }
 
 export interface FileDropState {
