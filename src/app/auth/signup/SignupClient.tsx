@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
+import { PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
 import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
 
@@ -299,7 +300,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
             label="Password"
             type="password"
             placeholder="••••••••"
-            helperText="Must be at least 6 characters"
+            helperText={PASSWORD_REQUIREMENTS}
             data-testid="signup-password"
             error={errors.password?.message}
             {...register("password")}
