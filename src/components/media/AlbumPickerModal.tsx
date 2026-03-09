@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui";
 import type { MediaAlbum } from "./AlbumCard";
 
@@ -172,10 +173,9 @@ export function AlbumPickerModal({ orgId, mediaIds, onClose, onSuccess }: AlbumP
               }`}
             >
               {/* Album cover or icon */}
-              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-[var(--muted)] flex items-center justify-center">
+              <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-[var(--muted)] flex items-center justify-center">
                 {album.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={album.cover_url} alt="" className="w-full h-full object-cover" />
+                  <Image src={album.cover_url} alt="" fill className="object-cover" sizes="36px" />
                 ) : (
                   <svg className="w-4 h-4 text-[var(--muted-foreground)] opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M2.25 18.75h19.5a2.25 2.25 0 002.25-2.25V7.5a2.25 2.25 0 00-2.25-2.25H2.25A2.25 2.25 0 000 7.5v9a2.25 2.25 0 002.25 2.25z" />

@@ -121,6 +121,7 @@ const nextConfig = {
     serverComponentsExternalPackages: ["googleapis"],
   },
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       {
         protocol: "https",
