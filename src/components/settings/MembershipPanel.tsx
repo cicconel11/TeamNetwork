@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge, Button, Card, Select } from "@/components/ui";
+import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
 
 import type { SubscriptionInfo } from "@/types/subscription";
 
@@ -78,6 +79,38 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
     }
   };
 
+  const patchMemberRole = async (
+    userId: string,
+    role: string,
+    onSuccess?: () => void,
+    cleanup?: () => void,
+  ) => {
+    setIsChangingRole(true);
+    setRoleChangeUserId(userId);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/members/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError((data as { error?: string }).error || "Failed to update role");
+      } else {
+        setMemberships((prev) =>
+          prev.map((m) => (m.user_id === userId ? { ...m, role } : m))
+        );
+        onSuccess?.();
+      }
+    } finally {
+      setIsChangingRole(false);
+      setRoleChangeUserId(null);
+      cleanup?.();
+    }
+  };
+
   const updateRole = async (userId: string, newRole: "admin" | "active_member" | "alumni" | "parent") => {
     const currentMember = memberships.find((m) => m.user_id === userId);
     if (currentMember?.role === newRole) return;
@@ -88,76 +121,20 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
       return;
     }
 
-    setIsChangingRole(true);
-    setRoleChangeUserId(userId);
-    setError(null);
-
-    const res = await fetch(`/api/organizations/${orgId}/members/${userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: newRole }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError((data as { error?: string }).error || "Failed to update role");
-    } else {
-      setMemberships((prev) =>
-        prev.map((m) => (m.user_id === userId ? { ...m, role: newRole } : m))
-      );
+    await patchMemberRole(userId, newRole, () => {
       if (newRole === "alumni" || currentMember?.role === "alumni") {
         onAlumniRoleChanged();
       }
-    }
-
-    setIsChangingRole(false);
-    setRoleChangeUserId(null);
+    });
   };
 
   const confirmAdminPromotion = async () => {
     if (!pendingAdminUserId) return;
 
-    setIsChangingRole(true);
-    setRoleChangeUserId(pendingAdminUserId);
-    setError(null);
-
-    const res = await fetch(`/api/organizations/${orgId}/members/${pendingAdminUserId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: "admin" }),
+    await patchMemberRole(pendingAdminUserId, "admin", undefined, () => {
+      setShowAdminConfirm(false);
+      setPendingAdminUserId(null);
     });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError((data as { error?: string }).error || "Failed to update role");
-    } else {
-      setMemberships((prev) =>
-        prev.map((m) => (m.user_id === pendingAdminUserId ? { ...m, role: "admin" } : m))
-      );
-    }
-
-    setIsChangingRole(false);
-    setRoleChangeUserId(null);
-    setShowAdminConfirm(false);
-    setPendingAdminUserId(null);
-  };
-
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case "admin": return "warning";
-      case "alumni": return "muted";
-      case "parent": return "primary";
-      default: return "primary";
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "admin": return "Admin";
-      case "alumni": return "Alumni";
-      case "parent": return "Parent";
-      case "active_member": return "Active Member";
-      case "member": return "Member";
-      default: return role;
-    }
   };
 
   return (

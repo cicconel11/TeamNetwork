@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
+import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
+import { formatShortDate, isExpired } from "@/lib/utils/dates";
 
 interface Invite {
   id: string;
@@ -34,11 +36,19 @@ export function EnterpriseInviteList({
 }: EnterpriseInviteListProps) {
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(null), 2000);
   };
 
   const getInviteLink = (invite: Invite) => {
@@ -46,41 +56,11 @@ export function EnterpriseInviteList({
     return `${base}/app/join?token=${encodeURIComponent(invite.token)}&invite=enterprise`;
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const isExpired = (expiresAt: string | null) => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
-  };
-
   const isValid = (invite: Invite) => {
     if (invite.revoked_at) return false;
     if (isExpired(invite.expires_at)) return false;
     if (invite.uses_remaining !== null && invite.uses_remaining <= 0) return false;
     return true;
-  };
-
-  const getRoleBadgeVariant = (role: string): "warning" | "muted" | "primary" => {
-    switch (role) {
-      case "admin": return "warning";
-      case "alumni": return "muted";
-      default: return "primary";
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "admin": return "Admin";
-      case "alumni": return "Alumni";
-      case "active_member": return "Active Member";
-      default: return role;
-    }
   };
 
   if (invites.length === 0) {
@@ -196,9 +176,9 @@ export function EnterpriseInviteList({
                           : "Unlimited uses"}
                       </span>
                       {invite.expires_at && (
-                        <span>Expires {formatDate(invite.expires_at)}</span>
+                        <span>Expires {formatShortDate(invite.expires_at)}</span>
                       )}
-                      <span>Created {formatDate(invite.created_at)}</span>
+                      <span>Created {formatShortDate(invite.created_at)}</span>
                     </div>
 
                     {showQR === invite.id && (

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Badge, Select, Input } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
+import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
+import { formatShortDate } from "@/lib/utils/dates";
 
 interface PendingMember {
   user_id: string;
@@ -217,10 +219,19 @@ export default function ApprovalsPage() {
     setInvites(invites.filter((i) => i.id !== inviteId));
   };
 
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
+
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(null), 2000);
   };
 
   const getInviteLink = (invite: Invite) => {
@@ -229,32 +240,6 @@ export default function ApprovalsPage() {
       return `${base}/app/join?token=${invite.token}`;
     }
     return `${base}/app/join?code=${invite.code}`;
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "admin": return "Admin";
-      case "alumni": return "Alumni";
-      case "active_member": return "Active Member";
-      case "member": return "Member";
-      default: return role;
-    }
-  };
-
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case "admin": return "warning";
-      case "alumni": return "muted";
-      default: return "primary";
-    }
   };
 
   if (isLoading) {
@@ -420,7 +405,7 @@ export default function ApprovalsPage() {
                     {member.users?.email}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Requested {formatDate(member.created_at)} • {getRoleLabel(member.role)}
+                    Requested {formatShortDate(member.created_at)} • {getRoleLabel(member.role)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -470,7 +455,7 @@ export default function ApprovalsPage() {
                     {member.users?.email}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Requested {formatDate(member.created_at)} • Alumni
+                    Requested {formatShortDate(member.created_at)} • Alumni
                   </p>
                 </div>
                 <div className="flex gap-2">

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge, Button, Card, Input, Select } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
 import { buildInviteLink } from "@/lib/invites/buildInviteLink";
+import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
+import { formatShortDate, isExpired } from "@/lib/utils/dates";
 
 interface Invite {
   id: string;
@@ -43,7 +45,6 @@ interface InviteItem {
 interface OrgInvitePanelProps {
   orgId: string;
   orgSlug: string;
-  quotaRemaining: number | null;
   quotaLimit: number | null;
   alumniCount: number;
   showForm: boolean;
@@ -54,7 +55,6 @@ interface OrgInvitePanelProps {
 export function OrgInvitePanel({
   orgId,
   orgSlug,
-  quotaRemaining,
   quotaLimit,
   alumniCount,
   showForm,
@@ -68,6 +68,13 @@ export function OrgInvitePanel({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    };
+  }, []);
 
   // Form state
   const [newRole, setNewRole] = useState<"active_member" | "admin" | "alumni" | "parent">("active_member");
@@ -77,28 +84,29 @@ export function OrgInvitePanel({
   // Fetch invites
   useEffect(() => {
     const fetchInvites = async () => {
-      const { data: inviteData, error: inviteError } = await supabase
-        .from("organization_invites")
-        .select("*")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false });
+      const [inviteResult, parentInviteResult] = await Promise.all([
+        supabase
+          .from("organization_invites")
+          .select("*")
+          .eq("organization_id", orgId)
+          .order("created_at", { ascending: false }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase as any)
+          .from("parent_invites")
+          .select("id,email,code,expires_at,status,created_at")
+          .eq("organization_id", orgId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-      if (inviteError) {
-        console.error("Failed to fetch invites:", inviteError.message);
+      if (inviteResult.error) {
+        console.error("Failed to fetch invites:", inviteResult.error.message);
       }
-      setOrgInvites(inviteData || []);
+      setOrgInvites(inviteResult.data || []);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: parentInviteData, error: parentInviteError } = await (supabase as any)
-        .from("parent_invites")
-        .select("id,email,code,expires_at,status,created_at")
-        .eq("organization_id", orgId)
-        .order("created_at", { ascending: false });
-
-      if (parentInviteError) {
-        console.error("Failed to fetch parent invites:", parentInviteError.message);
+      if (parentInviteResult.error) {
+        console.error("Failed to fetch parent invites:", parentInviteResult.error.message);
       }
-      setParentInvites((parentInviteData as ParentInvite[] | null) || []);
+      setParentInvites((parentInviteResult.data as ParentInvite[] | null) || []);
     };
 
     fetchInvites();
@@ -235,7 +243,8 @@ export function OrgInvitePanel({
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopied(key);
-    setTimeout(() => setCopied(null), 2000);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(null), 2000);
   };
 
   const getInviteLink = (invite: InviteItem) => {
@@ -249,42 +258,9 @@ export function OrgInvitePanel({
     });
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const isExpired = (expiresAt: string | null) => {
-    if (!expiresAt) return false;
-    return new Date(expiresAt) < new Date();
-  };
-
   const isRevoked = (revokedAt: string | null) => !!revokedAt;
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case "admin": return "warning";
-      case "alumni": return "muted";
-      case "parent": return "primary";
-      default: return "primary";
-    }
-  };
-
-  const getRoleLabel = (role: string) => {
-    switch (role) {
-      case "admin": return "Admin";
-      case "alumni": return "Alumni";
-      case "parent": return "Parent";
-      case "active_member": return "Active Member";
-      case "member": return "Member";
-      default: return role;
-    }
-  };
-
-  const allInvites: InviteItem[] = [
+  const allInvites: InviteItem[] = useMemo(() => [
     ...orgInvites.map((invite) => ({
       kind: "org" as const,
       id: invite.id,
@@ -304,7 +280,7 @@ export function OrgInvitePanel({
       expires_at: invite.expires_at,
       status: invite.status,
     })),
-  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [orgInvites, parentInvites]);
 
   const atAlumniLimit = quotaLimit !== null && alumniCount >= quotaLimit;
 
@@ -439,7 +415,7 @@ export function OrgInvitePanel({
                           <div>Parent invite</div>
                         )}
                         {invite.expires_at && (
-                          <div>Expires {formatDate(invite.expires_at)}</div>
+                          <div>Expires {formatShortDate(invite.expires_at)}</div>
                         )}
                       </div>
                       {invite.kind === "org" && !revoked && !expired && !exhausted && (
