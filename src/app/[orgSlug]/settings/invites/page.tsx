@@ -107,7 +107,6 @@ export default function InvitesPage() {
       <OrgInvitePanel
         orgId={orgId}
         orgSlug={orgSlug}
-        quotaRemaining={quota?.remaining ?? null}
         quotaLimit={quota?.alumniLimit ?? null}
         alumniCount={quota?.alumniCount ?? 0}
         showForm={showInviteForm}
