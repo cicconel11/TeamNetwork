@@ -6,7 +6,6 @@ import { Button, Badge, Card } from "@/components/ui";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { summarizeRows, type ImportResultBase } from "@/lib/alumni/import-utils";
 import { ImportDropZone } from "./ImportDropZone";
-import { ImportPasteArea } from "./ImportPasteArea";
 import { ImportPreviewSummary } from "./ImportPreviewSummary";
 import { ImportResultBanner } from "./ImportResultBanner";
 
@@ -204,14 +203,6 @@ export function BulkLinkedInImporter({ organizationId, onClose }: BulkLinkedInIm
 
   const fileDrop = useFileDrop({ onFile: processFile });
 
-  const handlePasteSubmit = useCallback(() => {
-    if (!fileDrop.pasteText.trim()) return;
-    setResult(null);
-    const parsed = parseSpreadsheetData(fileDrop.pasteText);
-    setRows(parsed);
-    handlePreview(parsed, overwrite);
-  }, [handlePreview, overwrite, fileDrop.pasteText]);
-
   // ─── Import ─────────────────────────────────────────────────────────────
 
   const handleImport = useCallback(async () => {
@@ -247,7 +238,7 @@ export function BulkLinkedInImporter({ organizationId, onClose }: BulkLinkedInIm
     } finally {
       setIsImporting(false);
     }
-  }, [organizationId, validRows, overwrite]);
+  }, [organizationId, router, validRows, overwrite]);
 
   // ─── Reset ──────────────────────────────────────────────────────────────
 
@@ -275,8 +266,8 @@ export function BulkLinkedInImporter({ organizationId, onClose }: BulkLinkedInIm
             </svg>
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-foreground">Import LinkedIn URLs</h3>
-            <p className="text-xs text-muted-foreground">CSV or spreadsheet with email &amp; LinkedIn URL columns</p>
+            <h3 className="text-sm font-semibold text-foreground">Bulk Import LinkedIn URLs</h3>
+            <p className="text-xs text-muted-foreground">Upload a CSV or TSV file with email and LinkedIn URL columns</p>
           </div>
         </div>
         {onClose && (
@@ -293,16 +284,7 @@ export function BulkLinkedInImporter({ organizationId, onClose }: BulkLinkedInIm
       </div>
 
       <div className="px-5 py-4 space-y-4">
-        <ImportDropZone fileDrop={fileDrop} hint="CSV or TSV with email and LinkedIn URL columns" />
-
-        <ImportPasteArea
-          showPaste={fileDrop.showPaste}
-          pasteText={fileDrop.pasteText}
-          placeholder={"email\tlinkedin_url\nalice@example.com\thttps://linkedin.com/in/alice\nbob@example.com\thttps://linkedin.com/in/bob"}
-          onToggle={() => fileDrop.setShowPaste((v) => !v)}
-          onChange={fileDrop.setPasteText}
-          onSubmit={handlePasteSubmit}
-        />
+        <ImportDropZone fileDrop={fileDrop} hint="Upload CSV or TSV with email and LinkedIn URL columns" />
 
         {/* Preview table */}
         {rows.length > 0 && !result && (

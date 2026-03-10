@@ -155,7 +155,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       />
 
       {/* Import panel (admin only, toggled from dropdown) */}
-      {canEdit && <AlumniImportPanel organizationId={org.id} />}
+      {canEdit && <AlumniImportPanel organizationId={org.id} orgSlug={orgSlug} />}
 
       {/* Alumni Grid */}
       {alumni && alumni.length > 0 ? (

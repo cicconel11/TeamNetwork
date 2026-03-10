@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 interface AddAlumniMenuProps {
   orgSlug: string;
   actionLabel: string;
+  onSingleLinkedInClick: () => void;
   onImportClick: () => void;
   onCsvImportClick: () => void;
 }
@@ -13,7 +14,13 @@ interface AddAlumniMenuProps {
 const SHARED_BUTTON =
   "inline-flex items-center justify-center text-sm font-medium bg-org-secondary text-org-secondary-foreground hover:opacity-90 transition-opacity duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-secondary focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-pointer";
 
-export function AddAlumniMenu({ orgSlug, actionLabel, onImportClick, onCsvImportClick }: AddAlumniMenuProps) {
+export function AddAlumniMenu({
+  orgSlug,
+  actionLabel,
+  onSingleLinkedInClick,
+  onImportClick,
+  onCsvImportClick,
+}: AddAlumniMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -85,6 +92,20 @@ export function AddAlumniMenu({ orgSlug, actionLabel, onImportClick, onCsvImport
             className="w-full text-left px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors duration-150 flex items-center gap-3"
             onClick={() => {
               setIsOpen(false);
+              onSingleLinkedInClick();
+            }}
+          >
+            <svg className="h-4 w-4 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75v10.5m-10.5-10.5v10.5M12 3v18m8.25-8.25H3.75" />
+            </svg>
+            Attach LinkedIn URL
+          </button>
+          <div className="border-t border-border" />
+          <button
+            role="menuitem"
+            className="w-full text-left px-4 py-3 text-sm text-foreground hover:bg-muted transition-colors duration-150 flex items-center gap-3"
+            onClick={() => {
+              setIsOpen(false);
               router.push(`/${orgSlug}/alumni/new`);
             }}
           >
@@ -105,7 +126,7 @@ export function AddAlumniMenu({ orgSlug, actionLabel, onImportClick, onCsvImport
             <svg className="h-4 w-4 text-muted-foreground shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
             </svg>
-            Import LinkedIn CSV
+            Bulk Import LinkedIn URLs
           </button>
           <div className="border-t border-border" />
           <button

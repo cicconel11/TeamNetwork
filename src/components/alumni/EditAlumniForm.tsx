@@ -201,10 +201,10 @@ export function EditAlumniForm({ alumni, orgSlug, isReadOnly }: EditAlumniFormPr
             />
 
             <Input
-              label="LinkedIn profile (optional)"
+              label="LinkedIn profile URL (optional)"
               type="url"
               placeholder="https://www.linkedin.com/in/username"
-              helperText="Must be a valid https:// URL"
+              helperText="Use a public LinkedIn profile URL under linkedin.com/in/..."
               error={errors.linkedin_url?.message}
               {...register("linkedin_url")}
             />

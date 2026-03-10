@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,7 +21,9 @@ interface SubscriptionInfo {
 export default function NewAlumniPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgSlug = params.orgSlug as string;
+  const prefilledLinkedinUrl = searchParams.get("linkedin_url") ?? "";
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export default function NewAlumniPage() {
       job_title: "",
       photo_url: "",
       notes: "",
-      linkedin_url: "",
+      linkedin_url: prefilledLinkedinUrl,
       phone_number: "",
       industry: "",
       current_company: "",
@@ -272,10 +274,10 @@ export default function NewAlumniPage() {
           />
 
           <Input
-            label="LinkedIn profile (optional)"
+            label="LinkedIn profile URL (optional)"
             type="url"
             placeholder="https://www.linkedin.com/in/username"
-            helperText="Must be a valid https:// URL"
+            helperText="Use a public LinkedIn profile URL under linkedin.com/in/..."
             error={errors.linkedin_url?.message}
             {...register("linkedin_url")}
           />
