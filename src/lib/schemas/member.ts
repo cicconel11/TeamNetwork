@@ -8,6 +8,7 @@ import {
   optionalHttpsUrlSchema,
   optionalDateStringSchema,
 } from "./common";
+import { optionalLinkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
 
 // New member form
 export const newMemberSchema = z.object({
@@ -37,7 +38,7 @@ export const newAlumniSchema = z.object({
   job_title: optionalSafeString(200),
   photo_url: optionalHttpsUrlSchema,
   notes: optionalSafeString(1000),
-  linkedin_url: optionalHttpsUrlSchema,
+  linkedin_url: optionalLinkedInProfileUrlSchema,
   phone_number: optionalSafeString(50),
   industry: optionalSafeString(200),
   current_company: optionalSafeString(200),

@@ -6,45 +6,13 @@ import {
   planLinkedInImport,
   type LinkedInImportPreviewStatus,
 } from "@/lib/alumni/linkedin-import";
+import { linkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
-const linkedinUrlSchema = z
-  .string()
-  .trim()
-  .transform((val) => {
-    try {
-      const url = new URL(val);
-      if (url.protocol === "http:") {
-        url.protocol = "https:";
-      }
-      if (url.hostname === "linkedin.com") {
-        url.hostname = "www.linkedin.com";
-      }
-      return url.toString().replace(/\/+$/, "");
-    } catch {
-      return val;
-    }
-  })
-  .refine(
-    (val) => {
-      try {
-        const url = new URL(val);
-        return (
-          url.protocol === "https:" &&
-          url.hostname === "www.linkedin.com" &&
-          /^\/in\/[a-zA-Z0-9_-]+/.test(url.pathname)
-        );
-      } catch {
-        return false;
-      }
-    },
-    { message: "Must be a valid LinkedIn profile URL (linkedin.com/in/...)" },
-  );
-
 const importRowSchema = z.object({
   email: z.string().trim().email().max(320),
-  linkedin_url: linkedinUrlSchema,
+  linkedin_url: linkedInProfileUrlSchema,
 });
 
 const importBodySchema = z.object({
