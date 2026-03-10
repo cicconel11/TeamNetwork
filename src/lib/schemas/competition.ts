@@ -1,14 +1,10 @@
 import { z } from "zod";
-import { safeString, optionalSafeString } from "./common";
+import { safeString, optionalSafeString, hexColorSchema } from "./common";
 
 // Add team to competition
 export const addTeamSchema = z.object({
   name: safeString(100),
-  color: z
-    .string()
-    .trim()
-    .regex(/^#[0-9a-fA-F]{6}$/, { message: "Color must be a valid hex code" })
-    .optional(),
+  color: hexColorSchema.optional(),
 });
 export type AddTeamForm = z.infer<typeof addTeamSchema>;
 

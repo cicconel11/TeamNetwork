@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button, Input, Card, CardHeader, CardTitle, CardDescription } from "@/components/ui";
 import { OrgLimitUpgradeModal } from "./OrgLimitUpgradeModal";
+import { hexColorSchema } from "@/lib/schemas/common";
 
 const createSubOrgSchema = z.object({
   name: z
@@ -19,10 +20,7 @@ const createSubOrgSchema = z.object({
     .trim()
     .toLowerCase()
     .regex(/^[a-z0-9-]{3,64}$/, "Use 3-64 lowercase letters, numbers, or hyphens"),
-  primaryColor: z
-    .string()
-    .trim()
-    .regex(/^#[0-9a-fA-F]{6}$/, "Color must be a 6 character hex code"),
+  primaryColor: hexColorSchema,
   billingType: z.literal("enterprise_managed"),
 });
 

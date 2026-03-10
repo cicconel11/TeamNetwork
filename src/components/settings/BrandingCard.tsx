@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { animate } from "animejs";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
+import { hexColorSchema } from "@/lib/schemas/common";
 
 interface BrandingCardProps {
   orgId: string;
@@ -95,8 +96,7 @@ export function BrandingCard({
       return;
     }
 
-    const colorPattern = /^#[0-9a-fA-F]{6}$/;
-    if (!colorPattern.test(primaryColor) || !colorPattern.test(secondaryColor)) {
+    if (!hexColorSchema.safeParse(primaryColor).success || !hexColorSchema.safeParse(secondaryColor).success) {
       setBrandError("Use 6-digit hex colors like #1e3a5f.");
       return;
     }
