@@ -125,11 +125,12 @@ export async function PATCH(
       );
     }
 
-    // Update job
+    // Update job (strip mediaIds — not a DB column, handled via media linking)
+    const { mediaIds: _mediaIds, ...jobUpdateData } = validationResult.data;
     const { data: job, error } = await supabase
       .from("job_postings")
       .update({
-        ...validationResult.data,
+        ...jobUpdateData,
         updated_at: new Date().toISOString(),
       })
       .eq("id", jobId)
