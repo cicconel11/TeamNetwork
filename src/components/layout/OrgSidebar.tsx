@@ -225,6 +225,22 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
           </button>
         </form>
       </div>
+
+      {/* Platform Branding */}
+      <div className="px-4 py-4 border-t border-border">
+        <Link href="/" className="flex flex-col items-start gap-1 group">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
+            Powered by
+          </span>
+          <Image
+            src="/TeamNetwor.png"
+            alt="TeamNetwork"
+            width={541}
+            height={303}
+            className="w-full max-w-[200px] h-auto object-contain opacity-50 group-hover:opacity-80 transition-opacity"
+          />
+        </Link>
+      </div>
     </aside>
   );
 }
