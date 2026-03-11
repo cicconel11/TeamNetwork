@@ -98,6 +98,27 @@ function validateBuildEnv() {
     console.warn(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`);
   }
 
+  // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  let parsedSiteUrl = null;
+  if (siteUrl) {
+    try {
+      const parsed = new URL(siteUrl);
+      parsedSiteUrl = {
+        host: parsed.host,
+        protocol: parsed.protocol,
+      };
+    } catch {
+      parsedSiteUrl = null;
+    }
+  }
+  if (
+    isVercelProduction &&
+    (!parsedSiteUrl || parsedSiteUrl.host !== "www.myteamnetwork.com" || parsedSiteUrl.protocol !== "https:")
+  ) {
+    throw new Error(`NEXT_PUBLIC_SITE_URL must use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}`);
+  }
+
   // Require CRON_SECRET on Vercel production deploys, warn otherwise
   // (Local `next build` runs with NODE_ENV=production, so we key off Vercel env vars instead.)
   const cronSecret = process.env.CRON_SECRET;
