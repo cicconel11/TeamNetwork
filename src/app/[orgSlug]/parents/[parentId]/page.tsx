@@ -141,6 +141,7 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
                   organizationField="organization_id"
                   organizationId={orgId}
                   redirectTo={`/${orgSlug}/parents`}
+                  revalidatePaths={[`/${orgSlug}`, `/${orgSlug}/parents`]}
                 />
               )}
             </div>

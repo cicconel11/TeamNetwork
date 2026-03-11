@@ -83,6 +83,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                   organizationField="organization_id"
                   organizationId={org.id}
                   redirectTo={`/${orgSlug}/members`}
+                  revalidatePaths={[`/${orgSlug}`, `/${orgSlug}/members`]}
                   data-testid="member-delete-button"
                 />
               )}

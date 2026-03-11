@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
@@ -159,6 +160,19 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
 
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 400 });
+  }
+
+  // Invalidate cached pages that display alumni data
+  const serviceSupabase = createServiceClient();
+  const { data: org } = await serviceSupabase
+    .from("organizations")
+    .select("slug")
+    .eq("id", organizationId)
+    .single();
+
+  if (org?.slug) {
+    revalidatePath(`/${org.slug}`);
+    revalidatePath(`/${org.slug}/alumni`);
   }
 
   return NextResponse.json({ success: true });
