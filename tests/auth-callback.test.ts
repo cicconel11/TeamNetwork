@@ -84,6 +84,17 @@ interface CallbackResult {
   success: boolean;
 }
 
+function buildSignupErrorRedirect(siteUrl: string, message: string, redirect: string | null): string {
+  const url = new URL("/auth/signup", siteUrl);
+  url.searchParams.set("error", message);
+
+  if (redirect) {
+    url.searchParams.set("redirect", redirect);
+  }
+
+  return url.toString();
+}
+
 /**
  * CURRENT (BUGGY) implementation - blocks login for users without age data
  */
@@ -183,6 +194,7 @@ function handleAuthCallbackFixed(
   const oauthAgeBracket = requestUrl.searchParams.get("age_bracket");
   const oauthAgeToken = requestUrl.searchParams.get("age_token");
   const hasAgeQueryParams = oauthAgeBracket || oauthAgeToken;
+  const redirect = requestUrl.searchParams.get("redirect");
 
   // Only validate age if:
   // 1. User has age_bracket in metadata (existing validated user), OR
@@ -203,7 +215,11 @@ function handleAuthCallbackFixed(
     // New signup flow with age data in query params - validate it
     if (!oauthAgeBracket) {
       return {
-        redirect: `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`,
+        redirect: buildSignupErrorRedirect(
+          siteUrl,
+          "Age verification required. Please complete the signup process.",
+          redirect
+        ),
         success: false,
       };
     }
@@ -221,7 +237,11 @@ function handleAuthCallbackFixed(
 
     if (!oauthAgeToken) {
       return {
-        redirect: `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`,
+        redirect: buildSignupErrorRedirect(
+          siteUrl,
+          "Age verification required. Please complete the signup process.",
+          redirect
+        ),
         success: false,
       };
     }
@@ -229,7 +249,11 @@ function handleAuthCallbackFixed(
     const tokenResult = verifyAgeValidationToken(oauthAgeToken);
     if (!tokenResult.valid) {
       return {
-        redirect: `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification expired. Please try again.")}`,
+        redirect: buildSignupErrorRedirect(
+          siteUrl,
+          "Age verification expired. Please try again.",
+          redirect
+        ),
         success: false,
       };
     }
@@ -250,7 +274,11 @@ function handleAuthCallbackFixed(
 
     if (isNewUser) {
       return {
-        redirect: `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`,
+        redirect: buildSignupErrorRedirect(
+          siteUrl,
+          "Age verification required. Please complete the signup process.",
+          redirect
+        ),
         success: false,
       };
     }
@@ -411,6 +439,28 @@ describe("Auth Callback - Login vs Signup Age Validation", () => {
       assert.ok(fixedResult.redirect.includes("/auth/signup?error="));
     });
 
+    it("signup with missing age_token preserves invite redirect", () => {
+      const session: MockSession = {
+        user: {
+          id: "new-user-222b",
+          user_metadata: {},
+        },
+      };
+
+      const redirect = "/app/join?token=invite123";
+      const requestUrl = new URL(
+        `http://localhost:3000/auth/callback?code=abc123&redirect=${encodeURIComponent(redirect)}&age_bracket=18_plus`
+      );
+
+      const fixedResult = handleAuthCallbackFixed(requestUrl, session, siteUrl);
+
+      assert.strictEqual(fixedResult.success, false);
+      assert.ok(
+        fixedResult.redirect.includes(`redirect=${encodeURIComponent(redirect)}`),
+        "Should preserve invite redirect when returning the user to signup"
+      );
+    });
+
     it("signup with missing age_bracket - redirects to signup with error", () => {
       const session: MockSession = {
         user: {
@@ -487,6 +537,36 @@ describe("Auth Callback - Login vs Signup Age Validation", () => {
 
       assert.strictEqual(fixedResult.success, false);
       assert.ok(fixedResult.redirect.includes("/auth/parental-consent"));
+    });
+
+    it("signup with expired age token preserves invite redirect", () => {
+      const session: MockSession = {
+        user: {
+          id: "new-user-666b",
+          user_metadata: {},
+        },
+      };
+
+      const expiredToken = createAgeValidationToken("18_plus");
+      const originalNow = Date.now;
+      Date.now = () => originalNow() + TOKEN_EXPIRY_MS + 1000;
+
+      try {
+        const redirect = "/app/join?token=invite456";
+        const requestUrl = new URL(
+          `http://localhost:3000/auth/callback?code=abc123&redirect=${encodeURIComponent(redirect)}&age_bracket=18_plus&age_token=${encodeURIComponent(expiredToken)}`
+        );
+
+        const fixedResult = handleAuthCallbackFixed(requestUrl, session, siteUrl);
+
+        assert.strictEqual(fixedResult.success, false);
+        assert.ok(
+          fixedResult.redirect.includes(`redirect=${encodeURIComponent(redirect)}`),
+          "Should preserve invite redirect when age validation expires"
+        );
+      } finally {
+        Date.now = originalNow;
+      }
     });
   });
 
@@ -595,6 +675,31 @@ describe("Auth Callback - Login vs Signup Age Validation", () => {
       assert.ok(
         fixedResult.redirect.includes("/auth/signup?error="),
         "Should redirect to signup with age verification error"
+      );
+    });
+
+    it("SECURITY: brand new user without age params preserves invite redirect", () => {
+      const session: MockSession = {
+        user: {
+          id: "bypass-attempt-222",
+          user_metadata: {
+            email: "attacker@example.com",
+          },
+          created_at: new Date(Date.now() - 5000).toISOString(),
+        },
+      };
+
+      const redirect = "/app/join?token=invite789";
+      const requestUrl = new URL(
+        `http://localhost:3000/auth/callback?code=oauth_code&redirect=${encodeURIComponent(redirect)}`
+      );
+
+      const fixedResult = handleAuthCallbackFixed(requestUrl, session, siteUrl);
+
+      assert.strictEqual(fixedResult.success, false);
+      assert.ok(
+        fixedResult.redirect.includes(`redirect=${encodeURIComponent(redirect)}`),
+        "Should preserve invite redirect when blocking direct OAuth bypass"
       );
     });
 

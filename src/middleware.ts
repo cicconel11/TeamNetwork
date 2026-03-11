@@ -219,7 +219,8 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     const redirectUrl = new URL("/auth/login", request.url);
-    redirectUrl.searchParams.set("redirect", pathname);
+    const fullPath = pathname + request.nextUrl.search;
+    redirectUrl.searchParams.set("redirect", fullPath);
     const redirectResponse = NextResponse.redirect(redirectUrl);
 
     if (hasAuthCookies) {

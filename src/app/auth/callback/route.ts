@@ -9,10 +9,22 @@ import { debugLog, maskPII } from "@/lib/debug";
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
+function buildSignupRedirect(siteUrl: string, message: string, redirect: string | null): string {
+  const signupUrl = new URL("/auth/signup", siteUrl);
+  signupUrl.searchParams.set("error", message);
+
+  if (redirect) {
+    signupUrl.searchParams.set("redirect", redirect);
+  }
+
+  return signupUrl.toString();
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const redirect = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+  const requestedRedirect = requestUrl.searchParams.get("redirect");
+  const redirect = sanitizeRedirectPath(requestedRedirect);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
@@ -106,7 +118,11 @@ export async function GET(request: NextRequest) {
         if (!oauthAgeBracket) {
           console.error("[auth/callback] Signup without age validation - missing age_bracket");
           return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+            buildSignupRedirect(
+              siteUrl,
+              "Age verification required. Please complete the signup process.",
+              requestedRedirect ? redirect : null
+            )
           );
         }
 
@@ -125,7 +141,11 @@ export async function GET(request: NextRequest) {
         if (!oauthAgeToken) {
           console.error("[auth/callback] OAuth signup missing age token");
           return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+            buildSignupRedirect(
+              siteUrl,
+              "Age verification required. Please complete the signup process.",
+              requestedRedirect ? redirect : null
+            )
           );
         }
 
@@ -133,7 +153,11 @@ export async function GET(request: NextRequest) {
         if (!tokenResult.valid) {
           console.error("[auth/callback] Invalid age token:", tokenResult.error);
           return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification expired. Please try again.")}`
+            buildSignupRedirect(
+              siteUrl,
+              "Age verification expired. Please try again.",
+              requestedRedirect ? redirect : null
+            )
           );
         }
 
@@ -153,7 +177,11 @@ export async function GET(request: NextRequest) {
         if (isNewUser) {
           console.error("[auth/callback] New user signup attempted without age validation - blocking");
           return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+            buildSignupRedirect(
+              siteUrl,
+              "Age verification required. Please complete the signup process.",
+              requestedRedirect ? redirect : null
+            )
           );
         }
 

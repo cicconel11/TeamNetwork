@@ -25,9 +25,10 @@ interface AgeGateData {
 
 interface SignupClientProps {
   hcaptchaSiteKey: string;
+  redirectTo?: string;
 }
 
-export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
+export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupClientProps) {
   const router = useRouter();
   const [step, setStep] = useState<SignupStep>("age_gate");
   const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
@@ -148,7 +149,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${siteUrl}/auth/callback?redirect=/app`,
+        redirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
         queryParams: {
           // Pass age data as query params to be handled in callback
           age_bracket: ageBracket,
@@ -191,7 +192,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
           is_minor: isMinor,
           age_validation_token: ageToken,
         },
-        emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
+        emailRedirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
         captchaToken,
       },
     });
@@ -331,7 +332,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <Link href={`/auth/login?redirect=${encodeURIComponent(redirectTo)}`} className="text-foreground font-medium hover:underline">
           Sign in
         </Link>
       </div>
