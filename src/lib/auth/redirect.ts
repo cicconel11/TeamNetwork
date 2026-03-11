@@ -23,6 +23,29 @@ export function sanitizeRedirectPath(raw: string | null): string {
 }
 
 /**
+ * Builds the OAuth callback URL with age validation params embedded in the URL
+ * (not in queryParams, which Google strips during OAuth round-trip).
+ *
+ * Includes mode=signup so error pages can route back to signup instead of login.
+ */
+export function buildOAuthSignupCallbackUrl(
+  siteUrl: string,
+  redirectTo: string,
+  ageBracket: string,
+  isMinor: boolean,
+  ageToken: string
+): string {
+  const base = siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
+  const url = new URL("/auth/callback", base);
+  url.searchParams.set("redirect", sanitizeRedirectPath(redirectTo));
+  url.searchParams.set("age_bracket", ageBracket);
+  url.searchParams.set("is_minor", String(isMinor));
+  url.searchParams.set("age_token", ageToken);
+  url.searchParams.set("mode", "signup");
+  return url.toString();
+}
+
+/**
  * Builds the absolute redirect URL for Supabase resetPasswordForEmail.
  * The flow is: email link → /auth/callback?redirect=<encoded reset page> → reset page
  */

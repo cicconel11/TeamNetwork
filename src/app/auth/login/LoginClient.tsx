@@ -261,7 +261,10 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link href={`/auth/signup?redirect=${encodeURIComponent(redirectTo)}`} className="text-foreground font-medium hover:underline">
+        <Link
+          href={redirectTo !== "/app" ? `/auth/signup?redirect=${encodeURIComponent(redirectTo)}` : "/auth/signup"}
+          className="text-foreground font-medium hover:underline"
+        >
           Sign up
         </Link>
       </div>

@@ -10,6 +10,8 @@ import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
 import { PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
+import { buildOAuthSignupCallbackUrl } from "@/lib/auth/redirect";
+import { buildEmailSignupCallbackUrl, shouldResumeSignupRegistration } from "@/lib/auth/signup-flow";
 import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
 
@@ -26,9 +28,10 @@ interface AgeGateData {
 interface SignupClientProps {
   hcaptchaSiteKey: string;
   redirectTo?: string;
+  initialError?: string | null;
 }
 
-export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupClientProps) {
+export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialError = null }: SignupClientProps) {
   const router = useRouter();
   const [step, setStep] = useState<SignupStep>("age_gate");
   const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
@@ -37,7 +40,7 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupCli
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
@@ -45,17 +48,22 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupCli
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(AGE_GATE_STORAGE_KEY);
-      if (stored) {
+      if (shouldResumeSignupRegistration({
+        initialError,
+        hasStoredAgeGateData: Boolean(stored),
+      }) && stored) {
         const data: AgeGateData = JSON.parse(stored);
         setAgeBracket(data.ageBracket);
         setIsMinor(data.isMinor);
         setAgeToken(data.token);
         setStep("registration");
+      } else if (stored) {
+        clearAgeGateData();
       }
     } catch {
       // Ignore storage errors
     }
-  }, []);
+  }, [initialError]);
 
   const {
     register,
@@ -146,25 +154,20 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupCli
     setError(null);
 
     const supabase = createClient()!;
+    // Embed age data in redirectTo URL (queryParams don't survive Google OAuth round-trip)
+    const callbackUrl = buildOAuthSignupCallbackUrl(siteUrl, redirectTo, ageBracket, isMinor, ageToken);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
-        queryParams: {
-          // Pass age data as query params to be handled in callback
-          age_bracket: ageBracket,
-          is_minor: String(isMinor),
-          age_token: ageToken,
-        },
-      },
+      options: { redirectTo: callbackUrl },
     });
 
     if (error) {
       setError(error.message);
       setIsGoogleLoading(false);
-    } else {
-      clearAgeGateData();
     }
+    // Don't clear age gate data here — user may be bounced back if OAuth fails.
+    // The useEffect at mount restores age gate state from sessionStorage.
   };
 
   const onSubmit = async (data: SignupForm) => {
@@ -192,7 +195,7 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupCli
           is_minor: isMinor,
           age_validation_token: ageToken,
         },
-        emailRedirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirectTo)}`,
+        emailRedirectTo: buildEmailSignupCallbackUrl(siteUrl, redirectTo),
         captchaToken,
       },
     });
@@ -332,7 +335,10 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app" }: SignupCli
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href={`/auth/login?redirect=${encodeURIComponent(redirectTo)}`} className="text-foreground font-medium hover:underline">
+        <Link
+          href={redirectTo !== "/app" ? `/auth/login?redirect=${encodeURIComponent(redirectTo)}` : "/auth/login"}
+          className="text-foreground font-medium hover:underline"
+        >
           Sign in
         </Link>
       </div>
