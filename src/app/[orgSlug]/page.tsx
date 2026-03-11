@@ -37,13 +37,13 @@ export default async function OrgDashboardPage({ params }: DashboardPageProps) {
     { data: recentDonations },
     { data: donationStat },
   ] = await Promise.all([
-    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
+    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).eq("status", "active"),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()),
     queryClient.from("announcements").select("*").eq("organization_id", org.id).is("deleted_at", null).order("published_at", { ascending: false }).limit(3),
     queryClient.from("events").select("*").eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()).order("start_date").limit(5),
-    queryClient.from("organization_donations").select("*").eq("organization_id", org.id).order("created_at", { ascending: false }).limit(5),
+    queryClient.from("organization_donations").select("*").eq("organization_id", org.id).eq("status", "succeeded").order("created_at", { ascending: false }).limit(5),
     queryClient.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
   ]);
 
