@@ -66,13 +66,13 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
   return (
     <Card className="p-6">
       {error && (
-        <div data-testid="forgot-password-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="forgot-password-error" className="mb-4 p-3 rounded-xl bg-red-900/20 text-red-400 text-sm">
           {error}
         </div>
       )}
 
       {message && (
-        <div data-testid="forgot-password-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="forgot-password-success" className="mb-4 p-3 rounded-xl bg-emerald-900/20 text-emerald-400 text-sm">
           {message}
         </div>
       )}
@@ -95,7 +95,7 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
               onVerify={onVerify}
               onExpire={onExpire}
               onError={onError}
-              theme="light"
+              theme="dark"
             />
           </div>
 
@@ -111,9 +111,9 @@ function ForgotPasswordFormComponent({ hcaptchaSiteKey }: ForgotPasswordFormProp
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-white/50">
         Remember your password?{" "}
-        <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <Link href="/auth/login" className="text-white font-medium hover:underline">
           Sign in
         </Link>
       </div>
@@ -126,8 +126,8 @@ export function ForgotPasswordClient({ hcaptchaSiteKey }: ForgotPasswordFormProp
     <Suspense fallback={
       <Card className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-muted rounded-xl" />
-          <div className="h-10 bg-muted rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
         </div>
       </Card>
     }>

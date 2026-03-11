@@ -92,8 +92,8 @@ export function AgeGate({ onComplete, isLoading = false, error: externalError }:
   return (
     <Card className="p-6">
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-foreground mb-2">Date of Birth</h2>
-        <p className="text-sm text-muted-foreground">
+        <h2 className="text-lg font-semibold text-white mb-2">Date of Birth</h2>
+        <p className="text-sm text-white/50">
           Please enter your date of birth to continue.
         </p>
       </div>
@@ -101,7 +101,7 @@ export function AgeGate({ onComplete, isLoading = false, error: externalError }:
       {displayError && (
         <div
           data-testid="age-gate-error"
-          className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm"
+          className="mb-4 p-3 rounded-xl bg-red-900/20 text-red-400 text-sm"
         >
           {displayError}
           <div className="mt-2 flex justify-end">
@@ -145,9 +145,9 @@ export function AgeGate({ onComplete, isLoading = false, error: externalError }:
         Continue
       </Button>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-white/50">
         Already have an account?{" "}
-        <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <Link href="/auth/login" className="text-white font-medium hover:underline">
           Sign in
         </Link>
       </div>

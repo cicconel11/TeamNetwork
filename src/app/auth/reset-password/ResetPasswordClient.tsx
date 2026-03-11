@@ -72,8 +72,8 @@ function ResetPasswordFormComponent() {
     return (
       <Card className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-muted rounded-xl" />
-          <div className="h-10 bg-muted rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
         </div>
       </Card>
     );
@@ -82,14 +82,14 @@ function ResetPasswordFormComponent() {
   if (sessionState === "error") {
     return (
       <Card className="p-6 text-center">
-        <p className="text-muted-foreground mb-4">
+        <p className="text-white/50 mb-4">
           Something went wrong. Please check your connection and try again.
         </p>
         <Button className="w-full" onClick={checkSession}>
           Try again
         </Button>
-        <div className="mt-4 text-sm text-muted-foreground">
-          <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <div className="mt-4 text-sm text-white/50">
+          <Link href="/auth/login" className="text-white font-medium hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -100,14 +100,14 @@ function ResetPasswordFormComponent() {
   if (sessionState === "expired") {
     return (
       <Card className="p-6 text-center">
-        <p className="text-muted-foreground mb-4">
+        <p className="text-white/50 mb-4">
           This password reset link is expired or invalid.
         </p>
         <Link href="/auth/forgot-password">
           <Button className="w-full">Request a new reset link</Button>
         </Link>
-        <div className="mt-4 text-sm text-muted-foreground">
-          <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <div className="mt-4 text-sm text-white/50">
+          <Link href="/auth/login" className="text-white font-medium hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -118,13 +118,13 @@ function ResetPasswordFormComponent() {
   return (
     <Card className="p-6">
       {error && (
-        <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div className="mb-4 p-3 rounded-xl bg-red-900/20 text-red-400 text-sm">
           {error}
         </div>
       )}
 
       {message && (
-        <div className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div className="mb-4 p-3 rounded-xl bg-emerald-900/20 text-emerald-400 text-sm">
           {message}
         </div>
       )}
@@ -157,8 +157,8 @@ function ResetPasswordFormComponent() {
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
-        <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+      <div className="mt-6 text-center text-sm text-white/50">
+        <Link href="/auth/login" className="text-white font-medium hover:underline">
           Back to sign in
         </Link>
       </div>
@@ -171,8 +171,8 @@ export function ResetPasswordClient() {
     <Suspense fallback={
       <Card className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-muted rounded-xl" />
-          <div className="h-10 bg-muted rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
         </div>
       </Card>
     }>

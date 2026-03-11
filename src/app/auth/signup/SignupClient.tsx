@@ -258,15 +258,15 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
 
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
+          <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with email</span>
         </div>
       </div>
 
       {error && (
-        <div data-testid="signup-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="signup-error" className="mb-4 p-3 rounded-xl bg-red-900/20 text-red-400 text-sm">
           {error}
           <div className="mt-2 flex justify-end">
             <FeedbackButton context="signup" trigger="signup_error" />
@@ -275,7 +275,7 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
       )}
 
       {message && (
-        <div data-testid="signup-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="signup-success" className="mb-4 p-3 rounded-xl bg-emerald-900/20 text-emerald-400 text-sm">
           {message}
         </div>
       )}
@@ -317,7 +317,7 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
               onVerify={onVerify}
               onExpire={onExpire}
               onError={onCaptchaError}
-              theme="light"
+              theme="dark"
             />
           </div>
 
@@ -333,9 +333,9 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-white/50">
         Already have an account?{" "}
-        <Link href={buildAuthLink("/auth/login", redirectTo)} className="text-foreground font-medium hover:underline">
+        <Link href={buildAuthLink("/auth/login", redirectTo)} className="text-white font-medium hover:underline">
           Sign in
         </Link>
       </div>

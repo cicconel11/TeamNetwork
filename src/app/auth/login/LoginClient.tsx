@@ -155,22 +155,22 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
 
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
+          <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with</span>
         </div>
       </div>
 
-      <div className="flex rounded-xl bg-muted p-1 mb-6">
+      <div className="flex rounded-xl bg-white/5 p-1 mb-6">
         <button
           type="button"
           onClick={() => setMode("password")}
           data-testid="login-mode-password"
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-all ${
             mode === "password"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-[#0a0a0a] text-white shadow-sm"
+              : "text-white/50 hover:text-white"
           }`}
         >
           Password
@@ -181,8 +181,8 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
           data-testid="login-mode-magic"
           className={`flex-1 py-2 px-4 text-sm font-medium rounded-lg transition-all ${
             mode === "magic-link"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
+              ? "bg-[#0a0a0a] text-white shadow-sm"
+              : "text-white/50 hover:text-white"
           }`}
         >
           Magic Link
@@ -190,7 +190,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
       </div>
 
       {error && (
-        <div data-testid="login-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <div data-testid="login-error" className="mb-4 p-3 rounded-xl bg-red-900/20 text-red-400 text-sm">
           {error}
           <div className="mt-2 flex justify-end">
             <FeedbackButton context="login" trigger="login_error" />
@@ -199,7 +199,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
       )}
 
       {message && (
-        <div data-testid="login-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <div data-testid="login-success" className="mb-4 p-3 rounded-xl bg-emerald-900/20 text-emerald-400 text-sm">
           {message}
         </div>
       )}
@@ -228,7 +228,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
               <div className="text-right">
                 <Link
                   href={`/auth/forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
-                  className="text-sm text-muted-foreground hover:text-foreground hover:underline"
+                  className="text-sm text-white/50 hover:text-white hover:underline"
                 >
                   Forgot password?
                 </Link>
@@ -243,7 +243,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
               onVerify={onVerify}
               onExpire={onExpire}
               onError={onError}
-              theme="light"
+              theme="dark"
             />
           </div>
 
@@ -259,9 +259,9 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-white/50">
         Don&apos;t have an account?{" "}
-        <Link href={buildAuthLink("/auth/signup", redirectTo)} className="text-foreground font-medium hover:underline">
+        <Link href={buildAuthLink("/auth/signup", redirectTo)} className="text-white font-medium hover:underline">
           Sign up
         </Link>
       </div>
@@ -274,9 +274,9 @@ export function LoginClient({ hcaptchaSiteKey }: LoginFormProps) {
     <Suspense fallback={
       <Card className="p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-10 bg-muted rounded-xl" />
-          <div className="h-10 bg-muted rounded-xl" />
-          <div className="h-10 bg-muted rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
+          <div className="h-10 bg-white/5 rounded-xl" />
         </div>
       </Card>
     }>
