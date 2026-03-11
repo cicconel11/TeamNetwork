@@ -26,20 +26,30 @@ interface RunAgeValidationGateArgs {
   cleanupUnvalidatedSignup?: () => Promise<void>;
 }
 
-function getSanitizedRedirect(requestedRedirect: string | null | undefined): string {
-  return sanitizeRedirectPath(requestedRedirect ?? null);
+const MSG_AGE_REQUIRED = "Age verification required. Please complete the signup process.";
+const MSG_AGE_EXPIRED = "Age verification expired. Please try again.";
+const MSG_AGE_PERSIST_FAILED = "We couldn't complete age verification. Please try again.";
+const MSG_INVALID_AGE_DATA = "Invalid age data";
+
+function buildAuthRedirect(
+  siteUrl: string,
+  path: string,
+  params: Record<string, string | null | undefined>,
+  requestedRedirect: string | null | undefined
+): string {
+  const url = new URL(path, siteUrl);
+  for (const [k, v] of Object.entries(params)) {
+    if (v) url.searchParams.set(k, v);
+  }
+  const safeRedirect = sanitizeRedirectPath(requestedRedirect ?? null);
+  if (requestedRedirect && safeRedirect !== "/app") {
+    url.searchParams.set("redirect", safeRedirect);
+  }
+  return url.toString();
 }
 
 export function buildSignupRedirect(siteUrl: string, message: string, requestedRedirect: string | null | undefined): string {
-  const signupUrl = new URL("/auth/signup", siteUrl);
-  signupUrl.searchParams.set("error", message);
-
-  const safeRedirect = getSanitizedRedirect(requestedRedirect);
-  if (requestedRedirect && safeRedirect !== "/app") {
-    signupUrl.searchParams.set("redirect", safeRedirect);
-  }
-
-  return signupUrl.toString();
+  return buildAuthRedirect(siteUrl, "/auth/signup", { error: message }, requestedRedirect);
 }
 
 export function buildErrorRedirect(
@@ -48,19 +58,7 @@ export function buildErrorRedirect(
   requestedRedirect: string | null | undefined,
   mode: string | null | undefined
 ): string {
-  const url = new URL("/auth/error", siteUrl);
-  url.searchParams.set("message", message);
-
-  const safeRedirect = getSanitizedRedirect(requestedRedirect);
-  if (requestedRedirect && safeRedirect !== "/app") {
-    url.searchParams.set("redirect", safeRedirect);
-  }
-
-  if (mode) {
-    url.searchParams.set("mode", mode);
-  }
-
-  return url.toString();
+  return buildAuthRedirect(siteUrl, "/auth/error", { message, mode }, requestedRedirect);
 }
 
 function isNewUserWithoutAgeData(user: CallbackUser): boolean {
@@ -95,7 +93,7 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
 
   if (typeof ageBracket === "string" && ageBracket.length > 0) {
     if (!isValidAgeBracket(ageBracket)) {
-      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, "Invalid age data", requestedRedirect, mode) };
+      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, MSG_INVALID_AGE_DATA, requestedRedirect, mode) };
     }
 
     if (ageBracket === "under_13") {
@@ -109,16 +107,12 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
     if (!oauthAgeBracket) {
       return {
         kind: "redirect",
-        location: buildSignupRedirect(
-          args.siteUrl,
-          "Age verification required. Please complete the signup process.",
-          requestedRedirect
-        ),
+        location: buildSignupRedirect(args.siteUrl, MSG_AGE_REQUIRED, requestedRedirect),
       };
     }
 
     if (!isValidAgeBracket(oauthAgeBracket)) {
-      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, "Invalid age data", requestedRedirect, mode) };
+      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, MSG_INVALID_AGE_DATA, requestedRedirect, mode) };
     }
 
     if (oauthAgeBracket === "under_13") {
@@ -128,11 +122,7 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
     if (!oauthAgeToken) {
       return {
         kind: "redirect",
-        location: buildSignupRedirect(
-          args.siteUrl,
-          "Age verification required. Please complete the signup process.",
-          requestedRedirect
-        ),
+        location: buildSignupRedirect(args.siteUrl, MSG_AGE_REQUIRED, requestedRedirect),
       };
     }
 
@@ -140,12 +130,12 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
     if (!tokenResult.valid) {
       return {
         kind: "redirect",
-        location: buildSignupRedirect(args.siteUrl, "Age verification expired. Please try again.", requestedRedirect),
+        location: buildSignupRedirect(args.siteUrl, MSG_AGE_EXPIRED, requestedRedirect),
       };
     }
 
     if (tokenResult.ageBracket !== oauthAgeBracket) {
-      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, "Invalid age data", requestedRedirect, mode) };
+      return { kind: "redirect", location: buildErrorRedirect(args.siteUrl, MSG_INVALID_AGE_DATA, requestedRedirect, mode) };
     }
 
     if (args.persistAgeMetadata) {
@@ -158,11 +148,7 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
 
         return {
           kind: "redirect",
-          location: buildSignupRedirect(
-            args.siteUrl,
-            "We couldn't complete age verification. Please try again.",
-            requestedRedirect
-          ),
+          location: buildSignupRedirect(args.siteUrl, MSG_AGE_PERSIST_FAILED, requestedRedirect),
         };
       }
     }
@@ -173,11 +159,7 @@ export async function runAgeValidationGate(args: RunAgeValidationGateArgs): Prom
   if (isNewUserWithoutAgeData(args.user)) {
     return {
       kind: "redirect",
-      location: buildSignupRedirect(
-        args.siteUrl,
-        "Age verification required. Please complete the signup process.",
-        requestedRedirect
-      ),
+      location: buildSignupRedirect(args.siteUrl, MSG_AGE_REQUIRED, requestedRedirect),
     };
   }
 

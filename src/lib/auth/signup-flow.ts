@@ -1,4 +1,4 @@
-import { sanitizeRedirectPath } from "./redirect";
+import { sanitizeRedirectPath, buildAuthLink } from "./redirect";
 
 const AGE_GATE_RESET_ERROR_PATTERNS = [
   /age verification expired/i,
@@ -9,11 +9,7 @@ const AGE_GATE_RESET_ERROR_PATTERNS = [
 
 export function buildAuthRetryHref(mode: string | null | undefined, redirect: string | null | undefined): string {
   const basePath = mode === "signup" ? "/auth/signup" : "/auth/login";
-  const safeRedirect = sanitizeRedirectPath(redirect ?? null);
-  if (safeRedirect === "/app") {
-    return basePath;
-  }
-  return `${basePath}?redirect=${encodeURIComponent(safeRedirect)}`;
+  return buildAuthLink(basePath, sanitizeRedirectPath(redirect ?? null));
 }
 
 export function shouldResumeSignupRegistration(input: {

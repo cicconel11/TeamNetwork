@@ -8,6 +8,10 @@
  * - Backslash injection (`/\evil.com` — `new URL` resolves to external host)
  * - Control character injection (null bytes, tabs that confuse URL parsers)
  */
+function normalizeOrigin(siteUrl: string): string {
+  return siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
+}
+
 export function sanitizeRedirectPath(raw: string | null): string {
   if (!raw) return "/app";
 
@@ -23,6 +27,13 @@ export function sanitizeRedirectPath(raw: string | null): string {
 }
 
 /**
+ * Builds an auth page link, appending ?redirect= only when redirectTo differs from the default "/app".
+ */
+export function buildAuthLink(path: string, redirectTo: string): string {
+  return redirectTo !== "/app" ? `${path}?redirect=${encodeURIComponent(redirectTo)}` : path;
+}
+
+/**
  * Builds the OAuth callback URL with age validation params embedded in the URL
  * (not in queryParams, which Google strips during OAuth round-trip).
  *
@@ -35,8 +46,7 @@ export function buildOAuthSignupCallbackUrl(
   isMinor: boolean,
   ageToken: string
 ): string {
-  const base = siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
-  const url = new URL("/auth/callback", base);
+  const url = new URL("/auth/callback", normalizeOrigin(siteUrl));
   url.searchParams.set("redirect", sanitizeRedirectPath(redirectTo));
   url.searchParams.set("age_bracket", ageBracket);
   url.searchParams.set("is_minor", String(isMinor));
@@ -50,8 +60,7 @@ export function buildOAuthSignupCallbackUrl(
  * Marks with mode=signup so error recovery routes back to signup, not login.
  */
 export function buildEmailSignupCallbackUrl(siteUrl: string, redirectTo: string): string {
-  const base = siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
-  const url = new URL("/auth/callback", base);
+  const url = new URL("/auth/callback", normalizeOrigin(siteUrl));
   url.searchParams.set("redirect", sanitizeRedirectPath(redirectTo));
   url.searchParams.set("mode", "signup");
   return url.toString();
@@ -67,6 +76,6 @@ export function buildRecoveryRedirectTo(
 ): string {
   const safeRedirect = sanitizeRedirectPath(innerRedirect);
   const resetPage = `/auth/reset-password?redirect=${encodeURIComponent(safeRedirect)}`;
-  const base = siteUrl.endsWith("/") ? siteUrl.slice(0, -1) : siteUrl;
+  const base = normalizeOrigin(siteUrl);
   return `${base}/auth/callback?redirect=${encodeURIComponent(resetPage)}`;
 }

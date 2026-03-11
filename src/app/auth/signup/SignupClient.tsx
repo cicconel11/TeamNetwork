@@ -10,7 +10,7 @@ import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
 import { PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
-import { buildOAuthSignupCallbackUrl, buildEmailSignupCallbackUrl } from "@/lib/auth/redirect";
+import { buildOAuthSignupCallbackUrl, buildEmailSignupCallbackUrl, buildAuthLink } from "@/lib/auth/redirect";
 import { shouldResumeSignupRegistration } from "@/lib/auth/signup-flow";
 import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
@@ -23,6 +23,14 @@ interface AgeGateData {
   ageBracket: AgeBracket;
   isMinor: boolean;
   token: string;
+}
+
+function clearAgeGateData() {
+  try {
+    sessionStorage.removeItem(AGE_GATE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
 }
 
 interface SignupClientProps {
@@ -133,14 +141,6 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
       setError("Unable to verify age. Please try again.");
     } finally {
       setIsValidating(false);
-    }
-  };
-
-  const clearAgeGateData = () => {
-    try {
-      sessionStorage.removeItem(AGE_GATE_STORAGE_KEY);
-    } catch {
-      // Ignore storage errors
     }
   };
 
@@ -335,10 +335,7 @@ export function SignupClient({ hcaptchaSiteKey, redirectTo = "/app", initialErro
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link
-          href={redirectTo !== "/app" ? `/auth/login?redirect=${encodeURIComponent(redirectTo)}` : "/auth/login"}
-          className="text-foreground font-medium hover:underline"
-        >
+        <Link href={buildAuthLink("/auth/login", redirectTo)} className="text-foreground font-medium hover:underline">
           Sign in
         </Link>
       </div>

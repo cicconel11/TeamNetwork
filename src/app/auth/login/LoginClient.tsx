@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
 import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
-import { sanitizeRedirectPath } from "@/lib/auth/redirect";
+import { sanitizeRedirectPath, buildAuthLink } from "@/lib/auth/redirect";
 import { loginSchema, type LoginForm } from "@/lib/schemas/auth";
 
 interface LoginFormProps {
@@ -261,10 +261,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
 
       <div className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link
-          href={redirectTo !== "/app" ? `/auth/signup?redirect=${encodeURIComponent(redirectTo)}` : "/auth/signup"}
-          className="text-foreground font-medium hover:underline"
-        >
+        <Link href={buildAuthLink("/auth/signup", redirectTo)} className="text-foreground font-medium hover:underline">
           Sign up
         </Link>
       </div>
