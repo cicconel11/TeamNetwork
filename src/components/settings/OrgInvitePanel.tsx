@@ -44,7 +44,6 @@ interface InviteItem {
 
 interface OrgInvitePanelProps {
   orgId: string;
-  orgSlug: string;
   quotaLimit: number | null;
   alumniCount: number;
   showForm: boolean;
@@ -54,7 +53,6 @@ interface OrgInvitePanelProps {
 
 export function OrgInvitePanel({
   orgId,
-  orgSlug,
   quotaLimit,
   alumniCount,
   showForm,
@@ -65,6 +63,7 @@ export function OrgInvitePanel({
   const [orgInvites, setOrgInvites] = useState<Invite[]>([]);
   const [parentInvites, setParentInvites] = useState<ParentInvite[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingParentInviteId, setDeletingParentInviteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<string | null>(null);
@@ -224,20 +223,28 @@ export function OrgInvitePanel({
     );
   };
 
-  const handleRevokeParentInvite = async (inviteId: string) => {
-    const res = await fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, {
-      method: "PATCH",
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error || "Failed to revoke parent invite");
+  const handleDeleteParentInvite = async (inviteId: string) => {
+    if (!confirm("Delete this parent invite link? Anyone who already joined will keep access.")) {
       return;
     }
-    setParentInvites((prev) =>
-      prev.map((i) =>
-        i.id === inviteId ? { ...i, status: "revoked" as const } : i
-      )
-    );
+
+    setDeletingParentInviteId(inviteId);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to delete parent invite");
+      }
+
+      setParentInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+      setShowQR((prev) => (prev === `parent-${inviteId}` ? null : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete parent invite");
+    } finally {
+      setDeletingParentInviteId(null);
+    }
   };
 
   const copyToClipboard = (text: string, key: string) => {
@@ -352,6 +359,7 @@ export function OrgInvitePanel({
             const revoked = invite.kind === "org" ? isRevoked(invite.revoked_at ?? null) : invite.status === "revoked";
             const exhausted = invite.kind === "org" && invite.uses_remaining != null && invite.uses_remaining <= 0;
             const accepted = invite.kind === "parent" && invite.status === "accepted";
+            const isDeletingParentInvite = invite.kind === "parent" && deletingParentInviteId === invite.id;
             const invalid = expired || exhausted || revoked;
             const inviteLink = getInviteLink(invite);
 
@@ -428,14 +436,15 @@ export function OrgInvitePanel({
                           Revoke
                         </Button>
                       )}
-                      {invite.kind === "parent" && !revoked && !expired && !accepted && (
+                      {invite.kind === "parent" && !accepted && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleRevokeParentInvite(invite.id)}
-                          className="text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                          onClick={() => handleDeleteParentInvite(invite.id)}
+                          isLoading={isDeletingParentInvite}
+                          className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
-                          Revoke
+                          Delete
                         </Button>
                       )}
                       {invite.kind === "org" && (
@@ -481,4 +490,3 @@ export function OrgInvitePanel({
     </>
   );
 }
-
