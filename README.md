@@ -1,190 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+TeamNetwork is a multi-tenant Next.js 14 application for organization membership, alumni directories, communication, scheduling, payments, and enterprise administration.
 
 ## Getting Started
 
-### Environment Variables
-
-Copy `.env.local.example` to `.env.local` and fill in your values:
+Copy `.env.local.example` to `.env.local` and fill in the values your local environment needs:
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Required environment variables:
+Core environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SITE_URL` | Canonical application base URL |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key |
 | `STRIPE_SECRET_KEY` | Stripe secret API key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key (get from [hCaptcha Dashboard](https://dashboard.hcaptcha.com/)) |
-| `HCAPTCHA_SECRET_KEY` | hCaptcha secret key (server-side only) |
-| `RESEND_API_KEY` | Resend API key for emails |
-| `FROM_EMAIL` | Sender email for notifications (optional, default: noreply@myteamnetwork.com) |
-| `ADMIN_EMAIL` | Admin notification recipient (optional, default: admin@myteamnetwork.com) |
-| `NEXT_PUBLIC_APP_URL` | Application base URL |
+| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key |
+| `HCAPTCHA_SECRET_KEY` | hCaptcha secret key |
 
-### Development Server
+Build-time Stripe price validation also expects:
 
-Run the development server:
+- `STRIPE_PRICE_BASE_MONTHLY`
+- `STRIPE_PRICE_BASE_YEARLY`
+- `STRIPE_PRICE_ALUMNI_0_250_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_0_250_YEARLY`
+- `STRIPE_PRICE_ALUMNI_251_500_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_251_500_YEARLY`
+- `STRIPE_PRICE_ALUMNI_501_1000_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_501_1000_YEARLY`
+- `STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_1001_2500_YEARLY`
+- `STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_2500_5000_YEARLY`
+- `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY`
+- `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY`
+- `STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY`
+- `STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY`
+
+Useful optional variables:
+
+- `STRIPE_WEBHOOK_SECRET_CONNECT`
+- `CRON_SECRET`
+- `RESEND_API_KEY`
+- `FROM_EMAIL`
+- `ADMIN_EMAIL`
+- `ALERT_EMAIL_TO`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY`
+- `SKIP_STRIPE_VALIDATION=true` for local development without real Stripe price IDs
+
+## Development
 
 ```bash
 npm run dev
+npm run build
+npm run lint
+npm run test
+npm run test:unit
+npm run test:security
+npm run test:payments
+npm run test:routes
+npm run test:schedules
+npm run test:e2e
+npm run gen:types
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `src/app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) after `npm run dev`.
 
 ## Payments Idempotency
 
-- All payment flows (subscriptions, donations, Connect onboarding) store an attempt row in `payment_attempts` keyed by `idempotency_key` (unique). Stripe objects reuse that row and every Stripe create call includes the same `idempotencyKey`.
-- Webhooks are deduped via `stripe_events(event_id unique)`. Each event is recorded once; retries skip if `processed_at` is set.
-- Clients keep a stable key in local storage per flow; server returns existing `checkout_url`/`session`/`payment_intent` if the same key is replayed.
-- Troubleshooting: look up the attempt by `idempotency_key` to see status and any `last_error`; confirm the matching Stripe IDs; check `stripe_events` to see if the webhook ran.
-- Tests: `npm run test:payments` runs idempotency + webhook dedupe unit tests (uses the lightweight TS loader in `tests/ts-loader.js`).
+- All payment flows store a `payment_attempts` row keyed by `idempotency_key`.
+- Stripe webhooks are deduplicated in `stripe_events`.
+- Clients reuse stable keys so replayed requests return the existing checkout/session result.
+- `npm run test:payments` covers the core idempotency and webhook dedupe paths.
 
 ## Error Reporting
 
-Automated error tracking with fingerprinting, deduplication, and alerting.
+- Client and server errors are sent to `POST /api/telemetry/error`.
+- Error grouping is fingerprint-based.
+- `ADMIN_EMAIL`, `FROM_EMAIL`, and `RESEND_API_KEY` enable production alert delivery.
+- Hourly baseline updates run through `/api/cron/error-baselines`.
 
-### How It Works
+## Audit Tooling
 
-1. Client/server errors are sent to `POST /api/telemetry/error`
-2. Errors are deduplicated by fingerprint (hash of error name + normalized message + route + stack frame)
-3. Counts are tracked hourly/daily with spike detection
-4. New production errors trigger admin notifications
+The repo still includes audit helpers under `scripts/audit/` plus audit-oriented Playwright configuration, but there are currently no `npm run audit:*` wrappers in `package.json`.
 
-### Environment Variables
-
-| Variable | Required | Where to Set | Description |
-|----------|----------|--------------|-------------|
-| `VERCEL_DEPLOYMENT_ID` | Auto | Vercel (automatic) | Unique deployment identifier |
-| `VERCEL_GIT_COMMIT_SHA` | Auto | Vercel (automatic) | Full git commit SHA |
-| `ADMIN_EMAIL` | Yes | Vercel | Recipient for error alerts |
-| `FROM_EMAIL` | Yes | Vercel | Sender address for alerts |
-| `RESEND_API_KEY` | Yes | Vercel | Resend API key for sending alerts |
-
-**Supabase Setup:**
-- Apply migration: `supabase db push` or run `20260203000001_add_deployment_tracking.sql`
-- Schedule hourly cron: Call `update_error_baselines()` RPC every hour
-
-### Staging vs Production
-
-Environment separation is automatic:
-- `env` field in payloads: `"development"` | `"staging"` | `"production"`
-- Production server discards development-env errors silently
-- Query by env: `SELECT * FROM error_groups WHERE env = 'production'`
-
-### Alert Runbook
-
-**Responding to an Error Alert:**
-
-1. **Identify the error group** - Alert includes fingerprint and title
-2. **Check recent occurrences** - View count_1h and count_24h for spike severity
-3. **Review sample event** - Contains stack trace, user context, breadcrumbs
-4. **Correlate with deployment** - Check deployment_id and git_sha to identify if caused by recent deploy
-5. **Investigate** - Use session_id to trace user journey, user_id for affected accounts
-
-**Marking an Error Resolved:**
-
-```sql
--- Mark resolved (will reopen if error recurs)
-UPDATE error_groups
-SET status = 'resolved'
-WHERE fingerprint = '<fingerprint>';
-
--- Mute alerts for known issues
-UPDATE error_groups
-SET status = 'muted'
-WHERE fingerprint = '<fingerprint>';
-
--- Ignore permanently (won't reopen)
-UPDATE error_groups
-SET status = 'ignored'
-WHERE fingerprint = '<fingerprint>';
-```
-
-**Status Meanings:**
-- `open` - Active error, will trigger alerts on spikes
-- `resolved` - Fixed, will auto-reopen if error recurs
-- `muted` - Known issue, no alerts but still tracked
-- `ignored` - Won't alert or reopen
-
-### Testing Locally
+Manual entry points:
 
 ```bash
-# Send test error
-curl -X POST http://localhost:3000/api/telemetry/error \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Test error","env":"development","name":"TestError"}'
-
-# Verify in database
-psql -c "SELECT * FROM error_groups ORDER BY last_seen_at DESC LIMIT 1"
+node scripts/audit/static-routes.js
+node scripts/audit/backend-audit.js
+node scripts/audit/report.js
 ```
+
+`playwright.config.ts` still defines an `audit-crawler` project, but the repository does not currently include a committed `tests/audit/` suite.
 
 ## Learn More
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Audit System
-
-This project includes a comprehensive automated audit system for QA and monitoring. The audit system crawls your application, analyzes the codebase, and audits the backend database schema.
-
-### Quick Start
-
-1. **Install Playwright browsers**:
-   ```bash
-   npm run audit:install
-   ```
-
-2. **Configure environment variables** (see `docs/audit-setup.md` for details):
-   ```bash
-   AUDIT_BASE_URL=https://www.myteamnetwork.com
-   AUDIT_START_PATH=/testing123
-   AUDIT_EMAIL=your-test-user@example.com
-   AUDIT_PASSWORD=your-test-password
-   AUDIT_SAFE_MODE=true
-   ```
-
-3. **Run complete audit**:
-   ```bash
-   npm run audit:all
-   ```
-
-### Audit Commands
-
-- `npm run audit:ui` - Crawl UI and validate all reachable pages
-- `npm run audit:static` - Analyze codebase for routes and hardcoded links
-- `npm run audit:backend` - Audit database schema and performance issues
-- `npm run audit:all` - Run all audits and generate combined report
-
-### Generated Reports
-
-Reports are saved to the `audit/` directory:
-- `combined_report.md` - Executive summary with action items
-- `report.md` - UI crawl results with screenshots of failures
-- `static-inventory.md` - Code analysis results
-- `backend_report.md` - Database audit findings
-
-### Safe Mode
-
-The UI crawler includes **SAFE MODE** by default, which prevents any destructive operations during audits by blocking POST/PUT/PATCH/DELETE requests.
-
-See `docs/audit-setup.md` for complete setup instructions and troubleshooting.
+- [Next.js Documentation](https://nextjs.org/docs)
+- [Playwright Documentation](https://playwright.dev/)
+- [Stripe Docs](https://stripe.com/docs)

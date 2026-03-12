@@ -15,23 +15,27 @@ npm run gen:types    # Regenerate Supabase TypeScript types (writes to src/types
 
 ### Testing
 ```bash
-npm run test:auth       # Test authentication middleware
+npm run test            # Run unit + security + payment + route suites
+npm run test:unit       # Run focused unit/integration suites
+npm run test:security   # Run security-specific tests
 npm run test:payments   # Test payment idempotency and Stripe webhooks
+npm run test:routes     # Run route simulation suites
 npm run test:schedules  # Test schedule domain verification and enrollment
+npm run test:e2e        # Run Playwright end-to-end tests
 ```
 
 ### Audit System
 ```bash
-npm run audit:install  # Install Playwright browsers (first time only)
-npm run audit:ui       # Crawl UI and validate pages
-npm run audit:static   # Analyze codebase for routes
-npm run audit:backend  # Audit database schema
-npm run audit:all      # Run all audits
+npx playwright test --project=audit-crawler  # Only if a tests/audit suite exists
+node scripts/audit/static-routes.js          # Analyze codebase for routes
+node scripts/audit/backend-audit.js          # Audit database schema
+node scripts/audit/report.js                 # Compile generated audit reports
 ```
 
 ### Stripe Webhook Testing (Local)
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-connect-to localhost:3000/api/stripe/webhook-connect
 ```
 
 ## Architecture
@@ -115,10 +119,10 @@ This is a multi-tenant application where organizations are first-class entities 
 src/
 ├── app/                    # Next.js App Router
 │   ├── [orgSlug]/          # Dynamic org-scoped routes
-│   ├── app/                # Platform routes (/app/join, /app/create-org)
+│   ├── app/                # Platform routes (/app/join, /app/create-org, /app/create-enterprise)
 │   ├── auth/               # Auth flows (login, signup, callback)
 │   ├── api/                # API routes (Stripe webhooks, org APIs)
-│   ├── customization/      # Org customization route (renamed from settings)
+│   ├── enterprise/         # Enterprise dashboard routes
 │   └── settings/           # User settings (notifications)
 ├── components/             # Reusable UI components
 │   ├── ui/                 # Base UI primitives (Button, Card, Input)
@@ -142,6 +146,8 @@ supabase/migrations/        # Database migrations
 tests/                      # Test files
 docs/                       # Product and database documentation
 ```
+
+Important org-scoped feature areas now include calendar, chat, discussions, feed, forms, jobs, media, parents, philanthropy, and enterprise-linked admin flows under `src/app/[orgSlug]/`.
 
 ### Supabase Client Wrappers
 Use the appropriate wrapper for different contexts:
@@ -168,7 +174,7 @@ Every request flows through `src/middleware.ts`:
 5. Redirect revoked users to `/app` with error
 6. Enforce canonical domain (myteamnetwork.com → www.myteamnetwork.com)
 
-Public routes: `/`, `/auth/*`, `/terms`. Stripe webhooks bypass middleware.
+Public routes now include `/`, `/demos`, `/terms`, `/privacy`, `/app/parents-join`, and `/auth/*`. Middleware also bypasses `/api/stripe/webhook`, `/api/stripe/webhook-connect`, `/api/auth/validate-age`, `/api/telemetry/error`, and the parent invite accept endpoint. Middleware handles auth refresh plus revoked/pending membership redirects; org existence and no-membership gating are finalized in `src/app/[orgSlug]/layout.tsx`.
 
 ## Key Architectural Patterns
 
@@ -206,6 +212,7 @@ Navigation is customizable per organization:
 - The nav `group` field controls sidebar collapsible grouping; it is separate from role visibility
 - Organizations can customize labels/visibility via `nav_config` JSONB column
 - Sidebar dynamically filters based on user role
+- Current nav coverage is broader than the original core set and includes Feed, Parents, Calendar, Discussions, Jobs, Forms, Media Archive, Customization, Settings, and Navigation alongside the legacy feature areas
 
 ### Announcement Audience Targeting
 Announcements support flexible audience specification:
@@ -254,6 +261,8 @@ User feedback is collected through a friction feedback system:
 - `src/app/app/create-org/page.tsx` - Organization creation flow
 - `src/app/app/join/page.tsx` - Join organization flow
 - `src/app/auth/login/LoginClient.tsx` - Login page
+- `src/app/auth/signup/SignupClient.tsx` - Signup error flow
+- `src/components/auth/AgeGate.tsx` - Age-gate error flow
 
 ### Schema Validation System
 Centralized Zod schemas in `src/lib/schemas/` for input validation:
@@ -265,12 +274,22 @@ Centralized Zod schemas in `src/lib/schemas/` for input validation:
 - `common` - Shared utilities (`safeString`, `safeNumber`, etc.)
 - `competition` - Competition and scoring schemas
 - `content` - Events, announcements, workouts, records, expenses
+- `calendar` - Calendar sync and feed validation
 - `donations` - Donation form validation
 - `feedback` - Feedback submission validation
 - `form-builder` - Dynamic form schemas
+- `feed` - Feed post/comment validation
+- `media` - Media upload and moderation validation
 - `member` - Member profile schemas
+- `mentorship` - Mentorship pair and log validation
+- `jobs` - Job posting validation
 - `organization` - Organization settings schemas
 - `schedule` - Schedule import schemas
+- `discussion` - Discussion thread and reply validation
+- `telemetry` - Client/server error payloads
+- `errors` - Error tracking/admin schemas
+- `analytics` - Analytics ingest and profile schemas
+- `enterprise` - Enterprise validation schemas
 
 **Usage:**
 ```typescript
@@ -294,7 +313,7 @@ Route-level loading skeletons using Next.js `loading.tsx` convention:
 - `SkeletonMemberCard`, `SkeletonEventItem` - Feature-specific
 - `SkeletonStatCard`, `SkeletonLeaderboardRow` - Dashboard components
 
-Routes with loading states: alumni, announcements, chat, competition, donations, events, expenses, forms, members, mentorship, notifications, philanthropy, records, schedules, workouts
+Routes with loading states currently include alumni, announcements, calendar, chat, competition, discussions, donations, events, expenses, feed, forms, jobs, media, members, mentorship, notifications, parents, philanthropy, records, and workouts.
 
 ### Schedule Domain Allowlist & Security
 External schedule URLs are validated before import to prevent SSRF and abuse:
@@ -332,6 +351,7 @@ Modular system for importing events from external schedule sources:
 - `ics` - ICS/iCal feed parser (highest confidence)
 - `vendorA` - Vantage/SectionXI athletics sites
 - `vendorB` - Sidearm/CHSAA athletics sites
+- `googleCalendar` - Connector for `google://` Google Calendar sources
 - `generic_html` - Fallback table-based HTML parser
 
 **Event Processing Pipeline:**
@@ -365,13 +385,14 @@ Automated background jobs scheduled via Vercel Cron (configured in `vercel.json`
 **Active Cron Jobs:**
 - `/api/cron/error-baselines` - Hourly (0 * * * *): Updates error group rolling baselines and resets hourly counts for spike detection
 - `/api/cron/graduation-check` - Daily at 8 AM UTC (0 8 * * *): Processes member graduations, sends 30-day warnings, transitions members to alumni or revokes access based on capacity, auto-reinstates members with updated graduation dates
-- `/api/cron/analytics-aggregate` - Weekly on Sunday at 2 AM UTC (0 2 * * 0): Disabled (legacy usage_events aggregation not used in minimal analytics system)
+- `/api/cron/analytics-aggregate` - Weekly on Sunday at 2 AM UTC (0 2 * * 0): Legacy analytics aggregate job, still scheduled in `vercel.json`
 - `/api/cron/analytics-purge` - Daily at 3 AM UTC (0 3 * * *): Purges expired analytics and ops events using `purge_analytics_events()` and `purge_ops_events()` RPC functions
 - `/api/cron/analytics-rate-limit-cleanup` - Daily at 3 AM UTC (0 3 * * *): Deletes expired rate limit records older than 24 hours from `rate_limit_analytics` table
+- `/api/cron/calendar-sync` - Hourly: Syncs active calendar feeds not updated in 60 minutes
+- `/api/cron/schedules-sync` - Daily: Syncs active schedule sources that haven't been updated in 24 hours
+- `/api/cron/media-cleanup` - Daily: Cleans up stale pending media uploads
 
-**Inactive Cron Jobs (not in vercel.json):**
-- `/api/cron/schedules-sync` - Syncs active schedule sources that haven't been updated in 24 hours (batch processing with max 3 concurrent syncs)
-- `/api/cron/calendar-sync` - Syncs active calendar feeds not updated in 60 minutes
+**Inactive / unscheduled cron endpoints:**
 - `/api/cron/error-alerts` - Sends email notifications for new error groups and error spikes to ALERT_EMAIL_TO (or ADMIN_EMAIL)
 
 ## Environment Variables
@@ -382,17 +403,33 @@ Required variables (validated at build time in `next.config.mjs`):
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_SECRET_KEY`
-- `STRIPE_BASE_PLAN_MONTHLY_PRICE_ID` (+ 7 more tier/billing variants)
+- `STRIPE_PRICE_BASE_MONTHLY`
+- `STRIPE_PRICE_BASE_YEARLY`
+- `STRIPE_PRICE_ALUMNI_0_250_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_0_250_YEARLY`
+- `STRIPE_PRICE_ALUMNI_251_500_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_251_500_YEARLY`
+- `STRIPE_PRICE_ALUMNI_501_1000_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_501_1000_YEARLY`
+- `STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_1001_2500_YEARLY`
+- `STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY`
+- `STRIPE_PRICE_ALUMNI_2500_5000_YEARLY`
+- `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_MONTHLY`
+- `STRIPE_PRICE_ENTERPRISE_ALUMNI_BUCKET_YEARLY`
+- `STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY`
+- `STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY`
 - `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_WEBHOOK_SECRET_CONNECT` - Stripe Connect webhook secret for donation events
-- `RESEND_API_KEY`
-- `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
-- `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
-- `CRON_SECRET` - Secret for authenticating Vercel cron job requests (required in production)
+- `STRIPE_WEBHOOK_SECRET_CONNECT` - Required on Vercel production for donation webhooks; otherwise the build warns
+- `CRON_SECRET` - Required on Vercel production for cron auth; otherwise the build warns
 
 Optional variables:
+- `RESEND_API_KEY` - Enables real email delivery; local/dev falls back to stub logging
+- `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
+- `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
 - `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
+- `NEXT_PUBLIC_SITE_URL` - Canonical site URL used in auth and deployment checks
 
 Stored in `.env.local` (never commit this file).
 
@@ -412,9 +449,16 @@ Use `SKIP_STRIPE_VALIDATION=true` in dev to skip Stripe price ID validation.
 Tests are located in the `tests/` directory with a coverage goal of 80%.
 
 **Available test commands:**
-- `npm run test:auth` - Authentication middleware tests
+- `npm run test` - Run unit + security + payment + route suites
+- `npm run test:unit` - Focused unit and integration suites
+- `npm run test:security` - Security-specific suites
 - `npm run test:payments` - Payment idempotency and Stripe webhook tests
 - `npm run test:schedules` - Schedule domain verification and enrollment tests
+- `npm run test:routes` - API route simulation suites
+- `npm run test:jobs` - Job route tests
+- `npm run test:media` - Media tests
+- `npm run test:qrcode` - QR code tests
+- `npm run test:e2e`, `npm run test:e2e:ui`, `npm run test:e2e:debug` - Playwright suites
 
 **Test Structure:**
 ```
@@ -463,7 +507,7 @@ tests/
 ## Known Issues & Considerations
 
 From `docs/db/schema-audit.md`:
-- Announcement notifications are stubs (needs Resend API integration)
+- Announcement emails use Resend when configured; SMS delivery remains a stub
 - Consider moving invite code generation to server-side RPC for security
 - RLS policies use helper functions: `is_org_admin()`, `is_org_member()`, `has_active_role()`
 
@@ -526,7 +570,7 @@ if (seatQuota.error) return respond({ error: "Unable to verify seat limit..." },
 
 3. **Case-insensitive email lookup:** Admin invite uses `(serviceSupabase as any).schema("auth").from("users").ilike("email", sanitizeIlikeInput(email))`. Always use `sanitizeIlikeInput()` from `src/lib/security/validation.ts` to escape `%`, `_`, `\` before `.ilike()`.
 
-4. **Enterprise `as any` cast pattern:** Enterprise tables aren't in generated types. Use `(supabase as any).from("enterprise_table").select("...") as { data: TypeHere | null }`.
+4. **Enterprise `as any` cast pattern:** Generated types now include enterprise tables, but some service-role and auth-schema queries still use casts for ergonomics or incomplete regeneration coverage.
 
 5. **getUserById logging:** GET handlers that fetch user details via `Promise.all(userIds.map(id => getUserById(id)))` log failures before filtering: `userFetches.forEach((r, i) => { if (r.error) console.error(...) })`.
 
