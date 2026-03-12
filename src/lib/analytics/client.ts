@@ -4,6 +4,9 @@ import { VALID_FEATURES, type ValidFeature } from "@/lib/schemas/analytics";
 
 const FEATURE_SET = new Set<string>(VALID_FEATURES);
 
+/** Non-org route prefixes that should never be treated as org slugs. */
+export const NON_ORG_PREFIXES = new Set(["app", "auth", "settings", "privacy", "terms", "api"]);
+
 /**
  * Extract a normalized feature name from a pathname.
  * E.g. "/org-slug/members/123" → "members"
@@ -23,7 +26,7 @@ export function extractFeature(pathname: string): ValidFeature {
   }
 
   // Check if this is the org dashboard (exactly /<orgSlug>)
-  if (segments.length === 1 && segments[0] !== "" && !["app", "auth", "settings", "privacy", "terms", "api"].includes(segments[0])) {
+  if (segments.length === 1 && segments[0] !== "" && !NON_ORG_PREFIXES.has(segments[0])) {
     return "dashboard";
   }
 

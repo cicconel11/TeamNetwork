@@ -133,7 +133,6 @@ export default async function JobsPage({ params, searchParams }: PageProps) {
       />
 
       <JobsFilters
-        orgId={org.id}
         locations={uniqueLocations}
         companies={uniqueCompanies}
         industries={uniqueIndustries}

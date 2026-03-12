@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { extractFeature } from "@/lib/analytics/client";
+import { extractFeature, NON_ORG_PREFIXES } from "@/lib/analytics/client";
 import {
   canTrackBehavioralEvent,
   getAgeBracketFromUserMetadata,
@@ -24,9 +24,6 @@ import { useOrgAnalytics } from "./OrgAnalyticsContext";
 interface AnalyticsProviderProps {
   children: ReactNode;
 }
-
-/** Non-org route prefixes that should never be treated as org slugs. */
-const NON_ORG_PREFIXES = ["app", "auth", "settings", "privacy", "terms", "api"];
 
 export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
   const pathname = usePathname();
@@ -100,7 +97,7 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     async function syncRoute() {
       const segments = pathname.replace(/^\//, "").split("/");
       const maybeSlug = segments[0];
-      const isOrgRoute = !!maybeSlug && !NON_ORG_PREFIXES.includes(maybeSlug);
+      const isOrgRoute = !!maybeSlug && !NON_ORG_PREFIXES.has(maybeSlug);
       const orgId = isOrgRoute ? orgAnalytics?.orgId ?? null : null;
       const orgType = normalizeOrgType(orgAnalytics?.orgType);
       const routeKey = `${orgId ?? "non-org"}:${pathname}`;
@@ -216,5 +213,5 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
     };
   }, [authAgeBracket, authReady, authUserId, orgAnalytics, pathname, policyVersion]);
 
-  return <>{children}</>;
+  return children;
 }

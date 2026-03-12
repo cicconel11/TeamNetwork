@@ -11,7 +11,6 @@ interface FilterOption {
 }
 
 interface JobsFiltersProps {
-  orgId: string;
   locations: (string | null)[];
   companies: (string | null)[];
   industries: (string | null)[];
@@ -34,12 +33,10 @@ const EXPERIENCE_OPTIONS: FilterOption[] = [
 ];
 
 export function JobsFilters({
-  orgId: _orgId,
   locations,
   companies,
   industries,
 }: JobsFiltersProps) {
-  void _orgId;
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

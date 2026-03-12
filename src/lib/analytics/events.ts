@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { canTrackBehavioralEvent, type TrackingLevel } from "@/lib/analytics/policy";
+import type { DeviceClass } from "@/lib/analytics/types";
 
 export type AnalyticsEventName =
   | "app_open"
@@ -31,8 +32,6 @@ export type OpsEventName = "api_error" | "client_error" | "auth_fail" | "rate_li
 export type ConsentState = "opted_in" | "opted_out" | "unknown";
 
 type ReferrerType = "direct" | "invite_link" | "deeplink" | "notification" | "email_link";
-
-type DeviceClass = "mobile" | "tablet" | "desktop";
 
 const ANALYTICS_SESSION_KEY = "tn_analytics_session";
 
@@ -132,11 +131,6 @@ function dispatchAnalyticsPolicy(detail: AnalyticsPolicyChangeDetail): void {
   if (typeof window === "undefined") return;
 
   window.dispatchEvent(
-    new CustomEvent("analytics:consent-change", {
-      detail: { orgId: detail.orgId, consentState: detail.consentState, consented: detail.consented },
-    }),
-  );
-  window.dispatchEvent(
     new CustomEvent<AnalyticsPolicyChangeDetail>("analytics:policy-change", {
       detail,
     }),
@@ -164,14 +158,6 @@ export function setAnalyticsPolicy(
     consented: consentState === "opted_in",
     trackingLevel,
   });
-}
-
-export function setConsentState(orgId: string, state: ConsentState): void {
-  setAnalyticsPolicy(
-    orgId,
-    state,
-    state === "opted_in" ? getTrackingLevel(orgId) : "none",
-  );
 }
 
 export function getConsentState(orgId: string | undefined | null): ConsentState {

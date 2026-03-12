@@ -1,5 +1,5 @@
-export type AgeBracket = "under_13" | "13_17" | "18_plus";
-export type OrgType = "educational" | "athletic" | "general";
+export type { AgeBracket, OrgType } from "@/lib/analytics/types";
+import type { AgeBracket, OrgType } from "@/lib/analytics/types";
 export type TrackingLevel = "none" | "page_view_only" | "full";
 
 export function normalizeAgeBracket(value: unknown): AgeBracket | null {
