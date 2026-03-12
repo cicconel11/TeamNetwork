@@ -95,6 +95,12 @@ test("settings invites page does not create org invites through direct client RP
     panelNormalized.includes('fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, { method: "DELETE" })'),
     "parent invite UI must delete invite links through the server route",
   );
+  assert.ok(
+    panelNormalized.includes('onClick={() => handleDeleteParentInvite(invite.id)}') &&
+      panelNormalized.includes('isLoading={isDeletingParentInvite}') &&
+      panelNormalized.includes('<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>'),
+    "parent invite delete UI must use the same trash-icon affordance as org invites",
+  );
 });
 
 test("org invites API route authorizes admins through service client", () => {
