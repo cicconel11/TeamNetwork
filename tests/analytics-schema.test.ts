@@ -51,6 +51,20 @@ const uiProfileSchema = z.object({
   dashboard_hints: dashboardHintsSchema,
 });
 
+const fileUploadPayloadSchema = z.object({
+  file_type: z.enum(["image", "pdf", "doc", "other"]),
+  file_size_bucket: z.enum(["<1MB", "1-5MB", "5-25MB", "25MB+"]),
+  result: z.enum(["success", "fail_validation", "fail_server"]),
+  error_code: z.string().max(100).optional(),
+});
+
+const chatMessagePayloadSchema = z.object({
+  thread_id: z.string().max(100),
+  message_type: z.enum(["text", "poll", "form"]),
+  result: z.enum(["success", "fail_validation", "fail_server"]),
+  error_code: z.string().max(100).optional(),
+});
+
 // ===========================================================================
 // Tests
 // ===========================================================================
@@ -293,6 +307,55 @@ describe("Analytics Schemas - consentUpdateSchema", () => {
   it("rejects missing consented field", () => {
     const result = consentUpdateSchema.safeParse({});
     assert.strictEqual(result.success, false);
+  });
+});
+
+describe("Analytics Schemas - coarse enum analytics props", () => {
+  it("accepts chat analytics payloads for text, poll, and form message types", () => {
+    for (const messageType of ["text", "poll", "form"] as const) {
+      const result = chatMessagePayloadSchema.safeParse({
+        thread_id: "thread-123",
+        message_type: messageType,
+        result: "success",
+      });
+      assert.strictEqual(result.success, true);
+    }
+  });
+
+  it("rejects stale or free-form chat message types", () => {
+    for (const messageType of ["image", "file", "meet Alice after practice"]) {
+      const result = chatMessagePayloadSchema.safeParse({
+        thread_id: "thread-123",
+        message_type: messageType,
+        result: "success",
+      });
+      assert.strictEqual(result.success, false);
+    }
+  });
+
+  it("accepts only coarse file upload enums", () => {
+    const result = fileUploadPayloadSchema.safeParse({
+      file_type: "pdf",
+      file_size_bucket: "1-5MB",
+      result: "success",
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  it("rejects free-form file metadata strings", () => {
+    const badFileType = fileUploadPayloadSchema.safeParse({
+      file_type: "transcript.pdf",
+      file_size_bucket: "1-5MB",
+      result: "success",
+    });
+    const badSizeBucket = fileUploadPayloadSchema.safeParse({
+      file_type: "pdf",
+      file_size_bucket: "semester project folder",
+      result: "success",
+    });
+
+    assert.strictEqual(badFileType.success, false);
+    assert.strictEqual(badSizeBucket.success, false);
   });
 });
 

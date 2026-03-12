@@ -11,8 +11,8 @@ function squishWhitespace(value: string): string {
   return value.replace(/\s+/g, " ");
 }
 
-test("latest analytics migration keeps allowlisted message/file props while preserving privacy filters", () => {
-  const source = readSource("supabase/migrations/20260701000004_fix_analytics_allowlisted_props.sql");
+test("latest analytics migration keeps allowlisted message/file props but enforces coarse enum values", () => {
+  const source = readSource("supabase/migrations/20260701000005_harden_analytics_enum_props.sql");
   const normalized = squishWhitespace(source);
 
   assert.ok(
@@ -34,6 +34,18 @@ test("latest analytics migration keeps allowlisted message/file props while pres
   assert.ok(
     normalized.includes("(v_key ILIKE '%file%' AND v_key NOT IN ('file_type', 'file_size_bucket'))"),
     "file_type and file_size_bucket must remain allowed while other file-like keys stay blocked"
+  );
+  assert.ok(
+    normalized.includes("IF v_key = 'message_type' AND v_str NOT IN ('text', 'poll', 'form') THEN RETURN FALSE; END IF;"),
+    "message_type must be constrained to the coarse chat analytics enum"
+  );
+  assert.ok(
+    normalized.includes("IF v_key = 'file_type' AND v_str NOT IN ('image', 'pdf', 'doc', 'other') THEN RETURN FALSE; END IF;"),
+    "file_type must be constrained to the coarse file analytics enum"
+  );
+  assert.ok(
+    normalized.includes("IF v_key = 'file_size_bucket' AND v_str NOT IN ('<1MB', '1-5MB', '5-25MB', '25MB+') THEN RETURN FALSE; END IF;"),
+    "file_size_bucket must be constrained to the coarse upload size buckets"
   );
 });
 

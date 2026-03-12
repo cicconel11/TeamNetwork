@@ -214,7 +214,7 @@ const chatThreadOpenPayloadSchema = analyticsCommonFieldsSchema.extend({
 
 const chatMessagePayloadSchema = analyticsCommonFieldsSchema.extend({
   thread_id: z.string().max(100),
-  message_type: z.enum(["text", "image", "file"]),
+  message_type: z.enum(["text", "poll", "form"]),
   result: z.enum(["success", "fail_validation", "fail_server"]),
   error_code: z.string().max(100).optional(),
 });
