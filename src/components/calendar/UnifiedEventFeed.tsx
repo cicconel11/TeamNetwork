@@ -249,32 +249,38 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
 
     const rowContent = (
       <>
-        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
-        <span className="text-sm text-muted-foreground w-32 flex-shrink-0 whitespace-nowrap tabular-nums">
-          {formattedTime}
-        </span>
-        <span className="text-sm font-medium text-foreground truncate min-w-0 flex-1">
-          {event.title}
-        </span>
-        <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${badge}`}>
-          {event.sourceName}
-        </span>
-        {event.badges.length > 0 && (
-          <span
-            className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getBadgeColor(event.badges[0])}`}
-          >
-            {event.badges[0].charAt(0).toUpperCase() + event.badges[0].slice(1)}
-          </span>
-        )}
-        {event.location && (
-          <span className="text-xs text-muted-foreground truncate hidden sm:inline max-w-[150px]">
-            {event.location}
-          </span>
-        )}
+        <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${dot}`} />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="grid gap-1 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] sm:gap-x-4">
+            <div className="text-sm text-muted-foreground tabular-nums break-words">
+              {formattedTime}
+            </div>
+            <div className="min-w-0 text-sm font-medium text-foreground break-words">
+              {event.title}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${badge}`}>
+              {event.sourceName}
+            </span>
+            {event.badges.length > 0 && (
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${getBadgeColor(event.badges[0])}`}
+              >
+                {event.badges[0].charAt(0).toUpperCase() + event.badges[0].slice(1)}
+              </span>
+            )}
+            {event.location && (
+              <span className="min-w-0 text-xs text-muted-foreground break-words">
+                {event.location}
+              </span>
+            )}
+          </div>
+        </div>
       </>
     );
 
-    const className = "flex items-center gap-3 py-2";
+    const className = "flex items-start gap-3 py-3";
 
     if (event.sourceType === "event" && event.eventId) {
       return (
