@@ -11,14 +11,18 @@ import { FeedbackButton } from "@/components/feedback";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildAuthCallbackUrl, buildAuthLink } from "@/lib/auth/redirect";
 import { loginSchema, type LoginForm } from "@/lib/schemas/auth";
+import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
+import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
 
 interface LoginFormProps {
   hcaptchaSiteKey: string;
+  linkedinOauthAvailable: boolean;
 }
 
-function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
+function LoginFormComponent({ hcaptchaSiteKey, linkedinOauthAvailable }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"password" | "magic-link">("password");
@@ -42,14 +46,16 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
   const searchParams = useSearchParams();
   const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"));
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const isSocialLoading = isGoogleLoading || isLinkedInLoading;
 
-  const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true);
+  const handleSocialLogin = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
+    const setLoading = provider === "google" ? setIsGoogleLoading : setIsLinkedInLoading;
+    setLoading(true);
     setError(null);
 
     const supabase = createClient()!;
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       options: {
         redirectTo: buildAuthCallbackUrl(siteUrl, redirectTo, "login"),
       },
@@ -57,7 +63,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
 
     if (error) {
       setError(error.message);
-      setIsGoogleLoading(false);
+      setLoading(false);
     }
   };
 
@@ -128,8 +134,9 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
         type="button"
         variant="secondary"
         className="w-full mb-6"
-        onClick={handleGoogleLogin}
+        onClick={() => handleSocialLogin("google")}
         isLoading={isGoogleLoading}
+        disabled={isSocialLoading}
         data-testid="login-google"
       >
         <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
@@ -153,12 +160,27 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
         Continue with Google
       </Button>
 
+      {linkedinOauthAvailable && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full mb-6"
+          onClick={() => handleSocialLogin(LINKEDIN_OIDC_PROVIDER)}
+          isLoading={isLinkedInLoading}
+          disabled={isSocialLoading}
+          data-testid="login-linkedin"
+        >
+          <LinkedInIcon className="h-5 w-5 mr-2" />
+          Continue with LinkedIn
+        </Button>
+      )}
+
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with email</span>
         </div>
       </div>
 
@@ -269,7 +291,7 @@ function LoginFormComponent({ hcaptchaSiteKey }: LoginFormProps) {
   );
 }
 
-export function LoginClient({ hcaptchaSiteKey }: LoginFormProps) {
+export function LoginClient({ hcaptchaSiteKey, linkedinOauthAvailable }: LoginFormProps) {
   return (
     <Suspense fallback={
       <Card className="p-6">
@@ -280,7 +302,10 @@ export function LoginClient({ hcaptchaSiteKey }: LoginFormProps) {
         </div>
       </Card>
     }>
-      <LoginFormComponent hcaptchaSiteKey={hcaptchaSiteKey} />
+      <LoginFormComponent
+        hcaptchaSiteKey={hcaptchaSiteKey}
+        linkedinOauthAvailable={linkedinOauthAvailable}
+      />
     </Suspense>
   );
 }
