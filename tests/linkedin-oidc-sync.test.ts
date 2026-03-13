@@ -462,6 +462,288 @@ test("runLinkedInOidcSyncSafe logs non-success results", async () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// syncLinkedInOidcProfileOnLogin — propagates linkedin_url from org records
+// ---------------------------------------------------------------------------
+
+test("propagates linkedin_url from existing org record to all profiles", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/janedoe",
+      deleted_at: null,
+    },
+  ]);
+  stub.seed("alumni", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: null,
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  let savedUrl: string | null = null;
+  stub.registerRpc(
+    "save_user_linkedin_url",
+    ({ p_user_id, p_linkedin_url }: { p_user_id: string; p_linkedin_url: string | null }) => {
+      savedUrl = p_linkedin_url;
+      // Simulate updating all org records
+      for (const table of ["members", "alumni"] as const) {
+        const rows = stub.getRows(table);
+        for (const r of rows) {
+          if (r.user_id === p_user_id && !r.deleted_at) {
+            r.linkedin_url = p_linkedin_url;
+          }
+        }
+      }
+      return { updated_count: 2 };
+    },
+  );
+
+  const result = await syncLinkedInOidcProfileOnLogin(
+    stub as never,
+    makeUser(),
+  );
+
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+  assert.equal(savedUrl, "https://www.linkedin.com/in/janedoe");
+});
+
+test("does not call save_user_linkedin_url when no org record has linkedin_url", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: null,
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  let rpcCalled = false;
+  stub.registerRpc(
+    "save_user_linkedin_url",
+    () => {
+      rpcCalled = true;
+      return { updated_count: 1 };
+    },
+  );
+
+  const result = await syncLinkedInOidcProfileOnLogin(
+    stub as never,
+    makeUser(),
+  );
+
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+  assert.equal(rpcCalled, false, "save_user_linkedin_url should not be called when no org record has linkedin_url");
+});
+
+test("linkedin_url propagation failure does not fail the sync", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/janedoe",
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  stub.registerRpc("save_user_linkedin_url", () => {
+    throw new Error("db error");
+  });
+
+  const result = await syncLinkedInOidcProfileOnLogin(
+    stub as never,
+    makeUser(),
+  );
+
+  // Should still succeed — URL propagation is best-effort
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+});
+
+// ---------------------------------------------------------------------------
+// runLinkedInOidcSyncSafe
+// ---------------------------------------------------------------------------
+
+test("propagates the most recently updated linkedin_url when records disagree", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/old-url",
+      updated_at: "2026-01-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+  stub.seed("alumni", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/newer-url",
+      updated_at: "2026-06-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+
+  // Use the real sync RPC simulation — the ordering fix ensures
+  // findExistingLinkedInUrl runs BEFORE sync touches updated_at.
+  registerSyncRpc(stub);
+
+  let savedUrl: string | null = null;
+  stub.registerRpc("save_user_linkedin_url", ({ p_linkedin_url }: { p_linkedin_url: string | null }) => {
+    savedUrl = p_linkedin_url;
+    return { updated_count: 2 };
+  });
+
+  await syncLinkedInOidcProfileOnLogin(stub as never, makeUser());
+  assert.equal(savedUrl, "https://www.linkedin.com/in/newer-url");
+});
+
+test("aborts linkedin_url propagation when a table read fails", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/janedoe",
+      updated_at: "2026-01-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+  stub.seed("alumni", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: null,
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  // Simulate an error on the alumni table — findExistingLinkedInUrl should
+  // bail out and return null, so save_user_linkedin_url is never called.
+  stub.simulateError("alumni", {
+    message: "permission denied",
+    code: "42501",
+  });
+
+  let rpcCalled = false;
+  stub.registerRpc("save_user_linkedin_url", () => {
+    rpcCalled = true;
+    return { updated_count: 1 };
+  });
+
+  const result = await syncLinkedInOidcProfileOnLogin(stub as never, makeUser());
+
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+  assert.equal(rpcCalled, false, "save_user_linkedin_url must not be called when a table read fails");
+});
+
+test("skips linkedin_url propagation when records disagree with equal updated_at", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/member-url",
+      updated_at: "2026-06-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+  stub.seed("alumni", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/alumni-url",
+      updated_at: "2026-06-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  let rpcCalled = false;
+  stub.registerRpc("save_user_linkedin_url", () => {
+    rpcCalled = true;
+    return { updated_count: 2 };
+  });
+
+  const result = await syncLinkedInOidcProfileOnLogin(stub as never, makeUser());
+
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+  assert.equal(rpcCalled, false, "save_user_linkedin_url must not be called when timestamps tie but URLs differ");
+});
+
+test("skips propagation when same-table records disagree with equal updated_at", async () => {
+  const stub = createSupabaseStub();
+  // Two members rows (same user, different orgs) with same updated_at but different URLs
+  stub.seed("members", [
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/url-from-org-a",
+      updated_at: "2026-06-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+    {
+      user_id: USER_ID,
+      first_name: "Jane",
+      last_name: "Doe",
+      photo_url: null,
+      linkedin_url: "https://www.linkedin.com/in/url-from-org-b",
+      updated_at: "2026-06-01T00:00:00.000Z",
+      deleted_at: null,
+    },
+  ]);
+  registerSyncRpc(stub);
+
+  let rpcCalled = false;
+  stub.registerRpc("save_user_linkedin_url", () => {
+    rpcCalled = true;
+    return { updated_count: 2 };
+  });
+
+  const result = await syncLinkedInOidcProfileOnLogin(stub as never, makeUser());
+
+  assert.ok("synced" in result);
+  assert.equal((result as { synced: boolean }).synced, true);
+  assert.equal(rpcCalled, false, "save_user_linkedin_url must not be called when same-table records disagree");
+});
+
 test("runLinkedInOidcSyncSafe awaits the sync runner to completion", async () => {
   const stub = createSupabaseStub();
   let completed = false;

@@ -4,6 +4,7 @@ import type { User } from "@supabase/supabase-js";
 import type { LinkedInProfile } from "@/lib/linkedin/oauth";
 import { syncLinkedInProfileFields } from "@/lib/linkedin/oauth";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { saveLinkedInUrlForUser } from "@/lib/linkedin/settings";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -210,6 +211,64 @@ export async function storeLinkedInOidcConnection(
 }
 
 // ---------------------------------------------------------------------------
+// LinkedIn URL lookup from org records
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds the most recently updated linkedin_url from the user's org records.
+ * Queries members/alumni/parents ordered by updated_at DESC and returns the
+ * URL with the globally most recent timestamp, preventing arbitrary cross-org
+ * overwrites when records disagree.
+ */
+async function findExistingLinkedInUrl(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<string | null> {
+  let bestUrl: string | null = null;
+  let bestUpdatedAt: string | null = null;
+
+  for (const table of ["members", "alumni", "parents"] as const) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from(table)
+      .select("linkedin_url, updated_at")
+      .eq("user_id", userId)
+      .is("deleted_at", null)
+      .not("linkedin_url", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(2);
+
+    if (error) {
+      console.error(`[linkedin-oidc-sync] Failed to read ${table} for linkedin_url lookup:`, error);
+      return null;
+    }
+
+    // Intra-table ambiguity: 2 rows, same timestamp, different URLs
+    if (
+      data?.length === 2 &&
+      data[0].updated_at === data[1].updated_at &&
+      data[0].linkedin_url !== data[1].linkedin_url
+    ) {
+      return null;
+    }
+
+    const row = data?.[0];
+    if (row?.linkedin_url) {
+      const ts = row.updated_at ?? "";
+      if (!bestUpdatedAt || ts > bestUpdatedAt) {
+        bestUrl = row.linkedin_url;
+        bestUpdatedAt = ts;
+      } else if (ts === bestUpdatedAt && row.linkedin_url !== bestUrl) {
+        // Same timestamp, different URL — ambiguous; skip propagation
+        return null;
+      }
+    }
+  }
+
+  return bestUrl;
+}
+
+// ---------------------------------------------------------------------------
 // Main sync entry point
 // ---------------------------------------------------------------------------
 
@@ -237,6 +296,10 @@ export async function syncLinkedInOidcProfileOnLogin(
     return { synced: false, error: connectionResult.error ?? "Failed to store OIDC connection" };
   }
 
+  // Capture the most-recently-updated linkedin_url BEFORE profile sync
+  // touches updated_at on all rows via the sync RPC.
+  const existingUrl = await findExistingLinkedInUrl(supabase, user.id);
+
   // Profile fields second — only if connection row exists
   const syncResult = await syncLinkedInProfileFields(supabase, user.id, profile);
 
@@ -246,6 +309,15 @@ export async function syncLinkedInOidcProfileOnLogin(
       return { synced: true };
     }
     return { synced: false, error: syncResult.error };
+  }
+
+  // Best-effort: propagate linkedin_url from existing org records to all records.
+  // Handles the case where the user set their URL in one org but not others.
+  if (existingUrl) {
+    const urlResult = await saveLinkedInUrlForUser(supabase, user.id, existingUrl);
+    if (!urlResult.success && urlResult.reason !== "not_found") {
+      console.error("[linkedin-oidc-sync] Failed to propagate linkedin_url:", urlResult.error);
+    }
   }
 
   return { synced: true };
