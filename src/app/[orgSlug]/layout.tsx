@@ -9,6 +9,7 @@ import { DevPanel } from "@/components/layout/DevPanel";
 import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
 import { canDevAdminPerform } from "@/lib/auth/dev-admin";
 import { createServiceClient } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
 import { ConsentModal } from "@/components/analytics/ConsentModal";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
@@ -125,6 +126,19 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   const organization = orgContext.organization;
 
+  let currentMemberId: string | undefined;
+  if (orgContext.userId) {
+    const supabase = await createClient();
+    const { data: memberRow } = await supabase
+      .from("members")
+      .select("id")
+      .eq("organization_id", organization.id)
+      .eq("user_id", orgContext.userId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    currentMemberId = memberRow?.id ?? undefined;
+  }
+
   let serviceSupabase = null;
   if (isDevAdmin) {
     try {
@@ -212,10 +226,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} />
       {!isDevAdmin && <ConsentModal />}
 
       <main className={`lg:ml-64 ${(await headers()).get("x-pathname")?.includes("/messages") ? "h-[calc(100dvh-4rem)] lg:h-dvh overflow-hidden pt-16 lg:pt-0" : "p-4 lg:p-8 pt-20 lg:pt-8"} ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>

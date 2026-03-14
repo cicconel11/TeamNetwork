@@ -18,11 +18,12 @@ interface OrgSidebarProps {
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
   hasParentsAccess?: boolean;
+  currentMemberId?: string;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -206,6 +207,19 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
           <span className="text-sm font-medium text-muted-foreground">Theme</span>
           <ThemeToggle />
         </div>
+
+        {currentMemberId && (
+          <Link
+            href={`${basePath}/members/${currentMemberId}`}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" />
+            </svg>
+            My Profile
+          </Link>
+        )}
 
         <Link
           href="/app"
