@@ -12,6 +12,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext";
 import { ConsentModal } from "@/components/analytics/ConsentModal";
+import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
 
@@ -231,6 +232,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
       <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} />
       {!isDevAdmin && <ConsentModal />}
+      {!isDevAdmin && <LinkedInUrlPrompt />}
 
       <main className={`lg:ml-64 ${(await headers()).get("x-pathname")?.includes("/messages") ? "h-[calc(100dvh-4rem)] lg:h-dvh overflow-hidden pt-16 lg:pt-0" : "p-4 lg:p-8 pt-20 lg:pt-8"} ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>
         {children}
