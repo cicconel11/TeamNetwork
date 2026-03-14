@@ -128,16 +128,22 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   const organization = orgContext.organization;
 
   let currentMemberId: string | undefined;
+  let currentMemberName: string | undefined;
+  let currentMemberAvatar: string | undefined;
   if (orgContext.userId) {
     const supabase = await createClient();
     const { data: memberRow } = await supabase
       .from("members")
-      .select("id")
+      .select("id, first_name, last_name, photo_url")
       .eq("organization_id", organization.id)
       .eq("user_id", orgContext.userId)
       .is("deleted_at", null)
       .maybeSingle();
     currentMemberId = memberRow?.id ?? undefined;
+    currentMemberName = memberRow
+      ? `${memberRow.first_name} ${memberRow.last_name}`
+      : undefined;
+    currentMemberAvatar = memberRow?.photo_url ?? undefined;
   }
 
   let serviceSupabase = null;
@@ -227,10 +233,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 

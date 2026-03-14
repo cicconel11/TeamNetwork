@@ -11,6 +11,8 @@ import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGr
 import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -19,11 +21,13 @@ interface OrgSidebarProps {
   hasAlumniAccess?: boolean;
   hasParentsAccess?: boolean;
   currentMemberId?: string;
+  currentMemberName?: string;
+  currentMemberAvatar?: string | null;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -138,6 +142,24 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
           </div>
         </Link>
       </div>
+
+      {/* Profile Card */}
+      {currentMemberId && currentMemberName && (
+        <div className="px-4 pt-3 pb-3 border-b border-border">
+          <Link
+            href={`${basePath}/members/${currentMemberId}`}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200"
+          >
+            <Avatar src={currentMemberAvatar} name={currentMemberName} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{currentMemberName}</p>
+              <Badge variant="muted" className="text-[11px] capitalize mt-0.5">
+                {role === "active_member" ? "Member" : role}
+              </Badge>
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
