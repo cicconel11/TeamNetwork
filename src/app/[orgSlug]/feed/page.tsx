@@ -3,7 +3,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
-import { PageHeader } from "@/components/layout/PageHeader";
+
 import { FeedComposer } from "@/components/feed/FeedComposer";
 import { FeedList } from "@/components/feed/FeedList";
 
@@ -86,15 +86,24 @@ export default async function FeedPage({
 
   return (
     <>
-      <PageHeader
-        title="Feed"
-        description="Stay up to date with your team"
-      />
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground font-mono">
+          Team Feed
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
       {canPost && (
-        <div className="mb-6">
+        <div className="mb-5">
           <FeedComposer orgId={orgCtx.organization.id} />
         </div>
       )}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1 bg-border/50" />
+        <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/50">
+          Recent
+        </span>
+        <div className="h-px flex-1 bg-border/50" />
+      </div>
       <FeedList
         posts={augmentedPosts}
         orgSlug={orgSlug}
