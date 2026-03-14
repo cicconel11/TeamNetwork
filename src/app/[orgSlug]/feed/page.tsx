@@ -44,7 +44,6 @@ export default async function FeedPage({
     .range(offset, offset + limit - 1);
 
   if (error) {
-    console.error("[FEED DEBUG] feed_posts query error:", JSON.stringify(error));
     throw new Error("Failed to load feed");
   }
 
@@ -63,9 +62,8 @@ export default async function FeedPage({
   }
 
   // Fetch media attachments for all posts
-  const serviceClient = createServiceClient();
   const mediaMap = postIds.length > 0
-    ? await fetchMediaForEntities(serviceClient, "feed_post", postIds, orgCtx.organization.id)
+    ? await fetchMediaForEntities(createServiceClient(), "feed_post", postIds, orgCtx.organization.id)
     : new Map();
 
   // Augment posts with liked_by_user and media
@@ -109,7 +107,7 @@ export default async function FeedPage({
         orgSlug={orgSlug}
         currentUserId={orgCtx.userId || ""}
         isAdmin={orgCtx.isAdmin}
-        pagination={{ page, limit, total, totalPages }}
+        pagination={{ page, total, totalPages }}
       />
     </>
   );

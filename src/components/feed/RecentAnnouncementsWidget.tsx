@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 
-interface Announcement {
+interface AnnouncementSummary {
   id: string;
   title: string;
   body: string | null;
@@ -9,7 +9,7 @@ interface Announcement {
 }
 
 interface RecentAnnouncementsWidgetProps {
-  announcements: Announcement[];
+  announcements: AnnouncementSummary[];
   orgSlug: string;
 }
 

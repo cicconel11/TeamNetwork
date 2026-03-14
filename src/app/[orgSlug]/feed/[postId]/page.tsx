@@ -43,37 +43,39 @@ export default async function FeedPostDetailPage({
     return notFound();
   }
 
-  // Fetch comments
-  const { data: comments, error: commentsError } = await supabase
-    .from("feed_comments")
-    .select(
-      `
-      *,
-      author:users!feed_comments_author_id_fkey(name)
-    `,
-    )
-    .eq("post_id", postId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
+  // Fetch comments, like status, and media in parallel
+  const [
+    { data: comments, error: commentsError },
+    likeResult,
+    mediaMap,
+  ] = await Promise.all([
+    supabase
+      .from("feed_comments")
+      .select(
+        `
+        *,
+        author:users!feed_comments_author_id_fkey(name)
+      `,
+      )
+      .eq("post_id", postId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+    orgCtx.userId
+      ? supabase
+          .from("feed_likes")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("user_id", orgCtx.userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    fetchMediaForEntities(createServiceClient(), "feed_post", [postId], orgCtx.organization.id),
+  ]);
 
   if (commentsError) {
     throw new Error("Failed to load comments");
   }
 
-  // Check if user has liked this post
-  let likedByUser = false;
-  if (orgCtx.userId) {
-    const { data: like } = await supabase
-      .from("feed_likes")
-      .select("id")
-      .eq("post_id", postId)
-      .eq("user_id", orgCtx.userId)
-      .maybeSingle();
-    likedByUser = !!like;
-  }
-
-  const serviceClient = createServiceClient();
-  const mediaMap = await fetchMediaForEntities(serviceClient, "feed_post", [postId], orgCtx.organization.id);
+  const likedByUser = !!likeResult.data;
   const postMedia = mediaMap.get(postId) ?? [];
 
   return (

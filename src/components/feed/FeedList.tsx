@@ -10,7 +10,6 @@ interface FeedListProps {
   isAdmin: boolean;
   pagination?: {
     page: number;
-    limit: number;
     total: number;
     totalPages: number;
   };
