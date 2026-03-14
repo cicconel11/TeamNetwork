@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PostDetail } from "@/components/feed/PostDetail";
 import { CommentSection } from "@/components/feed/CommentSection";
@@ -70,11 +72,15 @@ export default async function FeedPostDetailPage({
     likedByUser = !!like;
   }
 
+  const serviceClient = createServiceClient();
+  const mediaMap = await fetchMediaForEntities(serviceClient, "feed_post", [postId]);
+  const postMedia = mediaMap.get(postId) ?? [];
+
   return (
     <>
       <PageHeader title="Post" backHref={`/${orgSlug}/feed`} />
       <PostDetail
-        post={{ ...post, liked_by_user: likedByUser }}
+        post={{ ...post, liked_by_user: likedByUser, media: postMedia }}
         orgSlug={orgSlug}
         currentUserId={orgCtx.userId || ""}
         isAdmin={orgCtx.isAdmin}

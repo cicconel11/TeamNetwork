@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { FeedComposer } from "@/components/feed/FeedComposer";
 import { FeedList } from "@/components/feed/FeedList";
@@ -60,10 +62,17 @@ export default async function FeedPage({
     userLikedPostIds = new Set((likes || []).map((l) => l.post_id));
   }
 
-  // Augment posts with liked_by_user
+  // Fetch media attachments for all posts
+  const serviceClient = createServiceClient();
+  const mediaMap = postIds.length > 0
+    ? await fetchMediaForEntities(serviceClient, "feed_post", postIds)
+    : new Map();
+
+  // Augment posts with liked_by_user and media
   const augmentedPosts = (posts || []).map((post) => ({
     ...post,
     liked_by_user: userLikedPostIds.has(post.id),
+    media: mediaMap.get(post.id) ?? [],
   }));
 
   const total = count || 0;

@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { LikeButton } from "./LikeButton";
+import { PostMedia } from "./PostMedia";
 import type { Database } from "@/types/database";
+import type { MediaAttachment } from "@/lib/media/fetch";
 
 type PostWithAuthor = Database["public"]["Tables"]["feed_posts"]["Row"] & {
   author: { name: string } | null;
   liked_by_user: boolean;
+  media?: MediaAttachment[];
 };
 
 interface PostDetailProps {
@@ -67,6 +70,9 @@ export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetail
       <div className="prose max-w-none">
         <p className="whitespace-pre-wrap text-foreground">{post.body}</p>
       </div>
+      {post.media && post.media.length > 0 && (
+        <PostMedia media={post.media} />
+      )}
       <div className="mt-4 flex items-center gap-4">
         <LikeButton postId={post.id} likeCount={post.like_count} likedByUser={post.liked_by_user} />
         <span className="text-sm text-muted-foreground">
