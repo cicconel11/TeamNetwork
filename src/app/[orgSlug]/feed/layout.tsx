@@ -17,9 +17,9 @@ export default async function FeedLayout({ children, params }: FeedLayoutProps) 
   const isDevAdmin = canDevAdminPerform(user, "view_org");
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6">
-        <div className="max-w-2xl mx-auto w-full">
+    <div className="container mx-auto px-4 py-6 max-w-6xl">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,640px)_300px] gap-8 xl:justify-center">
+        <div className="w-full">
           {children}
         </div>
         <aside className="hidden xl:block animate-fade-in">
