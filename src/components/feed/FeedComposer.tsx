@@ -144,10 +144,10 @@ export function FeedComposer({ orgId }: FeedComposerProps) {
   };
 
   return (
-    <Card className="p-5">
+    <Card className="px-4 pt-4 pb-3">
       <form onSubmit={handleSubmit}>
         {error && (
-          <div className="p-3 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-800 dark:text-red-300 text-sm">
+          <div className="p-3 mb-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-800 dark:text-red-300 text-sm" role="alert">
             {error}
           </div>
         )}
@@ -155,9 +155,10 @@ export function FeedComposer({ orgId }: FeedComposerProps) {
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="What's on your mind?"
-          rows={3}
+          rows={2}
           maxLength={5000}
-          className="border-0 bg-transparent p-0 focus:ring-0 resize-none text-foreground placeholder:text-muted-foreground/50"
+          className="w-full resize-none border-0 bg-transparent p-0 text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-0 min-h-[44px] max-h-48 overflow-y-auto leading-relaxed"
+          aria-label="Compose a post"
         />
 
         {/* Image preview */}
@@ -190,7 +191,7 @@ export function FeedComposer({ orgId }: FeedComposerProps) {
         )}
 
         {/* Action bar */}
-        <div className="flex items-center justify-between border-t border-border pt-3 mt-3">
+        <div className="flex items-center justify-between border-t border-border/60 pt-2.5 mt-3">
           <div className="flex items-center gap-1">
             <input
               ref={fileInputRef}
@@ -202,7 +203,7 @@ export function FeedComposer({ orgId }: FeedComposerProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2 rounded-xl text-muted-foreground hover:text-org-secondary hover:bg-org-secondary/10 transition-all duration-200"
+              className="p-2 rounded-xl text-muted-foreground hover:text-org-secondary hover:bg-org-secondary/10 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
               aria-label="Add image"
               disabled={isSubmitting}
             >
