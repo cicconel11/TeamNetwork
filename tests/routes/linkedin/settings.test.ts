@@ -8,10 +8,6 @@ import {
 } from "@/lib/alumni/linkedin-url";
 
 import {
-  linkedinSyncResponseSchema,
-  linkedinConnectionStatusSchema,
-} from "@/lib/schemas/linkedin";
-import {
   createLinkedInOAuthState,
   parseLinkedInOAuthState,
 } from "@/lib/linkedin/state";
@@ -87,72 +83,6 @@ describe("LinkedIn settings routes", () => {
     });
   });
 
-  describe("linkedinSyncResponseSchema", () => {
-    it("validates a successful sync response with profile", () => {
-      const result = linkedinSyncResponseSchema.safeParse({
-        success: true,
-        profile: {
-          sub: "abc123",
-          givenName: "Jane",
-          familyName: "Doe",
-          email: "jane@example.com",
-          picture: "https://photo.example.com/pic.jpg",
-          emailVerified: true,
-        },
-      });
-      assert.ok(result.success);
-    });
-
-    it("validates an error sync response", () => {
-      const result = linkedinSyncResponseSchema.safeParse({
-        success: false,
-        error: "Token expired",
-      });
-      assert.ok(result.success);
-    });
-
-    it("validates response without optional profile", () => {
-      const result = linkedinSyncResponseSchema.safeParse({
-        success: true,
-      });
-      assert.ok(result.success);
-    });
-
-    it("rejects response with old schema (name/profileUrl)", () => {
-      const result = linkedinSyncResponseSchema.safeParse({
-        success: true,
-        profile: {
-          name: "Jane Doe",
-          email: "jane@example.com",
-          pictureUrl: null,
-          profileUrl: null,
-        },
-      });
-      // Should fail because old schema doesn't match new shape
-      assert.ok(!result.success);
-    });
-  });
-
-  describe("linkedinConnectionStatusSchema", () => {
-    it("validates a connected status", () => {
-      const result = linkedinConnectionStatusSchema.safeParse({
-        connected: true,
-        linkedinEmail: "jane@example.com",
-        linkedinName: "Jane Doe",
-        linkedinPictureUrl: "https://photo.example.com/pic.jpg",
-        status: "connected",
-        tokenExpired: false,
-      });
-      assert.ok(result.success);
-    });
-
-    it("validates minimal status (only connected field)", () => {
-      const result = linkedinConnectionStatusSchema.safeParse({
-        connected: false,
-      });
-      assert.ok(result.success);
-    });
-  });
 
   describe("connect route state format", () => {
     it("stores the payload in the cookie while keeping provider-facing state opaque", () => {

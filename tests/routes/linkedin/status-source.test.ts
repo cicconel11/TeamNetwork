@@ -22,9 +22,9 @@ test("linkedin status helper filters soft-deleted memberships", () => {
     /\.is\("deleted_at", null\)/,
     "Expected LinkedIn membership lookups to filter deleted_at = null",
   );
-  assert.match(routeSource, /await getLatestLinkedInUrl\(supabase, "members", userId\)/);
-  assert.match(routeSource, /await getLatestLinkedInUrl\(supabase, "alumni", userId\)/);
-  assert.match(routeSource, /await getLatestLinkedInUrl\(supabase, "parents", userId\)/);
+  assert.match(routeSource, /getLatestLinkedInUrl\(supabase, "members", userId\)/);
+  assert.match(routeSource, /getLatestLinkedInUrl\(supabase, "alumni", userId\)/);
+  assert.match(routeSource, /getLatestLinkedInUrl\(supabase, "parents", userId\)/);
 });
 
 test("linkedin status helper makes the winning linkedin_url deterministic", () => {

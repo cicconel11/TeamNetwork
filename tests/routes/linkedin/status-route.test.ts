@@ -77,14 +77,40 @@ test("status helper throws when the LinkedIn connection lookup fails", async () 
   );
 });
 
-test("status helper throws when a profile table lookup fails", async () => {
+test("status helper throws when the highest-priority member lookup fails", async () => {
   const serviceSupabase = createSupabaseStub();
   serviceSupabase.simulateError("members", {
     message: "members table unavailable",
   });
+  serviceSupabase.seed("parents", [{
+    user_id: USER_ID,
+    linkedin_url: "https://www.linkedin.com/in/parent-user",
+    deleted_at: null,
+    updated_at: "2026-03-10T12:00:00.000Z",
+    created_at: "2026-03-01T12:00:00.000Z",
+  }]);
 
   await assert.rejects(
     () => getLinkedInStatusForUser(serviceSupabase as never, USER_ID),
     /Failed to fetch LinkedIn URL from members: members table unavailable/,
+  );
+});
+
+test("status helper throws when the alumni lookup fails before falling through to parents", async () => {
+  const serviceSupabase = createSupabaseStub();
+  serviceSupabase.simulateError("alumni", {
+    message: "alumni table unavailable",
+  });
+  serviceSupabase.seed("parents", [{
+    user_id: USER_ID,
+    linkedin_url: "https://www.linkedin.com/in/parent-user",
+    deleted_at: null,
+    updated_at: "2026-03-10T12:00:00.000Z",
+    created_at: "2026-03-01T12:00:00.000Z",
+  }]);
+
+  await assert.rejects(
+    () => getLinkedInStatusForUser(serviceSupabase as never, USER_ID),
+    /Failed to fetch LinkedIn URL from alumni: alumni table unavailable/,
   );
 });
