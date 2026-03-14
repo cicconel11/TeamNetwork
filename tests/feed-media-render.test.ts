@@ -6,7 +6,7 @@ describe("Feed media rendering", () => {
     const fs = await import("fs");
     const code = fs.readFileSync("src/components/feed/FeedPost.tsx", "utf-8");
     assert.ok(code.includes("media"), "should reference media in props or rendering");
-    assert.ok(code.includes("img") || code.includes("Image"), "should render images");
+    assert.ok(code.includes("PostMedia"), "should render PostMedia component for images");
   });
 
   it("PostDetail renders media attachments", async () => {
