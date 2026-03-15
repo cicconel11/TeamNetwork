@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { LikeButton } from "./LikeButton";
 import { PostMedia } from "./PostMedia";
+import { InlineComments } from "./InlineComments";
+import { FeedPoll } from "./FeedPoll";
 import { relativeTime } from "@/lib/utils/relative-time";
 import type { PostWithAuthor } from "./types";
 
@@ -20,6 +21,8 @@ interface FeedPostProps {
 export function FeedPost({ post, orgSlug, currentUserId, isAdmin }: FeedPostProps) {
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
+  const [commentCount, setCommentCount] = useState(post.comment_count);
 
   const canDelete = post.author_id === currentUserId || isAdmin;
   const authorName = post.author?.name || "Unknown";
@@ -64,26 +67,47 @@ export function FeedPost({ post, orgSlug, currentUserId, isAdmin }: FeedPostProp
               </button>
             )}
           </div>
-          <p className="mt-1.5 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.body}</p>
+          {post.body && <p className="mt-1.5 text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap">{post.body}</p>}
+          {post.poll_meta && (
+            <FeedPoll
+              postId={post.id}
+              meta={post.poll_meta}
+              userVote={post.user_vote ?? null}
+              voteCounts={post.vote_counts ?? []}
+              totalVotes={post.total_votes ?? 0}
+            />
+          )}
           {post.media && post.media.length > 0 && (
             <PostMedia media={post.media} />
           )}
         </div>
       </div>
-      {/* Interaction bar — aligned with body, not avatar */}
-      <div className="flex items-center gap-1 mt-3 pt-2.5 border-t border-border/40 ml-11">
+      {/* Interaction bar — full width, LinkedIn-style */}
+      <div className="flex items-center mt-3 pt-2.5 border-t border-border/40">
         <LikeButton postId={post.id} likeCount={post.like_count} likedByUser={post.liked_by_user} />
-        <Link
-          href={`/${orgSlug}/feed/${post.id}`}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium text-muted-foreground hover:text-org-primary hover:bg-org-primary/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-          aria-label={`${post.comment_count} comments`}
+        <button
+          onClick={() => setIsCommentsOpen(!isCommentsOpen)}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          aria-label={`${commentCount} comments`}
+          aria-expanded={isCommentsOpen}
+          type="button"
         >
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+          <svg className="h-[18px] w-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
           </svg>
-          <span className="font-mono">{post.comment_count}</span>
-        </Link>
+          <span>Comment{commentCount > 0 ? ` (${commentCount})` : ""}</span>
+        </button>
       </div>
+      {/* Inline comments expansion */}
+      {isCommentsOpen && (
+        <InlineComments
+          postId={post.id}
+          commentCount={commentCount}
+          currentUserId={currentUserId}
+          orgSlug={orgSlug}
+          onCountChange={setCommentCount}
+        />
+      )}
     </Card>
   );
 }

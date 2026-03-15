@@ -93,7 +93,7 @@ export function ChannelSidebar({
       <div className="flex-1 overflow-y-auto py-1">
         {/* Channels section */}
         <SectionHeader
-          label="Channels"
+          label="Discussions"
           isOpen={channelsOpen}
           onToggle={() => setChannelsOpen(!channelsOpen)}
         />
@@ -126,7 +126,7 @@ export function ChannelSidebar({
               );
             })}
             {chatGroups.length === 0 && (
-              <p className="px-3 py-2 text-xs text-muted-foreground">No channels yet</p>
+              <p className="px-3 py-2 text-xs text-muted-foreground">No discussions yet</p>
             )}
           </div>
         </div>
@@ -134,7 +134,7 @@ export function ChannelSidebar({
         {/* Threads section */}
         <div className="mt-2">
           <SectionHeader
-            label="Threads"
+            label="Chats"
             isOpen={threadsOpen}
             onToggle={() => setThreadsOpen(!threadsOpen)}
           />
@@ -178,7 +178,7 @@ export function ChannelSidebar({
                 );
               })}
               {discussionThreads.length === 0 && (
-                <p className="px-3 py-2 text-xs text-muted-foreground">No threads yet</p>
+                <p className="px-3 py-2 text-xs text-muted-foreground">No chats yet</p>
               )}
             </div>
           </div>
@@ -195,7 +195,7 @@ export function ChannelSidebar({
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            New Channel
+            New Discussion
           </Link>
         )}
         <Link
@@ -205,7 +205,7 @@ export function ChannelSidebar({
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
           </svg>
-          New Thread
+          New Chat
         </Link>
       </div>
     </div>

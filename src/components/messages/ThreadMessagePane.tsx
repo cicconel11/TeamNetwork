@@ -38,13 +38,13 @@ function formatRelativeTime(dateString: string): string {
 }
 
 function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const d = new Date(dateString);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric",
+    hour: "numeric", minute: "2-digit",
+  }).formatToParts(d);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  return `${get("month")} ${get("day")}, ${get("year")}, ${get("hour")}:${get("minute")} ${get("dayPeriod")}`;
 }
 
 export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadMessagePaneProps) {

@@ -67,10 +67,9 @@ export type NavConfig = Record<string, NavConfigEntry>;
 export const getConfigKey = (href: string): string => href === "" ? "dashboard" : href;
 
 export const ORG_NAV_ITEMS: OrgNavItem[] = [
-  { href: "", label: "Dashboard", icon: HomeIcon, roles: ["admin", "active_member", "alumni", "parent"] },
+  { href: "", label: "Home", icon: HomeIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/members", label: "Members", icon: UsersIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
   { href: "/messages", label: "Messages", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
-  { href: "/feed", label: "Feed", icon: FeedIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni", "parent"], requiresAlumni: true, group: "people" },
   { href: "/parents", label: "Parents", icon: ParentsIcon, roles: ["admin", "active_member", "parent"], requiresParents: true, group: "people" },
   { href: "/mentorship", label: "Mentorship", icon: HandshakeIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },

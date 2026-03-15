@@ -23,10 +23,16 @@ describe("Feed rework integration", () => {
     assert.equal(containerCount, 0, "feed page should have no container wrapper");
   });
 
-  it("feed layout has grid structure (no redundant container)", () => {
+  it("feed layout is a pass-through (grid moved to home page)", () => {
     const layout = readFileSync("src/app/[orgSlug]/feed/layout.tsx", "utf-8");
-    assert.ok(!layout.includes("container mx-auto"), "layout should NOT have container wrapper — org layout handles padding");
-    assert.ok(layout.includes("xl:grid-cols-"), "layout should have grid columns");
+    assert.ok(!layout.includes("container mx-auto"), "layout should NOT have container wrapper");
+    assert.ok(layout.includes("{children}"), "layout should render children");
+  });
+
+  it("home page has feed grid structure with sidebar", () => {
+    const homePage = readFileSync("src/app/[orgSlug]/page.tsx", "utf-8");
+    assert.ok(homePage.includes("xl:grid-cols-"), "home page should have grid columns");
+    assert.ok(homePage.includes("FeedSidebar"), "home page should render FeedSidebar");
   });
 
   it("no database migration was needed", async () => {

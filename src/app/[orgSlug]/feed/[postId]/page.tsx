@@ -80,7 +80,7 @@ export default async function FeedPostDetailPage({
 
   return (
     <>
-      <PageHeader title="Post" backHref={`/${orgSlug}/feed`} />
+      <PageHeader title="Post" backHref={`/${orgSlug}`} />
       <PostDetail
         post={{ ...post, liked_by_user: likedByUser, media: postMedia }}
         orgSlug={orgSlug}

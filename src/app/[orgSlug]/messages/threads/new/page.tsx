@@ -14,8 +14,8 @@ export default async function MessagesNewThreadPage({ params }: NewThreadPagePro
 
   return (
     <div className="p-4 lg:p-8 max-w-2xl">
-      <h1 className="text-xl font-bold text-foreground mb-2">New Thread</h1>
-      <p className="text-sm text-muted-foreground mb-6">Start a new discussion</p>
+      <h1 className="text-xl font-bold text-foreground mb-2">New Chat</h1>
+      <p className="text-sm text-muted-foreground mb-6">Start a new chat</p>
       <ThreadForm orgId={orgCtx.organization.id} orgSlug={orgSlug} />
     </div>
   );

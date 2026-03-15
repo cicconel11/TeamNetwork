@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { createPostSchema } from "@/lib/schemas/feed";
+import { createPollSchema } from "@/lib/schemas/chat-polls";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
+import type { PollMetadata } from "@/components/feed/types";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
@@ -98,11 +99,59 @@ export async function GET(request: NextRequest) {
       ? await fetchMediaForEntities(serviceClient, "feed_post", postIds)
       : new Map();
 
-    // Augment posts with liked_by_user and media
+    // Augment poll data for poll-type posts
+    const pollPostIds = (posts || []).filter((p) => p.post_type === "poll").map((p) => p.id);
+    const userVoteMap = new Map<string, number>();
+    const voteCountsMap = new Map<string, number[]>();
+    const totalVotesMap = new Map<string, number>();
+
+    if (pollPostIds.length > 0) {
+      const [{ data: userVotes }, { data: allVotes }] = await Promise.all([
+        supabase
+          .from("feed_poll_votes")
+          .select("post_id, option_index")
+          .eq("user_id", user.id)
+          .in("post_id", pollPostIds),
+        supabase
+          .from("feed_poll_votes")
+          .select("post_id, option_index")
+          .in("post_id", pollPostIds),
+      ]);
+
+      for (const v of userVotes || []) {
+        userVoteMap.set(v.post_id, v.option_index);
+      }
+
+      for (const v of allVotes || []) {
+        if (!voteCountsMap.has(v.post_id)) {
+          const post = (posts || []).find((p) => p.id === v.post_id);
+          const meta = post?.metadata as PollMetadata | null;
+          voteCountsMap.set(v.post_id, new Array(meta?.options.length || 0).fill(0));
+          totalVotesMap.set(v.post_id, 0);
+        }
+        const counts = voteCountsMap.get(v.post_id)!;
+        if (v.option_index < counts.length) {
+          counts[v.option_index]++;
+        }
+        totalVotesMap.set(v.post_id, (totalVotesMap.get(v.post_id) || 0) + 1);
+      }
+    }
+
+    // Augment posts with liked_by_user, media, and poll data
     const augmentedPosts = (posts || []).map((post) => ({
       ...post,
       liked_by_user: userLikedPostIds.has(post.id),
       media: mediaMap.get(post.id) ?? [],
+      ...(post.post_type === "poll"
+        ? {
+            poll_meta: post.metadata as PollMetadata | null,
+            user_vote: userVoteMap.get(post.id) ?? null,
+            vote_counts: voteCountsMap.get(post.id) ?? new Array(
+              ((post.metadata as PollMetadata | null)?.options ?? []).length
+            ).fill(0),
+            total_votes: totalVotesMap.get(post.id) ?? 0,
+          }
+        : {}),
     }));
 
     const total = count || 0;
@@ -150,11 +199,15 @@ export async function POST(request: NextRequest) {
 
     const bodySchema = z.object({
       orgId: baseSchemas.uuid,
-      body: createPostSchema.shape.body,
-      mediaIds: createPostSchema.shape.mediaIds,
-    });
+      body: z.string().trim().max(5000).default(""),
+      mediaIds: z.array(z.string().uuid()).max(10).optional(),
+      poll: createPollSchema.optional(),
+    }).refine(
+      (data) => data.poll || data.body.length >= 1,
+      { message: "Post body is required", path: ["body"] },
+    );
 
-    const { orgId, body, mediaIds } = await validateJson(request, bodySchema);
+    const { orgId, body, mediaIds, poll } = await validateJson(request, bodySchema);
 
     // Check org membership
     const membership = await getOrgMembership(supabase, user.id, orgId);
@@ -174,14 +227,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Your role is not allowed to create posts" }, { status: 403 });
     }
 
+    // Build insert payload — add poll fields if present
+    const insertPayload: Record<string, unknown> = {
+      organization_id: orgId,
+      author_id: user.id,
+      body,
+    };
+
+    if (poll) {
+      insertPayload.post_type = "poll";
+      insertPayload.metadata = {
+        question: poll.question,
+        options: poll.options.map((label) => ({ label })),
+        allow_change: poll.allow_change,
+      };
+    }
+
     // Create post
     const { data: post, error } = await supabase
       .from("feed_posts")
-      .insert({
-        organization_id: orgId,
-        author_id: user.id,
-        body,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 

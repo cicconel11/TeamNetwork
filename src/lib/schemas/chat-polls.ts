@@ -62,7 +62,7 @@ export type ChatFormResponseInput = z.infer<typeof chatFormResponseSchema>;
  * transformed to `{ label }` objects before storage.
  */
 export const createPollSchema = z.object({
-  question: safeString(500),
+  question: z.string().trim().max(500).default(""),
   options: z
     .array(safeString(200))
     .min(2, "Poll must have at least 2 options")

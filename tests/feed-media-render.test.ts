@@ -15,9 +15,9 @@ describe("Feed media rendering", () => {
     assert.ok(code.includes("media"), "should reference media");
   });
 
-  it("feed page fetches media for posts", async () => {
+  it("home page fetches media for feed posts", async () => {
     const fs = await import("fs");
-    const code = fs.readFileSync("src/app/[orgSlug]/feed/page.tsx", "utf-8");
+    const code = fs.readFileSync("src/app/[orgSlug]/page.tsx", "utf-8");
     assert.ok(code.includes("fetchMediaForEntities"), "should call fetchMediaForEntities");
   });
 });
