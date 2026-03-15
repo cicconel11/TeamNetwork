@@ -4936,6 +4936,11 @@ export type ScheduleFile = Tables<"schedule_files">;
 export type User = Tables<"users">;
 export type Workout = Tables<"workouts">;
 export type WorkoutLog = Tables<"workout_logs">;
+export type Competition = Tables<"competitions">;
+export type CompetitionPoint = Tables<"competition_points">;
+export type CompetitionTeam = Tables<"competition_teams">;
+export type MentorshipLog = Tables<"mentorship_logs">;
+export type MentorshipPair = Tables<"mentorship_pairs">;
 
 // Enum type exports
 export type EventType = Enums<"event_type">;
