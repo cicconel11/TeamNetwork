@@ -27,6 +27,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEvents } from "@/hooks/useEvents";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMembers } from "@/hooks/useMembers";
+import { useOrgStats } from "@/hooks/useOrgStats";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
@@ -72,6 +73,7 @@ export default function HomeScreen() {
   const { events, refetch: refetchEvents, refetchIfStale: refetchEventsIfStale } = useEvents(orgId);
   const { announcements, refetch: refetchAnnouncements, refetchIfStale: refetchAnnouncementsIfStale } = useAnnouncements(orgId);
   const { members, refetch: refetchMembers, refetchIfStale: refetchMembersIfStale } = useMembers(orgId);
+  const { stats, refetch: refetchStats, refetchIfStale: refetchStatsIfStale } = useOrgStats(orgId);
   const userId = user?.id ?? null;
 
   // Get upcoming events (next 2)
@@ -139,7 +141,8 @@ export default function HomeScreen() {
       refetchEventsIfStale();
       refetchAnnouncementsIfStale();
       refetchMembersIfStale();
-    }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale])
+      refetchStatsIfStale();
+    }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale, refetchStatsIfStale])
   );
 
   useEffect(() => {
@@ -204,6 +207,7 @@ export default function HomeScreen() {
         refetchEvents(),
         refetchAnnouncements(),
         refetchMembers(),
+        refetchStats(),
       ]);
     } finally {
       setRefreshing(false);
@@ -309,6 +313,39 @@ export default function HomeScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />
           }
         >
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <Pressable
+            style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/members`)}
+            accessibilityLabel={`${stats.activeMembers} members`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.statCount}>{stats.activeMembers}</Text>
+            <Text style={styles.statLabel}>Members</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/alumni`)}
+            accessibilityLabel={`${stats.alumni} alumni`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.statCount}>{stats.alumni}</Text>
+            <Text style={styles.statLabel}>Alumni</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.statCard, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push(`/(app)/${orgSlug}/(tabs)/events`)}
+            accessibilityLabel={`${stats.upcomingEvents} upcoming events`}
+            accessibilityRole="button"
+          >
+            <Text style={styles.statCount}>{stats.upcomingEvents}</Text>
+            <Text style={styles.statLabel}>Events</Text>
+          </Pressable>
+        </View>
+
         {/* Quick Access Section */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Quick Access</Text>
@@ -499,6 +536,31 @@ const createStyles = () =>
       alignItems: "center",
       padding: 24,
       backgroundColor: NEUTRAL.background,
+    },
+    // Stats row
+    statsRow: {
+      flexDirection: "row",
+      gap: SPACING.sm,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: NEUTRAL.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: NEUTRAL.border,
+      padding: SPACING.md,
+      alignItems: "center",
+      ...SHADOWS.sm,
+    },
+    statCount: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: NEUTRAL.foreground,
+      fontVariant: ["tabular-nums"],
+    },
+    statLabel: {
+      ...TYPOGRAPHY.caption,
+      color: NEUTRAL.muted,
+      marginTop: SPACING.xxs,
     },
     // Quick Actions (2x2 Grid)
     quickActionsGrid: {
