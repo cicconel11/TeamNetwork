@@ -8,6 +8,7 @@ export const VALID_FEATURES = [
   "dashboard",
   "members",
   "chat",
+  "feed",
   "alumni",
   "parents",
   "mentorship",
@@ -20,7 +21,10 @@ export const VALID_FEATURES = [
   "expenses",
   "records",
   "calendar",
+  "discussions",
+  "jobs",
   "forms",
+  "media",
   "customization",
   "settings",
   "navigation",
@@ -120,23 +124,25 @@ const onboardingStepPayloadSchema = analyticsCommonFieldsSchema.extend({
   result: z.string().max(50).optional(),
 });
 
+const directoryTypeSchema = z.enum(["active_members", "alumni", "parents"]);
+
 const directoryViewPayloadSchema = analyticsCommonFieldsSchema.extend({
-  directory_type: z.enum(["active_members", "alumni"]),
+  directory_type: directoryTypeSchema,
 });
 
 const directoryFilterPayloadSchema = analyticsCommonFieldsSchema.extend({
-  directory_type: z.enum(["active_members", "alumni"]),
+  directory_type: directoryTypeSchema,
   filter_keys: z.array(z.string().max(50)).max(50),
   filters_count: z.number().int().nonnegative(),
 });
 
 const directorySortPayloadSchema = analyticsCommonFieldsSchema.extend({
-  directory_type: z.enum(["active_members", "alumni"]),
+  directory_type: directoryTypeSchema,
   sort_key: z.string().max(50),
 });
 
 const profileCardPayloadSchema = analyticsCommonFieldsSchema.extend({
-  directory_type: z.enum(["active_members", "alumni"]),
+  directory_type: directoryTypeSchema,
   open_source: z.enum(["list", "search_results", "deep_link"]),
 });
 
@@ -214,7 +220,7 @@ const chatThreadOpenPayloadSchema = analyticsCommonFieldsSchema.extend({
 
 const chatMessagePayloadSchema = analyticsCommonFieldsSchema.extend({
   thread_id: z.string().max(100),
-  message_type: z.enum(["text", "image", "file"]),
+  message_type: z.enum(["text", "poll", "form"]),
   result: z.enum(["success", "fail_validation", "fail_server"]),
   error_code: z.string().max(100).optional(),
 });

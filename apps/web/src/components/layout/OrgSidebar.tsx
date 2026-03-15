@@ -11,6 +11,8 @@ import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGr
 import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
+import { Avatar } from "@/components/ui/Avatar";
+import { Badge } from "@/components/ui/Badge";
 
 interface OrgSidebarProps {
   organization: Organization;
@@ -18,11 +20,14 @@ interface OrgSidebarProps {
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
   hasParentsAccess?: boolean;
+  currentMemberId?: string;
+  currentMemberName?: string;
+  currentMemberAvatar?: string | null;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -138,6 +143,24 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
         </Link>
       </div>
 
+      {/* Profile Card */}
+      {currentMemberId && currentMemberName && (
+        <div className="px-4 pt-3 pb-3 border-b border-border">
+          <Link
+            href={`${basePath}/members/${currentMemberId}`}
+            className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-all duration-200"
+          >
+            <Avatar src={currentMemberAvatar} name={currentMemberName} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground truncate">{currentMemberName}</p>
+              <Badge variant="muted" className="text-[11px] capitalize mt-0.5">
+                {role === "active_member" ? "Member" : role}
+              </Badge>
+            </div>
+          </Link>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3">
@@ -207,6 +230,19 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
           <ThemeToggle />
         </div>
 
+        {currentMemberId && (
+          <Link
+            href={`${basePath}/members/${currentMemberId}`}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" />
+            </svg>
+            My Profile
+          </Link>
+        )}
+
         <Link
           href="/app"
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-[background-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
@@ -224,6 +260,22 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
             Sign Out
           </button>
         </form>
+      </div>
+
+      {/* Platform Branding */}
+      <div className="px-4 py-4 border-t border-border">
+        <Link href="/" className="flex flex-col items-start gap-1 group">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50 group-hover:text-muted-foreground/80 transition-colors">
+            Powered by
+          </span>
+          <Image
+            src="/TeamNetwor.png"
+            alt="TeamNetwork"
+            width={541}
+            height={303}
+            className="w-full max-w-[200px] h-auto object-contain opacity-50 group-hover:opacity-80 transition-opacity"
+          />
+        </Link>
       </div>
     </aside>
   );

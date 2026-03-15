@@ -15,11 +15,11 @@ import assert from "node:assert";
 // Recreate VALID_FEATURES locally
 // ---------------------------------------------------------------------------
 const VALID_FEATURES = [
-  "dashboard", "members", "chat", "alumni", "mentorship",
+  "dashboard", "members", "chat", "feed", "alumni", "parents", "mentorship",
   "workouts", "competition", "events", "announcements",
-  "philanthropy", "donations", "expenses", "records",
-  "calendar", "forms", "customization", "settings",
-  "navigation", "other",
+  "philanthropy", "donations", "expenses", "records", "calendar",
+  "discussions", "jobs", "forms", "media", "customization",
+  "settings", "navigation", "other",
 ] as const;
 
 type ValidFeature = (typeof VALID_FEATURES)[number];
@@ -35,6 +35,9 @@ function extractFeature(pathname: string): ValidFeature {
   // Org-scoped routes: /<orgSlug>/<feature>/...
   if (segments.length >= 2) {
     const candidate = segments[1];
+    if (candidate === "settings" && segments.length >= 3 && FEATURE_SET.has(segments[2])) {
+      return segments[2] as ValidFeature;
+    }
     if (FEATURE_SET.has(candidate)) return candidate as ValidFeature;
   }
 
@@ -76,6 +79,10 @@ describe("Analytics Client - Feature Extraction", () => {
       assert.strictEqual(extractFeature("/my-org/chat"), "chat");
     });
 
+    it("extracts 'feed' from /org-slug/feed", () => {
+      assert.strictEqual(extractFeature("/my-org/feed"), "feed");
+    });
+
     it("extracts 'events' from /org-slug/events", () => {
       assert.strictEqual(extractFeature("/org123/events"), "events");
     });
@@ -112,6 +119,10 @@ describe("Analytics Client - Feature Extraction", () => {
       assert.strictEqual(extractFeature("/org/alumni"), "alumni");
     });
 
+    it("extracts 'parents' from /org-slug/parents", () => {
+      assert.strictEqual(extractFeature("/org/parents"), "parents");
+    });
+
     it("extracts 'mentorship' from /org-slug/mentorship", () => {
       assert.strictEqual(extractFeature("/org/mentorship"), "mentorship");
     });
@@ -126,6 +137,18 @@ describe("Analytics Client - Feature Extraction", () => {
 
     it("extracts 'records' from /org-slug/records", () => {
       assert.strictEqual(extractFeature("/org/records"), "records");
+    });
+
+    it("extracts 'discussions' from /org-slug/discussions", () => {
+      assert.strictEqual(extractFeature("/org/discussions"), "discussions");
+    });
+
+    it("extracts 'jobs' from /org-slug/jobs", () => {
+      assert.strictEqual(extractFeature("/org/jobs"), "jobs");
+    });
+
+    it("extracts 'media' from /org-slug/media", () => {
+      assert.strictEqual(extractFeature("/org/media"), "media");
     });
   });
 

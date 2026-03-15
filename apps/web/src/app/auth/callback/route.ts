@@ -3,8 +3,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { requireEnv } from "@/lib/env";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
-import { isValidAgeBracket, verifyAgeValidationToken } from "@/lib/auth/age-validation";
+import { buildErrorRedirect, runAgeValidationGate } from "@/lib/auth/callback-flow";
 import { debugLog, maskPII } from "@/lib/debug";
+import { createServiceClient } from "@/lib/supabase/service";
+import { runLinkedInOidcSyncSafe } from "@/lib/linkedin/oidc-sync";
+import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -12,7 +15,8 @@ const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const redirect = sanitizeRedirectPath(requestUrl.searchParams.get("redirect"));
+  const requestedRedirect = requestUrl.searchParams.get("redirect");
+  const redirect = sanitizeRedirectPath(requestedRedirect);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
   const errorParam = requestUrl.searchParams.get("error");
   const errorDescription = requestUrl.searchParams.get("error_description");
@@ -26,10 +30,12 @@ export async function GET(request: NextRequest) {
     incomingCookies: request.cookies.getAll().map((c) => c.name),
   });
 
-  // Handle OAuth errors
+  // Handle OAuth errors — preserve redirect + mode so the error page can route back
   if (errorParam) {
     console.error("[auth/callback] OAuth error:", errorParam, errorDescription);
-    return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent(errorDescription || errorParam)}`);
+    return NextResponse.redirect(
+      buildErrorRedirect(siteUrl, errorDescription || errorParam, redirect, requestUrl.searchParams.get("mode"))
+    );
   }
 
   if (code) {
@@ -65,101 +71,70 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error("[auth/callback] Exchange error:", error.message);
-      return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent(error.message)}`);
+      return NextResponse.redirect(
+        buildErrorRedirect(siteUrl, error.message, redirect, requestUrl.searchParams.get("mode"))
+      );
     }
 
     if (data.session) {
       debugLog("auth-callback", "Success! User:", maskPII(data.session.user.id));
 
-      // Validate age data for signups only, not logins
-      // Detection logic:
-      // - If age_bracket in user_metadata → existing validated user → allow through
-      // - If age_bracket/age_token query params present → new signup flow → validate
-      // - If neither → login flow for pre-age-gate user → allow through
-      const userMeta = data.session.user.user_metadata;
-      const ageBracket = userMeta?.age_bracket;
+      const ageGateResult = await runAgeValidationGate({
+        requestUrl,
+        siteUrl,
+        requestedRedirect,
+        user: {
+          id: data.session.user.id,
+          created_at: data.session.user.created_at,
+          user_metadata: data.session.user.user_metadata,
+        },
+        persistAgeMetadata: async (metadata) => {
+          const { error: updateError } = await supabase.auth.updateUser({
+            data: metadata,
+          });
+          if (!updateError) {
+            return;
+          }
 
-      // Check if this is a signup flow with age data in query params
-      const oauthAgeBracket = requestUrl.searchParams.get("age_bracket");
-      const oauthAgeToken = requestUrl.searchParams.get("age_token");
-      const hasAgeQueryParams = oauthAgeBracket || oauthAgeToken;
+          console.error("[auth/callback] Failed to persist age metadata via session client:", updateError.message);
 
-      if (ageBracket) {
-        // User has age_bracket in metadata (existing validated user or email signup confirmation)
-        // Trust the stored age_bracket; token verification is only for signup flows.
-        if (!isValidAgeBracket(ageBracket)) {
-          console.error("[auth/callback] Invalid age bracket in metadata");
-          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
-        }
-
-        // Block under_13 confirmations
-        if (ageBracket === "under_13") {
-          debugLog("auth-callback", "Under-13 email confirmation - redirecting to parental consent");
-          return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
-        }
-
-        debugLog("auth-callback", "Age validation passed (from metadata)");
-      } else if (hasAgeQueryParams) {
-        // New signup flow with age data in query params - validate it
-        debugLog("auth-callback", "Signup flow detected - validating age params");
-
-        if (!oauthAgeBracket) {
-          console.error("[auth/callback] Signup without age validation - missing age_bracket");
-          return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
+          const serviceSupabase = createServiceClient();
+          const { error: adminUpdateError } = await serviceSupabase.auth.admin.updateUserById(
+            data.session.user.id,
+            { user_metadata: { ...(data.session.user.user_metadata ?? {}), ...metadata } }
           );
-        }
+          if (adminUpdateError) {
+            console.error("[auth/callback] Failed to persist age metadata via admin client:", adminUpdateError.message);
+            throw adminUpdateError;
+          }
+        },
+        cleanupUnvalidatedSignup: async () => {
+          const serviceSupabase = createServiceClient();
+          const { error: deleteError } = await serviceSupabase.auth.admin.deleteUser(data.session.user.id);
+          if (deleteError) {
+            console.error("[auth/callback] Failed to delete unvalidated OAuth user:", deleteError.message);
+          }
 
-        // Validate age bracket value from query params
-        if (!isValidAgeBracket(oauthAgeBracket)) {
-          console.error("[auth/callback] Invalid age bracket value");
-          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
-        }
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) {
+            console.error("[auth/callback] Failed to clear OAuth session after cleanup:", signOutError.message);
+          }
+        },
+      });
 
-        // Always send under_13 to parental consent for a consistent flow
-        if (oauthAgeBracket === "under_13") {
-          debugLog("auth-callback", "Under-13 OAuth attempt - redirecting to parental consent");
-          return NextResponse.redirect(`${siteUrl}/auth/parental-consent`);
-        }
-
-        if (!oauthAgeToken) {
-          console.error("[auth/callback] OAuth signup missing age token");
-          return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
-          );
-        }
-
-        const tokenResult = verifyAgeValidationToken(oauthAgeToken);
-        if (!tokenResult.valid) {
-          console.error("[auth/callback] Invalid age token:", tokenResult.error);
-          return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification expired. Please try again.")}`
-          );
-        }
-
-        if (tokenResult.ageBracket !== oauthAgeBracket) {
-          console.error("[auth/callback] Age bracket mismatch between token and query param");
-          return NextResponse.redirect(`${siteUrl}/auth/error?message=${encodeURIComponent("Invalid age data")}`);
-        }
-
-        debugLog("auth-callback", "Age validation passed (from query params)");
-      } else {
-        // No age data present - could be login or bypassed signup
-        // Check if this is a brand new user (created within last 60 seconds)
-        // to prevent age gate bypass via direct OAuth
-        const createdAt = data.session.user.created_at;
-        const isNewUser = createdAt && (Date.now() - new Date(createdAt).getTime()) < 60000;
-
-        if (isNewUser) {
-          console.error("[auth/callback] New user signup attempted without age validation - blocking");
-          return NextResponse.redirect(
-            `${siteUrl}/auth/signup?error=${encodeURIComponent("Age verification required. Please complete the signup process.")}`
-          );
-        }
-
-        // Pre-age-gate user login - allow through
-        debugLog("auth-callback", "Login flow for pre-age-gate user - skipping age validation");
+      if (ageGateResult.kind === "redirect") {
+        debugLog("auth-callback", "Age validation redirect:", ageGateResult.location);
+        return NextResponse.redirect(ageGateResult.location);
       }
+
+      // Best-effort sync in the background so redirect latency stays off the login path.
+      // Errors are handled inside runLinkedInOidcSyncSafe.
+      if (data.session.user.app_metadata?.provider === LINKEDIN_OIDC_PROVIDER) {
+        queueMicrotask(() => {
+          void runLinkedInOidcSyncSafe(createServiceClient, data.session.user);
+        });
+      }
+
       debugLog("auth-callback", "Cookies set:", response.cookies.getAll().map((c) => ({
         name: c.name,
         domain: (c as { domain?: string }).domain || "default",

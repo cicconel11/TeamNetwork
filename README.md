@@ -20,24 +20,29 @@ cp .env.local.example .env.local
 
 #### Web app (`apps/web`)
 
-Required environment variables:
+Core environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SITE_URL` | Canonical application base URL |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
 | `STRIPE_SECRET_KEY` | Stripe secret API key |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key (get from [hCaptcha Dashboard](https://dashboard.hcaptcha.com/)) |
+| `NEXT_PUBLIC_HCAPTCHA_SITE_KEY` | hCaptcha site key |
 | `HCAPTCHA_SECRET_KEY` | hCaptcha secret key (server-side only) |
-| `RESEND_API_KEY` | Resend API key for emails |
-| `NEXT_PUBLIC_APP_URL` | Application base URL (used for Google calendar OAuth callbacks) |
-| `NEXT_PUBLIC_SITE_URL` | Public site URL used for Supabase auth redirects |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID (calendar sync) |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret (calendar sync) |
-| `GOOGLE_TOKEN_ENCRYPTION_KEY` | 64-hex-char key for encrypting Google tokens |
+
+Build-time Stripe price validation also expects `STRIPE_PRICE_BASE_MONTHLY`, `STRIPE_PRICE_BASE_YEARLY`, and the full set of alumni/enterprise tier price IDs. See `.env.local.example` for the complete list.
+
+Useful optional variables:
+- `STRIPE_WEBHOOK_SECRET_CONNECT` - Required in production for donation webhooks via Stripe Connect
+- `CRON_SECRET` - Required in production for cron job authentication
+- `RESEND_API_KEY`, `FROM_EMAIL`, `ADMIN_EMAIL`, `ALERT_EMAIL_TO` - Email and alerting
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
+- `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_TOKEN_ENCRYPTION_KEY` - LinkedIn profile sync
+- `SKIP_STRIPE_VALIDATION=true` - Skip Stripe price ID validation in local dev
 
 #### Mobile app (`apps/mobile`)
 

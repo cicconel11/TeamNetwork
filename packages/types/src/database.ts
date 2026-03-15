@@ -2247,6 +2247,51 @@ export type Database = {
           },
         ]
       }
+      linkedin_connections: {
+        Row: {
+          connected_at: string
+          created_at: string
+          disconnected_at: string | null
+          id: string
+          linkedin_email: string | null
+          linkedin_family_name: string | null
+          linkedin_given_name: string | null
+          linkedin_name: string | null
+          linkedin_picture_url: string | null
+          linkedin_sub: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connected_at?: string
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          linkedin_email?: string | null
+          linkedin_family_name?: string | null
+          linkedin_given_name?: string | null
+          linkedin_name?: string | null
+          linkedin_picture_url?: string | null
+          linkedin_sub: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connected_at?: string
+          created_at?: string
+          disconnected_at?: string | null
+          id?: string
+          linkedin_email?: string | null
+          linkedin_family_name?: string | null
+          linkedin_given_name?: string | null
+          linkedin_name?: string | null
+          linkedin_picture_url?: string | null
+          linkedin_sub?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       media_album_items: {
         Row: {
           added_at: string
@@ -4125,6 +4170,69 @@ export type Database = {
           },
         ]
       }
+      user_linkedin_connections: {
+        Row: {
+          access_token_encrypted: string
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          linkedin_data: Json
+          linkedin_email: string | null
+          linkedin_family_name: string | null
+          linkedin_given_name: string | null
+          linkedin_name: string | null
+          linkedin_picture_url: string | null
+          linkedin_profile_url: string | null
+          linkedin_sub: string
+          refresh_token_encrypted: string | null
+          status: string
+          sync_error: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          linkedin_data?: Json
+          linkedin_email?: string | null
+          linkedin_family_name?: string | null
+          linkedin_given_name?: string | null
+          linkedin_name?: string | null
+          linkedin_picture_url?: string | null
+          linkedin_profile_url?: string | null
+          linkedin_sub: string
+          refresh_token_encrypted?: string | null
+          status?: string
+          sync_error?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          linkedin_data?: Json
+          linkedin_email?: string | null
+          linkedin_family_name?: string | null
+          linkedin_given_name?: string | null
+          linkedin_name?: string | null
+          linkedin_picture_url?: string | null
+          linkedin_profile_url?: string | null
+          linkedin_sub?: string
+          refresh_token_encrypted?: string | null
+          status?: string
+          sync_error?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_organization_roles: {
         Row: {
           created_at: string | null
@@ -4354,6 +4462,22 @@ export type Database = {
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
+      bulk_import_alumni_rich: {
+        Args: { p_organization_id: string; p_overwrite?: boolean; p_rows: Json }
+        Returns: {
+          out_email: string
+          out_first_name: string
+          out_last_name: string
+          out_status: string
+        }[]
+      }
+      bulk_import_linkedin_alumni: {
+        Args: { p_organization_id: string; p_overwrite?: boolean; p_rows: Json }
+        Returns: {
+          out_email: string
+          out_status: string
+        }[]
+      }
       can_add_alumni: { Args: { p_org_id: string }; Returns: boolean }
       can_add_parents: { Args: { p_org_id: string }; Returns: boolean }
       can_edit_page: {
@@ -4375,7 +4499,7 @@ export type Database = {
           p_max_events?: number
           p_org_id: string
           p_user_id: string
-          p_window_interval?: unknown
+          p_window_interval?: string
         }
         Returns: boolean
       }
@@ -4532,6 +4656,13 @@ export type Database = {
       redeem_org_invite: { Args: { p_code: string }; Returns: Json }
       redeem_org_invite_by_token: { Args: { p_token: string }; Returns: Json }
       redeem_parent_invite: { Args: { p_code: string }; Returns: Json }
+      resolve_alumni_quota: {
+        Args: { p_organization_id: string }
+        Returns: {
+          quota_count: number
+          quota_limit: number
+        }[]
+      }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean
@@ -4782,36 +4913,41 @@ export const Constants = {
   },
 } as const
 
-
-export type AcademicSchedule = Tables<'academic_schedules'>;
-export type Alumni = Tables<'alumni'>;
-export type Announcement = Tables<'announcements'>;
-export type ChatGroup = Tables<'chat_groups'>;
-export type ChatGroupMember = Tables<'chat_group_members'>;
-export type ChatMessage = Tables<'chat_messages'>;
-export type ChatPollVote = Tables<'chat_poll_votes'>;
-export type ChatFormResponse = Tables<'chat_form_responses'>;
-export type Event = Tables<'events'>;
-export type Form = Tables<'forms'>;
-export type FormDocument = Tables<'form_documents'>;
-export type FormDocumentSubmission = Tables<'form_document_submissions'>;
-export type FormSubmission = Tables<'form_submissions'>;
-export type Member = Tables<'members'>;
-export type NotificationPreference = Tables<'notification_preferences'>;
-export type Organization = Tables<'organizations'>;
-export type OrganizationDonation = Tables<'organization_donations'>;
-export type OrganizationDonationStat = Tables<'organization_donation_stats'>;
-export type ScheduleFile = Tables<'schedule_files'>;
-export type User = Tables<'users'>;
-export type Workout = Tables<'workouts'>;
-export type WorkoutLog = Tables<'workout_logs'>;
+// Compatibility aliases (app-wide imports depend on these exports)
+export type AcademicSchedule = Tables<"academic_schedules">;
+export type Alumni = Tables<"alumni">;
+export type Announcement = Tables<"announcements">;
+export type ChatGroup = Tables<"chat_groups">;
+export type ChatGroupMember = Tables<"chat_group_members">;
+export type ChatMessage = Tables<"chat_messages">;
+export type ChatPollVote = Tables<"chat_poll_votes">;
+export type ChatFormResponse = Tables<"chat_form_responses">;
+export type Event = Tables<"events">;
+export type Form = Tables<"forms">;
+export type FormDocument = Tables<"form_documents">;
+export type FormDocumentSubmission = Tables<"form_document_submissions">;
+export type FormSubmission = Tables<"form_submissions">;
+export type Member = Tables<"members">;
+export type NotificationPreference = Tables<"notification_preferences">;
+export type Organization = Tables<"organizations">;
+export type OrganizationDonation = Tables<"organization_donations">;
+export type OrganizationDonationStat = Tables<"organization_donation_stats">;
+export type ScheduleFile = Tables<"schedule_files">;
+export type User = Tables<"users">;
+export type Workout = Tables<"workouts">;
+export type WorkoutLog = Tables<"workout_logs">;
+export type Competition = Tables<"competitions">;
+export type CompetitionPoint = Tables<"competition_points">;
+export type CompetitionTeam = Tables<"competition_teams">;
+export type MentorshipLog = Tables<"mentorship_logs">;
+export type MentorshipPair = Tables<"mentorship_pairs">;
 
 // Enum type exports
-export type EventType = Enums<'event_type'>;
-export type ChatMessageStatus = Enums<'chat_message_status'>;
-export type MemberStatus = Enums<'member_status'>;
-export type MembershipStatus = Enums<'membership_status'>;
-export type UserRole = Enums<'user_role'>;
+export type EventType = Enums<"event_type">;
+export type ChatMessageStatus = Enums<"chat_message_status">;
+export type MemberStatus = Enums<"member_status">;
+export type MembershipStatus = Enums<"membership_status">;
+export type UserRole = Enums<"user_role">;
 
 // Additional type aliases for backward compatibility and convenience
 export type RsvpStatus = "attending" | "not_attending" | "maybe";
@@ -4841,7 +4977,6 @@ export interface FormField {
   options?: (string | FormFieldOption)[];
 }
 
-// Embed types (based on component usage)
 export interface PhilanthropyEmbed {
   id: string;
   organization_id: string;

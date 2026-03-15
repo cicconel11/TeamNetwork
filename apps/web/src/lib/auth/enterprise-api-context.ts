@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import type { EnterpriseRole } from "@/types/enterprise";

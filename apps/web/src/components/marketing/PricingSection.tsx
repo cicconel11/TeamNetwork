@@ -134,7 +134,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           {/* Alumni Add-on */}
           <div className="pricing-card pricing-card-featured holo-border rounded-2xl p-8 pt-10 relative pulse-glow">
             {/* Pick badge */}
-            <div className="pick-badge" style={{ background: "linear-gradient(135deg, #059669 0%, #34d399 100%)" }}>Pro Pick</div>
+            <div className="pick-badge" style={{ background: "linear-gradient(135deg, #15803d 0%, #22c55e 100%)" }}>Pro Pick</div>
 
             {/* Featured badge */}
             <div className="absolute top-14 right-6">
@@ -192,14 +192,14 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           >
             {/* Amber corner accent */}
             <div className="absolute top-0 right-0 w-24 h-24 overflow-hidden rounded-2xl pointer-events-none">
-              <div className="absolute inset-0 bg-gradient-to-bl from-amber-500/10 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-bl from-green-500/10 to-transparent" />
             </div>
 
             <div className="relative flex items-center justify-between gap-6">
               {/* Left: label + stats */}
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-400 text-xs font-semibold uppercase tracking-wider">
+                  <span className="px-3 py-1 rounded-full bg-landing-green/15 text-landing-green text-xs font-semibold uppercase tracking-wider">
                     Enterprise
                   </span>
                 </div>
@@ -220,7 +220,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
               </div>
 
               {/* Right: CTA */}
-              <div className="flex-shrink-0 flex items-center gap-2 text-amber-400 group-hover:text-amber-300 transition-colors text-sm font-semibold whitespace-nowrap">
+              <div className="flex-shrink-0 flex items-center gap-2 text-landing-green group-hover:text-landing-green/80 transition-colors text-sm font-semibold whitespace-nowrap">
                 Explore Enterprise
                 <svg
                   className="w-4 h-4 group-hover:translate-x-1 transition-transform"

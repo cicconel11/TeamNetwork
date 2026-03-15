@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import test, { beforeEach, describe } from "node:test";
 import assert from "node:assert";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";

@@ -30,10 +30,10 @@ export function AppBackgroundEffects() {
     
     // Generate orbs - more vibrant colors matching landing page
     const orbColors = [
-      "rgba(16, 185, 129, 0.15)",  // emerald-500 - more visible
-      "rgba(52, 211, 153, 0.12)", // emerald-400
-      "rgba(6, 182, 212, 0.1)",   // cyan-500
-      "rgba(34, 197, 94, 0.08)",  // green-500
+      "rgba(34, 197, 94, 0.15)",   // green-500 - brand green
+      "rgba(74, 222, 128, 0.12)",  // green-400
+      "rgba(6, 182, 212, 0.1)",    // cyan-500
+      "rgba(34, 197, 94, 0.08)",   // green-500
     ];
     
     const newOrbs: Orb[] = [
@@ -96,7 +96,7 @@ export function AppBackgroundEffects() {
         {particles.map((p) => (
           <div
             key={p.id}
-            className="absolute rounded-full bg-emerald-500 opacity-20"
+            className="absolute rounded-full bg-green-500 opacity-20"
             style={{
               left: `${p.x}%`,
               top: `${p.y}%`,

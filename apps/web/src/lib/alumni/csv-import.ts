@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 export interface CsvImportRow {
   first_name: string;
   last_name: string;
@@ -105,7 +106,7 @@ export function planCsvImport(params: {
 
   // Build a map from deduped row back to original index
   // After normalization, rows array has deduped rows; we track original indices separately
-  let originalRowIndex = 0;
+  const originalRowIndex = 0;
   let dedupedRowIndex = 0;
 
   for (let i = 0; i < params.rows.length; i++) {

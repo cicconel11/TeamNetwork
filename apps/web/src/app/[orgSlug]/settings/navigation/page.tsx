@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
@@ -10,10 +10,22 @@ import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavConfigEntry, typ
 import { bucketItemsByGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
 import { getSettingsGroupKey, reorderItemWithinGroup } from "@/lib/navigation/navigation-settings-order";
 import type { OrgRole } from "@/lib/auth/role-utils";
-import { setConsentState as setAnalyticsConsentState } from "@/lib/analytics/events";
+import {
+  getAgeBracketFromUserMetadata,
+  normalizeOrgType,
+  resolveTrackingLevel,
+  type AgeBracket,
+} from "@/lib/analytics/policy";
+import { setAnalyticsPolicy, type ConsentState } from "@/lib/analytics/events";
 
 const CONFIGURABLE_ITEMS = ORG_NAV_ITEMS.filter((item) => item.configurable !== false);
 const ALLOWED_ROLES: OrgRole[] = ["admin", "active_member", "alumni", "parent"];
+const GROUP_ORDER: (NavGroupId | "standalone" | "dashboard")[] = [
+  "dashboard",
+  ...ORG_NAV_GROUPS.filter(g => g.id !== "admin").map(g => g.id),
+  "standalone",
+  "admin",
+];
 
 function NavigationSettingsContent() {
   const params = useParams();
@@ -21,6 +33,7 @@ function NavigationSettingsContent() {
   const router = useRouter();
 
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgType, setOrgType] = useState<string>("general");
   const [navConfig, setNavConfig] = useState<NavConfig>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,7 +41,8 @@ function NavigationSettingsContent() {
   const [saved, setSaved] = useState(false);
   const [orderedItems, setOrderedItems] = useState<typeof CONFIGURABLE_ITEMS>([]);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-  const [consentState, setConsentState] = useState<"opted_in" | "opted_out" | "unknown">("unknown");
+  const [consentState, setConsentState] = useState<ConsentState>("unknown");
+  const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
   const [consentLoading, setConsentLoading] = useState(true);
   const [consentSaving, setConsentSaving] = useState(false);
   const [consentMessage, setConsentMessage] = useState<string | null>(null);
@@ -54,7 +68,7 @@ function NavigationSettingsContent() {
       const supabase = createClient();
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, nav_config")
+        .select("id, nav_config, org_type")
         .eq("slug", orgSlug)
         .maybeSingle();
       if (orgError || !org) {
@@ -63,6 +77,7 @@ function NavigationSettingsContent() {
         return;
       }
       setOrgId(org.id);
+      setOrgType((org as Record<string, unknown>).org_type as string || "general");
       const rawConfig = org.nav_config;
       let config: NavConfig = {};
       if (rawConfig && typeof rawConfig === "object" && !Array.isArray(rawConfig)) {
@@ -85,8 +100,11 @@ function NavigationSettingsContent() {
       setConsentMessage(null);
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
+      const nextAgeBracket = getAgeBracketFromUserMetadata(user?.user_metadata);
+      setAgeBracket(nextAgeBracket);
       if (!user) {
         setConsentState("unknown");
+        setAnalyticsPolicy(orgId, "unknown", "none");
         setConsentLoading(false);
         return;
       }
@@ -95,13 +113,21 @@ function NavigationSettingsContent() {
         .select("consent_state")
         .eq("org_id", orgId)
         .maybeSingle();
-      const nextState = (data?.consent_state as "opted_in" | "opted_out") ?? "unknown";
+      const nextState = (data?.consent_state as ConsentState) ?? "unknown";
       setConsentState(nextState);
-      setAnalyticsConsentState(orgId, nextState);
+      setAnalyticsPolicy(
+        orgId,
+        nextState,
+        resolveTrackingLevel(
+          nextState === "opted_in",
+          nextAgeBracket,
+          normalizeOrgType(orgType),
+        ),
+      );
       setConsentLoading(false);
     };
     loadConsent();
-  }, [orgId]);
+  }, [orgId, orgType]);
 
   const handleConsentToggle = async (nextConsented: boolean) => {
     if (!orgId || consentSaving) return;
@@ -114,6 +140,8 @@ function NavigationSettingsContent() {
       setConsentMessage("You must be signed in.");
       return;
     }
+    const nextAgeBracket = getAgeBracketFromUserMetadata(user.user_metadata);
+    setAgeBracket(nextAgeBracket);
     const nextState = nextConsented ? "opted_in" : "opted_out";
     const { error: updateError } = await supabase
       .from("analytics_consent")
@@ -127,9 +155,28 @@ function NavigationSettingsContent() {
       return;
     }
     setConsentState(nextState);
-    setAnalyticsConsentState(orgId, nextState);
+    setAnalyticsPolicy(
+      orgId,
+      nextState,
+      resolveTrackingLevel(
+        nextState === "opted_in",
+        nextAgeBracket,
+        normalizeOrgType(orgType),
+      ),
+    );
     setConsentSaving(false);
   };
+
+  const maxTrackingLevel = resolveTrackingLevel(
+    true,
+    ageBracket,
+    normalizeOrgType(orgType),
+  );
+
+  const groupedItems = useMemo(
+    () => bucketItemsByGroup(orderedItems as VisibleNavItem[]),
+    [orderedItems],
+  );
 
   const updateEntry = (href: string, updater: (entry?: NavConfigEntry) => NavConfigEntry | undefined) => {
     const key = getConfigKey(href);
@@ -291,12 +338,21 @@ function NavigationSettingsContent() {
           <div>
             <h3 className="font-semibold text-foreground">Usage Analytics (Admin)</h3>
             <p className="text-sm text-muted-foreground">
-              Control your personal analytics consent for this organization. Behavioral analytics are
-              disabled by default until you opt in.
+              {maxTrackingLevel === "page_view_only"
+                ? "Control your personal analytics consent for this organization. Your account or organization is limited to page-level analytics even when you opt in."
+                : maxTrackingLevel === "none"
+                  ? "Usage analytics are unavailable for this account under the current compliance rules."
+                  : "Control your personal analytics consent for this organization. Behavioral analytics are disabled by default until you opt in."}
             </p>
           </div>
           <Badge variant="muted" className="uppercase tracking-wide">
-            {consentState === "opted_in" ? "Opted In" : consentState === "opted_out" ? "Opted Out" : "Not Set"}
+            {maxTrackingLevel === "page_view_only"
+              ? "Page Views Only"
+              : consentState === "opted_in"
+                ? "Opted In"
+                : consentState === "opted_out"
+                  ? "Opted Out"
+                  : "Not Set"}
           </Badge>
         </div>
         <div className="mt-4 flex items-center gap-3">
@@ -306,10 +362,14 @@ function NavigationSettingsContent() {
               type="checkbox"
               className="h-4 w-4 rounded border-border"
               checked={consentState === "opted_in"}
-              disabled={consentLoading || consentSaving}
+              disabled={consentLoading || consentSaving || maxTrackingLevel === "none"}
               onChange={(e) => handleConsentToggle(e.target.checked)}
             />
-            <span className="text-sm text-foreground">Enable opt-in usage analytics</span>
+            <span className="text-sm text-foreground">
+              {maxTrackingLevel === "page_view_only"
+                ? "Enable limited opt-in usage analytics"
+                : "Enable opt-in usage analytics"}
+            </span>
           </label>
           {consentLoading && <span className="text-xs text-muted-foreground">Loading...</span>}
           {consentSaving && <span className="text-xs text-muted-foreground">Saving...</span>}
@@ -332,14 +392,7 @@ function NavigationSettingsContent() {
       )}
       <div className="space-y-2">
         {(() => {
-          const groupOrder: (NavGroupId | "standalone" | "dashboard")[] = [
-            "dashboard",
-            ...ORG_NAV_GROUPS.filter(g => g.id !== "admin").map(g => g.id),
-            "standalone",
-            "admin",
-          ];
-          const groupedItems = bucketItemsByGroup(orderedItems as VisibleNavItem[]);
-          return groupOrder.map((groupKey) => {
+          return GROUP_ORDER.map((groupKey) => {
             const items = groupedItems.get(groupKey);
             if (!items || items.length === 0) return null;
             const groupLabel =
@@ -359,15 +412,12 @@ function NavigationSettingsContent() {
                   const isHiddenEverywhere = entry?.hidden === true;
                   const editRoles = Array.isArray(entry?.editRoles) ? (entry.editRoles as OrgRole[]) : ["admin"];
                   const isExpanded = expandedItem === item.href;
-                  // Within-group boundary checks
-                  const itemGroup = item.href === "" ? "dashboard" as const : (item.group ?? "standalone") as NavGroupId | "standalone" | "dashboard";
-                  const groupSiblings = orderedItems.filter(i => {
-                    const g = i.href === "" ? "dashboard" as const : (i.group ?? "standalone") as NavGroupId | "standalone" | "dashboard";
-                    return g === itemGroup;
-                  });
-                  const groupIndex = groupSiblings.findIndex(i => i.href === item.href);
+                  // Within-group boundary checks (uses memoized groupedItems map)
+                  const itemGroup = item.href === "" ? "dashboard" : (item.group ?? "standalone");
+                  const siblings = groupedItems.get(itemGroup as NavGroupId | "standalone" | "dashboard") ?? [];
+                  const groupIndex = siblings.findIndex(i => i.href === item.href);
                   const isFirst = groupIndex === 0;
-                  const isLast = groupIndex === groupSiblings.length - 1;
+                  const isLast = groupIndex === siblings.length - 1;
 
                   return (
                     <Card key={configKey} className={`p-3 transition-all duration-200 ${isHiddenEverywhere ? "border-red-200 dark:border-red-900/40 opacity-60" : ""}`}>

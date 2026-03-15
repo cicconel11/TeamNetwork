@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any */
 import test from "node:test";
 import assert from "node:assert";
 import { z } from "zod";

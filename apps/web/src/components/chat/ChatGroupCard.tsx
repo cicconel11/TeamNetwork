@@ -65,7 +65,7 @@ export function ChatGroupCard({ group, orgSlug, memberCount, pendingCount, isAdm
   };
 
   return (
-    <Link href={`/${orgSlug}/chat/${group.id}`}>
+    <Link href={`/${orgSlug}/messages/chat/${group.id}`}>
       <Card className="p-4 hover:border-[var(--color-org-secondary)] transition-colors cursor-pointer h-full">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">

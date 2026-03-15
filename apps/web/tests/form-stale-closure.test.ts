@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createThreadSchema } from "@/lib/schemas/discussion";

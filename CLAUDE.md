@@ -49,13 +49,19 @@ bun run android          # Start and open in Android emulator
 
 ### Testing
 ```bash
-bun run test:auth      # Test authentication middleware
+bun run test           # Run unit + security + payment + route suites
+bun run test:unit      # Run focused unit/integration suites
+bun run test:security  # Run security-specific tests
 bun run test:payments  # Test payment idempotency and Stripe webhooks
+bun run test:routes    # Run route simulation suites
+bun run test:schedules # Test schedule domain verification and enrollment
+bun run test:e2e       # Run Playwright end-to-end tests
 ```
 
 ### Stripe Webhook Testing (Local)
 ```bash
 stripe listen --forward-to localhost:3000/api/stripe/webhook
+stripe listen --forward-connect-to localhost:3000/api/stripe/webhook-connect
 ```
 
 ## Architecture
@@ -80,9 +86,10 @@ This is a multi-tenant application where organizations are first-class entities 
 src/
 ├── app/                    # Next.js App Router
 │   ├── [orgSlug]/          # Dynamic org-scoped routes
-│   ├── app/                # Platform routes (/app/join, /app/create-org)
+│   ├── app/                # Platform routes (/app/join, /app/create-org, /app/create-enterprise)
 │   ├── auth/               # Auth flows (login, signup, callback)
 │   ├── api/                # API routes (Stripe webhooks, org APIs)
+│   ├── enterprise/         # Enterprise dashboard routes
 │   └── settings/           # User settings
 ├── components/             # Reusable UI components
 │   ├── ui/                 # Base UI primitives (Button, Card, Input)
@@ -102,6 +109,8 @@ supabase/migrations/        # Database migrations
 tests/                      # Test files
 docs/                       # Product and database documentation
 ```
+
+Important org-scoped feature areas now include calendar, chat, discussions, feed, forms, jobs, media, parents, philanthropy, and enterprise-linked admin flows under `src/app/[orgSlug]/`.
 
 ### Supabase Client Wrappers
 Use the appropriate wrapper for different contexts:
@@ -127,7 +136,7 @@ Every request flows through `src/middleware.ts`:
 5. Redirect revoked users to `/app` with error
 6. Enforce canonical domain (myteamnetwork.com → www.myteamnetwork.com)
 
-Public routes: `/`, `/auth/*`, `/terms`. Stripe webhooks bypass middleware.
+Public routes now include `/`, `/demos`, `/terms`, `/privacy`, `/app/parents-join`, and `/auth/*`. Middleware also bypasses `/api/stripe/webhook`, `/api/stripe/webhook-connect`, `/api/auth/validate-age`, `/api/telemetry/error`, and the parent invite accept endpoint. Middleware handles auth refresh plus revoked/pending membership redirects; org existence and no-membership gating are finalized in `src/app/[orgSlug]/layout.tsx`.
 
 ## Key Architectural Patterns
 
@@ -193,9 +202,19 @@ Required variables (validated at build time in `next.config.mjs`):
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 - `STRIPE_SECRET_KEY`
-- `STRIPE_BASE_PLAN_MONTHLY_PRICE_ID` (+ 7 more tier/billing variants)
+- `STRIPE_PRICE_BASE_MONTHLY` (+ 11 more tier/billing variants: `_YEARLY`, `_ALUMNI_*`, `_ENTERPRISE_*`)
 - `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_WEBHOOK_SECRET_CONNECT` (for donation webhooks via Stripe Connect)
 - `RESEND_API_KEY`
+
+Optional variables:
+- `NEXT_PUBLIC_SITE_URL` - Canonical site URL used in auth and deployment checks
+- `CRON_SECRET` - Required on Vercel production for cron job authentication
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
+- `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`, `LINKEDIN_TOKEN_ENCRYPTION_KEY` - LinkedIn profile sync
+- `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
+- `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
+- `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
 
 Stored in `.env.local` (never commit this file).
 

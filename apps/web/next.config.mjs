@@ -45,6 +45,12 @@ const googleCalendarEnv = [
   "GOOGLE_TOKEN_ENCRYPTION_KEY",
 ];
 
+const linkedInEnv = [
+  "LINKEDIN_CLIENT_ID",
+  "LINKEDIN_CLIENT_SECRET",
+  "LINKEDIN_TOKEN_ENCRYPTION_KEY",
+];
+
 function assertEnv(name, required = true) {
   const value = process.env[name];
   if (required && (!value || value.trim() === "")) {
@@ -98,6 +104,33 @@ function validateBuildEnv() {
     console.warn(`⚠️  Partial Google Calendar config: missing ${missingGoogleVars.join(", ")}. Google Calendar integration will not work.`);
   }
 
+  // Optional: warn if LinkedIn env vars are partially configured
+  const missingLinkedInVars = linkedInEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingLinkedInVars.length > 0 && missingLinkedInVars.length < linkedInEnv.length) {
+    console.warn(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`);
+  }
+
+  // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  let parsedSiteUrl = null;
+  if (siteUrl) {
+    try {
+      const parsed = new URL(siteUrl);
+      parsedSiteUrl = {
+        host: parsed.host,
+        protocol: parsed.protocol,
+      };
+    } catch {
+      parsedSiteUrl = null;
+    }
+  }
+  if (
+    isVercelProduction &&
+    (!parsedSiteUrl || parsedSiteUrl.host !== "www.myteamnetwork.com" || parsedSiteUrl.protocol !== "https:")
+  ) {
+    console.warn(`⚠️  NEXT_PUBLIC_SITE_URL should use https://www.myteamnetwork.com in production, got: ${siteUrl || "(unset)"}. OAuth redirects may break.`);
+  }
+
   // Require CRON_SECRET on Vercel production deploys, warn otherwise
   // (Local `next build` runs with NODE_ENV=production, so we key off Vercel env vars instead.)
   const cronSecret = process.env.CRON_SECRET;
@@ -134,6 +167,10 @@ const nextConfig = {
       {
         protocol: "https",
         hostname: "rytsziwekhtjdqzzpdso.supabase.co",
+      },
+      {
+        protocol: "https",
+        hostname: "media.licdn.com",
       },
     ],
   },
@@ -198,7 +235,7 @@ const nextConfig = {
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co",
+              "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co https://media.licdn.com",
               "font-src 'self' https://fonts.gstatic.com",
               "frame-src https://hcaptcha.com https://newassets.hcaptcha.com https://challenges.cloudflare.com https://js.stripe.com https://connect.stripe.com https://*.stripe.com",
               "media-src 'self' blob: https://rytsziwekhtjdqzzpdso.supabase.co",

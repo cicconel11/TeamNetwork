@@ -8,24 +8,10 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert";
-
-// Recreate types locally to avoid loader issues
-type AgeBracket = "under_13" | "13_17" | "18_plus";
-type OrgType = "educational" | "athletic" | "general";
-type TrackingLevel = "none" | "page_view_only" | "full";
-
-// Recreate resolveTrackingLevel exactly as in src/lib/analytics/consent.ts
-function resolveTrackingLevel(
-  consented: boolean,
-  ageBracket: AgeBracket | null | undefined,
-  orgType: OrgType | null | undefined,
-): TrackingLevel {
-  if (!consented) return "none";
-  if (ageBracket === "under_13") return "none";
-  if (ageBracket === "13_17") return "page_view_only";
-  if (orgType === "educational") return "page_view_only";
-  return "full";
-}
+import {
+  canTrackBehavioralEvent,
+  resolveTrackingLevel,
+} from "../src/lib/analytics/policy";
 
 describe("Analytics Consent - resolveTrackingLevel", () => {
   describe("consent checks", () => {
@@ -124,5 +110,24 @@ describe("Analytics Consent - resolveTrackingLevel", () => {
       const result = resolveTrackingLevel(true, "13_17", "educational");
       assert.strictEqual(result, "page_view_only");
     });
+  });
+});
+
+describe("Analytics Consent - canTrackBehavioralEvent", () => {
+  it("blocks all behavioral events when tracking is disabled", () => {
+    assert.strictEqual(canTrackBehavioralEvent("none", "route_view"), false);
+    assert.strictEqual(canTrackBehavioralEvent("none", "nav_click"), false);
+  });
+
+  it("allows only app_open and route_view at page_view_only", () => {
+    assert.strictEqual(canTrackBehavioralEvent("page_view_only", "app_open"), true);
+    assert.strictEqual(canTrackBehavioralEvent("page_view_only", "route_view"), true);
+    assert.strictEqual(canTrackBehavioralEvent("page_view_only", "page_dwell_bucket"), false);
+    assert.strictEqual(canTrackBehavioralEvent("page_view_only", "nav_click"), false);
+  });
+
+  it("allows full behavioral analytics at full level", () => {
+    assert.strictEqual(canTrackBehavioralEvent("full", "nav_click"), true);
+    assert.strictEqual(canTrackBehavioralEvent("full", "chat_message_send"), true);
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ComponentType } from "react";
 import type { NavGroupId, NavGroup, OrgNavItem } from "./nav-items";
 

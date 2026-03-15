@@ -24,10 +24,10 @@ interface Particle {
 }
 
 const DEFAULT_COLORS = [
-  "#34d399", // landing-green
-  "#10b981", // landing-green-dark
-  "#f1f5f9", // landing-cream
-  "#e2e8f0", // landing-cream-muted
+  "#22c55e", // landing-green
+  "#16a34a", // landing-green-dark
+  "#ffffff", // landing-cream
+  "#e5e5e5", // landing-cream-muted
 ];
 
 export function Confetti({

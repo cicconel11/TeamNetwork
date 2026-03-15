@@ -21,13 +21,14 @@ export async function fetchMediaForEntities(
   serviceClient: SupabaseClient,
   entityType: MediaFeature,
   entityIds: string[],
+  orgId?: string,
 ): Promise<Map<string, MediaAttachment[]>> {
   const result = new Map<string, MediaAttachment[]>();
 
   if (entityIds.length === 0) return result;
 
   // Single query for all media across entities
-  const { data: mediaRows, error } = await serviceClient
+  let query = serviceClient
     .from("media_uploads")
     .select("id, entity_id, storage_path, mime_type, file_size, file_name")
     .eq("entity_type", entityType)
@@ -35,6 +36,12 @@ export async function fetchMediaForEntities(
     .eq("status", "ready")
     .is("deleted_at", null)
     .order("created_at", { ascending: true });
+
+  if (orgId) {
+    query = query.eq("organization_id", orgId);
+  }
+
+  const { data: mediaRows, error } = await query;
 
   if (error || !mediaRows || mediaRows.length === 0) {
     return result;

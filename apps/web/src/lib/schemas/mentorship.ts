@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { z } from "zod";
 import { safeString } from "@/lib/security/validation";
 import { optionalSafeString, optionalEmail, optionalHttpsUrlSchema } from "./common";

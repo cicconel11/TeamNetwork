@@ -36,6 +36,7 @@ type TableName =
   | "feed_comments"
   | "feed_likes"
   | "media_uploads"
+  | "user_linkedin_connections"
   | "parents"
   | "parent_invites"
   | "chat_poll_votes"
@@ -93,6 +94,7 @@ const uniqueKeys: Record<TableName, UniqueConstraint[]> = {
   feed_comments: [],
   feed_likes: ["post_id", "user_id"],
   media_uploads: [],
+  user_linkedin_connections: ["user_id"],
   parents: [],
   parent_invites: ["code"],
   chat_poll_votes: [["message_id", "user_id"]],
@@ -142,6 +144,7 @@ export function createSupabaseStub() {
     feed_comments: [],
     feed_likes: [],
     media_uploads: [],
+    user_linkedin_connections: [],
     parents: [],
     parent_invites: [],
     chat_poll_votes: [],
@@ -151,7 +154,7 @@ export function createSupabaseStub() {
   };
 
   // RPC handler registry
-  const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown> = {};
+  const rpcHandlers: Record<string, (params: Record<string, unknown>) => unknown | Promise<unknown>> = {};
 
   // Track which tables should fail with an error
   const errorSimulation: Partial<Record<TableName, { code?: string; message: string }>> = {};
@@ -255,6 +258,9 @@ export function createSupabaseStub() {
       const filters: ((row: Row) => boolean)[] = [];
 
       const applyUpdate = () => {
+        if (errorSimulation[table]) {
+          return { rows: [] as Row[], error: errorSimulation[table] ?? null };
+        }
         const rows = applyFilters(storage[table], filters);
         for (const target of rows) {
           Object.entries(updates).forEach(([key, value]) => {
@@ -266,7 +272,7 @@ export function createSupabaseStub() {
             target.updated_at = nowIso();
           }
         }
-        return rows;
+        return { rows, error: null };
       };
 
       const builder = {
@@ -312,7 +318,10 @@ export function createSupabaseStub() {
           return builder;
         },
         maybeSingle(): SupabaseResponse<Row> {
-          const rows = applyUpdate();
+          const { rows, error } = applyUpdate();
+          if (error) {
+            return { data: null, error };
+          }
           if (!rows.length) {
             return { data: null, error: { code: "PGRST116", message: "No rows found" } };
           }
@@ -322,8 +331,8 @@ export function createSupabaseStub() {
           return builder.maybeSingle();
         },
         then(resolve: (value: SupabaseResponse<Row[]>) => void) {
-          const rows = applyUpdate();
-          resolve({ data: clone(rows), error: null });
+          const { rows, error } = applyUpdate();
+          resolve({ data: error ? null : clone(rows), error });
         },
       };
 
@@ -452,6 +461,15 @@ export function createSupabaseStub() {
           return { data: clone(rows[0]), error: null };
         },
         then(resolve: (value: SupabaseResponse<Row[]> | CountResponse) => void) {
+          if (errorSimulation[table]) {
+            if (options?.count === "exact" && options.head) {
+              resolve({ count: null, error: errorSimulation[table] ?? null });
+            } else {
+              resolve({ data: null, error: errorSimulation[table] ?? null });
+            }
+            return;
+          }
+
           let rows = applyFilters(storage[table], filters);
           if (sortColumn) {
             const col = sortColumn;
@@ -539,7 +557,10 @@ export function createSupabaseStub() {
   /**
    * Register an RPC handler for testing.
    */
-  const registerRpc = (name: string, handler: (params: Record<string, unknown>) => unknown) => {
+  const registerRpc = (
+    name: string,
+    handler: (params: Record<string, unknown>) => unknown | Promise<unknown>,
+  ) => {
     rpcHandlers[name] = handler;
   };
 
@@ -552,7 +573,7 @@ export function createSupabaseStub() {
       return { data: null, error: { code: "42883", message: `function ${name}() does not exist` } };
     }
     try {
-      const result = handler(params);
+      const result = await handler(params);
       return { data: result, error: null };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

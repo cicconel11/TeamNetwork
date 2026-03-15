@@ -241,7 +241,7 @@ export function EnterprisePricingModal({
                       </div>
                       <span
                         className={`font-semibold ${
-                          salesBucket ? "text-amber-400" : "text-landing-cream"
+                          salesBucket ? "text-landing-green" : "text-landing-cream"
                         }`}
                       >
                         {priceLabel}
@@ -260,7 +260,7 @@ export function EnterprisePricingModal({
                 Total
               </p>
               {salesLed ? (
-                <p className="text-xl font-bold text-amber-400">
+                <p className="text-xl font-bold text-landing-green">
                   Contact Sales
                 </p>
               ) : (
@@ -272,7 +272,7 @@ export function EnterprisePricingModal({
             {salesLed ? (
               <a
                 href="/contact"
-                className="bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 font-semibold py-3 px-6 rounded-xl transition-[background-color] text-sm"
+                className="bg-landing-green/20 hover:bg-landing-green/30 border border-landing-green/40 text-landing-green font-semibold py-3 px-6 rounded-xl transition-[background-color] text-sm"
               >
                 Contact Sales &rarr;
               </a>

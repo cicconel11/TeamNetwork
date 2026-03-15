@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PostDetail } from "@/components/feed/PostDetail";
 import { CommentSection } from "@/components/feed/CommentSection";
@@ -41,40 +43,46 @@ export default async function FeedPostDetailPage({
     return notFound();
   }
 
-  // Fetch comments
-  const { data: comments, error: commentsError } = await supabase
-    .from("feed_comments")
-    .select(
-      `
-      *,
-      author:users!feed_comments_author_id_fkey(name)
-    `,
-    )
-    .eq("post_id", postId)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: true });
+  // Fetch comments, like status, and media in parallel
+  const [
+    { data: comments, error: commentsError },
+    likeResult,
+    mediaMap,
+  ] = await Promise.all([
+    supabase
+      .from("feed_comments")
+      .select(
+        `
+        *,
+        author:users!feed_comments_author_id_fkey(name)
+      `,
+      )
+      .eq("post_id", postId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+    orgCtx.userId
+      ? supabase
+          .from("feed_likes")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("user_id", orgCtx.userId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    fetchMediaForEntities(createServiceClient(), "feed_post", [postId], orgCtx.organization.id),
+  ]);
 
   if (commentsError) {
     throw new Error("Failed to load comments");
   }
 
-  // Check if user has liked this post
-  let likedByUser = false;
-  if (orgCtx.userId) {
-    const { data: like } = await supabase
-      .from("feed_likes")
-      .select("id")
-      .eq("post_id", postId)
-      .eq("user_id", orgCtx.userId)
-      .maybeSingle();
-    likedByUser = !!like;
-  }
+  const likedByUser = !!likeResult.data;
+  const postMedia = mediaMap.get(postId) ?? [];
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <>
       <PageHeader title="Post" backHref={`/${orgSlug}/feed`} />
       <PostDetail
-        post={{ ...post, liked_by_user: likedByUser }}
+        post={{ ...post, liked_by_user: likedByUser, media: postMedia }}
         orgSlug={orgSlug}
         currentUserId={orgCtx.userId || ""}
         isAdmin={orgCtx.isAdmin}
@@ -82,6 +90,6 @@ export default async function FeedPostDetailPage({
       <div className="mt-8">
         <CommentSection postId={postId} comments={comments || []} />
       </div>
-    </div>
+    </>
   );
 }

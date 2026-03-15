@@ -14,4 +14,5 @@ export { Skeleton } from "./Skeleton";
 export { PermissionRoleCard } from "./PermissionRoleCard";
 export { ProgressBar } from "./ProgressBar";
 export { ToggleSwitch } from "./ToggleSwitch";
+export { InlineBanner } from "./InlineBanner";
 

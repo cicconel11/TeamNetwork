@@ -1,8 +1,11 @@
 import { google } from "googleapis";
-import crypto from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { getAppUrl } from "@/lib/url";
+import {
+    encryptToken as sharedEncrypt,
+    decryptToken as sharedDecrypt,
+} from "@/lib/crypto/token-encryption";
 
 // Environment variable helpers
 function getGoogleClientId(): string {
@@ -25,16 +28,12 @@ function getGoogleRedirectUri(): string {
     return `${getAppUrl()}/api/google/callback`;
 }
 
-function getEncryptionKey(): Buffer {
+function getGoogleEncryptionKey(): string {
     const key = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY;
     if (!key || key.trim() === "") {
         throw new Error("Missing required environment variable: GOOGLE_TOKEN_ENCRYPTION_KEY");
     }
-    // Key should be 32 bytes (64 hex characters) for AES-256
-    if (key.length !== 64) {
-        throw new Error("GOOGLE_TOKEN_ENCRYPTION_KEY must be 64 hex characters (32 bytes)");
-    }
-    return Buffer.from(key, "hex");
+    return key;
 }
 
 // OAuth configuration
@@ -120,48 +119,21 @@ export function parseAuthorizationUrl(url: string): {
 }
 
 /**
- * Encrypts a token using AES-256-GCM
+ * Encrypts a token using AES-256-GCM (delegates to shared crypto module)
  * @param token - The plaintext token to encrypt
  * @returns The encrypted token as a base64 string (iv:authTag:ciphertext)
  */
 export function encryptToken(token: string): string {
-    const key = getEncryptionKey();
-    const iv = crypto.randomBytes(12); // 96-bit IV for GCM
-
-    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-    let encrypted = cipher.update(token, "utf8", "base64");
-    encrypted += cipher.final("base64");
-
-    const authTag = cipher.getAuthTag();
-
-    // Format: iv:authTag:ciphertext (all base64)
-    return `${iv.toString("base64")}:${authTag.toString("base64")}:${encrypted}`;
+    return sharedEncrypt(token, getGoogleEncryptionKey());
 }
 
 /**
- * Decrypts a token encrypted with encryptToken
+ * Decrypts a token encrypted with encryptToken (delegates to shared crypto module)
  * @param encryptedToken - The encrypted token string
  * @returns The decrypted plaintext token
  */
 export function decryptToken(encryptedToken: string): string {
-    const key = getEncryptionKey();
-    const parts = encryptedToken.split(":");
-
-    if (parts.length !== 3) {
-        throw new Error("Invalid encrypted token format");
-    }
-
-    const [ivBase64, authTagBase64, ciphertext] = parts;
-    const iv = Buffer.from(ivBase64, "base64");
-    const authTag = Buffer.from(authTagBase64, "base64");
-
-    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(authTag);
-
-    let decrypted = decipher.update(ciphertext, "base64", "utf8");
-    decrypted += decipher.final("utf8");
-
-    return decrypted;
+    return sharedDecrypt(encryptedToken, getGoogleEncryptionKey());
 }
 
 /**

@@ -7,6 +7,8 @@ import { ReinstateCard } from "@/components/members/ReinstateCard";
 import { isOrgAdmin } from "@/lib/auth";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import type { Member } from "@/types/database";
+import { LinkedInProfileLink } from "@/components/shared";
+import { ConnectedAccountsSection } from "@/components/members/ConnectedAccountsSection";
 
 interface MemberDetailPageProps {
   params: Promise<{ orgSlug: string; memberId: string }>;
@@ -59,6 +61,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const isAdmin = await isOrgAdmin(org.id);
   const currentUserId = user?.id ?? null;
   const canEdit = isAdmin || (currentUserId && memberUserId === currentUserId);
+  const isOwnProfile = currentUserId !== null && currentUserId === memberUserId;
 
   return (
     <div className="animate-fade-in" data-testid="member-detail">
@@ -83,6 +86,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
                   organizationField="organization_id"
                   organizationId={org.id}
                   redirectTo={`/${orgSlug}/members`}
+                  revalidatePaths={[`/${orgSlug}`, `/${orgSlug}/members`]}
                   data-testid="member-delete-button"
                 />
               )}
@@ -164,18 +168,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
             <div>
               <dt className="text-sm text-muted-foreground">LinkedIn</dt>
               <dd className="text-foreground font-medium">
-                {member.linkedin_url ? (
-                  <a
-                    href={member.linkedin_url}
-                    className="text-org-primary hover:underline break-all"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View profile
-                  </a>
-                ) : (
-                  "—"
-                )}
+                <LinkedInProfileLink linkedinUrl={member.linkedin_url} />
               </dd>
             </div>
             <div>
@@ -202,6 +195,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
           />
         )}
       </div>
+
+      {isOwnProfile && (
+        <ConnectedAccountsSection orgSlug={orgSlug} orgId={org.id} orgName={org.name} />
+      )}
     </div>
   );
 }

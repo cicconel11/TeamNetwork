@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
@@ -52,12 +53,10 @@ export default async function LandingPage() {
       {/* Header */}
       <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="#top" className="group flex items-center gap-2">
-            <div className="w-8 h-8 rounded bg-landing-green-dark flex items-center justify-center">
-              <span className="font-display font-bold text-white text-sm">TN</span>
-            </div>
-            <span className="font-display text-xl font-bold tracking-tight">
-              Team<span className="text-landing-cream">Network</span>
+          <Link href="#top" className="group flex items-center gap-2.5">
+            <Image src="/TeamNetwor.png" alt="" width={541} height={303} className="h-7 w-auto object-contain" aria-hidden="true" />
+            <span className="font-display text-xl font-bold tracking-tight text-landing-cream">
+              <span className="text-landing-green">Team</span><span className="text-landing-cream">Network</span>
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm">
@@ -71,7 +70,7 @@ export default async function LandingPage() {
             <ButtonLink href="/auth/login" variant="custom" className="text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
               Sign In
             </ButtonLink>
-            <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-5">
+            <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-5">
               Get Started
             </ButtonLink>
           </div>
@@ -79,7 +78,7 @@ export default async function LandingPage() {
       </header>
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 pt-20 lg:pt-32 pb-20 px-6">
+      <section className="relative z-10 pt-12 lg:pt-20 pb-20 px-6">
         {/* Stadium Light Beams */}
         <StadiumLightBeams />
 
@@ -89,15 +88,22 @@ export default async function LandingPage() {
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             {/* Left - Copy */}
             <div>
-              <div className="hero-animate inline-flex items-center gap-2 px-4 py-2 rounded-full bg-landing-cream/10 border border-landing-cream/20 mb-8">
+              <div className="hero-animate inline-flex items-center gap-2 px-4 py-2 rounded-full bg-landing-cream/10 border border-landing-cream/20 mb-4">
                 <span className="w-2 h-2 rounded-full bg-landing-green gold-shimmer" />
                 <span className="text-landing-cream/80 text-sm font-medium">Built for teams that go the distance</span>
               </div>
 
-              <h1 className="hero-animate font-display text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-6 jersey-text">
-                Your Team&apos;s
-                <br />
-                <span className="text-landing-cream">Home Field Advantage</span>
+              <h1 className="hero-animate mb-6">
+                <span className="sr-only">TeamNetwork: Your team&apos;s home field advantage</span>
+                <Image
+                  src="/TeamNetwor.png"
+                  alt=""
+                  width={541}
+                  height={303}
+                  className="w-[300px] sm:w-[360px] lg:w-[420px] h-auto drop-shadow-[0_0_40px_rgba(34,197,94,0.15)]"
+                  aria-hidden="true"
+                  priority
+                />
               </h1>
 
               <p className="hero-animate text-xl text-landing-cream/70 max-w-lg mb-10 leading-relaxed">
@@ -105,7 +111,7 @@ export default async function LandingPage() {
               </p>
 
               <div className="hero-animate flex flex-col sm:flex-row gap-4">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-8 py-6 text-base cta-glow">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-8 py-6 text-base cta-glow">
                   Create Your Organization
                 </ButtonLink>
                 <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-6 text-base">
@@ -142,17 +148,17 @@ export default async function LandingPage() {
                   </div>
                 </div>
                 {/* Quick stats - Scoreboard style */}
-                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0f18]">
+                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0a0a]">
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>127</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>127</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Members</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>24</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>24</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Events</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(52,211,153,0.5)" }}>$8.2k</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>$8.2k</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Donations</p>
                   </div>
                 </div>
@@ -376,11 +382,14 @@ export default async function LandingPage() {
         <div className="max-w-4xl mx-auto text-center">
           {/* Trophy icon with bounce */}
           <div className="scroll-reveal inline-block mb-8">
-            <div className="w-20 h-20 mx-auto rounded-full bg-landing-green/10 border border-landing-green/20 flex items-center justify-center">
-              <svg className="w-10 h-10 text-landing-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
-              </svg>
-            </div>
+            <Image
+              src="/TeamNetwor.png"
+              alt="TeamNetwork"
+              width={541}
+              height={303}
+              className="h-32 sm:h-40 lg:h-48 w-auto object-contain mx-auto drop-shadow-[0_0_60px_rgba(34,197,94,0.2)]"
+              priority={false}
+            />
           </div>
 
           <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 jersey-text">
@@ -394,7 +403,7 @@ export default async function LandingPage() {
           </p>
 
           <div className="scroll-reveal flex flex-col sm:flex-row gap-4 justify-center">
-            <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#059669] text-white font-semibold px-10 py-6 text-lg cta-glow">
+            <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-10 py-6 text-lg cta-glow">
               Create Your Organization
             </ButtonLink>
             <ButtonLink href="/auth/login" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-10 py-6 text-lg">
@@ -408,11 +417,8 @@ export default async function LandingPage() {
       <footer className="relative z-10 border-t border-landing-cream/10 py-12 bg-landing-navy">
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded bg-landing-green-dark flex items-center justify-center">
-                <span className="font-display font-bold text-white text-sm">TN</span>
-              </div>
-              <span className="font-display font-bold">TeamNetwork</span>
+            <div className="flex items-center">
+              <Image src="/TeamNetwor.png" alt="TeamNetwork" width={541} height={303} className="h-8 w-auto object-contain" />
             </div>
 
             <div className="flex items-center gap-8 text-sm text-landing-cream/50">

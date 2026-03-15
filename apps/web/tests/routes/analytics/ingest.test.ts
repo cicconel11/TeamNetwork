@@ -1,5 +1,10 @@
 import test from "node:test";
 import assert from "node:assert";
+import {
+  resolveTrackingLevel,
+  type AgeBracket,
+  type OrgType,
+} from "../../../src/lib/analytics/policy";
 
 /**
  * Tests for POST /api/analytics/ingest
@@ -23,10 +28,7 @@ function isAuthenticated(ctx: AuthContext): boolean {
   return ctx.user !== null && ctx.user.id !== "";
 }
 
-type AgeBracket = "under_13" | "13_17" | "18_plus";
-type OrgType = "educational" | "athletic" | "general";
 type EventType = "page_view" | "feature_enter" | "feature_exit" | "nav_click";
-type TrackingLevel = "none" | "page_view_only" | "full";
 
 interface UsageEvent {
   event_type: EventType;
@@ -54,19 +56,6 @@ interface IngestResult {
     duration_ms: number | null;
     hour_of_day: number | null;
   }>;
-}
-
-// Tracking level resolution logic (from consent.ts)
-function resolveTrackingLevel(
-  consented: boolean,
-  ageBracket: AgeBracket | null | undefined,
-  orgType: OrgType | null | undefined,
-): TrackingLevel {
-  if (!consented) return "none";
-  if (ageBracket === "under_13") return "none";
-  if (ageBracket === "13_17") return "page_view_only";
-  if (orgType === "educational") return "page_view_only";
-  return "full";
 }
 
 function simulateIngest(request: IngestRequest): IngestResult {

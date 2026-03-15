@@ -366,6 +366,45 @@ function simulateRevokeInvite(req: RevokeInviteRequest): RevokeInviteResult {
   return { status: 200, success: true };
 }
 
+interface DeleteInviteRequest {
+  organizationId: string;
+  inviteId: string;
+  userId: string | null;
+  role: OrgRole;
+  invite: InviteOrFetchError;
+  deleteError?: boolean;
+}
+
+interface DeleteInviteResult {
+  status: number;
+  success?: boolean;
+  error?: string;
+}
+
+function simulateDeleteInvite(req: DeleteInviteRequest): DeleteInviteResult {
+  const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!UUID_PATTERN.test(req.organizationId)) {
+    return { status: 400, error: "Invalid organization id" };
+  }
+  if (!UUID_PATTERN.test(req.inviteId)) {
+    return { status: 400, error: "Invalid invite id" };
+  }
+
+  if (!req.userId) return { status: 401, error: "Unauthorized" };
+  if (req.role !== "admin") return { status: 403, error: "Forbidden" };
+
+  if (req.invite === "fetch_error") {
+    return { status: 500, error: "Failed to fetch invite" };
+  }
+  if (!req.invite) return { status: 404, error: "Invite not found" };
+
+  if (req.deleteError) return { status: 500, error: "Failed to delete invite" };
+
+  return { status: 200, success: true };
+}
+
 // ── POST /parents/invite/accept simulation ────────────────────────────────────
 
 interface AcceptInviteRequest {
@@ -1085,6 +1124,149 @@ describe("PATCH /api/organizations/[organizationId]/parents/invite/[inviteId]", 
       role: "admin",
       invite: makeInvite({ status: "pending" }),
       updateError: true,
+    });
+    assert.strictEqual(result.status, 500);
+  });
+});
+
+describe("DELETE /api/organizations/[organizationId]/parents/invite/[inviteId]", () => {
+  const validOrgId = randomUUID();
+  const validInviteId = randomUUID();
+
+  it("returns 401 for unauthenticated", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: null,
+      role: null,
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 401);
+  });
+
+  it("returns 403 for active_member", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "m1",
+      role: "active_member",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 403);
+  });
+
+  it("returns 403 for parent role", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "p1",
+      role: "parent",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 403);
+  });
+
+  it("returns 400 for invalid organizationId UUID", () => {
+    const result = simulateDeleteInvite({
+      organizationId: "not-a-uuid",
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 400);
+    assert.strictEqual(result.error, "Invalid organization id");
+  });
+
+  it("returns 400 for invalid inviteId UUID", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: "not-a-uuid",
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite(),
+    });
+    assert.strictEqual(result.status, 400);
+    assert.strictEqual(result.error, "Invalid invite id");
+  });
+
+  it("returns 404 if invite not found", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: null,
+    });
+    assert.strictEqual(result.status, 404);
+  });
+
+  it("returns 404 if invite belongs to a different org (org-scoped DB query returns nothing)", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: null,
+    });
+    assert.strictEqual(result.status, 404);
+  });
+
+  it("returns 200 and deletes an accepted invite without affecting joined users", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "accepted" }),
+    });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns 200 and deletes a pending invite", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "pending" }),
+    });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns 200 and deletes a revoked invite", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "revoked" }),
+    });
+    assert.strictEqual(result.status, 200);
+    assert.strictEqual(result.success, true);
+  });
+
+  it("returns 500 on DB fetch error", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: "fetch_error",
+    });
+    assert.strictEqual(result.status, 500);
+  });
+
+  it("returns 500 on DB delete error", () => {
+    const result = simulateDeleteInvite({
+      organizationId: validOrgId,
+      inviteId: validInviteId,
+      userId: "admin",
+      role: "admin",
+      invite: makeInvite({ status: "pending" }),
+      deleteError: true,
     });
     assert.strictEqual(result.status, 500);
   });

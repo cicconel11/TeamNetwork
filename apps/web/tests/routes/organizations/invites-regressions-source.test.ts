@@ -91,6 +91,21 @@ test("settings invites page does not create org invites through direct client RP
     panelNormalized.includes('fetch(`/api/organizations/${orgId}/invites`, {'),
     "org invite UI must create org invites through the server route",
   );
+  assert.ok(
+    panelNormalized.includes('fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, { method: "DELETE" })'),
+    "parent invite UI must delete invite links through the server route",
+  );
+  assert.strictEqual(
+    panelSource.includes('invite.kind === "parent" && !accepted'),
+    false,
+    "accepted parent invites must still render the delete affordance",
+  );
+  assert.ok(
+    panelNormalized.includes('onClick={() => handleDeleteParentInvite(invite.id)}') &&
+      panelNormalized.includes('isLoading={isDeletingParentInvite}') &&
+      panelNormalized.includes('<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>'),
+    "parent invite delete UI must use the same trash-icon affordance as org invites",
+  );
 });
 
 test("org invites API route authorizes admins through service client", () => {
@@ -143,5 +158,24 @@ test("org invites API route creates invites through authenticated server RPC", (
   assert.ok(
     normalized.includes('revalidatePath(`/${orgSlugRow.slug}/settings/invites`)'),
     "org invites route must revalidate the invites settings page after invite creation",
+  );
+});
+
+test("parent invite item route supports deleting invite links without touching joined users", () => {
+  const source = readSource("src/app/api/organizations/[organizationId]/parents/invite/[inviteId]/route.ts");
+  const normalized = squishWhitespace(source);
+
+  assert.ok(
+    normalized.includes("export async function DELETE(req: Request, { params }: RouteParams)"),
+    "parent invite item route must expose a DELETE handler",
+  );
+  assert.strictEqual(
+    normalized.includes('return respond({ error: "Invite already accepted — cannot delete" }, 409);'),
+    false,
+    "accepted parent invites must be deletable",
+  );
+  assert.ok(
+    normalized.includes('.delete() .eq("id", inviteId) .eq("organization_id", organizationId)'),
+    "parent invite delete must scope deletion to the requested org invite row",
   );
 });

@@ -164,8 +164,12 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
       <AppPageAnimations />
       <header className="relative z-10 border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="app-hero-animate text-2xl font-bold text-foreground" style={{ opacity: 0 }}>
-            Team<span className="text-emerald-500">Network</span>
+          <h1 className="app-hero-animate flex items-center gap-2.5" style={{ opacity: 0 }}>
+            <Image src="/TeamNetwor.png" alt="" width={541} height={303}
+                   className="h-7 w-auto object-contain" aria-hidden="true" />
+            <span className="text-2xl font-bold text-foreground">
+              <span className="text-green-500">Team</span>Network
+            </span>
           </h1>
           <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
             <ThemeToggle />
@@ -403,10 +407,10 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         {/* Pending memberships section */}
         {pendingDisplayMemberships.length > 0 && (
           <div className="mt-8">
-            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
               Pending Approval
               <Badge variant="warning">{pendingDisplayMemberships.length}</Badge>
-            </h3>
+            </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {pendingDisplayMemberships.map((org) => (
                 <Card key={org.id} className="p-5 space-y-3 opacity-70">

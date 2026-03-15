@@ -6,12 +6,16 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createClient } from "@/lib/supabase/client";
-import { Button, Input, Card, HCaptcha, HCaptchaRef } from "@/components/ui";
+import { Button, Input, Card, HCaptcha, HCaptchaRef, InlineBanner } from "@/components/ui";
 import { useCaptcha } from "@/hooks/useCaptcha";
 import { signupSchema, type SignupForm, type AgeBracket } from "@/lib/schemas/auth";
 import { PASSWORD_REQUIREMENTS } from "@/lib/auth/password";
+import { buildOAuthSignupCallbackUrl, buildEmailSignupCallbackUrl, buildAuthLink } from "@/lib/auth/redirect";
+import { shouldResumeSignupRegistration } from "@/lib/auth/signup-flow";
 import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
+import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
+import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
 
 type SignupStep = "age_gate" | "registration";
 
@@ -23,11 +27,25 @@ interface AgeGateData {
   token: string;
 }
 
-interface SignupClientProps {
-  hcaptchaSiteKey: string;
+function clearAgeGateData() {
+  try {
+    sessionStorage.removeItem(AGE_GATE_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors
+  }
 }
 
-export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
+interface SignupClientProps {
+  hcaptchaSiteKey: string;
+  redirectTo?: string;
+  initialError?: string | null;
+}
+
+export function SignupClient({
+  hcaptchaSiteKey,
+  redirectTo = "/app",
+  initialError = null,
+}: SignupClientProps) {
   const router = useRouter();
   const [step, setStep] = useState<SignupStep>("age_gate");
   const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
@@ -35,26 +53,33 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
   const [ageToken, setAgeToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
+  const isSocialLoading = isGoogleLoading || isLinkedInLoading;
 
   // Restore age gate data from sessionStorage on mount
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem(AGE_GATE_STORAGE_KEY);
-      if (stored) {
+      if (shouldResumeSignupRegistration({
+        initialError,
+        hasStoredAgeGateData: Boolean(stored),
+      }) && stored) {
         const data: AgeGateData = JSON.parse(stored);
         setAgeBracket(data.ageBracket);
         setIsMinor(data.isMinor);
         setAgeToken(data.token);
         setStep("registration");
+      } else if (stored) {
+        clearAgeGateData();
       }
     } catch {
       // Ignore storage errors
     }
-  }, []);
+  }, [initialError]);
 
   const {
     register,
@@ -127,43 +152,38 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
     }
   };
 
-  const clearAgeGateData = () => {
-    try {
-      sessionStorage.removeItem(AGE_GATE_STORAGE_KEY);
-    } catch {
-      // Ignore storage errors
+  const handleSocialSignup = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
+    if (!isVerified || !captchaToken) {
+      setError("Please complete the captcha verification");
+      return;
     }
-  };
 
-  const handleGoogleSignup = async () => {
     if (!ageBracket || isMinor === null || !ageToken) {
       setError("Please complete the date of birth step first");
       return;
     }
 
-    setIsGoogleLoading(true);
+    const setLoading = provider === "google" ? setIsGoogleLoading : setIsLinkedInLoading;
+    setLoading(true);
     setError(null);
 
     const supabase = createClient()!;
+    const callbackUrl = buildOAuthSignupCallbackUrl(siteUrl, redirectTo, ageBracket, isMinor, ageToken);
+
     const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
+      provider,
       options: {
-        redirectTo: `${siteUrl}/auth/callback?redirect=/app`,
-        queryParams: {
-          // Pass age data as query params to be handled in callback
-          age_bracket: ageBracket,
-          is_minor: String(isMinor),
-          age_token: ageToken,
-        },
+        redirectTo: callbackUrl,
       },
     });
 
     if (error) {
       setError(error.message);
-      setIsGoogleLoading(false);
-    } else {
-      clearAgeGateData();
+      setLoading(false);
+      captchaRef.current?.reset();
     }
+    // Don't clear age gate data here — user may be bounced back if OAuth fails.
+    // The useEffect at mount restores age gate state from sessionStorage.
   };
 
   const onSubmit = async (data: SignupForm) => {
@@ -191,7 +211,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
           is_minor: isMinor,
           age_validation_token: ageToken,
         },
-        emailRedirectTo: `${siteUrl}/auth/callback?redirect=/app`,
+        emailRedirectTo: buildEmailSignupCallbackUrl(siteUrl, redirectTo),
         captchaToken,
       },
     });
@@ -227,8 +247,9 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
         type="button"
         variant="secondary"
         className="w-full mb-6"
-        onClick={handleGoogleSignup}
+        onClick={() => handleSocialSignup("google")}
         isLoading={isGoogleLoading}
+        disabled={isSocialLoading}
         data-testid="signup-google"
       >
         <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
@@ -252,28 +273,41 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
         Continue with Google
       </Button>
 
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full mb-6"
+        onClick={() => handleSocialSignup(LINKEDIN_OIDC_PROVIDER)}
+        isLoading={isLinkedInLoading}
+        disabled={isSocialLoading}
+        data-testid="signup-linkedin"
+      >
+        <LinkedInIcon className="h-5 w-5 mr-2" />
+        Continue with LinkedIn
+      </Button>
+
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-border" />
+          <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with email</span>
         </div>
       </div>
 
       {error && (
-        <div data-testid="signup-error" className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+        <InlineBanner variant="error" data-testid="signup-error" className="mb-4">
           {error}
           <div className="mt-2 flex justify-end">
             <FeedbackButton context="signup" trigger="signup_error" />
           </div>
-        </div>
+        </InlineBanner>
       )}
 
       {message && (
-        <div data-testid="signup-success" className="mb-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 text-sm">
+        <InlineBanner variant="success" data-testid="signup-success" className="mb-4">
           {message}
-        </div>
+        </InlineBanner>
       )}
 
       <form data-testid="signup-form" onSubmit={handleSubmit(onSubmit)}>
@@ -313,7 +347,7 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
               onVerify={onVerify}
               onExpire={onExpire}
               onError={onCaptchaError}
-              theme="light"
+              theme="dark"
             />
           </div>
 
@@ -329,9 +363,9 @@ export function SignupClient({ hcaptchaSiteKey }: SignupClientProps) {
         </div>
       </form>
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-white/50">
         Already have an account?{" "}
-        <Link href="/auth/login" className="text-foreground font-medium hover:underline">
+        <Link href={buildAuthLink("/auth/login", redirectTo)} className="text-white font-medium hover:underline">
           Sign in
         </Link>
       </div>

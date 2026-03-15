@@ -14,11 +14,11 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 const VALID_FEATURES = [
-  "dashboard", "members", "chat", "alumni", "mentorship",
-  "workouts", "competition", "events", "announcements",
-  "philanthropy", "donations", "expenses", "records",
-  "schedules", "forms", "customization", "settings",
-  "navigation", "other",
+  "dashboard", "members", "chat", "feed", "alumni", "parents",
+  "mentorship", "workouts", "competition", "events", "announcements",
+  "philanthropy", "donations", "expenses", "records", "calendar",
+  "discussions", "jobs", "forms", "media", "customization",
+  "settings", "navigation", "other",
 ] as const;
 
 const usageEventSchema = z.object({
@@ -39,6 +39,8 @@ const consentUpdateSchema = z.object({
   consented: z.boolean(),
 });
 
+const directoryTypeSchema = z.enum(["active_members", "alumni", "parents"]);
+
 const dashboardHintsSchema = z.object({
   show_recent_features: z.boolean(),
   suggested_features: z.array(z.string()).max(10),
@@ -49,6 +51,24 @@ const uiProfileSchema = z.object({
   nav_order: z.array(z.string()).max(30),
   feature_highlights: z.array(z.string()).max(10),
   dashboard_hints: dashboardHintsSchema,
+});
+
+const fileUploadPayloadSchema = z.object({
+  file_type: z.enum(["image", "pdf", "doc", "other"]),
+  file_size_bucket: z.enum(["<1MB", "1-5MB", "5-25MB", "25MB+"]),
+  result: z.enum(["success", "fail_validation", "fail_server"]),
+  error_code: z.string().max(100).optional(),
+});
+
+const chatMessagePayloadSchema = z.object({
+  thread_id: z.string().max(100),
+  message_type: z.enum(["text", "poll", "form"]),
+  result: z.enum(["success", "fail_validation", "fail_server"]),
+  error_code: z.string().max(100).optional(),
+});
+
+const directoryViewPayloadSchema = z.object({
+  directory_type: directoryTypeSchema,
 });
 
 // ===========================================================================
@@ -292,6 +312,105 @@ describe("Analytics Schemas - consentUpdateSchema", () => {
 
   it("rejects missing consented field", () => {
     const result = consentUpdateSchema.safeParse({});
+    assert.strictEqual(result.success, false);
+  });
+});
+
+describe("Analytics Schemas - coarse enum analytics props", () => {
+  it("accepts chat analytics payloads for text, poll, and form message types", () => {
+    for (const messageType of ["text", "poll", "form"] as const) {
+      const result = chatMessagePayloadSchema.safeParse({
+        thread_id: "thread-123",
+        message_type: messageType,
+        result: "success",
+      });
+      assert.strictEqual(result.success, true);
+    }
+  });
+
+  it("rejects stale or free-form chat message types", () => {
+    for (const messageType of ["image", "file", "meet Alice after practice"]) {
+      const result = chatMessagePayloadSchema.safeParse({
+        thread_id: "thread-123",
+        message_type: messageType,
+        result: "success",
+      });
+      assert.strictEqual(result.success, false);
+    }
+  });
+
+  it("rejects non-string chat message types", () => {
+    for (const messageType of [null, true, 1]) {
+      const result = chatMessagePayloadSchema.safeParse({
+        thread_id: "thread-123",
+        message_type: messageType,
+        result: "success",
+      });
+      assert.strictEqual(result.success, false);
+    }
+  });
+
+  it("accepts only coarse file upload enums", () => {
+    const result = fileUploadPayloadSchema.safeParse({
+      file_type: "pdf",
+      file_size_bucket: "1-5MB",
+      result: "success",
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  it("rejects free-form file metadata strings", () => {
+    const badFileType = fileUploadPayloadSchema.safeParse({
+      file_type: "transcript.pdf",
+      file_size_bucket: "1-5MB",
+      result: "success",
+    });
+    const badSizeBucket = fileUploadPayloadSchema.safeParse({
+      file_type: "pdf",
+      file_size_bucket: "semester project folder",
+      result: "success",
+    });
+
+    assert.strictEqual(badFileType.success, false);
+    assert.strictEqual(badSizeBucket.success, false);
+  });
+
+  it("rejects non-string file metadata values", () => {
+    const badFileTypeValues = [null, true, 1];
+    const badSizeBucketValues = [null, true, 1];
+
+    for (const fileType of badFileTypeValues) {
+      const result = fileUploadPayloadSchema.safeParse({
+        file_type: fileType,
+        file_size_bucket: "1-5MB",
+        result: "success",
+      });
+      assert.strictEqual(result.success, false);
+    }
+
+    for (const fileSizeBucket of badSizeBucketValues) {
+      const result = fileUploadPayloadSchema.safeParse({
+        file_type: "pdf",
+        file_size_bucket: fileSizeBucket,
+        result: "success",
+      });
+      assert.strictEqual(result.success, false);
+    }
+  });
+});
+
+describe("Analytics Schemas - directory payloads", () => {
+  it("accepts parents as a supported directory type", () => {
+    const result = directoryViewPayloadSchema.safeParse({
+      directory_type: "parents",
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  it("rejects unsupported directory types", () => {
+    const result = directoryViewPayloadSchema.safeParse({
+      directory_type: "jobs",
+    });
     assert.strictEqual(result.success, false);
   });
 });

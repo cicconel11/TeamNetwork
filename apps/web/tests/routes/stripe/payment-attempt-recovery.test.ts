@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import test from "node:test";
 import assert from "node:assert";
 import { createSupabaseStub } from "../../utils/supabaseStub.ts";
@@ -218,7 +219,7 @@ test("If ensurePaymentAttempt throws, resolvedAttemptId is undefined and no upda
   // and we never attempt an update on a non-existent ID.
 
   let resolvedAttemptId: string | undefined;
-  let stripeResourceCreated = false;
+  const stripeResourceCreated = false;
 
   // Simulate the scenario: ensurePaymentAttempt throws before we set resolvedAttemptId
   try {

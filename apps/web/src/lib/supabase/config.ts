@@ -1,4 +1,5 @@
 const expectedProjectRef = "rytsziwekhtjdqzzpdso";
+const canonicalProductionHost = "www.myteamnetwork.com";
 
 function assertValue(name: string, value: string | undefined) {
   if (!value || value.trim() === "") {
@@ -27,16 +28,35 @@ export function getSupabaseServiceEnv() {
   return { supabaseUrl, supabaseAnonKey, serviceRoleKey };
 }
 
-export function validateSiteUrl() {
-  if (process.env.NODE_ENV === "production") {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    if (!siteUrl) {
-      console.warn("[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL is not set in production - OAuth redirects may be unreliable");
-      return false;
-    } else if (!siteUrl.includes("www.myteamnetwork.com")) {
-      console.warn(`[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL (${siteUrl}) doesn't match expected domain`);
-      return false;
-    }
+function isVercelProductionRuntime(env: NodeJS.ProcessEnv) {
+  return env.VERCEL === "1" && env.VERCEL_ENV === "production";
+}
+
+function parseSiteUrl(siteUrl: string): { host: string; protocol: string } | null {
+  try {
+    const parsed = new URL(siteUrl);
+    return { host: parsed.host, protocol: parsed.protocol };
+  } catch {
+    return null;
   }
+}
+
+export function validateSiteUrl(env: NodeJS.ProcessEnv = process.env) {
+  if (!isVercelProductionRuntime(env)) {
+    return true;
+  }
+
+  const siteUrl = env.NEXT_PUBLIC_SITE_URL;
+  if (!siteUrl) {
+    throw new Error("[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL is not set for Vercel production — OAuth redirects will fail");
+  }
+
+  const parsedSiteUrl = parseSiteUrl(siteUrl);
+  if (!parsedSiteUrl || parsedSiteUrl.host !== canonicalProductionHost || parsedSiteUrl.protocol !== "https:") {
+    throw new Error(
+      `[SUPABASE CONFIG] NEXT_PUBLIC_SITE_URL (${siteUrl}) must use the canonical production origin (https://${canonicalProductionHost})`
+    );
+  }
+
   return true;
 }

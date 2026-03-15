@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /**
  * Tests for auth helper functions in src/lib/auth.ts and src/lib/auth/roles.ts.
  *

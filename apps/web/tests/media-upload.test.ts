@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import test, { describe } from "node:test";
 import assert from "node:assert";
 import { randomUUID } from "node:crypto";

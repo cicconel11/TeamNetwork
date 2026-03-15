@@ -71,7 +71,6 @@ export function NavGroupSection({
                 visibleNav={visibleNav}
                 organizationId={organizationId}
                 globalIndex={globalIndexMap.get(item.href) ?? 0}
-                groupId={group.id}
                 onClose={onClose}
               />
             ))}
@@ -89,7 +88,6 @@ interface NavItemLinkProps {
   visibleNav: VisibleNavItem[];
   organizationId: string;
   globalIndex: number;
-  groupId?: string;
   onClose?: () => void;
 }
 
@@ -100,7 +98,6 @@ export function NavItemLink({
   visibleNav,
   organizationId,
   globalIndex,
-  groupId,
   onClose,
 }: NavItemLinkProps) {
   const href = `${basePath}${item.href}`;
@@ -128,7 +125,6 @@ export function NavItemLink({
               destination_route: href,
               nav_surface: "sidebar",
               position: globalIndex,
-              group_id: groupId,
             },
             organizationId
           );

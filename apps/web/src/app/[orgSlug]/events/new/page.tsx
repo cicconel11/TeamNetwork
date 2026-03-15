@@ -309,10 +309,10 @@ export default function NewEventPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: orgIdToUse,
-            title: `New ${singularLabel}: ${formData.title}`,
-            body: notificationBody || `${singularLabel} scheduled for ${formData.start_date} at ${formData.start_time}`,
+            title: `New ${singularLabel}: ${data.title}`,
+            body: notificationBody || `${singularLabel} scheduled for ${data.start_date} at ${data.start_time}`,
             type: "event",
-            resourceId: event.id,
+            resourceId: createdEventIds[0],
             audience: audienceValue,
             targetUserIds: targetIds || undefined,
           }),

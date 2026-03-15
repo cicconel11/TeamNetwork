@@ -13,9 +13,12 @@ interface MobileNavProps {
   isDevAdmin?: boolean;
   hasAlumniAccess?: boolean;
   hasParentsAccess?: boolean;
+  currentMemberId?: string;
+  currentMemberName?: string;
+  currentMemberAvatar?: string | null;
 }
 
-export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasEverOpened, setHasEverOpened] = useState(false);
   const basePath = `/${organization.slug}`;
@@ -107,6 +110,9 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
             isDevAdmin={isDevAdmin}
             hasAlumniAccess={hasAlumniAccess}
             hasParentsAccess={hasParentsAccess}
+            currentMemberId={currentMemberId}
+            currentMemberName={currentMemberName}
+            currentMemberAvatar={currentMemberAvatar}
             className="h-full border-r border-border"
             onClose={closeMenu}
           />

@@ -11,6 +11,7 @@ import { canEditNavItem } from "@/lib/navigation/permissions";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
+import { LinkedInBadge } from "@/components/shared";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 interface AlumniPageProps {
@@ -35,6 +36,7 @@ interface AlumniRecord {
   graduation_year: number | null;
   industry: string | null;
   current_city: string | null;
+  linkedin_url: string | null;
 }
 
 export default async function AlumniPage({ params, searchParams }: AlumniPageProps) {
@@ -68,7 +70,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
     .from("alumni")
     .select(`
       id, first_name, last_name, photo_url, position_title, job_title, current_company,
-      graduation_year, industry, current_city
+      graduation_year, industry, current_city, linkedin_url
     `)
     .eq("organization_id", org.id)
     .is("deleted_at", null);
@@ -161,14 +163,14 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       {alumni && alumni.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {alumni.map((alum) => (
-            <DirectoryCardLink
-              key={alum.id}
-              href={`/${orgSlug}/alumni/${alum.id}`}
-              organizationId={org.id}
-              directoryType="alumni"
-            >
-              <Card interactive className="p-5">
-                <div className="flex items-center gap-4">
+            <Card key={alum.id} interactive className="p-5">
+              <div className="flex items-center gap-4">
+                <DirectoryCardLink
+                  href={`/${orgSlug}/alumni/${alum.id}`}
+                  organizationId={org.id}
+                  directoryType="alumni"
+                  className="flex min-w-0 flex-1 items-center gap-4"
+                >
                   <Avatar
                     src={alum.photo_url}
                     name={`${alum.first_name} ${alum.last_name}`}
@@ -198,9 +200,10 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                       )}
                     </div>
                   </div>
-                </div>
-              </Card>
-            </DirectoryCardLink>
+                </DirectoryCardLink>
+                <LinkedInBadge linkedinUrl={alum.linkedin_url} className="shrink-0" />
+              </div>
+            </Card>
           ))}
         </div>
       ) : (

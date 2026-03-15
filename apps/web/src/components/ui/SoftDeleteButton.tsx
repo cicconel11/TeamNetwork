@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "./Button";
 import { createClient } from "@/lib/supabase/client";
+import { revalidatePaths as revalidatePathsAction } from "@/lib/cache";
 
 interface SoftDeleteButtonProps {
   table: string;
@@ -14,6 +15,7 @@ interface SoftDeleteButtonProps {
   label?: string;
   confirmMessage?: string;
   onAfterDelete?: () => Promise<void>;
+  revalidatePaths?: string[];
   "data-testid"?: string;
 }
 
@@ -26,6 +28,7 @@ export function SoftDeleteButton({
   label = "Delete",
   confirmMessage = "Are you sure? This will remove the record from active lists.",
   onAfterDelete,
+  revalidatePaths,
   "data-testid": dataTestId,
 }: SoftDeleteButtonProps) {
   const router = useRouter();
@@ -57,6 +60,24 @@ export function SoftDeleteButton({
       } catch (callbackError) {
         // Log but don't block - post-delete actions should not prevent navigation
         console.error("Post-delete callback error:", callbackError);
+      }
+    }
+
+    // Invalidate server-side cache for related pages (dashboard, list pages)
+    if (revalidatePaths && revalidatePaths.length > 0) {
+      try {
+        await revalidatePathsAction(revalidatePaths);
+      } catch (revalidateError) {
+        console.error("Cache revalidation error:", revalidateError);
+      }
+    }
+
+    // Invalidate server-side cache for related pages (dashboard, list pages)
+    if (revalidatePaths && revalidatePaths.length > 0) {
+      try {
+        await revalidatePathsAction(revalidatePaths);
+      } catch (revalidateError) {
+        console.error("Cache revalidation error:", revalidateError);
       }
     }
 

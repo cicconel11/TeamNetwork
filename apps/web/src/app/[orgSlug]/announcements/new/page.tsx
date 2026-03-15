@@ -169,8 +169,8 @@ export default function NewAnnouncementPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             organizationId: org.id,
-            title: formData.title,
-            body: formData.body || undefined,
+            title: data.title,
+            body: data.body || undefined,
             type: "announcement",
             resourceId: announcement.id,
             audience: notifAudience,

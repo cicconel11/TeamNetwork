@@ -9,6 +9,7 @@ import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { DirectoryViewTracker } from "@/components/analytics/DirectoryViewTracker";
 import { DirectoryCardLink } from "@/components/analytics/DirectoryCardLink";
+import { LinkedInBadge } from "@/components/shared";
 
 interface MembersPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -25,6 +26,7 @@ interface MemberWithAdminFlag {
   role: string | null;
   status: string | null;
   graduation_year: number | null;
+  linkedin_url: string | null;
   isAdmin: boolean;
 }
 
@@ -66,12 +68,13 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   );
 
   // Step 2a: Query members WITH user accounts that have correct roles
+  // Note: no dev-admin email exclusion here — the user_organization_roles
+  // check (memberUserIds) already ensures only real org members appear.
   let linkedMembersQuery = dataClient
     .from("members")
-    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, user_id")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
-    .not("email", "in", devAdminEmailFilter)
     .not("user_id", "is", null);
 
   // Only filter by role-matched user_ids if there are any
@@ -85,7 +88,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Step 2b: Query members WITHOUT user accounts (manually added) - always show in members tab
   let manualMembersQuery = dataClient
     .from("members")
-    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, user_id")
+    .select("id, first_name, last_name, email, photo_url, role, status, graduation_year, linkedin_url, user_id")
     .eq("organization_id", org.id)
     .is("deleted_at", null)
     .not("email", "in", devAdminEmailFilter)
@@ -118,8 +121,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .from("members")
       .select("role")
       .eq("organization_id", org.id)
-      .is("deleted_at", null)
-      .not("email", "in", devAdminEmailFilter),
+      .is("deleted_at", null),
   ]);
 
   // Combine and add isAdmin flag
@@ -132,6 +134,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
     role: string | null;
     status: string | null;
     graduation_year: number | null;
+    linkedin_url: string | null;
     user_id: string | null;
   };
 
@@ -145,6 +148,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       role: m.role,
       status: m.status,
       graduation_year: m.graduation_year,
+      linkedin_url: m.linkedin_url,
       isAdmin: m.user_id ? adminUserIds.has(m.user_id) : false,
     })),
     ...(manualMembers || []).map((m: MemberRow) => ({
@@ -156,6 +160,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       role: m.role,
       status: m.status,
       graduation_year: m.graduation_year,
+      linkedin_url: m.linkedin_url,
       isAdmin: false,
     })),
   ].sort((a, b) => a.last_name.localeCompare(b.last_name));
@@ -201,14 +206,14 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       {members && members.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {members.map((member) => (
-            <DirectoryCardLink
-              key={member.id}
-              href={`/${orgSlug}/members/${member.id}`}
-              organizationId={org.id}
-              directoryType="active_members"
-            >
-              <Card interactive className="p-5">
-                <div className="flex items-center gap-4">
+            <Card key={member.id} interactive className="p-5">
+              <div className="flex items-center gap-4">
+                <DirectoryCardLink
+                  href={`/${orgSlug}/members/${member.id}`}
+                  organizationId={org.id}
+                  directoryType="active_members"
+                  className="flex min-w-0 flex-1 items-center gap-4"
+                >
                   <Avatar
                     src={member.photo_url}
                     name={`${member.first_name} ${member.last_name}`}
@@ -235,9 +240,10 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
                       )}
                     </div>
                   </div>
-                </div>
-              </Card>
-            </DirectoryCardLink>
+                </DirectoryCardLink>
+                <LinkedInBadge linkedinUrl={member.linkedin_url} className="shrink-0" />
+              </div>
+            </Card>
           ))}
         </div>
       ) : (

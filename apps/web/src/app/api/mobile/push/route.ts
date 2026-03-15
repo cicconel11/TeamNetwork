@@ -121,7 +121,8 @@ export async function POST(request: Request) {
     }
 
     // Get push tokens for these users, filtering by push_enabled preference
-    const { data: tokens } = await service
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: tokens } = await (service as any)
       .from("user_push_tokens")
       .select("expo_push_token, user_id")
       .in("user_id", memberUserIds);
@@ -135,19 +136,22 @@ export async function POST(request: Request) {
     }
 
     // Check notification preferences (push_enabled) for each user
-    const { data: prefs } = await service
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: prefs } = await (service as any)
       .from("notification_preferences")
       .select("user_id, push_enabled")
       .eq("organization_id", organizationId)
       .in("user_id", memberUserIds);
 
     const prefsMap = new Map<string, boolean>();
-    (prefs || []).forEach((p) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prefs || []).forEach((p: any) => {
       if (p.user_id) prefsMap.set(p.user_id, p.push_enabled ?? true);
     });
 
     // Filter tokens by preference (default to enabled if no preference set)
-    const enabledTokens = tokens.filter((t) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const enabledTokens = (tokens as any[]).filter((t: any) => {
       const pushEnabled = prefsMap.get(t.user_id) ?? true;
       return pushEnabled;
     });

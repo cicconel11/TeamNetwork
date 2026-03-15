@@ -10,6 +10,7 @@ import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Organization, Alumni } from "@/types/database";
 import { checkOrgReadOnly } from "@/lib/subscription/read-only-guard";
 import { DeleteAlumniButton } from "@/components/alumni/DeleteAlumniButton";
+import { LinkedInProfileLink } from "@/components/shared";
 
 interface AlumniDetailPageProps {
   params: Promise<{ orgSlug: string; alumniId: string }>;
@@ -193,18 +194,7 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
             <div>
               <dt className="text-sm text-muted-foreground">LinkedIn</dt>
               <dd className="text-foreground font-medium">
-                {alum.linkedin_url ? (
-                  <a
-                    href={alum.linkedin_url}
-                    className="text-org-primary hover:underline break-all"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View profile
-                  </a>
-                ) : (
-                  "—"
-                )}
+                <LinkedInProfileLink linkedinUrl={alum.linkedin_url} />
               </dd>
             </div>
             <div>

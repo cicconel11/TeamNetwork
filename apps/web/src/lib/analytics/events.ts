@@ -1,6 +1,8 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { canTrackBehavioralEvent, type TrackingLevel } from "@/lib/analytics/policy";
+import type { DeviceClass } from "@/lib/analytics/types";
 
 export type AnalyticsEventName =
   | "app_open"
@@ -31,13 +33,19 @@ export type ConsentState = "opted_in" | "opted_out" | "unknown";
 
 type ReferrerType = "direct" | "invite_link" | "deeplink" | "notification" | "email_link";
 
-type DeviceClass = "mobile" | "tablet" | "desktop";
-
 const ANALYTICS_SESSION_KEY = "tn_analytics_session";
 
 const consentByOrg = new Map<string, ConsentState>();
+const trackingLevelByOrg = new Map<string, TrackingLevel>();
 let cachedSessionId: string | null = null;
 let cachedSessionDay: string | null = null;
+
+export interface AnalyticsPolicyChangeDetail {
+  consentState: ConsentState;
+  consented: boolean;
+  orgId: string;
+  trackingLevel: TrackingLevel;
+}
 
 function getClientDay(): string {
   return new Date().toISOString().slice(0, 10);
@@ -119,21 +127,47 @@ function getReferrerType(): ReferrerType {
   return "deeplink";
 }
 
-export function setConsentState(orgId: string, state: ConsentState): void {
-  consentByOrg.set(orgId, state);
+function dispatchAnalyticsPolicy(detail: AnalyticsPolicyChangeDetail): void {
+  if (typeof window === "undefined") return;
 
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(
-      new CustomEvent("analytics:consent-change", {
-        detail: { orgId, consentState: state, consented: state === "opted_in" },
-      }),
-    );
+  window.dispatchEvent(
+    new CustomEvent<AnalyticsPolicyChangeDetail>("analytics:policy-change", {
+      detail,
+    }),
+  );
+}
+
+export function setAnalyticsPolicy(
+  orgId: string,
+  consentState: ConsentState,
+  trackingLevel: TrackingLevel,
+): void {
+  const previousConsentState = consentByOrg.get(orgId);
+  const previousTrackingLevel = trackingLevelByOrg.get(orgId);
+
+  if (previousConsentState === consentState && previousTrackingLevel === trackingLevel) {
+    return;
   }
+
+  consentByOrg.set(orgId, consentState);
+  trackingLevelByOrg.set(orgId, trackingLevel);
+
+  dispatchAnalyticsPolicy({
+    orgId,
+    consentState,
+    consented: consentState === "opted_in",
+    trackingLevel,
+  });
 }
 
 export function getConsentState(orgId: string | undefined | null): ConsentState {
   if (!orgId) return "unknown";
   return consentByOrg.get(orgId) ?? "unknown";
+}
+
+export function getTrackingLevel(orgId: string | undefined | null): TrackingLevel {
+  if (!orgId) return "none";
+  return trackingLevelByOrg.get(orgId) ?? "none";
 }
 
 export function getAnalyticsSessionMetadata() {
@@ -150,7 +184,9 @@ export function trackBehavioralEvent(
 ): void {
   if (!orgId) return;
   const consentState = getConsentState(orgId);
+  const trackingLevel = getTrackingLevel(orgId);
   if (consentState !== "opted_in") return;
+  if (!canTrackBehavioralEvent(trackingLevel, event_name)) return;
 
   const supabase = createClient();
 

@@ -2,8 +2,9 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
 import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
+import { validateSiteUrl } from "./lib/supabase/config";
 
-// Validate AUTH_TEST_MODE at module load
+// Validate at module load
 validateAuthTestMode();
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -77,6 +78,16 @@ export async function middleware(request: NextRequest) {
     url.protocol = "https:";
     url.host = "www.myteamnetwork.com";
     return NextResponse.redirect(url, { status: 308 });
+  }
+
+  try {
+    validateSiteUrl();
+  } catch (e) {
+    console.error("[MW] Site URL validation failed:", (e as Error).message);
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 500 }
+    );
   }
 
   const response = NextResponse.next({
@@ -225,9 +236,9 @@ export async function middleware(request: NextRequest) {
   // API routes: keep JSON 401 instead of HTML redirect
   if (pathname.startsWith("/api/")) {
     if (!user) {
-      const corsHeaders = process.env.NODE_ENV === "development"
+      const corsHeaders: HeadersInit | undefined = process.env.NODE_ENV === "development"
         ? { "Access-Control-Allow-Origin": "*" }
-        : {};
+        : undefined;
       return NextResponse.json(
         { error: "Unauthorized", message: "Authentication required" },
         { status: 401, headers: corsHeaders }
@@ -238,7 +249,8 @@ export async function middleware(request: NextRequest) {
 
   if (!user) {
     const redirectUrl = new URL("/auth/login", request.url);
-    redirectUrl.searchParams.set("redirect", pathname);
+    const fullPath = pathname + request.nextUrl.search;
+    redirectUrl.searchParams.set("redirect", fullPath);
     const redirectResponse = NextResponse.redirect(redirectUrl);
 
     if (hasAuthCookies) {
@@ -424,6 +436,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  response.headers.set("x-pathname", pathname);
   return response;
 }
 

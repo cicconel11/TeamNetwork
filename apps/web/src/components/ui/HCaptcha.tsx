@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   useCallback,
+  useEffect,
 } from "react";
 import ReactHCaptcha from "@hcaptcha/react-hcaptcha";
 
@@ -83,7 +84,19 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
 
     const handleLoad = useCallback(() => {
       setIsLoading(false);
+      setTimedOut(false);
     }, []);
+
+    const [timedOut, setTimedOut] = useState(false);
+
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        if (isLoading) {
+          setTimedOut(true);
+        }
+      }, 8000);
+      return () => clearTimeout(timer);
+    }, [isLoading]);
 
     // Development mode bypass — only when no real site key is configured
     // (mirrors server-side bypass condition: development && !secretKey)
@@ -111,7 +124,7 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
     return (
       <div className={`relative ${className}`}>
         {/* Loading indicator */}
-        {isLoading && (
+        {isLoading && !timedOut && (
           <div
             className="flex items-center justify-center p-4 text-muted-foreground"
             role="status"
@@ -139,6 +152,40 @@ export const HCaptcha = forwardRef<HCaptchaRef, HCaptchaProps>(
               />
             </svg>
             <span>Loading captcha...</span>
+          </div>
+        )}
+
+        {/* Timeout fallback */}
+        {isLoading && timedOut && (
+          <div
+            className="flex flex-col items-center justify-center p-4 text-muted-foreground text-sm"
+            role="alert"
+          >
+            <p>Captcha failed to load. This may be caused by an ad blocker.</p>
+            <button
+              type="button"
+              className="mt-2 text-primary underline hover:no-underline"
+              onClick={() => window.location.reload()}
+            >
+              Reload page
+            </button>
+          </div>
+        )}
+
+        {/* Timeout fallback */}
+        {isLoading && timedOut && (
+          <div
+            className="flex flex-col items-center justify-center p-4 text-muted-foreground text-sm"
+            role="alert"
+          >
+            <p>Captcha failed to load. This may be caused by an ad blocker.</p>
+            <button
+              type="button"
+              className="mt-2 text-primary underline hover:no-underline"
+              onClick={() => window.location.reload()}
+            >
+              Reload page
+            </button>
           </div>
         )}
 

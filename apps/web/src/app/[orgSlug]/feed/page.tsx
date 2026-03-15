@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { createClient } from "@/lib/supabase/server";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { createServiceClient } from "@/lib/supabase/service";
+import { fetchMediaForEntities } from "@/lib/media/fetch";
+
 import { FeedComposer } from "@/components/feed/FeedComposer";
 import { FeedList } from "@/components/feed/FeedList";
 
@@ -42,7 +44,6 @@ export default async function FeedPage({
     .range(offset, offset + limit - 1);
 
   if (error) {
-    console.error("[FEED DEBUG] feed_posts query error:", JSON.stringify(error));
     throw new Error("Failed to load feed");
   }
 
@@ -60,10 +61,16 @@ export default async function FeedPage({
     userLikedPostIds = new Set((likes || []).map((l) => l.post_id));
   }
 
-  // Augment posts with liked_by_user
+  // Fetch media attachments for all posts
+  const mediaMap = postIds.length > 0
+    ? await fetchMediaForEntities(createServiceClient(), "feed_post", postIds, orgCtx.organization.id)
+    : new Map();
+
+  // Augment posts with liked_by_user and media
   const augmentedPosts = (posts || []).map((post) => ({
     ...post,
     liked_by_user: userLikedPostIds.has(post.id),
+    media: mediaMap.get(post.id) ?? [],
   }));
 
   const total = count || 0;
@@ -76,23 +83,32 @@ export default async function FeedPage({
   const canPost = orgCtx.role ? feedPostRoles.includes(orgCtx.role) : false;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <PageHeader
-        title="Feed"
-        description="Stay up to date with your team"
-      />
+    <>
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground font-mono">
+          Team Feed
+        </span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
       {canPost && (
-        <div className="mb-6">
+        <div className="mb-5">
           <FeedComposer orgId={orgCtx.organization.id} />
         </div>
       )}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1 bg-border/50" />
+        <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/50">
+          Recent
+        </span>
+        <div className="h-px flex-1 bg-border/50" />
+      </div>
       <FeedList
         posts={augmentedPosts}
         orgSlug={orgSlug}
         currentUserId={orgCtx.userId || ""}
         isAdmin={orgCtx.isAdmin}
-        pagination={{ page, limit, total, totalPages }}
+        pagination={{ page, total, totalPages }}
       />
-    </div>
+    </>
   );
 }

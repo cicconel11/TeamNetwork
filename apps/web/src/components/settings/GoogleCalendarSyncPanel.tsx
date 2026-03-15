@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Badge, Button, Card, Select } from "@/components/ui";
+import { Badge, Button, Card, Select, InlineBanner } from "@/components/ui";
+import { showFeedback } from "@/lib/feedback/show-feedback";
 
 export interface SyncPreferences {
   sync_general: boolean;
@@ -148,21 +149,6 @@ export function GoogleCalendarSyncPanel({
 }: GoogleCalendarSyncPanelProps) {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
-
-  // Auto-dismiss feedback after 5 seconds
-  useEffect(() => {
-    if (!actionNotice) return;
-    const timer = setTimeout(() => setActionNotice(null), 5000);
-    return () => clearTimeout(timer);
-  }, [actionNotice]);
-
-  useEffect(() => {
-    if (!actionError) return;
-    const timer = setTimeout(() => setActionError(null), 5000);
-    return () => clearTimeout(timer);
-  }, [actionError]);
   const [targetError, setTargetError] = useState<string | null>(null);
 
   // Preferences local state for optimistic updates
@@ -177,12 +163,10 @@ export function GoogleCalendarSyncPanel({
   const handleDisconnect = async () => {
     if (!confirm("Disconnect your Google Calendar? Events already synced will remain.")) return;
     setIsDisconnecting(true);
-    setActionError(null);
-    setActionNotice(null);
     try {
       await onDisconnect();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to disconnect");
+      showFeedback(err instanceof Error ? err.message : "Failed to disconnect", "error", { duration: 5000 });
     } finally {
       setIsDisconnecting(false);
     }
@@ -190,13 +174,11 @@ export function GoogleCalendarSyncPanel({
 
   const handleSync = async () => {
     setIsSyncing(true);
-    setActionError(null);
-    setActionNotice(null);
     try {
       const result = await onSync();
-      setActionNotice(result.message);
+      showFeedback(result.message, "success", { duration: 5000 });
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Failed to sync");
+      showFeedback(err instanceof Error ? err.message : "Failed to sync", "error", { duration: 5000 });
     } finally {
       setIsSyncing(false);
     }
@@ -285,14 +267,10 @@ export function GoogleCalendarSyncPanel({
         </p>
 
         {connection?.status === "disconnected" && (
-          <div className="text-sm text-amber-600 dark:text-amber-400">
-            Your Google Calendar connection has been disconnected. Please reconnect to continue syncing events.
-          </div>
+          <InlineBanner variant="warning">Your Google Calendar connection has been disconnected. Please reconnect to continue syncing events.</InlineBanner>
         )}
         {connection?.status === "error" && (
-          <div className="text-sm text-red-600 dark:text-red-400">
-            There was an error with your Google Calendar connection. Please try reconnecting.
-          </div>
+          <InlineBanner variant="error">There was an error with your Google Calendar connection. Please try reconnecting.</InlineBanner>
         )}
 
         <Button onClick={onConnect}>
@@ -333,9 +311,7 @@ export function GoogleCalendarSyncPanel({
         </p>
 
         {connection?.status === "error" && (
-          <div className="text-sm text-red-600 dark:text-red-400">
-            There was an error with your Google Calendar connection. Please try reconnecting.
-          </div>
+          <InlineBanner variant="error">There was an error with your Google Calendar connection. Please try reconnecting.</InlineBanner>
         )}
 
       </div>
@@ -361,7 +337,7 @@ export function GoogleCalendarSyncPanel({
               disabled={calendarsLoading}
             />
             {targetError && (
-              <p className="text-sm text-error">{targetError}</p>
+              <InlineBanner variant="error">{targetError}</InlineBanner>
             )}
           </>
         )}
@@ -391,7 +367,7 @@ export function GoogleCalendarSyncPanel({
             </div>
 
             {prefError && (
-              <div className="text-sm text-red-600 dark:text-red-400">{prefError}</div>
+              <InlineBanner variant="error">{prefError}</InlineBanner>
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
@@ -438,16 +414,6 @@ export function GoogleCalendarSyncPanel({
 
       {/* Section 4: Actions footer */}
       <div className="p-5 space-y-3">
-        {actionNotice && (
-          <div className="rounded-md bg-green-50 dark:bg-green-900/20 px-3 py-2 text-sm text-green-700 dark:text-green-300">
-            {actionNotice}
-          </div>
-        )}
-        {actionError && (
-          <div className="rounded-md bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-600 dark:text-red-400">
-            {actionError}
-          </div>
-        )}
         <div className="flex items-center justify-between">
         <Button
           variant="secondary"

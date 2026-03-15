@@ -8,13 +8,21 @@
     "start": "next start",
     "lint": "next lint",
     "test": "npm run test:unit && npm run test:security && npm run test:payments && npm run test:mobile",
-    "test:unit": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts tests/cancel-subscription.test.ts tests/grace-period.test.ts",
+    "test:unit": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts tests/cancel-subscription.test.ts tests/grace-period.test.ts tests/subscription.test.ts tests/calendar-ics-sync.test.ts tests/schedule-connectors.test.ts tests/alumni-edit-roles.test.ts tests/forgot-password.test.ts tests/auth-callback.test.ts tests/auth-oauth-regressions.test.ts tests/invite-redirect.test.ts tests/oauth-signup-callback-url.test.ts tests/alumni-linkedin-url.test.ts tests/linkedin-*.test.ts tests/enterprise/*.test.ts tests/enterprise-quantity-pricing.test.ts tests/embed-url-policy.test.ts",
     "test:auth": "node --test --loader ./tests/ts-loader.js tests/middleware.testing123.test.ts",
     "test:payments": "node --test --loader ./tests/ts-loader.js tests/payment-idempotency.test.ts tests/stripe-webhook-dedupe.test.ts tests/platform-fee.test.ts",
     "test:security": "node --test --loader ./tests/ts-loader.js tests/webhook-rate-limit.test.ts",
+    "test:schedules": "node --test --loader ./tests/ts-loader.js tests/schedule-domain.test.ts",
+    "test:jobs": "node --test --loader ./tests/ts-loader.js tests/routes/jobs/*.test.ts",
+    "test:media": "node --test --loader ./tests/ts-loader.js tests/media-upload.test.ts tests/media-link.test.ts",
+    "test:qrcode": "node --test --loader ./tests/ts-loader.js tests/qrcode-display.test.ts",
+    "test:routes": "node --test --loader ./tests/ts-loader.js tests/routes/stripe/*.test.ts tests/routes/organizations/*.test.ts tests/routes/enterprise/*.test.ts tests/routes/admin/*.test.ts tests/routes/schedules/*.test.ts tests/routes/calendar/*.test.ts tests/routes/chat/*.test.ts tests/routes/feedback/*.test.ts tests/routes/notifications/*.test.ts tests/routes/dev-admin/*.test.ts tests/routes/jobs/*.test.ts tests/routes/linkedin/*.test.ts",
     "test:mobile": "node --test --loader ./tests/ts-loader.js tests/mobile-permissions.test.ts tests/mobile-routing.test.ts tests/mobile-parity-menu.test.ts",
     "test:e2e": "npx playwright test --project=e2e",
-    "typecheck": "tsc --noEmit"
+    "test:e2e:ui": "npx playwright test --project=e2e --ui",
+    "test:e2e:debug": "npx playwright test --project=e2e --debug",
+    "typecheck": "tsc --noEmit",
+    "gen:types": "npx supabase gen types --lang=typescript --project-id rytsziwekhtjdqzzpdso > src/types/database.ts && node scripts/append-database-compat.js"
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^1.17.4",

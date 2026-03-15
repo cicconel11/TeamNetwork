@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { ComponentType } from "react";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import {
@@ -68,7 +69,7 @@ export const getConfigKey = (href: string): string => href === "" ? "dashboard" 
 export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "", label: "Dashboard", icon: HomeIcon, roles: ["admin", "active_member", "alumni", "parent"] },
   { href: "/members", label: "Members", icon: UsersIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "people" },
-  { href: "/chat", label: "Chat", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
+  { href: "/messages", label: "Messages", icon: ChatIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/feed", label: "Feed", icon: FeedIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/alumni", label: "Alumni", icon: GraduationCapIcon, roles: ["admin", "active_member", "alumni", "parent"], requiresAlumni: true, group: "people" },
   { href: "/parents", label: "Parents", icon: ParentsIcon, roles: ["admin", "active_member", "parent"], requiresParents: true, group: "people" },
@@ -82,7 +83,6 @@ export const ORG_NAV_ITEMS: OrgNavItem[] = [
   { href: "/expenses", label: "Expenses", icon: ReceiptIcon, roles: ["admin", "active_member"], group: "finance" },
   { href: "/records", label: "Records", icon: TrophyIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "activity" },
   { href: "/calendar", label: "Calendar", icon: BookOpenIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "schedule" },
-  { href: "/discussions", label: "Discussions", icon: DiscussionIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/jobs", label: "Jobs", icon: BriefcaseIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/forms", label: "Forms", icon: ClipboardIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },
   { href: "/media", label: "Media Archive", icon: GridIcon, roles: ["admin", "active_member", "alumni", "parent"], group: "community" },

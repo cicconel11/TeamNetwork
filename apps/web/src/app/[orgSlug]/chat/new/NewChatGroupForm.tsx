@@ -160,7 +160,7 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
     }
 
     // Use window.location for a hard navigation to ensure fresh data
-    window.location.href = `/${orgSlug}/chat/${group.id}`;
+    window.location.href = `/${orgSlug}/messages/chat/${group.id}`;
   };
 
   return (
@@ -320,7 +320,7 @@ export function NewChatGroupForm({ orgSlug, organizationId, currentUserId }: New
             <Button
               type="button"
               variant="secondary"
-              onClick={() => router.push(`/${orgSlug}/chat`)}
+              onClick={() => router.push(`/${orgSlug}/messages`)}
             >
               Cancel
             </Button>
