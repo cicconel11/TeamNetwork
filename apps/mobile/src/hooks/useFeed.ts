@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import type { FeedPost, PostAuthor, MediaAttachment, UseFeedReturn } from "@/types/feed";
@@ -264,16 +265,25 @@ export function useFeed(orgId: string | null): UseFeedReturn {
 
   // Create post
   const createPost = useCallback(
-    async (body: string) => {
+    async (body: string, mediaIds: string[] = []) => {
       if (!userId || !orgId) return;
 
       try {
-        const { error: insertError } = await supabase.from("feed_posts").insert({
-          organization_id: orgId,
-          author_id: userId,
-          body: body.trim(),
+        const response = await fetchWithAuth("/api/feed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orgId,
+            body: body.trim(),
+            mediaIds,
+          }),
         });
-        if (insertError) throw insertError;
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to create post");
+        }
+
         showToast("Post created");
       } catch (e) {
         const message = (e as Error).message || "Failed to create post";

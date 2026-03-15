@@ -47,7 +47,7 @@ export interface UseFeedReturn {
   refetch: () => Promise<void>;
   refetchIfStale: () => void;
   acceptPendingPosts: () => void;
-  createPost: (body: string) => Promise<void>;
+  createPost: (body: string, mediaIds?: string[]) => Promise<void>;
   updatePost: (postId: string, body: string) => Promise<void>;
   deletePost: (postId: string) => Promise<void>;
   toggleLike: (postId: string) => Promise<void>;
