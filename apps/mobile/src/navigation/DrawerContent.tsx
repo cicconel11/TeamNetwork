@@ -119,7 +119,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       communityItems.push({
         label: "Feed",
         icon: Newspaper,
-        href: `/(app)/(drawer)/${slug}/feed`,
+        href: `/(app)/${slug}/feed`,
       });
     }
 

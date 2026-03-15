@@ -16,6 +16,7 @@ import { X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { APP_CHROME } from "@/lib/chrome";
@@ -28,12 +29,14 @@ export default function NewPostScreen() {
   const router = useRouter();
   const { orgId } = useOrg();
   const { user } = useAuth();
+  const { isAdmin, isActiveMember } = useOrgRole();
+  const canCreatePost = isAdmin || isActiveMember;
   const userId = user?.id ?? null;
   const [body, setBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const styles = useMemo(() => createStyles(), []);
 
-  const canSubmit = body.trim().length > 0 && !submitting;
+  const canSubmit = body.trim().length > 0 && !submitting && canCreatePost;
   const remaining = MAX_BODY_LENGTH - body.length;
 
   const handleSubmit = useCallback(async () => {
@@ -57,6 +60,38 @@ export default function NewPostScreen() {
       setSubmitting(false);
     }
   }, [canSubmit, userId, orgId, body, router]);
+
+  if (!canCreatePost) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable
+                onPress={() => router.back()}
+                style={styles.closeButton}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+              >
+                <X size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>New Post</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={[styles.contentSheet, { justifyContent: "center", alignItems: "center" }]}>
+          <Text style={{ ...TYPOGRAPHY.bodyMedium, color: SEMANTIC.error }}>
+            You do not have permission to create posts.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

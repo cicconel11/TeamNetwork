@@ -83,45 +83,42 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         const rawPosts = postsData || [];
         const postIds = rawPosts.map((p) => p.id);
 
-        // Fetch like status for current user
-        let likedPostIds: Set<string> = new Set();
-        if (postIds.length > 0) {
-          const { data: likesData } = await supabase
-            .from("feed_likes")
-            .select("post_id")
-            .eq("user_id", user.id)
-            .in("post_id", postIds);
+        // Fetch likes and media in parallel
+        const [likesResult, mediaResult] = await Promise.all([
+          postIds.length > 0
+            ? supabase
+                .from("feed_likes")
+                .select("post_id")
+                .eq("user_id", user.id)
+                .in("post_id", postIds)
+            : Promise.resolve({ data: null }),
+          postIds.length > 0
+            ? supabase
+                .from("media_uploads")
+                .select("id, storage_path, mime_type, file_name, entity_id")
+                .eq("entity_type", "feed_post")
+                .eq("status", "ready")
+                .in("entity_id", postIds)
+                .is("deleted_at", null)
+            : Promise.resolve({ data: null }),
+        ]);
 
-          if (likesData) {
-            likedPostIds = new Set(likesData.map((l) => l.post_id));
-          }
-        }
+        const likedPostIds: Set<string> = new Set(
+          (likesResult.data ?? []).map((l: { post_id: string }) => l.post_id)
+        );
 
-        // Fetch media attachments
         const mediaByPostId: Map<string, MediaAttachment[]> = new Map();
-        if (postIds.length > 0) {
-          const { data: mediaData } = await supabase
-            .from("media_uploads")
-            .select("id, storage_path, mime_type, file_name, entity_id")
-            .eq("entity_type", "feed_post")
-            .eq("status", "ready")
-            .in("entity_id", postIds)
-            .is("deleted_at", null);
-
-          if (mediaData) {
-            for (const m of mediaData) {
-              const entityId = m.entity_id;
-              if (!entityId) continue;
-              const existing = mediaByPostId.get(entityId) || [];
-              existing.push({
-                id: m.id,
-                storage_path: m.storage_path,
-                mime_type: m.mime_type,
-                file_name: m.file_name,
-              });
-              mediaByPostId.set(entityId, existing);
-            }
-          }
+        for (const m of mediaResult.data ?? []) {
+          const entityId = (m as { entity_id: string | null }).entity_id;
+          if (!entityId) continue;
+          const existing = mediaByPostId.get(entityId) || [];
+          existing.push({
+            id: (m as { id: string }).id,
+            storage_path: (m as { storage_path: string }).storage_path,
+            mime_type: (m as { mime_type: string | null }).mime_type ?? "",
+            file_name: (m as { file_name: string | null }).file_name ?? "",
+          });
+          mediaByPostId.set(entityId, existing);
         }
 
         if (currentGeneration !== generationRef.current) return;
@@ -291,11 +288,13 @@ export function useFeed(orgId: string | null): UseFeedReturn {
   // Update post
   const updatePost = useCallback(async (postId: string, body: string) => {
     try {
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from("feed_posts")
         .update({ body: body.trim(), updated_at: new Date().toISOString() })
-        .eq("id", postId);
+        .eq("id", postId)
+        .select("id");
       if (updateError) throw updateError;
+      if (!data || data.length === 0) throw new Error("Post not found or not authorized");
       showToast("Post updated");
     } catch (e) {
       const message = (e as Error).message || "Failed to update post";
@@ -354,6 +353,8 @@ export function useFeed(orgId: string | null): UseFeedReturn {
           // Don't add own posts to pending (they'll appear via refetch after create)
           if (newPost.author_id === userId) return;
 
+          if (!isMountedRef.current) return;
+
           // Fetch author info for the new post
           // users table has "name" column; map to PostAuthor's full_name field
           const { data: authorData } = await supabase
@@ -361,6 +362,8 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             .select("id, name, avatar_url")
             .eq("id", newPost.author_id)
             .single();
+
+          if (!isMountedRef.current) return;
 
           const author: PostAuthor | null = authorData
             ? { id: authorData.id, full_name: authorData.name, avatar_url: authorData.avatar_url }
@@ -373,9 +376,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             media: [],
           };
 
-          if (isMountedRef.current) {
-            setPendingPosts((prev) => [enrichedPost, ...prev]);
-          }
+          setPendingPosts((prev) => [enrichedPost, ...prev]);
         }
       )
       .on(

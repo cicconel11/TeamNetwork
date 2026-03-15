@@ -85,12 +85,14 @@ export function useComments(postId: string | undefined, orgId: string | null): U
 
   const deleteComment = useCallback(async (commentId: string) => {
     try {
-      const { error: deleteError } = await supabase
+      const { data, error: deleteError } = await supabase
         .from("feed_comments")
         .update({ deleted_at: new Date().toISOString() })
-        .eq("id", commentId);
+        .eq("id", commentId)
+        .select("id");
 
       if (deleteError) throw deleteError;
+      if (!data || data.length === 0) throw new Error("Comment not found or not authorized");
 
       if (isMountedRef.current) {
         setComments((prev) => prev.filter((c) => c.id !== commentId));

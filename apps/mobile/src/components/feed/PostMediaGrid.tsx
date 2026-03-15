@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { supabase } from "@/lib/supabase";
 import { RADIUS, SPACING } from "@/lib/design-tokens";
@@ -9,12 +9,16 @@ interface PostMediaGridProps {
   media: MediaAttachment[];
 }
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
-const GRID_WIDTH = SCREEN_WIDTH - SPACING.md * 4; // account for card padding + screen padding
+interface CachedUrl {
+  url: string;
+  expiresAt: number;
+}
+
+const SIGNED_URL_TTL_MS = 3_540_000; // 59 minutes (URL valid for 60 min)
 
 export function PostMediaGrid({ media }: PostMediaGridProps) {
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
-  const urlCacheRef = useRef<Record<string, string>>({});
+  const urlCacheRef = useRef<Record<string, CachedUrl>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -22,9 +26,10 @@ export function PostMediaGrid({ media }: PostMediaGridProps) {
     async function generateUrls() {
       const newUrls: Record<string, string> = {};
       for (const item of media) {
-        // Use cached URL if available
-        if (urlCacheRef.current[item.id]) {
-          newUrls[item.id] = urlCacheRef.current[item.id];
+        // Use cached URL if not expired
+        const cached = urlCacheRef.current[item.id];
+        if (cached && Date.now() < cached.expiresAt) {
+          newUrls[item.id] = cached.url;
           continue;
         }
         const { data } = await supabase.storage
@@ -32,7 +37,7 @@ export function PostMediaGrid({ media }: PostMediaGridProps) {
           .createSignedUrl(item.storage_path, 3600);
         if (data?.signedUrl) {
           newUrls[item.id] = data.signedUrl;
-          urlCacheRef.current[item.id] = data.signedUrl;
+          urlCacheRef.current[item.id] = { url: data.signedUrl, expiresAt: Date.now() + SIGNED_URL_TTL_MS };
         }
       }
       if (!cancelled) {

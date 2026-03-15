@@ -16,6 +16,8 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { X } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { usePost } from "@/hooks/usePost";
+import { useAuth } from "@/hooks/useAuth";
+import { useOrgRole } from "@/hooks/useOrgRole";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { APP_CHROME } from "@/lib/chrome";
@@ -28,10 +30,14 @@ export default function EditPostScreen() {
   const { postId } = useLocalSearchParams<{ postId: string }>();
   const router = useRouter();
   const { post, loading } = usePost(postId);
+  const { user } = useAuth();
+  const { isAdmin } = useOrgRole();
   const [body, setBody] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const styles = useMemo(() => createStyles(), []);
+
+  const canEdit = !post || !user ? null : post.author_id === user.id || isAdmin;
 
   // Pre-fill body from post
   useEffect(() => {
@@ -69,6 +75,38 @@ export default function EditPostScreen() {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color={NEUTRAL.muted} />
+      </View>
+    );
+  }
+
+  if (canEdit === false) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <Pressable
+                onPress={() => router.back()}
+                style={styles.closeButton}
+                accessibilityLabel="Close"
+                accessibilityRole="button"
+              >
+                <X size={24} color={APP_CHROME.headerTitle} />
+              </Pressable>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Edit Post</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={[styles.contentSheet, styles.centered]}>
+          <Text style={styles.unauthorizedText}>
+            You are not authorized to edit this post.
+          </Text>
+        </View>
       </View>
     );
   }
@@ -155,6 +193,12 @@ const createStyles = () =>
     centered: {
       justifyContent: "center",
       alignItems: "center",
+    },
+    unauthorizedText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: SEMANTIC.error,
+      textAlign: "center",
+      padding: SPACING.lg,
     },
     headerGradient: {
       paddingBottom: SPACING.md,

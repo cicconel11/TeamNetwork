@@ -6,6 +6,7 @@ import {
   RefreshControl,
   StyleSheet,
   Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -33,11 +34,13 @@ export default function FeedScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { permissions, isAdmin } = useOrgRole();
+  const { permissions, isAdmin, isActiveMember } = useOrgRole();
+  const canCreatePost = isAdmin || isActiveMember;
   const styles = useMemo(() => createStyles(), []);
   const {
     posts,
     loading,
+    loadingMore,
     error,
     hasMore,
     pendingPosts,
@@ -210,15 +213,17 @@ export default function FeedScreen() {
               </Text>
             </View>
 
-            {/* Create post button */}
-            <Pressable
-              onPress={handleCreatePost}
-              style={styles.createButton}
-              accessibilityLabel="Create post"
-              accessibilityRole="button"
-            >
-              <Plus size={22} color={APP_CHROME.headerTitle} />
-            </Pressable>
+            {/* Create post button — gated by role */}
+            {canCreatePost && (
+              <Pressable
+                onPress={handleCreatePost}
+                style={styles.createButton}
+                accessibilityLabel="Create post"
+                accessibilityRole="button"
+              >
+                <Plus size={22} color={APP_CHROME.headerTitle} />
+              </Pressable>
+            )}
 
             {/* Overflow Menu (admin only) */}
             {adminMenuItems.length > 0 && (
@@ -250,19 +255,26 @@ export default function FeedScreen() {
           }
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            loadingMore ? (
+              <ActivityIndicator style={{ paddingVertical: SPACING.lg }} color={NEUTRAL.muted} />
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>No Posts Yet</Text>
               <Text style={styles.emptyText}>
                 Start the conversation — share an update with your team.
               </Text>
-              <Pressable
-                onPress={handleCreatePost}
-                style={styles.emptyCreateButton}
-                accessibilityRole="button"
-              >
-                <Text style={styles.emptyCreateButtonText}>Create Post</Text>
-              </Pressable>
+              {canCreatePost && (
+                <Pressable
+                  onPress={handleCreatePost}
+                  style={styles.emptyCreateButton}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.emptyCreateButtonText}>Create Post</Text>
+                </Pressable>
+              )}
             </View>
           }
           initialNumToRender={8}
