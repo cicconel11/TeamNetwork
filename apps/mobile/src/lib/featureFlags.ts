@@ -13,6 +13,8 @@ export interface FeatureFlags {
   recordsEnabled: boolean;
   /** Enable forms module */
   formsEnabled: boolean;
+  /** Enable social feed feature */
+  socialFeedEnabled: boolean;
 }
 
 /**
@@ -25,6 +27,7 @@ export const defaultFeatureFlags: FeatureFlags = {
   donationsEnabled: false,
   recordsEnabled: false,
   formsEnabled: false,
+  socialFeedEnabled: false,
 };
 
 /**
@@ -44,6 +47,7 @@ export function getFeatureFlags(_orgId?: string): FeatureFlags {
   const flags = { ...defaultFeatureFlags };
   if (__DEV__) {
     flags.alumniEnabled = true;
+    flags.socialFeedEnabled = true;
   }
   return flags;
 }
