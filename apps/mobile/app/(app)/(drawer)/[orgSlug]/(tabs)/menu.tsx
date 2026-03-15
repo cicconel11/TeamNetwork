@@ -381,7 +381,7 @@ export default function MenuScreen() {
             </View>
 
             {/* User Profile */}
-            <Pressable style={({ pressed }) => [styles.profileRow, pressed && { opacity: 0.7 }]}>
+            <Pressable style={({ pressed }) => [styles.profileRow, pressed && { opacity: 0.7 }]} onPress={() => router.push("/(app)/(drawer)/profile")}>
               {userAvatar ? (
                 <Image source={userAvatar} style={styles.avatar} contentFit="cover" transition={200} />
               ) : (
