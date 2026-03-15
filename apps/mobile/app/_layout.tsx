@@ -9,6 +9,7 @@ import AuthLoadingScreen from "@/components/AuthLoadingScreen";
 import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled, setEnabled } from "@/lib/analytics";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
+import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 
 // Stripe React Native is a native module — not available on web.
 // Use conditional require to avoid crash when running in browser.
@@ -71,6 +72,9 @@ function RootLayoutInner() {
 
   // Track screen views automatically
   useScreenTracking();
+
+  // Reconnect Supabase realtime when app returns from background
+  useSupabaseAppState();
 
   // Initialize push notifications
   usePushNotifications({
