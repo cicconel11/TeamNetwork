@@ -56,9 +56,8 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
         return;
       }
 
-      // Redirect to the discussions list with fresh data
-      router.replace(`/${orgSlug}/messages`);
-      router.refresh();
+      // Hard navigation to the new thread to ensure sidebar refreshes
+      window.location.href = `/${orgSlug}/messages/threads/${result.data.id}`;
     } catch (err) {
       setError("An unexpected error occurred");
       setIsSubmitting(false);
@@ -104,7 +103,7 @@ export function ThreadForm({ orgId, orgSlug }: ThreadFormProps) {
 
         <div className="flex gap-3">
           <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? "Creating..." : "Create Thread"}
+            {isSubmitting ? "Creating..." : "Create Discussion"}
           </Button>
           <Button type="button" variant="ghost" onClick={() => router.push(`/${orgSlug}/messages`)} disabled={isSubmitting}>
             Cancel
