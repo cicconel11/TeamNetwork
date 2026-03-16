@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
 import { EventRsvp, AttendanceList, EventDeleteButton, RecurringEventDeleteButton } from "@/components/events";
 import type { RsvpStatus } from "@/types/database";
 import { EventOpenTracker } from "@/components/analytics/EventsViewTracker";
@@ -14,18 +14,11 @@ interface EventDetailPageProps {
 
 export default async function EventDetailPage({ params }: EventDetailPageProps) {
   const { orgSlug, eventId } = await params;
+
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
+  if (!org) return notFound();
+
   const supabase = await createClient();
-
-  // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return notFound();
 
   // Fetch event
   const { data: event } = await supabase
@@ -37,8 +30,6 @@ export default async function EventDetailPage({ params }: EventDetailPageProps) 
     .single();
 
   if (!event) return notFound();
-
-  const isAdmin = await isOrgAdmin(org.id);
   const isPast = new Date(event.start_date) < new Date();
   const isRecurring = !!event.recurrence_group_id;
 
