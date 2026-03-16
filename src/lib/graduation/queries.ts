@@ -364,6 +364,158 @@ export async function getMembersToReinstate(
   return (data || []) as GraduatingMember[];
 }
 
+export interface CapacityResult {
+  hasCapacity: boolean;
+  currentCount: number;
+  limit: number | null;
+}
+
+/**
+ * Batch-fetch organization details for a set of org IDs.
+ * Returns a Map keyed by org ID.
+ */
+export async function batchGetOrganizations(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, OrgWithSlug>> {
+  if (orgIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("id, name, slug")
+    .in("id", orgIds);
+
+  if (error) {
+    console.error("[graduation] Error batch-fetching organizations:", error);
+    return new Map();
+  }
+
+  const map = new Map<string, OrgWithSlug>();
+  for (const org of data || []) {
+    map.set(org.id, org as OrgWithSlug);
+  }
+  return map;
+}
+
+/**
+ * Batch-fetch admin emails for a set of org IDs.
+ * Returns a Map keyed by org ID.
+ */
+export async function batchGetOrgAdminEmails(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, string[]>> {
+  if (orgIds.length === 0) return new Map();
+
+  const { data: roleRows, error: rolesError } = await supabase
+    .from("user_organization_roles")
+    .select("organization_id, user_id")
+    .in("organization_id", orgIds)
+    .eq("role", "admin")
+    .eq("status", "active");
+
+  if (rolesError || !roleRows || roleRows.length === 0) {
+    return new Map();
+  }
+
+  const userIds = [...new Set(roleRows.map((r) => r.user_id))];
+
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, email")
+    .in("id", userIds);
+
+  if (usersError || !users) {
+    return new Map();
+  }
+
+  const emailByUserId = new Map<string, string>();
+  for (const user of users) {
+    if (user.email) emailByUserId.set(user.id, user.email);
+  }
+
+  const map = new Map<string, string[]>();
+  for (const row of roleRows) {
+    const email = emailByUserId.get(row.user_id);
+    if (!email) continue;
+    const existing = map.get(row.organization_id) ?? [];
+    existing.push(email);
+    map.set(row.organization_id, existing);
+  }
+  return map;
+}
+
+/**
+ * Batch-check alumni capacity for a set of org IDs.
+ * Returns a Map keyed by org ID.
+ */
+export async function batchCheckAlumniCapacity(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, CapacityResult>> {
+  if (orgIds.length === 0) return new Map();
+
+  const { data: subscriptions, error: subError } = await supabase
+    .from("organization_subscriptions")
+    .select("organization_id, alumni_bucket")
+    .in("organization_id", orgIds);
+
+  if (subError) {
+    console.error("[graduation] Error batch-fetching subscriptions:", subError);
+    throw new Error(`Failed to batch-check alumni capacity: ${subError.message}`);
+  }
+
+  const bucketByOrg = new Map<string, string>();
+  for (const sub of subscriptions || []) {
+    bucketByOrg.set(sub.organization_id, sub.alumni_bucket || "none");
+  }
+
+  // Determine which orgs need an alumni count (those with a finite limit)
+  const orgsNeedingCount: string[] = [];
+  for (const orgId of orgIds) {
+    const bucket = bucketByOrg.get(orgId) || "none";
+    const limit = getAlumniLimit(bucket as Parameters<typeof getAlumniLimit>[0]);
+    if (limit !== null) {
+      orgsNeedingCount.push(orgId);
+    }
+  }
+
+  // Batch-count alumni for orgs with finite limits
+  const alumniCountByOrg = new Map<string, number>();
+  if (orgsNeedingCount.length > 0) {
+    const { data: alumniRows, error: countError } = await supabase
+      .from("alumni")
+      .select("organization_id")
+      .in("organization_id", orgsNeedingCount)
+      .is("deleted_at", null);
+
+    if (countError) {
+      console.error("[graduation] Error batch-counting alumni:", countError);
+      // Fall through — each affected org will report hasCapacity: false
+    } else {
+      for (const row of alumniRows || []) {
+        const current = alumniCountByOrg.get(row.organization_id) ?? 0;
+        alumniCountByOrg.set(row.organization_id, current + 1);
+      }
+    }
+  }
+
+  const map = new Map<string, CapacityResult>();
+  for (const orgId of orgIds) {
+    const bucket = bucketByOrg.get(orgId) || "none";
+    const limit = getAlumniLimit(bucket as Parameters<typeof getAlumniLimit>[0]);
+
+    if (limit === null) {
+      map.set(orgId, { hasCapacity: true, currentCount: 0, limit: null });
+      continue;
+    }
+
+    const currentCount = alumniCountByOrg.get(orgId) ?? 0;
+    map.set(orgId, { hasCapacity: currentCount < limit, currentCount, limit });
+  }
+  return map;
+}
+
 /**
  * Dry-run result for the graduation cron job.
  */
@@ -390,10 +542,10 @@ export async function getGraduationDryRun(
 
   // Determine capacity per org for past-graduation members
   const orgIds = [...new Set(pastGraduation.map((m) => m.organization_id))];
+  const capacityMap = await batchCheckAlumniCapacity(supabase, orgIds);
   const capacityByOrg: Record<string, { hasCapacity: boolean; currentCount: number; limit: number | null }> = {};
-
-  for (const orgId of orgIds) {
-    capacityByOrg[orgId] = await checkAlumniCapacity(supabase, orgId);
+  for (const [orgId, result] of capacityMap) {
+    capacityByOrg[orgId] = result;
   }
 
   const toAlumni: GraduatingMember[] = [];
