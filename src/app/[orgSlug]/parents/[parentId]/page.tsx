@@ -48,7 +48,7 @@ export default async function ParentDetailPage({ params }: ParentDetailPageProps
   // Fetch organization
   const { data: orgData, error: orgError } = await dataClient
     .from("organizations")
-    .select("*")
+    .select("id, nav_config")
     .eq("slug", orgSlug)
     .limit(1);
 

@@ -40,7 +40,7 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   // Fetch organization
   const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
-    .select("*")
+    .select("id, nav_config")
     .eq("slug", orgSlug)
     .limit(1);
 

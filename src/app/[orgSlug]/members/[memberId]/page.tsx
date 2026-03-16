@@ -23,7 +23,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   // Fetch organization
   const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
-    .select("*")
+    .select("id, name")
     .eq("slug", orgSlug)
     .limit(1);
 
