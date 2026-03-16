@@ -129,5 +129,8 @@ BEGIN
 END;
 $$;
 
--- Part C: Grant execute to service_role (called server-side; bypasses anon/authenticated RLS)
+-- Part C: Restrict execute to service_role only (called server-side; bypasses anon/authenticated RLS)
+REVOKE EXECUTE ON FUNCTION public.get_enterprise_alumni_stats(uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_enterprise_alumni_stats(uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.get_enterprise_alumni_stats(uuid) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.get_enterprise_alumni_stats(uuid) TO service_role;
