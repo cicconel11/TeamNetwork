@@ -110,7 +110,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
 
-  const { data: orgEnterprise } = await serviceSupabase
+  const svc = createServiceClient();
+  const { data: orgEnterprise } = await svc
     .from("organizations")
     .select("enterprise_id")
     .eq("id", organizationId)

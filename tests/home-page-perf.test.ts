@@ -9,9 +9,8 @@ describe("getCachedDonationStats column names", () => {
     assert.ok(!src.match(/select\([^)]*total_amount[^_]/), "Should not select bare total_amount");
   });
 
-  it("selects total_amount_cents not total_amount in cache.ts", () => {
+  it("cache.ts no longer contains getCachedDonationStats (consolidated to cached-queries.ts)", () => {
     const src = readFileSync("src/lib/cache.ts", "utf-8");
-    assert.ok(src.includes("total_amount_cents"), "Should select total_amount_cents");
-    assert.ok(!src.match(/select\([^)]*total_amount[^_]/), "Should not select bare total_amount");
+    assert.ok(!src.includes("getCachedDonationStats"), "Should not have getCachedDonationStats in cache.ts");
   });
 });
