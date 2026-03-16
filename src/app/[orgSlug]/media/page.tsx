@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
+import dynamic from "next/dynamic";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { MediaGallery } from "@/components/media/MediaGallery";
+
+const MediaGallery = dynamic(
+  () => import("@/components/media/MediaGallery").then((mod) => mod.MediaGallery),
+  { loading: () => <div className="animate-pulse bg-[var(--muted)] rounded-2xl h-96" /> }
+);
 
 export default async function MediaArchivePage({
   params,

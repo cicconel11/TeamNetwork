@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { sendEmail } from "@/lib/notifications";
@@ -265,6 +266,19 @@ export async function POST(req: Request, { params }: RouteParams) {
     quotaBlocked,
     errors,
   };
+
+  // Invalidate enterprise alumni stats cache if any alumni were written
+  if (result.created > 0 || result.updated > 0) {
+    const { data: orgEnterprise } = await serviceSupabase
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    if (orgEnterprise?.enterprise_id) {
+      revalidateTag(`enterprise-alumni-stats-${orgEnterprise.enterprise_id}`);
+    }
+  }
 
   // Phase 2: Send invite emails if requested
   if (sendInvites && createdRecords.length > 0) {

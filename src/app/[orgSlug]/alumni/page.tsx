@@ -53,7 +53,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   // Fetch organization
   const { data: orgs, error: orgError } = await dataClient
     .from("organizations")
-    .select("*")
+    .select("id, slug, nav_config")
     .eq("slug", orgSlug)
     .limit(1);
 

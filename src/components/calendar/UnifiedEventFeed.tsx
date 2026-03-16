@@ -1,25 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-
-type UnifiedEvent = {
-  id: string;
-  title: string;
-  startAt: string; // ISO timestamp
-  endAt: string | null;
-  allDay: boolean;
-  location: string | null;
-  sourceType: "event" | "schedule" | "feed" | "class";
-  sourceName: string;
-  badges: string[];
-  eventId?: string; // Link to /events/[id] for manual events
-  color?: string;
-};
+import type { UnifiedEvent } from "@/lib/calendar/unified-events";
 
 type UnifiedEventFeedProps = {
   orgId: string;
   orgSlug: string;
+  initialEvents?: UnifiedEvent[];
 };
 
 type SourceFilterKey = "events" | "schedules" | "feeds" | "classes";
@@ -145,9 +133,10 @@ function getBadgeColor(badgeText: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
-  const [events, setEvents] = useState<UnifiedEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEventFeedProps) {
+  const hasInitialData = initialEvents !== undefined;
+  const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
 
@@ -155,7 +144,7 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date();
-    end.setDate(end.getDate() + 365);
+    end.setDate(end.getDate() + 180);
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }, []);
@@ -191,9 +180,16 @@ export function UnifiedEventFeed({ orgId, orgSlug }: UnifiedEventFeedProps) {
     }
   }, [activeFilter, dateRange, orgId]);
 
+  const initialMountRef = useRef(hasInitialData);
+
   useEffect(() => {
+    if (initialMountRef.current && activeFilter === "all") {
+      initialMountRef.current = false;
+      return;
+    }
+    initialMountRef.current = false;
     fetchEvents();
-  }, [fetchEvents]);
+  }, [fetchEvents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (typeof window === "undefined") return;

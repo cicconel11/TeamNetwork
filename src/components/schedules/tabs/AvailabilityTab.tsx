@@ -1,7 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Card } from "@/components/ui";
-import { AvailabilityGrid } from "../AvailabilityGrid";
+
+const AvailabilityGrid = dynamic(
+  () => import("../AvailabilityGrid").then((mod) => mod.AvailabilityGrid),
+  { loading: () => <div className="animate-pulse bg-[var(--muted)] rounded-2xl h-64" /> }
+);
 import type { AcademicSchedule, User } from "@/types/database";
 
 type AvailabilityTabProps = {

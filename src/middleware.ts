@@ -359,35 +359,53 @@ export async function middleware(request: NextRequest) {
       if (!userIsDevAdmin) {
         // Only check membership for non-dev-admins
         try {
-          // Get organization by slug
-          const { data: org } = await supabase
-            .from("organizations")
-            .select("id")
-            .eq("slug", orgSlug)
-            .maybeSingle();
+          // Use RPC to fetch org + membership in a single round-trip (Phase 1.1 performance)
+          const { data: ctx, error: rpcError } = await supabase.rpc(
+            "get_org_context_by_slug",
+            { p_slug: orgSlug }
+          );
 
-          if (org) {
-            // Check user's membership status
-            const { data: membership } = await supabase
-              .from("user_organization_roles")
-              .select("status")
-              .eq("organization_id", org.id)
-              .eq("user_id", user.id)
+          let membershipStatus: string | null | undefined;
+
+          if (rpcError) {
+            // RPC failed — fall back to sequential queries so users are not blocked
+            if (shouldLog) {
+              console.error("[AUTH-MW] get_org_context_by_slug RPC failed, falling back:", rpcError);
+            }
+
+            const { data: org } = await supabase
+              .from("organizations")
+              .select("id")
+              .eq("slug", orgSlug)
               .maybeSingle();
 
-            if (membership?.status === "revoked") {
-              // User's access has been revoked - redirect to app with error
-              const redirectUrl = new URL("/app", request.url);
-              redirectUrl.searchParams.set("error", "access_revoked");
-              return NextResponse.redirect(redirectUrl);
-            }
+            if (org) {
+              const { data: membership } = await supabase
+                .from("user_organization_roles")
+                .select("status")
+                .eq("organization_id", org.id)
+                .eq("user_id", user.id)
+                .maybeSingle();
 
-            if (membership?.status === "pending") {
-              // User's membership is pending approval - redirect to app with pending message
-              const redirectUrl = new URL("/app", request.url);
-              redirectUrl.searchParams.set("pending", orgSlug);
-              return NextResponse.redirect(redirectUrl);
+              membershipStatus = membership?.status;
             }
+          } else if (ctx?.found) {
+            membershipStatus = ctx.membership?.status;
+          }
+          // If !ctx?.found the org doesn't exist — layout.tsx handles the 404 gate
+
+          if (membershipStatus === "revoked") {
+            // User's access has been revoked - redirect to app with error
+            const redirectUrl = new URL("/app", request.url);
+            redirectUrl.searchParams.set("error", "access_revoked");
+            return NextResponse.redirect(redirectUrl);
+          }
+
+          if (membershipStatus === "pending") {
+            // User's membership is pending approval - redirect to app with pending message
+            const redirectUrl = new URL("/app", request.url);
+            redirectUrl.searchParams.set("pending", orgSlug);
+            return NextResponse.redirect(redirectUrl);
           }
         } catch (e) {
           // Log error but don't block the request

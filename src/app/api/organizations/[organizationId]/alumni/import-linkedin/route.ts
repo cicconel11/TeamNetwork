@@ -1,3 +1,4 @@
+import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { validateAlumniImportRequest } from "@/lib/alumni/validate-import-request";
@@ -214,6 +215,19 @@ export async function POST(req: Request, { params }: RouteParams) {
     quotaBlocked,
     errors,
   };
+
+  // Invalidate enterprise alumni stats cache if any alumni were written
+  if (result.created > 0 || result.updated > 0) {
+    const { data: orgEnterprise } = await serviceSupabase
+      .from("organizations")
+      .select("enterprise_id")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+    if (orgEnterprise?.enterprise_id) {
+      revalidateTag(`enterprise-alumni-stats-${orgEnterprise.enterprise_id}`);
+    }
+  }
 
   return respond(result);
 }

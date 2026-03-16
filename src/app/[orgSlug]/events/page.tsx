@@ -3,7 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { EventsViewTracker } from "@/components/analytics/EventsViewTracker";
@@ -17,25 +17,20 @@ interface EventsPageProps {
 export default async function EventsPage({ params, searchParams }: EventsPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+
+  // getOrgContext is cached per request — gives us org, role, and admin status
+  const orgCtx = await getOrgContext(orgSlug);
+  if (!orgCtx.organization) return null;
+
+  const org = orgCtx.organization;
+  const isAdmin = orgCtx.isAdmin;
+
   const supabase = await createClient();
-
-  // Fetch organization
-  const { data: orgs, error: orgError } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
 
   // Build query with filters
   let query = supabase
     .from("events")
-    .select("*")
+    .select("id, title, description, start_date, end_date, location, event_type, is_philanthropy, recurrence_group_id, organization_id")
     .eq("organization_id", org.id)
     .is("deleted_at", null);
 

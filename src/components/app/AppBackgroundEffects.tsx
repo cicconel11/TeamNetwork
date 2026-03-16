@@ -71,14 +71,14 @@ export function AppBackgroundEffects() {
   return (
     <>
       {/* Stripe pattern overlay like landing page */}
-      <div className="fixed inset-0 stripe-pattern pointer-events-none z-0 opacity-30" />
+      <div className="fixed inset-0 app-stripe-pattern pointer-events-none z-0 opacity-30" />
       
       {/* Gradient orbs */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         {orbs.map((orb) => (
           <div
             key={orb.id}
-            className="gradient-orb"
+            className="app-gradient-orb"
             style={{
               left: `${orb.x}%`,
               top: `${orb.y}%`,

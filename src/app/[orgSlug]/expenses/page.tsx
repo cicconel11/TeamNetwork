@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, Button, EmptyState, SoftDeleteButton } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ExpensesFilters } from "@/components/expenses";
-import { isOrgAdmin } from "@/lib/auth";
+import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
@@ -17,18 +17,11 @@ interface ExpensesPageProps {
 export default async function ExpensesPage({ params, searchParams }: ExpensesPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
-  const supabase = await createClient();
 
-  // Fetch organization
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .single();
-
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
   if (!org) return null;
 
-  const isAdmin = await isOrgAdmin(org.id);
+  const supabase = await createClient();
   const navConfig = org.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/expenses", navConfig);
   const actionLabel = resolveActionLabel("/expenses", navConfig, "Submit");

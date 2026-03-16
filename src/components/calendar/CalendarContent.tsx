@@ -5,6 +5,7 @@ import { CalendarViewToggle } from "./CalendarViewToggle";
 import { UnifiedEventFeed } from "./UnifiedEventFeed";
 import { AvailabilityTab } from "@/components/schedules/tabs/AvailabilityTab";
 import type { AcademicSchedule, User } from "@/types/database";
+import type { UnifiedEvent } from "@/lib/calendar/unified-events";
 
 type CalendarContentProps = {
   orgId: string;
@@ -12,6 +13,7 @@ type CalendarContentProps = {
   isAdmin: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
+  initialEvents?: UnifiedEvent[];
 };
 
 export function CalendarContent({
@@ -20,6 +22,7 @@ export function CalendarContent({
   isAdmin,
   mySchedules,
   allSchedules,
+  initialEvents,
 }: CalendarContentProps) {
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") === "availability" ? "availability" : "list";
@@ -30,7 +33,7 @@ export function CalendarContent({
 
       <div className="animate-fade-in">
         {currentView === "list" ? (
-          <UnifiedEventFeed orgId={orgId} orgSlug={orgSlug} />
+          <UnifiedEventFeed orgId={orgId} orgSlug={orgSlug} initialEvents={initialEvents} />
         ) : (
           <AvailabilityTab
             orgId={orgId}

@@ -7,6 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
+import { CACHE_HEADERS } from "@/lib/api/response";
 
 export async function GET(request: NextRequest) {
   try {
@@ -84,7 +85,7 @@ export async function GET(request: NextRequest) {
           total: count ?? 0,
         },
       },
-      { headers: rateLimit.headers },
+      { headers: { ...rateLimit.headers, ...CACHE_HEADERS.privateShort } },
     );
   } catch (error) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { isOrgAdmin } from "@/lib/auth";
+import { getCurrentUser, getOrgContext } from "@/lib/auth/roles";
 import { MembersFilter } from "@/components/members/MembersFilter";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { resolveDataClient, getDevAdminEmails } from "@/lib/auth/dev-admin";
@@ -33,22 +34,12 @@ interface MemberWithAdminFlag {
 export default async function MembersPage({ params, searchParams }: MembersPageProps) {
   const { orgSlug } = await params;
   const filters = await searchParams;
+  const { organization: org, isAdmin } = await getOrgContext(orgSlug);
+  if (!org) notFound();
+
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const dataClient = resolveDataClient(user, supabase, "view_members");
-
-  // Fetch organization
-  const { data: orgs, error: orgError } = await dataClient
-    .from("organizations")
-    .select("*")
-    .eq("slug", orgSlug)
-    .limit(1);
-
-  const org = orgs?.[0];
-
-  if (!org || orgError) return null;
-
-  const isAdmin = await isOrgAdmin(org.id);
 
   // Build query with filters
   const devAdminEmails = getDevAdminEmails();
@@ -121,7 +112,8 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
       .from("members")
       .select("role")
       .eq("organization_id", org.id)
-      .is("deleted_at", null),
+      .is("deleted_at", null)
+      .limit(1000),
   ]);
 
   // Combine and add isAdmin flag

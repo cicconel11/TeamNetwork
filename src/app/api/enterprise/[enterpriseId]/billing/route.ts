@@ -10,6 +10,7 @@ import { getAlumniBucketPricing, getSubOrgPricing, isSalesLed } from "@/lib/ente
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import type { BillingInterval } from "@/types/enterprise";
 import { requireEnv } from "@/lib/env";
+import { CACHE_HEADERS } from "@/lib/api/response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -125,7 +126,10 @@ export async function GET(req: Request, { params }: RouteParams) {
       : null,
   };
 
-  return respond({ billing });
+  return NextResponse.json(
+    { billing },
+    { headers: { ...rateLimit.headers, ...CACHE_HEADERS.privateShort } }
+  );
 }
 
 const updateBucketSchema = z

@@ -1,3 +1,14 @@
+/**
+ * In-memory rate limiter using a global Map.
+ *
+ * IMPORTANT — Serverless limitation:
+ * This store does NOT persist across serverless function instances.
+ * Under multi-instance deployments (Vercel auto-scaling), the effective
+ * rate limit per user/IP is `configured_limit × active_instances`.
+ *
+ * This provides per-instance burst protection, not distributed rate limiting.
+ * For strict enforcement, migrate to Vercel KV or an external Redis store.
+ */
 import { NextResponse, type NextRequest } from "next/server";
 
 type RequestLike = Request | NextRequest;

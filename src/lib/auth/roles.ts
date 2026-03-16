@@ -103,7 +103,9 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
     getCurrentUser(),
     supabase
       .from("organizations")
-      .select("*")
+      .select(
+        "id, name, slug, logo_url, primary_color, secondary_color, nav_config, stripe_connect_account_id, org_type, donation_embed_url, created_at, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles"
+      )
       .eq("slug", orgSlug)
       .maybeSingle(),
   ]);
@@ -158,7 +160,7 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
   const gracePeriod = getGracePeriodInfo(subscription);
 
   const { role, status: memberStatus } = normalizeMembershipRow(membershipData?.data);
-  const flags = roleFlags(role);
+  const flags = memberStatus === "revoked" ? roleFlags(null) : roleFlags(role);
 
   return {
     organization: org as Organization,

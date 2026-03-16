@@ -1,4 +1,5 @@
 {
+  "regions": ["iad1"],
   "crons": [
     {
       "path": "/api/cron/error-baselines",

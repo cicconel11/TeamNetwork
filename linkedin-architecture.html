@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkedIn → Profile Architecture Map</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 16px 24px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  header h1 { font-size: 18px; color: #e6edf3; }
+  header .subtitle { font-size: 13px; color: #8b949e; }
+  .main-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  .controls {
+    width: 280px;
+    min-width: 280px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    padding: 16px;
+    overflow-y: auto;
+  }
+  .controls h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+    margin-bottom: 12px;
+  }
+  .control-group {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #21262d;
+  }
+  .control-group:last-child { border-bottom: none; }
+  .radio-group label, .check-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+  .radio-group label:hover, .check-group label:hover { background: #21262d; }
+  input[type="radio"], input[type="checkbox"] { accent-color: #58a6ff; }
+  .preset-btn {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 6px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .preset-btn:hover { background: #30363d; border-color: #58a6ff; }
+  .preset-btn.active { background: #1f3a5f; border-color: #58a6ff; color: #58a6ff; }
+  .canvas {
+    flex: 1;
+    overflow: auto;
+    padding: 32px;
+  }
+  .diagram {
+    min-width: 900px;
+    min-height: 600px;
+    position: relative;
+  }
+
+  /* Node styles */
+  .node {
+    position: absolute;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    border: 1px solid;
+    min-width: 160px;
+  }
+  .node.dimmed { opacity: 0.15; }
+  .node.highlighted {
+    box-shadow: 0 0 20px rgba(88, 166, 255, 0.3);
+    transform: scale(1.03);
+  }
+  .node .title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .node .fields { font-size: 11px; line-height: 1.6; font-family: 'SF Mono', Monaco, monospace; }
+  .node .fields .field { display: flex; align-items: center; gap: 4px; }
+  .node .fields .field.synced { color: #3fb950; }
+  .node .fields .field.gap { color: #f85149; text-decoration: line-through; opacity: 0.7; }
+  .node .fields .field.manual { color: #d29922; }
+  .node .fields .field.available { color: #58a6ff; }
+
+  /* Node type colors */
+  .node.source { background: #1a1f35; border-color: #4f46e5; }
+  .node.source .title { color: #818cf8; }
+  .node.auth { background: #1a2332; border-color: #2563eb; }
+  .node.auth .title { color: #60a5fa; }
+  .node.lib { background: #1a2a1a; border-color: #16a34a; }
+  .node.lib .title { color: #4ade80; }
+  .node.db { background: #2a1a1a; border-color: #dc2626; }
+  .node.db .title { color: #f87171; }
+  .node.ui { background: #2a2a1a; border-color: #ca8a04; }
+  .node.ui .title { color: #facc15; }
+  .node.rpc { background: #1a2a2a; border-color: #0891b2; }
+  .node.rpc .title { color: #22d3ee; }
+
+  /* Arrows via SVG */
+  svg.arrows {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  svg.arrows path {
+    fill: none;
+    stroke-width: 2;
+    transition: all 0.3s ease;
+  }
+  svg.arrows path.dimmed { opacity: 0.08; }
+  svg.arrows path.highlighted { stroke-width: 3; }
+  svg.arrows text { font-size: 10px; font-family: system-ui; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  /* Prompt output */
+  .prompt-output {
+    background: #161b22;
+    border-top: 1px solid #30363d;
+    padding: 16px 24px;
+  }
+  .prompt-output h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .prompt-text {
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #e6edf3;
+    white-space: pre-wrap;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .copy-btn {
+    padding: 4px 12px;
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: #30363d; border-color: #58a6ff; }
+  .copy-btn.copied { background: #1a3a1a; border-color: #3fb950; color: #3fb950; }
+
+  /* Gap badge */
+  .gap-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .gap-badge.red { background: #3d1a1a; color: #f85149; }
+  .gap-badge.yellow { background: #3d2e1a; color: #d29922; }
+  .gap-badge.green { background: #1a3d1a; color: #3fb950; }
+  .gap-badge.blue { background: #1a2a3d; color: #58a6ff; }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: #1c2128;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    max-width: 300px;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LinkedIn Integration Architecture</h1>
+  <span class="subtitle">Data flow from LinkedIn OIDC → Database → Profile UI</span>
+</header>
+
+<div class="main-layout">
+  <div class="controls">
+    <div class="control-group">
+      <h3>View Preset</h3>
+      <button class="preset-btn active" onclick="setPreset('full')">Full Architecture</button>
+      <button class="preset-btn" onclick="setPreset('oidc')">Flow 1: OIDC Login</button>
+      <button class="preset-btn" onclick="setPreset('oauth')">Flow 2: OAuth Connect</button>
+      <button class="preset-btn" onclick="setPreset('gaps')">Data Gaps Analysis</button>
+      <button class="preset-btn" onclick="setPreset('profile')">Profile Display</button>
+    </div>
+
+    <div class="control-group">
+      <h3>Highlight Layer</h3>
+      <div class="radio-group">
+        <label><input type="radio" name="layer" value="all" checked onchange="updateAll()"> All layers</label>
+        <label><input type="radio" name="layer" value="source" onchange="updateAll()"> LinkedIn Source</label>
+        <label><input type="radio" name="layer" value="auth" onchange="updateAll()"> Auth Callback</label>
+        <label><input type="radio" name="layer" value="lib" onchange="updateAll()"> Sync Libraries</label>
+        <label><input type="radio" name="layer" value="rpc" onchange="updateAll()"> Database RPCs</label>
+        <label><input type="radio" name="layer" value="db" onchange="updateAll()"> Database Tables</label>
+        <label><input type="radio" name="layer" value="ui" onchange="updateAll()"> UI Components</label>
+      </div>
+    </div>
+
+    <div class="control-group">
+      <h3>Show Details</h3>
+      <div class="check-group">
+        <label><input type="checkbox" id="showFields" checked onchange="updateAll()"> Field names</label>
+        <label><input type="checkbox" id="showGaps" checked onchange="updateAll()"> Gap indicators</label>
+        <label><input type="checkbox" id="showArrowLabels" checked onchange="updateAll()"> Arrow labels</label>
+        <label><input type="checkbox" id="showFiles" onchange="updateAll()"> File paths</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="canvas">
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#4f46e5"></div> LinkedIn Source</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div> Auth Callback</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#16a34a"></div> Sync Libraries</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#0891b2"></div> Database RPCs</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div> Database Tables</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ca8a04"></div> UI Components</div>
+      <div class="legend-item" style="margin-left:16px"><span style="color:#3fb950">●</span> Synced</div>
+      <div class="legend-item"><span style="color:#f85149">●</span> Gap</div>
+      <div class="legend-item"><span style="color:#d29922">●</span> Manual</div>
+    </div>
+    <div class="diagram" id="diagram"></div>
+  </div>
+</div>
+
+<div class="prompt-output">
+  <h3>
+    <span>Prompt Output</span>
+    <button class="copy-btn" onclick="copyPrompt()">Copy</button>
+  </h3>
+  <div class="prompt-text" id="promptText"></div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DEFAULTS = {
+  preset: 'full',
+  layer: 'all',
+  showFields: true,
+  showGaps: true,
+  showArrowLabels: true,
+  showFiles: false
+};
+
+const state = {
+  preset: 'full',
+  layer: 'all',
+  showFields: true,
+  showGaps: true,
+  showArrowLabels: true,
+  showFiles: false
+};
+
+const nodes = [
+  {
+    id: 'linkedin-oidc',
+    type: 'source',
+    label: 'LinkedIn OIDC Userinfo',
+    x: 20, y: 20,
+    file: '/v2/userinfo endpoint',
+    flows: ['oidc', 'oauth'],
+    fields: [
+      { name: 'sub', status: 'synced' },
+      { name: 'given_name', status: 'synced' },
+      { name: 'family_name', status: 'synced' },
+      { name: 'email', status: 'synced' },
+      { name: 'picture', status: 'synced' },
+      { name: 'email_verified', status: 'synced' },
+      { name: 'locale', status: 'gap', tooltip: 'Available but ignored' },
+    ],
+    gapNote: 'No headline, industry, company, or vanity URL from OIDC'
+  },
+  {
+    id: 'linkedin-api',
+    type: 'source',
+    label: 'LinkedIn v2 API (Restricted)',
+    x: 20, y: 230,
+    file: 'Requires Partnership Program',
+    flows: ['gaps'],
+    fields: [
+      { name: 'headline', status: 'gap', tooltip: 'Requires r_liteprofile scope' },
+      { name: 'industry', status: 'gap', tooltip: 'Requires r_fullprofile scope' },
+      { name: 'current_company', status: 'gap', tooltip: 'Requires r_fullprofile scope' },
+      { name: 'vanityName (URL)', status: 'gap', tooltip: 'Requires r_liteprofile scope' },
+      { name: 'location', status: 'gap', tooltip: 'Requires r_fullprofile scope' },
+    ],
+    gapNote: 'Requires LinkedIn Partnership — not available to standard apps'
+  },
+  {
+    id: 'auth-callback',
+    type: 'auth',
+    label: 'Auth Callback (Flow 1: OIDC)',
+    x: 280, y: 20,
+    file: 'src/app/auth/callback/route.ts',
+    flows: ['oidc'],
+    fields: [
+      { name: 'exchangeCodeForSession()', status: 'synced' },
+      { name: 'runAgeValidationGate()', status: 'synced' },
+      { name: 'queueMicrotask(sync)', status: 'synced', tooltip: 'Fire-and-forget — does not block redirect' },
+    ]
+  },
+  {
+    id: 'oauth-callback',
+    type: 'auth',
+    label: 'OAuth Callback (Flow 2: Connect)',
+    x: 280, y: 190,
+    file: 'src/app/api/linkedin/callback/route.ts',
+    flows: ['oauth'],
+    fields: [
+      { name: 'validateState() x2', status: 'synced', tooltip: 'Double-check CSRF pattern' },
+      { name: 'exchangeLinkedInCode()', status: 'synced' },
+      { name: 'storeLinkedInConnection()', status: 'synced', tooltip: 'Real encrypted tokens' },
+    ]
+  },
+  {
+    id: 'oidc-sync',
+    type: 'lib',
+    label: 'OIDC Sync',
+    x: 540, y: 20,
+    file: 'src/lib/linkedin/oidc-sync.ts',
+    flows: ['oidc'],
+    fields: [
+      { name: 'extractLinkedInProfile()', status: 'synced' },
+      { name: 'storeLinkedInOidcConnection()', status: 'synced', tooltip: 'Sentinel tokens: __oidc_login__' },
+      { name: 'findExistingLinkedInUrl()', status: 'synced' },
+      { name: 'syncLinkedInProfileFields()', status: 'synced' },
+    ]
+  },
+  {
+    id: 'oauth-lib',
+    type: 'lib',
+    label: 'OAuth Library',
+    x: 540, y: 190,
+    file: 'src/lib/linkedin/oauth.ts',
+    flows: ['oauth'],
+    fields: [
+      { name: 'exchangeLinkedInCode()', status: 'synced' },
+      { name: 'storeLinkedInConnection()', status: 'synced', tooltip: 'AES-encrypted real tokens' },
+      { name: 'syncLinkedInProfile()', status: 'synced' },
+    ]
+  },
+  {
+    id: 'rpc-sync-fields',
+    type: 'rpc',
+    label: 'RPC: sync_user_linkedin_profile_fields',
+    x: 540, y: 350,
+    file: 'Migration: 20260704000000',
+    flows: ['oidc', 'oauth'],
+    fields: [
+      { name: 'p_first_name → members/alumni/parents', status: 'synced' },
+      { name: 'p_last_name → members/alumni/parents', status: 'synced' },
+      { name: 'p_photo_url → members/alumni/parents', status: 'synced' },
+    ]
+  },
+  {
+    id: 'rpc-save-url',
+    type: 'rpc',
+    label: 'RPC: save_user_linkedin_url',
+    x: 540, y: 480,
+    file: 'Migration: 20260703000000',
+    flows: ['oidc'],
+    fields: [
+      { name: 'p_linkedin_url → members/alumni/parents', status: 'manual', tooltip: 'Only if URL already exists in some org record' },
+    ],
+    gapNote: 'Only propagates existing URLs — never auto-populates from LinkedIn'
+  },
+  {
+    id: 'db-connections',
+    type: 'db',
+    label: 'user_linkedin_connections',
+    x: 800, y: 20,
+    file: 'Database table',
+    flows: ['oidc', 'oauth', 'profile'],
+    fields: [
+      { name: 'linkedin_sub', status: 'synced' },
+      { name: 'linkedin_given_name', status: 'synced' },
+      { name: 'linkedin_family_name', status: 'synced' },
+      { name: 'linkedin_email', status: 'synced' },
+      { name: 'linkedin_picture_url', status: 'synced' },
+      { name: 'linkedin_profile_url', status: 'gap', tooltip: 'Column exists but NEVER populated' },
+      { name: 'access_token_encrypted', status: 'synced' },
+      { name: 'linkedin_data (JSON)', status: 'manual', tooltip: 'Only stores {source} or {email_verified}' },
+      { name: 'status', status: 'synced' },
+    ]
+  },
+  {
+    id: 'db-members',
+    type: 'db',
+    label: 'members / alumni / parents',
+    x: 800, y: 290,
+    file: 'Database tables (3)',
+    flows: ['oidc', 'oauth', 'profile', 'gaps'],
+    fields: [
+      { name: 'first_name', status: 'synced' },
+      { name: 'last_name', status: 'synced' },
+      { name: 'photo_url', status: 'synced' },
+      { name: 'linkedin_url', status: 'manual', tooltip: 'Must be entered manually or via CSV' },
+      { name: 'email', status: 'available', tooltip: 'Exists in member record, not synced from LinkedIn' },
+      { name: 'industry (alumni only)', status: 'gap', tooltip: 'Column exists, never populated by LinkedIn' },
+      { name: 'current_company (alumni only)', status: 'gap', tooltip: 'Column exists, never populated by LinkedIn' },
+      { name: 'job_title (alumni only)', status: 'gap', tooltip: 'Column exists, never populated by LinkedIn' },
+    ]
+  },
+  {
+    id: 'ui-profile',
+    type: 'ui',
+    label: 'Member Profile Page',
+    x: 1060, y: 20,
+    file: 'src/app/[orgSlug]/members/[memberId]/page.tsx',
+    flows: ['profile'],
+    fields: [
+      { name: 'Avatar (photo_url)', status: 'synced' },
+      { name: 'Full name', status: 'synced' },
+      { name: 'Role / Position badge', status: 'available' },
+      { name: 'Status badge', status: 'available' },
+      { name: 'Email (mailto)', status: 'available' },
+      { name: '"View Profile" link', status: 'manual', tooltip: 'Only shows if linkedin_url is set (manual)' },
+    ],
+    gapNote: 'No join to user_linkedin_connections — reads only from members table'
+  },
+  {
+    id: 'ui-connected',
+    type: 'ui',
+    label: 'ConnectedAccountsSection',
+    x: 1060, y: 260,
+    file: 'src/components/members/ConnectedAccountsSection.tsx',
+    flows: ['profile'],
+    fields: [
+      { name: 'LinkedIn avatar', status: 'synced' },
+      { name: 'LinkedIn name', status: 'synced' },
+      { name: 'LinkedIn email', status: 'synced' },
+      { name: 'Last synced timestamp', status: 'synced' },
+      { name: 'Sync error banner', status: 'synced' },
+      { name: 'Manual URL input', status: 'manual' },
+    ],
+    gapNote: 'Only visible when isOwnProfile === true'
+  },
+  {
+    id: 'ui-directory',
+    type: 'ui',
+    label: 'Directory Listings',
+    x: 1060, y: 470,
+    file: 'src/app/[orgSlug]/members/page.tsx',
+    flows: ['profile'],
+    fields: [
+      { name: 'LinkedIn badge icon', status: 'manual', tooltip: 'Shows if linkedin_url exists' },
+      { name: 'Name + photo', status: 'synced' },
+    ]
+  }
+];
+
+const arrows = [
+  { from: 'linkedin-oidc', to: 'auth-callback', label: 'OIDC redirect', color: '#818cf8', flows: ['oidc'] },
+  { from: 'linkedin-oidc', to: 'oauth-callback', label: 'OAuth redirect', color: '#818cf8', flows: ['oauth'] },
+  { from: 'auth-callback', to: 'oidc-sync', label: 'queueMicrotask', color: '#60a5fa', flows: ['oidc'] },
+  { from: 'oauth-callback', to: 'oauth-lib', label: 'token exchange', color: '#60a5fa', flows: ['oauth'] },
+  { from: 'oidc-sync', to: 'db-connections', label: 'sentinel write', color: '#4ade80', flows: ['oidc'] },
+  { from: 'oauth-lib', to: 'db-connections', label: 'encrypted write', color: '#4ade80', flows: ['oauth'] },
+  { from: 'oidc-sync', to: 'rpc-sync-fields', label: 'sync names+photo', color: '#4ade80', flows: ['oidc'] },
+  { from: 'oauth-lib', to: 'rpc-sync-fields', label: 'sync names+photo', color: '#4ade80', flows: ['oauth'] },
+  { from: 'oidc-sync', to: 'rpc-save-url', label: 'propagate URL', color: '#d29922', flows: ['oidc'] },
+  { from: 'rpc-sync-fields', to: 'db-members', label: 'first, last, photo', color: '#22d3ee', flows: ['oidc', 'oauth'] },
+  { from: 'rpc-save-url', to: 'db-members', label: 'linkedin_url', color: '#d29922', flows: ['oidc'] },
+  { from: 'db-members', to: 'ui-profile', label: 'query members', color: '#facc15', flows: ['profile'] },
+  { from: 'db-connections', to: 'ui-connected', label: 'GET /api/user/linkedin/status', color: '#facc15', flows: ['profile'] },
+  { from: 'db-members', to: 'ui-connected', label: 'linkedin_url lookup', color: '#d29922', flows: ['profile'] },
+  { from: 'db-members', to: 'ui-directory', label: 'query members', color: '#facc15', flows: ['profile'] },
+  { from: 'linkedin-api', to: 'db-members', label: 'NOT CONNECTED', color: '#f85149', flows: ['gaps'], dashed: true },
+];
+
+function getNodeCenter(node) {
+  const el = document.getElementById('node-' + node.id);
+  if (!el) return { x: node.x + 100, y: node.y + 60 };
+  return {
+    x: node.x + el.offsetWidth / 2,
+    y: node.y + el.offsetHeight / 2
+  };
+}
+
+function getNodeEdge(node, targetNode) {
+  const el = document.getElementById('node-' + node.id);
+  if (!el) return getNodeCenter(node);
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  const cx = node.x + w / 2;
+  const cy = node.y + h / 2;
+  const tx = targetNode.x;
+
+  if (tx > node.x + w) return { x: node.x + w, y: cy };
+  if (tx < node.x) return { x: node.x, y: cy };
+  return { x: cx, y: node.y + h };
+}
+
+function isVisible(item) {
+  if (state.preset === 'full') return true;
+  if (state.preset === 'gaps') return item.flows && item.flows.includes('gaps') || (item.fields && item.fields.some(f => f.status === 'gap'));
+  return item.flows && item.flows.includes(state.preset);
+}
+
+function isLayerMatch(nodeType) {
+  return state.layer === 'all' || state.layer === nodeType;
+}
+
+function renderDiagram() {
+  const diagram = document.getElementById('diagram');
+  let html = '';
+
+  for (const node of nodes) {
+    const visible = isVisible(node);
+    const layerMatch = isLayerMatch(node.type);
+    const dimmed = (!visible || !layerMatch) ? 'dimmed' : '';
+    const highlighted = (visible && layerMatch && state.layer !== 'all') ? 'highlighted' : '';
+
+    html += `<div id="node-${node.id}" class="node ${node.type} ${dimmed} ${highlighted}"
+              style="left:${node.x}px; top:${node.y}px"
+              data-type="${node.type}">`;
+    html += `<div class="title">${node.label}</div>`;
+
+    if (state.showFiles && node.file) {
+      html += `<div style="font-size:10px; color:#8b949e; margin-bottom:4px; font-family:monospace">${node.file}</div>`;
+    }
+
+    if (state.showFields && node.fields) {
+      html += `<div class="fields">`;
+      for (const f of node.fields) {
+        if (f.status === 'gap' && !state.showGaps) continue;
+        const icon = f.status === 'synced' ? '✓' : f.status === 'gap' ? '✗' : f.status === 'manual' ? '◐' : '○';
+        html += `<div class="field ${f.status}" ${f.tooltip ? `title="${f.tooltip}"` : ''}>${icon} ${f.name}</div>`;
+        }
+      html += `</div>`;
+    }
+
+    if (state.showGaps && node.gapNote) {
+      const badgeClass = node.gapNote.includes('NOT') || node.gapNote.includes('never') || node.gapNote.includes('No ') ? 'red' : 'yellow';
+      html += `<div style="margin-top:6px; font-size:10px; color:#8b949e; border-top:1px solid #30363d; padding-top:6px">${node.gapNote} <span class="gap-badge ${badgeClass}">GAP</span></div>`;
+    }
+
+    html += `</div>`;
+  }
+
+  diagram.innerHTML = html;
+
+  // Render arrows after nodes are in DOM
+  requestAnimationFrame(() => renderArrows());
+}
+
+function renderArrows() {
+  const diagram = document.getElementById('diagram');
+  const existing = diagram.querySelector('svg.arrows');
+  if (existing) existing.remove();
+
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'arrows');
+  svg.style.width = diagram.scrollWidth + 'px';
+  svg.style.height = diagram.scrollHeight + 'px';
+
+  // Add arrowhead marker
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  for (const arrow of arrows) {
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', `arrowhead-${arrow.from}-${arrow.to}`);
+    marker.setAttribute('markerWidth', '8');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('refX', '8');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    poly.setAttribute('points', '0 0, 8 3, 0 6');
+    poly.setAttribute('fill', arrow.color);
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+  }
+  svg.appendChild(defs);
+
+  for (const arrow of arrows) {
+    const fromNode = nodes.find(n => n.id === arrow.from);
+    const toNode = nodes.find(n => n.id === arrow.to);
+    if (!fromNode || !toNode) continue;
+
+    const visible = isVisible(arrow);
+    const start = getNodeEdge(fromNode, toNode);
+    const end = getNodeEdge(toNode, fromNode);
+
+    const midX = (start.x + end.x) / 2;
+    const midY = (start.y + end.y) / 2;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const cx = midX + dy * 0.1;
+    const cy = midY - dx * 0.05;
+
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${start.x},${start.y} Q${cx},${cy} ${end.x},${end.y}`);
+    path.setAttribute('stroke', arrow.color);
+    path.setAttribute('marker-end', `url(#arrowhead-${arrow.from}-${arrow.to})`);
+    if (arrow.dashed) path.setAttribute('stroke-dasharray', '6 4');
+    if (!visible) path.setAttribute('class', 'dimmed');
+    svg.appendChild(path);
+
+    if (state.showArrowLabels && arrow.label && visible) {
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', cx);
+      text.setAttribute('y', cy - 6);
+      text.setAttribute('fill', arrow.color);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('opacity', '0.8');
+      text.textContent = arrow.label;
+      svg.appendChild(text);
+    }
+  }
+
+  diagram.insertBefore(svg, diagram.firstChild);
+}
+
+function updatePrompt() {
+  const parts = [];
+
+  if (state.preset !== DEFAULTS.preset) {
+    const presetNames = {
+      full: 'full architecture',
+      oidc: 'OIDC login flow',
+      oauth: 'OAuth connect flow',
+      gaps: 'data gaps analysis',
+      profile: 'profile display'
+    };
+    parts.push(`Showing the ${presetNames[state.preset]} view of the LinkedIn integration.`);
+  } else {
+    parts.push('Showing the full LinkedIn integration architecture.');
+  }
+
+  if (state.layer !== 'all') {
+    parts.push(`Focused on the ${state.layer} layer.`);
+  }
+
+  parts.push('');
+  parts.push('KEY FINDINGS:');
+  parts.push('');
+
+  if (state.preset === 'full' || state.preset === 'oidc' || state.preset === 'oauth') {
+    parts.push('Data Flow:');
+    parts.push('- LinkedIn OIDC provides: sub, given_name, family_name, email, picture, email_verified');
+    parts.push('- Synced to DB: first_name, last_name, photo_url (via sync_user_linkedin_profile_fields RPC)');
+    parts.push('- Two flows share the same RPC but use different token storage strategies');
+    parts.push('  - Flow 1 (OIDC Login): sentinel tokens, fire-and-forget via queueMicrotask');
+    parts.push('  - Flow 2 (OAuth Connect): AES-encrypted real tokens, synchronous');
+    parts.push('');
+  }
+
+  if (state.preset === 'full' || state.preset === 'gaps') {
+    parts.push('Data Gaps (fields we CANNOT auto-populate from LinkedIn):');
+    parts.push('- linkedin_profile_url: column exists in user_linkedin_connections but OIDC never returns it');
+    parts.push('- headline, industry, current_company, job_title: columns exist on alumni table but require LinkedIn Partnership API (r_liteprofile/r_fullprofile scopes)');
+    parts.push('- linkedin_url on member profiles: must be entered manually or via CSV import');
+    parts.push('- locale: available from OIDC but currently ignored');
+    parts.push('- linkedin_data JSON blob: stores almost nothing (just source sentinel or email_verified)');
+    parts.push('');
+  }
+
+  if (state.preset === 'full' || state.preset === 'profile') {
+    parts.push('Profile Display:');
+    parts.push('- Member profile page queries ONLY the members table (no join to user_linkedin_connections)');
+    parts.push('- ConnectedAccountsSection is only visible to the profile owner (isOwnProfile === true)');
+    parts.push('- "View Profile" LinkedIn link only renders if linkedin_url is manually set');
+    parts.push('- Directory listings show LinkedIn badge icon only if linkedin_url exists');
+    parts.push('');
+  }
+
+  parts.push('RECOMMENDATIONS:');
+  if (state.preset === 'gaps' || state.preset === 'full') {
+    parts.push('1. Consider auto-populating linkedin_url by constructing it from the linkedin_sub (format: linkedin.com/in/sub) — though OIDC sub may not match vanity URL');
+    parts.push('2. The linkedin_data JSON blob could store the full OIDC response for future use');
+    parts.push('3. For richer profile data (headline, company), would need LinkedIn Marketing Developer Partnership');
+    parts.push('4. Could prompt users to complete their profile after LinkedIn connection (nudge for manual fields)');
+  }
+
+  document.getElementById('promptText').textContent = parts.join('\n');
+}
+
+function setPreset(preset) {
+  state.preset = preset;
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase().includes(
+      preset === 'full' ? 'full' :
+      preset === 'oidc' ? 'flow 1' :
+      preset === 'oauth' ? 'flow 2' :
+      preset === 'gaps' ? 'gaps' : 'profile'
+    ));
+  });
+  updateAll();
+}
+
+function updateAll() {
+  state.layer = document.querySelector('input[name="layer"]:checked').value;
+  state.showFields = document.getElementById('showFields').checked;
+  state.showGaps = document.getElementById('showGaps').checked;
+  state.showArrowLabels = document.getElementById('showArrowLabels').checked;
+  state.showFiles = document.getElementById('showFiles').checked;
+  renderDiagram();
+  updatePrompt();
+}
+
+function copyPrompt() {
+  const text = document.getElementById('promptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 1500);
+  });
+}
+
+// Tooltip handling
+document.addEventListener('mouseover', (e) => {
+  const field = e.target.closest('.field[title]');
+  if (field) {
+    const tooltip = document.getElementById('tooltip');
+    tooltip.textContent = field.getAttribute('title');
+    tooltip.style.display = 'block';
+    tooltip.style.left = e.clientX + 12 + 'px';
+    tooltip.style.top = e.clientY - 8 + 'px';
+  }
+});
+document.addEventListener('mouseout', (e) => {
+  if (e.target.closest('.field[title]')) {
+    document.getElementById('tooltip').style.display = 'none';
+  }
+});
+document.addEventListener('mousemove', (e) => {
+  const tooltip = document.getElementById('tooltip');
+  if (tooltip.style.display === 'block') {
+    tooltip.style.left = e.clientX + 12 + 'px';
+    tooltip.style.top = e.clientY - 8 + 'px';
+  }
+});
+
+// Initial render
+updateAll();
+</script>
+</body>
+</html>

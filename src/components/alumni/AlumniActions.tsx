@@ -1,10 +1,18 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { AddAlumniMenu } from "./AddAlumniMenu";
-import { BulkLinkedInImporter } from "./BulkLinkedInImporter";
-import { BulkCsvImporter } from "./BulkCsvImporter";
 import { SingleLinkedInAttacher } from "./SingleLinkedInAttacher";
+
+const BulkLinkedInImporter = dynamic(
+  () => import("./BulkLinkedInImporter").then((mod) => mod.BulkLinkedInImporter),
+  { loading: () => <div className="animate-pulse bg-[var(--muted)] rounded-2xl h-48" /> }
+);
+const BulkCsvImporter = dynamic(
+  () => import("./BulkCsvImporter").then((mod) => mod.BulkCsvImporter),
+  { loading: () => <div className="animate-pulse bg-[var(--muted)] rounded-2xl h-48" /> }
+);
 
 // ─── Context to decouple menu (in header) from panel (in body) ───────────────
 

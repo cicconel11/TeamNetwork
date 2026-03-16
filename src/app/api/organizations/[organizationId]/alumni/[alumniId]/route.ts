@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
@@ -110,6 +110,17 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
   }
 
+  const svc = createServiceClient();
+  const { data: orgEnterprise } = await svc
+    .from("organizations")
+    .select("enterprise_id")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (orgEnterprise?.enterprise_id) {
+    revalidateTag(`enterprise-alumni-stats-${orgEnterprise.enterprise_id}`);
+  }
+
   return NextResponse.json({ success: true });
 }
 
@@ -162,17 +173,21 @@ export async function DELETE(_req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: deleteError.message }, { status: 400 });
   }
 
-  // Invalidate cached pages that display alumni data
+  // Invalidate cached pages and tags that display alumni data
   const serviceSupabase = createServiceClient();
   const { data: org } = await serviceSupabase
     .from("organizations")
-    .select("slug")
+    .select("slug, enterprise_id")
     .eq("id", organizationId)
     .single();
 
   if (org?.slug) {
     revalidatePath(`/${org.slug}`);
     revalidatePath(`/${org.slug}/alumni`);
+  }
+
+  if (org?.enterprise_id) {
+    revalidateTag(`enterprise-alumni-stats-${org.enterprise_id}`);
   }
 
   return NextResponse.json({ success: true });

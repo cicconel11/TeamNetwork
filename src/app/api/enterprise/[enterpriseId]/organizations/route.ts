@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import type { EnterpriseRelationshipType } from "@/types/enterprise";
 import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
+import { CACHE_HEADERS } from "@/lib/api/response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -116,5 +117,8 @@ export async function GET(req: Request, { params }: RouteParams) {
     };
   });
 
-  return respond({ organizations: orgsWithCounts });
+  return NextResponse.json(
+    { organizations: orgsWithCounts },
+    { headers: { ...rateLimit.headers, ...CACHE_HEADERS.privateShort } }
+  );
 }

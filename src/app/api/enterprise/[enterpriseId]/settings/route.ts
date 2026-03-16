@@ -15,6 +15,7 @@ import { extractRequestContext } from "@/lib/audit/enterprise-audit";
 import type { Enterprise } from "@/types/enterprise";
 import { updateEnterprise, isUpdateError } from "@/lib/enterprise/update-enterprise";
 import { enterprisePatchSchema } from "@/lib/schemas/enterprise";
+import { CACHE_HEADERS } from "@/lib/api/response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -104,11 +105,10 @@ export async function GET(req: Request, { params }: RouteParams) {
     user_email: userDetails[admin.user_id]?.email ?? null,
   }));
 
-  return respond({
-    enterprise,
-    admins: adminsWithDetails,
-    userRole: ctx.role,
-  });
+  return NextResponse.json(
+    { enterprise, admins: adminsWithDetails, userRole: ctx.role },
+    { headers: { ...rateLimit.headers, ...CACHE_HEADERS.privateShort } }
+  );
 }
 
 export async function PATCH(req: Request, { params }: RouteParams) {

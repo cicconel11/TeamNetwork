@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas, validateJson, ValidationError } from "@/lib/security/validation";
@@ -88,6 +89,16 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 400 });
+  }
+
+  const { data: orgEnterprise } = await serviceSupabase
+    .from("organizations")
+    .select("enterprise_id")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (orgEnterprise?.enterprise_id) {
+    revalidateTag(`enterprise-alumni-stats-${orgEnterprise.enterprise_id}`);
   }
 
   return NextResponse.json({ id: created?.id ?? null });

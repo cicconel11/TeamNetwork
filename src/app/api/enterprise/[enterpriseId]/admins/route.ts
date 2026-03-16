@@ -17,6 +17,7 @@ import {
 import type { EnterpriseRole } from "@/types/enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { removeEnterpriseAdmin } from "@/lib/enterprise/admin";
+import { CACHE_HEADERS } from "@/lib/api/response";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -113,7 +114,10 @@ export async function GET(req: Request, { params }: RouteParams) {
     full_name: userDetails[admin.user_id]?.full_name ?? null,
   }));
 
-  return respond({ admins: adminsWithDetails });
+  return NextResponse.json(
+    { admins: adminsWithDetails },
+    { headers: { ...rateLimit.headers, ...CACHE_HEADERS.privateShort } }
+  );
 }
 
 export async function POST(req: Request, { params }: RouteParams) {

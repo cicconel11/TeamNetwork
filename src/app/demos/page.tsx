@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui";
 import { LandingAnimations } from "@/components/marketing";
+import "../landing-styles.css";
+
+// Static content — ISR revalidates every hour
+export const revalidate = 3600;
 
 type Demo = {
   title: string;

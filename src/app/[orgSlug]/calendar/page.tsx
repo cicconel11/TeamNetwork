@@ -5,8 +5,10 @@ import { Button } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { CalendarContent } from "@/components/calendar/CalendarContent";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { fetchUnifiedEvents } from "@/lib/calendar/unified-events";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { AcademicSchedule, User } from "@/types/database";
+import type { UnifiedEvent } from "@/lib/calendar/unified-events";
 
 interface CalendarPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -22,26 +24,40 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
 
   const orgId = orgCtx.organization.id;
 
-  // Fetch user's own schedules (for availability view)
-  const { data: mySchedules } = await supabase
-    .from("academic_schedules")
-    .select("*")
-    .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId)
-    .is("deleted_at", null)
-    .order("start_time", { ascending: true });
+  const now = new Date();
+  const rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeEnd.getDate() + 30);
+  rangeEnd.setHours(23, 59, 59, 999);
 
-  // For admins, fetch all schedules with user info (for team availability view)
-  let allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[] = [];
-  if (orgCtx.isAdmin) {
-    const { data } = await supabase
+  const [mySchedulesResult, allSchedulesResult, initialEventsResult] = await Promise.all([
+    supabase
       .from("academic_schedules")
-      .select("*, users(name, email)")
+      .select("*")
       .eq("organization_id", orgId)
+      .eq("user_id", orgCtx.userId)
       .is("deleted_at", null)
-      .order("start_time", { ascending: true });
-    allSchedules = (data || []) as (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
-  }
+      .order("start_time", { ascending: true }),
+    orgCtx.isAdmin
+      ? supabase
+          .from("academic_schedules")
+          .select("*, users(name, email)")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .order("start_time", { ascending: true })
+      : Promise.resolve({ data: [] }),
+    fetchUnifiedEvents(supabase, orgId, orgCtx.userId, {
+      start: rangeStart,
+      end: rangeEnd,
+    }).catch((err) => {
+      console.error("[calendar] Server-side event fetch failed, client will retry:", err);
+      return undefined;
+    }),
+  ]);
+
+  const mySchedules = mySchedulesResult.data || [];
+  const allSchedules = (allSchedulesResult.data || []) as (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
+  const initialEvents: UnifiedEvent[] | undefined = initialEventsResult ?? undefined;
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/calendar", navConfig);
@@ -91,8 +107,9 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
         orgId={orgId}
         orgSlug={orgSlug}
         isAdmin={orgCtx.isAdmin}
-        mySchedules={mySchedules || []}
+        mySchedules={mySchedules}
         allSchedules={allSchedules}
+        initialEvents={initialEvents}
       />
     </div>
   );

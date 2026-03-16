@@ -5,6 +5,8 @@ import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
 
+import { getCachedDonationStats } from "@/lib/cached-queries";
+
 import { FeedComposer } from "@/components/feed/FeedComposer";
 import { FeedList } from "@/components/feed/FeedList";
 import { FeedSidebar } from "@/components/feed/FeedSidebar";
@@ -40,7 +42,6 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     { count: alumniCount },
     { count: parentsCount },
     { count: eventsCount },
-    { data: donationStat },
     { data: posts, error: postsError, count: postsCount },
     userName,
   ] = await Promise.all([
@@ -48,7 +49,6 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()),
-    queryClient.from("organization_donation_stats").select("*").eq("organization_id", org.id).maybeSingle(),
     supabase
       .from("feed_posts")
       .select(`*, author:users!feed_posts_author_id_fkey(name)`, { count: "exact", head: false })
@@ -60,6 +60,8 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       ? supabase.from("users").select("name").eq("id", orgCtx.userId).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
   ]);
+
+  const donationStat = await getCachedDonationStats(org.id);
 
   if (postsError) {
     throw new Error("Failed to load feed");
@@ -98,7 +100,8 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       supabase
         .from("feed_poll_votes")
         .select("post_id, option_index")
-        .in("post_id", pollPostIds),
+        .in("post_id", pollPostIds)
+        .limit(5000),
     ]);
 
     for (const v of userVotes || []) {
@@ -144,7 +147,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
   const canPost = orgCtx.role ? feedPostRoles.includes(orgCtx.role) : false;
 
   // Build stats for sidebar widget
-  const totalDonations = ((donationStat as { total_amount_cents?: number } | null)?.total_amount_cents ?? 0) / 100;
+  const totalDonations = (donationStat?.total_amount_cents ?? 0) / 100;
 
   const stats: StatItem[] = [
     { label: "Active Members", value: membersCount || 0, href: `/${orgSlug}/members`, icon: Users },
