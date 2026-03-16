@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
+import "./landing-styles.css";
 
 // Lazy-load animation components - only needed on landing page
 const LandingAnimations = dynamic(
@@ -29,7 +30,7 @@ const Confetti = dynamic(
 
 const PricingSection = dynamic(
   () => import("@/components/marketing/PricingSection").then((mod) => mod.PricingSection),
-  { ssr: true }
+  { ssr: false }
 );
 
 export default async function LandingPage() {
@@ -54,7 +55,7 @@ export default async function LandingPage() {
       <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="#top" className="group flex items-center gap-2.5">
-            <Image src="/TeamNetwor.png" alt="" width={541} height={303} className="h-7 w-auto object-contain" aria-hidden="true" />
+            <Image src="/TeamNetwor.png" alt="" width={541} height={303} sizes="28px" className="h-7 w-auto object-contain" aria-hidden="true" />
             <span className="font-display text-xl font-bold tracking-tight text-landing-cream">
               <span className="text-landing-green">Team</span><span className="text-landing-cream">Network</span>
             </span>
@@ -418,7 +419,7 @@ export default async function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center">
-              <Image src="/TeamNetwor.png" alt="TeamNetwork" width={541} height={303} className="h-8 w-auto object-contain" />
+              <Image src="/TeamNetwor.png" alt="TeamNetwork" width={541} height={303} sizes="32px" className="h-8 w-auto object-contain" />
             </div>
 
             <div className="flex items-center gap-8 text-sm text-landing-cream/50">
