@@ -98,7 +98,8 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
       supabase
         .from("feed_poll_votes")
         .select("post_id, option_index")
-        .in("post_id", pollPostIds),
+        .in("post_id", pollPostIds)
+        .limit(5000),
     ]);
 
     for (const v of userVotes || []) {
