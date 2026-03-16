@@ -583,10 +583,10 @@ export async function getGraduationDryRun(
 
   // Determine capacity per org for past-graduation members
   const orgIds = [...new Set(pastGraduation.map((m) => m.organization_id))];
+  const capacityMap = await batchCheckAlumniCapacity(supabase, orgIds);
   const capacityByOrg: Record<string, { hasCapacity: boolean; currentCount: number; limit: number | null }> = {};
-
-  for (const orgId of orgIds) {
-    capacityByOrg[orgId] = await checkAlumniCapacity(supabase, orgId);
+  for (const [orgId, cap] of capacityMap) {
+    capacityByOrg[orgId] = cap;
   }
 
   const toAlumni: GraduatingMember[] = [];

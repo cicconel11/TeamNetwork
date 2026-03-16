@@ -6,9 +6,9 @@ import {
   getMembersNearingGraduation,
   getMembersPastGraduation,
   getMembersToReinstate,
-  getOrganization,
-  getOrgAdminEmails,
-  checkAlumniCapacity,
+  batchGetOrganizations,
+  batchGetOrgAdminEmails,
+  batchCheckAlumniCapacity,
   transitionToAlumni,
   revokeMemberAccess,
   reinstateToActiveMember,
@@ -95,50 +95,59 @@ export async function GET(request: Request) {
     const nearingGraduation = await getMembersNearingGraduation(supabase, 30);
     console.log(`[cron/graduation-check] Found ${nearingGraduation.length} members nearing graduation`);
 
-    // Group by organization to avoid duplicate admin lookups
+    // Group by organization
     const byOrgWarning = new Map<string, typeof nearingGraduation>();
     for (const member of nearingGraduation) {
-      const orgMembers = byOrgWarning.get(member.organization_id) || [];
+      const orgMembers = byOrgWarning.get(member.organization_id) ?? [];
       orgMembers.push(member);
       byOrgWarning.set(member.organization_id, orgMembers);
     }
 
-    for (const [orgId, members] of byOrgWarning) {
-      const org = await getOrganization(supabase, orgId);
-      if (!org) {
-        results.errors.push(`Organization not found: ${orgId}`);
-        continue;
-      }
+    if (byOrgWarning.size > 0) {
+      const warningOrgIds = [...byOrgWarning.keys()];
+      const [warningOrgs, warningAdminEmails] = await Promise.all([
+        batchGetOrganizations(supabase, warningOrgIds),
+        batchGetOrgAdminEmails(supabase, warningOrgIds),
+      ]);
 
-      const adminEmails = await getOrgAdminEmails(supabase, orgId);
-      if (adminEmails.length === 0) {
-        results.errors.push(`No admin emails found for org: ${org.name}`);
-        continue;
-      }
-
-      for (const member of members) {
-        const email = build30DayWarningEmail(member, org);
-        let anyEmailSucceeded = false;
-
-        for (const adminEmail of adminEmails) {
-          const result = await sendEmail({
-            to: adminEmail,
-            subject: email.subject,
-            body: email.body,
-          });
-
-          if (result.success) {
-            anyEmailSucceeded = true;
-          } else {
-            results.errors.push(`Failed to send warning to ${adminEmail}: ${result.error}`);
-          }
+      for (const [orgId, members] of byOrgWarning) {
+        const org = warningOrgs.get(orgId);
+        if (!org) {
+          results.errors.push(`Organization not found: ${orgId}`);
+          continue;
         }
 
-        // Only mark warning as sent if at least one email was delivered
-        // This allows retry on next cron run if all emails failed
-        if (anyEmailSucceeded) {
-          await markWarningSent(supabase, member.id);
-          results.warningsSent++;
+        const adminEmails = warningAdminEmails.get(orgId) ?? [];
+        if (adminEmails.length === 0) {
+          results.errors.push(`No admin emails found for org: ${org.name}`);
+          continue;
+        }
+
+        for (const member of members) {
+          const email = build30DayWarningEmail(member, org);
+          let anyEmailSucceeded = false;
+
+          // Keep emails sequential for Resend rate-limit safety
+          for (const adminEmail of adminEmails) {
+            const result = await sendEmail({
+              to: adminEmail,
+              subject: email.subject,
+              body: email.body,
+            });
+
+            if (result.success) {
+              anyEmailSucceeded = true;
+            } else {
+              results.errors.push(`Failed to send warning to ${adminEmail}: ${result.error}`);
+            }
+          }
+
+          // Only mark warning as sent if at least one email was delivered
+          // This allows retry on next cron run if all emails failed
+          if (anyEmailSucceeded) {
+            await markWarningSent(supabase, member.id);
+            results.warningsSent++;
+          }
         }
       }
     }
@@ -150,73 +159,103 @@ export async function GET(request: Request) {
     // Group by organization
     const byOrgGrad = new Map<string, typeof pastGraduation>();
     for (const member of pastGraduation) {
-      const orgMembers = byOrgGrad.get(member.organization_id) || [];
+      const orgMembers = byOrgGrad.get(member.organization_id) ?? [];
       orgMembers.push(member);
       byOrgGrad.set(member.organization_id, orgMembers);
     }
 
-    for (const [orgId, members] of byOrgGrad) {
-      const org = await getOrganization(supabase, orgId);
-      if (!org) {
-        results.errors.push(`Organization not found: ${orgId}`);
-        continue;
-      }
+    if (byOrgGrad.size > 0) {
+      const gradOrgIds = [...byOrgGrad.keys()];
+      const [gradOrgs, gradAdminEmails, capacityMap] = await Promise.all([
+        batchGetOrganizations(supabase, gradOrgIds),
+        batchGetOrgAdminEmails(supabase, gradOrgIds),
+        // TODO: checkAlumniCapacity (called inside batchCheckAlumniCapacity) throws on DB error
+        // rather than returning hasCapacity: false, which is correct fail-closed behavior.
+        // If this throw propagates, the entire graduation step fails and can be retried.
+        batchCheckAlumniCapacity(supabase, gradOrgIds),
+      ]);
 
-      const adminEmails = await getOrgAdminEmails(supabase, orgId);
-
-      for (const member of members) {
-        // Skip members without a user account (can't transition roles)
-        if (!member.user_id) {
-          console.log(`[cron/graduation-check] Skipping member ${member.id} - no user_id`);
-          continue;
-        }
-
-        debugLog("graduation-cron", "processing member", {
-          memberId: maskPII(member.id),
-          graduationDate: member.expected_graduation_date,
-          orgId: maskPII(orgId),
-        });
-
-        // Check alumni capacity
-        const { hasCapacity, currentCount, limit } = await checkAlumniCapacity(supabase, orgId);
-        debugLog("graduation-cron", "capacity check", { hasCapacity, currentCount, limit });
-
-        if (hasCapacity) {
-          // Transition to alumni
-          const result = await transitionToAlumni(supabase, member.id, member.user_id, orgId);
-
-          if (result.success && !result.skipped) {
-            results.transitionsToAlumni++;
-            const email = buildGraduationEmail(member, org);
-
-            for (const adminEmail of adminEmails) {
-              await sendEmail({
-                to: adminEmail,
-                subject: email.subject,
-                body: email.body,
-              });
-            }
-          } else if (!result.success) {
-            results.errors.push(`Failed to transition ${member.id}: ${result.error}`);
+      // Use Promise.allSettled for error isolation — one org failing shouldn't block others
+      const orgSettled = await Promise.allSettled(
+        [...byOrgGrad.entries()].map(async ([orgId, members]) => {
+          const org = gradOrgs.get(orgId);
+          if (!org) {
+            results.errors.push(`Organization not found: ${orgId}`);
+            return;
           }
-        } else {
-          // Revoke access
-          const result = await revokeMemberAccess(supabase, member.id, member.user_id, orgId);
 
-          if (result.success && !result.skipped) {
-            results.accessRevoked++;
-            const email = buildNoCapacityEmail(member, org, currentCount, limit!);
-
-            for (const adminEmail of adminEmails) {
-              await sendEmail({
-                to: adminEmail,
-                subject: email.subject,
-                body: email.body,
-              });
-            }
-          } else if (!result.success) {
-            results.errors.push(`Failed to revoke ${member.id}: ${result.error}`);
+          const adminEmails = gradAdminEmails.get(orgId) ?? [];
+          // Capacity is looked up once per-org from the pre-fetched map
+          const capacity = capacityMap.get(orgId);
+          if (!capacity) {
+            results.errors.push(`Capacity info missing for org: ${orgId}`);
+            return;
           }
+
+          const { hasCapacity, currentCount, limit } = capacity;
+          debugLog("graduation-cron", "capacity check", { orgId: maskPII(orgId), hasCapacity, currentCount, limit });
+
+          for (const member of members) {
+            // Skip members without a user account (can't transition roles)
+            if (!member.user_id) {
+              console.log(`[cron/graduation-check] Skipping member ${member.id} - no user_id`);
+              continue;
+            }
+
+            debugLog("graduation-cron", "processing member", {
+              memberId: maskPII(member.id),
+              graduationDate: member.expected_graduation_date,
+              orgId: maskPII(orgId),
+            });
+
+            if (hasCapacity) {
+              // Transition to alumni
+              const result = await transitionToAlumni(supabase, member.id, member.user_id, orgId);
+
+              if (result.success && !result.skipped) {
+                results.transitionsToAlumni++;
+                const email = buildGraduationEmail(member, org);
+
+                // Keep emails sequential for Resend rate-limit safety
+                for (const adminEmail of adminEmails) {
+                  await sendEmail({
+                    to: adminEmail,
+                    subject: email.subject,
+                    body: email.body,
+                  });
+                }
+              } else if (!result.success) {
+                results.errors.push(`Failed to transition ${member.id}: ${result.error}`);
+              }
+            } else {
+              // Revoke access
+              const result = await revokeMemberAccess(supabase, member.id, member.user_id, orgId);
+
+              if (result.success && !result.skipped) {
+                results.accessRevoked++;
+                const email = buildNoCapacityEmail(member, org, currentCount, limit!);
+
+                // Keep emails sequential for Resend rate-limit safety
+                for (const adminEmail of adminEmails) {
+                  await sendEmail({
+                    to: adminEmail,
+                    subject: email.subject,
+                    body: email.body,
+                  });
+                }
+              } else if (!result.success) {
+                results.errors.push(`Failed to revoke ${member.id}: ${result.error}`);
+              }
+            }
+          }
+        })
+      );
+
+      for (const settled of orgSettled) {
+        if (settled.status === "rejected") {
+          const reason = settled.reason instanceof Error ? settled.reason.message : String(settled.reason);
+          console.error("[cron/graduation-check] Org-level error during graduation:", reason);
+          results.errors.push(`Org processing error: ${reason}`);
         }
       }
     }
@@ -227,47 +266,56 @@ export async function GET(request: Request) {
 
     const byOrgReinstate = new Map<string, typeof membersToReinstate>();
     for (const member of membersToReinstate) {
-      const orgMembers = byOrgReinstate.get(member.organization_id) || [];
+      const orgMembers = byOrgReinstate.get(member.organization_id) ?? [];
       orgMembers.push(member);
       byOrgReinstate.set(member.organization_id, orgMembers);
     }
 
-    for (const [orgId, members] of byOrgReinstate) {
-      const org = await getOrganization(supabase, orgId);
-      if (!org) {
-        results.errors.push(`Organization not found: ${orgId}`);
-        continue;
-      }
+    if (byOrgReinstate.size > 0) {
+      const reinstateOrgIds = [...byOrgReinstate.keys()];
+      const [reinstateOrgs, reinstateAdminEmails] = await Promise.all([
+        batchGetOrganizations(supabase, reinstateOrgIds),
+        batchGetOrgAdminEmails(supabase, reinstateOrgIds),
+      ]);
 
-      const adminEmails = await getOrgAdminEmails(supabase, orgId);
-
-      for (const member of members) {
-        if (!member.user_id) {
-          console.log(`[cron/graduation-check] Skipping reinstate for member ${member.id} - no user_id`);
+      for (const [orgId, members] of byOrgReinstate) {
+        const org = reinstateOrgs.get(orgId);
+        if (!org) {
+          results.errors.push(`Organization not found: ${orgId}`);
           continue;
         }
 
-        const result = await reinstateToActiveMember(
-          supabase,
-          member.id,
-          member.user_id,
-          orgId,
-          "active"
-        );
+        const adminEmails = reinstateAdminEmails.get(orgId) ?? [];
 
-        if (result.success && !result.skipped) {
-          results.reinstatesToActive++;
-          const email = buildReinstatementEmail(member, org);
-
-          for (const adminEmail of adminEmails) {
-            await sendEmail({
-              to: adminEmail,
-              subject: email.subject,
-              body: email.body,
-            });
+        for (const member of members) {
+          if (!member.user_id) {
+            console.log(`[cron/graduation-check] Skipping reinstate for member ${member.id} - no user_id`);
+            continue;
           }
-        } else if (!result.success) {
-          results.errors.push(`Failed to reinstate ${member.id}: ${result.error}`);
+
+          const result = await reinstateToActiveMember(
+            supabase,
+            member.id,
+            member.user_id,
+            orgId,
+            "active"
+          );
+
+          if (result.success && !result.skipped) {
+            results.reinstatesToActive++;
+            const email = buildReinstatementEmail(member, org);
+
+            // Keep emails sequential for Resend rate-limit safety
+            for (const adminEmail of adminEmails) {
+              await sendEmail({
+                to: adminEmail,
+                subject: email.subject,
+                body: email.body,
+              });
+            }
+          } else if (!result.success) {
+            results.errors.push(`Failed to reinstate ${member.id}: ${result.error}`);
+          }
         }
       }
     }
