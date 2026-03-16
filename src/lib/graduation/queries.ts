@@ -394,6 +394,65 @@ export async function batchGetOrganizations(
   return result;
 }
 
+/**
+ * Fetch admin emails for multiple organizations in 2 queries total.
+ * Returns a Map keyed by org ID. Orgs with no admins map to an empty array.
+ */
+export async function batchGetOrgAdminEmails(
+  supabase: SupabaseClient<Database>,
+  orgIds: string[]
+): Promise<Map<string, string[]>> {
+  if (orgIds.length === 0) return new Map();
+
+  // Pre-initialize all orgIds so every key is present even with no admins
+  const result = new Map<string, string[]>();
+  for (const orgId of orgIds) {
+    result.set(orgId, []);
+  }
+
+  const { data: roles, error: rolesError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id, organization_id")
+    .eq("role", "admin")
+    .eq("status", "active")
+    .in("organization_id", orgIds);
+
+  if (rolesError) {
+    throw new Error(`Failed to batch-fetch admin emails: ${rolesError.message}`);
+  }
+
+  if (!roles || roles.length === 0) {
+    return result;
+  }
+
+  const userIds = [...new Set(roles.map((r) => r.user_id))];
+
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, email")
+    .in("id", userIds);
+
+  if (usersError || !users) {
+    return result;
+  }
+
+  const emailById = new Map<string, string | null>();
+  for (const user of users) {
+    emailById.set(user.id as string, user.email as string | null);
+  }
+
+  for (const role of roles) {
+    const email = emailById.get(role.user_id as string);
+    if (email) {
+      const orgEmails = result.get(role.organization_id as string) ?? [];
+      orgEmails.push(email);
+      result.set(role.organization_id as string, orgEmails);
+    }
+  }
+
+  return result;
+}
+
 
 /**
  * Dry-run result for the graduation cron job.
