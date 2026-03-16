@@ -91,7 +91,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: insertError.message }, { status: 400 });
   }
 
-  const { data: orgEnterprise } = await supabase
+  const { data: orgEnterprise } = await serviceSupabase
     .from("organizations")
     .select("enterprise_id")
     .eq("id", organizationId)
