@@ -1,17 +1,10 @@
-"use server";
-
-import { revalidatePath, revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 
-export async function revalidatePaths(paths: string[]) {
-  for (const path of paths) {
-    revalidatePath(path);
-  }
-}
-
 /**
  * Typed wrapper around unstable_cache that preserves return types.
+ * Uses the service client internally since cached functions may execute
+ * outside a request context during background revalidation.
  *
  * IMPORTANT — Multi-tenant safety:
  * Always include the tenant identifier (orgId) in both keyParts and tags
@@ -39,7 +32,7 @@ export function getCachedNavConfig(orgId: string) {
         .eq("id", id)
         .single();
       if (error) throw new Error(`Nav config query failed: ${error.message}`);
-      return (data?.nav_config ?? null) as Record<string, unknown> | null;
+      return data?.nav_config ?? null;
     },
     ["nav-config", orgId],
     { revalidate: 300, tags: [`nav-config-${orgId}`] }
@@ -86,14 +79,4 @@ export function getCachedDonationStats(orgId: string) {
     ["donation-stats", orgId],
     { revalidate: 300, tags: [`donation-stats-${orgId}`] }
   )(orgId);
-}
-
-/**
- * Invalidate cached data for an organization by tag.
- * Call this from mutation routes/server actions.
- */
-export async function invalidateOrgCache(orgId: string, ...cacheTypes: Array<"nav-config" | "org-settings" | "donation-stats">) {
-  for (const type of cacheTypes) {
-    revalidateTag(`${type}-${orgId}`);
-  }
 }
