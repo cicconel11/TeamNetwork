@@ -102,6 +102,7 @@ export function getCachedEnterpriseAlumniStats(enterpriseId: string) {
   return typedCache(
     async (id: string) => {
       const supabase = createServiceClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any).rpc(
         "get_enterprise_alumni_stats",
         { p_enterprise_id: id }
