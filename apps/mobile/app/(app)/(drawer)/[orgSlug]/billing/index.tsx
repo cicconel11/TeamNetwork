@@ -22,6 +22,7 @@ import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonthDayYearSafe } from "@/lib/date-format";
+import { getWebAppUrl } from "@/lib/web-api";
 import {
   ALUMNI_BUCKET_LABELS,
   ALUMNI_LIMITS,
@@ -239,7 +240,7 @@ export default function BillingScreen() {
     },
     progressBar: {
       height: 8,
-      backgroundColor: n.divider,
+      backgroundColor: n.borderStrong,
       borderRadius: RADIUS.full,
       overflow: "hidden" as const,
     },
@@ -353,7 +354,7 @@ export default function BillingScreen() {
   }, [refetchSubscription]);
 
   const handleManageBillingInWeb = useCallback(() => {
-    const url = `https://www.myteamnetwork.com/${orgSlug}/settings/billing`;
+    const url = `${getWebAppUrl()}/${orgSlug}/settings/billing`;
     Linking.openURL(url);
   }, [orgSlug]);
 
@@ -361,20 +362,20 @@ export default function BillingScreen() {
     (status: string): { label: string; color: string; bgColor: string } => {
       switch (status) {
         case "active":
-          return { label: "Active", color: semantic.success, bgColor: semantic.successLight };
+          return { label: "Active", color: semantic.successDark, bgColor: semantic.successLight };
         case "trialing":
-          return { label: "Trial", color: semantic.info, bgColor: semantic.infoLight };
+          return { label: "Trial", color: semantic.infoDark, bgColor: semantic.infoLight };
         case "past_due":
-          return { label: "Past Due", color: semantic.warning, bgColor: semantic.warningLight };
+          return { label: "Past Due", color: semantic.warningDark, bgColor: semantic.warningLight };
         case "canceled":
         case "canceling":
           return {
             label: status === "canceling" ? "Canceling" : "Canceled",
-            color: semantic.error,
+            color: semantic.errorDark,
             bgColor: semantic.errorLight,
           };
         default:
-          return { label: status, color: neutral.muted, bgColor: neutral.divider };
+          return { label: status, color: neutral.foreground, bgColor: neutral.divider };
       }
     },
     [semantic, neutral]
