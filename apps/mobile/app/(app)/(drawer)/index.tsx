@@ -84,8 +84,28 @@ export default function OrganizationsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyTitle}>No organizations</Text>
-            <Text style={styles.emptyText}>You are not a member of any organizations yet.</Text>
+            <Text style={styles.emptyTitle}>Welcome to TeamNetwork</Text>
+            <Text style={styles.emptyText}>
+              Join an existing team or create a new one
+            </Text>
+            <View style={styles.emptyActions}>
+              <Pressable
+                style={({ pressed }) => [styles.emptyActionButton, styles.emptyActionButtonPrimary, pressed && { opacity: 0.8 }]}
+                onPress={() => router.push("/(app)/join" as const)}
+                accessibilityLabel="Join a Team"
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyActionButtonPrimaryText}>Join a Team</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [styles.emptyActionButton, styles.emptyActionButtonSecondary, pressed && { opacity: 0.8 }]}
+                onPress={() => router.push("/(app)/create-org" as const)}
+                accessibilityLabel="Create a Team"
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyActionButtonSecondaryText}>Create a Team</Text>
+              </Pressable>
+            </View>
           </View>
         }
         ListFooterComponent={<OrgSwitcherActions />}
@@ -143,15 +163,43 @@ const createStyles = () =>
       paddingHorizontal: 24,
     },
     emptyTitle: {
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: "700",
       color: colors.title,
       marginBottom: 8,
     },
     emptyText: {
-      fontSize: 14,
+      fontSize: 15,
       color: colors.subtitle,
       textAlign: "center",
-      lineHeight: 20,
+      lineHeight: 22,
+      marginBottom: 28,
+    },
+    emptyActions: {
+      width: "100%",
+      gap: 12,
+    },
+    emptyActionButton: {
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center",
+    },
+    emptyActionButtonPrimary: {
+      backgroundColor: "#059669",
+    },
+    emptyActionButtonPrimaryText: {
+      color: "#ffffff",
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    emptyActionButtonSecondary: {
+      backgroundColor: "transparent",
+      borderWidth: 1.5,
+      borderColor: "#1e293b",
+    },
+    emptyActionButtonSecondaryText: {
+      color: "#0f172a",
+      fontSize: 15,
+      fontWeight: "600",
     },
   });

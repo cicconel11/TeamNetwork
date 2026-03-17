@@ -1,15 +1,18 @@
-import { View, Text, Pressable, StyleSheet, StatusBar, Dimensions } from "react-native";
+import { View, Text, Pressable, StyleSheet, StatusBar, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 
-const { width, height } = Dimensions.get("window");
-
 export default function LandingScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
 
-  const handleEmailPress = () => {
+  const handleSignInPress = () => {
     router.push("/(auth)/login");
+  };
+
+  const handleCreateAccountPress = () => {
+    router.push("/(auth)/signup");
   };
 
   const handleGooglePress = () => {
@@ -20,7 +23,7 @@ export default function LandingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Gradient Background - dark teal to navy matching web */}
+      {/* Gradient Background */}
       <LinearGradient
         colors={["#134e4a", "#0f172a", "#0f172a"]}
         start={{ x: 0, y: 0 }}
@@ -30,9 +33,9 @@ export default function LandingScreen() {
 
       {/* Decorative Circles */}
       <View style={styles.circlesContainer}>
-        <View style={[styles.circle, styles.circle1]} />
-        <View style={[styles.circle, styles.circle2]} />
-        <View style={[styles.circle, styles.circle3]} />
+        <View style={[styles.circle, { width: width * 0.8, height: width * 0.8, top: -width * 0.2, right: -width * 0.3 }]} />
+        <View style={[styles.circle, { width: width * 0.6, height: width * 0.6, top: height * 0.25, left: -width * 0.25 }]} />
+        <View style={[styles.circle, { width: width * 0.5, height: width * 0.5, top: height * 0.5, right: -width * 0.15 }]} />
       </View>
 
       {/* Bottom Card */}
@@ -54,19 +57,29 @@ export default function LandingScreen() {
             Join your team's network or sign in to continue.
           </Text>
 
-          {/* Primary Button: Continue with Email */}
+          {/* Primary Button: Sign In */}
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
-            onPress={handleEmailPress}
-            accessibilityLabel="Continue with Email"
+            onPress={handleSignInPress}
+            accessibilityLabel="Sign In"
             accessibilityRole="button"
           >
-            <Text style={styles.primaryButtonText}>Continue with Email</Text>
+            <Text style={styles.primaryButtonText}>Sign In</Text>
           </Pressable>
 
-          {/* Secondary Button: Continue with Google */}
+          {/* Secondary Button: Create Account */}
           <Pressable
             style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.8 }]}
+            onPress={handleCreateAccountPress}
+            accessibilityLabel="Create Account"
+            accessibilityRole="button"
+          >
+            <Text style={styles.secondaryButtonText}>Create Account</Text>
+          </Pressable>
+
+          {/* Tertiary Button: Continue with Google */}
+          <Pressable
+            style={({ pressed }) => [styles.tertiaryButton, pressed && { opacity: 0.8 }]}
             onPress={handleGooglePress}
             accessibilityLabel="Continue with Google"
             accessibilityRole="button"
@@ -75,7 +88,7 @@ export default function LandingScreen() {
               <View style={styles.googleIcon}>
                 <Text style={styles.googleIconText}>G</Text>
               </View>
-              <Text style={styles.secondaryButtonText}>Continue with Google</Text>
+              <Text style={styles.tertiaryButtonText}>Continue with Google</Text>
             </View>
           </Pressable>
         </View>
@@ -108,25 +121,7 @@ const styles = StyleSheet.create({
   circle: {
     position: "absolute",
     borderRadius: 9999,
-    backgroundColor: "rgba(20, 184, 166, 0.08)", // subtle teal tint
-  },
-  circle1: {
-    width: width * 0.8,
-    height: width * 0.8,
-    top: -width * 0.2,
-    right: -width * 0.3,
-  },
-  circle2: {
-    width: width * 0.6,
-    height: width * 0.6,
-    top: height * 0.25,
-    left: -width * 0.25,
-  },
-  circle3: {
-    width: width * 0.5,
-    height: width * 0.5,
-    top: height * 0.5,
-    right: -width * 0.15,
+    backgroundColor: "rgba(20, 184, 166, 0.08)",
   },
 
   // Card
@@ -140,14 +135,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#ffffff",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
+    borderCurve: "continuous",
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
+    boxShadow: "0px -4px 12px rgba(0, 0, 0, 0.1)",
   },
 
   // Header
@@ -161,7 +153,8 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#059669", // green matching web branding
+    borderCurve: "continuous",
+    backgroundColor: "#059669",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -178,21 +171,22 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#0f172a", // dark navy matching web
+    color: "#0f172a",
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: "#64748b", // slate-500, muted gray matching web
+    color: "#64748b",
     lineHeight: 24,
     marginBottom: 28,
   },
 
   // Buttons
   primaryButton: {
-    backgroundColor: "#059669", // green matching web CTA
+    backgroundColor: "#059669",
     paddingVertical: 16,
     borderRadius: 14,
+    borderCurve: "continuous",
     alignItems: "center",
     marginBottom: 12,
   },
@@ -202,12 +196,26 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   secondaryButton: {
+    backgroundColor: "#0f172a",
+    paddingVertical: 16,
+    borderRadius: 14,
+    borderCurve: "continuous",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  secondaryButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  tertiaryButton: {
     backgroundColor: "transparent",
     paddingVertical: 16,
     borderRadius: 14,
+    borderCurve: "continuous",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "#1e293b", // dark navy/slate border matching web
+    borderColor: "#1e293b",
   },
   googleButtonContent: {
     flexDirection: "row",
@@ -222,15 +230,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#cbd5e1", // slate-300 matching web palette
+    borderColor: "#cbd5e1",
   },
   googleIconText: {
     fontSize: 12,
     fontWeight: "bold",
     color: "#4285F4",
   },
-  secondaryButtonText: {
-    color: "#0f172a", // dark navy matching web
+  tertiaryButtonText: {
+    color: "#0f172a",
     fontSize: 16,
     fontWeight: "600",
   },
