@@ -49,7 +49,7 @@ function getLinkedInClientId(): string {
   if (!v || v.trim() === "") {
     throw new Error("Missing required environment variable: LINKEDIN_CLIENT_ID");
   }
-  return v;
+  return v.trim();
 }
 
 function getLinkedInClientSecret(): string {
@@ -57,7 +57,7 @@ function getLinkedInClientSecret(): string {
   if (!v || v.trim() === "") {
     throw new Error("Missing required environment variable: LINKEDIN_CLIENT_SECRET");
   }
-  return v;
+  return v.trim();
 }
 
 function getLinkedInEncryptionKey(): string {
