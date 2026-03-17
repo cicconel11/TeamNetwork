@@ -1,6 +1,7 @@
 import React, { useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
 import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 import { MessageCircle } from "lucide-react-native";
 import { NEUTRAL, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -16,7 +17,12 @@ interface PostCardProps {
 }
 
 function PostCardInner({ post, onPress, onLikeToggle }: PostCardProps) {
-  const handlePress = useCallback(() => onPress(post.id), [onPress, post.id]);
+  const handlePress = useCallback(() => {
+    if (Platform.OS === "ios") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+    onPress(post.id);
+  }, [onPress, post.id]);
   const handleLike = useCallback(() => onLikeToggle(post.id), [onLikeToggle, post.id]);
 
   return (
