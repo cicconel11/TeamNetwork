@@ -65,12 +65,6 @@
         {
           "photosPermission": "TeamMeet needs access to your photos to attach images to posts."
         }
-      ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "enableGooglePay": true
-        }
       ]
     ],
     "extra": {

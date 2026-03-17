@@ -12,19 +12,6 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 
-// Stripe React Native is a native module — not available on web.
-// Use conditional require to avoid crash when running in browser.
-const StripeProvider =
-  Platform.OS !== "web"
-    ? require("@stripe/stripe-react-native").StripeProvider
-    : null;
-
-const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-
-if (!STRIPE_PUBLISHABLE_KEY && !__DEV__) {
-  console.error("[Stripe] Missing EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY. Payment features will not work.");
-}
-
 // Suppress known third-party library warnings on web platform
 // These are library compatibility issues that don't affect functionality
 if (Platform.OS === "web") {
@@ -306,16 +293,7 @@ function RootLayoutInner() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      {StripeProvider ? (
-        <StripeProvider
-          publishableKey={STRIPE_PUBLISHABLE_KEY}
-          urlScheme="teammeet"
-        >
-          {navigation}
-        </StripeProvider>
-      ) : (
-        navigation
-      )}
+      {navigation}
     </GestureHandlerRootView>
   );
 }

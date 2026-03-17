@@ -26,7 +26,6 @@
     "@react-navigation/elements": "^2.9.5",
     "@react-navigation/native": "^7.1.28",
     "@sentry/react-native": "^7.9.0",
-    "@stripe/stripe-react-native": "0.50.3",
     "@supabase/supabase-js": "^2.39.6",
     "@teammeet/core": "workspace:*",
     "@teammeet/types": "workspace:*",
