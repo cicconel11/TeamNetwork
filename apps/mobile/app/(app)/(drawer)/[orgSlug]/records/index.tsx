@@ -62,11 +62,11 @@ interface RecordsByCategory {
 }
 
 export default function RecordsScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
-  const { records, categories, loading, error, refetch, refetchIfStale } = useRecords(orgSlug || "");
+  const { records, categories, loading, error, refetch, refetchIfStale } = useRecords(orgId);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const isRefetchingRef = useRef(false);

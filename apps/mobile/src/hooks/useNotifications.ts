@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { normalizeRole, ViewerContext } from "@teammeet/core";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -119,7 +121,9 @@ export function useNotifications(
 
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -136,23 +140,6 @@ export function useNotifications(
     if (!userId || !orgId) return null;
     return `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
   }, [userId, orgId]);
-
-  // Load read IDs from AsyncStorage
-  const loadReadIds = useCallback(async () => {
-    const storageKey = getStorageKey();
-    if (!storageKey) return new Set<string>();
-
-    try {
-      const stored = await AsyncStorage.getItem(storageKey);
-      if (stored) {
-        const ids: string[] = JSON.parse(stored);
-        return new Set(ids);
-      }
-    } catch {
-      // Ignore parse errors
-    }
-    return new Set<string>();
-  }, [getStorageKey]);
 
   // Save read IDs to AsyncStorage
   const saveReadIds = useCallback(
@@ -177,11 +164,14 @@ export function useNotifications(
     setTotalCount(null);
     setReadIds(new Set());
     viewerContextRef.current = null;
-  }, [orgId]);
+    invalidateRequests();
+  }, [orgId, userId, invalidateRequests]);
 
   const fetchNotifications = useCallback(
     async (fetchOffset: number = 0, append: boolean = false) => {
-      if (!orgId) {
+      const requestId = beginRequest();
+
+      if (!orgId || !userId) {
         if (isMountedRef.current) {
           setNotifications([]);
           setError(null);
@@ -200,33 +190,25 @@ export function useNotifications(
         }
 
         // Get current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        if (isMountedRef.current) {
-          setUserId(user.id);
-        }
-
         // Get user's role in this org (only on initial fetch or if not cached)
         if (!viewerContextRef.current || !append) {
           const { data: roleData } = await supabase
             .from("user_organization_roles")
             .select("role, status")
             .eq("organization_id", orgId)
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("status", "active")
             .single();
 
           viewerContextRef.current = {
             role: normalizeRole(roleData?.role),
             status: roleData?.status ?? null,
-            userId: user.id,
+            userId,
           };
         }
 
         // Load read IDs from storage
-        const storageKey = `${STORAGE_KEY_PREFIX}${user.id}_${orgId}`;
+        const storageKey = `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
         let storedReadIds = new Set<string>();
         try {
           const stored = await AsyncStorage.getItem(storageKey);
@@ -256,6 +238,7 @@ export function useNotifications(
         const { data: notificationsData, error: notificationsError, count } = await query;
 
         if (notificationsError) throw notificationsError;
+        if (!isCurrentRequest(requestId)) return;
 
         // Filter based on audience targeting
         const filtered = (notificationsData || []).filter((notification) =>
@@ -268,7 +251,7 @@ export function useNotifications(
           isRead: storedReadIds.has(n.id),
         }));
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           if (append) {
             setNotifications((prev) => [...prev, ...annotated]);
           } else {
@@ -291,17 +274,17 @@ export function useNotifications(
         }
       } catch (e) {
         sentry.captureException(e as Error, { context: "useNotifications.fetchNotifications" });
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setError((e as Error).message);
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setLoading(false);
           setLoadingMore(false);
         }
       }
     },
-    [orgId, pageSize, isPaginated]
+    [orgId, userId, pageSize, isPaginated, beginRequest, isCurrentRequest]
   );
 
   const loadMore = useCallback(async () => {
@@ -324,13 +307,30 @@ export function useNotifications(
     }
   }, [fetchNotifications]);
 
+  const persistReadIds = useCallback(
+    async (updater: (current: Set<string>) => Set<string>) => {
+      if (!orgId || !userId) return;
+
+      let nextReadIds = new Set<string>();
+      setReadIds((current) => {
+        nextReadIds = updater(current);
+        return nextReadIds;
+      });
+      await saveReadIds(nextReadIds);
+    },
+    [orgId, userId, saveReadIds]
+  );
+
   // Mark a notification as read
   const markAsRead = useCallback(
     async (notificationId: string) => {
-      const newReadIds = new Set(readIds);
-      newReadIds.add(notificationId);
-      setReadIds(newReadIds);
-      await saveReadIds(newReadIds);
+      if (!orgId || !userId) return;
+
+      await persistReadIds((current) => {
+        const next = new Set(current);
+        next.add(notificationId);
+        return next;
+      });
 
       // Update local notifications state (immutable)
       setNotifications((prev) =>
@@ -342,30 +342,33 @@ export function useNotifications(
       // Emit event for other hook instances
       readStatusEmitter.emit("read", { orgId, userId, notificationId });
     },
-    [orgId, userId, readIds, saveReadIds]
+    [orgId, userId, persistReadIds]
   );
 
   // Mark all notifications as read
   const markAllAsRead = useCallback(async () => {
+    if (!orgId || !userId) return;
+
     const allIds = notifications.map((n) => n.id);
-    const newReadIds = new Set([...readIds, ...allIds]);
-    setReadIds(newReadIds);
-    await saveReadIds(newReadIds);
+    await persistReadIds((current) => new Set([...current, ...allIds]));
 
     // Update local notifications state (immutable)
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     // Emit event for other hook instances
     readStatusEmitter.emit("readAll", { orgId, userId });
-  }, [orgId, userId, notifications, readIds, saveReadIds]);
+  }, [orgId, userId, notifications, persistReadIds]);
 
   // Mark a notification as unread
   const markAsUnread = useCallback(
     async (notificationId: string) => {
-      const newReadIds = new Set(readIds);
-      newReadIds.delete(notificationId);
-      setReadIds(newReadIds);
-      await saveReadIds(newReadIds);
+      if (!orgId || !userId) return;
+
+      await persistReadIds((current) => {
+        const next = new Set(current);
+        next.delete(notificationId);
+        return next;
+      });
 
       // Update local notifications state (immutable)
       setNotifications((prev) =>
@@ -377,7 +380,7 @@ export function useNotifications(
       // Emit event for other hook instances
       readStatusEmitter.emit("unread", { orgId, userId, notificationId });
     },
-    [orgId, userId, readIds, saveReadIds]
+    [orgId, userId, persistReadIds]
   );
 
   // Compute unread count

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -53,6 +54,7 @@ export function useEvents(
 
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -66,10 +68,13 @@ export function useEvents(
     setOffset(0);
     setHasMore(false);
     setTotalCount(null);
-  }, [orgId]);
+    invalidateRequests();
+  }, [orgId, invalidateRequests]);
 
   const fetchEvents = useCallback(
     async (fetchOffset: number = 0, append: boolean = false) => {
+      const requestId = beginRequest();
+
       if (!orgId) {
         if (isMountedRef.current) {
           setEvents([]);
@@ -116,8 +121,9 @@ export function useEvents(
           }
           throw eventsError;
         }
+        if (!isCurrentRequest(requestId)) return;
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           const newData = (data as Event[]) || [];
 
           if (append) {
@@ -142,7 +148,7 @@ export function useEvents(
           setOffset(fetchOffset + newData.length);
         }
       } catch (e) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           // If table doesn't exist, don't treat as error
           const err = e as { code?: string; message: string };
           if (err.code === "42P01" || err.message?.includes("does not exist")) {
@@ -161,13 +167,13 @@ export function useEvents(
           }
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setLoading(false);
           setLoadingMore(false);
         }
       }
     },
-    [orgId, pageSize, isPaginated]
+    [orgId, pageSize, isPaginated, beginRequest, isCurrentRequest]
   );
 
   const loadMore = useCallback(async () => {

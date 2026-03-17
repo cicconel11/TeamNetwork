@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import type { Form, FormDocument } from "@teammeet/types";
@@ -17,12 +19,12 @@ interface UseFormsReturn {
   refetchIfStale: () => void;
 }
 
-export function useForms(orgSlug: string): UseFormsReturn {
+export function useForms(orgId: string | null): UseFormsReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
-  const userIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [forms, setForms] = useState<Form[]>([]);
   const [formDocuments, setFormDocuments] = useState<FormDocument[]>([]);
   const [submittedFormIds, setSubmittedFormIds] = useState<Set<string>>(new Set());
@@ -30,16 +32,16 @@ export function useForms(orgSlug: string): UseFormsReturn {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset when org changes
+  // Reset when org or user changes
   useEffect(() => {
-    orgIdRef.current = null;
-    userIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+    invalidateRequests();
+  }, [orgId, userId, invalidateRequests]);
 
-  const fetchForms = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchForms = useCallback(async () => {
+    const requestId = beginRequest();
+
+    if (!orgId || !userId) {
       if (isMountedRef.current) {
         setForms([]);
         setFormDocuments([]);
@@ -47,8 +49,6 @@ export function useForms(orgSlug: string): UseFormsReturn {
         setSubmittedDocIds(new Set());
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
@@ -56,34 +56,11 @@ export function useForms(orgSlug: string): UseFormsReturn {
     try {
       setLoading(true);
 
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-      userIdRef.current = user.id;
-
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        // Get org ID from slug
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
-
       // Fetch active forms
       const { data: formsData, error: formsError } = await supabase
         .from("forms")
         .select("*")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -107,7 +84,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
       const { data: docsData, error: docsError } = await supabase
         .from("form_documents")
         .select("*")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .eq("is_active", true)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -120,17 +97,17 @@ export function useForms(orgSlug: string): UseFormsReturn {
       const { data: submissions } = await supabase
         .from("form_submissions")
         .select("form_id")
-        .eq("organization_id", resolvedOrgId)
-        .eq("user_id", user.id);
+        .eq("organization_id", orgId)
+        .eq("user_id", userId);
 
       // Fetch user's document submissions
       const { data: docSubmissions } = await supabase
         .from("form_document_submissions")
         .select("document_id")
-        .eq("organization_id", resolvedOrgId)
-        .eq("user_id", user.id);
+        .eq("organization_id", orgId)
+        .eq("user_id", userId);
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setForms((formsData as Form[]) || []);
         setFormDocuments((docsData as FormDocument[]) || []);
         setSubmittedFormIds(new Set(submissions?.map((s) => s.form_id) || []));
@@ -139,7 +116,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
         lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         const error = e as { code?: string; message: string };
         if (error.code === "42P01" || error.message?.includes("does not exist")) {
           setForms([]);
@@ -149,20 +126,20 @@ export function useForms(orgSlug: string): UseFormsReturn {
           setError(null);
         } else {
           const message = error.message || "An error occurred";
-          setError(message);
-          showToast(message, "error");
-          sentry.captureException(e as Error, {
-            context: "useForms",
-            orgSlug,
-          });
+            setError(message);
+            showToast(message, "error");
+            sentry.captureException(e as Error, {
+              context: "useForms",
+              orgId,
+            });
+          }
         }
-      }
-    } finally {
-      if (isMountedRef.current) {
+      } finally {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId, userId, beginRequest, isCurrentRequest]);
 
   // Initial fetch
   useEffect(() => {
@@ -189,7 +166,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchForms(orgId);
+          fetchForms();
         }
       )
       .on(
@@ -201,7 +178,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchForms(orgId);
+          fetchForms();
         }
       )
       .on(
@@ -213,7 +190,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchForms(orgId);
+          fetchForms();
         }
       )
       .on(
@@ -225,7 +202,7 @@ export function useForms(orgSlug: string): UseFormsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchForms(orgId);
+          fetchForms();
         }
       )
       .subscribe();

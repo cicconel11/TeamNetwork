@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { formatDefaultDateFromString } from "@/lib/date-format";
@@ -59,14 +61,14 @@ export function formatTime(time: string): string {
 }
 
 export function useSchedules(
-  orgSlug: string,
-  userId: string | undefined,
+  orgId: string | null,
   isAdmin: boolean
 ): UseSchedulesReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [mySchedules, setMySchedules] = useState<AcademicSchedule[]>([]);
   const [allSchedules, setAllSchedules] = useState<ScheduleWithUser[]>([]);
   const [totalMembers, setTotalMembers] = useState<number>(0);
@@ -75,21 +77,25 @@ export function useSchedules(
 
   // Reset state when org changes
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+    invalidateRequests();
+    if (!isAdmin) {
+      setAllSchedules([]);
+      setTotalMembers(0);
+    }
+  }, [orgId, userId, isAdmin, invalidateRequests]);
 
   const fetchSchedules = useCallback(
-    async (overrideOrgId?: string) => {
-      if (!orgSlug || !userId) {
+    async () => {
+      const requestId = beginRequest();
+
+      if (!orgId || !userId) {
         if (isMountedRef.current) {
           setMySchedules([]);
           setAllSchedules([]);
+          setTotalMembers(0);
           setError(null);
           setLoading(false);
-          orgIdRef.current = null;
-          setOrgId(null);
         }
         return;
       }
@@ -97,29 +103,11 @@ export function useSchedules(
       try {
         setLoading(true);
 
-        let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-        if (!resolvedOrgId) {
-          // First get org ID from slug
-          const { data: org, error: orgError } = await supabase
-            .from("organizations")
-            .select("id")
-            .eq("slug", orgSlug)
-            .single();
-
-          if (orgError) throw orgError;
-          resolvedOrgId = org.id;
-          orgIdRef.current = resolvedOrgId;
-          if (isMountedRef.current) {
-            setOrgId(resolvedOrgId);
-          }
-        }
-
         // Fetch user's own schedules
         const { data: myData, error: myError } = await supabase
           .from("academic_schedules")
           .select("*")
-          .eq("organization_id", resolvedOrgId)
+          .eq("organization_id", orgId)
           .eq("user_id", userId)
           .is("deleted_at", null)
           .order("start_time", { ascending: true });
@@ -136,7 +124,7 @@ export function useSchedules(
           throw myError;
         }
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setMySchedules((myData as AcademicSchedule[]) || []);
         }
 
@@ -145,7 +133,7 @@ export function useSchedules(
           const { data: allData, error: allError } = await supabase
             .from("academic_schedules")
             .select("*, users(name, email)")
-            .eq("organization_id", resolvedOrgId)
+            .eq("organization_id", orgId)
             .is("deleted_at", null)
             .order("start_time", { ascending: true });
 
@@ -153,7 +141,7 @@ export function useSchedules(
             throw allError;
           }
 
-          if (isMountedRef.current) {
+          if (isMountedRef.current && isCurrentRequest(requestId)) {
             setAllSchedules((allData as ScheduleWithUser[]) || []);
           }
 
@@ -161,24 +149,28 @@ export function useSchedules(
           const { count } = await supabase
             .from("user_organization_roles")
             .select("user_id", { count: "exact" })
-            .eq("organization_id", resolvedOrgId)
+            .eq("organization_id", orgId)
             .eq("status", "active");
 
-          if (isMountedRef.current) {
+          if (isMountedRef.current && isCurrentRequest(requestId)) {
             setTotalMembers(count || 0);
           }
+        } else if (isMountedRef.current && isCurrentRequest(requestId)) {
+          setAllSchedules([]);
+          setTotalMembers(0);
         }
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setError(null);
           lastFetchTimeRef.current = Date.now();
         }
       } catch (e) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           const error = e as { code?: string; message: string };
           if (error.code === "42P01" || error.message?.includes("does not exist")) {
             setMySchedules([]);
             setAllSchedules([]);
+            setTotalMembers(0);
             setError(null);
           } else {
             const message = error.message || "An error occurred";
@@ -186,17 +178,17 @@ export function useSchedules(
             showToast(message, "error");
             sentry.captureException(e as Error, {
               context: "useSchedules",
-              orgSlug,
+              orgId,
             });
           }
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setLoading(false);
         }
       }
     },
-    [orgSlug, userId, isAdmin]
+    [orgId, userId, isAdmin, beginRequest, isCurrentRequest]
   );
 
   // Initial fetch
@@ -223,7 +215,7 @@ export function useSchedules(
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchSchedules(orgId);
+          fetchSchedules();
         }
       )
       .subscribe();

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -33,15 +34,19 @@ interface UseMembersReturn {
 export function useMembers(orgId: string | null): UseMembersReturn {
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     lastFetchTimeRef.current = 0;
-  }, [orgId]);
+    invalidateRequests();
+  }, [orgId, invalidateRequests]);
 
   const fetchMembers = useCallback(async () => {
+    const requestId = beginRequest();
+
     if (!orgId) {
       if (isMountedRef.current) {
         setMembers([]);
@@ -74,13 +79,13 @@ export function useMembers(orgId: string | null): UseMembersReturn {
 
       if (membersError) throw membersError;
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setMembers((data as unknown as Member[]) || []);
         setError(null);
         lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         const message = (e as Error).message || "An error occurred";
         setError(message);
         showToast(message, "error");
@@ -90,11 +95,11 @@ export function useMembers(orgId: string | null): UseMembersReturn {
         });
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, [orgId]);
+  }, [orgId, beginRequest, isCurrentRequest]);
 
   useEffect(() => {
     isMountedRef.current = true;

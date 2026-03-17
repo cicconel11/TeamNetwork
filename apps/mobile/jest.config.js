@@ -3,6 +3,7 @@ module.exports = {
   transform: {
     "^.+\\.(ts|tsx)$": ["babel-jest", { presets: ["babel-preset-expo"] }],
   },
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
   testMatch: ["**/__tests__/**/*.test.ts?(x)", "**/*.test.ts?(x)"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   collectCoverageFrom: [

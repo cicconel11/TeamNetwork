@@ -18,10 +18,8 @@ import * as Linking from "expo-linking";
 import { useForms } from "@/hooks/useForms";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
-import { useAuth } from "@/hooks/useAuth";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
-import { supabase } from "@/lib/supabase";
-import type { Form, FormDocument, Organization } from "@teammeet/types";
+import type { Form, FormDocument } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
@@ -49,10 +47,9 @@ type ListItem =
   | { type: "empty" };
 
 export default function FormsScreen() {
-  const { orgSlug } = useOrg();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
-  const { user } = useAuth();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
   const {
@@ -64,36 +61,9 @@ export default function FormsScreen() {
     error,
     refetch,
     refetchIfStale,
-  } = useForms(orgSlug || "");
+  } = useForms(orgId);
   const [refreshing, setRefreshing] = useState(false);
-  const [organization, setOrganization] = useState<Organization | null>(null);
   const isRefetchingRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  // Fetch organization data for header
-  const fetchOrg = useCallback(async () => {
-    if (!orgSlug || !user) return;
-    try {
-      const { data } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("slug", orgSlug)
-        .single();
-      if (isMountedRef.current && data) {
-        setOrganization(data);
-      }
-    } catch {
-      // Silently fail - header will show fallback
-    }
-  }, [orgSlug, user]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    fetchOrg();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchOrg]);
 
   // Handle back navigation
   const handleBack = useCallback(() => {
@@ -144,12 +114,12 @@ export default function FormsScreen() {
     setRefreshing(true);
     isRefetchingRef.current = true;
     try {
-      await Promise.all([refetch(), fetchOrg()]);
+      await refetch();
     } finally {
       setRefreshing(false);
       isRefetchingRef.current = false;
     }
-  }, [refetch, fetchOrg]);
+  }, [refetch]);
 
   // Build list data with section headers
   const listData: ListItem[] = useMemo(() => {
@@ -303,11 +273,11 @@ export default function FormsScreen() {
 
             {/* Org Logo (opens drawer) */}
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {organization?.logo_url ? (
-                <Image source={organization.logo_url} style={styles.orgLogo} contentFit="contain" transition={200} />
+              {orgLogoUrl ? (
+                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
               ) : (
                 <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{organization?.name?.[0] || "?"}</Text>
+                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "?"}</Text>
                 </View>
               )}
             </Pressable>

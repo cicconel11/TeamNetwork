@@ -2773,6 +2773,7 @@ export type Database = {
           id: string
           organization_id: string
           phone_number: string | null
+          push_enabled: boolean | null
           sms_enabled: boolean | null
           updated_at: string | null
           user_id: string
@@ -2789,6 +2790,7 @@ export type Database = {
           id?: string
           organization_id: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id: string
@@ -2805,6 +2807,7 @@ export type Database = {
           id?: string
           organization_id?: string
           phone_number?: string | null
+          push_enabled?: boolean | null
           sms_enabled?: boolean | null
           updated_at?: string | null
           user_id?: string
@@ -4275,6 +4278,44 @@ export type Database = {
           },
         ]
       }
+      user_push_tokens: {
+        Row: {
+          created_at: string | null
+          device_id: string | null
+          expo_push_token: string
+          id: string
+          platform: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_id?: string | null
+          expo_push_token: string
+          id?: string
+          platform: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string | null
+          expo_push_token?: string
+          id?: string
+          platform?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           avatar_url: string | null
@@ -4922,6 +4963,7 @@ export type ChatGroupMember = Tables<"chat_group_members">;
 export type ChatMessage = Tables<"chat_messages">;
 export type ChatPollVote = Tables<"chat_poll_votes">;
 export type ChatFormResponse = Tables<"chat_form_responses">;
+export type Expense = Tables<"expenses">;
 export type Event = Tables<"events">;
 export type Form = Tables<"forms">;
 export type FormDocument = Tables<"form_documents">;
@@ -4932,8 +4974,10 @@ export type NotificationPreference = Tables<"notification_preferences">;
 export type Organization = Tables<"organizations">;
 export type OrganizationDonation = Tables<"organization_donations">;
 export type OrganizationDonationStat = Tables<"organization_donation_stats">;
+export type Record = Tables<"records">;
 export type ScheduleFile = Tables<"schedule_files">;
 export type User = Tables<"users">;
+export type UserPushToken = Tables<"user_push_tokens">;
 export type Workout = Tables<"workouts">;
 export type WorkoutLog = Tables<"workout_logs">;
 export type Competition = Tables<"competitions">;

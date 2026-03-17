@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { filterAnnouncementsForUser, ViewerContext } from "@teammeet/core";
@@ -47,7 +49,9 @@ export function useAnnouncements(
 
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -65,11 +69,14 @@ export function useAnnouncements(
     setHasMore(false);
     setTotalCount(null);
     viewerContextRef.current = null;
-  }, [orgId]);
+    invalidateRequests();
+  }, [orgId, userId, invalidateRequests]);
 
   const fetchAnnouncements = useCallback(
     async (fetchOffset: number = 0, append: boolean = false) => {
-      if (!orgId) {
+      const requestId = beginRequest();
+
+      if (!orgId || !userId) {
         if (isMountedRef.current) {
           setAnnouncements([]);
           setError(null);
@@ -88,28 +95,20 @@ export function useAnnouncements(
         }
 
         // Get current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        if (isMountedRef.current) {
-          setUserId(user.id);
-        }
-
         // Get user's role in this org (only on initial fetch or if not cached)
         if (!viewerContextRef.current || !append) {
           const { data: roleData } = await supabase
             .from("user_organization_roles")
             .select("role, status")
             .eq("organization_id", orgId)
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("status", "active")
             .single();
 
           viewerContextRef.current = {
             role: normalizeRole(roleData?.role),
             status: roleData?.status ?? null,
-            userId: user.id,
+            userId,
           };
         }
 
@@ -129,6 +128,7 @@ export function useAnnouncements(
         const { data: announcementsData, error: announcementsError, count } = await query;
 
         if (announcementsError) throw announcementsError;
+        if (!isCurrentRequest(requestId)) return;
 
         // Filter based on audience targeting
         const filtered = filterAnnouncementsForUser(
@@ -136,7 +136,7 @@ export function useAnnouncements(
           viewerContextRef.current
         );
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           if (append) {
             setAnnouncements((prev) => [...prev, ...filtered]);
           } else {
@@ -160,7 +160,7 @@ export function useAnnouncements(
           setOffset(fetchOffset + (announcementsData?.length || 0));
         }
       } catch (e) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           const message = (e as Error).message || "An error occurred";
           setError(message);
           showToast(message, "error");
@@ -170,13 +170,13 @@ export function useAnnouncements(
           });
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setLoading(false);
           setLoadingMore(false);
         }
       }
     },
-    [orgId, pageSize, isPaginated]
+    [orgId, userId, pageSize, isPaginated, beginRequest, isCurrentRequest]
   );
 
   const loadMore = useCallback(async () => {

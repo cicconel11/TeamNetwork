@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
@@ -12,7 +13,10 @@ export function useFeed(orgId: string | null): UseFeedReturn {
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
   const generationRef = useRef(0);
-  const [userId, setUserId] = useState<string | null>(null);
+  const postsRef = useRef<FeedPost[]>([]);
+  const pendingPostsRef = useRef<FeedPost[]>([]);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [pendingPosts, setPendingPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +34,19 @@ export function useFeed(orgId: string | null): UseFeedReturn {
     setTotalCount(null);
     setPendingPosts([]);
     generationRef.current += 1;
-  }, [orgId]);
+  }, [orgId, userId]);
+
+  useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  useEffect(() => {
+    pendingPostsRef.current = pendingPosts;
+  }, [pendingPosts]);
 
   const fetchPosts = useCallback(
     async (fetchOffset: number = 0, append: boolean = false) => {
-      if (!orgId) {
+      if (!orgId || !userId) {
         if (isMountedRef.current) {
           setPosts([]);
           setError(null);
@@ -52,15 +64,6 @@ export function useFeed(orgId: string | null): UseFeedReturn {
           setLoadingMore(true);
         } else {
           setLoading(true);
-        }
-
-        // Get current user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
-        if (isMountedRef.current) {
-          setUserId(user.id);
         }
 
         // Fetch posts with author join
@@ -90,7 +93,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             ? supabase
                 .from("feed_likes")
                 .select("post_id")
-                .eq("user_id", user.id)
+                .eq("user_id", userId)
                 .in("post_id", postIds)
             : Promise.resolve({ data: null }),
           postIds.length > 0
@@ -169,7 +172,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         }
       }
     },
-    [orgId]
+    [orgId, userId]
   );
 
   const loadMore = useCallback(async () => {
@@ -284,6 +287,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
           throw new Error(data.error || "Failed to create post");
         }
 
+        await refetch();
         showToast("Post created");
       } catch (e) {
         const message = (e as Error).message || "Failed to create post";
@@ -292,7 +296,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         throw e;
       }
     },
-    [userId, orgId]
+    [userId, orgId, refetch]
   );
 
   // Update post
@@ -360,8 +364,10 @@ export function useFeed(orgId: string | null): UseFeedReturn {
         },
         async (payload) => {
           const newPost = payload.new as FeedPost;
-          // Don't add own posts to pending (they'll appear via refetch after create)
-          if (newPost.author_id === userId) return;
+          if (newPost.author_id === userId) {
+            void refetch();
+            return;
+          }
 
           if (!isMountedRef.current) return;
 
@@ -386,7 +392,16 @@ export function useFeed(orgId: string | null): UseFeedReturn {
             media: [],
           };
 
-          setPendingPosts((prev) => [enrichedPost, ...prev]);
+          setPendingPosts((prev) => {
+            if (
+              prev.some((post) => post.id === enrichedPost.id) ||
+              postsRef.current.some((post) => post.id === enrichedPost.id) ||
+              pendingPostsRef.current.some((post) => post.id === enrichedPost.id)
+            ) {
+              return prev;
+            }
+            return [enrichedPost, ...prev];
+          });
         }
       )
       .on(
@@ -429,7 +444,7 @@ export function useFeed(orgId: string | null): UseFeedReturn {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, userId]);
+  }, [orgId, userId, refetch]);
 
   return {
     posts,

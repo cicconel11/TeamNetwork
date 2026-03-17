@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import type { Organization } from "@teammeet/types";
 import * as sentry from "@/lib/analytics/sentry";
 
@@ -12,17 +14,18 @@ interface UseOrganizationsReturn {
 
 export function useOrganizations(): UseOrganizationsReturn {
   const isMountedRef = useRef(true);
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
 
   const fetchOrganizations = useCallback(async () => {
-    try {
-      // First check if we have a session (don't throw if missing)
-      const { data: sessionData } = await supabase.auth.getSession();
+    const requestId = beginRequest();
 
-      if (!sessionData?.session?.user) {
+    try {
+      if (!userId) {
         if (isMountedRef.current) {
           setOrganizations([]);
           setError(null); // Not an error, just not logged in
@@ -31,17 +34,15 @@ export function useOrganizations(): UseOrganizationsReturn {
         return;
       }
 
-      const user = sessionData.session.user;
-
       const { data, error: fetchError } = await supabase
         .from("user_organization_roles")
         .select("organization:organizations(*)")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("status", "active");
 
       if (fetchError) throw fetchError;
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         const orgs = (data || [])
           .map((row) => row.organization)
           .filter((org): org is Organization => org !== null);
@@ -51,47 +52,25 @@ export function useOrganizations(): UseOrganizationsReturn {
       }
     } catch (e) {
       sentry.captureException(e as Error, { context: "useOrganizations.fetchOrganizations" });
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setError((e as Error).message);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, []);
+  }, [userId, beginRequest, isCurrentRequest]);
 
   useEffect(() => {
     isMountedRef.current = true;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isMountedRef.current) {
-        setUserId(session?.user?.id ?? null);
-      }
-    });
+    invalidateRequests();
     fetchOrganizations();
-
-    // Listen for auth state changes and refetch when user signs in
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (isMountedRef.current) {
-        setUserId(session?.user?.id ?? null);
-      }
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-        fetchOrganizations();
-      } else if (event === "SIGNED_OUT") {
-        if (isMountedRef.current) {
-          setOrganizations([]);
-          setError(null);
-        }
-      }
-    });
 
     return () => {
       isMountedRef.current = false;
-      subscription?.unsubscribe();
     };
-  }, [fetchOrganizations]);
+  }, [fetchOrganizations, invalidateRequests]);
 
   useEffect(() => {
     if (!userId) return;

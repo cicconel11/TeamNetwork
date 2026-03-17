@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 import { ViewerContext, normalizeRole } from "@teammeet/core";
 
 const STORAGE_KEY_PREFIX = "announcement_last_viewed_";
@@ -67,9 +69,11 @@ interface UseUnreadAnnouncementCountReturn {
 export function useUnreadAnnouncementCount(
   orgId: string | null
 ): UseUnreadAnnouncementCountReturn {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
   const isMountedRef = useRef(true);
   const lastFetchTimeRef = useRef<number>(0);
 
@@ -80,7 +84,9 @@ export function useUnreadAnnouncementCount(
   }, [userId, orgId]);
 
   const fetchUnreadCount = useCallback(async () => {
-    if (!orgId) {
+    const requestId = beginRequest();
+
+    if (!orgId || !userId) {
       if (isMountedRef.current) {
         setUnreadCount(0);
         setLoading(false);
@@ -91,26 +97,8 @@ export function useUnreadAnnouncementCount(
     try {
       setLoading(true);
 
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        if (isMountedRef.current) {
-          setUnreadCount(0);
-          setLoading(false);
-          setUserId(null);
-        }
-        return;
-      }
-
-      // Track user ID for storage key
-      if (isMountedRef.current) {
-        setUserId(user.id);
-      }
-
       // Get last viewed timestamp from AsyncStorage (key includes user ID)
-      const storageKey = `${STORAGE_KEY_PREFIX}${user.id}_${orgId}`;
+      const storageKey = `${STORAGE_KEY_PREFIX}${userId}_${orgId}`;
       const lastViewedStr = await AsyncStorage.getItem(storageKey);
       const lastViewed = lastViewedStr ? new Date(lastViewedStr) : null;
 
@@ -119,7 +107,7 @@ export function useUnreadAnnouncementCount(
         .from("user_organization_roles")
         .select("role, status")
         .eq("organization_id", orgId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("status", "active")
         .single();
 
@@ -145,7 +133,7 @@ export function useUnreadAnnouncementCount(
       const ctx: ViewerContext = {
         role: normalizeRole(roleData?.role),
         status: roleData?.status ?? null,
-        userId: user.id,
+        userId,
       };
 
       // Filter announcements for audience targeting
@@ -153,21 +141,21 @@ export function useUnreadAnnouncementCount(
         (announcement) => canViewAnnouncement(announcement, ctx)
       );
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setUnreadCount(visibleAnnouncements.length);
         lastFetchTimeRef.current = Date.now();
       }
     } catch {
       // On error, just show 0 to avoid confusion
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setUnreadCount(0);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, [orgId, getStorageKey]);
+  }, [orgId, userId, getStorageKey, beginRequest, isCurrentRequest]);
 
   // Mark announcements as read by updating the last viewed timestamp
   const markAsRead = useCallback(async () => {
@@ -195,12 +183,13 @@ export function useUnreadAnnouncementCount(
   // Initial fetch
   useEffect(() => {
     isMountedRef.current = true;
+    invalidateRequests();
     fetchUnreadCount();
 
     return () => {
       isMountedRef.current = false;
     };
-  }, [fetchUnreadCount]);
+  }, [fetchUnreadCount, invalidateRequests]);
 
   // Listen for mark-as-read events from other hook instances to sync state
   useEffect(() => {
@@ -217,7 +206,7 @@ export function useUnreadAnnouncementCount(
     };
   }, [orgId, userId]);
 
-  // Real-time subscription for new announcements
+  // Real-time subscription for announcement changes
   useEffect(() => {
     if (!orgId) return;
 
@@ -226,14 +215,29 @@ export function useUnreadAnnouncementCount(
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "announcements",
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          // Refetch count when a new announcement is created
           fetchUnreadCount();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_organization_roles",
+          filter: userId ? `user_id=eq.${userId}` : undefined,
+        },
+        (payload) => {
+          const nextOrgId = (payload.new as { organization_id?: string } | null)?.organization_id;
+          const previousOrgId = (payload.old as { organization_id?: string } | null)?.organization_id;
+          if (nextOrgId === orgId || previousOrgId === orgId) {
+            fetchUnreadCount();
+          }
         }
       )
       .subscribe();
@@ -241,7 +245,7 @@ export function useUnreadAnnouncementCount(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, fetchUnreadCount]);
+  }, [orgId, userId, fetchUnreadCount]);
 
   return {
     unreadCount,

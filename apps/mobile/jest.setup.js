@@ -3,9 +3,6 @@
  * Configures testing environment and global mocks
  */
 
-// Import testing library extensions
-import "@testing-library/jest-native/extend-expect";
-
 // Mock reanimated
 jest.mock("react-native-reanimated", () => {
   const Reanimated = require("react-native-reanimated/mock");
@@ -140,16 +137,12 @@ jest.mock("@/lib/supabase", () => ({
   },
 }));
 
-// Mock analytics
-jest.mock("@/lib/analytics", () => ({
-  identify: jest.fn(),
-  reset: jest.fn(),
-  track: jest.fn(),
-  screen: jest.fn(),
-  setUserProperties: jest.fn(),
+jest.mock("@/lib/analytics/sentry", () => ({
+  init: jest.fn(),
+  setUser: jest.fn(),
   captureException: jest.fn(),
-  setEnabled: jest.fn(),
-  isEnabled: jest.fn().mockReturnValue(false),
+  captureMessage: jest.fn(),
+  isInitialized: jest.fn().mockReturnValue(false),
 }));
 
 // Suppress console warnings in tests

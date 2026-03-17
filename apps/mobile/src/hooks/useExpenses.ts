@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import type { Expense } from "@teammeet/types";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 
@@ -21,34 +23,35 @@ interface UseExpensesOptions {
 }
 
 export function useExpenses(
-  orgSlug: string,
+  orgId: string | null,
   options: UseExpensesOptions = {}
 ): UseExpensesReturn {
   const { isAdmin = false } = options;
+  const { user } = useAuth();
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
+  const userId = user?.id ?? null;
 
-  // Reset state when org changes
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
+    invalidateRequests();
+    setExpenses([]);
+    setError(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId, userId, isAdmin, invalidateRequests]);
 
   const fetchExpenses = useCallback(
-    async (overrideOrgId?: string) => {
-      if (!orgSlug) {
+    async () => {
+      const requestId = beginRequest();
+
+      if (!orgId || (!isAdmin && !userId)) {
         if (isMountedRef.current) {
           setExpenses([]);
           setError(null);
           setLoading(false);
-          orgIdRef.current = null;
-          setOrgId(null);
         }
         return;
       }
@@ -56,40 +59,17 @@ export function useExpenses(
       try {
         setLoading(true);
 
-        let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-        if (!resolvedOrgId) {
-          // First get org ID from slug
-          const { data: org, error: orgError } = await supabase
-            .from("organizations")
-            .select("id")
-            .eq("slug", orgSlug)
-            .single();
-
-          if (orgError) throw orgError;
-          resolvedOrgId = org.id;
-          orgIdRef.current = resolvedOrgId;
-          if (isMountedRef.current) {
-            setOrgId(resolvedOrgId);
-          }
-        }
-
         // Build query
         let query = supabase
           .from("expenses")
           .select("*")
-          .eq("organization_id", resolvedOrgId)
+          .eq("organization_id", orgId)
           .is("deleted_at", null)
           .order("created_at", { ascending: false });
 
         // Non-admin users only see their own expenses
-        if (!isAdmin) {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (user) {
-            query = query.eq("user_id", user.id);
-          }
+        if (!isAdmin && userId) {
+          query = query.eq("user_id", userId);
         }
 
         const { data, error: expensesError } = await query;
@@ -106,13 +86,13 @@ export function useExpenses(
           throw expensesError;
         }
 
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setExpenses((data as Expense[]) || []);
           setError(null);
           lastFetchTimeRef.current = Date.now();
         }
       } catch (e) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           const error = e as { code?: string; message: string };
           if (
             error.code === "42P01" ||
@@ -126,17 +106,17 @@ export function useExpenses(
             showToast(message, "error");
             sentry.captureException(e as Error, {
               context: "useExpenses",
-              orgSlug,
+              orgId,
             });
           }
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && isCurrentRequest(requestId)) {
           setLoading(false);
         }
       }
     },
-    [orgSlug, isAdmin]
+    [beginRequest, isAdmin, isCurrentRequest, orgId, userId]
   );
 
   // Initial fetch
@@ -163,7 +143,7 @@ export function useExpenses(
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchExpenses(orgId);
+          fetchExpenses();
         }
       )
       .subscribe();

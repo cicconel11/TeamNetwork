@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import type { Record } from "@teammeet/types";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 
 const STALE_TIME_MS = 30_000; // 30 seconds
 
@@ -15,32 +16,32 @@ interface UseRecordsReturn {
   refetchIfStale: () => void;
 }
 
-export function useRecords(orgSlug: string): UseRecordsReturn {
+export function useRecords(orgId: string | null): UseRecordsReturn {
   const isMountedRef = useRef(true);
-  const orgIdRef = useRef<string | null>(null);
   const lastFetchTimeRef = useRef<number>(0);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [records, setRecords] = useState<Record[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
 
-  // Reset state when org changes
   useEffect(() => {
-    orgIdRef.current = null;
-    setOrgId(null);
+    invalidateRequests();
+    setRecords([]);
+    setCategories([]);
+    setError(null);
     lastFetchTimeRef.current = 0;
-  }, [orgSlug]);
+  }, [orgId, invalidateRequests]);
 
-  const fetchRecords = useCallback(async (overrideOrgId?: string) => {
-    if (!orgSlug) {
+  const fetchRecords = useCallback(async () => {
+    const requestId = beginRequest();
+
+    if (!orgId) {
       if (isMountedRef.current) {
         setRecords([]);
         setCategories([]);
         setError(null);
         setLoading(false);
-        orgIdRef.current = null;
-        setOrgId(null);
       }
       return;
     }
@@ -48,29 +49,11 @@ export function useRecords(orgSlug: string): UseRecordsReturn {
     try {
       setLoading(true);
 
-      let resolvedOrgId = overrideOrgId ?? orgIdRef.current;
-
-      if (!resolvedOrgId) {
-        // First get org ID from slug
-        const { data: org, error: orgError } = await supabase
-          .from("organizations")
-          .select("id")
-          .eq("slug", orgSlug)
-          .single();
-
-        if (orgError) throw orgError;
-        resolvedOrgId = org.id;
-        orgIdRef.current = resolvedOrgId;
-        if (isMountedRef.current) {
-          setOrgId(resolvedOrgId);
-        }
-      }
-
       // Fetch records ordered by category, then title
       const { data, error: recordsError } = await supabase
         .from("records")
         .select("*")
-        .eq("organization_id", resolvedOrgId)
+        .eq("organization_id", orgId)
         .is("deleted_at", null)
         .order("category")
         .order("title");
@@ -88,7 +71,7 @@ export function useRecords(orgSlug: string): UseRecordsReturn {
         throw recordsError;
       }
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         const recordsData = (data as Record[]) || [];
         setRecords(recordsData);
         
@@ -105,7 +88,7 @@ export function useRecords(orgSlug: string): UseRecordsReturn {
         lastFetchTimeRef.current = Date.now();
       }
     } catch (e) {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         const error = e as { code?: string; message: string };
         if (error.code === "42P01" || error.message?.includes("does not exist")) {
           setRecords([]);
@@ -117,16 +100,16 @@ export function useRecords(orgSlug: string): UseRecordsReturn {
           showToast(message, "error");
           sentry.captureException(e as Error, {
             context: "useRecords",
-            orgSlug,
+            orgId,
           });
         }
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [beginRequest, isCurrentRequest, orgId]);
 
   // Initial fetch
   useEffect(() => {
@@ -152,7 +135,7 @@ export function useRecords(orgSlug: string): UseRecordsReturn {
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchRecords(orgId);
+          fetchRecords();
         }
       )
       .subscribe();

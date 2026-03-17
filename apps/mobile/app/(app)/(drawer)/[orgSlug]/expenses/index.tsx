@@ -52,13 +52,13 @@ const EXPENSES_COLORS = {
 };
 
 export default function ExpensesScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
   const { expenses, total, loading, error, refetch, refetchIfStale } =
-    useExpenses(orgSlug || "", { isAdmin });
+    useExpenses(orgId, { isAdmin });
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
 

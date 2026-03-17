@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
+import { useAuth } from "@/hooks/useAuth";
+import { useRequestTracker } from "@/hooks/useRequestTracker";
 
 export interface NotificationPreferences {
   id: string;
@@ -24,15 +26,26 @@ interface UseNotificationPreferencesReturn {
 export function useNotificationPreferences(
   orgId: string | null
 ): UseNotificationPreferencesReturn {
+  const { user } = useAuth();
   const isMountedRef = useRef(true);
-  const userIdRef = useRef<string | null>(null);
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { beginRequest, invalidateRequests, isCurrentRequest } = useRequestTracker();
+  const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
+
+  const isMissingPushEnabledColumnError = useCallback((value: unknown) => {
+    if (!value || typeof value !== "object") return false;
+    const maybeError = value as { message?: string };
+    return maybeError.message?.includes("push_enabled") ?? false;
+  }, []);
 
   const fetchPrefs = useCallback(async () => {
-    if (!orgId) {
+    const requestId = beginRequest();
+
+    if (!orgId || !userId) {
       setPrefs(null);
       setLoading(false);
       return;
@@ -42,27 +55,33 @@ export function useNotificationPreferences(
       setLoading(true);
       setError(null);
 
-      // Get current user
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user) {
-        throw new Error("Not authenticated");
-      }
-
-      userIdRef.current = user.id;
-
-      const { data, error: fetchError } = await supabase
+      let { data, error: fetchError } = await supabase
         .from("notification_preferences")
         .select("id, email_address, email_enabled, push_enabled")
         .eq("organization_id", orgId)
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .maybeSingle();
+
+      if (fetchError && isMissingPushEnabledColumnError(fetchError)) {
+        const fallback = await supabase
+          .from("notification_preferences")
+          .select("id, email_address, email_enabled")
+          .eq("organization_id", orgId)
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        data = fallback.data
+          ? {
+              ...fallback.data,
+              push_enabled: true,
+            }
+          : null;
+        fetchError = fallback.error;
+      }
 
       if (fetchError) throw fetchError;
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         if (data) {
           setPrefs({
             id: data.id,
@@ -74,7 +93,7 @@ export function useNotificationPreferences(
           // Return defaults if no preferences exist yet
           setPrefs({
             id: "",
-            email_address: user.email ?? null,
+            email_address: userEmail,
             email_enabled: true,
             push_enabled: true,
           });
@@ -83,16 +102,16 @@ export function useNotificationPreferences(
       }
     } catch (e) {
       sentry.captureException(e as Error, { context: "useNotificationPreferences.fetchPrefs" });
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setError((e as Error).message);
         setPrefs(null);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isCurrentRequest(requestId)) {
         setLoading(false);
       }
     }
-  }, [orgId]);
+  }, [beginRequest, isCurrentRequest, isMissingPushEnabledColumnError, orgId, userEmail, userId]);
 
   // Initial fetch
   useEffect(() => {
@@ -104,11 +123,16 @@ export function useNotificationPreferences(
     };
   }, [fetchPrefs]);
 
+  useEffect(() => {
+    invalidateRequests();
+    setPrefs(null);
+    setError(null);
+  }, [invalidateRequests, orgId, userId]);
+
   // Realtime subscription
   useEffect(() => {
-    if (!orgId || !userIdRef.current) return;
+    if (!orgId || !userId) return;
 
-    const userId = userIdRef.current;
     const channel = supabase
       .channel(`notification-prefs:${orgId}:${userId}`)
       .on(
@@ -133,18 +157,29 @@ export function useNotificationPreferences(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, fetchPrefs]);
+  }, [orgId, fetchPrefs, userId]);
 
   const updatePrefs = useCallback(
     async (
       updates: Partial<Omit<NotificationPreferences, "id">>
     ): Promise<{ success: boolean; error?: string }> => {
-      if (!orgId || !userIdRef.current) {
+      if (!orgId || !userId) {
         return { success: false, error: "Not authenticated or no organization" };
       }
 
       const previousPrefs = prefs;
-      const userId = userIdRef.current;
+      const emailAddress = updates.email_address ?? prefs?.email_address ?? userEmail;
+      const emailEnabled = updates.email_enabled ?? prefs?.email_enabled ?? true;
+      const pushEnabled = updates.push_enabled ?? prefs?.push_enabled ?? true;
+      const writePayload = {
+        email_address: emailAddress,
+        email_enabled: emailEnabled,
+        push_enabled: pushEnabled,
+      };
+      const fallbackPayload = {
+        email_address: emailAddress,
+        email_enabled: emailEnabled,
+      };
 
       // Optimistic update
       setPrefs((prev) => (prev ? { ...prev, ...updates } : prev));
@@ -154,33 +189,51 @@ export function useNotificationPreferences(
       try {
         if (prefs?.id) {
           // Update existing preferences
-          const { error: updateError } = await supabase
+          let { error: updateError } = await supabase
             .from("notification_preferences")
-            .update({
-              email_address: updates.email_address ?? prefs.email_address,
-              email_enabled: updates.email_enabled ?? prefs.email_enabled,
-              push_enabled: updates.push_enabled ?? prefs.push_enabled,
-            })
+            .update(writePayload)
             .eq("id", prefs.id);
+
+          if (updateError && isMissingPushEnabledColumnError(updateError)) {
+            const fallback = await supabase
+              .from("notification_preferences")
+              .update(fallbackPayload)
+              .eq("id", prefs.id);
+
+            updateError = fallback.error;
+          }
 
           if (updateError) throw updateError;
         } else {
           // Insert new preferences
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          const { data, error: insertError } = await supabase
+          let { data, error: insertError } = await supabase
             .from("notification_preferences")
             .insert({
               organization_id: orgId,
               user_id: userId,
-              email_address: updates.email_address ?? user?.email ?? null,
-              email_enabled: updates.email_enabled ?? true,
-              push_enabled: updates.push_enabled ?? true,
+              ...writePayload,
               phone_number: null,
               sms_enabled: false,
             })
             .select("id")
             .single();
+
+          if (insertError && isMissingPushEnabledColumnError(insertError)) {
+            const fallback = await supabase
+              .from("notification_preferences")
+              .insert({
+                organization_id: orgId,
+                user_id: userId,
+                ...fallbackPayload,
+                phone_number: null,
+                sms_enabled: false,
+              })
+              .select("id")
+              .single();
+
+            data = fallback.data;
+            insertError = fallback.error;
+          }
 
           if (insertError) throw insertError;
 
@@ -204,7 +257,7 @@ export function useNotificationPreferences(
         }
       }
     },
-    [orgId, prefs]
+    [isMissingPushEnabledColumnError, orgId, prefs, userEmail, userId]
   );
 
   return { prefs, loading, error, saving, updatePrefs, refetch: fetchPrefs };

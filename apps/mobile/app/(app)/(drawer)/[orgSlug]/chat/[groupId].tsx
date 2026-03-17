@@ -308,6 +308,8 @@ export default function ChatRoomScreen() {
       organization_id: orgId,
       author_id: currentUserId,
       body: messageBody,
+      message_type: null,
+      metadata: null,
       status: initialStatus,
       approved_by: null,
       approved_at: null,

@@ -57,7 +57,7 @@ const SCHEDULES_COLORS = {
 type FileTab = "my" | "all";
 
 export default function SchedulesScreen() {
-  const { orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const router = useRouter();
   const navigation = useNavigation();
   const { user } = useAuth();
@@ -72,7 +72,7 @@ export default function SchedulesScreen() {
     error: schedulesError,
     refetch: refetchSchedules,
     refetchIfStale: refetchSchedulesIfStale,
-  } = useSchedules(orgSlug || "", user?.id, isAdmin);
+  } = useSchedules(orgId, isAdmin);
 
   const {
     myFiles,

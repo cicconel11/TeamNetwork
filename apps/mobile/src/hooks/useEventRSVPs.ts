@@ -1,13 +1,25 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import * as sentry from "@/lib/analytics/sentry";
+import type { RsvpStatus } from "@teammeet/types";
+
+function normalizeRsvpStatus(status: string | null | undefined): RsvpStatus {
+  switch (status) {
+    case "attending":
+    case "not_attending":
+    case "maybe":
+      return status;
+    default:
+      return "maybe";
+  }
+}
 
 export interface EventRSVP {
   id: string;
   event_id: string;
   user_id: string;
   organization_id: string;
-  status: "attending" | "not_attending" | "maybe";
+  status: RsvpStatus;
   checked_in_at: string | null;
   checked_in_by: string | null;
   created_at: string | null;
@@ -80,7 +92,7 @@ export function useEventRSVPs(eventId: string | undefined): UseEventRSVPsReturn 
         event_id: rsvp.event_id,
         user_id: rsvp.user_id,
         organization_id: rsvp.organization_id,
-        status: rsvp.status,
+        status: normalizeRsvpStatus(rsvp.status),
         checked_in_at: rsvp.checked_in_at,
         checked_in_by: rsvp.checked_in_by,
         created_at: rsvp.created_at,

@@ -18,7 +18,7 @@ import { ChevronLeft, Check, Circle, Square, CheckSquare } from "lucide-react-na
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
-import type { Form, FormField, FormSubmission } from "@teammeet/types";
+import type { Form, FormField, FormFieldOption, FormSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
@@ -43,6 +43,67 @@ const FORM_COLORS = {
   inputBorder: "#d1d5db",
   inputFocusBorder: "#059669",
 };
+
+function isFormFieldOption(value: unknown): value is FormFieldOption {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { label?: unknown }).label === "string" &&
+    typeof (value as { value?: unknown }).value === "string"
+  );
+}
+
+function isFormField(value: unknown): value is FormField {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const field = value as {
+    name?: unknown;
+    label?: unknown;
+    type?: unknown;
+    options?: unknown;
+  };
+
+  if (
+    typeof field.name !== "string" ||
+    typeof field.label !== "string" ||
+    typeof field.type !== "string"
+  ) {
+    return false;
+  }
+
+  if (field.options === undefined) {
+    return true;
+  }
+
+  return (
+    Array.isArray(field.options) &&
+    field.options.every(
+      (option) => typeof option === "string" || isFormFieldOption(option)
+    )
+  );
+}
+
+function parseFormFields(value: unknown): FormField[] {
+  return Array.isArray(value) ? value.filter(isFormField) : [];
+}
+
+function parseResponseMap(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function getOptionValue(option: string | FormFieldOption): string {
+  return typeof option === "string" ? option : option.value;
+}
+
+function getOptionLabel(option: string | FormFieldOption): string {
+  return typeof option === "string" ? option : option.label;
+}
 
 export default function FormDetailScreen() {
   const { formId, orgSlug: paramOrgSlug } = useLocalSearchParams<{ formId: string; orgSlug: string }>();
@@ -103,8 +164,9 @@ export default function FormDetailScreen() {
           if (submission && isMounted) {
             setExistingSubmission(submission as FormSubmission);
             // Use 'data' field if it exists, otherwise try 'responses' for backward compat
-            const submissionData = (submission as any).data || (submission as any).responses || {};
-            setResponses(submissionData as Record<string, unknown>);
+            const submissionRecord = submission as { data?: unknown; responses?: unknown };
+            const submissionData = submissionRecord.data ?? submissionRecord.responses;
+            setResponses(parseResponseMap(submissionData));
           }
         }
 
@@ -134,7 +196,7 @@ export default function FormDetailScreen() {
   const handleSubmit = async () => {
     if (!form) return;
 
-    const fields = (form.fields || []) as FormField[];
+    const fields = parseFormFields(form.fields);
 
     // Validate required fields
     for (const field of fields) {
@@ -220,17 +282,26 @@ export default function FormDetailScreen() {
           <View style={styles.fieldContainer} key={field.name}>
             <Text style={styles.fieldLabel}>{label}</Text>
             <View style={styles.optionsContainer}>
-              {(field.options || []).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={[styles.selectOption, value === opt && styles.selectOptionSelected]}
-                  onPress={() => updateResponse(field.name, opt)}
-                >
-                  <Text style={[styles.selectOptionText, value === opt && styles.selectOptionTextSelected]}>
-                    {opt}
-                  </Text>
-                </Pressable>
-              ))}
+              {(field.options || []).map((opt) => {
+                const optionValue = getOptionValue(opt);
+                const optionLabel = getOptionLabel(opt);
+                return (
+                  <Pressable
+                    key={optionValue}
+                    style={[styles.selectOption, value === optionValue && styles.selectOptionSelected]}
+                    onPress={() => updateResponse(field.name, optionValue)}
+                  >
+                    <Text
+                      style={[
+                        styles.selectOptionText,
+                        value === optionValue && styles.selectOptionTextSelected,
+                      ]}
+                    >
+                      {optionLabel}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         );
@@ -240,22 +311,26 @@ export default function FormDetailScreen() {
           <View style={styles.fieldContainer} key={field.name}>
             <Text style={styles.fieldLabel}>{label}</Text>
             <View style={styles.radioContainer}>
-              {(field.options || []).map((opt) => (
-                <Pressable
-                  key={opt}
-                  style={styles.radioOption}
-                  onPress={() => updateResponse(field.name, opt)}
-                >
-                  {value === opt ? (
-                    <View style={styles.radioSelected}>
-                      <Circle size={12} color={FORM_COLORS.primaryCTA} fill={FORM_COLORS.primaryCTA} />
-                    </View>
-                  ) : (
-                    <View style={styles.radioUnselected} />
-                  )}
-                  <Text style={styles.radioLabel}>{opt}</Text>
-                </Pressable>
-              ))}
+              {(field.options || []).map((opt) => {
+                const optionValue = getOptionValue(opt);
+                const optionLabel = getOptionLabel(opt);
+                return (
+                  <Pressable
+                    key={optionValue}
+                    style={styles.radioOption}
+                    onPress={() => updateResponse(field.name, optionValue)}
+                  >
+                    {value === optionValue ? (
+                      <View style={styles.radioSelected}>
+                        <Circle size={12} color={FORM_COLORS.primaryCTA} fill={FORM_COLORS.primaryCTA} />
+                      </View>
+                    ) : (
+                      <View style={styles.radioUnselected} />
+                    )}
+                    <Text style={styles.radioLabel}>{optionLabel}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
         );
@@ -267,16 +342,18 @@ export default function FormDetailScreen() {
             <Text style={styles.fieldLabel}>{label}</Text>
             <View style={styles.checkboxContainer}>
               {(field.options || []).map((opt) => {
-                const isChecked = checkedValues.includes(opt);
+                const optionValue = getOptionValue(opt);
+                const optionLabel = getOptionLabel(opt);
+                const isChecked = checkedValues.includes(optionValue);
                 return (
                   <Pressable
-                    key={opt}
+                    key={optionValue}
                     style={styles.checkboxOption}
                     onPress={() => {
                       if (isChecked) {
-                        updateResponse(field.name, checkedValues.filter((v) => v !== opt));
+                        updateResponse(field.name, checkedValues.filter((v) => v !== optionValue));
                       } else {
-                        updateResponse(field.name, [...checkedValues, opt]);
+                        updateResponse(field.name, [...checkedValues, optionValue]);
                       }
                     }}
                   >
@@ -285,7 +362,7 @@ export default function FormDetailScreen() {
                     ) : (
                       <Square size={20} color={FORM_COLORS.inputBorder} />
                     )}
-                    <Text style={styles.checkboxLabel}>{opt}</Text>
+                    <Text style={styles.checkboxLabel}>{optionLabel}</Text>
                   </Pressable>
                 );
               })}
@@ -404,7 +481,7 @@ export default function FormDetailScreen() {
     );
   }
 
-  const fields = (form.fields || []) as FormField[];
+  const fields = parseFormFields(form.fields);
 
   // Success state
   if (success) {
