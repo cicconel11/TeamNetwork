@@ -18,8 +18,8 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { formatMonthShort, formatTime } from "@/lib/date-format";
 import type { Event, OrganizationDonationStat } from "@teammeet/types";
 
@@ -46,7 +46,8 @@ export default function PhilanthropyScreen() {
   const navigation = useNavigation();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isActiveMember } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
   const isMountedRef = useRef(true);
 
   // Safe drawer toggle - only dispatch if drawer is available
@@ -500,7 +501,7 @@ function formatMonth(dateString: string) {
   return formatMonthShort(dateString);
 }
 
-const createStyles = () =>
+const createStyles = (surfaceColor: string) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -575,7 +576,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: surfaceColor,
     },
     scrollContent: {
       padding: spacing.md,

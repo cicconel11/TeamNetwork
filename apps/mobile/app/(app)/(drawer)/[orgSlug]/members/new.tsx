@@ -5,7 +5,6 @@ import {
   Pressable,
   ScrollView,
   Share,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -19,8 +18,10 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { getWebAppUrl } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 type InviteRole = "active_member" | "admin" | "alumni";
 
@@ -51,7 +52,195 @@ export default function NewMemberInviteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState<InviteRecord | null>(null);
 
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {},
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      minHeight: 44,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      overflow: "hidden" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleMedium,
+      color: APP_CHROME.headerTitle,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+      textAlign: "center" as const,
+    },
+    headerSpacer: {
+      width: 36,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    formHeader: {
+      gap: SPACING.xs,
+    },
+    formTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+    },
+    formSubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    errorCard: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: s.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      backgroundColor: n.surface,
+    },
+    chipRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+    },
+    chip: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    chipSelected: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    },
+    chipText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    chipTextSelected: {
+      color: s.successDark,
+      fontWeight: "600" as const,
+    },
+    primaryButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+    inviteCard: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+      backgroundColor: n.surface,
+    },
+    inviteCardTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+    },
+    inviteCode: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+    },
+    inviteLink: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    qrContainer: {
+      alignItems: "center" as const,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    qrHint: {
+      marginTop: SPACING.sm,
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    inviteActions: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    secondaryButton: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+    },
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+  }));
 
   const handleDrawerToggle = useCallback(() => {
     try {
@@ -193,7 +382,7 @@ export default function NewMemberInviteScreen() {
               value={uses}
               onChangeText={setUses}
               placeholder="Unlimited"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               keyboardType="number-pad"
               style={styles.input}
             />
@@ -205,7 +394,7 @@ export default function NewMemberInviteScreen() {
               value={expires}
               onChangeText={setExpires}
               placeholder="YYYY-MM-DD"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               style={styles.input}
             />
           </View>
@@ -262,199 +451,4 @@ export default function NewMemberInviteScreen() {
       </View>
     </View>
   );
-}
-
-function createStyles() {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    headerGradient: {
-      // Gradient fills this area
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      minHeight: 44,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-      overflow: "hidden",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 8,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleMedium,
-      color: APP_CHROME.headerTitle,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-      flex: 1,
-      textAlign: "center",
-    },
-    headerSpacer: {
-      width: 36,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.lg,
-    },
-    formHeader: {
-      gap: SPACING.xs,
-    },
-    formTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-    },
-    formSubtitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-    },
-    errorCard: {
-      backgroundColor: SEMANTIC.errorLight,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: SEMANTIC.error,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: SEMANTIC.error,
-    },
-    fieldGroup: {
-      gap: SPACING.xs,
-    },
-    fieldLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.secondary,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      backgroundColor: NEUTRAL.surface,
-    },
-    chipRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.sm,
-    },
-    chip: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      backgroundColor: NEUTRAL.surface,
-    },
-    chipSelected: {
-      borderColor: SEMANTIC.success,
-      backgroundColor: SEMANTIC.successLight,
-    },
-    chipText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
-    },
-    chipTextSelected: {
-      color: SEMANTIC.successDark,
-      fontWeight: "600",
-    },
-    primaryButton: {
-      backgroundColor: SEMANTIC.success,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-    inviteCard: {
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      gap: SPACING.sm,
-      backgroundColor: NEUTRAL.surface,
-    },
-    inviteCardTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-    },
-    inviteCode: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-    },
-    inviteLink: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.muted,
-    },
-    qrContainer: {
-      alignItems: "center",
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: NEUTRAL.background,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-    },
-    qrHint: {
-      marginTop: SPACING.sm,
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.muted,
-    },
-    inviteActions: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-    },
-    secondaryButton: {
-      flex: 1,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.sm,
-      alignItems: "center",
-      backgroundColor: NEUTRAL.surface,
-    },
-    secondaryButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
-    },
-  });
 }

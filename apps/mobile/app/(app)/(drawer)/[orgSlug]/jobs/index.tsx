@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   RefreshControl,
-  StyleSheet,
   Pressable,
   TextInput,
 } from "react-native";
@@ -19,8 +18,10 @@ import { useJobs } from "@/hooks/useJobs";
 import { JobCard } from "@/components/jobs/JobCard";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import type { LocationType, ExperienceLevel } from "@/types/jobs";
 import type { JobPostingWithPoster } from "@/types/jobs";
 
@@ -65,7 +66,186 @@ export default function JobsScreen() {
 
   const { jobs, loading, error, canPost, refetch, refetchIfStale } = useJobs(orgId, filters);
 
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    listHeader: {
+      gap: SPACING.sm,
+      paddingBottom: SPACING.sm,
+    },
+    searchContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      backgroundColor: n.background,
+      paddingHorizontal: SPACING.sm,
+      gap: SPACING.xs,
+    },
+    searchIcon: {},
+    searchInput: {
+      flex: 1,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+    },
+    pillSection: {
+      gap: SPACING.xs,
+    },
+    pillRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.xs,
+    },
+    pill: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    pillSelected: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    },
+    pillText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    pillTextSelected: {
+      color: s.successDark,
+      fontWeight: "600" as const,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 100,
+      flexGrow: 1,
+    },
+    jobCard: {
+      marginBottom: SPACING.sm,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      paddingVertical: 64,
+      gap: SPACING.sm,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      marginTop: SPACING.sm,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+      paddingHorizontal: SPACING.xl,
+    },
+    emptyCreateButton: {
+      marginTop: SPACING.sm,
+      backgroundColor: n.foreground,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+    },
+    emptyCreateButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.surface,
+      fontWeight: "600" as const,
+    },
+    fab: {
+      position: "absolute" as const,
+      bottom: SPACING.xl,
+      right: SPACING.xl,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    fabPressed: {
+      opacity: 0.85,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+      backgroundColor: n.background,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+      textAlign: "center" as const,
+    },
+  }));
 
   const handleDrawerToggle = useCallback(() => {
     try {
@@ -140,12 +320,12 @@ export default function JobsScreen() {
       <View style={styles.listHeader}>
         {/* Search */}
         <View style={styles.searchContainer}>
-          <Search size={16} color={NEUTRAL.muted} style={styles.searchIcon} />
+          <Search size={16} color={neutral.muted} style={styles.searchIcon} />
           <TextInput
             value={searchText}
             onChangeText={handleSearchChange}
             placeholder="Search jobs..."
-            placeholderTextColor={NEUTRAL.placeholder}
+            placeholderTextColor={neutral.placeholder}
             style={styles.searchInput}
             returnKeyType="search"
             clearButtonMode="while-editing"
@@ -266,12 +446,12 @@ export default function JobsScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={SEMANTIC.success}
+                tintColor={semantic.success}
               />
             }
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Briefcase size={48} color={NEUTRAL.border} />
+                <Briefcase size={48} color={neutral.border} />
                 <Text style={styles.emptyTitle}>No jobs posted yet</Text>
                 <Text style={styles.emptyText}>
                   {canPost
@@ -312,183 +492,3 @@ export default function JobsScreen() {
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      ...TYPOGRAPHY.caption,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    listHeader: {
-      gap: SPACING.sm,
-      paddingBottom: SPACING.sm,
-    },
-    searchContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      backgroundColor: NEUTRAL.background,
-      paddingHorizontal: SPACING.sm,
-      gap: SPACING.xs,
-    },
-    searchIcon: {},
-    searchInput: {
-      flex: 1,
-      paddingVertical: SPACING.sm,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-    },
-    pillSection: {
-      gap: SPACING.xs,
-    },
-    pillRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.xs,
-    },
-    pill: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      backgroundColor: NEUTRAL.surface,
-    },
-    pillSelected: {
-      borderColor: SEMANTIC.success,
-      backgroundColor: SEMANTIC.successLight,
-    },
-    pillText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.secondary,
-    },
-    pillTextSelected: {
-      color: SEMANTIC.successDark,
-      fontWeight: "600",
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingBottom: 100,
-      flexGrow: 1,
-    },
-    jobCard: {
-      marginBottom: SPACING.sm,
-    },
-    emptyContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 64,
-      gap: SPACING.sm,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      marginTop: SPACING.sm,
-    },
-    emptyText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-      paddingHorizontal: SPACING.xl,
-    },
-    emptyCreateButton: {
-      marginTop: SPACING.sm,
-      backgroundColor: NEUTRAL.foreground,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-    },
-    emptyCreateButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.surface,
-      fontWeight: "600",
-    },
-    fab: {
-      position: "absolute",
-      bottom: SPACING.xl,
-      right: SPACING.xl,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: SEMANTIC.success,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 6,
-    },
-    fabPressed: {
-      opacity: 0.85,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-      backgroundColor: NEUTRAL.background,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-    },
-  });

@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   Pressable,
-  StyleSheet,
   ActivityIndicator,
   Alert,
   RefreshControl,
@@ -21,7 +20,9 @@ import type { OrgRole } from "@teammeet/core";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import {
   Home,
   Users,
@@ -75,7 +76,240 @@ export default function NavigationSettingsScreen() {
   const router = useRouter();
   const { orgSlug, orgId } = useOrg();
   const { user } = useAuth();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    headerTitle: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: APP_CHROME.headerTitle,
+      textAlign: "center" as const,
+    },
+    headerSpacer: {
+      width: 40,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+    },
+    descriptionSection: {
+      marginBottom: SPACING.md,
+    },
+    descriptionText: {
+      fontSize: 14,
+      color: n.muted,
+      lineHeight: 20,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: n.muted,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.lg,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: "600" as const,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    errorBanner: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    errorText: {
+      fontSize: 14,
+      color: s.error,
+    },
+    itemsList: {
+      gap: SPACING.sm,
+    },
+    itemCard: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      overflow: "hidden" as const,
+    },
+    itemCardDisabled: {
+      opacity: 0.6,
+      borderColor: s.error + "40",
+    },
+    itemHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      padding: SPACING.sm,
+      gap: 10,
+    },
+    reorderButtons: {
+      gap: 2,
+    },
+    reorderButton: {
+      padding: 4,
+    },
+    reorderButtonDisabled: {
+      opacity: 0.3,
+    },
+    itemLabelContainer: {
+      flex: 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+    },
+    itemLabel: {
+      fontSize: 15,
+      fontWeight: "600" as const,
+      color: n.foreground,
+    },
+    itemLabelOriginal: {
+      fontSize: 13,
+      color: n.muted,
+    },
+    badgesContainer: {
+      flexDirection: "row" as const,
+      gap: 6,
+    },
+    badge: {
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: RADIUS.xs,
+    },
+    badgeError: {
+      backgroundColor: s.errorLight,
+    },
+    badgeErrorText: {
+      fontSize: 11,
+      fontWeight: "600" as const,
+      color: s.error,
+    },
+    badgeWarning: {
+      backgroundColor: s.warningLight,
+    },
+    badgeWarningText: {
+      fontSize: 11,
+      fontWeight: "600" as const,
+      color: s.warning,
+    },
+    expandButton: {
+      padding: 4,
+    },
+    expandedContent: {
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+    },
+    fieldGroup: {
+      gap: SPACING.sm,
+    },
+    fieldLabel: {
+      fontSize: 14,
+      fontWeight: "500" as const,
+      color: n.foreground,
+    },
+    input: {
+      backgroundColor: n.surface,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      fontSize: 15,
+      color: n.foreground,
+    },
+    checkboxRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 10,
+      paddingVertical: 6,
+    },
+    checkboxRowInline: {
+      paddingVertical: 0,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: RADIUS.xs,
+      borderWidth: 2,
+      borderColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    checkboxChecked: {
+      backgroundColor: s.success,
+      borderColor: s.success,
+    },
+    checkboxDisabled: {
+      opacity: 0.6,
+    },
+    checkboxLabel: {
+      fontSize: 14,
+      color: n.foreground,
+    },
+    editRolesRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.md,
+    },
+    footer: {
+      marginTop: SPACING.lg,
+    },
+    saveButton: {
+      backgroundColor: s.success,
+      paddingVertical: 14,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    saveButtonDisabled: {
+      opacity: 0.5,
+    },
+    saveButtonText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: n.surface,
+    },
+  }));
 
   const { navConfig, loading, saving, error, saveNavConfig, refetch } = useNavConfig(orgId);
 
@@ -280,7 +514,7 @@ export default function NavigationSettingsScreen() {
 
         <View style={styles.contentSheet}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={SEMANTIC.success} />
+            <ActivityIndicator size="large" color={semantic.success} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         </View>
@@ -340,7 +574,7 @@ export default function NavigationSettingsScreen() {
       <View style={styles.contentSheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={SEMANTIC.success} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={semantic.success} />}
         >
           {/* Description */}
           <View style={styles.descriptionSection}>
@@ -383,19 +617,19 @@ export default function NavigationSettingsScreen() {
                       disabled={isFirst}
                       style={[styles.reorderButton, isFirst && styles.reorderButtonDisabled]}
                     >
-                      <ChevronUp size={18} color={isFirst ? NEUTRAL.border : NEUTRAL.muted} />
+                      <ChevronUp size={18} color={isFirst ? neutral.border : neutral.muted} />
                     </Pressable>
                     <Pressable
                       onPress={() => moveItem(item.href, "down")}
                       disabled={isLast}
                       style={[styles.reorderButton, isLast && styles.reorderButtonDisabled]}
                     >
-                      <ChevronDown size={18} color={isLast ? NEUTRAL.border : NEUTRAL.muted} />
+                      <ChevronDown size={18} color={isLast ? neutral.border : neutral.muted} />
                     </Pressable>
                   </View>
 
                   {/* Icon */}
-                  <Icon size={20} color={NEUTRAL.muted} />
+                  <Icon size={20} color={neutral.muted} />
 
                   {/* Label */}
                   <View style={styles.itemLabelContainer}>
@@ -426,7 +660,7 @@ export default function NavigationSettingsScreen() {
                   >
                     <ChevronDown
                       size={20}
-                      color={NEUTRAL.muted}
+                      color={neutral.muted}
                       style={{ transform: [{ rotate: isExpanded ? "180deg" : "0deg" }] }}
                     />
                   </Pressable>
@@ -443,7 +677,7 @@ export default function NavigationSettingsScreen() {
                         value={labelValue}
                         onChangeText={(text) => handleLabelChange(item.href, text)}
                         placeholder={item.label}
-                        placeholderTextColor={NEUTRAL.placeholder}
+                        placeholderTextColor={neutral.placeholder}
                       />
                     </View>
 
@@ -461,7 +695,7 @@ export default function NavigationSettingsScreen() {
                           ]}
                         >
                           {hiddenForRoles.includes("active_member") && (
-                            <Check size={14} color={NEUTRAL.surface} />
+                            <Check size={14} color={neutral.surface} />
                           )}
                         </View>
                         <Text style={styles.checkboxLabel}>Hide from members</Text>
@@ -474,7 +708,7 @@ export default function NavigationSettingsScreen() {
                           style={[styles.checkbox, hiddenForRoles.includes("alumni") && styles.checkboxChecked]}
                         >
                           {hiddenForRoles.includes("alumni") && (
-                            <Check size={14} color={NEUTRAL.surface} />
+                            <Check size={14} color={neutral.surface} />
                           )}
                         </View>
                         <Text style={styles.checkboxLabel}>Hide from alumni</Text>
@@ -484,7 +718,7 @@ export default function NavigationSettingsScreen() {
                         onPress={() => toggleHiddenEverywhere(item.href)}
                       >
                         <View style={[styles.checkbox, isHiddenEverywhere && styles.checkboxChecked]}>
-                          {isHiddenEverywhere && <Check size={14} color={NEUTRAL.surface} />}
+                          {isHiddenEverywhere && <Check size={14} color={neutral.surface} />}
                         </View>
                         <Text style={styles.checkboxLabel}>Disable for everyone</Text>
                       </Pressable>
@@ -496,7 +730,7 @@ export default function NavigationSettingsScreen() {
                       <View style={styles.editRolesRow}>
                         <View style={[styles.checkboxRow, styles.checkboxRowInline]}>
                           <View style={[styles.checkbox, styles.checkboxChecked, styles.checkboxDisabled]}>
-                            <Check size={14} color={NEUTRAL.surface} />
+                            <Check size={14} color={neutral.surface} />
                           </View>
                           <Text style={styles.checkboxLabel}>Admins</Text>
                         </View>
@@ -511,7 +745,7 @@ export default function NavigationSettingsScreen() {
                             ]}
                           >
                             {editRoles.includes("active_member") && (
-                              <Check size={14} color={NEUTRAL.surface} />
+                              <Check size={14} color={neutral.surface} />
                             )}
                           </View>
                           <Text style={styles.checkboxLabel}>Members</Text>
@@ -524,7 +758,7 @@ export default function NavigationSettingsScreen() {
                             style={[styles.checkbox, editRoles.includes("alumni") && styles.checkboxChecked]}
                           >
                             {editRoles.includes("alumni") && (
-                              <Check size={14} color={NEUTRAL.surface} />
+                              <Check size={14} color={neutral.surface} />
                             )}
                           </View>
                           <Text style={styles.checkboxLabel}>Alumni</Text>
@@ -546,7 +780,7 @@ export default function NavigationSettingsScreen() {
               disabled={!hasChanges || saving}
             >
               {saving ? (
-                <ActivityIndicator size="small" color={NEUTRAL.surface} />
+                <ActivityIndicator size="small" color={neutral.surface} />
               ) : (
                 <Text style={styles.saveButtonText}>Save changes</Text>
               )}
@@ -558,241 +792,3 @@ export default function NavigationSettingsScreen() {
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    // Header styles
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    headerTitle: {
-      flex: 1,
-      fontSize: 18,
-      fontWeight: "600",
-      color: APP_CHROME.headerTitle,
-      textAlign: "center",
-    },
-    headerSpacer: {
-      width: 40, // Match back button width for centering
-    },
-    // Content sheet
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-    },
-    descriptionSection: {
-      marginBottom: SPACING.md,
-    },
-    descriptionText: {
-      fontSize: 14,
-      color: NEUTRAL.muted,
-      lineHeight: 20,
-    },
-    loadingContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.sm,
-    },
-    loadingText: {
-      fontSize: 14,
-      color: NEUTRAL.muted,
-    },
-    emptyContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.lg,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: "600",
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.sm,
-    },
-    emptyText: {
-      fontSize: 14,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-    },
-    errorBanner: {
-      backgroundColor: SEMANTIC.errorLight,
-      borderRadius: RADIUS.md,
-      padding: SPACING.sm,
-      marginBottom: SPACING.md,
-    },
-    errorText: {
-      fontSize: 14,
-      color: SEMANTIC.error,
-    },
-    itemsList: {
-      gap: SPACING.sm,
-    },
-    itemCard: {
-      backgroundColor: NEUTRAL.background,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      overflow: "hidden",
-    },
-    itemCardDisabled: {
-      opacity: 0.6,
-      borderColor: SEMANTIC.error + "40",
-    },
-    itemHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      padding: SPACING.sm,
-      gap: 10,
-    },
-    reorderButtons: {
-      gap: 2,
-    },
-    reorderButton: {
-      padding: 4,
-    },
-    reorderButtonDisabled: {
-      opacity: 0.3,
-    },
-    itemLabelContainer: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    itemLabel: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: NEUTRAL.foreground,
-    },
-    itemLabelOriginal: {
-      fontSize: 13,
-      color: NEUTRAL.muted,
-    },
-    badgesContainer: {
-      flexDirection: "row",
-      gap: 6,
-    },
-    badge: {
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: RADIUS.xs,
-    },
-    badgeError: {
-      backgroundColor: SEMANTIC.errorLight,
-    },
-    badgeErrorText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: SEMANTIC.error,
-    },
-    badgeWarning: {
-      backgroundColor: SEMANTIC.warningLight,
-    },
-    badgeWarningText: {
-      fontSize: 11,
-      fontWeight: "600",
-      color: SEMANTIC.warning,
-    },
-    expandButton: {
-      padding: 4,
-    },
-    expandedContent: {
-      borderTopWidth: 1,
-      borderTopColor: NEUTRAL.border,
-      padding: SPACING.md,
-      gap: SPACING.md,
-    },
-    fieldGroup: {
-      gap: SPACING.sm,
-    },
-    fieldLabel: {
-      fontSize: 14,
-      fontWeight: "500",
-      color: NEUTRAL.foreground,
-    },
-    input: {
-      backgroundColor: NEUTRAL.surface,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      fontSize: 15,
-      color: NEUTRAL.foreground,
-    },
-    checkboxRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-      paddingVertical: 6,
-    },
-    checkboxRowInline: {
-      paddingVertical: 0,
-    },
-    checkbox: {
-      width: 20,
-      height: 20,
-      borderRadius: RADIUS.xs,
-      borderWidth: 2,
-      borderColor: NEUTRAL.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    checkboxChecked: {
-      backgroundColor: SEMANTIC.success,
-      borderColor: SEMANTIC.success,
-    },
-    checkboxDisabled: {
-      opacity: 0.6,
-    },
-    checkboxLabel: {
-      fontSize: 14,
-      color: NEUTRAL.foreground,
-    },
-    editRolesRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.md,
-    },
-    footer: {
-      marginTop: SPACING.lg,
-    },
-    saveButton: {
-      backgroundColor: SEMANTIC.success,
-      paddingVertical: 14,
-      borderRadius: RADIUS.md,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    saveButtonDisabled: {
-      opacity: 0.5,
-    },
-    saveButtonText: {
-      fontSize: 16,
-      fontWeight: "600",
-      color: NEUTRAL.surface,
-    },
-  });

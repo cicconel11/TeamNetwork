@@ -21,7 +21,6 @@ import { supabase } from "@/lib/supabase";
 import { normalizeRole, roleFlags } from "@teammeet/core";
 import { captureException } from "@/lib/analytics";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import Constants from "expo-constants";
 import {
   SettingsOrganizationSection,
@@ -256,7 +255,7 @@ const createStyles = (colors: { background: string; card: string; foreground: st
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: colors.card,
     },
     scrollContent: {
       padding: 16,

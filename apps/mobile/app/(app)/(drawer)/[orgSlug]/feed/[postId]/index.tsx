@@ -30,10 +30,12 @@ import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { formatRelativeTime } from "@/lib/date-format";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import type { FeedComment } from "@/types/feed";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 export default function PostDetailScreen() {
   const { postId } = useLocalSearchParams<{ postId: string }>();
@@ -52,7 +54,141 @@ export default function PostDetailScreen() {
   const inputRef = useRef<TextInput>(null);
   const [sending, setSending] = useState(false);
 
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    loadingContainer: {
+      padding: SPACING.md,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.md,
+    },
+    postContainer: {
+      marginBottom: SPACING.md,
+    },
+    authorRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginBottom: SPACING.sm,
+    },
+    avatar: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+    },
+    avatarFallback: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    avatarFallbackText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.secondary,
+      fontWeight: "600" as const,
+    },
+    authorMeta: {
+      flex: 1,
+      marginLeft: SPACING.sm,
+    },
+    authorName: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+      fontWeight: "600" as const,
+    },
+    timestamp: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    body: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      marginBottom: SPACING.md,
+      lineHeight: 22,
+    },
+    actionsRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingTop: SPACING.sm,
+    },
+    commentCountText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: n.border,
+      marginTop: SPACING.md,
+    },
+    composerContainer: {
+      flexDirection: "row" as const,
+      alignItems: "flex-end" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: n.border,
+      backgroundColor: n.surface,
+      gap: SPACING.sm,
+    },
+    composerInput: {
+      flex: 1,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      maxHeight: 100,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    sendButton: {
+      width: 40,
+      height: 40,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    sendButtonDisabled: {
+      opacity: 0.5,
+    },
+  }));
 
   // Sync like state from post
   useEffect(() => {
@@ -174,7 +310,7 @@ export default function PostDetailScreen() {
       items.push({
         id: "edit",
         label: "Edit Post",
-        icon: <Edit2 size={20} color={NEUTRAL.foreground} />,
+        icon: <Edit2 size={20} color={neutral.foreground} />,
         onPress: () => {
           router.push(`/(app)/(drawer)/${orgSlug}/feed/${postId}/edit`);
         },
@@ -185,7 +321,7 @@ export default function PostDetailScreen() {
       items.push({
         id: "delete",
         label: "Delete Post",
-        icon: <Trash2 size={20} color={SEMANTIC.error} />,
+        icon: <Trash2 size={20} color={semantic.error} />,
         onPress: handleDeletePost,
         destructive: true,
       });
@@ -194,14 +330,14 @@ export default function PostDetailScreen() {
     items.push({
       id: "open-in-web",
       label: "Open in Web",
-      icon: <ExternalLink size={20} color={NEUTRAL.foreground} />,
+      icon: <ExternalLink size={20} color={neutral.foreground} />,
       onPress: () => {
         Linking.openURL(`https://www.myteamnetwork.com/${orgSlug}/feed/${postId}`);
       },
     });
 
     return items;
-  }, [canEdit, post?.author_id, userId, orgSlug, postId, handleDeletePost, router]);
+  }, [canEdit, post?.author_id, userId, orgSlug, postId, handleDeletePost, router, neutral, semantic]);
 
   const renderComment = useCallback(
     ({ item }: { item: FeedComment }) => (
@@ -326,7 +462,7 @@ export default function PostDetailScreen() {
             ref={inputRef}
             style={styles.composerInput}
             placeholder="Add a comment..."
-            placeholderTextColor={NEUTRAL.placeholder}
+            placeholderTextColor={neutral.placeholder}
             multiline
             maxLength={2000}
             onChangeText={(t) => {
@@ -340,146 +476,10 @@ export default function PostDetailScreen() {
             accessibilityLabel="Send comment"
             accessibilityRole="button"
           >
-            <Send size={20} color={sending ? NEUTRAL.disabled : SEMANTIC.info} />
+            <Send size={20} color={sending ? neutral.disabled : semantic.info} />
           </Pressable>
         </View>
       </KeyboardAvoidingView>
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      width: 36,
-      height: 36,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    loadingContainer: {
-      padding: SPACING.md,
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.md,
-    },
-    postContainer: {
-      marginBottom: SPACING.md,
-    },
-    authorRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginBottom: SPACING.sm,
-    },
-    avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-    },
-    avatarFallback: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: NEUTRAL.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    avatarFallbackText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.secondary,
-      fontWeight: "600",
-    },
-    authorMeta: {
-      flex: 1,
-      marginLeft: SPACING.sm,
-    },
-    authorName: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.foreground,
-      fontWeight: "600",
-    },
-    timestamp: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginTop: 2,
-    },
-    body: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.md,
-      lineHeight: 22,
-    },
-    actionsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingTop: SPACING.sm,
-    },
-    commentCountText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.muted,
-    },
-    divider: {
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: NEUTRAL.border,
-      marginTop: SPACING.md,
-    },
-    composerContainer: {
-      flexDirection: "row",
-      alignItems: "flex-end",
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: NEUTRAL.border,
-      backgroundColor: NEUTRAL.surface,
-      gap: SPACING.sm,
-    },
-    composerInput: {
-      flex: 1,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      maxHeight: 100,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.md,
-      backgroundColor: NEUTRAL.background,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-    },
-    sendButton: {
-      width: 40,
-      height: 40,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    sendButtonDisabled: {
-      opacity: 0.5,
-    },
-  });

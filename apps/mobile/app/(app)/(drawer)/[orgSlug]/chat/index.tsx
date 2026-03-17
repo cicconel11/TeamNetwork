@@ -18,8 +18,8 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { SkeletonList } from "@/components/ui/Skeleton";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
 
 const CHAT_COLORS = {
@@ -43,7 +43,8 @@ export default function ChatGroupsScreen() {
   const { isAdmin } = useOrgRole();
   const router = useRouter();
   const navigation = useNavigation();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
   const isMountedRef = useRef(true);
 
   // Safe drawer toggle - only dispatch if drawer is available
@@ -388,7 +389,7 @@ export default function ChatGroupsScreen() {
   );
 }
 
-const createStyles = () =>
+const createStyles = (surfaceColor: string) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -446,7 +447,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: surfaceColor,
     },
     listContent: {
       padding: spacing.md,

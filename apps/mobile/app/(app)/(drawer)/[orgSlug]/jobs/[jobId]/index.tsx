@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
   Pressable,
   ActivityIndicator,
   Alert,
@@ -26,16 +25,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useJobs } from "@/hooks/useJobs";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { JobPostingWithPoster } from "@/types/jobs";
 
-const LOCATION_TYPE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  remote: { label: "Remote", bg: SEMANTIC.infoLight, color: SEMANTIC.infoDark },
-  onsite: { label: "On-site", bg: SEMANTIC.warningLight, color: SEMANTIC.warningDark },
-  hybrid: { label: "Hybrid", bg: SEMANTIC.successLight, color: SEMANTIC.successDark },
-};
 
 const EXPERIENCE_LEVEL_LABELS: Record<string, string> = {
   entry: "Entry Level",
@@ -69,7 +65,166 @@ export default function JobDetailScreen() {
 
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const locationTypeConfig: Record<string, { label: string; bg: string; color: string }> = {
+    remote: { label: "Remote", bg: semantic.infoLight, color: semantic.infoDark },
+    onsite: { label: "On-site", bg: semantic.warningLight, color: semantic.warningDark },
+    hybrid: { label: "Hybrid", bg: semantic.successLight, color: semantic.successDark },
+  };
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+    },
+    headerSpacer: {
+      width: 36,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.md,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    titleSection: {
+      gap: SPACING.xs,
+    },
+    jobTitle: {
+      ...TYPOGRAPHY.headlineLarge,
+      color: n.foreground,
+    },
+    companyRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    companyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    locationRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    locationText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+    },
+    badgeRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.xs,
+    },
+    badge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xxs,
+      borderRadius: RADIUS.full,
+    },
+    badgeText: {
+      ...TYPOGRAPHY.labelSmall,
+    },
+    badgeNeutral: {
+      backgroundColor: n.background,
+    },
+    badgeTextNeutral: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.secondary,
+    },
+    section: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    sectionTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+    },
+    descriptionText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      lineHeight: 24,
+    },
+    contactRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    contactLink: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.info,
+      flex: 1,
+    },
+    footerSection: {
+      gap: SPACING.xxs,
+      paddingTop: SPACING.sm,
+    },
+    footerText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    applyContainer: {
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+      backgroundColor: n.surface,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.sm,
+    },
+    applyInner: {},
+    applyButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    applyButtonPressed: {
+      opacity: 0.9,
+    },
+    applyButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    loadingOverlay: {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.8)",
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+  }));
 
   const job: JobPostingWithPoster | undefined = useMemo(
     () => jobs.find((j) => j.id === jobId),
@@ -124,13 +279,13 @@ export default function JobDetailScreen() {
       {
         id: "edit",
         label: "Edit Job",
-        icon: <Briefcase size={20} color={NEUTRAL.foreground} />,
+        icon: <Briefcase size={20} color={neutral.foreground} />,
         onPress: handleEdit,
       },
       {
         id: "delete",
         label: "Delete Job",
-        icon: <MoreHorizontal size={20} color={SEMANTIC.error} />,
+        icon: <MoreHorizontal size={20} color={semantic.error} />,
         onPress: handleDelete,
         destructive: true,
       },
@@ -161,13 +316,13 @@ export default function JobDetailScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={styles.centered}>
-          <ActivityIndicator color={SEMANTIC.success} />
+          <ActivityIndicator color={semantic.success} />
         </View>
       </View>
     );
   }
 
-  const locationConfig = job.location_type ? LOCATION_TYPE_CONFIG[job.location_type] : null;
+  const locationConfig = job.location_type ? locationTypeConfig[job.location_type] : null;
   const experienceLabel = job.experience_level
     ? EXPERIENCE_LEVEL_LABELS[job.experience_level]
     : null;
@@ -214,12 +369,12 @@ export default function JobDetailScreen() {
         <View style={styles.titleSection}>
           <Text style={styles.jobTitle}>{job.title}</Text>
           <View style={styles.companyRow}>
-            <Building2 size={16} color={NEUTRAL.muted} />
+            <Building2 size={16} color={neutral.muted} />
             <Text style={styles.companyText}>{job.company}</Text>
           </View>
           {job.location != null && (
             <View style={styles.locationRow}>
-              <MapPin size={16} color={NEUTRAL.muted} />
+              <MapPin size={16} color={neutral.muted} />
               <Text style={styles.locationText}>{job.location}</Text>
             </View>
           )}
@@ -262,7 +417,7 @@ export default function JobDetailScreen() {
                 onPress={() => Linking.openURL(job.application_url!)}
                 style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.7 }]}
               >
-                <ExternalLink size={16} color={SEMANTIC.info} />
+                <ExternalLink size={16} color={semantic.info} />
                 <Text style={styles.contactLink} numberOfLines={1}>
                   {job.application_url}
                 </Text>
@@ -273,7 +428,7 @@ export default function JobDetailScreen() {
                 onPress={() => Linking.openURL(`mailto:${job.contact_email}`)}
                 style={({ pressed }) => [styles.contactRow, pressed && { opacity: 0.7 }]}
               >
-                <Mail size={16} color={SEMANTIC.info} />
+                <Mail size={16} color={semantic.info} />
                 <Text style={styles.contactLink}>{job.contact_email}</Text>
               </Pressable>
             )}
@@ -311,161 +466,10 @@ export default function JobDetailScreen() {
 
       {isDeleting && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={SEMANTIC.success} />
+          <ActivityIndicator size="large" color={semantic.success} />
         </View>
       )}
     </View>
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-      flex: 1,
-    },
-    headerSpacer: {
-      width: 36,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.md,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    titleSection: {
-      gap: SPACING.xs,
-    },
-    jobTitle: {
-      ...TYPOGRAPHY.headlineLarge,
-      color: NEUTRAL.foreground,
-    },
-    companyRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.xs,
-    },
-    companyText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-    },
-    locationRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.xs,
-    },
-    locationText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-    },
-    badgeRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.xs,
-    },
-    badge: {
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xxs,
-      borderRadius: RADIUS.full,
-    },
-    badgeText: {
-      ...TYPOGRAPHY.labelSmall,
-    },
-    badgeNeutral: {
-      backgroundColor: NEUTRAL.background,
-    },
-    badgeTextNeutral: {
-      ...TYPOGRAPHY.labelSmall,
-      color: NEUTRAL.secondary,
-    },
-    section: {
-      backgroundColor: NEUTRAL.background,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      gap: SPACING.sm,
-      ...SHADOWS.sm,
-    },
-    sectionTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-    },
-    descriptionText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-      lineHeight: 24,
-    },
-    contactRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    contactLink: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.info,
-      flex: 1,
-    },
-    footerSection: {
-      gap: SPACING.xxs,
-      paddingTop: SPACING.sm,
-    },
-    footerText: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-    },
-    applyContainer: {
-      borderTopWidth: 1,
-      borderTopColor: NEUTRAL.border,
-      backgroundColor: NEUTRAL.surface,
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.sm,
-    },
-    applyInner: {},
-    applyButton: {
-      backgroundColor: SEMANTIC.success,
-      borderRadius: RADIUS.lg,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-    },
-    applyButtonPressed: {
-      opacity: 0.9,
-    },
-    applyButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-      fontWeight: "600",
-    },
-    loadingOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-  });

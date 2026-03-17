@@ -1,17 +1,47 @@
-import { View, Text, FlatList, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, FlatList, ActivityIndicator } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { SearchX, Search } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useGlobalSearch } from "@/hooks/useGlobalSearch";
 import { SearchResultCard } from "@/components/search";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { SearchResult } from "@/hooks/useGlobalSearch";
 
 export default function SearchScreen() {
   const { orgId, orgSlug } = useOrg();
   const router = useRouter();
+  const { neutral, semantic } = useAppColorScheme();
   const { query, setQuery, results, loading } = useGlobalSearch(orgId);
+  const styles = useThemedStyles((n, s) => ({
+    list: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    centerState: {
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingTop: SPACING.xxxl,
+      paddingHorizontal: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    stateTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      textAlign: "center" as const,
+      marginTop: SPACING.xs,
+    },
+    stateText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    footer: {
+      height: SPACING.xl,
+    },
+  }));
 
   const handleResultPress = (result: SearchResult) => {
     switch (result.type) {
@@ -56,7 +86,7 @@ export default function SearchScreen() {
         ListHeaderComponent={
           loading ? (
             <View style={styles.centerState}>
-              <ActivityIndicator size="small" color={SEMANTIC.success} />
+              <ActivityIndicator size="small" color={semantic.success} />
               <Text style={styles.stateText}>Searching…</Text>
             </View>
           ) : null
@@ -65,7 +95,7 @@ export default function SearchScreen() {
           !loading ? (
             showEmpty ? (
               <View style={styles.centerState}>
-                <Search size={40} color={NEUTRAL.border} />
+                <Search size={40} color={neutral.border} />
                 <Text style={styles.stateTitle}>Search your organization</Text>
                 <Text style={styles.stateText}>
                   Find members, events, and announcements
@@ -73,7 +103,7 @@ export default function SearchScreen() {
               </View>
             ) : showNoResults ? (
               <View style={styles.centerState}>
-                <SearchX size={40} color={NEUTRAL.border} />
+                <SearchX size={40} color={neutral.border} />
                 <Text style={styles.stateTitle}>No results found</Text>
                 <Text style={styles.stateText}>
                   Try a different search term
@@ -88,31 +118,3 @@ export default function SearchScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  list: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  centerState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: SPACING.xxxl,
-    paddingHorizontal: SPACING.xl,
-    gap: SPACING.sm,
-  },
-  stateTitle: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-    textAlign: "center",
-    marginTop: SPACING.xs,
-  },
-  stateText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-    textAlign: "center",
-  },
-  footer: {
-    height: SPACING.xl,
-  },
-});

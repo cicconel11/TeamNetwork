@@ -10,7 +10,8 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import type { Event } from "@/hooks/useEvents";
 import { APP_CHROME } from "@/lib/chrome";
-import { SEMANTIC, NEUTRAL, SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
@@ -43,6 +44,7 @@ export default function EventDetailScreen() {
   const { orgId, orgSlug } = useOrg();
   const router = useRouter();
   const { permissions } = useOrgRole();
+  const { neutral, semantic } = useAppColorScheme();
   const styles = useMemo(() => createStyles(), []);
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -149,30 +151,30 @@ export default function EventDetailScreen() {
       {
         id: "edit",
         label: "Edit Event",
-        icon: <Edit3 size={20} color={NEUTRAL.foreground} />,
+        icon: <Edit3 size={20} color={neutral.foreground} />,
         onPress: handleEditEvent,
       },
       {
         id: "view-rsvps",
         label: "View RSVPs",
-        icon: <List size={20} color={NEUTRAL.foreground} />,
+        icon: <List size={20} color={neutral.foreground} />,
         onPress: handleViewRsvps,
       },
       {
         id: "open-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={SEMANTIC.success} />,
+        icon: <ExternalLink size={20} color={semantic.success} />,
         onPress: handleOpenInWeb,
       },
       {
         id: "cancel",
         label: "Cancel Event",
-        icon: <XCircle size={20} color={SEMANTIC.error} />,
+        icon: <XCircle size={20} color={semantic.error} />,
         onPress: handleCancelEvent,
         destructive: true,
       },
     ];
-  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent]);
+  }, [permissions.canUseAdminActions, handleEditEvent, handleViewRsvps, handleOpenInWeb, handleCancelEvent, neutral, semantic]);
 
   // RSVP counts
   const rsvpCounts = useMemo(() => {

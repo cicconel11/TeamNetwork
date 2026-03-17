@@ -21,8 +21,8 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Form, FormDocument } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 // Neutral color palette
 const FORMS_COLORS = {
@@ -51,7 +51,8 @@ export default function FormsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
   const {
     forms,
     formDocuments,
@@ -324,7 +325,7 @@ export default function FormsScreen() {
   );
 }
 
-const createStyles = () =>
+const createStyles = (surfaceColor: string) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -384,7 +385,7 @@ const createStyles = () =>
     // Content sheet
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: surfaceColor,
     },
     listContent: {
       padding: spacing.md,

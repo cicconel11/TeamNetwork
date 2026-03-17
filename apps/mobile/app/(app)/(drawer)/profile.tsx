@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -21,7 +20,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useAvatarUpload } from "@/hooks/useAvatarUpload";
 import { supabase } from "@/lib/supabase";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
 
 const profileSchema = z.object({
@@ -39,6 +40,165 @@ const profileSchema = z.object({
 export default function ProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {},
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      minHeight: 44,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+      textAlign: "center" as const,
+    },
+    headerSpacer: {
+      width: 36,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    avatarSection: {
+      alignItems: "center" as const,
+      paddingVertical: SPACING.lg,
+    },
+    avatarWrapper: {
+      position: "relative" as const,
+      width: 120,
+      height: 120,
+      boxShadow: "0px 4px 16px rgba(0, 0, 0, 0.12)",
+      borderRadius: 60,
+    },
+    avatar: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+    },
+    avatarPlaceholder: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: s.successLight,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    avatarPlaceholderText: {
+      fontSize: 48,
+      fontWeight: "600" as const,
+      color: s.successDark,
+    },
+    cameraOverlay: {
+      position: "absolute" as const,
+      bottom: 0,
+      right: 0,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: s.info,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      borderWidth: 2,
+      borderColor: n.surface,
+    },
+    errorCard: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: s.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabelRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    charCounter: {
+      textAlign: "right" as const,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      borderCurve: "continuous" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      backgroundColor: n.surface,
+    },
+    textArea: {
+      minHeight: 80,
+      textAlignVertical: "top" as const,
+    },
+    readOnlyField: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      borderCurve: "continuous" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      backgroundColor: n.background,
+    },
+    readOnlyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+    },
+    fieldHint: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    additionalFields: {
+      gap: SPACING.lg,
+    },
+    primaryButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  }));
 
   const userMeta = (user?.user_metadata ?? {}) as {
     name?: string;
@@ -166,7 +326,7 @@ export default function ProfileScreen() {
             <Pressable
               onPress={handleAvatarPress}
               disabled={isUploading}
-              style={styles.avatarWrapper}
+              style={styles.avatarWrapper as any}
             >
               {avatarUrl ? (
                 <Image
@@ -202,8 +362,8 @@ export default function ProfileScreen() {
               value={name}
               onChangeText={setName}
               placeholder="Your name"
-              placeholderTextColor={NEUTRAL.placeholder}
-              style={styles.input}
+              placeholderTextColor={neutral.placeholder}
+              style={styles.input as any}
               autoCapitalize="words"
             />
           </View>
@@ -211,7 +371,7 @@ export default function ProfileScreen() {
           {/* Email Field (read-only) */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Email</Text>
-            <View style={styles.readOnlyField}>
+            <View style={styles.readOnlyField as any}>
               <Text selectable style={styles.readOnlyText}>
                 {user?.email ?? ""}
               </Text>
@@ -234,8 +394,8 @@ export default function ProfileScreen() {
                 value={bio}
                 onChangeText={(text) => setBio(text.slice(0, 160))}
                 placeholder="Tell your teammates about yourself"
-                placeholderTextColor={NEUTRAL.placeholder}
-                style={[styles.input, styles.textArea]}
+                placeholderTextColor={neutral.placeholder}
+                style={[styles.input, styles.textArea] as any}
                 multiline
                 numberOfLines={3}
                 maxLength={160}
@@ -250,8 +410,8 @@ export default function ProfileScreen() {
                 value={classYear}
                 onChangeText={(text) => setClassYear(text.replace(/\D/g, "").slice(0, 4))}
                 placeholder="e.g. 2026"
-                placeholderTextColor={NEUTRAL.placeholder}
-                style={styles.input}
+                placeholderTextColor={neutral.placeholder}
+                style={styles.input as any}
                 keyboardType="number-pad"
                 maxLength={4}
               />
@@ -264,8 +424,8 @@ export default function ProfileScreen() {
                 value={position}
                 onChangeText={(text) => setPosition(text.slice(0, 50))}
                 placeholder="e.g. Captain, Forward"
-                placeholderTextColor={NEUTRAL.placeholder}
-                style={styles.input}
+                placeholderTextColor={neutral.placeholder}
+                style={styles.input as any}
                 autoCapitalize="words"
                 maxLength={50}
               />
@@ -292,162 +452,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  headerGradient: {},
-  headerSafeArea: {},
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    minHeight: 44,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.titleLarge,
-    color: APP_CHROME.headerTitle,
-    flex: 1,
-    textAlign: "center",
-  },
-  headerSpacer: {
-    width: 36,
-  },
-  contentSheet: {
-    flex: 1,
-    backgroundColor: NEUTRAL.surface,
-  },
-  scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.lg,
-  },
-  avatarSection: {
-    alignItems: "center",
-    paddingVertical: SPACING.lg,
-  },
-  avatarWrapper: {
-    position: "relative",
-    width: 120,
-    height: 120,
-    boxShadow: "0px 4px 16px rgba(0, 0, 0, 0.12)",
-    borderRadius: 60,
-  } as any,
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-  },
-  avatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: SEMANTIC.successLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarPlaceholderText: {
-    fontSize: 48,
-    fontWeight: "600",
-    color: SEMANTIC.successDark,
-  },
-  cameraOverlay: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: SEMANTIC.info,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: NEUTRAL.surface,
-  },
-  errorCard: {
-    backgroundColor: SEMANTIC.errorLight,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: SEMANTIC.error,
-  },
-  errorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: SEMANTIC.error,
-  },
-  fieldGroup: {
-    gap: SPACING.xs,
-  },
-  fieldLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  fieldLabel: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.secondary,
-  },
-  charCounter: {
-    textAlign: "right",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    borderCurve: "continuous",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    backgroundColor: NEUTRAL.surface,
-  } as any,
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  readOnlyField: {
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    borderCurve: "continuous",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: NEUTRAL.background,
-  } as any,
-  readOnlyText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.muted,
-  },
-  fieldHint: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-  },
-  additionalFields: {
-    gap: SPACING.lg,
-  },
-  primaryButton: {
-    backgroundColor: SEMANTIC.success,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.md,
-    alignItems: "center",
-  },
-  primaryButtonPressed: {
-    opacity: 0.9,
-  },
-  primaryButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: "#ffffff",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   Alert,
@@ -45,26 +44,12 @@ import { getRoleLabel } from "@/hooks/useMemberships";
 import { showToast } from "@/components/ui/Toast";
 import { captureException } from "@/lib/analytics";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { formatMonthDayYearSafe } from "@/lib/date-format";
 import { getWebAppUrl } from "@/lib/web-api";
-
-const INVITES_COLORS = {
-  background: NEUTRAL.background,
-  surface: NEUTRAL.surface,
-  foreground: NEUTRAL.foreground,
-  muted: NEUTRAL.muted,
-  mutedForeground: NEUTRAL.placeholder,
-  border: NEUTRAL.border,
-  primary: SEMANTIC.success,
-  primaryLight: SEMANTIC.successLight,
-  primaryForeground: NEUTRAL.surface,
-  error: SEMANTIC.error,
-  errorLight: SEMANTIC.errorLight,
-  warning: SEMANTIC.warning,
-  warningLight: SEMANTIC.warningLight,
-};
 
 export default function InvitesScreen() {
   const router = useRouter();
@@ -81,7 +66,352 @@ export default function InvitesScreen() {
     refetch,
   } = useInvites(orgId);
 
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {
+      flex: 0,
+    },
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    createHeaderButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      gap: SPACING.md,
+    },
+    inviteCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      ...SHADOWS.sm,
+    },
+    inviteCardInvalid: {
+      opacity: 0.6,
+    },
+    inviteHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    inviteCode: {
+      ...TYPOGRAPHY.headlineMedium,
+      fontFamily: "monospace",
+      color: n.foreground,
+    },
+    roleBadge: {
+      paddingVertical: 2,
+      paddingHorizontal: SPACING.sm,
+      borderRadius: RADIUS.xs,
+    },
+    roleBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontWeight: "600" as const,
+    },
+    statusRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.xs,
+      marginBottom: SPACING.xs,
+      flexWrap: "wrap" as const,
+    },
+    statusBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingVertical: 2,
+      paddingHorizontal: SPACING.sm,
+      borderRadius: RADIUS.xs,
+    },
+    statusBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontWeight: "500" as const,
+    },
+    inviteMeta: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      marginTop: SPACING.xs,
+    },
+    inviteCreated: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    inviteActions: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.md,
+      marginTop: SPACING.md,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: n.divider,
+    },
+    actionButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingVertical: SPACING.xs,
+    },
+    actionButtonPressed: {
+      opacity: 0.7,
+    },
+    actionButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: s.success,
+    },
+    qrContainer: {
+      alignItems: "center" as const,
+      marginTop: SPACING.md,
+      paddingTop: SPACING.md,
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+    },
+    emptyContainer: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.xl,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+      marginTop: SPACING.md,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+      marginTop: SPACING.xs,
+      marginBottom: SPACING.lg,
+    },
+    createButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+    },
+    createButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.md,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+    },
+    errorContainer: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.xl,
+    },
+    errorTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+      marginBottom: SPACING.lg,
+    },
+    retryButton: {
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    accessDenied: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.xl,
+    },
+    accessDeniedTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+      marginTop: SPACING.md,
+    },
+    accessDeniedText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+      marginTop: SPACING.xs,
+      marginBottom: SPACING.lg,
+    },
+    backButton: {
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+    },
+    backButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.lg,
+    },
+    modalContent: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.xl,
+      padding: SPACING.lg,
+      width: "100%",
+      maxWidth: 400,
+    },
+    modalTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      marginBottom: SPACING.lg,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    roleButtons: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    roleButton: {
+      flex: 1,
+      paddingVertical: SPACING.sm + 2,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    roleButtonActive: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    },
+    roleButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    roleButtonTextActive: {
+      color: s.success,
+      fontWeight: "600" as const,
+    },
+    input: {
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.md,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      marginBottom: SPACING.lg,
+    },
+    modalActions: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    cancelModalButton: {
+      flex: 1,
+      paddingVertical: SPACING.sm + 2,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    cancelModalButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.muted,
+    },
+    createModalButton: {
+      flex: 1,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+    },
+    createModalButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+  }));
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [inviteRole, setInviteRole] = useState<"active_member" | "admin" | "alumni">("active_member");
@@ -215,11 +545,11 @@ export default function InvitesScreen() {
     const getRoleBadgeColors = (role: string | null) => {
       switch (role) {
         case "admin":
-          return { bg: INVITES_COLORS.warningLight, text: INVITES_COLORS.warning };
+          return { bg: semantic.warningLight, text: semantic.warning };
         case "alumni":
-          return { bg: NEUTRAL.divider, text: NEUTRAL.secondary };
+          return { bg: neutral.divider, text: neutral.secondary };
         default:
-          return { bg: INVITES_COLORS.primaryLight, text: INVITES_COLORS.primary };
+          return { bg: semantic.successLight, text: semantic.success };
       }
     };
 
@@ -239,21 +569,21 @@ export default function InvitesScreen() {
         {/* Status badges */}
         <View style={styles.statusRow}>
           {expired && (
-            <View style={[styles.statusBadge, { backgroundColor: INVITES_COLORS.errorLight }]}>
-              <Clock size={12} color={INVITES_COLORS.error} />
-              <Text style={[styles.statusBadgeText, { color: INVITES_COLORS.error }]}>Expired</Text>
+            <View style={[styles.statusBadge, { backgroundColor: semantic.errorLight }]}>
+              <Clock size={12} color={semantic.error} />
+              <Text style={[styles.statusBadgeText, { color: semantic.error }]}>Expired</Text>
             </View>
           )}
           {revoked && (
-            <View style={[styles.statusBadge, { backgroundColor: INVITES_COLORS.errorLight }]}>
-              <ShieldX size={12} color={INVITES_COLORS.error} />
-              <Text style={[styles.statusBadgeText, { color: INVITES_COLORS.error }]}>Revoked</Text>
+            <View style={[styles.statusBadge, { backgroundColor: semantic.errorLight }]}>
+              <ShieldX size={12} color={semantic.error} />
+              <Text style={[styles.statusBadgeText, { color: semantic.error }]}>Revoked</Text>
             </View>
           )}
           {exhausted && (
-            <View style={[styles.statusBadge, { backgroundColor: INVITES_COLORS.errorLight }]}>
-              <Users size={12} color={INVITES_COLORS.error} />
-              <Text style={[styles.statusBadgeText, { color: INVITES_COLORS.error }]}>No uses left</Text>
+            <View style={[styles.statusBadge, { backgroundColor: semantic.errorLight }]}>
+              <Users size={12} color={semantic.error} />
+              <Text style={[styles.statusBadgeText, { color: semantic.error }]}>No uses left</Text>
             </View>
           )}
         </View>
@@ -276,9 +606,9 @@ export default function InvitesScreen() {
             onPress={() => handleCopyLink(invite)}
           >
             {copiedInviteId === invite.id ? (
-              <Check size={16} color={INVITES_COLORS.primary} />
+              <Check size={16} color={semantic.success} />
             ) : (
-              <Copy size={16} color={INVITES_COLORS.primary} />
+              <Copy size={16} color={semantic.success} />
             )}
             <Text style={styles.actionButtonText}>
               {copiedInviteId === invite.id ? "Copied" : "Copy Link"}
@@ -289,7 +619,7 @@ export default function InvitesScreen() {
             style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
             onPress={() => setShowQRCode(showQRCode === invite.id ? null : invite.id)}
           >
-            <QrCode size={16} color={INVITES_COLORS.primary} />
+            <QrCode size={16} color={semantic.success} />
             <Text style={styles.actionButtonText}>QR</Text>
           </Pressable>
 
@@ -298,8 +628,8 @@ export default function InvitesScreen() {
               style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
               onPress={() => handleRevoke(invite)}
             >
-              <X size={16} color={INVITES_COLORS.warning} />
-              <Text style={[styles.actionButtonText, { color: INVITES_COLORS.warning }]}>Revoke</Text>
+              <X size={16} color={semantic.warning} />
+              <Text style={[styles.actionButtonText, { color: semantic.warning }]}>Revoke</Text>
             </Pressable>
           )}
 
@@ -307,7 +637,7 @@ export default function InvitesScreen() {
             style={({ pressed }) => [styles.actionButton, pressed && styles.actionButtonPressed]}
             onPress={() => handleDelete(invite)}
           >
-            <Trash2 size={16} color={INVITES_COLORS.error} />
+            <Trash2 size={16} color={semantic.error} />
           </Pressable>
         </View>
 
@@ -317,8 +647,8 @@ export default function InvitesScreen() {
             <QRCode
               value={getInviteLink(invite, getWebAppUrl())}
               size={180}
-              backgroundColor={INVITES_COLORS.surface}
-              color={INVITES_COLORS.foreground}
+              backgroundColor={neutral.surface}
+              color={neutral.foreground}
             />
           </View>
         )}
@@ -355,7 +685,7 @@ export default function InvitesScreen() {
 
         <View style={styles.contentSheet}>
           <View style={styles.accessDenied}>
-            <ShieldX size={48} color={INVITES_COLORS.muted} />
+            <ShieldX size={48} color={neutral.muted} />
             <Text style={styles.accessDeniedTitle}>Access Denied</Text>
             <Text style={styles.accessDeniedText}>
               Only administrators can manage invite links.
@@ -401,7 +731,7 @@ export default function InvitesScreen() {
 
         <View style={styles.contentSheet}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={INVITES_COLORS.primary} />
+            <ActivityIndicator size="large" color={semantic.success} />
             <Text style={styles.loadingText}>Loading invites...</Text>
           </View>
         </View>
@@ -495,7 +825,7 @@ export default function InvitesScreen() {
       <View style={styles.contentSheet}>
         {allInvites.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <LinkIcon size={48} color={INVITES_COLORS.muted} />
+            <LinkIcon size={48} color={neutral.muted} />
             <Text style={styles.emptyTitle}>No Invites Yet</Text>
             <Text style={styles.emptyText}>
               Create invite links to let people join your organization.
@@ -504,7 +834,7 @@ export default function InvitesScreen() {
               style={({ pressed }) => [styles.createButton, pressed && { opacity: 0.8 }]}
               onPress={() => setShowCreateModal(true)}
             >
-              <Plus size={18} color={INVITES_COLORS.primaryForeground} />
+              <Plus size={18} color={neutral.surface} />
               <Text style={styles.createButtonText}>Create Invite</Text>
             </Pressable>
           </View>
@@ -518,7 +848,7 @@ export default function InvitesScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={INVITES_COLORS.primary}
+                tintColor={semantic.success}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -561,7 +891,7 @@ export default function InvitesScreen() {
               value={inviteUses}
               onChangeText={setInviteUses}
               placeholder="Unlimited"
-              placeholderTextColor={INVITES_COLORS.mutedForeground}
+              placeholderTextColor={neutral.muted}
               keyboardType="number-pad"
             />
 
@@ -582,7 +912,7 @@ export default function InvitesScreen() {
                 disabled={inviteCreating}
               >
                 {inviteCreating ? (
-                  <ActivityIndicator size="small" color={INVITES_COLORS.primaryForeground} />
+                  <ActivityIndicator size="small" color={neutral.surface} />
                 ) : (
                   <Text style={styles.createModalButtonText}>Create</Text>
                 )}
@@ -594,356 +924,3 @@ export default function InvitesScreen() {
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {
-      flex: 0,
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      ...TYPOGRAPHY.caption,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    createHeaderButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: "rgba(255,255,255,0.15)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-      gap: SPACING.md,
-    },
-    // Invite card
-    inviteCard: {
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      padding: SPACING.md,
-      ...SHADOWS.sm,
-    },
-    inviteCardInvalid: {
-      opacity: 0.6,
-    },
-    inviteHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      marginBottom: SPACING.xs,
-    },
-    inviteCode: {
-      ...TYPOGRAPHY.headlineMedium,
-      fontFamily: "monospace",
-      color: NEUTRAL.foreground,
-    },
-    roleBadge: {
-      paddingVertical: 2,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.xs,
-    },
-    roleBadgeText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "600",
-    },
-    statusRow: {
-      flexDirection: "row",
-      gap: SPACING.xs,
-      marginBottom: SPACING.xs,
-      flexWrap: "wrap",
-    },
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: 2,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.xs,
-    },
-    statusBadgeText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "500",
-    },
-    inviteMeta: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.secondary,
-      marginTop: SPACING.xs,
-    },
-    inviteCreated: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginTop: 2,
-    },
-    inviteActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.md,
-      marginTop: SPACING.md,
-      paddingTop: SPACING.sm,
-      borderTopWidth: 1,
-      borderTopColor: NEUTRAL.divider,
-    },
-    actionButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: SPACING.xs,
-    },
-    actionButtonPressed: {
-      opacity: 0.7,
-    },
-    actionButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: SEMANTIC.success,
-    },
-    qrContainer: {
-      alignItems: "center",
-      marginTop: SPACING.md,
-      paddingTop: SPACING.md,
-      borderTopWidth: 1,
-      borderTopColor: NEUTRAL.border,
-    },
-    // Empty state
-    emptyContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: NEUTRAL.foreground,
-      marginTop: SPACING.md,
-    },
-    emptyText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-      marginTop: SPACING.xs,
-      marginBottom: SPACING.lg,
-    },
-    createButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      backgroundColor: SEMANTIC.success,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-    },
-    createButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.surface,
-    },
-    // Loading state
-    loadingContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.md,
-    },
-    loadingText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-    },
-    // Error state
-    errorContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-    },
-    errorTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.xs,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-      marginBottom: SPACING.lg,
-    },
-    retryButton: {
-      backgroundColor: SEMANTIC.success,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.surface,
-    },
-    // Access denied
-    accessDenied: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-    },
-    accessDeniedTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: NEUTRAL.foreground,
-      marginTop: SPACING.md,
-    },
-    accessDeniedText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-      marginTop: SPACING.xs,
-      marginBottom: SPACING.lg,
-    },
-    backButton: {
-      backgroundColor: SEMANTIC.success,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-    },
-    backButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.surface,
-    },
-    // Modal
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.lg,
-    },
-    modalContent: {
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.xl,
-      padding: SPACING.lg,
-      width: "100%",
-      maxWidth: 400,
-    },
-    modalTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.lg,
-    },
-    fieldLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.sm,
-    },
-    roleButtons: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      marginBottom: SPACING.md,
-    },
-    roleButton: {
-      flex: 1,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      alignItems: "center",
-    },
-    roleButtonActive: {
-      borderColor: SEMANTIC.success,
-      backgroundColor: SEMANTIC.successLight,
-    },
-    roleButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.muted,
-    },
-    roleButtonTextActive: {
-      color: SEMANTIC.success,
-      fontWeight: "600",
-    },
-    input: {
-      backgroundColor: NEUTRAL.background,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.md,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.lg,
-    },
-    modalActions: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-    },
-    cancelModalButton: {
-      flex: 1,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      alignItems: "center",
-    },
-    cancelModalButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.muted,
-    },
-    createModalButton: {
-      flex: 1,
-      backgroundColor: SEMANTIC.success,
-      paddingVertical: SPACING.sm + 2,
-      borderRadius: RADIUS.md,
-      alignItems: "center",
-    },
-    createModalButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.surface,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-  });

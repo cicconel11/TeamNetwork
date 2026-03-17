@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,7 +9,6 @@ import {
   Text,
   TextInput,
   View,
-  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,9 +17,11 @@ import { ChevronLeft } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { Announcement } from "@teammeet/types";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 type Audience = "all" | "active_members" | "members" | "alumni" | "individuals";
 
@@ -54,7 +55,211 @@ export default function EditAnnouncementScreen() {
   const router = useRouter();
   const { announcementId } = useLocalSearchParams<{ announcementId: string }>();
   const { orgId, orgSlug } = useOrg();
-  const styles = useMemo(() => createStyles(), []);
+  const { semantic } = useAppColorScheme();
+  const styles = useThemedStyles((_n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: EDIT_COLORS.background,
+    },
+    centered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+    },
+    errorContainer: {
+      padding: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: EDIT_COLORS.errorBg,
+      marginBottom: SPACING.md,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: EDIT_COLORS.error,
+      textAlign: "center" as const,
+      marginBottom: SPACING.md,
+    },
+    errorTextSmall: {
+      ...TYPOGRAPHY.bodySmall,
+      color: EDIT_COLORS.error,
+    },
+    backButtonAlt: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: EDIT_COLORS.primaryCTA,
+    },
+    backButtonAltText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: EDIT_COLORS.primaryCTAText,
+    },
+    field: {
+      marginBottom: SPACING.md,
+    },
+    label: {
+      ...TYPOGRAPHY.labelMedium,
+      color: EDIT_COLORS.primaryText,
+      marginBottom: SPACING.xs,
+    },
+    input: {
+      backgroundColor: EDIT_COLORS.inputBg,
+      borderWidth: 1,
+      borderColor: EDIT_COLORS.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: EDIT_COLORS.primaryText,
+    },
+    textArea: {
+      minHeight: 120,
+      paddingTop: SPACING.sm,
+    },
+    optionsGrid: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+    },
+    optionButton: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: EDIT_COLORS.border,
+      backgroundColor: EDIT_COLORS.inputBg,
+    },
+    optionButtonActive: {
+      backgroundColor: s.success,
+      borderColor: s.success,
+    },
+    optionText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: EDIT_COLORS.primaryText,
+    },
+    optionTextActive: {
+      color: "#ffffff",
+    },
+    recipientsList: {
+      gap: SPACING.sm,
+    },
+    recipientItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      padding: SPACING.sm,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: EDIT_COLORS.border,
+      backgroundColor: EDIT_COLORS.inputBg,
+    },
+    recipientItemActive: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    },
+    checkbox: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: EDIT_COLORS.mutedText,
+      backgroundColor: "transparent",
+    },
+    checkboxActive: {
+      borderColor: s.success,
+      backgroundColor: s.success,
+    },
+    recipientText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: EDIT_COLORS.primaryText,
+    },
+    togglesSection: {
+      gap: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    toggleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    toggleLabelContainer: {
+      flex: 1,
+    },
+    toggleLabel: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: EDIT_COLORS.primaryText,
+    },
+    toggleHint: {
+      ...TYPOGRAPHY.caption,
+      color: EDIT_COLORS.mutedText,
+      marginTop: 2,
+    },
+    actions: {
+      flexDirection: "row" as const,
+      gap: SPACING.md,
+      marginTop: SPACING.lg,
+      paddingTop: SPACING.md,
+      borderTopWidth: 1,
+      borderTopColor: EDIT_COLORS.border,
+    },
+    cancelButton: {
+      flex: 1,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: EDIT_COLORS.inputBg,
+      borderWidth: 1,
+      borderColor: EDIT_COLORS.border,
+      alignItems: "center" as const,
+    },
+    cancelButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: EDIT_COLORS.primaryText,
+    },
+    submitButton: {
+      flex: 1,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: EDIT_COLORS.primaryCTA,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      minHeight: 44,
+    },
+    submitButtonDisabled: {
+      opacity: 0.6,
+    },
+    submitButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: EDIT_COLORS.primaryCTAText,
+    },
+  }));
 
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loadingAnnouncement, setLoadingAnnouncement] = useState(true);
@@ -346,8 +551,8 @@ export default function EditAnnouncementScreen() {
             <Switch
               value={isPinned}
               onValueChange={setIsPinned}
-              trackColor={{ false: EDIT_COLORS.border, true: SEMANTIC.successLight }}
-              thumbColor={isPinned ? SEMANTIC.success : EDIT_COLORS.inputBg}
+              trackColor={{ false: EDIT_COLORS.border, true: semantic.successLight }}
+              thumbColor={isPinned ? semantic.success : EDIT_COLORS.inputBg}
             />
           </View>
 
@@ -361,8 +566,8 @@ export default function EditAnnouncementScreen() {
             <Switch
               value={isPublished}
               onValueChange={setIsPublished}
-              trackColor={{ false: EDIT_COLORS.border, true: SEMANTIC.successLight }}
-              thumbColor={isPublished ? SEMANTIC.success : EDIT_COLORS.inputBg}
+              trackColor={{ false: EDIT_COLORS.border, true: semantic.successLight }}
+              thumbColor={isPublished ? semantic.success : EDIT_COLORS.inputBg}
             />
           </View>
         </View>
@@ -388,209 +593,3 @@ export default function EditAnnouncementScreen() {
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: EDIT_COLORS.background,
-    },
-    centered: {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-    },
-    errorContainer: {
-      padding: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: EDIT_COLORS.errorBg,
-      marginBottom: SPACING.md,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: EDIT_COLORS.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    errorTextSmall: {
-      ...TYPOGRAPHY.bodySmall,
-      color: EDIT_COLORS.error,
-    },
-    backButtonAlt: {
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: EDIT_COLORS.primaryCTA,
-    },
-    backButtonAltText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: EDIT_COLORS.primaryCTAText,
-    },
-    field: {
-      marginBottom: SPACING.md,
-    },
-    label: {
-      ...TYPOGRAPHY.labelMedium,
-      color: EDIT_COLORS.primaryText,
-      marginBottom: SPACING.xs,
-    },
-    input: {
-      backgroundColor: EDIT_COLORS.inputBg,
-      borderWidth: 1,
-      borderColor: EDIT_COLORS.border,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      ...TYPOGRAPHY.bodyMedium,
-      color: EDIT_COLORS.primaryText,
-    },
-    textArea: {
-      minHeight: 120,
-      paddingTop: SPACING.sm,
-    },
-    optionsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.sm,
-    },
-    optionButton: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: EDIT_COLORS.border,
-      backgroundColor: EDIT_COLORS.inputBg,
-    },
-    optionButtonActive: {
-      backgroundColor: SEMANTIC.success,
-      borderColor: SEMANTIC.success,
-    },
-    optionText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: EDIT_COLORS.primaryText,
-    },
-    optionTextActive: {
-      color: "#ffffff",
-    },
-    recipientsList: {
-      gap: SPACING.sm,
-    },
-    recipientItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      padding: SPACING.sm,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: EDIT_COLORS.border,
-      backgroundColor: EDIT_COLORS.inputBg,
-    },
-    recipientItemActive: {
-      borderColor: SEMANTIC.success,
-      backgroundColor: SEMANTIC.successLight,
-    },
-    checkbox: {
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      borderWidth: 2,
-      borderColor: EDIT_COLORS.mutedText,
-      backgroundColor: "transparent",
-    },
-    checkboxActive: {
-      borderColor: SEMANTIC.success,
-      backgroundColor: SEMANTIC.success,
-    },
-    recipientText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: EDIT_COLORS.primaryText,
-    },
-    togglesSection: {
-      gap: SPACING.md,
-      marginBottom: SPACING.md,
-    },
-    toggleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-    },
-    toggleLabelContainer: {
-      flex: 1,
-    },
-    toggleLabel: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: EDIT_COLORS.primaryText,
-    },
-    toggleHint: {
-      ...TYPOGRAPHY.caption,
-      color: EDIT_COLORS.mutedText,
-      marginTop: 2,
-    },
-    actions: {
-      flexDirection: "row",
-      gap: SPACING.md,
-      marginTop: SPACING.lg,
-      paddingTop: SPACING.md,
-      borderTopWidth: 1,
-      borderTopColor: EDIT_COLORS.border,
-    },
-    cancelButton: {
-      flex: 1,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: EDIT_COLORS.inputBg,
-      borderWidth: 1,
-      borderColor: EDIT_COLORS.border,
-      alignItems: "center",
-    },
-    cancelButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: EDIT_COLORS.primaryText,
-    },
-    submitButton: {
-      flex: 1,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: EDIT_COLORS.primaryCTA,
-      alignItems: "center",
-      justifyContent: "center",
-      minHeight: 44,
-    },
-    submitButtonDisabled: {
-      opacity: 0.6,
-    },
-    submitButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: EDIT_COLORS.primaryCTAText,
-    },
-  });

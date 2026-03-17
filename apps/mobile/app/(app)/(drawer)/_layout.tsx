@@ -1,15 +1,14 @@
 import React from "react";
-import { StyleSheet, useWindowDimensions, View, Text } from "react-native";
+import { useWindowDimensions, View, Text } from "react-native";
 import { Stack } from "expo-router";
 import { useDrawerProgress } from "@react-navigation/drawer";
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { NEUTRAL } from "@/lib/design-tokens";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_MAX_WIDTH = 320;
 const DRAWER_SHIFT_RATIO = 0.15;
-const SCALE_START = 1.0;
 const SCALE_END = 0.88;
 const RADIUS_END = 18;
 
@@ -18,6 +17,14 @@ export default function DrawerStackLayout() {
   const drawerWidth = Math.min(width * DRAWER_WIDTH_RATIO, DRAWER_MAX_WIDTH);
   const drawerProgress = useDrawerProgress();
   const reduceMotion = useReducedMotion();
+  const styles = useThemedStyles((n) => ({
+    scene: {
+      flex: 1,
+      backgroundColor: n.dark950,
+      overflow: "hidden" as const,
+      borderCurve: "continuous" as const,
+    },
+  }));
 
   const animatedStyle = useAnimatedStyle(() => {
     const progress = drawerProgress?.value ?? 0;
@@ -86,12 +93,3 @@ export default function DrawerStackLayout() {
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  scene: {
-    flex: 1,
-    backgroundColor: NEUTRAL.dark950,
-    overflow: "hidden",
-    borderCurve: "continuous",
-  },
-});

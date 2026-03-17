@@ -3,7 +3,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -19,8 +18,10 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useCompetition } from "@/hooks/useCompetition";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING } from "@/lib/design-tokens";
+import { RADIUS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import {
   HeroScoreboard,
@@ -35,6 +36,7 @@ export default function CompetitionScreen() {
   const navigation = useNavigation();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin } = useOrgRole();
+  const { neutral, semantic } = useAppColorScheme();
 
   const {
     competition,
@@ -51,6 +53,155 @@ export default function CompetitionScreen() {
     refetchIfStale,
     deletePoint,
   } = useCompetition(orgId);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 96,
+      gap: SPACING.lg,
+    },
+    adminActions: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+    },
+    errorCard: {
+      backgroundColor: `${s.error}14`,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: `${s.error}55`,
+      gap: SPACING.sm,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    retryButton: {
+      alignSelf: "flex-start" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs + 2,
+      borderRadius: RADIUS.md,
+      backgroundColor: s.error,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    emptyCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+    },
+    emptySubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    primaryButton: {
+      alignSelf: "flex-start" as const,
+      backgroundColor: n.dark900,
+      borderRadius: RADIUS.md,
+      borderCurve: "continuous" as const,
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.md,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    secondaryButton: {
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    buttonPressed: {
+      opacity: 0.85,
+    },
+    fab: {
+      position: "absolute" as const,
+      bottom: 24,
+      right: 24,
+    },
+    fabInner: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: n.dark900,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+    },
+  }));
 
   useFocusEffect(
     useCallback(() => {
@@ -126,7 +277,7 @@ export default function CompetitionScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={NEUTRAL.secondary}
+              tintColor={neutral.secondary}
             />
           }
         >
@@ -220,152 +371,3 @@ export default function CompetitionScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  headerGradient: {
-    paddingBottom: SPACING.md,
-  },
-  headerSafeArea: {},
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.xs,
-    minHeight: 40,
-    gap: SPACING.sm,
-  },
-  orgLogoButton: {
-    width: 36,
-    height: 36,
-  },
-  orgLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  orgAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: APP_CHROME.avatarBackground,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  orgAvatarText: {
-    ...TYPOGRAPHY.titleSmall,
-    fontWeight: "700",
-    color: APP_CHROME.avatarText,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.headlineSmall,
-    color: APP_CHROME.headerTitle,
-  },
-  headerMeta: {
-    ...TYPOGRAPHY.caption,
-    color: APP_CHROME.headerMeta,
-    marginTop: 2,
-  },
-  contentSheet: {
-    flex: 1,
-    backgroundColor: NEUTRAL.surface,
-  },
-  scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: 96,
-    gap: SPACING.lg,
-  },
-  adminActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: SPACING.sm,
-  },
-  errorCard: {
-    backgroundColor: `${SEMANTIC.error}14`,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: `${SEMANTIC.error}55`,
-    gap: SPACING.sm,
-  },
-  errorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: SEMANTIC.error,
-  },
-  retryButton: {
-    alignSelf: "flex-start",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs + 2,
-    borderRadius: RADIUS.md,
-    backgroundColor: SEMANTIC.error,
-  },
-  retryButtonText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: "#ffffff",
-  },
-  emptyCard: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderCurve: "continuous",
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    gap: SPACING.md,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-  },
-  emptyTitle: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-  },
-  emptySubtitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-  },
-  primaryButton: {
-    alignSelf: "flex-start",
-    backgroundColor: NEUTRAL.dark900,
-    borderRadius: RADIUS.md,
-    borderCurve: "continuous",
-    paddingVertical: SPACING.xs + 2,
-    paddingHorizontal: SPACING.md,
-  },
-  primaryButtonText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: "#ffffff",
-  },
-  secondaryButton: {
-    paddingVertical: SPACING.xs + 2,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    backgroundColor: NEUTRAL.surface,
-  },
-  secondaryButtonText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.foreground,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 24,
-    right: 24,
-  },
-  fabInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: NEUTRAL.dark900,
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-  },
-});

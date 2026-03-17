@@ -1,8 +1,8 @@
 import React from "react";
-import { StyleSheet, useWindowDimensions } from "react-native";
+import { useWindowDimensions } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { DrawerContent } from "@/navigation/DrawerContent";
-import { NEUTRAL } from "@/lib/design-tokens";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_MAX_WIDTH = 320;
@@ -10,6 +10,14 @@ const DRAWER_MAX_WIDTH = 320;
 export function AppDrawer() {
   const { width } = useWindowDimensions();
   const drawerWidth = Math.min(width * DRAWER_WIDTH_RATIO, DRAWER_MAX_WIDTH);
+  const styles = useThemedStyles((n) => ({
+    drawer: {
+      backgroundColor: n.dark950,
+    },
+    scene: {
+      backgroundColor: n.dark950,
+    },
+  }));
 
   return (
     <Drawer
@@ -38,12 +46,3 @@ export function AppDrawer() {
     </Drawer>
   );
 }
-
-const styles = StyleSheet.create({
-  drawer: {
-    backgroundColor: NEUTRAL.dark950,
-  },
-  scene: {
-    backgroundColor: NEUTRAL.dark950,
-  },
-});

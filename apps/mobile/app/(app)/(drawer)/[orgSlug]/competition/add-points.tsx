@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -16,8 +15,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { CompetitionTeam } from "@teammeet/types";
 
@@ -27,6 +28,7 @@ export default function CompetitionAddPointsScreen() {
   const { orgId, orgSlug } = useOrg();
   const { user } = useAuth();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
+  const { neutral, semantic } = useAppColorScheme();
 
   const [competitionId, setCompetitionId] = useState<string | null>(null);
   const [teams, setTeams] = useState<CompetitionTeam[]>([]);
@@ -38,6 +40,156 @@ export default function CompetitionAddPointsScreen() {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {},
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      minHeight: 44,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginLeft: -SPACING.sm,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+      textAlign: "center" as const,
+    },
+    headerSpacer: {
+      width: 40,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    formHeader: {
+      gap: SPACING.xs,
+    },
+    formTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+    },
+    formSubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    errorCard: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: s.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      backgroundColor: n.surface,
+    },
+    textArea: {
+      minHeight: 120,
+    },
+    optionList: {
+      gap: SPACING.sm,
+    },
+    optionRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      padding: SPACING.sm,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    optionRowSelected: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    },
+    optionRowPressed: {
+      opacity: 0.85,
+    },
+    optionIndicator: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: n.muted,
+      backgroundColor: "transparent",
+    },
+    optionIndicatorSelected: {
+      borderColor: s.success,
+      backgroundColor: s.success,
+    },
+    optionLabel: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    primaryButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  }));
 
   const handleBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -163,7 +315,7 @@ export default function CompetitionAddPointsScreen() {
         </LinearGradient>
         <View style={styles.contentSheet}>
           <View style={styles.centered}>
-            <ActivityIndicator color={SEMANTIC.success} />
+            <ActivityIndicator color={semantic.success} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         </View>
@@ -272,7 +424,7 @@ export default function CompetitionAddPointsScreen() {
                 if (value) setTeamId("");
               }}
               placeholder="e.g., Blue Squad"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               style={styles.input}
             />
           </View>
@@ -283,7 +435,7 @@ export default function CompetitionAddPointsScreen() {
               value={points}
               onChangeText={setPoints}
               placeholder="Enter points (can be negative)"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               keyboardType="number-pad"
               style={styles.input}
             />
@@ -295,7 +447,7 @@ export default function CompetitionAddPointsScreen() {
               value={reason}
               onChangeText={setReason}
               placeholder="Why the points were awarded"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               style={styles.input}
             />
           </View>
@@ -306,7 +458,7 @@ export default function CompetitionAddPointsScreen() {
               value={notes}
               onChangeText={setNotes}
               placeholder="e.g., Won the scrimmage, community service hours"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               multiline
               textAlignVertical="top"
               style={[styles.input, styles.textArea]}
@@ -333,157 +485,3 @@ export default function CompetitionAddPointsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  headerGradient: {
-    // Gradient fills this area
-  },
-  headerSafeArea: {
-    // SafeAreaView handles top inset
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    minHeight: 44,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: -SPACING.sm,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.titleLarge,
-    color: APP_CHROME.headerTitle,
-    flex: 1,
-    textAlign: "center",
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  contentSheet: {
-    flex: 1,
-    backgroundColor: NEUTRAL.surface,
-  },
-  scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.lg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  loadingText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-  },
-  formHeader: {
-    gap: SPACING.xs,
-  },
-  formTitle: {
-    ...TYPOGRAPHY.headlineMedium,
-    color: NEUTRAL.foreground,
-  },
-  formSubtitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-  },
-  errorCard: {
-    backgroundColor: SEMANTIC.errorLight,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: SEMANTIC.error,
-  },
-  errorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: SEMANTIC.error,
-  },
-  fieldGroup: {
-    gap: SPACING.xs,
-  },
-  fieldLabel: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.secondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    backgroundColor: NEUTRAL.surface,
-  },
-  textArea: {
-    minHeight: 120,
-  },
-  optionList: {
-    gap: SPACING.sm,
-  },
-  optionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    backgroundColor: NEUTRAL.surface,
-  },
-  optionRowSelected: {
-    borderColor: SEMANTIC.success,
-    backgroundColor: SEMANTIC.successLight,
-  },
-  optionRowPressed: {
-    opacity: 0.85,
-  },
-  optionIndicator: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: NEUTRAL.muted,
-    backgroundColor: "transparent",
-  },
-  optionIndicatorSelected: {
-    borderColor: SEMANTIC.success,
-    backgroundColor: SEMANTIC.success,
-  },
-  optionLabel: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    flex: 1,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-  },
-  primaryButton: {
-    backgroundColor: SEMANTIC.success,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.md,
-    alignItems: "center",
-  },
-  primaryButtonPressed: {
-    opacity: 0.9,
-  },
-  primaryButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: "#ffffff",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});

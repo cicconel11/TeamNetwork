@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   View,
   Text,
   TextInput,
   Pressable,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,8 +20,10 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { showToast } from "@/components/ui/Toast";
 import * as sentry from "@/lib/analytics/sentry";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const MAX_BODY_LENGTH = 5000;
 
@@ -35,7 +36,95 @@ export default function EditPostScreen() {
   const [body, setBody] = useState("");
   const [initialized, setInitialized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    },
+    centered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+    unauthorizedText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+      textAlign: "center" as const,
+      padding: SPACING.lg,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    closeButton: {
+      width: 36,
+      height: 36,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    saveButton: {
+      backgroundColor: n.surface,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.lg,
+    },
+    saveButtonDisabled: {
+      opacity: 0.4,
+    },
+    saveButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+      fontWeight: "600" as const,
+    },
+    saveButtonTextDisabled: {
+      color: n.muted,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      flexGrow: 1,
+    },
+    bodyInput: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+      minHeight: 200,
+      lineHeight: 22,
+    },
+    charCounter: {
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.sm,
+      alignItems: "flex-end" as const,
+    },
+    charCounterText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    charCounterWarning: {
+      color: s.warning,
+    },
+  }));
 
   const canEdit = !post || !user ? null : post.author_id === user.id || isAdmin;
 
@@ -74,7 +163,7 @@ export default function EditPostScreen() {
   if (loading && !post) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={NEUTRAL.muted} />
+        <ActivityIndicator size="large" color={neutral.muted} />
       </View>
     );
   }
@@ -158,7 +247,7 @@ export default function EditPostScreen() {
           <TextInput
             style={styles.bodyInput}
             placeholder="What's on your mind?"
-            placeholderTextColor={NEUTRAL.placeholder}
+            placeholderTextColor={neutral.placeholder}
             multiline
             autoFocus
             value={body}
@@ -183,93 +272,3 @@ export default function EditPostScreen() {
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    centered: {
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    unauthorizedText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-      padding: SPACING.lg,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    closeButton: {
-      width: 36,
-      height: 36,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    saveButton: {
-      backgroundColor: NEUTRAL.surface,
-      paddingVertical: SPACING.xs,
-      paddingHorizontal: SPACING.md,
-      borderRadius: RADIUS.lg,
-    },
-    saveButtonDisabled: {
-      opacity: 0.4,
-    },
-    saveButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
-      fontWeight: "600",
-    },
-    saveButtonTextDisabled: {
-      color: NEUTRAL.muted,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      flexGrow: 1,
-    },
-    bodyInput: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      flex: 1,
-      minHeight: 200,
-      lineHeight: 22,
-    },
-    charCounter: {
-      paddingHorizontal: SPACING.md,
-      paddingBottom: SPACING.sm,
-      alignItems: "flex-end",
-    },
-    charCounterText: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-    },
-    charCounterWarning: {
-      color: SEMANTIC.warning,
-    },
-  });

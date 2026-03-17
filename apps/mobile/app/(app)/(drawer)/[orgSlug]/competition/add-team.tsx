@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useNavigation } from "expo-router";
@@ -16,8 +15,10 @@ import { DrawerActions } from "@react-navigation/native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 
 export default function CompetitionAddTeamScreen() {
@@ -25,12 +26,137 @@ export default function CompetitionAddTeamScreen() {
   const navigation = useNavigation();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
+  const { neutral, semantic } = useAppColorScheme();
 
   const [competitionId, setCompetitionId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {},
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      minHeight: 44,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      overflow: "hidden" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 8,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleMedium,
+      color: APP_CHROME.headerTitle,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+      flex: 1,
+      textAlign: "center" as const,
+    },
+    headerSpacer: {
+      width: 36,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    formHeader: {
+      gap: SPACING.xs,
+    },
+    formTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+    },
+    formSubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    errorCard: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: s.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      backgroundColor: n.surface,
+    },
+    primaryButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  }));
 
   const handleDrawerToggle = useCallback(() => {
     try {
@@ -113,7 +239,7 @@ export default function CompetitionAddTeamScreen() {
             <View style={styles.headerContent}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} contentFit="contain" />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
@@ -127,7 +253,7 @@ export default function CompetitionAddTeamScreen() {
         </LinearGradient>
         <View style={styles.contentSheet}>
           <View style={styles.centered}>
-            <ActivityIndicator color={SEMANTIC.success} />
+            <ActivityIndicator color={semantic.success} />
             <Text style={styles.loadingText}>Loading...</Text>
           </View>
         </View>
@@ -146,7 +272,7 @@ export default function CompetitionAddTeamScreen() {
             <View style={styles.headerContent}>
               <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
                 {orgLogoUrl ? (
-                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                  <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} contentFit="contain" />
                 ) : (
                   <View style={styles.orgAvatar}>
                     <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
@@ -177,7 +303,7 @@ export default function CompetitionAddTeamScreen() {
           <View style={styles.headerContent}>
             <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
               {orgLogoUrl ? (
-                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} />
+                <Image source={{ uri: orgLogoUrl }} style={styles.orgLogo} contentFit="contain" />
               ) : (
                 <View style={styles.orgAvatar}>
                   <Text style={styles.orgAvatarText}>{orgName?.[0] || "O"}</Text>
@@ -213,7 +339,7 @@ export default function CompetitionAddTeamScreen() {
               value={teamName}
               onChangeText={setTeamName}
               placeholder="e.g., Blue Squad"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               style={styles.input}
             />
           </View>
@@ -238,131 +364,3 @@ export default function CompetitionAddTeamScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  headerGradient: {
-    // Gradient fills this area
-  },
-  headerSafeArea: {
-    // SafeAreaView handles top inset
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    minHeight: 44,
-  },
-  orgLogoButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  orgLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-  },
-  orgAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  orgAvatarText: {
-    ...TYPOGRAPHY.titleMedium,
-    color: APP_CHROME.headerTitle,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.titleLarge,
-    color: APP_CHROME.headerTitle,
-    flex: 1,
-    textAlign: "center",
-  },
-  headerSpacer: {
-    width: 36,
-  },
-  contentSheet: {
-    flex: 1,
-    backgroundColor: NEUTRAL.surface,
-  },
-  scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xxl,
-    gap: SPACING.lg,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: SPACING.sm,
-  },
-  loadingText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-  },
-  formHeader: {
-    gap: SPACING.xs,
-  },
-  formTitle: {
-    ...TYPOGRAPHY.headlineMedium,
-    color: NEUTRAL.foreground,
-  },
-  formSubtitle: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-  },
-  errorCard: {
-    backgroundColor: SEMANTIC.errorLight,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: SEMANTIC.error,
-  },
-  errorText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: SEMANTIC.error,
-  },
-  fieldGroup: {
-    gap: SPACING.xs,
-  },
-  fieldLabel: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.secondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    borderRadius: RADIUS.md,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    backgroundColor: NEUTRAL.surface,
-  },
-  primaryButton: {
-    backgroundColor: SEMANTIC.success,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.md,
-    alignItems: "center",
-  },
-  primaryButtonPressed: {
-    opacity: 0.9,
-  },
-  primaryButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: "#ffffff",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-});

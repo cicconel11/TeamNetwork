@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   View,
@@ -16,10 +15,12 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatDatePickerLabel, formatTimePickerLabel } from "@/lib/date-format";
 import type { ThemeColors } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
 
 type Audience = "members" | "alumni" | "both";
 type EventType = "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
@@ -59,7 +60,8 @@ export default function EditEventScreen() {
   const router = useRouter();
   const { orgId, orgSlug } = useOrg();
   const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(colors, neutral, semantic), [colors, neutral, semantic]);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -243,11 +245,11 @@ export default function EditEventScreen() {
   const fieldStyle = {
     flex: 1,
     borderWidth: 1,
-    borderColor: NEUTRAL.border,
+    borderColor: neutral.border,
     borderRadius: RADIUS.md,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 2,
-    backgroundColor: NEUTRAL.surface,
+    backgroundColor: neutral.surface,
     justifyContent: "center" as const,
   };
 
@@ -279,7 +281,7 @@ export default function EditEventScreen() {
           value={title}
           onChangeText={setTitle}
           placeholder="Team Meeting"
-          placeholderTextColor={NEUTRAL.placeholder}
+          placeholderTextColor={neutral.placeholder}
           style={styles.input}
         />
       </View>
@@ -291,7 +293,7 @@ export default function EditEventScreen() {
           value={description}
           onChangeText={setDescription}
           placeholder="Add event details..."
-          placeholderTextColor={NEUTRAL.placeholder}
+          placeholderTextColor={neutral.placeholder}
           multiline
           textAlignVertical="top"
           style={[styles.input, styles.textArea]}
@@ -365,7 +367,7 @@ export default function EditEventScreen() {
           value={location}
           onChangeText={setLocation}
           placeholder="Team facility or address"
-          placeholderTextColor={NEUTRAL.placeholder}
+          placeholderTextColor={neutral.placeholder}
           style={styles.input}
         />
       </View>
@@ -428,11 +430,11 @@ export default function EditEventScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
+const createStyles = (colors: ThemeColors, neutral: NeutralColors, semantic: SemanticColors) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: NEUTRAL.background,
+      backgroundColor: neutral.background,
     },
     content: {
       padding: SPACING.md,
@@ -446,34 +448,34 @@ const createStyles = (colors: ThemeColors) =>
       padding: SPACING.lg,
     },
     errorContainer: {
-      backgroundColor: SEMANTIC.errorLight,
+      backgroundColor: semantic.errorLight,
       borderRadius: RADIUS.md,
       padding: SPACING.sm,
       borderWidth: 1,
-      borderColor: SEMANTIC.error,
+      borderColor: semantic.error,
     },
     errorText: {
       ...TYPOGRAPHY.bodySmall,
-      color: SEMANTIC.error,
+      color: semantic.error,
     },
     field: {
       gap: SPACING.sm,
     },
     label: {
       ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.secondary,
+      color: neutral.secondary,
       textTransform: "uppercase",
       letterSpacing: 0.5,
     },
     input: {
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: neutral.surface,
       borderWidth: 1,
-      borderColor: NEUTRAL.border,
+      borderColor: neutral.border,
       borderRadius: RADIUS.md,
       paddingHorizontal: SPACING.md,
       paddingVertical: SPACING.sm + 2,
       ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
+      color: neutral.foreground,
     },
     textArea: {
       minHeight: 120,
@@ -485,23 +487,23 @@ const createStyles = (colors: ThemeColors) =>
     },
     dateText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
+      color: neutral.foreground,
     },
     placeholderText: {
-      color: NEUTRAL.placeholder,
+      color: neutral.placeholder,
     },
     pickerContainer: {
       borderWidth: 1,
-      borderColor: NEUTRAL.border,
+      borderColor: neutral.border,
       borderRadius: RADIUS.md,
       overflow: "hidden",
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: neutral.surface,
     },
     pickerDoneButton: {
       paddingVertical: SPACING.sm,
       alignItems: "center",
       borderTopWidth: 1,
-      borderTopColor: NEUTRAL.border,
+      borderTopColor: neutral.border,
     },
     pickerDoneText: {
       ...TYPOGRAPHY.labelLarge,
@@ -517,19 +519,19 @@ const createStyles = (colors: ThemeColors) =>
       paddingVertical: SPACING.xs,
       borderRadius: RADIUS.full,
       borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      backgroundColor: NEUTRAL.surface,
+      borderColor: neutral.border,
+      backgroundColor: neutral.surface,
     },
     chipSelected: {
       borderColor: colors.primary,
-      backgroundColor: colors.primaryLight || SEMANTIC.successLight,
+      backgroundColor: colors.primaryLight || semantic.successLight,
     },
     chipText: {
       ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
+      color: neutral.foreground,
     },
     chipTextSelected: {
-      color: colors.primaryForeground || NEUTRAL.foreground,
+      color: colors.primaryForeground || neutral.foreground,
       fontWeight: "600",
     },
     submitButton: {

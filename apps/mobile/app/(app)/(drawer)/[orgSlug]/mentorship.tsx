@@ -27,8 +27,8 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
 import { fetchWithAuth } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { formatDefaultDate, formatDefaultDateFromString } from "@/lib/date-format";
 import type { MentorshipLog, MentorshipPair, User } from "@teammeet/types";
 
@@ -64,7 +64,8 @@ export default function MentorshipScreen() {
   const { user } = useAuth();
   const { role, isAdmin, isActiveMember, isAlumni, isLoading: roleLoading } = useOrgRole();
   const navigation = useNavigation();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
   const isMountedRef = useRef(true);
 
   // Safe drawer toggle - only dispatch if drawer is available
@@ -1403,7 +1404,7 @@ function SelectModal({
   );
 }
 
-const createStyles = () =>
+const createStyles = (surfaceColor: string) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -1461,7 +1462,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: surfaceColor,
     },
     scrollContent: {
       padding: spacing.md,

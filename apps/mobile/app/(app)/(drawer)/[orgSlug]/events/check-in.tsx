@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  StyleSheet,
   ActivityIndicator,
   TextInput,
   Pressable,
@@ -31,8 +30,10 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEventRSVPs, type EventRSVP } from "@/hooks/useEventRSVPs";
 import type { Event } from "@/hooks/useEvents";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS, AVATAR_SIZES } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS, AVATAR_SIZES } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 
 type FilterMode = "all" | "attending" | "checked_in" | "not_checked_in";
@@ -43,7 +44,271 @@ export default function CheckInScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+      backgroundColor: n.background,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      marginTop: SPACING.md,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+      textAlign: "center" as const,
+      marginBottom: SPACING.md,
+    },
+    backButtonLarge: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+    },
+    backButtonTextLarge: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    eventCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.md,
+      ...SHADOWS.sm,
+    },
+    eventTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    eventDetails: {
+      gap: SPACING.xs,
+    },
+    eventDetailRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    eventDetailText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      flex: 1,
+    },
+    searchContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      paddingHorizontal: SPACING.sm,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.md,
+      height: 44,
+      gap: SPACING.sm,
+    },
+    searchInput: {
+      flex: 1,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      paddingVertical: 0,
+    },
+    filterContainer: {
+      flexDirection: "row" as const,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: 2,
+    },
+    filterTab: {
+      flex: 1,
+      paddingVertical: SPACING.sm,
+      alignItems: "center" as const,
+      borderRadius: RADIUS.sm,
+    },
+    filterTabActive: {
+      backgroundColor: s.success,
+    },
+    filterTabText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.muted,
+    },
+    filterTabTextActive: {
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    attendeeCard: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    attendeeCardCheckedIn: {
+      borderColor: s.successLight,
+      backgroundColor: `${s.successLight}30`,
+    },
+    attendeeInfo: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      flex: 1,
+      gap: SPACING.sm,
+    },
+    avatar: {
+      width: AVATAR_SIZES.md,
+      height: AVATAR_SIZES.md,
+      borderRadius: AVATAR_SIZES.md / 2,
+    },
+    avatarPlaceholder: {
+      width: AVATAR_SIZES.md,
+      height: AVATAR_SIZES.md,
+      borderRadius: AVATAR_SIZES.md / 2,
+      backgroundColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    avatarCheckedIn: {
+      backgroundColor: s.successLight,
+    },
+    avatarText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    attendeeDetails: {
+      flex: 1,
+    },
+    attendeeName: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    attendeeEmail: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    checkedInBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      marginTop: 4,
+    },
+    checkedInTime: {
+      ...TYPOGRAPHY.caption,
+      color: s.success,
+    },
+    checkInButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginLeft: SPACING.sm,
+    },
+    undoButton: {
+      backgroundColor: s.errorLight,
+    },
+    emptyState: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingVertical: SPACING.xxl,
+      paddingHorizontal: SPACING.md,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginTop: SPACING.md,
+    },
+    emptySubtitle: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      textAlign: "center" as const,
+      marginTop: SPACING.xs,
+    },
+  }));
 
   const [event, setEvent] = useState<Event | null>(null);
   const [eventLoading, setEventLoading] = useState(true);
@@ -199,7 +464,7 @@ export default function CheckInScreen() {
             )}
             {isCheckedIn && item.checked_in_at && (
               <View style={styles.checkedInBadge}>
-                <Check size={12} color={SEMANTIC.success} />
+                <Check size={12} color={semantic.success} />
                 <Text style={styles.checkedInTime}>
                   Checked in at {formatCheckInTime(item.checked_in_at)}
                 </Text>
@@ -213,7 +478,7 @@ export default function CheckInScreen() {
           onPress={() => (isCheckedIn ? handleUndoCheckIn(item) : handleCheckIn(item))}
         >
           {isCheckedIn ? (
-            <X size={20} color={SEMANTIC.error} />
+            <X size={20} color={semantic.error} />
           ) : (
             <UserCheck size={20} color="#ffffff" />
           )}
@@ -224,7 +489,7 @@ export default function CheckInScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Users size={40} color={NEUTRAL.muted} />
+      <Users size={40} color={neutral.muted} />
       <Text style={styles.emptyTitle}>
         {searchQuery ? "No matching attendees" : "No attendees found"}
       </Text>
@@ -258,7 +523,7 @@ export default function CheckInScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={SEMANTIC.success} />
+        <ActivityIndicator size="large" color={semantic.success} />
         <Text style={styles.loadingText}>Loading check-in...</Text>
       </View>
     );
@@ -321,14 +586,14 @@ export default function CheckInScreen() {
             </Text>
             <View style={styles.eventDetails}>
               <View style={styles.eventDetailRow}>
-                <Calendar size={14} color={NEUTRAL.muted} />
+                <Calendar size={14} color={neutral.muted} />
                 <Text style={styles.eventDetailText}>
                   {formatDate(event.start_date)} at {formatTime(event.start_date)}
                 </Text>
               </View>
               {event.location && (
                 <View style={styles.eventDetailRow}>
-                  <MapPin size={14} color={NEUTRAL.muted} />
+                  <MapPin size={14} color={neutral.muted} />
                   <Text style={styles.eventDetailText} numberOfLines={1}>
                     {event.location}
                   </Text>
@@ -340,11 +605,11 @@ export default function CheckInScreen() {
 
         {/* Search Bar */}
         <View style={styles.searchContainer}>
-          <Search size={18} color={NEUTRAL.muted} />
+          <Search size={18} color={neutral.muted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or email..."
-            placeholderTextColor={NEUTRAL.placeholder}
+            placeholderTextColor={neutral.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             autoCapitalize="none"
@@ -352,7 +617,7 @@ export default function CheckInScreen() {
           />
           {searchQuery.length > 0 && (
             <Pressable onPress={() => setSearchQuery("")}>
-              <X size={18} color={NEUTRAL.muted} />
+              <X size={18} color={neutral.muted} />
             </Pressable>
           )}
         </View>
@@ -402,276 +667,3 @@ export default function CheckInScreen() {
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-      backgroundColor: NEUTRAL.background,
-    },
-    loadingText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-      marginTop: SPACING.md,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    backButtonLarge: {
-      backgroundColor: SEMANTIC.success,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-    },
-    backButtonTextLarge: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-    },
-    // Header styles
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      width: 36,
-      height: 36,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      ...TYPOGRAPHY.caption,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    // Content sheet
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    // Event card
-    eventCard: {
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      padding: SPACING.md,
-      marginHorizontal: SPACING.md,
-      marginTop: SPACING.md,
-      ...SHADOWS.sm,
-    },
-    eventTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.sm,
-    },
-    eventDetails: {
-      gap: SPACING.xs,
-    },
-    eventDetailRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.xs,
-    },
-    eventDetailText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.secondary,
-      flex: 1,
-    },
-    // Search
-    searchContainer: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: NEUTRAL.background,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      paddingHorizontal: SPACING.sm,
-      marginHorizontal: SPACING.md,
-      marginTop: SPACING.md,
-      height: 44,
-      gap: SPACING.sm,
-    },
-    searchInput: {
-      flex: 1,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      paddingVertical: 0,
-    },
-    // Filter tabs
-    filterContainer: {
-      flexDirection: "row",
-      marginHorizontal: SPACING.md,
-      marginTop: SPACING.md,
-      marginBottom: SPACING.sm,
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      padding: 2,
-    },
-    filterTab: {
-      flex: 1,
-      paddingVertical: SPACING.sm,
-      alignItems: "center",
-      borderRadius: RADIUS.sm,
-    },
-    filterTabActive: {
-      backgroundColor: SEMANTIC.success,
-    },
-    filterTabText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: NEUTRAL.muted,
-    },
-    filterTabTextActive: {
-      color: "#ffffff",
-      fontWeight: "600",
-    },
-    // List
-    listContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-      flexGrow: 1,
-    },
-    // Attendee card
-    attendeeCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      padding: SPACING.md,
-      marginBottom: SPACING.sm,
-      ...SHADOWS.sm,
-    },
-    attendeeCardCheckedIn: {
-      borderColor: SEMANTIC.successLight,
-      backgroundColor: `${SEMANTIC.successLight}30`,
-    },
-    attendeeInfo: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      gap: SPACING.sm,
-    },
-    avatar: {
-      width: AVATAR_SIZES.md,
-      height: AVATAR_SIZES.md,
-      borderRadius: AVATAR_SIZES.md / 2,
-    },
-    avatarPlaceholder: {
-      width: AVATAR_SIZES.md,
-      height: AVATAR_SIZES.md,
-      borderRadius: AVATAR_SIZES.md / 2,
-      backgroundColor: NEUTRAL.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    avatarCheckedIn: {
-      backgroundColor: SEMANTIC.successLight,
-    },
-    avatarText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.foreground,
-    },
-    attendeeDetails: {
-      flex: 1,
-    },
-    attendeeName: {
-      ...TYPOGRAPHY.titleSmall,
-      color: NEUTRAL.foreground,
-    },
-    attendeeEmail: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginTop: 2,
-    },
-    checkedInBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 4,
-    },
-    checkedInTime: {
-      ...TYPOGRAPHY.caption,
-      color: SEMANTIC.success,
-    },
-    checkInButton: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: SEMANTIC.success,
-      alignItems: "center",
-      justifyContent: "center",
-      marginLeft: SPACING.sm,
-    },
-    undoButton: {
-      backgroundColor: SEMANTIC.errorLight,
-    },
-    // Empty state
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: SPACING.xxl,
-      paddingHorizontal: SPACING.md,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-      marginTop: SPACING.md,
-    },
-    emptySubtitle: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.secondary,
-      textAlign: "center",
-      marginTop: SPACING.xs,
-    },
-  });

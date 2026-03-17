@@ -20,8 +20,8 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import type { Form, FormField, FormFieldOption, FormSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { formatDefaultDate } from "@/lib/date-format";
 
 const FORM_COLORS = {
@@ -110,7 +110,8 @@ export default function FormDetailScreen() {
   const { orgSlug: contextOrgSlug } = useOrg();
   const orgSlug = paramOrgSlug || contextOrgSlug;
   const router = useRouter();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
 
   const [form, setForm] = useState<Form | null>(null);
   const [existingSubmission, setExistingSubmission] = useState<FormSubmission | null>(null);
@@ -595,7 +596,7 @@ export default function FormDetailScreen() {
   );
 }
 
-const createStyles = () =>
+const createStyles = (surfaceColor: string) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -629,7 +630,7 @@ const createStyles = () =>
     },
     contentSheet: {
       flex: 1,
-      backgroundColor: NEUTRAL.surface,
+      backgroundColor: surfaceColor,
     },
     scrollView: {
       flex: 1,

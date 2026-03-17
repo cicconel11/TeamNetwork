@@ -4,7 +4,6 @@ import {
   Text,
   ScrollView,
   ActivityIndicator,
-  StyleSheet,
   Pressable,
   Alert,
   Platform,
@@ -19,10 +18,12 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonthDayYearSafe } from "@/lib/date-format";
 import type { Announcement } from "@teammeet/types";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const DETAIL_COLORS = {
   background: "#ffffff",
@@ -42,7 +43,143 @@ export default function AnnouncementDetailScreen() {
   const { orgSlug, orgId } = useOrg();
   const router = useRouter();
   const { permissions } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, _s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: DETAIL_COLORS.background,
+    },
+    centered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+    },
+    statusRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    pinnedBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: DETAIL_COLORS.pinnedBg,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.sm,
+      gap: 4,
+    },
+    pinnedText: {
+      ...TYPOGRAPHY.overline,
+      fontSize: 10,
+      color: DETAIL_COLORS.pinnedText,
+    },
+    draftBadge: {
+      backgroundColor: n.divider,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.sm,
+    },
+    draftText: {
+      ...TYPOGRAPHY.overline,
+      fontSize: 10,
+      color: DETAIL_COLORS.secondaryText,
+    },
+    title: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: DETAIL_COLORS.primaryText,
+      marginBottom: SPACING.xs,
+    },
+    date: {
+      ...TYPOGRAPHY.caption,
+      color: DETAIL_COLORS.mutedText,
+      marginBottom: SPACING.lg,
+    },
+    bodyCard: {
+      backgroundColor: DETAIL_COLORS.card,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: DETAIL_COLORS.border,
+      ...SHADOWS.sm,
+    },
+    bodyText: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: DETAIL_COLORS.primaryText,
+      lineHeight: 26,
+    },
+    metaSection: {
+      marginTop: SPACING.lg,
+      paddingTop: SPACING.md,
+      borderTopWidth: 1,
+      borderTopColor: DETAIL_COLORS.border,
+    },
+    metaLabel: {
+      ...TYPOGRAPHY.overline,
+      color: DETAIL_COLORS.mutedText,
+      marginBottom: SPACING.xs,
+    },
+    metaValue: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.secondaryText,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: DETAIL_COLORS.error,
+      textAlign: "center" as const,
+      marginBottom: SPACING.md,
+    },
+    backButtonAlt: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      backgroundColor: DETAIL_COLORS.success,
+    },
+    backButtonAltText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    loadingOverlay: {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.8)",
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+  }));
+
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -199,42 +336,42 @@ export default function AnnouncementDetailScreen() {
       {
         id: "edit",
         label: "Edit",
-        icon: <Pencil size={20} color={NEUTRAL.foreground} />,
+        icon: <Pencil size={20} color={neutral.foreground} />,
         onPress: handleEdit,
       },
       {
         id: "toggle-pin",
         label: announcement.is_pinned ? "Unpin" : "Pin",
-        icon: <Pin size={20} color={NEUTRAL.foreground} />,
+        icon: <Pin size={20} color={neutral.foreground} />,
         onPress: handleTogglePin,
       },
       {
         id: "toggle-publish",
         label: announcement.published_at ? "Unpublish" : "Publish",
         icon: announcement.published_at ? (
-          <EyeOff size={20} color={NEUTRAL.foreground} />
+          <EyeOff size={20} color={neutral.foreground} />
         ) : (
-          <Eye size={20} color={NEUTRAL.foreground} />
+          <Eye size={20} color={neutral.foreground} />
         ),
         onPress: handleTogglePublish,
       },
       {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={NEUTRAL.foreground} />,
+        icon: <ExternalLink size={20} color={neutral.foreground} />,
         onPress: handleOpenInWeb,
       },
       {
         id: "delete",
         label: "Delete",
-        icon: <Trash2 size={20} color={SEMANTIC.error} />,
+        icon: <Trash2 size={20} color={semantic.error} />,
         onPress: handleDelete,
         destructive: true,
       },
     ];
 
     return items;
-  }, [permissions.canUseAdminActions, announcement, orgSlug, announcementId]);
+  }, [permissions.canUseAdminActions, announcement, orgSlug, announcementId, neutral, semantic]);
 
   if (loading) {
     return (
@@ -345,136 +482,3 @@ export default function AnnouncementDetailScreen() {
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: DETAIL_COLORS.background,
-    },
-    centered: {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-    },
-    statusRow: {
-      flexDirection: "row",
-      gap: SPACING.sm,
-      marginBottom: SPACING.sm,
-    },
-    pinnedBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: DETAIL_COLORS.pinnedBg,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.sm,
-      gap: 4,
-    },
-    pinnedText: {
-      ...TYPOGRAPHY.overline,
-      fontSize: 10,
-      color: DETAIL_COLORS.pinnedText,
-    },
-    draftBadge: {
-      backgroundColor: NEUTRAL.divider,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.sm,
-    },
-    draftText: {
-      ...TYPOGRAPHY.overline,
-      fontSize: 10,
-      color: DETAIL_COLORS.secondaryText,
-    },
-    title: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: DETAIL_COLORS.primaryText,
-      marginBottom: SPACING.xs,
-    },
-    date: {
-      ...TYPOGRAPHY.caption,
-      color: DETAIL_COLORS.mutedText,
-      marginBottom: SPACING.lg,
-    },
-    bodyCard: {
-      backgroundColor: DETAIL_COLORS.card,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: DETAIL_COLORS.border,
-      ...SHADOWS.sm,
-    },
-    bodyText: {
-      ...TYPOGRAPHY.bodyLarge,
-      color: DETAIL_COLORS.primaryText,
-      lineHeight: 26,
-    },
-    metaSection: {
-      marginTop: SPACING.lg,
-      paddingTop: SPACING.md,
-      borderTopWidth: 1,
-      borderTopColor: DETAIL_COLORS.border,
-    },
-    metaLabel: {
-      ...TYPOGRAPHY.overline,
-      color: DETAIL_COLORS.mutedText,
-      marginBottom: SPACING.xs,
-    },
-    metaValue: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.secondaryText,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    backButtonAlt: {
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: DETAIL_COLORS.success,
-    },
-    backButtonAltText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: "#ffffff",
-    },
-    loadingOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-  });

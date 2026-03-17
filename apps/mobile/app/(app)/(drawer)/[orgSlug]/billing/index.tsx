@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   RefreshControl,
@@ -17,8 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonthDayYearSafe } from "@/lib/date-format";
 import {
@@ -39,43 +40,6 @@ import {
   Shield,
 } from "lucide-react-native";
 
-const BILLING_COLORS = {
-  background: NEUTRAL.background,
-  surface: NEUTRAL.surface,
-  foreground: NEUTRAL.foreground,
-  secondary: NEUTRAL.secondary,
-  muted: NEUTRAL.muted,
-  border: NEUTRAL.border,
-  primary: SEMANTIC.success,
-  primaryLight: SEMANTIC.successLight,
-  warning: SEMANTIC.warning,
-  warningLight: SEMANTIC.warningLight,
-  error: SEMANTIC.error,
-  errorLight: SEMANTIC.errorLight,
-  info: SEMANTIC.info,
-  infoLight: SEMANTIC.infoLight,
-};
-
-function formatStatus(status: string): { label: string; color: string; bgColor: string } {
-  switch (status) {
-    case "active":
-      return { label: "Active", color: BILLING_COLORS.primary, bgColor: BILLING_COLORS.primaryLight };
-    case "trialing":
-      return { label: "Trial", color: BILLING_COLORS.info, bgColor: BILLING_COLORS.infoLight };
-    case "past_due":
-      return { label: "Past Due", color: BILLING_COLORS.warning, bgColor: BILLING_COLORS.warningLight };
-    case "canceled":
-    case "canceling":
-      return {
-        label: status === "canceling" ? "Canceling" : "Canceled",
-        color: BILLING_COLORS.error,
-        bgColor: BILLING_COLORS.errorLight,
-      };
-    default:
-      return { label: status, color: BILLING_COLORS.muted, bgColor: NEUTRAL.divider };
-  }
-}
-
 function formatBucketLabel(bucket: AlumniBucket): string {
   return ALUMNI_BUCKET_LABELS[bucket] || bucket;
 }
@@ -84,13 +48,291 @@ export default function BillingScreen() {
   const navigation = useNavigation();
   const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
+  const { neutral, semantic } = useAppColorScheme();
   const {
     subscription,
     loading: subLoading,
     error: subError,
     refetch: refetchSubscription,
   } = useSubscription(orgId);
-  const styles = useMemo(() => createStyles(), []);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {
+      flex: 0 as const,
+    },
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      overflow: "hidden" as const,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      gap: SPACING.md,
+    },
+    loadingContainer: {
+      paddingVertical: 60,
+      alignItems: "center" as const,
+      gap: SPACING.md,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+    },
+    errorContainer: {
+      paddingVertical: 40,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    errorTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginTop: SPACING.sm,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    retryButton: {
+      marginTop: SPACING.md,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.surface,
+    },
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      ...SHADOWS.sm,
+    },
+    cardHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.md,
+    },
+    cardTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+    statusBadge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: 4,
+      paddingHorizontal: SPACING.sm,
+      borderRadius: RADIUS.full,
+      gap: 6,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontWeight: "600" as const,
+    },
+    tierRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xs,
+    },
+    tierLabelRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+    },
+    tierLabel: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    tierValue: {
+      ...TYPOGRAPHY.bodyMedium,
+      fontWeight: "600" as const,
+      color: n.foreground,
+    },
+    usageStats: {
+      flexDirection: "row" as const,
+      justifyContent: "space-around" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.md,
+    },
+    usageStat: {
+      alignItems: "center" as const,
+      flex: 1,
+    },
+    usageNumber: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+    },
+    usageLabel: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    usageDivider: {
+      width: 1,
+      height: 32,
+      backgroundColor: n.border,
+    },
+    progressContainer: {
+      marginTop: SPACING.sm,
+    },
+    progressBar: {
+      height: 8,
+      backgroundColor: n.divider,
+      borderRadius: RADIUS.full,
+      overflow: "hidden" as const,
+    },
+    progressFill: {
+      height: "100%" as any,
+      borderRadius: RADIUS.full,
+    },
+    progressText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      textAlign: "right" as const,
+      marginTop: 4,
+    },
+    warningBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: s.warningLight,
+      padding: SPACING.sm,
+      borderRadius: RADIUS.md,
+      marginTop: SPACING.md,
+      gap: SPACING.sm,
+    },
+    warningText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.warning,
+      flex: 1,
+    },
+    manageBillingButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.md,
+      gap: SPACING.sm,
+    },
+    manageBillingText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    hintText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      textAlign: "center" as const,
+      paddingHorizontal: SPACING.md,
+    },
+    noSubscription: {
+      paddingVertical: 60,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    noSubscriptionTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginTop: SPACING.sm,
+    },
+    noSubscriptionText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    setupButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.sm + 2,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.md,
+      marginTop: SPACING.md,
+      gap: SPACING.sm,
+    },
+    setupButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.surface,
+    },
+    accessDenied: {
+      flex: 1,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    accessDeniedTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginTop: SPACING.sm,
+    },
+    accessDeniedText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+  }));
 
   const [refreshing, setRefreshing] = React.useState(false);
 
@@ -115,6 +357,29 @@ export default function BillingScreen() {
     Linking.openURL(url);
   }, [orgSlug]);
 
+  const formatStatus = useCallback(
+    (status: string): { label: string; color: string; bgColor: string } => {
+      switch (status) {
+        case "active":
+          return { label: "Active", color: semantic.success, bgColor: semantic.successLight };
+        case "trialing":
+          return { label: "Trial", color: semantic.info, bgColor: semantic.infoLight };
+        case "past_due":
+          return { label: "Past Due", color: semantic.warning, bgColor: semantic.warningLight };
+        case "canceled":
+        case "canceling":
+          return {
+            label: status === "canceling" ? "Canceling" : "Canceled",
+            color: semantic.error,
+            bgColor: semantic.errorLight,
+          };
+        default:
+          return { label: status, color: neutral.muted, bgColor: neutral.divider };
+      }
+    },
+    [semantic, neutral]
+  );
+
   const statusInfo = subscription ? formatStatus(subscription.status) : null;
   const normalizedBucket = subscription ? normalizeBucket(subscription.bucket) : "none";
   const alumniLimit = ALUMNI_LIMITS[normalizedBucket];
@@ -123,13 +388,11 @@ export default function BillingScreen() {
       ? Math.min((subscription.alumniCount / alumniLimit) * 100, 100)
       : 0;
 
-  // Calculate current price (estimate based on bucket)
   const estimatedPrice =
     subscription && normalizedBucket !== "none"
       ? getTotalPrice("month" as SubscriptionInterval, normalizedBucket)
       : null;
 
-  // Admin-only access check
   if (!roleLoading && !isAdmin) {
     return (
       <View style={styles.container}>
@@ -158,7 +421,7 @@ export default function BillingScreen() {
 
         <View style={styles.contentSheet}>
           <View style={styles.accessDenied}>
-            <Shield size={48} color={BILLING_COLORS.muted} />
+            <Shield size={48} color={neutral.muted} />
             <Text style={styles.accessDeniedTitle}>Admin Access Required</Text>
             <Text style={styles.accessDeniedText}>
               Only organization admins can view billing information.
@@ -203,18 +466,18 @@ export default function BillingScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={BILLING_COLORS.primary}
+              tintColor={semantic.success}
             />
           }
         >
           {subLoading || roleLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={BILLING_COLORS.primary} />
+              <ActivityIndicator size="large" color={semantic.success} />
               <Text style={styles.loadingText}>Loading subscription...</Text>
             </View>
           ) : subError ? (
             <View style={styles.errorContainer}>
-              <AlertCircle size={40} color={BILLING_COLORS.error} />
+              <AlertCircle size={40} color={semantic.error} />
               <Text style={styles.errorTitle}>Unable to Load Billing</Text>
               <Text style={styles.errorText}>{subError}</Text>
               <Pressable
@@ -229,7 +492,7 @@ export default function BillingScreen() {
               {/* Subscription Status Card */}
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <CreditCard size={20} color={BILLING_COLORS.primary} />
+                  <CreditCard size={20} color={semantic.success} />
                   <Text style={styles.cardTitle}>Subscription</Text>
                   {statusInfo && (
                     <View style={[styles.statusBadge, { backgroundColor: statusInfo.bgColor }]}>
@@ -256,7 +519,7 @@ export default function BillingScreen() {
                 {subscription.currentPeriodEnd && (
                   <View style={styles.tierRow}>
                     <View style={styles.tierLabelRow}>
-                      <Calendar size={14} color={BILLING_COLORS.muted} />
+                      <Calendar size={14} color={neutral.muted} />
                       <Text style={styles.tierLabel}>Next Billing</Text>
                     </View>
                     <Text style={styles.tierValue}>
@@ -269,7 +532,7 @@ export default function BillingScreen() {
               {/* Alumni Usage Card */}
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Users size={20} color={BILLING_COLORS.primary} />
+                  <Users size={20} color={semantic.success} />
                   <Text style={styles.cardTitle}>Alumni Usage</Text>
                 </View>
 
@@ -304,10 +567,10 @@ export default function BillingScreen() {
                             width: `${usagePercent}%`,
                             backgroundColor:
                               usagePercent >= 90
-                                ? BILLING_COLORS.error
+                                ? semantic.error
                                 : usagePercent >= 75
-                                  ? BILLING_COLORS.warning
-                                  : BILLING_COLORS.primary,
+                                  ? semantic.warning
+                                  : semantic.success,
                           },
                         ]}
                       />
@@ -318,7 +581,7 @@ export default function BillingScreen() {
 
                 {usagePercent >= 90 && (
                   <View style={styles.warningBanner}>
-                    <TrendingUp size={16} color={BILLING_COLORS.warning} />
+                    <TrendingUp size={16} color={semantic.warning} />
                     <Text style={styles.warningText}>
                       You're approaching your alumni limit. Consider upgrading your plan.
                     </Text>
@@ -331,9 +594,9 @@ export default function BillingScreen() {
                 style={({ pressed }) => [styles.manageBillingButton, pressed && { opacity: 0.9 }]}
                 onPress={handleManageBillingInWeb}
               >
-                <CreditCard size={20} color={NEUTRAL.surface} />
+                <CreditCard size={20} color={neutral.surface} />
                 <Text style={styles.manageBillingText}>Manage Billing in Web</Text>
-                <ExternalLink size={18} color={NEUTRAL.surface} />
+                <ExternalLink size={18} color={neutral.surface} />
               </Pressable>
 
               <Text style={styles.hintText}>
@@ -343,7 +606,7 @@ export default function BillingScreen() {
             </>
           ) : (
             <View style={styles.noSubscription}>
-              <CreditCard size={48} color={BILLING_COLORS.muted} />
+              <CreditCard size={48} color={neutral.muted} />
               <Text style={styles.noSubscriptionTitle}>No Active Subscription</Text>
               <Text style={styles.noSubscriptionText}>
                 Set up billing from the web to access all features.
@@ -353,7 +616,7 @@ export default function BillingScreen() {
                 onPress={handleManageBillingInWeb}
               >
                 <Text style={styles.setupButtonText}>Set Up Billing</Text>
-                <ExternalLink size={16} color={NEUTRAL.surface} />
+                <ExternalLink size={16} color={neutral.surface} />
               </Pressable>
             </View>
           )}
@@ -362,282 +625,3 @@ export default function BillingScreen() {
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: BILLING_COLORS.background,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {
-      flex: 0,
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.sm,
-      gap: SPACING.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      overflow: "hidden",
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      ...TYPOGRAPHY.caption,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-      gap: SPACING.md,
-    },
-    loadingContainer: {
-      paddingVertical: 60,
-      alignItems: "center",
-      gap: SPACING.md,
-    },
-    loadingText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: BILLING_COLORS.muted,
-    },
-    errorContainer: {
-      paddingVertical: 40,
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    errorTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: BILLING_COLORS.foreground,
-      marginTop: SPACING.sm,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: BILLING_COLORS.muted,
-      textAlign: "center",
-    },
-    retryButton: {
-      marginTop: SPACING.md,
-      backgroundColor: BILLING_COLORS.primary,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.surface,
-    },
-    card: {
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: BILLING_COLORS.border,
-      ...SHADOWS.sm,
-    },
-    cardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-      marginBottom: SPACING.md,
-    },
-    cardTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: BILLING_COLORS.foreground,
-      flex: 1,
-    },
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: 4,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.full,
-      gap: 6,
-    },
-    statusDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
-    statusText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "600",
-    },
-    tierRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      paddingVertical: SPACING.xs,
-    },
-    tierLabelRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-    },
-    tierLabel: {
-      ...TYPOGRAPHY.bodySmall,
-      color: BILLING_COLORS.muted,
-    },
-    tierValue: {
-      ...TYPOGRAPHY.bodyMedium,
-      fontWeight: "600",
-      color: BILLING_COLORS.foreground,
-    },
-    usageStats: {
-      flexDirection: "row",
-      justifyContent: "space-around",
-      alignItems: "center",
-      paddingVertical: SPACING.md,
-    },
-    usageStat: {
-      alignItems: "center",
-      flex: 1,
-    },
-    usageNumber: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: BILLING_COLORS.foreground,
-    },
-    usageLabel: {
-      ...TYPOGRAPHY.caption,
-      color: BILLING_COLORS.muted,
-      marginTop: 2,
-    },
-    usageDivider: {
-      width: 1,
-      height: 32,
-      backgroundColor: BILLING_COLORS.border,
-    },
-    progressContainer: {
-      marginTop: SPACING.sm,
-    },
-    progressBar: {
-      height: 8,
-      backgroundColor: NEUTRAL.divider,
-      borderRadius: RADIUS.full,
-      overflow: "hidden",
-    },
-    progressFill: {
-      height: "100%",
-      borderRadius: RADIUS.full,
-    },
-    progressText: {
-      ...TYPOGRAPHY.caption,
-      color: BILLING_COLORS.muted,
-      textAlign: "right",
-      marginTop: 4,
-    },
-    warningBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: BILLING_COLORS.warningLight,
-      padding: SPACING.sm,
-      borderRadius: RADIUS.md,
-      marginTop: SPACING.md,
-      gap: SPACING.sm,
-    },
-    warningText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: BILLING_COLORS.warning,
-      flex: 1,
-    },
-    manageBillingButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: BILLING_COLORS.primary,
-      paddingVertical: SPACING.md,
-      borderRadius: RADIUS.md,
-      gap: SPACING.sm,
-    },
-    manageBillingText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.surface,
-    },
-    hintText: {
-      ...TYPOGRAPHY.caption,
-      color: BILLING_COLORS.muted,
-      textAlign: "center",
-      paddingHorizontal: SPACING.md,
-    },
-    noSubscription: {
-      paddingVertical: 60,
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    noSubscriptionTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: BILLING_COLORS.foreground,
-      marginTop: SPACING.sm,
-    },
-    noSubscriptionText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: BILLING_COLORS.muted,
-      textAlign: "center",
-    },
-    setupButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: BILLING_COLORS.primary,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-      marginTop: SPACING.md,
-      gap: SPACING.sm,
-    },
-    setupButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.surface,
-    },
-    accessDenied: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-      gap: SPACING.sm,
-    },
-    accessDeniedTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: BILLING_COLORS.foreground,
-      marginTop: SPACING.sm,
-    },
-    accessDeniedText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: BILLING_COLORS.muted,
-      textAlign: "center",
-    },
-  });

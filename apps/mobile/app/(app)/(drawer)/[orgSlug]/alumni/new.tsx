@@ -1,11 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -21,8 +20,10 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 // Validation schema for alumni form
 const alumniFormSchema = z.object({
@@ -81,7 +82,182 @@ export default function NewAlumniScreen() {
   const navigation = useNavigation();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isLoading: roleLoading } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    centered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      marginTop: SPACING.md,
+    },
+    accessDeniedTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    accessDeniedText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      textAlign: "center" as const,
+      marginBottom: SPACING.lg,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+      gap: SPACING.lg,
+    },
+    formHeader: {
+      gap: SPACING.xs,
+    },
+    formTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+    },
+    formSubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+    errorCard: {
+      backgroundColor: s.errorLight,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: s.error,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    row: {
+      flexDirection: "row" as const,
+      gap: SPACING.md,
+    },
+    halfWidth: {
+      flex: 1,
+    },
+    fieldGroup: {
+      gap: SPACING.xs,
+    },
+    fieldLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm + 2,
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      backgroundColor: n.surface,
+    },
+    inputError: {
+      borderColor: s.error,
+    },
+    textArea: {
+      minHeight: 100,
+    },
+    helperText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    fieldError: {
+      ...TYPOGRAPHY.caption,
+      color: s.error,
+    },
+    buttonRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.md,
+      marginTop: SPACING.md,
+    },
+    primaryButton: {
+      flex: 1,
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    },
+    secondaryButton: {
+      flex: 1,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+    },
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+  }));
 
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
   const [isSaving, setIsSaving] = useState(false);
@@ -214,7 +390,7 @@ export default function NewAlumniScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={[styles.contentSheet, styles.centered]}>
-          <ActivityIndicator size="large" color={SEMANTIC.success} />
+          <ActivityIndicator size="large" color={semantic.success} />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </View>
@@ -309,7 +485,7 @@ export default function NewAlumniScreen() {
                 value={formData.first_name}
                 onChangeText={(v) => updateField("first_name", v)}
                 placeholder="John"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={[styles.input, fieldErrors.first_name && styles.inputError]}
               />
               {fieldErrors.first_name && (
@@ -322,7 +498,7 @@ export default function NewAlumniScreen() {
                 value={formData.last_name}
                 onChangeText={(v) => updateField("last_name", v)}
                 placeholder="Doe"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={[styles.input, fieldErrors.last_name && styles.inputError]}
               />
               {fieldErrors.last_name && (
@@ -338,7 +514,7 @@ export default function NewAlumniScreen() {
               value={formData.email}
               onChangeText={(v) => updateField("email", v)}
               placeholder="alumni@example.com"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               keyboardType="email-address"
               autoCapitalize="none"
               style={[styles.input, fieldErrors.email && styles.inputError]}
@@ -356,7 +532,7 @@ export default function NewAlumniScreen() {
                 value={formData.graduation_year}
                 onChangeText={(v) => updateField("graduation_year", v)}
                 placeholder="2020"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 keyboardType="number-pad"
                 maxLength={4}
                 style={styles.input}
@@ -368,7 +544,7 @@ export default function NewAlumniScreen() {
                 value={formData.major}
                 onChangeText={(v) => updateField("major", v)}
                 placeholder="e.g., Finance"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={styles.input}
               />
             </View>
@@ -382,7 +558,7 @@ export default function NewAlumniScreen() {
                 value={formData.position_title}
                 onChangeText={(v) => updateField("position_title", v)}
                 placeholder="e.g., Software Engineer"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={styles.input}
               />
             </View>
@@ -392,7 +568,7 @@ export default function NewAlumniScreen() {
                 value={formData.current_company}
                 onChangeText={(v) => updateField("current_company", v)}
                 placeholder="e.g., Google"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={styles.input}
               />
             </View>
@@ -406,7 +582,7 @@ export default function NewAlumniScreen() {
                 value={formData.industry}
                 onChangeText={(v) => updateField("industry", v)}
                 placeholder="e.g., Technology"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={styles.input}
               />
             </View>
@@ -416,7 +592,7 @@ export default function NewAlumniScreen() {
                 value={formData.current_city}
                 onChangeText={(v) => updateField("current_city", v)}
                 placeholder="e.g., San Francisco"
-                placeholderTextColor={NEUTRAL.placeholder}
+                placeholderTextColor={neutral.placeholder}
                 style={styles.input}
               />
             </View>
@@ -429,7 +605,7 @@ export default function NewAlumniScreen() {
               value={formData.phone_number}
               onChangeText={(v) => updateField("phone_number", v)}
               placeholder="+1 (555) 123-4567"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               keyboardType="phone-pad"
               style={styles.input}
             />
@@ -442,7 +618,7 @@ export default function NewAlumniScreen() {
               value={formData.photo_url}
               onChangeText={(v) => updateField("photo_url", v)}
               placeholder="https://example.com/photo.jpg"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               autoCapitalize="none"
               keyboardType="url"
               style={[styles.input, fieldErrors.photo_url && styles.inputError]}
@@ -460,7 +636,7 @@ export default function NewAlumniScreen() {
               value={formData.linkedin_url}
               onChangeText={(v) => updateField("linkedin_url", v)}
               placeholder="https://linkedin.com/in/username"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               autoCapitalize="none"
               keyboardType="url"
               style={[styles.input, fieldErrors.linkedin_url && styles.inputError]}
@@ -478,7 +654,7 @@ export default function NewAlumniScreen() {
               value={formData.job_title}
               onChangeText={(v) => updateField("job_title", v)}
               placeholder="e.g., Software Engineer at Google"
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               style={styles.input}
             />
             <Text style={styles.helperText}>
@@ -493,7 +669,7 @@ export default function NewAlumniScreen() {
               value={formData.notes}
               onChangeText={(v) => updateField("notes", v)}
               placeholder="Any additional notes about this alumni..."
-              placeholderTextColor={NEUTRAL.placeholder}
+              placeholderTextColor={neutral.placeholder}
               multiline
               textAlignVertical="top"
               style={[styles.input, styles.textArea]}
@@ -528,182 +704,4 @@ export default function NewAlumniScreen() {
       </KeyboardAvoidingView>
     </View>
   );
-}
-
-function createStyles() {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    centered: {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    loadingText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-      marginTop: SPACING.md,
-    },
-    accessDeniedTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.sm,
-    },
-    accessDeniedText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-      textAlign: "center",
-      marginBottom: SPACING.lg,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xxl,
-      gap: SPACING.lg,
-    },
-    formHeader: {
-      gap: SPACING.xs,
-    },
-    formTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-    },
-    formSubtitle: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.secondary,
-    },
-    errorCard: {
-      backgroundColor: SEMANTIC.errorLight,
-      borderRadius: RADIUS.md,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: SEMANTIC.error,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: SEMANTIC.error,
-    },
-    row: {
-      flexDirection: "row",
-      gap: SPACING.md,
-    },
-    halfWidth: {
-      flex: 1,
-    },
-    fieldGroup: {
-      gap: SPACING.xs,
-    },
-    fieldLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.secondary,
-    },
-    input: {
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      borderRadius: RADIUS.md,
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm + 2,
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.foreground,
-      backgroundColor: NEUTRAL.surface,
-    },
-    inputError: {
-      borderColor: SEMANTIC.error,
-    },
-    textArea: {
-      minHeight: 100,
-    },
-    helperText: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-    },
-    fieldError: {
-      ...TYPOGRAPHY.caption,
-      color: SEMANTIC.error,
-    },
-    buttonRow: {
-      flexDirection: "row",
-      gap: SPACING.md,
-      marginTop: SPACING.md,
-    },
-    primaryButton: {
-      flex: 1,
-      backgroundColor: SEMANTIC.success,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-    },
-    secondaryButton: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-      borderRadius: RADIUS.md,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-      justifyContent: "center",
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-    },
-    secondaryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: NEUTRAL.foreground,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-  });
 }

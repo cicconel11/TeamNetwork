@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   ActivityIndicator,
-  StyleSheet,
   Pressable,
   RefreshControl,
 } from "react-native";
@@ -14,8 +13,10 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgTheme } from "@/hooks/useOrgTheme";
 import type { ThemeColors } from "@/lib/theme";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, RSVP_COLORS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, RSVP_COLORS, SHADOWS } from "@/lib/design-tokens";
+import type { NeutralColors, SemanticColors } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 type RSVPStatus = "attending" | "not_attending" | "maybe";
 type FilterStatus = "all" | RSVPStatus;
@@ -65,7 +66,8 @@ export default function RSVPsScreen() {
   const { orgId } = useOrg();
   const router = useRouter();
   const { colors } = useOrgTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useMemo(() => createStyles(colors, neutral, semantic), [colors, neutral, semantic]);
 
   const [eventInfo, setEventInfo] = useState<EventInfo | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -141,7 +143,7 @@ export default function RSVPsScreen() {
       <View style={styles.rsvpCard}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatar}>
-            <User size={20} color={NEUTRAL.muted} />
+            <User size={20} color={neutral.muted} />
           </View>
         </View>
         <View style={styles.rsvpInfo}>
@@ -260,172 +262,171 @@ export default function RSVPsScreen() {
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: NEUTRAL.background,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.md,
-      paddingBottom: SPACING.sm,
-    },
-    backButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    backButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: colors.primary,
-    },
-    eventTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      paddingHorizontal: SPACING.md,
-      marginBottom: SPACING.md,
-    },
-    filterContainer: {
-      flexDirection: "row",
-      paddingHorizontal: SPACING.md,
-      marginBottom: SPACING.md,
-      gap: SPACING.sm,
-    },
-    filterTab: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: SPACING.xs,
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.sm,
-      borderRadius: RADIUS.md,
-      backgroundColor: NEUTRAL.surface,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-    },
-    filterTabSelected: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    filterText: {
-      ...TYPOGRAPHY.labelSmall,
-      color: NEUTRAL.secondary,
-    },
-    filterTextSelected: {
-      color: colors.primaryForeground || "#ffffff",
-    },
-    countBadge: {
-      minWidth: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: NEUTRAL.border,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 6,
-    },
-    countBadgeSelected: {
-      backgroundColor: "rgba(255, 255, 255, 0.3)",
-    },
-    countText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontSize: 11,
-      color: NEUTRAL.secondary,
-    },
-    countTextSelected: {
-      color: colors.primaryForeground || "#ffffff",
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingTop: 0,
-      gap: SPACING.sm,
-      flexGrow: 1,
-    },
-    rsvpCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      ...SHADOWS.sm,
-    },
-    avatarContainer: {
-      marginRight: SPACING.sm,
-    },
-    avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: NEUTRAL.divider,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    rsvpInfo: {
-      flex: 1,
-      marginRight: SPACING.sm,
-    },
-    rsvpName: {
-      ...TYPOGRAPHY.titleSmall,
-      color: NEUTRAL.foreground,
-    },
-    rsvpEmail: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginTop: 2,
-    },
-    statusBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.md,
-    },
-    statusText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "600",
-    },
-    emptyState: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: SPACING.xl,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.xs,
-    },
-    emptySubtitle: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    retryButton: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: SPACING.lg,
-      paddingVertical: SPACING.sm,
-      borderRadius: RADIUS.md,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: colors.primaryForeground || "#ffffff",
-    },
-  });
+const createStyles = (colors: ThemeColors, neutral: NeutralColors, semantic: SemanticColors) => ({
+  container: {
+    flex: 1,
+    backgroundColor: neutral.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+    padding: SPACING.lg,
+  },
+  header: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  backButton: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: SPACING.sm,
+  },
+  backButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: colors.primary,
+  },
+  eventTitle: {
+    ...TYPOGRAPHY.headlineMedium,
+    color: neutral.foreground,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  filterContainer: {
+    flexDirection: "row" as const,
+    paddingHorizontal: SPACING.md,
+    marginBottom: SPACING.md,
+    gap: SPACING.sm,
+  },
+  filterTab: {
+    flex: 1,
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: neutral.surface,
+    borderWidth: 1,
+    borderColor: neutral.border,
+  },
+  filterTabSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterText: {
+    ...TYPOGRAPHY.labelSmall,
+    color: neutral.secondary,
+  },
+  filterTextSelected: {
+    color: colors.primaryForeground || "#ffffff",
+  },
+  countBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: neutral.border,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    paddingHorizontal: 6,
+  },
+  countBadgeSelected: {
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+  },
+  countText: {
+    ...TYPOGRAPHY.labelSmall,
+    fontSize: 11,
+    color: neutral.secondary,
+  },
+  countTextSelected: {
+    color: colors.primaryForeground || "#ffffff",
+  },
+  listContent: {
+    padding: SPACING.md,
+    paddingTop: 0,
+    gap: SPACING.sm,
+    flexGrow: 1,
+  },
+  rsvpCard: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    backgroundColor: neutral.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    borderWidth: 1,
+    borderColor: neutral.border,
+    ...SHADOWS.sm,
+  },
+  avatarContainer: {
+    marginRight: SPACING.sm,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: neutral.divider,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+  },
+  rsvpInfo: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  rsvpName: {
+    ...TYPOGRAPHY.titleSmall,
+    color: neutral.foreground,
+  },
+  rsvpEmail: {
+    ...TYPOGRAPHY.caption,
+    color: neutral.muted,
+    marginTop: 2,
+  },
+  statusBadge: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.md,
+  },
+  statusText: {
+    ...TYPOGRAPHY.labelSmall,
+    fontWeight: "600" as const,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: "center" as const,
+    justifyContent: "center" as const,
+    padding: SPACING.xl,
+  },
+  emptyTitle: {
+    ...TYPOGRAPHY.titleMedium,
+    color: neutral.foreground,
+    marginBottom: SPACING.xs,
+  },
+  emptySubtitle: {
+    ...TYPOGRAPHY.bodySmall,
+    color: neutral.muted,
+    textAlign: "center" as const,
+  },
+  errorText: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: semantic.error,
+    textAlign: "center" as const,
+    marginBottom: SPACING.md,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+  },
+  retryButtonText: {
+    ...TYPOGRAPHY.labelLarge,
+    color: colors.primaryForeground || "#ffffff",
+  },
+});

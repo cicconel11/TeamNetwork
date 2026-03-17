@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   RefreshControl,
-  StyleSheet,
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
@@ -26,8 +25,10 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { SkeletonList } from "@/components/ui/Skeleton";
 
 // Relative time formatter
@@ -57,7 +58,191 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginLeft: -SPACING.xs,
+    },
+    orgLogoButton: {
+      width: 32,
+      height: 32,
+    },
+    orgLogo: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    },
+    orgAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    notificationCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      marginBottom: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    notificationCardUnread: {
+      backgroundColor: s.infoLight,
+      borderColor: s.info,
+    },
+    notificationCardPressed: {
+      opacity: 0.7,
+    },
+    notificationContent: {
+      flexDirection: "row" as const,
+      padding: SPACING.md,
+    },
+    unreadIndicatorContainer: {
+      width: 12,
+      alignItems: "center" as const,
+      paddingTop: 6,
+    },
+    unreadIndicator: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: s.info,
+    },
+    notificationMain: {
+      flex: 1,
+      paddingRight: SPACING.sm,
+    },
+    notificationTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    notificationBody: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      marginBottom: SPACING.sm,
+    },
+    notificationMeta: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+    },
+    notificationTime: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    metaDot: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginHorizontal: SPACING.xs,
+    },
+    notificationChannel: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      textTransform: "capitalize" as const,
+    },
+    readToggle: {
+      width: 32,
+      height: 32,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      paddingVertical: 64,
+    },
+    emptyIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: n.background,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginBottom: SPACING.md,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+      paddingHorizontal: SPACING.xl,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+      textAlign: "center" as const,
+      marginBottom: SPACING.md,
+    },
+    retryButton: {
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      backgroundColor: s.success,
+      borderRadius: RADIUS.md,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.surface,
+    },
+  }));
 
   const {
     notifications,
@@ -102,7 +287,7 @@ export default function NotificationsScreen() {
       items.push({
         id: "mark-all-read",
         label: "Mark all as read",
-        icon: <CheckCheck size={20} color={NEUTRAL.foreground} />,
+        icon: <CheckCheck size={20} color={neutral.foreground} />,
         onPress: () => markAllAsRead(),
       });
     }
@@ -111,7 +296,7 @@ export default function NotificationsScreen() {
       items.push({
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={NEUTRAL.foreground} />,
+        icon: <ExternalLink size={20} color={neutral.foreground} />,
         onPress: () => {
           const webUrl = `https://www.myteamnetwork.com/${orgSlug}/notifications`;
           Linking.openURL(webUrl);
@@ -215,9 +400,9 @@ export default function NotificationsScreen() {
             accessibilityLabel={item.isRead ? "Mark as unread" : "Mark as read"}
           >
             {item.isRead ? (
-              <BellOff size={18} color={NEUTRAL.muted} />
+              <BellOff size={18} color={neutral.muted} />
             ) : (
-              <Circle size={18} color={SEMANTIC.info} fill={SEMANTIC.infoLight} />
+              <Circle size={18} color={semantic.info} fill={semantic.infoLight} />
             )}
           </Pressable>
         </View>
@@ -348,13 +533,13 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={SEMANTIC.success}
+              tintColor={semantic.success}
             />
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={styles.emptyIconContainer}>
-                <Bell size={48} color={NEUTRAL.muted} />
+                <Bell size={48} color={neutral.muted} />
               </View>
               <Text style={styles.emptyTitle}>No Notifications</Text>
               <Text style={styles.emptyText}>
@@ -372,195 +557,3 @@ export default function NotificationsScreen() {
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    // Gradient header styles
-    headerGradient: {
-      paddingBottom: SPACING.md,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
-      marginLeft: -SPACING.xs,
-    },
-    orgLogoButton: {
-      width: 32,
-      height: 32,
-    },
-    orgLogo: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-    },
-    orgAvatar: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      ...TYPOGRAPHY.titleSmall,
-      fontWeight: "700",
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      ...TYPOGRAPHY.caption,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    // Content sheet
-    contentSheet: {
-      flex: 1,
-      backgroundColor: NEUTRAL.surface,
-    },
-    listContent: {
-      padding: SPACING.md,
-      paddingBottom: 40,
-      flexGrow: 1,
-    },
-    // Notification card
-    notificationCard: {
-      backgroundColor: NEUTRAL.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: NEUTRAL.border,
-      marginBottom: SPACING.sm,
-      ...SHADOWS.sm,
-    },
-    notificationCardUnread: {
-      backgroundColor: SEMANTIC.infoLight,
-      borderColor: SEMANTIC.info,
-    },
-    notificationCardPressed: {
-      opacity: 0.7,
-    },
-    notificationContent: {
-      flexDirection: "row",
-      padding: SPACING.md,
-    },
-    unreadIndicatorContainer: {
-      width: 12,
-      alignItems: "center",
-      paddingTop: 6,
-    },
-    unreadIndicator: {
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: SEMANTIC.info,
-    },
-    notificationMain: {
-      flex: 1,
-      paddingRight: SPACING.sm,
-    },
-    notificationTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.xs,
-    },
-    notificationBody: {
-      ...TYPOGRAPHY.bodySmall,
-      color: NEUTRAL.secondary,
-      marginBottom: SPACING.sm,
-    },
-    notificationMeta: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    notificationTime: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-    },
-    metaDot: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      marginHorizontal: SPACING.xs,
-    },
-    notificationChannel: {
-      ...TYPOGRAPHY.caption,
-      color: NEUTRAL.muted,
-      textTransform: "capitalize",
-    },
-    readToggle: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    // Empty state
-    emptyContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 64,
-    },
-    emptyIconContainer: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: NEUTRAL.background,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: SPACING.md,
-    },
-    emptyTitle: {
-      ...TYPOGRAPHY.headlineMedium,
-      color: NEUTRAL.foreground,
-      marginBottom: SPACING.sm,
-    },
-    emptyText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: NEUTRAL.muted,
-      textAlign: "center",
-      paddingHorizontal: SPACING.xl,
-    },
-    // Loading/Error states
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: SEMANTIC.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    retryButton: {
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.lg,
-      backgroundColor: SEMANTIC.success,
-      borderRadius: RADIUS.md,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: NEUTRAL.surface,
-    },
-  });
