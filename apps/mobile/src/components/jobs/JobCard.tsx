@@ -11,7 +11,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Briefcase, MapPin, Building2 } from "lucide-react-native";
-import { SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
+import { RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { JobPostingWithPoster } from "@/types/jobs";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -25,13 +25,13 @@ interface JobCardProps {
   style?: ViewStyle;
 }
 
-// Location type badge config — uses static SEMANTIC since these are
-// always the same semantic colors regardless of theme
-const LOCATION_TYPE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  remote: { label: "Remote", bg: SEMANTIC.infoLight, color: SEMANTIC.infoDark },
-  onsite: { label: "On-site", bg: SEMANTIC.warningLight, color: SEMANTIC.warningDark },
-  hybrid: { label: "Hybrid", bg: SEMANTIC.successLight, color: SEMANTIC.successDark },
-};
+function buildLocationTypeConfig(semantic: { infoLight: string; infoDark: string; warningLight: string; warningDark: string; successLight: string; successDark: string }) {
+  return {
+    remote: { label: "Remote", bg: semantic.infoLight, color: semantic.infoDark },
+    onsite: { label: "On-site", bg: semantic.warningLight, color: semantic.warningDark },
+    hybrid: { label: "Hybrid", bg: semantic.successLight, color: semantic.successDark },
+  } as Record<string, { label: string; bg: string; color: string }>;
+}
 
 // Experience level badge config
 const EXPERIENCE_LEVEL_CONFIG: Record<string, string> = {
@@ -61,7 +61,8 @@ export const JobCard = React.memo(function JobCard({
   onPress,
   style,
 }: JobCardProps) {
-  const { neutral } = useAppColorScheme();
+  const { neutral, semantic } = useAppColorScheme();
+  const locationTypeConfig = buildLocationTypeConfig(semantic);
   const styles = useThemedStyles((n) => ({
     container: {
       backgroundColor: n.surface,
@@ -162,7 +163,7 @@ export const JobCard = React.memo(function JobCard({
   }, [scale]);
 
   const locationConfig = job.location_type
-    ? LOCATION_TYPE_CONFIG[job.location_type]
+    ? locationTypeConfig[job.location_type]
     : null;
 
   const experienceLabel = job.experience_level
