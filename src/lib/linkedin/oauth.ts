@@ -103,7 +103,7 @@ export function getLinkedInAuthUrl(state: string): string {
     client_id: getLinkedInClientId(),
     redirect_uri: getLinkedInRedirectUri(),
     state,
-    scope: "openid profile email",
+    scope: "openid profile email offline_access",
   });
   return `${LINKEDIN_AUTH_URL}?${params.toString()}`;
 }
