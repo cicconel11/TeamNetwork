@@ -77,7 +77,7 @@ export default function NavigationSettingsScreen() {
   const { user } = useAuth();
   const styles = useMemo(() => createStyles(), []);
 
-  const { navConfig, loading, saving, error, saveNavConfig, refetch } = useNavConfig(orgSlug);
+  const { navConfig, loading, saving, error, saveNavConfig, refetch } = useNavConfig(orgId);
 
   // Local state
   const [isAdmin, setIsAdmin] = useState(false);

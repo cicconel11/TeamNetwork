@@ -5,6 +5,12 @@ import { setUserProperties, captureException } from "@/lib/analytics";
 import { normalizeRole, type OrgRole } from "@teammeet/core";
 
 export type AnalyticsRole = "admin" | "member" | "alumni" | "unknown";
+export type OrgAccessStatus =
+  | "loading"
+  | "ready"
+  | "not_found"
+  | "unauthorized"
+  | "error";
 // Normalized roles after applying normalizeRole()
 type NormalizedRole = OrgRole | null;
 
@@ -22,6 +28,7 @@ interface OrgContextValue {
   orgPrimaryColor: string | null;
   orgSecondaryColor: string | null;
   userRole: NormalizedRole;
+  status: OrgAccessStatus;
   isLoading: boolean;
   error: string | null;
 }
@@ -36,6 +43,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [orgPrimaryColor, setOrgPrimaryColor] = useState<string | null>(null);
   const [orgSecondaryColor, setOrgSecondaryColor] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<NormalizedRole>(null);
+  const [status, setStatus] = useState<OrgAccessStatus>("loading");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +52,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
     async function fetchOrgData() {
       if (!orgSlug) {
+        setStatus("ready");
         setIsLoading(false);
         return;
       }
@@ -61,33 +70,51 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
         if (!isMounted) return;
 
+        if (orgResult.error) {
+          const nextStatus = orgResult.error.code === "PGRST116" ? "not_found" : "error";
+          setStatus(nextStatus);
+          setError(nextStatus === "not_found" ? null : orgResult.error.message);
+          return;
+        }
+
+        const currentUser = userResult.data?.user;
+        if (!currentUser) {
+          setStatus("unauthorized");
+          return;
+        }
+
         const fetchedOrgId = orgResult.data?.id ?? null;
-        const fetchedOrgName = orgResult.data?.name ?? null;
-        const fetchedOrgLogoUrl = orgResult.data?.logo_url ?? null;
-        const fetchedPrimaryColor = orgResult.data?.primary_color ?? null;
-        const fetchedSecondaryColor = orgResult.data?.secondary_color ?? null;
+        if (!fetchedOrgId) {
+          setStatus("not_found");
+          return;
+        }
 
-        setOrgId(fetchedOrgId);
-        setOrgName(fetchedOrgName);
-        setOrgLogoUrl(fetchedOrgLogoUrl);
-        setOrgPrimaryColor(fetchedPrimaryColor);
-        setOrgSecondaryColor(fetchedSecondaryColor);
-
-        // Fetch user's role if we have both org and user
-        if (fetchedOrgId && userResult.data?.user?.id) {
-          const { data: roleData } = await supabase
+        const { data: roleData, error: roleError } = await supabase
             .from("user_organization_roles")
             .select("role")
             .eq("organization_id", fetchedOrgId)
-            .eq("user_id", userResult.data.user.id)
+            .eq("user_id", currentUser.id)
             .eq("status", "active")
-            .single();
+            .maybeSingle();
 
-          if (isMounted && roleData?.role) {
-            const normalized = normalizeRole(roleData.role);
-            setUserRole(normalized);
-          }
+        if (!isMounted) return;
+
+        if (roleError) {
+          throw roleError;
         }
+
+        if (!roleData?.role) {
+          setStatus("unauthorized");
+          return;
+        }
+
+        setOrgId(fetchedOrgId);
+        setOrgName(orgResult.data.name ?? null);
+        setOrgLogoUrl(orgResult.data.logo_url ?? null);
+        setOrgPrimaryColor(orgResult.data.primary_color ?? null);
+        setOrgSecondaryColor(orgResult.data.secondary_color ?? null);
+        setUserRole(normalizeRole(roleData.role));
+        setStatus("ready");
       } catch (err) {
         if (isMounted) {
           const message = err instanceof Error ? err.message : String(err);
@@ -95,6 +122,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
             err instanceof Error ? err : new Error(message),
             { context: "OrgContext.fetchOrgData", orgSlug }
           );
+          setStatus("error");
           setError(message);
         }
       } finally {
@@ -107,6 +135,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     setError(null);
     setUserRole(null);
+    setStatus(orgSlug ? "loading" : "ready");
     setOrgId(null);
     setOrgName(null);
     setOrgLogoUrl(null);
@@ -121,14 +150,14 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   // Set analytics user properties when org context changes
   useEffect(() => {
-    if (isLoading || !orgSlug || !orgId) return;
+    if (isLoading || status !== "ready" || !orgSlug || !orgId) return;
 
     setUserProperties({
       currentOrgSlug: orgSlug,
       currentOrgId: orgId,
       role: toAnalyticsRole(userRole),
     });
-  }, [orgSlug, orgId, userRole, isLoading]);
+  }, [orgSlug, orgId, userRole, isLoading, status]);
 
   return (
     <OrgContext.Provider
@@ -140,6 +169,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         orgPrimaryColor,
         orgSecondaryColor,
         userRole,
+        status,
         isLoading,
         error,
       }}

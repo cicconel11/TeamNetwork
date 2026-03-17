@@ -1,5 +1,28 @@
-import { Stack } from "expo-router";
+import { useEffect } from "react";
+import { Stack, useRouter } from "expo-router";
+import LoadingScreen from "@/components/LoadingScreen";
+import { useOrg } from "@/contexts/OrgContext";
+
 function OrgLayoutInner() {
+  const router = useRouter();
+  const { orgSlug, status, isLoading } = useOrg();
+
+  useEffect(() => {
+    if (!orgSlug || isLoading || status === "loading" || status === "ready") {
+      return;
+    }
+
+    router.replace("/(app)");
+  }, [orgSlug, isLoading, status, router]);
+
+  if (!orgSlug || isLoading || status === "loading") {
+    return <LoadingScreen />;
+  }
+
+  if (status !== "ready") {
+    return <LoadingScreen />;
+  }
+
   return (
     <Stack>
       <Stack.Screen

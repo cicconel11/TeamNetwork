@@ -39,7 +39,7 @@ const fontWeight = {
 export function SettingsDangerSection({ orgId, orgSlug, isAdmin, colors }: Props) {
   const router = useRouter();
   const { subscription, refetch: refetchSubscription } = useSubscription(orgId);
-  const { org } = useOrgSettings(orgSlug);
+  const { org } = useOrgSettings(orgId);
 
   const [expanded, setExpanded] = useState(false);
   const [cancelling, setCancelling] = useState(false);

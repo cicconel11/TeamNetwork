@@ -22,7 +22,6 @@ import {
   Home,
   LogOut,
   MessageCircle,
-  Newspaper,
   Receipt,
   Settings,
   SlidersHorizontal,
@@ -32,7 +31,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { signOut } from "@/lib/supabase";
 import { getWebAppUrl } from "@/lib/web-api";
-import { isFeatureEnabled } from "@/lib/featureFlags";
 import { spacing, fontSize, fontWeight } from "@/lib/theme";
 import { NEUTRAL, SEMANTIC } from "@/lib/design-tokens";
 
@@ -122,13 +120,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         href: `/(app)/${slug}/jobs`,
       },
     ];
-    if (isFeatureEnabled("socialFeedEnabled")) {
-      communityItems.push({
-        label: "Feed",
-        icon: Newspaper,
-        href: `/(app)/${slug}/feed`,
-      });
-    }
 
     const sections: NavSection[] = [
       { id: "main", title: null, items: mainItems },
@@ -170,7 +161,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     if (item.href === `/(app)/${slug}`) {
       router.push(item.href);
     } else if (item.href === "/(app)") {
-      router.navigate(item.href);
+      router.navigate({
+        pathname: item.href as any,
+        params: slug ? { currentSlug: slug } : undefined,
+      } as any);
     } else {
       router.replace(item.href);
     }

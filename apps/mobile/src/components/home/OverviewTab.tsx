@@ -45,7 +45,7 @@ export function OverviewTab({
       {
         icon: <UserPlus size={18} color={NEUTRAL.secondary} />,
         label: "Invite",
-        path: `/(app)/${orgSlug}/members/invite`,
+        path: `/(app)/${orgSlug}/members/new`,
         onPress: undefined as (() => void) | undefined,
       },
       {

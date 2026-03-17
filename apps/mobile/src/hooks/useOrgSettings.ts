@@ -25,14 +25,14 @@ interface UseOrgSettingsReturn {
   refetch: () => Promise<void>;
 }
 
-export function useOrgSettings(orgSlug: string | null): UseOrgSettingsReturn {
+export function useOrgSettings(orgId: string | null): UseOrgSettingsReturn {
   const isMountedRef = useRef(true);
   const [org, setOrg] = useState<OrgSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchOrg = useCallback(async () => {
-    if (!orgSlug) {
+    if (!orgId) {
       setOrg(null);
       setLoading(false);
       return;
@@ -45,7 +45,7 @@ export function useOrgSettings(orgSlug: string | null): UseOrgSettingsReturn {
       const { data, error: fetchError } = await supabase
         .from("organizations")
         .select("id, name, slug, logo_url, primary_color, secondary_color")
-        .eq("slug", orgSlug)
+        .eq("id", orgId)
         .single();
 
       if (fetchError) throw fetchError;
@@ -65,7 +65,7 @@ export function useOrgSettings(orgSlug: string | null): UseOrgSettingsReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   // Initial fetch
   useEffect(() => {

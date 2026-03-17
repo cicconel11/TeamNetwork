@@ -24,8 +24,8 @@ const colors = {
 
 export default function OrganizationsScreen() {
   const router = useRouter();
-  const params = useGlobalSearchParams<{ orgSlug?: string }>();
-  const currentSlug = params.orgSlug;
+  const params = useGlobalSearchParams<{ orgSlug?: string; currentSlug?: string }>();
+  const currentSlug = params.currentSlug ?? params.orgSlug;
   const { organizations, loading, error, refetch } = useOrganizations();
   const styles = useMemo(() => createStyles(), []);
   const [refreshing, setRefreshing] = useState(false);

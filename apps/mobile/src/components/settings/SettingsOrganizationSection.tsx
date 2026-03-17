@@ -13,7 +13,7 @@ import { useOrgSettings } from "@/hooks/useOrgSettings";
 import { type SettingsColors } from "./settingsColors";
 
 interface Props {
-  orgSlug: string;
+  orgId: string | null;
   isAdmin: boolean;
   colors: SettingsColors;
 }
@@ -27,8 +27,8 @@ const fontWeight = {
   bold: "700" as const,
 };
 
-export function SettingsOrganizationSection({ orgSlug, isAdmin, colors }: Props) {
-  const { org, loading: orgLoading, updateName } = useOrgSettings(orgSlug);
+export function SettingsOrganizationSection({ orgId, isAdmin, colors }: Props) {
+  const { org, loading: orgLoading, updateName } = useOrgSettings(orgId);
 
   const [expanded, setExpanded] = useState(true);
   const [editedName, setEditedName] = useState("");

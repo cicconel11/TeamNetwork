@@ -177,7 +177,10 @@ export default function MenuScreen() {
   };
 
   const handleSwitchOrg = () => {
-    router.push("/(app)");
+    router.replace({
+      pathname: "/(app)",
+      params: { currentSlug: orgSlug },
+    });
   };
 
   const renderMenuItem = (item: MenuItem) => (

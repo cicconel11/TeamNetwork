@@ -24,18 +24,16 @@ interface UseNavConfigReturn {
   refetch: () => void;
 }
 
-export function useNavConfig(orgSlug: string | null): UseNavConfigReturn {
+export function useNavConfig(orgId: string | null): UseNavConfigReturn {
   const isMountedRef = useRef(true);
-  const [orgId, setOrgId] = useState<string | null>(null);
   const [navConfig, setNavConfig] = useState<NavConfig>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchNavConfig = useCallback(async () => {
-    if (!orgSlug) {
+    if (!orgId) {
       setNavConfig({});
-      setOrgId(null);
       setLoading(false);
       return;
     }
@@ -46,14 +44,13 @@ export function useNavConfig(orgSlug: string | null): UseNavConfigReturn {
 
       const { data, error: fetchError } = await supabase
         .from("organizations")
-        .select("id, nav_config")
-        .eq("slug", orgSlug)
+        .select("nav_config")
+        .eq("id", orgId)
         .single();
 
       if (fetchError) throw fetchError;
 
       if (isMountedRef.current) {
-        setOrgId(data.id);
         // Parse nav_config - it could be null or an object
         const rawConfig = data.nav_config;
         let config: NavConfig = {};
@@ -74,7 +71,7 @@ export function useNavConfig(orgSlug: string | null): UseNavConfigReturn {
         setLoading(false);
       }
     }
-  }, [orgSlug]);
+  }, [orgId]);
 
   // Initial fetch
   useEffect(() => {

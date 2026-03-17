@@ -136,7 +136,7 @@ export default function SettingsScreen() {
           {!roleLoading && orgId && (
             <>
               <SettingsOrganizationSection
-                orgSlug={orgSlug}
+                orgId={orgId}
                 isAdmin={isAdmin}
                 colors={SETTINGS_COLORS}
               />
