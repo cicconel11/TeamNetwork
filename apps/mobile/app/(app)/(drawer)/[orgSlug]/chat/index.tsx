@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   Pressable,
-  ActivityIndicator,
   RefreshControl,
   StyleSheet,
 } from "react-native";
@@ -17,6 +16,7 @@ import { MessageCircle } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL } from "@/lib/design-tokens";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
@@ -279,8 +279,8 @@ export default function ChatGroupsScreen() {
 
         {/* Content Sheet */}
         <View style={styles.contentSheet}>
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={CHAT_COLORS.accent} />
+          <View style={styles.skeletonContainer}>
+            <SkeletonList type="chat" count={6} />
           </View>
         </View>
       </View>
@@ -458,6 +458,9 @@ const createStyles = () =>
       alignItems: "center",
       padding: spacing.lg,
       gap: spacing.sm,
+    },
+    skeletonContainer: {
+      padding: spacing.md,
     },
     card: {
       backgroundColor: CHAT_COLORS.card,

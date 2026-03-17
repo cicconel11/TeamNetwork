@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Pressable,
   TextInput,
-  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,6 +17,7 @@ import { Briefcase, Plus, Search } from "lucide-react-native";
 import { useOrg } from "@/contexts/OrgContext";
 import { useJobs } from "@/hooks/useJobs";
 import { JobCard } from "@/components/jobs/JobCard";
+import { SkeletonList } from "@/components/ui/Skeleton";
 import { APP_CHROME } from "@/lib/chrome";
 import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -252,7 +252,7 @@ export default function JobsScreen() {
       <View style={styles.contentSheet}>
         {loading && jobs.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color={SEMANTIC.success} />
+            <SkeletonList type="member" count={4} />
           </View>
         ) : (
           <FlatList

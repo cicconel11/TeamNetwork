@@ -262,10 +262,31 @@ export function SkeletonNotificationCard({ style }: SkeletonCardProps) {
   );
 }
 
+// Chat card skeleton
+export function SkeletonChatCard({ style }: SkeletonCardProps) {
+  return (
+    <Animated.View
+      style={[styles.memberCard, style]}
+      accessible={true}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading chat group"
+      accessibilityState={{ busy: true }}
+    >
+      <SkeletonAvatar size={40} />
+      <View style={styles.memberCardContent}>
+        <Skeleton width="60%" height={14} />
+        <Skeleton width="40%" height={12} style={{ marginTop: SPACING.xs }} />
+      </View>
+    </Animated.View>
+  );
+}
+
 // List skeleton (multiple cards)
+type SkeletonType = "event" | "announcement" | "member" | "notification" | "chat";
+
 interface SkeletonListProps {
   count?: number;
-  type?: "event" | "announcement" | "member" | "notification";
+  type?: SkeletonType;
   style?: ViewStyle;
 }
 
@@ -279,6 +300,7 @@ export function SkeletonList({
     announcement: SkeletonAnnouncementCard,
     member: SkeletonMemberCard,
     notification: SkeletonNotificationCard,
+    chat: SkeletonChatCard,
   };
 
   const typeLabelMap = {
@@ -286,6 +308,7 @@ export function SkeletonList({
     announcement: "announcements",
     member: "members",
     notification: "notifications",
+    chat: "chat group",
   };
 
   const CardComponent = cardComponentMap[type];
