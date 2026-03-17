@@ -8,12 +8,13 @@ import {
   View,
   Text,
   Modal,
-  StyleSheet,
   Pressable,
 } from "react-native";
 import { MoreVertical } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 export interface OverflowMenuItem {
   id: string;
@@ -40,8 +41,61 @@ export function OverflowMenu({
   iconColor,
   accessibilityLabel = "More options",
 }: OverflowMenuProps) {
+  const { neutral, semantic } = useAppColorScheme();
   const [visible, setVisible] = useState(false);
-  const resolvedIconColor = iconColor ?? NEUTRAL.muted;
+  const resolvedIconColor = iconColor ?? neutral.muted;
+
+  const styles = useThemedStyles((n, s) => ({
+    triggerButton: {
+      padding: 8,
+    },
+    overlay: {
+      flex: 1,
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      justifyContent: "flex-end" as const,
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.xl,
+    },
+    menuContainer: {
+      gap: SPACING.sm,
+    },
+    menu: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      overflow: "hidden" as const,
+    },
+    menuItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: SPACING.lg,
+    },
+    menuItemBorder: {
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    menuItemIcon: {
+      marginRight: SPACING.sm,
+    },
+    menuItemText: {
+      ...TYPOGRAPHY.bodyMedium,
+      fontWeight: "500" as const,
+      color: n.foreground,
+    },
+    menuItemTextDestructive: {
+      color: s.error,
+    },
+    cancelButton: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    cancelButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: s.success,
+    },
+  }));
 
   const handleOpen = () => setVisible(true);
   const handleClose = () => setVisible(false);
@@ -114,57 +168,5 @@ export function OverflowMenu({
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  triggerButton: {
-    padding: 8,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    justifyContent: "flex-end",
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.xl,
-  },
-  menuContainer: {
-    gap: SPACING.sm,
-  },
-  menu: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    overflow: "hidden",
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-  },
-  menuItemBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: NEUTRAL.border,
-  },
-  menuItemIcon: {
-    marginRight: SPACING.sm,
-  },
-  menuItemText: {
-    ...TYPOGRAPHY.bodyMedium,
-    fontWeight: "500",
-    color: NEUTRAL.foreground,
-  },
-  menuItemTextDestructive: {
-    color: SEMANTIC.error,
-  },
-  cancelButton: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    paddingVertical: SPACING.md,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: SEMANTIC.success,
-  },
-});
 
 export default OverflowMenu;

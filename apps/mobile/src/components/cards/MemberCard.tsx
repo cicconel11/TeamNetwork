@@ -4,17 +4,19 @@
  */
 
 import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
-import { ChevronRight, Mail, Phone } from "lucide-react-native";
-import { NEUTRAL, RADIUS, SPACING, ANIMATION } from "@/lib/design-tokens";
+import { ChevronRight } from "lucide-react-native";
+import { RADIUS, SPACING, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { Avatar, type PresenceStatus } from "@/components/ui/Avatar";
 import { RoleBadge, Badge } from "@/components/ui/Badge";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -61,6 +63,74 @@ export const MemberCard = React.memo(function MemberCard({
   showChevron = true,
   showContactActions = false,
 }: MemberCardProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      paddingVertical: SPACING.sm,
+      paddingLeft: SPACING.md,
+      paddingRight: SPACING.sm,
+      gap: SPACING.md,
+    },
+    content: {
+      flex: 1,
+      minWidth: 0,
+    },
+    name: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    email: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      marginTop: 2,
+    },
+    right: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    chips: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+
+    // Compact styles
+    compactContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    compactName: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+
+    // Group header styles
+    groupHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.xs,
+    },
+    groupTitle: {
+      ...TYPOGRAPHY.overline,
+      color: n.secondary,
+    },
+    groupCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -119,7 +189,7 @@ export const MemberCard = React.memo(function MemberCard({
         </View>
 
         {showChevron && (
-          <ChevronRight size={18} color={NEUTRAL.border} />
+          <ChevronRight size={18} color={neutral.border} />
         )}
       </View>
     </AnimatedPressable>
@@ -138,6 +208,21 @@ export const MemberCardCompact = React.memo(function MemberCardCompact({
   onPress,
   style,
 }: MemberCardCompactProps) {
+  const styles = useThemedStyles((n) => ({
+    compactContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    compactName: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -190,77 +275,28 @@ export const MemberGroupHeader = React.memo(function MemberGroupHeader({
   count,
   style,
 }: MemberGroupHeaderProps) {
+  const styles = useThemedStyles((n) => ({
+    groupHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.xs,
+    },
+    groupTitle: {
+      ...TYPOGRAPHY.overline,
+      color: n.secondary,
+    },
+    groupCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
   return (
     <View style={[styles.groupHeader, style]}>
       <Text style={styles.groupTitle}>{title}</Text>
       <Text style={styles.groupCount}>({count})</Text>
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.md,
-    paddingVertical: SPACING.sm,
-    paddingLeft: SPACING.md,
-    paddingRight: SPACING.sm,
-    gap: SPACING.md,
-  },
-  content: {
-    flex: 1,
-    minWidth: 0,
-  },
-  name: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-  },
-  email: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-    marginTop: 2,
-  },
-  right: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  chips: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-
-  // Compact styles
-  compactContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  compactName: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    flex: 1,
-  },
-
-  // Group header styles
-  groupHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.xs,
-  },
-  groupTitle: {
-    ...TYPOGRAPHY.overline,
-    color: NEUTRAL.secondary,
-  },
-  groupCount: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
 });

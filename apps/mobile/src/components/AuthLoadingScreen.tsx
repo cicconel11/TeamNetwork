@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect } from "react";
-import { View, StyleSheet } from "react-native";
+import { View } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -17,7 +17,9 @@ import Animated, {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { APP_CHROME } from "@/lib/chrome";
-import { NEUTRAL, RADIUS, SPACING } from "@/lib/design-tokens";
+import { RADIUS, SPACING } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 // Skeleton shimmer component
 function ShimmerPlaceholder({
@@ -31,6 +33,7 @@ function ShimmerPlaceholder({
   borderRadius?: number;
   style?: object;
 }) {
+  const { neutral } = useAppColorScheme();
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
@@ -54,7 +57,7 @@ function ShimmerPlaceholder({
           width,
           height,
           borderRadius,
-          backgroundColor: NEUTRAL.border,
+          backgroundColor: neutral.border,
         },
         style,
         animatedStyle,
@@ -65,6 +68,22 @@ function ShimmerPlaceholder({
 
 // Skeleton org card
 function SkeletonOrgCard() {
+  const styles = useThemedStyles((n) => ({
+    orgCard: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+    },
+    orgCardText: {
+      flex: 1,
+    },
+  }));
+
   return (
     <View style={styles.orgCard}>
       {/* Logo placeholder */}
@@ -80,6 +99,37 @@ function SkeletonOrgCard() {
 }
 
 export default function AuthLoadingScreen() {
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    header: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.md,
+      minHeight: 56,
+      gap: SPACING.sm,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+      paddingTop: SPACING.md,
+    },
+    cardList: {
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+    },
+  }));
+
   return (
     <View style={styles.container}>
       {/* Gradient Header */}
@@ -122,49 +172,3 @@ export default function AuthLoadingScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: NEUTRAL.background,
-  },
-  header: {
-    paddingBottom: SPACING.md,
-  },
-  headerSafeArea: {
-    // SafeAreaView handles top inset
-  },
-  headerContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    minHeight: 56,
-    gap: SPACING.sm,
-  },
-  headerTextContainer: {
-    flex: 1,
-  },
-  contentSheet: {
-    flex: 1,
-    backgroundColor: NEUTRAL.surface,
-    paddingTop: SPACING.md,
-  },
-  cardList: {
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-  },
-  orgCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  orgCardText: {
-    flex: 1,
-  },
-});

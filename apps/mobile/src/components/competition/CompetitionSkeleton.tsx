@@ -1,9 +1,30 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { NEUTRAL, RADIUS, SPACING } from "@/lib/design-tokens";
+import { RADIUS, SPACING } from "@/lib/design-tokens";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 export function CompetitionSkeleton() {
+  const styles = useThemedStyles((n) => ({
+    container: {
+      gap: SPACING.lg,
+    },
+    heroSkeleton: {
+      backgroundColor: n.dark800,
+    },
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+    },
+    rows: {
+      gap: SPACING.sm,
+    },
+  }));
+
   return (
     <View
       accessible={true}
@@ -37,23 +58,3 @@ export function CompetitionSkeleton() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    gap: SPACING.lg,
-  },
-  heroSkeleton: {
-    backgroundColor: NEUTRAL.dark800,
-  },
-  card: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  rows: {
-    gap: SPACING.sm,
-  },
-});

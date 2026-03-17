@@ -1,9 +1,10 @@
-import { Pressable, Text, View, StyleSheet } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { User, Calendar, Megaphone } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { SearchResult } from "@/hooks/useGlobalSearch";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const TYPE_CONFIG: Record<
   SearchResult["type"],
@@ -39,6 +40,57 @@ export function SearchResultCard({ result, index, onPress }: SearchResultCardPro
   const config = TYPE_CONFIG[result.type];
   const { Icon } = config;
 
+  const styles = useThemedStyles((n) => ({
+    card: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      // @ts-ignore — iOS continuous corner curves
+      borderCurve: "continuous",
+      padding: SPACING.md,
+      marginHorizontal: SPACING.md,
+      marginBottom: SPACING.sm,
+      borderWidth: 1,
+      borderColor: n.border,
+      gap: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    cardPressed: {
+      opacity: 0.75,
+    },
+    iconContainer: {
+      width: 40,
+      height: 40,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      flexShrink: 0,
+    },
+    textContainer: {
+      flex: 1,
+    },
+    title: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    subtitle: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    badge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 3,
+      borderRadius: RADIUS.full,
+      flexShrink: 0,
+    },
+    badgeText: {
+      ...TYPOGRAPHY.caption,
+      fontWeight: "600" as const,
+    },
+  }));
+
   return (
     <Animated.View entering={FadeInDown.delay(index * 50)}>
       <Pressable
@@ -67,53 +119,3 @@ export function SearchResultCard({ result, index, onPress }: SearchResultCardPro
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderCurve: "continuous",
-    padding: SPACING.md,
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    gap: SPACING.sm,
-    ...SHADOWS.sm,
-  },
-  cardPressed: {
-    opacity: 0.75,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  textContainer: {
-    flex: 1,
-  },
-  title: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.foreground,
-  },
-  subtitle: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-    marginTop: 2,
-  },
-  badge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 3,
-    borderRadius: RADIUS.full,
-    flexShrink: 0,
-  },
-  badgeText: {
-    ...TYPOGRAPHY.caption,
-    fontWeight: "600",
-  },
-});

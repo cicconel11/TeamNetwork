@@ -4,19 +4,21 @@
  */
 
 import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
 import { MapPin, Users, Clock } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION, RSVP_COLORS, ENERGY } from "@/lib/design-tokens";
+import { RADIUS, SPACING, SHADOWS, ANIMATION, RSVP_COLORS, ENERGY } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonth, formatDay, formatTime, formatShortWeekdayDate } from "@/lib/date-format";
-import { LiveBadge, Badge } from "@/components/ui/Badge";
+import { LiveBadge } from "@/components/ui/Badge";
 import { AvatarGroup } from "@/components/ui/Avatar";
-import { Button, RSVPButton, type RSVPStatus } from "@/components/ui/Button";
+import { Button, type RSVPStatus } from "@/components/ui/Button";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -50,6 +52,157 @@ export const EventCard = React.memo(function EventCard({
   compact = false,
   accentColor,
 }: EventCardProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      overflow: "hidden" as const,
+      ...SHADOWS.sm,
+    },
+    liveContainer: {
+      position: "absolute" as const,
+      top: SPACING.sm,
+      right: SPACING.sm,
+      zIndex: 1,
+    },
+    content: {
+      flexDirection: "row" as const,
+      padding: SPACING.md,
+      gap: SPACING.md,
+    },
+    dateBlock: {
+      width: 52,
+      height: 52,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    dateMonth: {
+      ...TYPOGRAPHY.overline,
+      fontSize: 10,
+      color: s.error,
+      marginBottom: -2,
+    },
+    dateDay: {
+      ...TYPOGRAPHY.headlineMedium,
+      fontSize: 22,
+      color: n.foreground,
+    },
+    info: {
+      flex: 1,
+    },
+    title: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    details: {
+      gap: 4,
+    },
+    detailRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 6,
+    },
+    detailText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      flex: 1,
+    },
+    locationText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      flex: 1,
+    },
+    footer: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: n.divider,
+    },
+    attendeeInfo: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    attendeeText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginLeft: 4,
+    },
+    rsvpBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.lg,
+    },
+    rsvpBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontWeight: "600" as const,
+    },
+
+    // Compact styles
+    compactContainer: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      padding: SPACING.sm,
+      gap: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    compactLive: {
+      position: "absolute" as const,
+      top: 4,
+      right: 4,
+    },
+    liveDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: ENERGY.live,
+    },
+    compactDateBlock: {
+      width: 40,
+      height: 40,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.sm,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    compactMonth: {
+      ...TYPOGRAPHY.overline,
+      fontSize: 8,
+      color: s.error,
+      marginBottom: -1,
+    },
+    compactDay: {
+      ...TYPOGRAPHY.titleLarge,
+      fontSize: 16,
+      color: n.foreground,
+    },
+    compactInfo: {
+      flex: 1,
+    },
+    compactTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    compactTime: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -98,7 +251,7 @@ export const EventCard = React.memo(function EventCard({
 
           <View style={styles.details}>
             <View style={styles.detailRow}>
-              <Clock size={13} color={NEUTRAL.secondary} />
+              <Clock size={13} color={neutral.secondary} />
               <Text style={styles.detailText}>
                 {formatShortWeekdayDate(event.start_date)} · {formatTime(event.start_date)}
               </Text>
@@ -106,7 +259,7 @@ export const EventCard = React.memo(function EventCard({
 
             {event.location && (
               <View style={styles.detailRow}>
-                <MapPin size={13} color={NEUTRAL.muted} />
+                <MapPin size={13} color={neutral.muted} />
                 <Text style={styles.locationText} numberOfLines={1}>
                   {event.location}
                 </Text>
@@ -122,7 +275,7 @@ export const EventCard = React.memo(function EventCard({
           {event.attendees && event.attendees.length > 0 ? (
             <AvatarGroup avatars={event.attendees} size="xs" max={3} />
           ) : (
-            <Users size={14} color={NEUTRAL.muted} />
+            <Users size={14} color={neutral.muted} />
           )}
           <Text style={styles.attendeeText}>
             {event.rsvp_count !== undefined
@@ -146,7 +299,7 @@ export const EventCard = React.memo(function EventCard({
             variant="outline"
             size="sm"
             onPress={() => onRSVP?.("going")}
-            primaryColor={accentColor || SEMANTIC.success}
+            primaryColor={accentColor || semantic.success}
           >
             RSVP
           </Button>
@@ -163,6 +316,62 @@ export const EventCardCompact = React.memo(function EventCardCompact({
   style,
   accentColor,
 }: Omit<EventCardProps, "compact">) {
+  const styles = useThemedStyles((n, s) => ({
+    compactContainer: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      padding: SPACING.sm,
+      gap: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    compactLive: {
+      position: "absolute" as const,
+      top: 4,
+      right: 4,
+    },
+    liveDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: ENERGY.live,
+    },
+    compactDateBlock: {
+      width: 40,
+      height: 40,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.sm,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    compactMonth: {
+      ...TYPOGRAPHY.overline,
+      fontSize: 8,
+      color: s.error,
+      marginBottom: -1,
+    },
+    compactDay: {
+      ...TYPOGRAPHY.titleLarge,
+      fontSize: 16,
+      color: n.foreground,
+    },
+    compactInfo: {
+      flex: 1,
+    },
+    compactTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    compactTime: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -208,154 +417,4 @@ export const EventCardCompact = React.memo(function EventCardCompact({
       </View>
     </AnimatedPressable>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    overflow: "hidden",
-    ...SHADOWS.sm,
-  },
-  liveContainer: {
-    position: "absolute",
-    top: SPACING.sm,
-    right: SPACING.sm,
-    zIndex: 1,
-  },
-  content: {
-    flexDirection: "row",
-    padding: SPACING.md,
-    gap: SPACING.md,
-  },
-  dateBlock: {
-    width: 52,
-    height: 52,
-    backgroundColor: NEUTRAL.background,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dateMonth: {
-    ...TYPOGRAPHY.overline,
-    fontSize: 10,
-    color: SEMANTIC.error,
-    marginBottom: -2,
-  },
-  dateDay: {
-    ...TYPOGRAPHY.headlineMedium,
-    fontSize: 22,
-    color: NEUTRAL.foreground,
-  },
-  info: {
-    flex: 1,
-  },
-  title: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-    marginBottom: SPACING.xs,
-  },
-  details: {
-    gap: 4,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  detailText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.secondary,
-    flex: 1,
-  },
-  locationText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-    flex: 1,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: NEUTRAL.divider,
-  },
-  attendeeInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  attendeeText: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-    marginLeft: 4,
-  },
-  rsvpBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: RADIUS.lg,
-  },
-  rsvpBadgeText: {
-    ...TYPOGRAPHY.labelSmall,
-    fontWeight: "600",
-  },
-
-  // Compact styles
-  compactContainer: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: SPACING.sm,
-    gap: SPACING.sm,
-    ...SHADOWS.sm,
-  },
-  compactLive: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: ENERGY.live,
-  },
-  compactDateBlock: {
-    width: 40,
-    height: 40,
-    backgroundColor: NEUTRAL.background,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  compactMonth: {
-    ...TYPOGRAPHY.overline,
-    fontSize: 8,
-    color: SEMANTIC.error,
-    marginBottom: -1,
-  },
-  compactDay: {
-    ...TYPOGRAPHY.titleLarge,
-    fontSize: 16,
-    color: NEUTRAL.foreground,
-  },
-  compactInfo: {
-    flex: 1,
-  },
-  compactTitle: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-  },
-  compactTime: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-    marginTop: 2,
-  },
 });

@@ -6,8 +6,9 @@
 import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ViewStyle } from "react-native";
 import { Image } from "expo-image";
-import { NEUTRAL, ENERGY, AVATAR_SIZES, PRESENCE_SIZES, RADIUS } from "@/lib/design-tokens";
+import { ENERGY, AVATAR_SIZES, PRESENCE_SIZES, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl" | "xxl";
 export type PresenceStatus = "online" | "away" | "offline" | "none";
@@ -78,6 +79,7 @@ export const Avatar = React.memo(function Avatar({
   style,
   squircle = false,
 }: AvatarProps) {
+  const { neutral } = useAppColorScheme();
   const avatarSize = AVATAR_SIZES[size];
   const presenceSize = PRESENCE_SIZES[size];
   const backgroundColor = useMemo(() => getColorForName(name), [name]);
@@ -122,7 +124,7 @@ export const Avatar = React.memo(function Avatar({
     bottom: 0,
     right: 0,
     borderWidth: 2,
-    borderColor: NEUTRAL.surface,
+    borderColor: neutral.surface,
   };
 
   const accessibilityLabel = name ? `${name}'s avatar` : "User avatar";
@@ -178,6 +180,7 @@ export const AvatarGroup = React.memo(function AvatarGroup({
   max = 4,
   overlap = 8,
 }: AvatarGroupProps) {
+  const { neutral } = useAppColorScheme();
   const displayAvatars = avatars.slice(0, max);
   const remaining = avatars.length - max;
   const avatarSize = AVATAR_SIZES[size];
@@ -213,7 +216,7 @@ export const AvatarGroup = React.memo(function AvatarGroup({
             uri={avatar.uri}
             name={avatar.name}
             size={size}
-            borderColor={NEUTRAL.surface}
+            borderColor={neutral.surface}
           />
         </View>
       ))}
@@ -221,16 +224,20 @@ export const AvatarGroup = React.memo(function AvatarGroup({
         <View
           style={[
             styles.groupItem,
-            styles.remainingContainer,
             {
               marginLeft: -overlap,
               width: avatarSize,
               height: avatarSize,
               borderRadius: avatarSize / 2,
+              backgroundColor: neutral.border,
+              alignItems: "center",
+              justifyContent: "center",
+              borderWidth: 2,
+              borderColor: neutral.surface,
             },
           ]}
         >
-          <Text style={styles.remainingText}>+{remaining}</Text>
+          <Text style={[styles.remainingText, { color: neutral.secondary }]}>+{remaining}</Text>
         </View>
       )}
     </View>
@@ -262,15 +269,7 @@ const styles = StyleSheet.create({
   groupItem: {
     // Ensures proper stacking
   },
-  remainingContainer: {
-    backgroundColor: NEUTRAL.border,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: NEUTRAL.surface,
-  },
   remainingText: {
     ...TYPOGRAPHY.labelSmall,
-    color: NEUTRAL.secondary,
   },
 });

@@ -1,14 +1,16 @@
 import React, { useCallback } from "react";
-import { View, Text, Pressable, Platform, StyleSheet } from "react-native";
+import { View, Text, Pressable, Platform } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { MessageCircle } from "lucide-react-native";
-import { NEUTRAL, SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import { LikeButton } from "./LikeButton";
 import { PostMediaGrid } from "./PostMediaGrid";
 import type { FeedPost } from "@/types/feed";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface PostCardProps {
   post: FeedPost;
@@ -17,6 +19,82 @@ interface PostCardProps {
 }
 
 function PostCardInner({ post, onPress, onLikeToggle }: PostCardProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+      ...SHADOWS.sm,
+    },
+    cardPressed: {
+      transform: [{ scale: 0.98 }],
+    },
+    authorRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      marginBottom: SPACING.sm,
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    avatarFallback: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    avatarFallbackText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+      fontWeight: "600" as const,
+    },
+    authorMeta: {
+      flex: 1,
+      marginLeft: SPACING.sm,
+    },
+    authorName: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+      fontWeight: "600" as const,
+    },
+    timestamp: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      marginTop: 2,
+    },
+    body: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    actionsRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.lg,
+      marginTop: SPACING.sm,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 0.5,
+      borderTopColor: n.border,
+    },
+    commentAction: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    commentCount: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+  }));
+
   const handlePress = useCallback(() => {
     if (Platform.OS === "ios") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -76,7 +154,7 @@ function PostCardInner({ post, onPress, onLikeToggle }: PostCardProps) {
           onPress={handleLike}
         />
         <View style={styles.commentAction}>
-          <MessageCircle size={18} color={NEUTRAL.muted} />
+          <MessageCircle size={18} color={neutral.muted} />
           <Text style={styles.commentCount}>{post.comment_count}</Text>
         </View>
       </View>
@@ -92,79 +170,4 @@ export const PostCard = React.memo(PostCardInner, (prev, next) => {
     prev.post.liked_by_user === next.post.liked_by_user &&
     prev.post.comment_count === next.post.comment_count
   );
-});
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    ...SHADOWS.sm,
-  },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-  },
-  authorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: SPACING.sm,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  avatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: NEUTRAL.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarFallbackText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.secondary,
-    fontWeight: "600",
-  },
-  authorMeta: {
-    flex: 1,
-    marginLeft: SPACING.sm,
-  },
-  authorName: {
-    ...TYPOGRAPHY.labelLarge,
-    color: NEUTRAL.foreground,
-    fontWeight: "600",
-  },
-  timestamp: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-    marginTop: 2,
-  },
-  body: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-    marginBottom: SPACING.sm,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.lg,
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: NEUTRAL.border,
-  },
-  commentAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  commentCount: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.muted,
-  },
 });

@@ -1,12 +1,14 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Trash2 } from "lucide-react-native";
 import { LiveDot } from "./LiveDot";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING, ENERGY } from "@/lib/design-tokens";
+import { RADIUS, SPACING, ENERGY } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import type { PointHistoryEntry } from "@/hooks/competitionHelpers";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface ActivityFeedCardProps {
   pointHistory: PointHistoryEntry[];
@@ -15,6 +17,103 @@ interface ActivityFeedCardProps {
 }
 
 export function ActivityFeedCard({ pointHistory, isAdmin, onDelete }: ActivityFeedCardProps) {
+  const { semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      // @ts-ignore — iOS continuous corner curves
+      borderCurve: "continuous",
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    header: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    title: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: n.foreground,
+    },
+    liveIndicator: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    liveText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: ENERGY.live,
+    },
+    list: {
+      gap: SPACING.sm,
+    },
+    row: {
+      padding: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: n.background,
+      gap: SPACING.xs,
+    },
+    rowTop: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: SPACING.sm,
+    },
+    teamInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    teamName: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    timestamp: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    actions: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    pointsBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: 999,
+    },
+    pointsBadgePositive: {
+      backgroundColor: `${s.success}22`,
+    },
+    pointsBadgeNegative: {
+      backgroundColor: `${s.error}22`,
+    },
+    pointsBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontVariant: ["tabular-nums"] as const,
+      color: n.foreground,
+    },
+    deleteButton: {
+      padding: SPACING.xs,
+      borderRadius: RADIUS.sm,
+      backgroundColor: `${s.error}14`,
+    },
+    deletePressed: {
+      opacity: 0.8,
+    },
+    notes: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+  }));
+
   if (pointHistory.length === 0) {
     return (
       <View style={styles.card}>
@@ -70,7 +169,7 @@ export function ActivityFeedCard({ pointHistory, isAdmin, onDelete }: ActivityFe
                     accessibilityRole="button"
                     accessibilityLabel="Delete point entry"
                   >
-                    <Trash2 size={14} color={SEMANTIC.error} />
+                    <Trash2 size={14} color={semantic.error} />
                   </Pressable>
                 ) : null}
               </View>
@@ -85,98 +184,3 @@ export function ActivityFeedCard({ pointHistory, isAdmin, onDelete }: ActivityFe
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderCurve: "continuous",
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    gap: SPACING.md,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  title: {
-    ...TYPOGRAPHY.headlineSmall,
-    color: NEUTRAL.foreground,
-  },
-  liveIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  liveText: {
-    ...TYPOGRAPHY.labelSmall,
-    color: ENERGY.live,
-  },
-  list: {
-    gap: SPACING.sm,
-  },
-  row: {
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: NEUTRAL.background,
-    gap: SPACING.xs,
-  },
-  rowTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-  },
-  teamInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  teamName: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-  },
-  timestamp: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  pointsBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 999,
-  },
-  pointsBadgePositive: {
-    backgroundColor: `${SEMANTIC.success}22`,
-  },
-  pointsBadgeNegative: {
-    backgroundColor: `${SEMANTIC.error}22`,
-  },
-  pointsBadgeText: {
-    ...TYPOGRAPHY.labelSmall,
-    fontVariant: ["tabular-nums"],
-    color: NEUTRAL.foreground,
-  },
-  deleteButton: {
-    padding: SPACING.xs,
-    borderRadius: RADIUS.sm,
-    backgroundColor: `${SEMANTIC.error}14`,
-  },
-  deletePressed: {
-    opacity: 0.8,
-  },
-  notes: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.secondary,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-  },
-});

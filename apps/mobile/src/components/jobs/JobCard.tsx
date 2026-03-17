@@ -4,16 +4,18 @@
  */
 
 import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
 import { Briefcase, MapPin, Building2 } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
+import { SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { JobPostingWithPoster } from "@/types/jobs";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -23,7 +25,8 @@ interface JobCardProps {
   style?: ViewStyle;
 }
 
-// Location type badge config
+// Location type badge config — uses static SEMANTIC since these are
+// always the same semantic colors regardless of theme
 const LOCATION_TYPE_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   remote: { label: "Remote", bg: SEMANTIC.infoLight, color: SEMANTIC.infoDark },
   onsite: { label: "On-site", bg: SEMANTIC.warningLight, color: SEMANTIC.warningDark },
@@ -58,6 +61,92 @@ export const JobCard = React.memo(function JobCard({
   onPress,
   style,
 }: JobCardProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      ...SHADOWS.sm,
+      // @ts-ignore — iOS continuous corner curves
+      borderCurve: "continuous",
+    },
+    header: {
+      flexDirection: "row" as const,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+    },
+    iconContainer: {
+      width: 40,
+      height: 40,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    titleBlock: {
+      flex: 1,
+      gap: 3,
+    },
+    title: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+    },
+    companyRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 5,
+    },
+    company: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      flex: 1,
+    },
+    locationRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 5,
+    },
+    locationText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      flex: 1,
+    },
+    badgeRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.xs,
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.sm,
+      flexWrap: "wrap" as const,
+    },
+    badge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xxs,
+      borderRadius: RADIUS.full,
+    },
+    badgeText: {
+      ...TYPOGRAPHY.labelSmall,
+    },
+    badgeNeutral: {
+      backgroundColor: n.background,
+    },
+    badgeTextNeutral: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.secondary,
+    },
+    footer: {
+      borderTopWidth: 1,
+      borderTopColor: n.divider,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    footerText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -93,21 +182,21 @@ export const JobCard = React.memo(function JobCard({
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Briefcase size={20} color={NEUTRAL.secondary} />
+          <Briefcase size={20} color={neutral.secondary} />
         </View>
         <View style={styles.titleBlock}>
           <Text style={styles.title} numberOfLines={2}>
             {job.title}
           </Text>
           <View style={styles.companyRow}>
-            <Building2 size={13} color={NEUTRAL.muted} />
+            <Building2 size={13} color={neutral.muted} />
             <Text style={styles.company} selectable numberOfLines={1}>
               {job.company}
             </Text>
           </View>
           {job.location != null && (
             <View style={styles.locationRow}>
-              <MapPin size={13} color={NEUTRAL.muted} />
+              <MapPin size={13} color={neutral.muted} />
               <Text style={styles.locationText} numberOfLines={1}>
                 {job.location}
               </Text>
@@ -142,89 +231,4 @@ export const JobCard = React.memo(function JobCard({
       </View>
     </AnimatedPressable>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    ...SHADOWS.sm,
-    // @ts-ignore — iOS continuous corner curves
-    borderCurve: "continuous",
-  },
-  header: {
-    flexDirection: "row",
-    padding: SPACING.md,
-    gap: SPACING.sm,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    backgroundColor: NEUTRAL.background,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleBlock: {
-    flex: 1,
-    gap: 3,
-  },
-  title: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-  },
-  companyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  company: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.secondary,
-    flex: 1,
-  },
-  locationRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  locationText: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.muted,
-    flex: 1,
-  },
-  badgeRow: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.sm,
-    flexWrap: "wrap",
-  },
-  badge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xxs,
-    borderRadius: RADIUS.full,
-  },
-  badgeText: {
-    ...TYPOGRAPHY.labelSmall,
-  },
-  badgeNeutral: {
-    backgroundColor: NEUTRAL.background,
-  },
-  badgeTextNeutral: {
-    ...TYPOGRAPHY.labelSmall,
-    color: NEUTRAL.secondary,
-  },
-  footer: {
-    borderTopWidth: 1,
-    borderTopColor: NEUTRAL.divider,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  footerText: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
 });

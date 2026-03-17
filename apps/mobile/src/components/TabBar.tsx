@@ -1,10 +1,11 @@
-import React, { useMemo } from "react";
-import { View, Pressable, Text, StyleSheet } from "react-native";
+import React from "react";
+import { View, Pressable, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Calendar, Users, Megaphone, Plus } from "lucide-react-native";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { APP_CHROME } from "@/lib/chrome";
-import { SEMANTIC } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const ICON_SIZE = 22;
 
@@ -30,7 +31,88 @@ interface TabBarProps extends BottomTabBarProps {
 
 export function TabBar({ state, descriptors, navigation, onActionPress, badges }: TabBarProps) {
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => createStyles(), []);
+  const { semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      backgroundColor: APP_CHROME.tabBarBackground,
+      borderTopWidth: 1,
+      borderTopColor: APP_CHROME.tabBarBorder,
+    },
+    tabBar: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      height: 60,
+      paddingHorizontal: 4,
+    },
+    tabGroup: {
+      flex: 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-evenly" as const,
+    },
+    tab: {
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      minWidth: 56,
+      minHeight: 44,
+    },
+    tabContent: {
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 3,
+    },
+    iconContainer: {
+      position: "relative" as const,
+    },
+    badge: {
+      position: "absolute" as const,
+      top: -4,
+      right: -8,
+      minWidth: 16,
+      height: 16,
+      borderRadius: 8,
+      backgroundColor: s.error,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: 4,
+    },
+    badgeText: {
+      color: "#ffffff",
+      fontSize: 10,
+      fontWeight: "700" as const,
+      lineHeight: 12,
+    },
+    tabLabel: {
+      fontSize: 10,
+      fontWeight: "500" as const,
+      letterSpacing: 0.1,
+    },
+    activeIndicator: {
+      position: "absolute" as const,
+      bottom: -8,
+      width: 20,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: APP_CHROME.tabBarActive,
+    },
+    actionButton: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: APP_CHROME.actionButtonBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.2,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+  }));
+
   const activeColor = APP_CHROME.tabBarActive;
   const inactiveColor = APP_CHROME.tabBarInactive;
 
@@ -125,86 +207,3 @@ export function TabBar({ state, descriptors, navigation, onActionPress, badges }
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      backgroundColor: APP_CHROME.tabBarBackground,
-      borderTopWidth: 1,
-      borderTopColor: APP_CHROME.tabBarBorder,
-    },
-    tabBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      height: 60,
-      paddingHorizontal: 4,
-    },
-    tabGroup: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-evenly",
-    },
-    tab: {
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      minWidth: 56,
-      minHeight: 44,
-    },
-    tabContent: {
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 3,
-    },
-    iconContainer: {
-      position: "relative",
-    },
-    badge: {
-      position: "absolute",
-      top: -4,
-      right: -8,
-      minWidth: 16,
-      height: 16,
-      borderRadius: 8,
-      backgroundColor: SEMANTIC.error,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 4,
-    },
-    badgeText: {
-      color: "#ffffff",
-      fontSize: 10,
-      fontWeight: "700",
-      lineHeight: 12,
-    },
-    tabLabel: {
-      fontSize: 10,
-      fontWeight: "500",
-      letterSpacing: 0.1,
-    },
-    activeIndicator: {
-      position: "absolute",
-      bottom: -8,
-      width: 20,
-      height: 3,
-      borderRadius: 1.5,
-      backgroundColor: APP_CHROME.tabBarActive,
-    },
-    actionButton: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: APP_CHROME.actionButtonBackground,
-      alignItems: "center",
-      justifyContent: "center",
-      // Shadow for elevation
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.2,
-      shadowRadius: 8,
-      elevation: 4,
-    },
-  });

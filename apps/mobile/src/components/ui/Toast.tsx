@@ -4,20 +4,16 @@
  */
 
 import React, { useEffect, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  withTiming,
-  runOnJS,
   FadeInDown,
   FadeOutDown,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Check, X, AlertCircle, Info } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING, SHADOWS } from "@/lib/design-tokens";
+import { RADIUS, SPACING, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -90,34 +86,36 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-function getVariantStyles(variant: ToastVariant) {
+function useVariantStyles(variant: ToastVariant) {
+  const { semantic } = useAppColorScheme();
+
   switch (variant) {
     case "success":
       return {
-        backgroundColor: SEMANTIC.successLight,
+        backgroundColor: semantic.successLight,
         textColor: "#047857", // emerald-700
-        iconColor: SEMANTIC.success,
+        iconColor: semantic.success,
         Icon: Check,
       };
     case "error":
       return {
-        backgroundColor: SEMANTIC.errorLight,
+        backgroundColor: semantic.errorLight,
         textColor: "#b91c1c", // red-700
-        iconColor: SEMANTIC.error,
+        iconColor: semantic.error,
         Icon: X,
       };
     case "warning":
       return {
-        backgroundColor: SEMANTIC.warningLight,
+        backgroundColor: semantic.warningLight,
         textColor: "#b45309", // amber-700
-        iconColor: SEMANTIC.warning,
+        iconColor: semantic.warning,
         Icon: AlertCircle,
       };
     case "info":
       return {
-        backgroundColor: SEMANTIC.infoLight,
+        backgroundColor: semantic.infoLight,
         textColor: "#0369a1", // sky-700
-        iconColor: SEMANTIC.info,
+        iconColor: semantic.info,
         Icon: Info,
       };
   }
@@ -132,7 +130,7 @@ export function Toast({
   action,
 }: ToastProps) {
   const insets = useSafeAreaInsets();
-  const variantStyles = getVariantStyles(variant);
+  const variantStyles = useVariantStyles(variant);
 
   useEffect(() => {
     if (visible && duration > 0) {

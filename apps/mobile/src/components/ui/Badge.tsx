@@ -12,8 +12,9 @@ import Animated, {
   withTiming,
   useSharedValue,
 } from "react-native-reanimated";
-import { NEUTRAL, SEMANTIC, ROLE_COLORS, ENERGY, RADIUS } from "@/lib/design-tokens";
+import { ROLE_COLORS, ENERGY, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 export type BadgeVariant =
   | "success"
@@ -44,32 +45,34 @@ interface LiveBadgeProps {
   style?: ViewStyle;
 }
 
-function getVariantColors(variant: BadgeVariant) {
+function useVariantColors(variant: BadgeVariant) {
+  const { neutral, semantic } = useAppColorScheme();
+
   switch (variant) {
     case "success":
       return {
-        background: SEMANTIC.successLight,
-        text: SEMANTIC.success,
+        background: semantic.successLight,
+        text: semantic.success,
       };
     case "warning":
       return {
-        background: SEMANTIC.warningLight,
-        text: SEMANTIC.warning,
+        background: semantic.warningLight,
+        text: semantic.warning,
       };
     case "error":
       return {
-        background: SEMANTIC.errorLight,
-        text: SEMANTIC.error,
+        background: semantic.errorLight,
+        text: semantic.error,
       };
     case "info":
       return {
-        background: SEMANTIC.infoLight,
-        text: SEMANTIC.info,
+        background: semantic.infoLight,
+        text: semantic.info,
       };
     case "neutral":
       return {
-        background: NEUTRAL.divider,
-        text: NEUTRAL.secondary,
+        background: neutral.divider,
+        text: neutral.secondary,
       };
     case "admin":
       return ROLE_COLORS.admin;
@@ -79,8 +82,8 @@ function getVariantColors(variant: BadgeVariant) {
       return ROLE_COLORS.alumni;
     case "live":
       return {
-        background: SEMANTIC.errorLight,
-        text: SEMANTIC.error,
+        background: semantic.errorLight,
+        text: semantic.error,
       };
   }
 }
@@ -95,7 +98,7 @@ export function Badge({
   textStyle,
   accessibilityLabel,
 }: BadgeProps) {
-  const colors = getVariantColors(variant);
+  const colors = useVariantColors(variant);
   const sizeStyles = SIZE_STYLES[size];
 
   const containerStyle: ViewStyle = {
@@ -137,6 +140,7 @@ export function Badge({
 
 // Live badge with animated pulsing dot
 export function LiveBadge({ size = "md", style }: LiveBadgeProps) {
+  const { semantic } = useAppColorScheme();
   const opacity = useSharedValue(1);
 
   React.useEffect(() => {
@@ -163,7 +167,7 @@ export function LiveBadge({ size = "md", style }: LiveBadgeProps) {
       style={[
         styles.container,
         sizeStyles.container,
-        { backgroundColor: SEMANTIC.errorLight },
+        { backgroundColor: semantic.errorLight },
         style,
       ]}
     >
@@ -178,7 +182,7 @@ export function LiveBadge({ size = "md", style }: LiveBadgeProps) {
       <Text
         style={[
           sizeStyles.text,
-          { color: SEMANTIC.error, fontWeight: "600" },
+          { color: semantic.error, fontWeight: "600" as const },
         ]}
       >
         LIVE
@@ -198,9 +202,12 @@ interface CountBadgeProps {
 export function CountBadge({
   count,
   max = 99,
-  color = SEMANTIC.error,
+  color,
   style,
 }: CountBadgeProps) {
+  const { semantic } = useAppColorScheme();
+  const resolvedColor = color ?? semantic.error;
+
   if (count <= 0) return null;
 
   const displayCount = count > max ? `${max}+` : count.toString();
@@ -214,7 +221,7 @@ export function CountBadge({
       accessibilityLabel={accessibilityLabel}
       style={[
         styles.countBadge,
-        { backgroundColor: color },
+        { backgroundColor: resolvedColor },
         isLarge && styles.countBadgeLarge,
         style,
       ]}

@@ -1,8 +1,10 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Heart } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, SPACING } from "@/lib/design-tokens";
+import { SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface LikeButtonProps {
   liked: boolean;
@@ -11,6 +13,22 @@ interface LikeButtonProps {
 }
 
 export function LikeButton({ liked, count, onPress }: LikeButtonProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    count: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    countLiked: {
+      color: s.error,
+    },
+  }));
+
   return (
     <Pressable
       onPress={onPress}
@@ -22,8 +40,8 @@ export function LikeButton({ liked, count, onPress }: LikeButtonProps) {
     >
       <Heart
         size={18}
-        color={liked ? SEMANTIC.error : NEUTRAL.muted}
-        fill={liked ? SEMANTIC.error : "none"}
+        color={liked ? semantic.error : neutral.muted}
+        fill={liked ? semantic.error : "none"}
       />
       <Text style={[styles.count, liked && styles.countLiked]}>
         {count}
@@ -31,18 +49,3 @@ export function LikeButton({ liked, count, onPress }: LikeButtonProps) {
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  count: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.muted,
-  },
-  countLiked: {
-    color: SEMANTIC.error,
-  },
-});

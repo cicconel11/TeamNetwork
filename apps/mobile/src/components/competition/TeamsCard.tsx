@@ -1,10 +1,11 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { NEUTRAL, RADIUS, SPACING } from "@/lib/design-tokens";
+import { RADIUS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatLocalDateString } from "@/lib/date-format";
 import type { CompetitionTeam } from "@teammeet/types";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface TeamsCardProps {
   teams: CompetitionTeam[];
@@ -14,6 +15,90 @@ interface TeamsCardProps {
 }
 
 export function TeamsCard({ teams, teamPoints, isAdmin, onAddTeam }: TeamsCardProps) {
+  const styles = useThemedStyles((n) => ({
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      // @ts-ignore — iOS continuous corner curves
+      borderCurve: "continuous",
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.md,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    header: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    title: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: n.foreground,
+    },
+    subtitle: {
+      ...TYPOGRAPHY.caption,
+      color: n.secondary,
+      marginTop: 2,
+    },
+    addButton: {
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    addButtonPressed: {
+      opacity: 0.85,
+    },
+    addButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    list: {
+      gap: SPACING.sm,
+    },
+    row: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: SPACING.sm,
+      padding: SPACING.sm,
+      borderRadius: RADIUS.md,
+      backgroundColor: n.background,
+    },
+    teamInfo: {
+      flex: 1,
+    },
+    teamName: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    teamMeta: {
+      ...TYPOGRAPHY.caption,
+      color: n.secondary,
+      marginTop: 2,
+    },
+    pointsBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: 999,
+      backgroundColor: n.surface,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    pointsText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontVariant: ["tabular-nums"] as const,
+      color: n.foreground,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+    },
+  }));
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -61,86 +146,3 @@ export function TeamsCard({ teams, teamPoints, isAdmin, onAddTeam }: TeamsCardPr
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderCurve: "continuous",
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    gap: SPACING.md,
-    boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  title: {
-    ...TYPOGRAPHY.headlineSmall,
-    color: NEUTRAL.foreground,
-  },
-  subtitle: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.secondary,
-    marginTop: 2,
-  },
-  addButton: {
-    paddingVertical: SPACING.xs + 2,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    backgroundColor: NEUTRAL.surface,
-  },
-  addButtonPressed: {
-    opacity: 0.85,
-  },
-  addButtonText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.foreground,
-  },
-  list: {
-    gap: SPACING.sm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: SPACING.sm,
-    padding: SPACING.sm,
-    borderRadius: RADIUS.md,
-    backgroundColor: NEUTRAL.background,
-  },
-  teamInfo: {
-    flex: 1,
-  },
-  teamName: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-  },
-  teamMeta: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.secondary,
-    marginTop: 2,
-  },
-  pointsBadge: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: 999,
-    backgroundColor: NEUTRAL.surface,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-  },
-  pointsText: {
-    ...TYPOGRAPHY.labelSmall,
-    fontVariant: ["tabular-nums"],
-    color: NEUTRAL.foreground,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-  },
-});

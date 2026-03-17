@@ -14,7 +14,9 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
-import { NEUTRAL, RADIUS, SPACING } from "@/lib/design-tokens";
+import { RADIUS, SPACING } from "@/lib/design-tokens";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface SkeletonProps {
   width?: DimensionValue;
@@ -46,6 +48,7 @@ export function Skeleton({
   borderRadius = RADIUS.sm,
   style,
 }: SkeletonProps) {
+  const { neutral } = useAppColorScheme();
   const shimmerPosition = useSharedValue(-1);
 
   useEffect(() => {
@@ -78,8 +81,9 @@ export function Skeleton({
       accessibilityLabel="Loading content"
       accessibilityState={{ busy: true }}
       style={[
-        styles.skeleton,
         {
+          backgroundColor: neutral.border,
+          overflow: "hidden",
           width,
           height,
           borderRadius,
@@ -150,13 +154,32 @@ export function SkeletonAvatar({ size = 40, style }: SkeletonAvatarProps) {
 
 // Event card skeleton
 export function SkeletonEventCard({ style }: SkeletonCardProps) {
+  const styles2 = useThemedStyles((n) => ({
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+    },
+    eventCardFooter: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      marginTop: SPACING.md,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: n.divider,
+    },
+  }));
+
   return (
     <View
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel="Loading event"
       accessibilityState={{ busy: true }}
-      style={[styles.card, style]}
+      style={[styles2.card, style]}
     >
       <View style={styles.eventCardContent}>
         {/* Date block */}
@@ -173,7 +196,7 @@ export function SkeletonEventCard({ style }: SkeletonCardProps) {
       </View>
 
       {/* RSVP row */}
-      <View style={styles.eventCardFooter}>
+      <View style={styles2.eventCardFooter}>
         <Skeleton width={80} height={14} />
         <Skeleton width={72} height={32} borderRadius={RADIUS.md} />
       </View>
@@ -183,13 +206,23 @@ export function SkeletonEventCard({ style }: SkeletonCardProps) {
 
 // Announcement card skeleton
 export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
+  const styles2 = useThemedStyles((n) => ({
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+    },
+  }));
+
   return (
     <View
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel="Loading announcement"
       accessibilityState={{ busy: true }}
-      style={[styles.card, style]}
+      style={[styles2.card, style]}
     >
       <View style={styles.announcementHeader}>
         <SkeletonAvatar size={36} />
@@ -209,13 +242,25 @@ export function SkeletonAnnouncementCard({ style }: SkeletonCardProps) {
 
 // Member card skeleton
 export function SkeletonMemberCard({ style }: SkeletonCardProps) {
+  const styles2 = useThemedStyles((n) => ({
+    memberCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      padding: SPACING.sm,
+      paddingLeft: SPACING.md,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.md,
+    },
+  }));
+
   return (
     <View
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel="Loading member"
       accessibilityState={{ busy: true }}
-      style={[styles.memberCard, style]}
+      style={[styles2.memberCard, style]}
     >
       <SkeletonAvatar size={40} />
       <View style={styles.memberCardContent}>
@@ -232,13 +277,23 @@ export function SkeletonMemberCard({ style }: SkeletonCardProps) {
 
 // Notification card skeleton
 export function SkeletonNotificationCard({ style }: SkeletonCardProps) {
+  const styles2 = useThemedStyles((n) => ({
+    notificationCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+    },
+  }));
+
   return (
     <View
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel="Loading notification"
       accessibilityState={{ busy: true }}
-      style={[styles.notificationCard, style]}
+      style={[styles2.notificationCard, style]}
     >
       <View style={styles.notificationContent}>
         {/* Unread indicator placeholder */}
@@ -264,9 +319,21 @@ export function SkeletonNotificationCard({ style }: SkeletonCardProps) {
 
 // Chat card skeleton
 export function SkeletonChatCard({ style }: SkeletonCardProps) {
+  const styles2 = useThemedStyles((n) => ({
+    memberCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      padding: SPACING.sm,
+      paddingLeft: SPACING.md,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.md,
+    },
+  }));
+
   return (
     <Animated.View
-      style={[styles.memberCard, style]}
+      style={[styles2.memberCard, style]}
       accessible={true}
       accessibilityRole="progressbar"
       accessibilityLabel="Loading chat group"
@@ -330,10 +397,6 @@ export function SkeletonList({
 }
 
 const styles = StyleSheet.create({
-  skeleton: {
-    backgroundColor: NEUTRAL.border,
-    overflow: "hidden",
-  },
   shimmerContainer: {
     width: "100%",
     height: "100%",
@@ -345,28 +408,12 @@ const styles = StyleSheet.create({
   textContainer: {
     width: "100%",
   },
-  card: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-  },
   eventCardContent: {
     flexDirection: "row",
     gap: SPACING.md,
   },
   eventCardText: {
     flex: 1,
-  },
-  eventCardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: SPACING.md,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: NEUTRAL.divider,
   },
   announcementHeader: {
     flexDirection: "row",
@@ -376,27 +423,11 @@ const styles = StyleSheet.create({
   announcementHeaderText: {
     flex: 1,
   },
-  memberCard: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.md,
-    padding: SPACING.sm,
-    paddingLeft: SPACING.md,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.md,
-  },
   memberCardContent: {
     flex: 1,
   },
   memberCardRight: {
     marginLeft: SPACING.sm,
-  },
-  notificationCard: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
   },
   notificationContent: {
     flexDirection: "row",

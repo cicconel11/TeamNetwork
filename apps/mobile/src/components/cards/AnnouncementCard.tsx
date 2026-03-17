@@ -4,18 +4,20 @@
  */
 
 import React, { useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, ViewStyle } from "react-native";
+import { View, Text, Pressable, ViewStyle } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
 import { Pin, MessageCircle } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
+import { RADIUS, SPACING, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import { Avatar } from "@/components/ui/Avatar";
 import { PinnedBadge } from "@/components/ui/Badge";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -51,6 +53,133 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
   style,
   maxBodyLines = 3,
 }: AnnouncementCardProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      overflow: "hidden" as const,
+      ...SHADOWS.sm,
+    },
+    header: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      padding: SPACING.md,
+      paddingBottom: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    headerText: {
+      flex: 1,
+    },
+    headerRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    authorName: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      flex: 1,
+    },
+    timestamp: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    pinContainer: {
+      padding: 4,
+    },
+    content: {
+      paddingHorizontal: SPACING.md,
+      paddingBottom: SPACING.md,
+    },
+    title: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    body: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      lineHeight: 20,
+    },
+    footer: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: n.divider,
+      gap: SPACING.md,
+    },
+    reactions: {
+      flexDirection: "row" as const,
+      gap: SPACING.xs,
+      flex: 1,
+      flexWrap: "wrap" as const,
+    },
+    reactionPill: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.background,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: RADIUS.full,
+      gap: 4,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    reactionPillPressed: {
+      backgroundColor: n.divider,
+    },
+    reactionEmoji: {
+      fontSize: 14,
+    },
+    reactionCount: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.secondary,
+    },
+    replies: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+    replyCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+
+    // Compact styles
+    compactContainer: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      ...SHADOWS.sm,
+    },
+    compactPinned: {
+      marginBottom: SPACING.xs,
+    },
+    compactTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    compactBody: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      lineHeight: 18,
+      marginBottom: SPACING.xs,
+    },
+    compactMeta: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -138,7 +267,7 @@ export const AnnouncementCard = React.memo(function AnnouncementCard({
 
           {hasReplies && (
             <View style={styles.replies}>
-              <MessageCircle size={14} color={NEUTRAL.muted} />
+              <MessageCircle size={14} color={neutral.muted} />
               <Text style={styles.replyCount}>
                 {announcement.reply_count} {announcement.reply_count === 1 ? "reply" : "replies"}
               </Text>
@@ -162,6 +291,35 @@ export const AnnouncementCardCompact = React.memo(function AnnouncementCardCompa
   onPress,
   style,
 }: AnnouncementCardCompactProps) {
+  const styles = useThemedStyles((n) => ({
+    compactContainer: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      ...SHADOWS.sm,
+    },
+    compactPinned: {
+      marginBottom: SPACING.xs,
+    },
+    compactTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      marginBottom: SPACING.xs,
+    },
+    compactBody: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      lineHeight: 18,
+      marginBottom: SPACING.xs,
+    },
+    compactMeta: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+  }));
+
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -202,130 +360,4 @@ export const AnnouncementCardCompact = React.memo(function AnnouncementCardCompa
       </Text>
     </AnimatedPressable>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    overflow: "hidden",
-    ...SHADOWS.sm,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: SPACING.md,
-    paddingBottom: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-  },
-  authorName: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-    flex: 1,
-  },
-  timestamp: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
-  pinContainer: {
-    padding: 4,
-  },
-  content: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-  },
-  title: {
-    ...TYPOGRAPHY.titleMedium,
-    color: NEUTRAL.foreground,
-    marginBottom: SPACING.xs,
-  },
-  body: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.secondary,
-    lineHeight: 20,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: NEUTRAL.divider,
-    gap: SPACING.md,
-  },
-  reactions: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-    flex: 1,
-    flexWrap: "wrap",
-  },
-  reactionPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: NEUTRAL.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADIUS.full,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-  },
-  reactionPillPressed: {
-    backgroundColor: NEUTRAL.divider,
-  },
-  reactionEmoji: {
-    fontSize: 14,
-  },
-  reactionCount: {
-    ...TYPOGRAPHY.labelSmall,
-    color: NEUTRAL.secondary,
-  },
-  replies: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  replyCount: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
-
-  // Compact styles
-  compactContainer: {
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.md,
-    ...SHADOWS.sm,
-  },
-  compactPinned: {
-    marginBottom: SPACING.xs,
-  },
-  compactTitle: {
-    ...TYPOGRAPHY.titleSmall,
-    color: NEUTRAL.foreground,
-    marginBottom: SPACING.xs,
-  },
-  compactBody: {
-    ...TYPOGRAPHY.bodySmall,
-    color: NEUTRAL.secondary,
-    lineHeight: 18,
-    marginBottom: SPACING.xs,
-  },
-  compactMeta: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
 });

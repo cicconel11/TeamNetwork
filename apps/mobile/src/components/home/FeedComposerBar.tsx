@@ -1,14 +1,16 @@
 import React from "react";
-import { Text, Pressable, StyleSheet, View } from "react-native";
+import { Text, Pressable, View } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
 } from "react-native-reanimated";
 import { Edit3 } from "lucide-react-native";
-import { NEUTRAL, SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
+import { SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { Avatar } from "@/components/ui/Avatar";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -19,6 +21,35 @@ interface FeedComposerBarProps {
 }
 
 export function FeedComposerBar({ onPress, userAvatarUrl, userName }: FeedComposerBarProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    avatarPlaceholder: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: n.background,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    placeholder: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      flex: 1,
+    },
+  }));
+
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -47,38 +78,10 @@ export function FeedComposerBar({ onPress, userAvatarUrl, userName }: FeedCompos
         />
       ) : (
         <View style={styles.avatarPlaceholder}>
-          <Edit3 size={18} color={NEUTRAL.muted} />
+          <Edit3 size={18} color={neutral.muted} />
         </View>
       )}
       <Text style={styles.placeholder}>What's on your mind?</Text>
     </AnimatedPressable>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: NEUTRAL.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderColor: NEUTRAL.border,
-    padding: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-    ...SHADOWS.sm,
-  },
-  avatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: NEUTRAL.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholder: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.muted,
-    flex: 1,
-  },
-});

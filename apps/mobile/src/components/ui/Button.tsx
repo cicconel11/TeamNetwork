@@ -19,8 +19,10 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { Check, X, HelpCircle } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, RSVP_COLORS, RADIUS, ANIMATION } from "@/lib/design-tokens";
+import { RSVP_COLORS, RADIUS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -84,6 +86,7 @@ export function Button({
   accessibilityLabel,
   accessibilityHint,
 }: ButtonProps) {
+  const { neutral, semantic } = useAppColorScheme();
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -99,26 +102,26 @@ export function Button({
   }, [scale]);
 
   const sizeStyles = SIZE_STYLES[size];
-  const variantStyles = getVariantStyles(variant, primaryColor, primaryForeground);
+  const variantStyles = getVariantStyles(variant, primaryColor, primaryForeground, neutral, semantic);
 
   const containerStyle: ViewStyle = {
-    ...styles.base,
+    ...baseStyles.base,
     ...sizeStyles.container,
     ...variantStyles.container,
     ...(pill && { borderRadius: RADIUS.full }),
-    ...(fullWidth && { width: "100%" }),
-    ...(disabled && styles.disabled),
+    ...(fullWidth && { width: "100%" as const }),
+    ...(disabled && { backgroundColor: neutral.divider, borderColor: neutral.divider }),
   };
 
   const labelStyle: TextStyle = {
     ...TYPOGRAPHY.labelLarge,
     ...sizeStyles.text,
     ...variantStyles.text,
-    ...(disabled && styles.disabledText),
+    ...(disabled && { color: neutral.disabled }),
   };
 
   const iconColor = disabled
-    ? NEUTRAL.disabled
+    ? neutral.disabled
     : variantStyles.iconColor;
 
   // Derive accessibility label from children if it's a string
@@ -144,13 +147,13 @@ export function Button({
           color={iconColor}
         />
       ) : (
-        <View style={styles.content}>
+        <View style={baseStyles.content}>
           {icon && iconPosition === "left" && (
-            <View style={styles.iconLeft}>{icon}</View>
+            <View style={baseStyles.iconLeft}>{icon}</View>
           )}
           <Text style={[labelStyle, textStyle]}>{children}</Text>
           {icon && iconPosition === "right" && (
-            <View style={styles.iconRight}>{icon}</View>
+            <View style={baseStyles.iconRight}>{icon}</View>
           )}
         </View>
       )}
@@ -166,6 +169,7 @@ export function RSVPButton({
   style,
   accessibilityHint,
 }: RSVPButtonProps) {
+  const { neutral } = useAppColorScheme();
   const scale = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -207,17 +211,17 @@ export function RSVPButton({
   };
 
   const containerStyle: ViewStyle = {
-    ...styles.base,
+    ...baseStyles.base,
     ...sizeStyles.container,
-    backgroundColor: selected ? colors.background : NEUTRAL.surface,
+    backgroundColor: selected ? colors.background : neutral.surface,
     borderWidth: 1,
-    borderColor: selected ? colors.border : NEUTRAL.border,
+    borderColor: selected ? colors.border : neutral.border,
     borderRadius: RADIUS.lg,
   };
 
   const labelStyle: TextStyle = {
     ...TYPOGRAPHY.labelMedium,
-    color: selected ? colors.text : NEUTRAL.secondary,
+    color: selected ? colors.text : neutral.secondary,
   };
 
   const rsvpLabel = getLabel();
@@ -234,9 +238,9 @@ export function RSVPButton({
       accessibilityHint={accessibilityHint}
       accessibilityState={{ selected }}
     >
-      <View style={styles.content}>
+      <View style={baseStyles.content}>
         {getIcon()}
-        <Text style={[labelStyle, styles.rsvpLabel]}>{rsvpLabel}</Text>
+        <Text style={[labelStyle, baseStyles.rsvpLabel]}>{rsvpLabel}</Text>
       </View>
     </AnimatedPressable>
   );
@@ -279,10 +283,12 @@ const SIZE_STYLES = {
 // Variant configurations
 function getVariantStyles(
   variant: ButtonVariant,
-  primaryColor?: string,
-  primaryForeground?: string
+  primaryColor: string | undefined,
+  primaryForeground: string | undefined,
+  neutral: { divider: string; foreground: string; error?: string },
+  semantic: { success: string; error: string }
 ) {
-  const primary = primaryColor || SEMANTIC.success;
+  const primary = primaryColor || semantic.success;
   const foreground = primaryForeground || "#ffffff";
 
   switch (variant) {
@@ -299,12 +305,12 @@ function getVariantStyles(
     case "secondary":
       return {
         container: {
-          backgroundColor: NEUTRAL.divider,
+          backgroundColor: neutral.divider,
         } as ViewStyle,
         text: {
-          color: NEUTRAL.foreground,
+          color: neutral.foreground,
         } as TextStyle,
-        iconColor: NEUTRAL.foreground,
+        iconColor: neutral.foreground,
       };
     case "ghost":
       return {
@@ -312,9 +318,9 @@ function getVariantStyles(
           backgroundColor: "transparent",
         } as ViewStyle,
         text: {
-          color: NEUTRAL.foreground,
+          color: neutral.foreground,
         } as TextStyle,
-        iconColor: NEUTRAL.foreground,
+        iconColor: neutral.foreground,
       };
     case "outline":
       return {
@@ -331,7 +337,7 @@ function getVariantStyles(
     case "danger":
       return {
         container: {
-          backgroundColor: SEMANTIC.error,
+          backgroundColor: semantic.error,
         } as ViewStyle,
         text: {
           color: "#ffffff",
@@ -341,7 +347,7 @@ function getVariantStyles(
   }
 }
 
-const styles = StyleSheet.create({
+const baseStyles = StyleSheet.create({
   base: {
     borderRadius: RADIUS.lg,
     alignItems: "center",
@@ -358,13 +364,6 @@ const styles = StyleSheet.create({
   },
   iconRight: {
     marginLeft: 6,
-  },
-  disabled: {
-    backgroundColor: NEUTRAL.divider,
-    borderColor: NEUTRAL.divider,
-  },
-  disabledText: {
-    color: NEUTRAL.disabled,
   },
   rsvpLabel: {
     marginLeft: 6,

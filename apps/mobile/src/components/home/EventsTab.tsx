@@ -5,17 +5,40 @@ import {
   ScrollView,
   Pressable,
   RefreshControl,
-  StyleSheet,
 } from "react-native";
 import { Calendar, Megaphone, ChevronRight } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { EventCard } from "@/components/cards/EventCard";
 import { AnnouncementCardCompact } from "@/components/cards/AnnouncementCard";
 import type { EventCardEvent } from "@/components/cards/EventCard";
 import type { AnnouncementCardAnnouncement } from "@/components/cards/AnnouncementCard";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll: () => void }) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    sectionHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+    },
+    sectionTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+    },
+    seeAllButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xxs,
+    },
+    seeAllText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+  }));
+
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -29,7 +52,7 @@ function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll: () => voi
         accessibilityLabel={`See all ${title.toLowerCase()}`}
       >
         <Text style={styles.seeAllText}>See all</Text>
-        <ChevronRight size={16} color={NEUTRAL.secondary} />
+        <ChevronRight size={16} color={neutral.secondary} />
       </Pressable>
     </View>
   );
@@ -52,6 +75,40 @@ export function EventsTab({
   onRefresh,
   onNavigate,
 }: EventsTabProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xl,
+      gap: SPACING.lg,
+    },
+    section: {
+      gap: SPACING.sm,
+    },
+    cardList: {
+      gap: SPACING.sm,
+    },
+    emptyState: {
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xl,
+      gap: SPACING.sm,
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderStyle: "dashed" as const,
+      borderColor: n.border,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+    },
+    nextUpLabel: {
+      ...TYPOGRAPHY.overline,
+      color: s.success,
+      marginBottom: SPACING.xs,
+    },
+  }));
+
   const handleEventPress = useCallback(
     (eventId: string) => onNavigate(`/(app)/${orgSlug}/events/${eventId}`),
     [onNavigate, orgSlug]
@@ -69,7 +126,7 @@ export function EventsTab({
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={SEMANTIC.success}
+          tintColor={semantic.success}
         />
       }
       showsVerticalScrollIndicator={false}
@@ -83,7 +140,7 @@ export function EventsTab({
 
         {events.length === 0 ? (
           <View style={styles.emptyState}>
-            <Calendar size={32} color={NEUTRAL.disabled} />
+            <Calendar size={32} color={neutral.disabled} />
             <Text style={styles.emptyText}>No upcoming events</Text>
           </View>
         ) : (
@@ -97,8 +154,8 @@ export function EventsTab({
                   event={event}
                   onPress={() => handleEventPress(event.id)}
                   onRSVP={() => handleEventPress(event.id)}
-                  accentColor={SEMANTIC.success}
-                  style={index === 0 ? { backgroundColor: SEMANTIC.successLight } : undefined}
+                  accentColor={semantic.success}
+                  style={index === 0 ? { backgroundColor: semantic.successLight } : undefined}
                 />
               </View>
             ))}
@@ -115,7 +172,7 @@ export function EventsTab({
 
         {announcements.length === 0 ? (
           <View style={styles.emptyState}>
-            <Megaphone size={32} color={NEUTRAL.disabled} />
+            <Megaphone size={32} color={neutral.disabled} />
             <Text style={styles.emptyText}>No announcements</Text>
           </View>
         ) : (
@@ -125,7 +182,7 @@ export function EventsTab({
                 key={announcement.id}
                 announcement={announcement}
                 onPress={() => handleAnnouncementPress(announcement.id)}
-                style={announcement.is_pinned ? { borderLeftWidth: 3, borderLeftColor: SEMANTIC.warning } : undefined}
+                style={announcement.is_pinned ? { borderLeftWidth: 3, borderLeftColor: semantic.warning } : undefined}
               />
             ))}
           </View>
@@ -134,54 +191,3 @@ export function EventsTab({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scrollContent: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xl,
-    gap: SPACING.lg,
-  },
-  section: {
-    gap: SPACING.sm,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.titleLarge,
-    color: NEUTRAL.foreground,
-  },
-  seeAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xxs,
-  },
-  seeAllText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.secondary,
-  },
-  cardList: {
-    gap: SPACING.sm,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: SPACING.xl,
-    gap: SPACING.sm,
-    backgroundColor: NEUTRAL.background,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: NEUTRAL.border,
-  },
-  emptyText: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.muted,
-  },
-  nextUpLabel: {
-    ...TYPOGRAPHY.overline,
-    color: SEMANTIC.success,
-    marginBottom: SPACING.xs,
-  },
-});

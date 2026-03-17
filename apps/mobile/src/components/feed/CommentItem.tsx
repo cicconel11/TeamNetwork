@@ -1,11 +1,13 @@
 import React, { useCallback } from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Image } from "expo-image";
 import { Trash2 } from "lucide-react-native";
-import { NEUTRAL, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatRelativeTime } from "@/lib/date-format";
 import type { FeedComment } from "@/types/feed";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface CommentItemProps {
   comment: FeedComment;
@@ -15,6 +17,56 @@ interface CommentItemProps {
 }
 
 export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemProps) {
+  const { neutral } = useAppColorScheme();
+  const styles = useThemedStyles((n) => ({
+    container: {
+      flexDirection: "row" as const,
+      paddingVertical: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    avatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    },
+    avatarFallback: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    avatarFallbackText: {
+      fontSize: 12,
+      fontWeight: "600" as const,
+      color: n.secondary,
+    },
+    content: {
+      flex: 1,
+    },
+    headerRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      marginBottom: 2,
+    },
+    authorName: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+      fontWeight: "600" as const,
+      flex: 1,
+    },
+    timestamp: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    body: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+    },
+  }));
+
   const canDelete = (isOwn || isAdmin) && !!onDelete;
   const handleDelete = useCallback(() => {
     onDelete?.(comment.id);
@@ -51,7 +103,7 @@ export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemPr
               accessibilityLabel="Delete comment"
               accessibilityRole="button"
             >
-              <Trash2 size={14} color={NEUTRAL.placeholder} />
+              <Trash2 size={14} color={neutral.placeholder} />
             </Pressable>
           )}
         </View>
@@ -60,52 +112,3 @@ export function CommentItem({ comment, isOwn, isAdmin, onDelete }: CommentItemPr
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: "row",
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  avatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: NEUTRAL.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarFallbackText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: NEUTRAL.secondary,
-  },
-  content: {
-    flex: 1,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    marginBottom: 2,
-  },
-  authorName: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.foreground,
-    fontWeight: "600",
-    flex: 1,
-  },
-  timestamp: {
-    ...TYPOGRAPHY.caption,
-    color: NEUTRAL.muted,
-  },
-  body: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.foreground,
-  },
-});

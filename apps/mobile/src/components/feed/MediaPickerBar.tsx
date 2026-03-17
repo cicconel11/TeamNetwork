@@ -5,13 +5,14 @@ import {
   Pressable,
   ScrollView,
   ActivityIndicator,
-  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { ImagePlus, X, AlertCircle } from "lucide-react-native";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import type { PendingImage } from "@/hooks/useMediaUpload";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface MediaPickerBarProps {
   readonly images: readonly PendingImage[];
@@ -30,6 +31,90 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
   onRemove,
   maxImages,
 }: MediaPickerBarProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      paddingVertical: SPACING.sm,
+      borderTopWidth: 0.5,
+      borderTopColor: n.border,
+    },
+    scrollContent: {
+      paddingHorizontal: SPACING.md,
+      gap: SPACING.sm,
+      alignItems: "center" as const,
+    },
+    thumbWrapper: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: RADIUS.sm,
+      overflow: "hidden" as const,
+    },
+    thumb: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+    },
+    overlay: {
+      ...{ position: "absolute" as const, top: 0, left: 0, right: 0, bottom: 0 },
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    errorOverlay: {
+      backgroundColor: "rgba(220, 38, 38, 0.5)",
+    },
+    doneOverlay: {
+      backgroundColor: "rgba(5, 150, 105, 0.5)",
+    },
+    checkmark: {
+      color: n.surface,
+      fontSize: 20,
+      fontWeight: "700" as const,
+    },
+    removeButton: {
+      position: "absolute" as const,
+      top: 4,
+      right: 4,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    addMoreButton: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: RADIUS.sm,
+      borderWidth: 1.5,
+      borderColor: n.border,
+      borderStyle: "dashed" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    addButtonContainer: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs,
+      borderTopWidth: 0.5,
+      borderTopColor: n.border,
+    },
+    addPhotoButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+      paddingVertical: SPACING.xs,
+    },
+    addPhotoText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.muted,
+    },
+    progressText: {
+      ...TYPOGRAPHY.caption,
+      color: s.info,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+    },
+  }));
+
   if (images.length === 0 && !isUploading) {
     return (
       <View style={styles.addButtonContainer}>
@@ -39,7 +124,7 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
           accessibilityLabel="Add photos"
           accessibilityRole="button"
         >
-          <ImagePlus size={20} color={NEUTRAL.muted} />
+          <ImagePlus size={20} color={neutral.muted} />
           <Text style={styles.addPhotoText}>Add Photos</Text>
         </Pressable>
       </View>
@@ -69,14 +154,14 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
             {/* Upload overlay */}
             {image.status === "uploading" && (
               <View style={styles.overlay}>
-                <ActivityIndicator size="small" color={NEUTRAL.surface} />
+                <ActivityIndicator size="small" color={neutral.surface} />
               </View>
             )}
 
             {/* Error overlay */}
             {image.status === "error" && (
               <View style={[styles.overlay, styles.errorOverlay]}>
-                <AlertCircle size={18} color={NEUTRAL.surface} />
+                <AlertCircle size={18} color={neutral.surface} />
               </View>
             )}
 
@@ -96,7 +181,7 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
                 accessibilityRole="button"
                 hitSlop={8}
               >
-                <X size={12} color={NEUTRAL.surface} />
+                <X size={12} color={neutral.surface} />
               </Pressable>
             )}
           </View>
@@ -110,7 +195,7 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
             accessibilityLabel="Add more photos"
             accessibilityRole="button"
           >
-            <ImagePlus size={24} color={NEUTRAL.muted} />
+            <ImagePlus size={24} color={neutral.muted} />
           </Pressable>
         )}
       </ScrollView>
@@ -123,87 +208,4 @@ export const MediaPickerBar = React.memo(function MediaPickerBar({
       )}
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  container: {
-    paddingVertical: SPACING.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: NEUTRAL.border,
-  },
-  scrollContent: {
-    paddingHorizontal: SPACING.md,
-    gap: SPACING.sm,
-    alignItems: "center",
-  },
-  thumbWrapper: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: RADIUS.sm,
-    overflow: "hidden",
-  },
-  thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorOverlay: {
-    backgroundColor: "rgba(220, 38, 38, 0.5)",
-  },
-  doneOverlay: {
-    backgroundColor: "rgba(5, 150, 105, 0.5)",
-  },
-  checkmark: {
-    color: NEUTRAL.surface,
-    fontSize: 20,
-    fontWeight: "700",
-  },
-  removeButton: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addMoreButton: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1.5,
-    borderColor: NEUTRAL.border,
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addButtonContainer: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: NEUTRAL.border,
-  },
-  addPhotoButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xs,
-    paddingVertical: SPACING.xs,
-  },
-  addPhotoText: {
-    ...TYPOGRAPHY.labelSmall,
-    color: NEUTRAL.muted,
-  },
-  progressText: {
-    ...TYPOGRAPHY.caption,
-    color: SEMANTIC.info,
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.xs,
-  },
 });

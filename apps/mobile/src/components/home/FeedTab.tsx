@@ -7,11 +7,10 @@ import {
   RefreshControl,
   Pressable,
   ScrollView,
-  StyleSheet,
 } from "react-native";
 import { PenSquare, ChevronRight } from "lucide-react-native";
 import Animated, { FadeInUp, FadeOutUp } from "react-native-reanimated";
-import { NEUTRAL, SEMANTIC, SPACING, RADIUS } from "@/lib/design-tokens";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { PostCard } from "@/components/feed/PostCard";
 import { NewPostsBanner } from "@/components/feed/NewPostsBanner";
@@ -21,6 +20,8 @@ import { AnnouncementCardCompact } from "@/components/cards/AnnouncementCard";
 import type { FeedPost } from "@/types/feed";
 import type { EventCardEvent } from "@/components/cards/EventCard";
 import type { AnnouncementCardAnnouncement } from "@/components/cards/AnnouncementCard";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface FeedTabProps {
   posts: FeedPost[];
@@ -63,6 +64,102 @@ export function FeedTab({
   userAvatarUrl,
   userName,
 }: FeedTabProps) {
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+    },
+    listContent: {
+      paddingBottom: SPACING.xl,
+    },
+    sectionBlock: {
+      paddingTop: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    sectionHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingHorizontal: SPACING.md,
+      marginBottom: SPACING.xs,
+    },
+    sectionLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    seeAllButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xxs,
+    },
+    seeAllText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: s.info,
+    },
+    eventStripContent: {
+      paddingHorizontal: SPACING.md,
+    },
+    eventCard: {
+      width: 260,
+      marginRight: SPACING.sm,
+    },
+    pinnedWrapper: {
+      marginHorizontal: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    pinnedCard: {
+      borderLeftWidth: 3,
+      borderLeftColor: s.warning,
+    },
+    composerWrapper: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+    },
+    loadingMore: {
+      paddingVertical: SPACING.lg,
+    },
+    emptyState: {
+      alignItems: "center" as const,
+      paddingVertical: SPACING.xxxl,
+      paddingHorizontal: SPACING.xl,
+      gap: SPACING.sm,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: n.foreground,
+      marginTop: SPACING.sm,
+    },
+    emptyBody: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    emptyButton: {
+      marginTop: SPACING.md,
+      backgroundColor: s.info,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.lg,
+      borderRadius: RADIUS.lg,
+    },
+    emptyButtonPressed: {
+      opacity: 0.7,
+    },
+    emptyButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.surface,
+    },
+    skeletonContainer: {
+      flex: 1,
+      gap: SPACING.sm,
+      padding: SPACING.md,
+    },
+    skeletonCard: {
+      height: 120,
+      backgroundColor: n.divider,
+      borderRadius: RADIUS.lg,
+    },
+  }));
+
   const renderItem = useCallback(
     ({ item }: { item: FeedPost }) => (
       <PostCard post={item} onPress={onPostPress} onLikeToggle={onLikeToggle} />
@@ -86,7 +183,7 @@ export function FeedTab({
                 accessibilityLabel="See all events"
               >
                 <Text style={styles.seeAllText}>See all</Text>
-                <ChevronRight size={14} color={SEMANTIC.info} />
+                <ChevronRight size={14} color={semantic.info} />
               </Pressable>
             </View>
             <ScrollView
@@ -133,22 +230,24 @@ export function FeedTab({
       onCreatePost,
       userAvatarUrl,
       userName,
+      styles,
+      semantic.info,
     ]
   );
 
   const ListFooterComponent = useMemo(
     () =>
       loadingMore ? (
-        <ActivityIndicator size="small" color={SEMANTIC.info} style={styles.loadingMore} />
+        <ActivityIndicator size="small" color={semantic.info} style={styles.loadingMore} />
       ) : null,
-    [loadingMore]
+    [loadingMore, semantic.info, styles.loadingMore]
   );
 
   const ListEmptyComponent = useMemo(
     () =>
       !loading ? (
         <View style={styles.emptyState}>
-          <PenSquare size={40} color={NEUTRAL.disabled} />
+          <PenSquare size={40} color={neutral.disabled} />
           <Text style={styles.emptyTitle}>No Posts Yet</Text>
           <Text style={styles.emptyBody}>
             Be the first to share something with the team.
@@ -166,7 +265,7 @@ export function FeedTab({
           </Pressable>
         </View>
       ) : null,
-    [loading, onCreatePost]
+    [loading, onCreatePost, styles, neutral.disabled]
   );
 
   if (loading && posts.length === 0) {
@@ -195,7 +294,7 @@ export function FeedTab({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={SEMANTIC.success}
+            tintColor={semantic.success}
           />
         }
         contentContainerStyle={styles.listContent}
@@ -212,98 +311,3 @@ export function FeedTab({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  listContent: {
-    paddingBottom: SPACING.xl,
-  },
-  sectionBlock: {
-    paddingTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.xs,
-  },
-  sectionLabel: {
-    ...TYPOGRAPHY.labelMedium,
-    color: NEUTRAL.muted,
-  },
-  seeAllButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.xxs,
-  },
-  seeAllText: {
-    ...TYPOGRAPHY.labelMedium,
-    color: SEMANTIC.info,
-  },
-  eventStripContent: {
-    paddingHorizontal: SPACING.md,
-  },
-  eventCard: {
-    width: 260,
-    marginRight: SPACING.sm,
-  },
-  pinnedWrapper: {
-    marginHorizontal: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  pinnedCard: {
-    borderLeftWidth: 3,
-    borderLeftColor: SEMANTIC.warning,
-  },
-  composerWrapper: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-  },
-  loadingMore: {
-    paddingVertical: SPACING.lg,
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: SPACING.xxxl,
-    paddingHorizontal: SPACING.xl,
-    gap: SPACING.sm,
-  },
-  emptyTitle: {
-    ...TYPOGRAPHY.headlineSmall,
-    color: NEUTRAL.foreground,
-    marginTop: SPACING.sm,
-  },
-  emptyBody: {
-    ...TYPOGRAPHY.bodyMedium,
-    color: NEUTRAL.muted,
-    textAlign: "center",
-  },
-  emptyButton: {
-    marginTop: SPACING.md,
-    backgroundColor: SEMANTIC.info,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    borderRadius: RADIUS.lg,
-  },
-  emptyButtonPressed: {
-    opacity: 0.7,
-  },
-  emptyButtonText: {
-    ...TYPOGRAPHY.labelLarge,
-    color: NEUTRAL.surface,
-  },
-  skeletonContainer: {
-    flex: 1,
-    gap: SPACING.sm,
-    padding: SPACING.md,
-  },
-  skeletonCard: {
-    height: 120,
-    backgroundColor: NEUTRAL.divider,
-    borderRadius: RADIUS.lg,
-  },
-});
