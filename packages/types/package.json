@@ -8,6 +8,9 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
   }
 }

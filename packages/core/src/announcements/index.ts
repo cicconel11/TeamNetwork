@@ -36,8 +36,9 @@ const canViewAnnouncement = (announcement: Announcement, ctx: ViewerContext) => 
  */
 export function filterAnnouncementsForUser(
   announcements: Announcement[] | null | undefined,
-  ctx: ViewerContext
+  ctx: ViewerContext | null | undefined
 ): Announcement[] {
   if (!announcements || announcements.length === 0) return [];
+  if (!ctx) return [];
   return announcements.filter((announcement) => canViewAnnouncement(announcement, ctx));
 }

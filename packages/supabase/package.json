@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.86.2",
-    "@teammeet/types": "*"
+    "@teammeet/types": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0"
+    "typescript": "^5.9.2"
   }
 }

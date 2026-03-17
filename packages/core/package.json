@@ -13,9 +13,12 @@
     "./formatters": "./src/formatters/index.ts"
   },
   "scripts": {
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@teammeet/types": "*"
+    "@teammeet/types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
   }
 }

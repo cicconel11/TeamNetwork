@@ -22,4 +22,17 @@ config.resolver.extraNodeModules = {
   "react-native-web": path.resolve(projectRoot, "node_modules/react-native-web"),
 };
 
+// Stub out native-only modules when bundling for web
+const nativeOnlyModules = ["@stripe/stripe-react-native"];
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === "web" && nativeOnlyModules.some((m) => moduleName.startsWith(m))) {
+    return { type: "empty" };
+  }
+  if (originalResolveRequest) {
+    return originalResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;
