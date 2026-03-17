@@ -12,6 +12,7 @@ import { StripeWebView } from "@/components/StripeWebView";
 import { fetchWithAuth } from "@/lib/web-api";
 import { captureException } from "@/lib/analytics";
 import type { AlumniBucket } from "@teammeet/types";
+import { ALUMNI_LIMITS } from "@teammeet/core";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { buildSettingsColors } from "./settingsColors";
 import { useBaseStyles, formatDate, formatBucket, fontSize, fontWeight } from "./settingsShared";
@@ -35,15 +36,6 @@ interface Props {
   refetchSubscription: () => void;
 }
 
-const ALUMNI_LIMITS: Record<AlumniBucket, number | null> = {
-  none: 0,
-  "0-250": 250,
-  "251-500": 500,
-  "501-1000": 1000,
-  "1001-2500": 2500,
-  "2500-5000": 5000,
-  "5000+": null,
-};
 
 const BUCKET_OPTIONS: { value: AlumniBucket; label: string }[] = [
   { value: "0-250", label: "0\u2013250 alumni" },
