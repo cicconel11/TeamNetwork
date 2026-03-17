@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useFocusEffect, useNavigation } from "expo-router";
-import { Bell, RefreshCw } from "lucide-react-native";
+import { Bell, RefreshCw, Search } from "lucide-react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -201,6 +201,11 @@ export default function HomeScreen() {
     [router, orgSlug]
   );
 
+  const handleSearchPress = useCallback(
+    () => router.push(`/(app)/(drawer)/${orgSlug}/search` as any),
+    [router, orgSlug]
+  );
+
   // Derive user identity for child tabs
   const userMeta = useMemo(
     () => (user?.user_metadata ?? {}) as { name?: string; avatar_url?: string },
@@ -334,10 +339,20 @@ export default function HomeScreen() {
               </Text>
             </View>
 
+            {/* Search icon */}
+            <Pressable
+              onPress={handleSearchPress}
+              style={styles.headerIconButton}
+              accessibilityLabel="Search"
+              accessibilityRole="button"
+            >
+              <Search size={22} color={APP_CHROME.headerMeta} />
+            </Pressable>
+
             {/* Bell icon */}
             <Pressable
               onPress={handleBellPress}
-              style={styles.bellButton}
+              style={styles.headerIconButton}
               accessibilityLabel="Notifications"
               accessibilityRole="button"
             >
@@ -493,7 +508,7 @@ const styles = StyleSheet.create({
     color: APP_CHROME.headerMeta,
     marginTop: 2,
   },
-  bellButton: {
+  headerIconButton: {
     width: 36,
     height: 36,
     alignItems: "center",

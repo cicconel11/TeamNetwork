@@ -154,6 +154,14 @@ function OrgLayoutInner() {
           headerShown: false,
         }}
       />
+      <Stack.Screen
+        name="search"
+        options={{
+          headerShown: true,
+          title: "Search",
+          presentation: "card",
+        }}
+      />
     </Stack>
   );
 }
