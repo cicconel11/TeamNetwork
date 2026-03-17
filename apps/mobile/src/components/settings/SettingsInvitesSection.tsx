@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   TextInput,
   Pressable,
@@ -31,8 +30,10 @@ import {
 } from "@/hooks/useInvites";
 import { getRoleLabel } from "@/hooks/useMemberships";
 import { getWebAppUrl } from "@/lib/web-api";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, formatDate, formatBucket, fontSize, fontWeight } from "./settingsShared";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, formatDate, formatBucket, fontSize, fontWeight } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface Props {
   orgId: string;
@@ -42,6 +43,9 @@ interface Props {
 
 export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) {
   const { invites, loading: invitesLoading, createInvite, revokeInvite, deleteInvite } = useInvites(orgId);
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
 
   const [expanded, setExpanded] = useState(false);
   const [showInviteForm, setShowInviteForm] = useState(false);
@@ -51,9 +55,207 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
   const [showQRCode, setShowQRCode] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
 
+  const styles = useThemedStyles((n, s) => ({
+    badge: {
+      backgroundColor: s.warning,
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: "#fff",
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    fieldLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      fontSize: fontSize.base,
+      color: n.foreground,
+      marginBottom: 12,
+    },
+    button: {
+      flex: 1,
+      backgroundColor: s.success,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+    },
+    quotaContainer: {
+      gap: 8,
+    },
+    quotaRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+    },
+    quotaLabel: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+    quotaValue: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    createButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 8,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: s.success,
+      borderStyle: "dashed" as const,
+    },
+    createButtonText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.medium,
+      color: s.success,
+    },
+    inviteForm: {
+      marginTop: 16,
+    },
+    roleButtons: {
+      flexDirection: "row" as const,
+      gap: 8,
+      marginBottom: 16,
+    },
+    roleButton: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    roleButtonActive: {
+      borderColor: s.success,
+      backgroundColor: s.success + "10",
+    },
+    roleButtonText: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+    roleButtonTextActive: {
+      color: s.success,
+      fontWeight: fontWeight.semibold,
+    },
+    formActions: {
+      flexDirection: "row" as const,
+      gap: 12,
+      marginTop: 8,
+    },
+    cancelButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    cancelButtonText: {
+      fontSize: fontSize.base,
+      color: n.muted,
+    },
+    invitesList: {
+      marginTop: 16,
+      gap: 12,
+    },
+    inviteItem: {
+      backgroundColor: n.background,
+      padding: 12,
+      borderRadius: 8,
+    },
+    inviteItemInvalid: {
+      opacity: 0.6,
+    },
+    inviteHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+      flexWrap: "wrap" as const,
+    },
+    inviteCode: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.bold,
+      fontFamily: "monospace",
+      color: n.foreground,
+    },
+    roleBadge: {
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 4,
+    },
+    roleBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    statusBadge: {
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: 4,
+    },
+    statusBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+    },
+    inviteMeta: {
+      fontSize: 13,
+      color: n.placeholder,
+      marginTop: 8,
+    },
+    inviteActions: {
+      flexDirection: "row" as const,
+      gap: 16,
+      marginTop: 12,
+    },
+    inviteAction: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+    },
+    inviteActionText: {
+      fontSize: fontSize.sm,
+      color: s.success,
+    },
+    qrContainer: {
+      alignItems: "center" as const,
+      paddingTop: 16,
+      marginTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+    },
+    emptyText: {
+      fontSize: fontSize.sm,
+      color: n.placeholder,
+      textAlign: "center" as const,
+      paddingVertical: 24,
+    },
+  }));
+
   if (!isAdmin) return null;
 
-  const colors = SETTINGS_COLORS;
   const validInviteCount = invites.filter(isInviteValid).length;
 
   const handleCreateInvite = async () => {
@@ -333,204 +535,3 @@ export function SettingsInvitesSection({ orgId, isAdmin, subscription }: Props) 
     </View>
   );
 }
-
-const c = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-  badge: {
-    backgroundColor: c.warning,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: "#fff",
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  fieldLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: c.foreground,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: c.background,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: fontSize.base,
-    color: c.foreground,
-    marginBottom: 12,
-  },
-  button: {
-    flex: 1,
-    backgroundColor: c.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonText: {
-    color: c.primaryForeground,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-  },
-  quotaContainer: {
-    gap: 8,
-  },
-  quotaRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  quotaLabel: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-  },
-  quotaValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: c.foreground,
-  },
-  createButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.primary,
-    borderStyle: "dashed",
-  },
-  createButtonText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.medium,
-    color: c.primary,
-  },
-  inviteForm: {
-    marginTop: 16,
-  },
-  roleButtons: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 16,
-  },
-  roleButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.border,
-    alignItems: "center",
-  },
-  roleButtonActive: {
-    borderColor: c.primary,
-    backgroundColor: c.primary + "10",
-  },
-  roleButtonText: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-  },
-  roleButtonTextActive: {
-    color: c.primary,
-    fontWeight: fontWeight.semibold,
-  },
-  formActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.border,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    fontSize: fontSize.base,
-    color: c.muted,
-  },
-  invitesList: {
-    marginTop: 16,
-    gap: 12,
-  },
-  inviteItem: {
-    backgroundColor: c.background,
-    padding: 12,
-    borderRadius: 8,
-  },
-  inviteItemInvalid: {
-    opacity: 0.6,
-  },
-  inviteHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  inviteCode: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-    fontFamily: "monospace",
-    color: c.foreground,
-  },
-  roleBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  roleBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.semibold,
-  },
-  statusBadge: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 4,
-  },
-  statusBadgeText: {
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.medium,
-  },
-  inviteMeta: {
-    fontSize: 13,
-    color: c.mutedForeground,
-    marginTop: 8,
-  },
-  inviteActions: {
-    flexDirection: "row",
-    gap: 16,
-    marginTop: 12,
-  },
-  inviteAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  inviteActionText: {
-    fontSize: fontSize.sm,
-    color: c.primary,
-  },
-  qrContainer: {
-    alignItems: "center",
-    paddingTop: 16,
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: c.border,
-  },
-  emptyText: {
-    fontSize: fontSize.sm,
-    color: c.mutedForeground,
-    textAlign: "center",
-    paddingVertical: 24,
-  },
-});

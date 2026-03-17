@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   Alert,
@@ -12,8 +11,10 @@ import {
 import { AlertTriangle, ChevronDown } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { fetchWithAuth } from "@/lib/web-api";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, formatDate, fontSize, fontWeight } from "./settingsShared";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, formatDate, fontSize, fontWeight } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface Props {
   orgId: string;
@@ -25,12 +26,134 @@ interface Props {
 
 export function SettingsDangerSection({ orgId, orgName, isAdmin, subscription, refetchSubscription }: Props) {
   const router = useRouter();
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
 
   const [expanded, setExpanded] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+
+  const styles = useThemedStyles((n, s) => ({
+    dangerCard: {
+      borderWidth: 1,
+      borderColor: s.warning + "50",
+      backgroundColor: s.warning + "08",
+    },
+    dangerItem: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      justifyContent: "space-between" as const,
+      gap: 12,
+    },
+    dangerInfo: {
+      flex: 1,
+    },
+    dangerTitle: {
+      fontSize: 15,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      marginBottom: 4,
+    },
+    dangerDescription: {
+      fontSize: 13,
+      color: n.placeholder,
+    },
+    dangerButton: {
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: s.warning,
+    },
+    dangerButtonText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: s.warning,
+    },
+    deleteButton: {
+      backgroundColor: s.error,
+      borderColor: s.error,
+    },
+    deleteButtonText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: "#fff",
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: 24,
+    },
+    modalContent: {
+      backgroundColor: n.surface,
+      borderRadius: 16,
+      padding: 24,
+      width: "100%" as const,
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+      marginBottom: 12,
+    },
+    modalDescription: {
+      fontSize: 15,
+      color: n.placeholder,
+      marginBottom: 20,
+    },
+    modalBold: {
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    modalInput: {
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      fontSize: fontSize.base,
+      color: n.foreground,
+      marginBottom: 20,
+    },
+    modalActions: {
+      flexDirection: "row" as const,
+      gap: 12,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    modalCancelText: {
+      fontSize: fontSize.base,
+      color: n.muted,
+    },
+    modalDeleteButton: {
+      flex: 1,
+      backgroundColor: s.error,
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    modalDeleteText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: "#fff",
+    },
+  }));
 
   if (!isAdmin) return null;
 
@@ -114,8 +237,6 @@ export function SettingsDangerSection({ orgId, orgName, isAdmin, subscription, r
       setDeleteConfirmText("");
     }
   };
-
-  const colors = SETTINGS_COLORS;
 
   return (
     <>
@@ -233,124 +354,3 @@ export function SettingsDangerSection({ orgId, orgName, isAdmin, subscription, r
     </>
   );
 }
-
-const colors = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-  dangerCard: {
-    borderWidth: 1,
-    borderColor: colors.warning + "50",
-    backgroundColor: colors.warning + "08",
-  },
-  dangerItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  dangerInfo: {
-    flex: 1,
-  },
-  dangerTitle: {
-    fontSize: 15,
-    fontWeight: fontWeight.medium,
-    color: colors.foreground,
-    marginBottom: 4,
-  },
-  dangerDescription: {
-    fontSize: 13,
-    color: colors.mutedForeground,
-  },
-  dangerButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: colors.warning,
-  },
-  dangerButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: colors.warning,
-  },
-  deleteButton: {
-    backgroundColor: colors.error,
-    borderColor: colors.error,
-  },
-  deleteButtonText: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: "#fff",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 24,
-    width: "100%",
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-    marginBottom: 12,
-  },
-  modalDescription: {
-    fontSize: 15,
-    color: colors.mutedForeground,
-    marginBottom: 20,
-  },
-  modalBold: {
-    fontWeight: fontWeight.semibold,
-    color: colors.foreground,
-  },
-  modalInput: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: fontSize.base,
-    color: colors.foreground,
-    marginBottom: 20,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-  },
-  modalCancelText: {
-    fontSize: fontSize.base,
-    color: colors.muted,
-  },
-  modalDeleteButton: {
-    flex: 1,
-    backgroundColor: colors.error,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  modalDeleteText: {
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-    color: "#fff",
-  },
-});

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   Alert,
@@ -13,8 +12,10 @@ import { StripeWebView } from "@/components/StripeWebView";
 import { fetchWithAuth } from "@/lib/web-api";
 import { captureException } from "@/lib/analytics";
 import type { AlumniBucket } from "@teammeet/types";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, formatDate, formatBucket, fontSize, fontWeight } from "./settingsShared";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, formatDate, formatBucket, fontSize, fontWeight } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface SubscriptionData {
   status: string;
@@ -53,8 +54,10 @@ const BUCKET_OPTIONS: { value: AlumniBucket; label: string }[] = [
   { value: "5000+", label: "5,000+ (contact us)" },
 ];
 
-function formatStatus(status: string): { label: string; color: string } {
-  const colors = SETTINGS_COLORS;
+function formatStatus(
+  status: string,
+  colors: { success: string; primary: string; warning: string; error: string; mutedForeground: string }
+): { label: string; color: string } {
   switch (status) {
     case "active":
       return { label: "Active", color: colors.success };
@@ -82,6 +85,10 @@ export function SettingsBillingSection({
   subError,
   refetchSubscription,
 }: Props) {
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
+
   const [expanded, setExpanded] = useState(true);
   const [billingPortalUrl, setBillingPortalUrl] = useState<string | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
@@ -96,10 +103,204 @@ export function SettingsBillingSection({
     }
   }, [subscription?.bucket]);
 
+  const styles = useThemedStyles((n, s) => ({
+    loadingText: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+    errorContainer: {
+      padding: 16,
+      alignItems: "center" as const,
+      gap: 12,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: s.error,
+      textAlign: "center" as const,
+    },
+    retryButton: {
+      backgroundColor: s.success,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 6,
+    },
+    retryButtonText: {
+      color: "#ffffff",
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    fieldGroup: {
+      marginBottom: 16,
+    },
+    fieldLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      marginBottom: 8,
+    },
+    button: {
+      backgroundColor: s.success,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+    },
+    subscriptionCard: {
+      gap: 12,
+    },
+    subscriptionRow: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+    },
+    subscriptionLabel: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+    subscriptionValue: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    statusBadgeLarge: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: 12,
+      gap: 6,
+    },
+    statusDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+    statusTextLarge: {
+      fontSize: 13,
+      fontWeight: fontWeight.semibold,
+    },
+    pickerButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+    },
+    pickerButtonText: {
+      fontSize: fontSize.base,
+      color: n.foreground,
+    },
+    intervalRow: {
+      flexDirection: "row" as const,
+      gap: 8,
+      marginBottom: 12,
+    },
+    intervalButton: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    intervalButtonActive: {
+      borderColor: s.success,
+      backgroundColor: s.success + "10",
+    },
+    intervalButtonText: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+    intervalButtonTextActive: {
+      color: s.success,
+      fontWeight: fontWeight.semibold,
+    },
+    billingButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: s.success,
+      paddingVertical: 12,
+      borderRadius: 8,
+      gap: 8,
+    },
+    billingButtonText: {
+      color: "#ffffff",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+    },
+    noSubscription: {
+      padding: 24,
+      alignItems: "center" as const,
+      gap: 8,
+    },
+    noSubscriptionText: {
+      fontSize: 15,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      textAlign: "center" as const,
+    },
+    noSubscriptionHint: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    pickerOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      justifyContent: "flex-end" as const,
+    },
+    pickerContent: {
+      backgroundColor: n.surface,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      padding: 20,
+      paddingBottom: 40,
+    },
+    pickerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+      marginBottom: 16,
+      textAlign: "center" as const,
+    },
+    pickerOption: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingVertical: 14,
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    pickerOptionDisabled: {
+      opacity: 0.5,
+    },
+    pickerOptionText: {
+      fontSize: fontSize.base,
+      color: n.foreground,
+    },
+    pickerOptionTextDisabled: {
+      color: n.muted,
+    },
+  }));
+
   if (!isAdmin) return null;
 
-  const colors = SETTINGS_COLORS;
-  const statusInfo = subscription ? formatStatus(subscription.status) : null;
+  const statusInfo = subscription ? formatStatus(subscription.status, colors) : null;
 
   const handleManageBilling = async () => {
     if (!orgId) return;
@@ -358,200 +559,3 @@ export function SettingsBillingSection({
     </>
   );
 }
-
-const c = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-  loadingText: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-  },
-  errorContainer: {
-    padding: 16,
-    alignItems: "center",
-    gap: 12,
-  },
-  errorText: {
-    fontSize: fontSize.sm,
-    color: c.error,
-    textAlign: "center",
-  },
-  retryButton: {
-    backgroundColor: c.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-  },
-  retryButtonText: {
-    color: c.primaryForeground,
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-  },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.medium,
-    color: c.foreground,
-    marginBottom: 8,
-  },
-  button: {
-    backgroundColor: c.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: c.primaryForeground,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-  },
-  subscriptionCard: {
-    gap: 12,
-  },
-  subscriptionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  subscriptionLabel: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-  },
-  subscriptionValue: {
-    fontSize: fontSize.sm,
-    fontWeight: fontWeight.semibold,
-    color: c.foreground,
-  },
-  statusBadgeLarge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusTextLarge: {
-    fontSize: 13,
-    fontWeight: fontWeight.semibold,
-  },
-  pickerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: c.background,
-    borderWidth: 1,
-    borderColor: c.border,
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  pickerButtonText: {
-    fontSize: fontSize.base,
-    color: c.foreground,
-  },
-  intervalRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  intervalButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.border,
-    alignItems: "center",
-  },
-  intervalButtonActive: {
-    borderColor: c.primary,
-    backgroundColor: c.primary + "10",
-  },
-  intervalButtonText: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-  },
-  intervalButtonTextActive: {
-    color: c.primary,
-    fontWeight: fontWeight.semibold,
-  },
-  billingButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: c.primary,
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-  },
-  billingButtonText: {
-    color: c.primaryForeground,
-    fontSize: fontSize.base,
-    fontWeight: fontWeight.semibold,
-  },
-  noSubscription: {
-    padding: 24,
-    alignItems: "center",
-    gap: 8,
-  },
-  noSubscriptionText: {
-    fontSize: 15,
-    fontWeight: fontWeight.medium,
-    color: c.foreground,
-    textAlign: "center",
-  },
-  noSubscriptionHint: {
-    fontSize: fontSize.sm,
-    color: c.muted,
-    textAlign: "center",
-  },
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  pickerContent: {
-    backgroundColor: c.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-  },
-  pickerTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: fontWeight.semibold,
-    color: c.foreground,
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  pickerOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: c.border,
-  },
-  pickerOptionDisabled: {
-    opacity: 0.5,
-  },
-  pickerOptionText: {
-    fontSize: fontSize.base,
-    color: c.foreground,
-  },
-  pickerOptionTextDisabled: {
-    color: c.muted,
-  },
-});

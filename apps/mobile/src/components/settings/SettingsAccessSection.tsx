@@ -2,7 +2,6 @@ import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   Pressable,
   Alert,
@@ -11,8 +10,10 @@ import {
 import { Image } from "expo-image";
 import { Users, ChevronDown, Check, X } from "lucide-react-native";
 import { useMemberships, getRoleLabel } from "@/hooks/useMemberships";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, formatDate, fontSize, fontWeight } from "./settingsShared";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, formatDate, fontSize, fontWeight } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface Props {
   orgId: string;
@@ -30,15 +31,201 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
     approveMember,
     rejectMember,
   } = useMemberships(orgId);
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
 
   const [expanded, setExpanded] = useState(false);
   const [showAdminConfirm, setShowAdminConfirm] = useState(false);
   const [pendingAdminUserId, setPendingAdminUserId] = useState<string | null>(null);
   const [roleChanging, setRoleChanging] = useState<string | null>(null);
 
+  const styles = useThemedStyles((n, s) => ({
+    badge: {
+      backgroundColor: s.warning,
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: "#fff",
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+    },
+    subsectionTitle: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+      color: n.muted,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.5,
+      marginBottom: 12,
+    },
+    memberItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    memberItemRevoked: {
+      opacity: 0.6,
+    },
+    memberInfo: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      flex: 1,
+      gap: 12,
+    },
+    memberAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+    },
+    memberAvatarPlaceholder: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: s.successLight,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    memberAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: s.success,
+    },
+    memberDetails: {
+      flex: 1,
+    },
+    memberName: {
+      fontSize: 15,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+    },
+    memberEmail: {
+      fontSize: 13,
+      color: n.placeholder,
+    },
+    memberMeta: {
+      fontSize: fontSize.xs,
+      color: n.muted,
+      marginTop: 2,
+    },
+    memberActions: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+    },
+    approveButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: s.success + "20",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    rejectButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: s.error + "20",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    roleSelector: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 4,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      borderRadius: 6,
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    roleSelectorText: {
+      fontSize: 13,
+      color: n.foreground,
+    },
+    removeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    restoreButton: {
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 6,
+      backgroundColor: s.success,
+    },
+    restoreButtonText: {
+      fontSize: 13,
+      fontWeight: fontWeight.medium,
+      color: "#ffffff",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      padding: 24,
+    },
+    modalContent: {
+      backgroundColor: n.surface,
+      borderRadius: 16,
+      padding: 24,
+      width: "100%" as const,
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+      marginBottom: 12,
+    },
+    modalDescription: {
+      fontSize: 15,
+      color: n.placeholder,
+      marginBottom: 20,
+    },
+    modalActions: {
+      flexDirection: "row" as const,
+      gap: 12,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+    },
+    modalCancelText: {
+      fontSize: fontSize.base,
+      color: n.muted,
+    },
+    modalConfirmButton: {
+      flex: 1,
+      backgroundColor: s.warning,
+      paddingVertical: 12,
+      borderRadius: 8,
+      alignItems: "center" as const,
+    },
+    modalConfirmText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: "#fff",
+    },
+  }));
+
   if (!isAdmin) return null;
 
-  const colors = SETTINGS_COLORS;
   const activeMembers = useMemo(() => memberships.filter((m) => m.status === "active"), [memberships]);
   const revokedMembers = useMemo(() => memberships.filter((m) => m.status === "revoked"), [memberships]);
   const totalPending = pendingMembers.length + pendingAlumni.length;
@@ -324,189 +511,3 @@ export function SettingsAccessSection({ orgId, isAdmin }: Props) {
     </>
   );
 }
-
-const c = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-    badge: {
-      backgroundColor: c.warning,
-      borderRadius: 10,
-      minWidth: 20,
-      height: 20,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: 6,
-    },
-    badgeText: {
-      color: "#fff",
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.semibold,
-    },
-    subsectionTitle: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: c.muted,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      marginBottom: 12,
-    },
-    memberItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: c.border,
-    },
-    memberItemRevoked: {
-      opacity: 0.6,
-    },
-    memberInfo: {
-      flexDirection: "row",
-      alignItems: "center",
-      flex: 1,
-      gap: 12,
-    },
-    memberAvatar: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-    },
-    memberAvatarPlaceholder: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: c.primaryLight,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    memberAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: c.primary,
-    },
-    memberDetails: {
-      flex: 1,
-    },
-    memberName: {
-      fontSize: 15,
-      fontWeight: fontWeight.medium,
-      color: c.foreground,
-    },
-    memberEmail: {
-      fontSize: 13,
-      color: c.mutedForeground,
-    },
-    memberMeta: {
-      fontSize: fontSize.xs,
-      color: c.muted,
-      marginTop: 2,
-    },
-    memberActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    approveButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: c.success + "20",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    rejectButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: c.error + "20",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    roleSelector: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 10,
-      borderRadius: 6,
-      backgroundColor: c.background,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    roleSelectorText: {
-      fontSize: 13,
-      color: c.foreground,
-    },
-    removeButton: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    restoreButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      borderRadius: 6,
-      backgroundColor: c.primary,
-    },
-    restoreButtonText: {
-      fontSize: 13,
-      fontWeight: fontWeight.medium,
-      color: c.primaryForeground,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: 24,
-    },
-    modalContent: {
-      backgroundColor: c.card,
-      borderRadius: 16,
-      padding: 24,
-      width: "100%",
-      maxWidth: 400,
-    },
-    modalTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: c.foreground,
-      marginBottom: 12,
-    },
-    modalDescription: {
-      fontSize: 15,
-      color: c.mutedForeground,
-      marginBottom: 20,
-    },
-    modalActions: {
-      flexDirection: "row",
-      gap: 12,
-    },
-    modalCancelButton: {
-      flex: 1,
-      paddingVertical: 12,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: c.border,
-      alignItems: "center",
-    },
-    modalCancelText: {
-      fontSize: fontSize.base,
-      color: c.muted,
-    },
-    modalConfirmButton: {
-      flex: 1,
-      backgroundColor: c.warning,
-      paddingVertical: 12,
-      borderRadius: 8,
-      alignItems: "center",
-    },
-    modalConfirmText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: "#fff",
-    },
-  });

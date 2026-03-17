@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   TextInput,
   Pressable,
@@ -11,8 +10,9 @@ import {
 import { Bell, ChevronDown, Sun, Moon, Monitor } from "lucide-react-native";
 import { useNotificationPreferences } from "@/hooks/useNotificationPreferences";
 import { useAppColorScheme, type ColorSchemePreference } from "@/contexts/ColorSchemeContext";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, fontSize, fontWeight } from "./settingsShared";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, fontSize, fontWeight } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface Props {
   orgId: string;
@@ -26,7 +26,9 @@ const APPEARANCE_OPTIONS: Array<{ value: ColorSchemePreference; label: string; I
 
 export function SettingsNotificationsSection({ orgId }: Props) {
   const { prefs, loading: prefsLoading, saving: prefsSaving, updatePrefs } = useNotificationPreferences(orgId);
-  const { preference, setPreference } = useAppColorScheme();
+  const { preference, setPreference, neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
 
   const [expanded, setExpanded] = useState(true);
   const [emailAddress, setEmailAddress] = useState("");
@@ -49,7 +51,103 @@ export function SettingsNotificationsSection({ orgId }: Props) {
     });
   };
 
-  const colors = SETTINGS_COLORS;
+  const styles = useThemedStyles((n, s) => ({
+    fieldGroup: {
+      marginBottom: 16,
+    },
+    fieldLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      fontSize: fontSize.base,
+      color: n.foreground,
+      marginBottom: 12,
+    },
+    switchRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    switchInfo: {
+      flex: 1,
+    },
+    switchLabel: {
+      fontSize: fontSize.base,
+      color: n.foreground,
+    },
+    switchHint: {
+      fontSize: 13,
+      color: n.placeholder,
+      marginTop: 2,
+    },
+    button: {
+      backgroundColor: s.success,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginTop: 16,
+    },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+    },
+    appearanceHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 4,
+    },
+    segmentedControl: {
+      flexDirection: "row" as const,
+      backgroundColor: n.surface,
+      borderRadius: 10,
+      padding: 4,
+      gap: 4,
+    },
+    segmentOption: {
+      flex: 1,
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 4,
+      borderRadius: 8,
+    },
+    segmentOptionSelected: {
+      backgroundColor: n.background,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.08,
+      shadowRadius: 2,
+      elevation: 1,
+    },
+    segmentOptionText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: n.placeholder,
+    },
+    segmentOptionTextSelected: {
+      color: s.success,
+      fontWeight: fontWeight.semibold,
+    },
+  }));
 
   return (
     <>
@@ -176,103 +274,3 @@ export function SettingsNotificationsSection({ orgId }: Props) {
     </>
   );
 }
-
-const c = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-    fieldGroup: {
-      marginBottom: 16,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: c.foreground,
-      marginBottom: 8,
-    },
-    input: {
-      backgroundColor: c.background,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 8,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      fontSize: fontSize.base,
-      color: c.foreground,
-      marginBottom: 12,
-    },
-    switchRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: c.border,
-    },
-    switchInfo: {
-      flex: 1,
-    },
-    switchLabel: {
-      fontSize: fontSize.base,
-      color: c.foreground,
-    },
-    switchHint: {
-      fontSize: 13,
-      color: c.mutedForeground,
-      marginTop: 2,
-    },
-    button: {
-      backgroundColor: c.primary,
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 16,
-    },
-    buttonText: {
-      color: c.primaryForeground,
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-    },
-    appearanceHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      paddingVertical: 12,
-      paddingHorizontal: 4,
-    },
-    segmentedControl: {
-      flexDirection: "row",
-      backgroundColor: c.card,
-      borderRadius: 10,
-      padding: 4,
-      gap: 4,
-    },
-    segmentOption: {
-      flex: 1,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: 6,
-      paddingVertical: 8,
-      paddingHorizontal: 4,
-      borderRadius: 8,
-    },
-    segmentOptionSelected: {
-      backgroundColor: c.background,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.08,
-      shadowRadius: 2,
-      elevation: 1,
-    },
-    segmentOptionText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: c.mutedForeground,
-    },
-    segmentOptionTextSelected: {
-      color: c.primary,
-      fontWeight: fontWeight.semibold,
-    },
-  });

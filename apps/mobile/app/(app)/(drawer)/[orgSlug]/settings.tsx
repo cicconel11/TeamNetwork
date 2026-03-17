@@ -30,8 +30,9 @@ import {
   SettingsAccessSection,
   SettingsBillingSection,
   SettingsDangerSection,
-  SETTINGS_COLORS,
+  buildSettingsColors,
 } from "@/components/settings";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -39,8 +40,10 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const { subscription, loading: subLoading, error: subError, refetch: refetchSubscription } = useSubscription(orgId);
   const { org, loading: orgSettingsLoading, updateName } = useOrgSettings(orgId);
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
 
-  const styles = createStyles();
+  const styles = createStyles(colors);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [roleLoading, setRoleLoading] = useState(true);
@@ -132,7 +135,7 @@ export default function SettingsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={SETTINGS_COLORS.primary}
+              tintColor={colors.primary}
             />
           }
         >
@@ -183,7 +186,7 @@ export default function SettingsScreen() {
           <View style={styles.section}>
             <View style={styles.card}>
               <View style={styles.aboutRow}>
-                <Info size={20} color={SETTINGS_COLORS.muted} />
+                <Info size={20} color={colors.muted} />
                 <Text style={styles.aboutLabel}>App Version</Text>
                 <Text style={styles.aboutValue}>{Constants.expoConfig?.version || "1.0.0"}</Text>
               </View>
@@ -195,11 +198,11 @@ export default function SettingsScreen() {
   );
 }
 
-const createStyles = () =>
+const createStyles = (colors: { background: string; card: string; foreground: string; muted: string }) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: SETTINGS_COLORS.background,
+      backgroundColor: colors.background,
     },
     headerGradient: {
       paddingBottom: 16,
@@ -263,7 +266,7 @@ const createStyles = () =>
       marginBottom: 16,
     },
     card: {
-      backgroundColor: SETTINGS_COLORS.card,
+      backgroundColor: colors.card,
       borderRadius: 12,
       padding: 16,
       borderCurve: "continuous",
@@ -276,10 +279,10 @@ const createStyles = () =>
     aboutLabel: {
       flex: 1,
       fontSize: 16,
-      color: SETTINGS_COLORS.foreground,
+      color: colors.foreground,
     },
     aboutValue: {
       fontSize: 14,
-      color: SETTINGS_COLORS.muted,
+      color: colors.muted,
     },
   });

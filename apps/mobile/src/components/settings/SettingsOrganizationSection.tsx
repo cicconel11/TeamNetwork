@@ -2,15 +2,16 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ActivityIndicator,
   TextInput,
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
 import { Building2, ChevronDown } from "lucide-react-native";
-import { SETTINGS_COLORS } from "./settingsColors";
-import { baseStyles, fontSize, fontWeight, spacing } from "./settingsShared";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { buildSettingsColors } from "./settingsColors";
+import { useBaseStyles, fontSize, fontWeight, spacing } from "./settingsShared";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 
 interface Props {
   org: { name: string; slug: string; logo_url: string | null; primary_color: string | null; secondary_color: string | null } | null;
@@ -20,6 +21,9 @@ interface Props {
 }
 
 export function SettingsOrganizationSection({ org, orgLoading, updateName, isAdmin }: Props) {
+  const { neutral, semantic } = useAppColorScheme();
+  const colors = buildSettingsColors(neutral, semantic);
+  const baseStyles = useBaseStyles();
 
   const [expanded, setExpanded] = useState(true);
   const [editedName, setEditedName] = useState("");
@@ -32,9 +36,106 @@ export function SettingsOrganizationSection({ org, orgLoading, updateName, isAdm
     }
   }, [org]);
 
-  if (!isAdmin) return null;
+  const styles = useThemedStyles((n, s) => ({
+    fieldGroup: {
+      marginBottom: spacing.md,
+    },
+    fieldLabel: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.medium,
+      color: n.foreground,
+      marginBottom: spacing.sm,
+    },
+    input: {
+      backgroundColor: n.background,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: 8,
+      paddingVertical: 12,
+      paddingHorizontal: spacing.md,
+      fontSize: fontSize.base,
+      color: n.foreground,
+      marginBottom: 12,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: s.error,
+      marginBottom: spacing.sm,
+    },
+    button: {
+      backgroundColor: s.success,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
+    },
+    buttonText: {
+      color: "#ffffff",
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+    },
+    hintText: {
+      fontSize: 13,
+      color: n.placeholder,
+      marginTop: spacing.sm,
+    },
+    brandingPreview: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 12,
+      padding: spacing.md,
+      borderRadius: 12,
+      marginBottom: 12,
+    },
+    logoPreview: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+    },
+    logoPlaceholder: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    brandingName: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: "#fff",
+    },
+    brandingSlug: {
+      fontSize: fontSize.sm,
+      color: "rgba(255,255,255,0.8)",
+    },
+    colorRow: {
+      flexDirection: "row" as const,
+      gap: 24,
+    },
+    colorItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: 8,
+    },
+    colorSwatch: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    colorLabel: {
+      fontSize: fontSize.sm,
+      color: n.muted,
+    },
+  }));
 
-  const colors = SETTINGS_COLORS;
+  if (!isAdmin) return null;
 
   const handleSaveName = async () => {
     if (!editedName.trim() || editedName === org?.name) return;
@@ -133,104 +234,3 @@ export function SettingsOrganizationSection({ org, orgLoading, updateName, isAdm
     </View>
   );
 }
-
-const c = SETTINGS_COLORS;
-
-const styles = StyleSheet.create({
-    fieldGroup: {
-      marginBottom: spacing.md,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: c.foreground,
-      marginBottom: spacing.sm,
-    },
-    input: {
-      backgroundColor: c.background,
-      borderWidth: 1,
-      borderColor: c.border,
-      borderRadius: 8,
-      paddingVertical: 12,
-      paddingHorizontal: spacing.md,
-      fontSize: fontSize.base,
-      color: c.foreground,
-      marginBottom: 12,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: c.error,
-      marginBottom: spacing.sm,
-    },
-    button: {
-      backgroundColor: c.primary,
-      paddingVertical: 12,
-      paddingHorizontal: 20,
-      borderRadius: 8,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-    buttonText: {
-      color: c.primaryForeground,
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-    },
-    hintText: {
-      fontSize: 13,
-      color: c.mutedForeground,
-      marginTop: spacing.sm,
-    },
-    brandingPreview: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 12,
-      padding: spacing.md,
-      borderRadius: 12,
-      marginBottom: 12,
-    },
-    logoPreview: {
-      width: 48,
-      height: 48,
-      borderRadius: 12,
-    },
-    logoPlaceholder: {
-      width: 48,
-      height: 48,
-      borderRadius: 12,
-      backgroundColor: "rgba(255,255,255,0.2)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    brandingName: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: "#fff",
-    },
-    brandingSlug: {
-      fontSize: fontSize.sm,
-      color: "rgba(255,255,255,0.8)",
-    },
-    colorRow: {
-      flexDirection: "row",
-      gap: 24,
-    },
-    colorItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-    },
-    colorSwatch: {
-      width: 24,
-      height: 24,
-      borderRadius: 6,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    colorLabel: {
-      fontSize: fontSize.sm,
-      color: c.muted,
-    },
-  });
