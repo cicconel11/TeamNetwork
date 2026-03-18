@@ -3,8 +3,9 @@
 -- on revoked status skipped all sync, leaving orphaned records.
 --
 -- Pattern mirrors the existing parent cleanup at lines 176-184.
--- Guard: `deleted_at IS NULL` prevents infinite trigger recursion with
--- alumni_soft_delete_sync / members_soft_delete_sync.
+-- Guard: `deleted_at IS NULL` stops the trigger cycle after two iterations —
+-- alumni_soft_delete_sync / members_soft_delete_sync fire back but the second
+-- pass finds deleted_at already set and updates zero rows.
 
 CREATE OR REPLACE FUNCTION public.handle_org_member_sync()
 RETURNS trigger
@@ -34,7 +35,8 @@ BEGIN
         AND deleted_at IS NULL;
     END IF;
 
-    -- Soft-delete members record (all roles have a members row)
+    -- Soft-delete members record — intentionally ungated by role because
+    -- every role has a corresponding members row.
     IF NEW.user_id IS NOT NULL THEN
       UPDATE public.members
       SET deleted_at = now(), updated_at = now()
