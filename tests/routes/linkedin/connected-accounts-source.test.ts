@@ -17,23 +17,28 @@ const pagePath = path.resolve(
 
 const pageSource = fs.readFileSync(pagePath, "utf8");
 
-test("connected accounts page redirects to notifications", () => {
+test("connected accounts page renders the LinkedIn settings experience", () => {
   assert.match(
     pageSource,
-    /redirect\("\/settings\/notifications"\)/,
-    "expected connected accounts page to redirect to notifications settings",
+    /LinkedInSettingsPanel/,
+    "expected connected accounts page to render the LinkedIn settings panel",
+  );
+  assert.match(
+    pageSource,
+    /useLinkedIn/,
+    "expected connected accounts page to load LinkedIn connection state",
   );
 });
 
-test("connected accounts page does not contain client-side logic", () => {
-  assert.doesNotMatch(
+test("connected accounts page is a client component instead of a redirect shim", () => {
+  assert.match(
     pageSource,
     /use client/,
-    "expected connected accounts page to be a server component (redirect)",
+    "expected connected accounts page to be a client component",
   );
   assert.doesNotMatch(
     pageSource,
-    /useState/,
-    "expected connected accounts page to contain no client state",
+    /redirect\("\/settings\/notifications"\)/,
+    "expected connected accounts page to stop redirecting to notifications",
   );
 });

@@ -21,6 +21,8 @@ export const newMemberSchema = z.object({
   expected_graduation_date: optionalDateStringSchema,
   photo_url: optionalHttpsUrlSchema,
   linkedin_url: optionalHttpsUrlSchema,
+  current_company: optionalSafeString(200),
+  school: optionalSafeString(200),
 });
 export type NewMemberForm = z.infer<typeof newMemberSchema>;
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { syncLinkedInProfile } from "@/lib/linkedin/oauth";
+import { syncLinkedInProfile, runProxycurlEnrichment, getLinkedInUrlForUser } from "@/lib/linkedin/oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * POST /api/user/linkedin/sync
  *
  * Re-fetches the user's LinkedIn profile data using the stored access token
- * and updates the connection record.
+ * and updates the connection record. Also triggers Proxycurl enrichment if
+ * a LinkedIn URL is available.
  */
 export async function POST() {
   try {
@@ -31,6 +32,15 @@ export async function POST() {
         { error: result.error || "Failed to sync LinkedIn profile" },
         { status: 502 }
       );
+    }
+
+    // Best-effort enrichment — don't fail the sync if this errors
+    const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
+    if (linkedinUrl) {
+      const enrichResult = await runProxycurlEnrichment(serviceClient, user.id, linkedinUrl);
+      if (enrichResult.enriched) {
+        return NextResponse.json({ message: "LinkedIn profile synced and enriched" });
+      }
     }
 
     return NextResponse.json({ message: "LinkedIn profile synced" });

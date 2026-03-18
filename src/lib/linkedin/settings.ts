@@ -1,16 +1,28 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { optionalLinkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
+import {
+  getLinkedInConnectionSource,
+  type LinkedInConnectionSource,
+} from "@/lib/linkedin/connection-source";
 
 type LinkedInProfileTable = "members" | "alumni" | "parents";
 
+export interface LinkedInEnrichmentInfo {
+  jobTitle: string | null;
+  currentCompany: string | null;
+  school: string | null;
+}
+
 export interface LinkedInStatusConnection {
+  source: LinkedInConnectionSource;
   status: "connected" | "disconnected" | "error";
   linkedInName: string | null;
   linkedInEmail: string | null;
   linkedInPhotoUrl: string | null;
   lastSyncAt: string | null;
   syncError: string | null;
+  enrichment: LinkedInEnrichmentInfo | null;
 }
 
 export interface LinkedInStatusResult {
@@ -78,14 +90,31 @@ export async function getLinkedInStatusForUser(
     throw new Error(`Failed to fetch LinkedIn connection: ${connectionError.message}`);
   }
 
+  // Extract enrichment data from linkedin_data JSONB if present
+  let enrichment: LinkedInEnrichmentInfo | null = null;
+  if (connectionRow?.linkedin_data?.enrichment) {
+    const e = connectionRow.linkedin_data.enrichment;
+    const currentJob = Array.isArray(e.experiences)
+      ? e.experiences.find((exp: { ends_at?: unknown }) => !exp.ends_at) ?? e.experiences[0]
+      : null;
+    const latestEdu = Array.isArray(e.education) ? e.education[0] : null;
+    enrichment = {
+      jobTitle: currentJob?.title || e.occupation || null,
+      currentCompany: currentJob?.company || null,
+      school: latestEdu?.school || null,
+    };
+  }
+
   const connection = connectionRow
     ? {
+        source: getLinkedInConnectionSource(connectionRow),
         status: connectionRow.status as "connected" | "disconnected" | "error",
         linkedInName: connectionRow.linkedin_name || null,
         linkedInEmail: connectionRow.linkedin_email || null,
         linkedInPhotoUrl: connectionRow.linkedin_picture_url || null,
         lastSyncAt: connectionRow.last_synced_at || null,
         syncError: connectionRow.sync_error || null,
+        enrichment,
       }
     : null;
 

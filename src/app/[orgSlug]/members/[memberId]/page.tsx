@@ -166,6 +166,14 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               <dd className="text-foreground font-medium">{member.email || "—"}</dd>
             </div>
             <div>
+              <dt className="text-sm text-muted-foreground">Current Company</dt>
+              <dd className="text-foreground font-medium">{(member as Member & { current_company?: string }).current_company || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-sm text-muted-foreground">School</dt>
+              <dd className="text-foreground font-medium">{(member as Member & { school?: string }).school || "—"}</dd>
+            </div>
+            <div>
               <dt className="text-sm text-muted-foreground">LinkedIn</dt>
               <dd className="text-foreground font-medium">
                 <LinkedInProfileLink linkedinUrl={member.linkedin_url} />

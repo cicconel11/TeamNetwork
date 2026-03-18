@@ -103,7 +103,8 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     void refreshLinkedInStatus();
   }, [refreshLinkedInStatus]);
 
-  const isConnected = connection?.status === "connected";
+  const isConnected =
+    connection?.source === "oauth" && connection?.status === "connected";
 
   const onLinkedInUrlSave = useCallback(async (url: string) => {
     const res = await fetch("/api/user/linkedin/url", {

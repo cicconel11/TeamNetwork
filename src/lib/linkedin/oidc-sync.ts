@@ -4,6 +4,10 @@ import type { User } from "@supabase/supabase-js";
 import type { LinkedInProfile } from "@/lib/linkedin/oauth";
 import { syncLinkedInProfileFields } from "@/lib/linkedin/oauth";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import {
+  LINKEDIN_OIDC_SOURCE,
+  LINKEDIN_OIDC_TOKEN_SENTINEL,
+} from "@/lib/linkedin/connection-source";
 import { saveLinkedInUrlForUser } from "@/lib/linkedin/settings";
 
 // ---------------------------------------------------------------------------
@@ -115,9 +119,6 @@ export function extractLinkedInProfile(user: User): LinkedInProfile {
 // OIDC connection storage (conditional — never overwrites real OAuth tokens)
 // ---------------------------------------------------------------------------
 
-const OIDC_SOURCE = "oidc_login";
-const OIDC_TOKEN_SENTINEL = "__oidc_login__";
-
 /**
  * Stores a lightweight connection record for an OIDC login.
  *
@@ -164,7 +165,7 @@ export async function storeLinkedInOidcConnection(
   if (existing) {
     // Row exists — only update if it's also from OIDC (don't overwrite real OAuth tokens)
     const source = existing.linkedin_data?.source;
-    if (source !== OIDC_SOURCE) {
+    if (source !== LINKEDIN_OIDC_SOURCE) {
       return { success: true };
     }
 
@@ -193,13 +194,13 @@ export async function storeLinkedInOidcConnection(
     .insert({
       user_id: userId,
       ...profileFields,
-      access_token_encrypted: OIDC_TOKEN_SENTINEL,
+      access_token_encrypted: LINKEDIN_OIDC_TOKEN_SENTINEL,
       refresh_token_encrypted: null,
       token_expires_at: "1970-01-01T00:00:00.000Z",
       status: "connected",
       last_synced_at: now,
       sync_error: null,
-      linkedin_data: { source: OIDC_SOURCE },
+      linkedin_data: { source: LINKEDIN_OIDC_SOURCE },
     });
 
   if (insertError) {

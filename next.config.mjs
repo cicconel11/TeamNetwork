@@ -110,6 +110,11 @@ function validateBuildEnv() {
     console.warn(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`);
   }
 
+  // Optional: Proxycurl enrichment (enriches member profiles from LinkedIn)
+  if (!process.env.PROXYCURL_API_KEY) {
+    console.log("ℹ️  PROXYCURL_API_KEY not set — LinkedIn profile enrichment disabled");
+  }
+
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let parsedSiteUrl = null;

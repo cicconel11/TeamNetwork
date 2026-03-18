@@ -114,3 +114,33 @@ test("status helper throws when the alumni lookup fails before falling through t
     /Failed to fetch LinkedIn URL from alumni: alumni table unavailable/,
   );
 });
+
+test("status helper marks OIDC-only rows as oidc_login instead of OAuth connections", async () => {
+  const serviceSupabase = createSupabaseStub();
+  serviceSupabase.seed("user_linkedin_connections", [{
+    user_id: USER_ID,
+    linkedin_name: "OIDC User",
+    linkedin_email: "oidc@example.com",
+    linkedin_picture_url: "https://example.com/oidc.jpg",
+    access_token_encrypted: "__oidc_login__",
+    refresh_token_encrypted: null,
+    token_expires_at: "1970-01-01T00:00:00.000Z",
+    status: "connected",
+    last_synced_at: "2026-03-12T12:00:00.000Z",
+    sync_error: null,
+    linkedin_data: { source: "oidc_login" },
+  }]);
+
+  const result = await getLinkedInStatusForUser(serviceSupabase as never, USER_ID);
+
+  assert.deepEqual(result.connection, {
+    source: "oidc_login",
+    status: "connected",
+    linkedInName: "OIDC User",
+    linkedInEmail: "oidc@example.com",
+    linkedInPhotoUrl: "https://example.com/oidc.jpg",
+    lastSyncAt: "2026-03-12T12:00:00.000Z",
+    syncError: null,
+    enrichment: null,
+  });
+});

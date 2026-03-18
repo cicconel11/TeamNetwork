@@ -343,6 +343,7 @@ Optional variables:
 - `FROM_EMAIL` - Sender email for notifications (default: noreply@myteamnetwork.com)
 - `ADMIN_EMAIL` - Admin notification recipient (default: admin@myteamnetwork.com)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` - Google Calendar integration
+- `PROXYCURL_API_KEY` - Enables LinkedIn profile enrichment via Proxycurl (~$0.01/lookup); enrichment silently skipped if not set
 - `ALERT_EMAIL_TO` - Comma-separated list of emails for error alerts (defaults to ADMIN_EMAIL)
 - `NEXT_PUBLIC_SITE_URL` - Canonical site URL used in auth and deployment checks
 

@@ -6,13 +6,21 @@ import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
 import { optionalLinkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 
+export interface LinkedInEnrichment {
+  jobTitle: string | null;
+  currentCompany: string | null;
+  school: string | null;
+}
+
 export interface LinkedInConnection {
+  source: "oauth" | "oidc_login";
   status: "connected" | "disconnected" | "error";
   linkedInName: string | null;
   linkedInEmail: string | null;
   linkedInPhotoUrl: string | null;
   lastSyncAt: string | null;
   syncError: string | null;
+  enrichment?: LinkedInEnrichment | null;
 }
 
 export interface LinkedInSettingsPanelProps {
@@ -100,7 +108,8 @@ export function LinkedInSettingsPanel({
     }
   };
 
-  const canRetrySync = connection?.status === "error";
+  const isOidcLoginOnly = connection?.source === "oidc_login";
+  const canRetrySync = connection?.source === "oauth" && connection?.status === "error";
 
   // --- Loading skeleton ---
   if (connectionLoading) {
@@ -184,6 +193,23 @@ export function LinkedInSettingsPanel({
             </div>
           </div>
 
+          {connection.enrichment && (connection.enrichment.jobTitle || connection.enrichment.currentCompany || connection.enrichment.school) && (
+            <div className="text-sm space-y-1 pt-1">
+              {connection.enrichment.jobTitle && (
+                <p className="text-muted-foreground">
+                  <span className="text-foreground font-medium">{connection.enrichment.jobTitle}</span>
+                  {connection.enrichment.currentCompany && ` at ${connection.enrichment.currentCompany}`}
+                </p>
+              )}
+              {!connection.enrichment.jobTitle && connection.enrichment.currentCompany && (
+                <p className="text-muted-foreground">{connection.enrichment.currentCompany}</p>
+              )}
+              {connection.enrichment.school && (
+                <p className="text-muted-foreground">{connection.enrichment.school}</p>
+              )}
+            </div>
+          )}
+
           <p className="text-xs text-muted-foreground">
             Last synced: {formatLastSync(connection.lastSyncAt)}
           </p>
@@ -215,7 +241,7 @@ export function LinkedInSettingsPanel({
                 photo, name, and headline to your organization profile.
               </p>
 
-              {connection?.status === "error" && (
+              {connection?.status === "error" && !isOidcLoginOnly && (
                 <div className="space-y-3">
                   <p className="text-sm text-red-600 dark:text-red-400">
                     There was an error with your LinkedIn connection. Try syncing again first.
@@ -240,6 +266,13 @@ export function LinkedInSettingsPanel({
                     </Button>
                   </div>
                 </div>
+              )}
+
+              {isOidcLoginOnly && (
+                <p className="text-sm text-muted-foreground">
+                  You signed in with LinkedIn, but profile sync still requires a separate
+                  LinkedIn connection for reusable OAuth tokens.
+                </p>
               )}
 
               {!canRetrySync && (

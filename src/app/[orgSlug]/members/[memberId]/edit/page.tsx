@@ -38,6 +38,8 @@ export default function EditMemberPage() {
       expected_graduation_date: "",
       photo_url: "",
       linkedin_url: "",
+      current_company: "",
+      school: "",
     },
   });
 
@@ -86,6 +88,8 @@ export default function EditMemberPage() {
       const m = member as Member & {
         expected_graduation_date?: string;
         graduated_at?: string;
+        current_company?: string;
+        school?: string;
       };
       reset({
         first_name: m.first_name || "",
@@ -97,6 +101,8 @@ export default function EditMemberPage() {
         expected_graduation_date: m.expected_graduation_date || "",
         photo_url: m.photo_url || "",
         linkedin_url: m.linkedin_url || "",
+        current_company: m.current_company || "",
+        school: m.school || "",
       });
 
       // Fetch system access role
@@ -206,7 +212,8 @@ export default function EditMemberPage() {
       return;
     }
 
-    const { error: updateError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: updateError } = await (supabase as any)
       .from("members")
       .update({
         first_name: data.first_name,
@@ -218,6 +225,8 @@ export default function EditMemberPage() {
         expected_graduation_date: data.expected_graduation_date || null,
         photo_url: data.photo_url || null,
         linkedin_url: data.linkedin_url || null,
+        current_company: data.current_company || null,
+        school: data.school || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", memberId)
@@ -334,6 +343,21 @@ export default function EditMemberPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   When this member will automatically transition to alumni status
                 </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <Input
+                  label="Current Company"
+                  placeholder="e.g., Acme Corp"
+                  error={errors.current_company?.message}
+                  {...register("current_company")}
+                />
+                <Input
+                  label="School"
+                  placeholder="e.g., State University"
+                  error={errors.school?.message}
+                  {...register("school")}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

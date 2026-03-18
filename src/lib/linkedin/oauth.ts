@@ -2,9 +2,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { getAppUrl } from "@/lib/url";
 import {
+  getLinkedInConnectionSource,
+  LINKEDIN_OAUTH_SOURCE,
+  type LinkedInConnectionSource,
+} from "@/lib/linkedin/connection-source";
+import {
   encryptToken as sharedEncrypt,
   decryptToken as sharedDecrypt,
 } from "@/lib/crypto/token-encryption";
+import {
+  fetchLinkedInEnrichment,
+  mapEnrichmentToFields,
+  isProxycurlConfigured,
+  type ProxycurlEnrichmentResult,
+} from "@/lib/linkedin/proxycurl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,6 +32,7 @@ export interface LinkedInProfile {
 
 export interface LinkedInConnection {
   id: string;
+  source: LinkedInConnectionSource;
   linkedinMemberId: string;
   linkedinEmail: string | null;
   linkedinGivenName: string | null;
@@ -249,8 +261,9 @@ export async function storeLinkedInConnection(
         last_synced_at: new Date().toISOString(),
         sync_error: null,
         // linkedin_profile_url: not populated — LinkedIn OIDC userinfo doesn't
-      // expose the profile URL. Users can set it manually via the URL field.
-      linkedin_data: {
+        // expose the profile URL. Users can set it manually via the URL field.
+        linkedin_data: {
+          source: LINKEDIN_OAUTH_SOURCE,
           email_verified: tokens.profile.emailVerified,
         },
       },
@@ -283,15 +296,23 @@ export async function getLinkedInConnection(
   if (error || !data) return null;
 
   try {
+    const source = getLinkedInConnectionSource(data);
     return {
       id: data.id,
+      source,
       linkedinMemberId: data.linkedin_sub,
       linkedinEmail: data.linkedin_email,
       linkedinGivenName: data.linkedin_given_name,
       linkedinFamilyName: data.linkedin_family_name,
       linkedinPictureUrl: data.linkedin_picture_url,
-      accessToken: data.access_token_encrypted ? decryptToken(data.access_token_encrypted) : "",
-      refreshToken: data.refresh_token_encrypted ? decryptToken(data.refresh_token_encrypted) : "",
+      accessToken:
+        source === LINKEDIN_OAUTH_SOURCE && data.access_token_encrypted
+          ? decryptToken(data.access_token_encrypted)
+          : "",
+      refreshToken:
+        source === LINKEDIN_OAUTH_SOURCE && data.refresh_token_encrypted
+          ? decryptToken(data.refresh_token_encrypted)
+          : "",
       expiresAt: data.token_expires_at ? new Date(data.token_expires_at) : new Date(0),
       status: data.status as "connected" | "disconnected" | "error",
       lastSyncAt: data.last_synced_at ? new Date(data.last_synced_at) : null,
@@ -403,7 +424,14 @@ export async function getValidLinkedInToken(
   userId: string,
 ): Promise<string | null> {
   const conn = await getLinkedInConnection(supabase, userId);
-  if (!conn || conn.status === "disconnected" || !conn.accessToken) return null;
+  if (
+    !conn ||
+    conn.source !== LINKEDIN_OAUTH_SOURCE ||
+    conn.status === "disconnected" ||
+    !conn.accessToken
+  ) {
+    return null;
+  }
 
   if (!isTokenExpired(conn.expiresAt)) {
     return conn.accessToken;
@@ -518,6 +546,81 @@ export async function syncLinkedInProfile(
   }
 
   return { success: true, profile };
+}
+
+// ---------------------------------------------------------------------------
+// Proxycurl enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs Proxycurl enrichment for a user and writes the results to
+ * members/alumni records via the sync_user_linkedin_enrichment RPC.
+ *
+ * This is best-effort: it never throws. If Proxycurl is not configured or
+ * the enrichment fails, it logs and returns gracefully.
+ *
+ * @param linkedinUrl The user's LinkedIn profile URL (e.g. https://linkedin.com/in/user)
+ */
+export async function runProxycurlEnrichment(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  linkedinUrl: string | null | undefined,
+): Promise<{ enriched: boolean; error?: string }> {
+  if (!linkedinUrl) {
+    return { enriched: false };
+  }
+
+  if (!isProxycurlConfigured()) {
+    return { enriched: false };
+  }
+
+  try {
+    const enrichment = await fetchLinkedInEnrichment(linkedinUrl);
+    if (!enrichment) {
+      return { enriched: false, error: "Proxycurl returned no data" };
+    }
+
+    const fields = mapEnrichmentToFields(enrichment);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("sync_user_linkedin_enrichment", {
+      p_user_id: userId,
+      p_job_title: fields.job_title,
+      p_current_company: fields.current_company,
+      p_current_city: fields.current_city,
+      p_school: fields.school,
+      p_major: fields.major,
+      p_position_title: fields.position_title,
+      p_enrichment_json: enrichment as unknown,
+    });
+
+    if (error) {
+      console.error("[linkedin-enrichment] RPC error:", error);
+      return { enriched: false, error: error.message };
+    }
+
+    return { enriched: true };
+  } catch (err) {
+    console.error("[linkedin-enrichment] Unexpected error:", err);
+    return { enriched: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+/**
+ * Looks up the user's LinkedIn URL from their connection record.
+ */
+export async function getLinkedInUrlForUser(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (supabase as any)
+    .from("user_linkedin_connections")
+    .select("linkedin_profile_url")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  return data?.linkedin_profile_url || null;
 }
 
 /**

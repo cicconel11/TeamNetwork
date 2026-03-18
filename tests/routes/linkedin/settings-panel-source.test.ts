@@ -63,3 +63,16 @@ test("linkedin settings panel uses showFeedback for transient notifications", ()
 test("linkedin settings panel uses InlineBanner for inline errors", () => {
   assert.match(panelSource, /InlineBanner/);
 });
+
+test("linkedin settings panel distinguishes OIDC login rows from OAuth connections", () => {
+  assert.match(
+    panelSource,
+    /source: "oauth" \| "oidc_login"/,
+    "expected the panel connection type to expose the LinkedIn connection source",
+  );
+  assert.match(
+    panelSource,
+    /signed in with LinkedIn/i,
+    "expected OIDC-specific copy explaining that login alone does not enable sync",
+  );
+});

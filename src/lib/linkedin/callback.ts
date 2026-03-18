@@ -8,6 +8,8 @@ import {
   storeLinkedInConnection,
   syncLinkedInProfileFields,
   getLinkedInOAuthErrorMessage,
+  runProxycurlEnrichment,
+  getLinkedInUrlForUser,
 } from "@/lib/linkedin/oauth";
 import {
   LINKEDIN_STATE_COOKIE,
@@ -167,6 +169,15 @@ export async function handleLinkedInOAuthCallback(
         warning: "profile_sync_failed",
         warning_message: warningMessage,
       });
+    }
+
+    // Best-effort Proxycurl enrichment after successful OAuth connect
+    const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
+    if (linkedinUrl) {
+      const enrichResult = await runProxycurlEnrichment(serviceClient, user.id, linkedinUrl);
+      if (!enrichResult.enriched && enrichResult.error) {
+        console.warn("[linkedin-callback] Enrichment skipped:", enrichResult.error);
+      }
     }
 
     return buildSuccessRedirect(validatedState.redirectPath);

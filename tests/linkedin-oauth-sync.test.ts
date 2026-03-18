@@ -394,3 +394,23 @@ test("syncLinkedInProfile returns an error when no active org profile rows exist
   assert.equal(result.success, false);
   assert.equal(result.error, "No profile found to update");
 });
+
+test("syncLinkedInProfile returns a reconnect error for OIDC-only LinkedIn rows", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("user_linkedin_connections", [{
+    user_id: USER_ID,
+    access_token_encrypted: "__oidc_login__",
+    refresh_token_encrypted: null,
+    token_expires_at: "1970-01-01T00:00:00.000Z",
+    status: "connected",
+    linkedin_data: { source: "oidc_login" },
+  }]);
+
+  const result = await syncLinkedInProfile(stub as never, USER_ID);
+
+  assert.equal(result.success, false);
+  assert.equal(
+    result.error,
+    "Unable to get a valid LinkedIn token. Please reconnect your account.",
+  );
+});
