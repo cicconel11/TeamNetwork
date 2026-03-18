@@ -189,10 +189,18 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
       throw new Error((data as { error?: string }).error ?? "Failed to sync");
     }
 
-    const data = await res.json();
+    const data = await res.json() as {
+      message?: string;
+      enrichment?: { rateLimited?: boolean; retryAfterDays?: number };
+    };
     await refreshLinkedInStatus();
 
-    return { message: (data as { message?: string }).message ?? "LinkedIn profile synced" };
+    let message = data.message ?? "LinkedIn profile synced";
+    if (data.enrichment?.rateLimited && data.enrichment.retryAfterDays) {
+      message += `. Enrichment available in ${data.enrichment.retryAfterDays} day${data.enrichment.retryAfterDays === 1 ? "" : "s"}.`;
+    }
+
+    return { message };
   }, [refreshLinkedInStatus]);
 
   const onDisconnect = useCallback(async () => {

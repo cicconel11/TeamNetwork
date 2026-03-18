@@ -36,7 +36,7 @@ test("status helper ignores soft-deleted parent rows", async () => {
   assert.equal(result.linkedin_url, null);
 });
 
-test("status helper preserves member then alumni precedence over parent rows", async () => {
+test("status helper picks the most recently updated org URL across tables", async () => {
   const serviceSupabase = createSupabaseStub();
   serviceSupabase.seed("members", [{
     user_id: USER_ID,
@@ -62,7 +62,8 @@ test("status helper preserves member then alumni precedence over parent rows", a
 
   const result = await getLinkedInStatusForUser(serviceSupabase as never, USER_ID);
 
-  assert.equal(result.linkedin_url, "https://www.linkedin.com/in/member-user");
+  // Parent has the newest updated_at (2026-03-12), so it wins
+  assert.equal(result.linkedin_url, "https://www.linkedin.com/in/parent-user");
 });
 
 test("status helper throws when the LinkedIn connection lookup fails", async () => {
@@ -142,5 +143,6 @@ test("status helper marks OIDC-only rows as oidc_login instead of OAuth connecti
     lastSyncAt: "2026-03-12T12:00:00.000Z",
     syncError: null,
     enrichment: null,
+    lastEnrichedAt: null,
   });
 });

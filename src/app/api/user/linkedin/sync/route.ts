@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  *
  * Re-fetches the user's LinkedIn profile data using the stored access token
  * and updates the connection record. Also triggers Proxycurl enrichment if
- * a LinkedIn URL is available.
+ * a LinkedIn URL is available (rate-limited to once per 30 days).
  */
 export async function POST() {
   try {
@@ -34,13 +34,26 @@ export async function POST() {
       );
     }
 
-    // Best-effort enrichment — don't fail the sync if this errors
-    const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
-    if (linkedinUrl) {
-      const enrichResult = await runProxycurlEnrichment(serviceClient, user.id, linkedinUrl);
-      if (enrichResult.enriched) {
-        return NextResponse.json({ message: "LinkedIn profile synced and enriched" });
+    // Best-effort enrichment — rate-limited to once per 30 days
+    try {
+      const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
+      if (linkedinUrl) {
+        const enrichResult = await runProxycurlEnrichment(serviceClient, user.id, linkedinUrl);
+        if (enrichResult.enriched) {
+          return NextResponse.json({ message: "LinkedIn profile synced and enriched" });
+        }
+        if (enrichResult.rateLimited) {
+          return NextResponse.json({
+            message: "LinkedIn profile synced",
+            enrichment: {
+              rateLimited: true,
+              retryAfterDays: enrichResult.retryAfterDays,
+            },
+          });
+        }
       }
+    } catch (enrichErr) {
+      console.error("[linkedin-sync] Best-effort enrichment failed:", enrichErr);
     }
 
     return NextResponse.json({ message: "LinkedIn profile synced" });

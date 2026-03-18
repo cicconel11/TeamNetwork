@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/media-cleanup",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/linkedin-enrich",
+      "schedule": "0 5 1 */3 *"
     }
   ]
 }

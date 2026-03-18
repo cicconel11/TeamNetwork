@@ -171,13 +171,14 @@ export async function handleLinkedInOAuthCallback(
       });
     }
 
-    // Best-effort Proxycurl enrichment after successful OAuth connect
-    const linkedinUrl = await getLinkedInUrlForUser(serviceClient, user.id);
-    if (linkedinUrl) {
-      const enrichResult = await runProxycurlEnrichment(serviceClient, user.id, linkedinUrl);
-      if (!enrichResult.enriched && enrichResult.error) {
-        console.warn("[linkedin-callback] Enrichment skipped:", enrichResult.error);
+    // Best-effort enrichment on initial OAuth connect
+    try {
+      const enrichUrl = await getLinkedInUrlForUser(serviceClient, user.id);
+      if (enrichUrl) {
+        await runProxycurlEnrichment(serviceClient, user.id, enrichUrl);
       }
+    } catch (enrichErr) {
+      console.error("[linkedin-callback] Best-effort enrichment failed:", enrichErr);
     }
 
     return buildSuccessRedirect(validatedState.redirectPath);

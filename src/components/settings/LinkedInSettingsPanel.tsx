@@ -21,6 +21,7 @@ export interface LinkedInConnection {
   lastSyncAt: string | null;
   syncError: string | null;
   enrichment?: LinkedInEnrichment | null;
+  lastEnrichedAt?: string | null;
 }
 
 export interface LinkedInSettingsPanelProps {
@@ -213,6 +214,19 @@ export function LinkedInSettingsPanel({
           <p className="text-xs text-muted-foreground">
             Last synced: {formatLastSync(connection.lastSyncAt)}
           </p>
+
+          {connection.lastEnrichedAt && (
+            <p className="text-xs text-muted-foreground">
+              Last enriched: {new Date(connection.lastEnrichedAt).toLocaleDateString()}
+              {(() => {
+                const nextDate = new Date(connection.lastEnrichedAt!);
+                nextDate.setDate(nextDate.getDate() + 30);
+                return nextDate > new Date()
+                  ? ` · Next enrichment available: ${nextDate.toLocaleDateString()}`
+                  : " · Enrichment available on next sync";
+              })()}
+            </p>
+          )}
 
           {connection.syncError && (
             <InlineBanner variant="warning">{connection.syncError}</InlineBanner>

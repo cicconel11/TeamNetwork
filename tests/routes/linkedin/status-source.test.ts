@@ -11,7 +11,7 @@ const routePath = path.resolve(
   "src",
   "lib",
   "linkedin",
-  "settings.ts",
+  "url-resolver.ts",
 );
 
 const routeSource = fs.readFileSync(routePath, "utf8");

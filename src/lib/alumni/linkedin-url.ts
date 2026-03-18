@@ -19,6 +19,11 @@ export function normalizeLinkedInProfileUrl(value: string): string {
 
     url.pathname = url.pathname.replace(/\/+$/, "");
 
+    // Strip tracking query params and fragments — they are never meaningful
+    // for LinkedIn profile identity and cause false cooldown bypasses.
+    url.search = "";
+    url.hash = "";
+
     return url.toString();
   } catch {
     return trimmed;

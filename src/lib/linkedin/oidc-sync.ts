@@ -153,7 +153,7 @@ export async function storeLinkedInOidcConnection(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: existing, error: selectError } = await (supabase as any)
     .from("user_linkedin_connections")
-    .select("linkedin_data")
+    .select("linkedin_data, status")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -163,6 +163,37 @@ export async function storeLinkedInOidcConnection(
   }
 
   if (existing) {
+    // enriched_only sentinel rows can be upgraded to a proper OIDC connection
+    if (existing.status === "enriched_only") {
+      // Preserve enrichment data while upgrading to OIDC
+      const mergedData = {
+        ...(existing.linkedin_data || {}),
+        source: LINKEDIN_OIDC_SOURCE,
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: upgradeError } = await (supabase as any)
+        .from("user_linkedin_connections")
+        .update({
+          ...profileFields,
+          access_token_encrypted: LINKEDIN_OIDC_TOKEN_SENTINEL,
+          refresh_token_encrypted: null,
+          token_expires_at: "1970-01-01T00:00:00.000Z",
+          status: "connected",
+          linkedin_data: mergedData,
+          last_synced_at: now,
+          sync_error: null,
+        })
+        .eq("user_id", userId);
+
+      if (upgradeError) {
+        console.error("[linkedin-oidc-sync] Failed to upgrade enriched_only row:", upgradeError);
+        return { success: false, error: upgradeError.message };
+      }
+
+      return { success: true };
+    }
+
     // Row exists — only update if it's also from OIDC (don't overwrite real OAuth tokens)
     const source = existing.linkedin_data?.source;
     if (source !== LINKEDIN_OIDC_SOURCE) {

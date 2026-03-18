@@ -14,8 +14,9 @@ import {
   fetchLinkedInEnrichment,
   mapEnrichmentToFields,
   isProxycurlConfigured,
-  type ProxycurlEnrichmentResult,
 } from "@/lib/linkedin/proxycurl";
+import { resolveLinkedInUrlForEnrichment } from "@/lib/linkedin/url-resolver";
+import { normalizeLinkedInProfileUrl } from "@/lib/alumni/linkedin-url";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -241,6 +242,26 @@ export async function storeLinkedInConnection(
   const encryptedAccess = encryptToken(tokens.accessToken);
   const encryptedRefresh = tokens.refreshToken ? encryptToken(tokens.refreshToken) : null;
 
+  // Preserve existing enrichment data if present (e.g. from prior Proxycurl run)
+  let mergedLinkedinData: Record<string, unknown> = {
+    source: LINKEDIN_OAUTH_SOURCE,
+    email_verified: tokens.profile.emailVerified,
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("user_linkedin_connections")
+    .select("linkedin_data")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing?.linkedin_data?.enrichment) {
+    mergedLinkedinData = {
+      ...existing.linkedin_data,
+      ...mergedLinkedinData,
+    };
+  }
+
   // user_linkedin_connections is not fully covered by generated types in this codepath.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -262,10 +283,7 @@ export async function storeLinkedInConnection(
         sync_error: null,
         // linkedin_profile_url: not populated — LinkedIn OIDC userinfo doesn't
         // expose the profile URL. Users can set it manually via the URL field.
-        linkedin_data: {
-          source: LINKEDIN_OAUTH_SOURCE,
-          email_verified: tokens.profile.emailVerified,
-        },
+        linkedin_data: mergedLinkedinData,
       },
       { onConflict: "user_id" },
     );
@@ -519,6 +537,19 @@ export async function syncLinkedInProfile(
     emailVerified: data.email_verified ?? false,
   };
 
+  // Preserve existing enrichment data during sync (mirrors oidc-sync.ts merge pattern)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existingConn } = await (supabase as any)
+    .from("user_linkedin_connections")
+    .select("linkedin_data")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const mergedLinkedinData = {
+    ...(existingConn?.linkedin_data || {}),
+    email_verified: profile.emailVerified,
+  };
+
   const persisted = await updateLinkedInConnection(
     supabase,
     userId,
@@ -531,7 +562,7 @@ export async function syncLinkedInProfile(
       last_synced_at: new Date().toISOString(),
       status: "connected",
       sync_error: null,
-      linkedin_data: { email_verified: profile.emailVerified },
+      linkedin_data: mergedLinkedinData,
     },
     "persist LinkedIn profile sync",
   );
@@ -552,6 +583,15 @@ export async function syncLinkedInProfile(
 // Proxycurl enrichment
 // ---------------------------------------------------------------------------
 
+const ENRICHMENT_RATE_LIMIT_DAYS = 30;
+
+export interface EnrichmentResult {
+  enriched: boolean;
+  error?: string;
+  rateLimited?: boolean;
+  retryAfterDays?: number;
+}
+
 /**
  * Runs Proxycurl enrichment for a user and writes the results to
  * members/alumni records via the sync_user_linkedin_enrichment RPC.
@@ -560,18 +600,52 @@ export async function syncLinkedInProfile(
  * the enrichment fails, it logs and returns gracefully.
  *
  * @param linkedinUrl The user's LinkedIn profile URL (e.g. https://linkedin.com/in/user)
+ * @param skipRateLimit If true, bypass the 30-day rate limit (used by cron job)
  */
 export async function runProxycurlEnrichment(
   supabase: SupabaseClient<Database>,
   userId: string,
   linkedinUrl: string | null | undefined,
-): Promise<{ enriched: boolean; error?: string }> {
+  skipRateLimit: boolean = false,
+): Promise<EnrichmentResult> {
   if (!linkedinUrl) {
     return { enriched: false };
   }
 
   if (!isProxycurlConfigured()) {
     return { enriched: false };
+  }
+
+  // Rate-limit check: once per 30 days unless bypassed or URL changed
+  if (!skipRateLimit) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: connRow } = await (supabase as any)
+      .from("user_linkedin_connections")
+      .select("last_enriched_at, last_enriched_url")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (connRow?.last_enriched_at) {
+      // Bypass cooldown when the URL changed (e.g. user corrected a typo)
+      const urlChanged =
+        connRow.last_enriched_url == null ||
+        normalizeLinkedInProfileUrl(linkedinUrl) !==
+        normalizeLinkedInProfileUrl(connRow.last_enriched_url);
+
+      if (!urlChanged) {
+        const lastEnriched = new Date(connRow.last_enriched_at);
+        const daysSince = (Date.now() - lastEnriched.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince < ENRICHMENT_RATE_LIMIT_DAYS) {
+          const retryAfterDays = Math.ceil(ENRICHMENT_RATE_LIMIT_DAYS - daysSince);
+          return {
+            enriched: false,
+            rateLimited: true,
+            retryAfterDays,
+            error: "rateLimited",
+          };
+        }
+      }
+    }
   }
 
   try {
@@ -592,6 +666,7 @@ export async function runProxycurlEnrichment(
       p_major: fields.major,
       p_position_title: fields.position_title,
       p_enrichment_json: enrichment as unknown,
+      p_enriched_url: normalizeLinkedInProfileUrl(linkedinUrl),
     });
 
     if (error) {
@@ -607,20 +682,15 @@ export async function runProxycurlEnrichment(
 }
 
 /**
- * Looks up the user's LinkedIn URL from their connection record.
+ * Looks up the user's LinkedIn URL for enrichment, preferring org profile rows
+ * and falling back to the connection record when needed.
  */
 export async function getLinkedInUrlForUser(
   supabase: SupabaseClient<Database>,
   userId: string,
+  connectionProfileUrl?: string | null,
 ): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
-    .from("user_linkedin_connections")
-    .select("linkedin_profile_url")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  return data?.linkedin_profile_url || null;
+  return resolveLinkedInUrlForEnrichment(supabase, userId, connectionProfileUrl);
 }
 
 /**

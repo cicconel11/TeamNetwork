@@ -50,7 +50,6 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Best-effort enrichment when a URL is saved
     if (parsedBody.linkedinUrl) {
       await runProxycurlEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
     }

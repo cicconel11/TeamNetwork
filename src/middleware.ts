@@ -54,6 +54,7 @@ export async function middleware(request: NextRequest) {
     "/api/stripe/webhook-connect",
     "/api/auth/validate-age", // Age gate validation during signup
     "/api/telemetry/error", // Error tracking from unauthenticated contexts
+    "/api/cron/linkedin-enrich", // Vercel cron — validated by CRON_SECRET in handler
   ];
   if (publicApiRoutes.includes(pathname)) {
     return NextResponse.next();
