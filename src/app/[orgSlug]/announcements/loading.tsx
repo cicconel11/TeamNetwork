@@ -18,7 +18,7 @@ export default function Loading() {
       {/* Card skeletons */}
       <div className="space-y-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="card p-5">
+          <div key={i} className="card p-6">
             <div className="flex items-start gap-4">
               <Skeleton className="h-10 w-10 rounded-xl flex-shrink-0" />
               <div className="flex-1 space-y-3">
