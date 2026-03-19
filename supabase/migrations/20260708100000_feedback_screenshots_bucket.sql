@@ -1,4 +1,4 @@
--- Private bucket for friction-feedback screenshots (uploaded via service-role API only)
+-- Friction-feedback screenshots: uploads via service-role API only; public read for admin email links
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
   'feedback-screenshots',
