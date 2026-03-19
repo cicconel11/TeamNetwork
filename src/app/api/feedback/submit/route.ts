@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
-import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -8,11 +7,11 @@ import {
   buildRateLimitResponse,
 } from "@/lib/security/rate-limit";
 import {
-  safeString,
   validateJson,
   ValidationError,
   validationErrorResponse,
 } from "@/lib/security/validation";
+import { frictionFeedbackSubmitSchema } from "@/lib/schemas/friction-feedback-submit";
 import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -27,21 +26,6 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@myteamnetwork.com";
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@myteamnetwork.com";
-
-const feedbackSchema = z
-  .object({
-    message: safeString(2000, 1),
-    screenshot_url: z
-      .string()
-      .url({ message: "Screenshot URL must be a valid URL" })
-      .max(2048, "Screenshot URL is too long")
-      .optional(),
-    page_url: safeString(2048, 1),
-    user_agent: safeString(512, 1),
-    context: safeString(500, 1),
-    trigger: safeString(100, 1),
-  })
-  .strict();
 
 interface FeedbackResponses {
   message: string;
@@ -139,7 +123,7 @@ export async function POST(request: Request) {
       return respond({ error: "Unauthorized" }, 401);
     }
 
-    const body = await validateJson(request, feedbackSchema, {
+    const body = await validateJson(request, frictionFeedbackSubmitSchema, {
       maxBodyBytes: 50_000,
     });
     const { message, screenshot_url, page_url, user_agent, context, trigger } =

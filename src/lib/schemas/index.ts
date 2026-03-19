@@ -24,6 +24,7 @@ export * from "./donations";
 
 // Feedback schemas
 export * from "./feedback";
+export * from "./friction-feedback-submit";
 
 // Form builder schemas
 export * from "./form-builder";

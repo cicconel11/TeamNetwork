@@ -75,3 +75,6 @@ packages/
 
 # Real CSV test data with PII
 teamnetwork_linkedin_import_real.csv
+
+# Obsidian (local docs vault)
+docs/.obsidian/
