@@ -2076,7 +2076,7 @@ export type Database = {
           organization_id: string
           responses: Json
           submitted_at: string | null
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           form_id: string
@@ -2084,7 +2084,7 @@ export type Database = {
           organization_id: string
           responses?: Json
           submitted_at?: string | null
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           form_id?: string
@@ -2092,7 +2092,7 @@ export type Database = {
           organization_id?: string
           responses?: Json
           submitted_at?: string | null
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {

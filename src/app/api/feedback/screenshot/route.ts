@@ -29,20 +29,19 @@ export async function POST(request: Request) {
       data: { user },
     } = await supabase.auth.getUser();
 
+    const anonymous = !user;
     const rateLimit = checkRateLimit(request, {
       userId: user?.id ?? null,
-      feature: "feedback screenshot upload",
-      limitPerIp: 20,
-      limitPerUser: 10,
+      feature: anonymous
+        ? "feedback screenshot upload (anonymous)"
+        : "feedback screenshot upload",
+      limitPerIp: anonymous ? 5 : 20,
+      limitPerUser: anonymous ? 0 : 10,
       windowMs: HOUR_MS,
     });
 
     if (!rateLimit.ok) {
       return buildRateLimitResponse(rateLimit);
-    }
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const formData = await request.formData();
@@ -73,7 +72,8 @@ export async function POST(request: Request) {
 
     const buf = Buffer.from(await (file as Blob).arrayBuffer());
     const ext = extForMime(mimeType);
-    const path = `${user.id}/${randomUUID()}.${ext}`;
+    const prefix = user?.id ?? "anonymous";
+    const path = `${prefix}/${randomUUID()}.${ext}`;
 
     const service = createServiceClient();
     const { error: uploadError } = await service.storage
