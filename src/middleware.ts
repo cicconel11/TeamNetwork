@@ -50,6 +50,11 @@ export async function middleware(request: NextRequest) {
   const shouldLog = shouldLogAuth();
   const logFailures = shouldLogAuthFailures();
 
+  // Browser/devtools probes should bypass auth and org logic entirely.
+  if (pathname.startsWith("/.well-known/")) {
+    return NextResponse.next();
+  }
+
   // Bypass routes that should never be blocked by auth middleware
   if (shouldBypassAuth(pathname)) {
     return NextResponse.next();

@@ -5,18 +5,27 @@ import assert from "node:assert/strict";
 describe("getAiOrgContext", () => {
   // Helper to create mock service client
   function createMockServiceSupabase(opts: { role?: string; queryError?: boolean }) {
+    const eqCalls: Array<{ column: string; value: unknown }> = [];
+
     return {
+      eqCalls,
       from: () => ({
         select: () => ({
-          eq: () => ({
-            eq: () => ({
+          eq: (column: string, value: unknown) => {
+            eqCalls.push({ column, value });
+            return {
+              eq: (innerColumn: string, innerValue: unknown) => {
+                eqCalls.push({ column: innerColumn, value: innerValue });
+                return {
               maybeSingle: async () => {
                 if (opts.queryError) return { data: null, error: { message: "DB error" } };
                 if (!opts.role) return { data: null, error: null };
                 return { data: { role: opts.role }, error: null };
               },
-            }),
-          }),
+                };
+              },
+            };
+          },
         }),
       }),
     };
@@ -73,5 +82,20 @@ describe("getAiOrgContext", () => {
       assert.equal(result.role, "admin");
       assert.ok(result.serviceSupabase);
     }
+  });
+
+  it("queries membership using organization_id", async () => {
+    const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
+    const mockUser = { id: "user-id", email: "admin@test.com" };
+    const mockServiceSupabase = createMockServiceSupabase({ role: "admin" });
+
+    await getAiOrgContext("org-id", mockUser as any, mockRateLimit, {
+      serviceSupabase: mockServiceSupabase as any,
+    });
+
+    assert.deepEqual(mockServiceSupabase.eqCalls, [
+      { column: "user_id", value: "user-id" },
+      { column: "organization_id", value: "org-id" },
+    ]);
   });
 });
