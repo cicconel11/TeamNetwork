@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,12 +25,19 @@ type PhilanthropyEventRow = {
   updated_at: string | null;
 };
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
+
+  const rl = checkRateLimit(request, {
+    limitPerIp: 10,
+    limitPerUser: 5,
+    feature: "philanthropy export",
+  });
+  if (!rl.ok) return buildRateLimitResponse(rl);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
