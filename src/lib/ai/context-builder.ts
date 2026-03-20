@@ -42,14 +42,18 @@ interface QueryFailure {
 
 type QueryResult<T> = QuerySuccess<T> | QueryFailure;
 
+interface EventsResult {
+  events: UpcomingEvent[];
+  totalCount: number;
+}
+
 interface PromptContextData {
   org: QueryResult<OrgInfo | null>;
   userName: QueryResult<string | null>;
   memberCount: QueryResult<number>;
   alumniCount: QueryResult<number>;
   parentCount: QueryResult<number>;
-  eventCount: QueryResult<number>;
-  upcomingEvents: QueryResult<UpcomingEvent[]>;
+  upcomingEvents: QueryResult<EventsResult>;
   recentAnnouncements: QueryResult<RecentAnnouncement[]>;
   donationStats: QueryResult<DonationStats | null>;
 }
@@ -101,7 +105,6 @@ function formatDate(iso: string): string {
   if (Number.isNaN(date.getTime())) {
     return iso;
   }
-
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -128,7 +131,6 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     memberCount,
     alumniCount,
     parentCount,
-    eventCount,
     upcomingEvents,
     recentAnnouncements,
     donationStats,
@@ -173,28 +175,27 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
         .eq("organization_id", orgId)
         .is("deleted_at", null)
     ),
-    safeCount("upcoming event count", () =>
-      (serviceSupabase as any)
-        .from("events")
-        .select("*", { count: "exact", head: true })
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("start_date", now)
-    ),
-    safeQuery<UpcomingEvent[]>("upcoming events", () =>
-      (serviceSupabase as any)
-        .from("events")
-        .select("title, start_date, location")
-        .eq("organization_id", orgId)
-        .is("deleted_at", null)
-        .gte("start_date", now)
-        .order("start_date", { ascending: true })
-        .limit(5)
-    ).then((result) =>
-      result.ok
-        ? { ok: true as const, data: result.data ?? [] }
-        : { ok: false as const }
-    ),
+    // Single query returns both rows (limit 5) and total count
+    (async (): Promise<QueryResult<EventsResult>> => {
+      try {
+        const { data, count, error } = await (serviceSupabase as any)
+          .from("events")
+          .select("title, start_date, location", { count: "exact" })
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .gte("start_date", now)
+          .order("start_date", { ascending: true })
+          .limit(5);
+        if (error) {
+          console.warn("[ai-context-builder] omitted upcoming events:", error);
+          return { ok: false };
+        }
+        return { ok: true, data: { events: data ?? [], totalCount: count ?? 0 } };
+      } catch (error) {
+        console.warn("[ai-context-builder] omitted upcoming events:", error);
+        return { ok: false };
+      }
+    })(),
     safeQuery<RecentAnnouncement[]>("recent announcements", () =>
       (serviceSupabase as any)
         .from("announcements")
@@ -223,7 +224,6 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     memberCount,
     alumniCount,
     parentCount,
-    eventCount,
     upcomingEvents,
     recentAnnouncements,
     donationStats,
@@ -287,19 +287,19 @@ export async function buildPromptContext(
     context.memberCount.ok ||
     context.alumniCount.ok ||
     context.parentCount.ok ||
-    context.eventCount.ok;
+    context.upcomingEvents.ok;
 
   if (hasCountSection) {
     sections.push("", "## Counts");
     if (context.memberCount.ok) sections.push(`- Active Members: ${context.memberCount.data}`);
     if (context.alumniCount.ok) sections.push(`- Alumni: ${context.alumniCount.data}`);
     if (context.parentCount.ok) sections.push(`- Parents: ${context.parentCount.data}`);
-    if (context.eventCount.ok) sections.push(`- Upcoming Events: ${context.eventCount.data}`);
+    if (context.upcomingEvents.ok) sections.push(`- Upcoming Events: ${context.upcomingEvents.data.totalCount}`);
   }
 
-  if (context.upcomingEvents.ok && context.upcomingEvents.data.length > 0) {
+  if (context.upcomingEvents.ok && context.upcomingEvents.data.events.length > 0) {
     sections.push("", "## Upcoming Events");
-    for (const event of context.upcomingEvents.data) {
+    for (const event of context.upcomingEvents.data.events) {
       const location = event.location ? ` (${event.location})` : "";
       sections.push(`- ${event.title} - ${formatDate(event.start_date)}${location}`);
     }

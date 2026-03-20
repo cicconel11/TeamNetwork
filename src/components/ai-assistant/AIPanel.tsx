@@ -135,9 +135,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
       setThreads(nextState.threads);
       setActiveThreadId(nextState.activeThreadId);
       setMessages(nextState.messages);
-      await loadThreads();
     },
-    [activeThreadId, loadThreads, messages, orgId, threads]
+    [activeThreadId, messages, orgId, threads]
   );
 
   if (!isOpen) return null;
