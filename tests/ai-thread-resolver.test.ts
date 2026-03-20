@@ -36,22 +36,22 @@ describe("resolveOwnThread", () => {
     if (!result.ok) assert.equal(result.status, 404);
   });
 
-  it("returns 403 for wrong user", async () => {
+  it("returns 404 for wrong user ownership", async () => {
     const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
     const thread = { id: "t1", user_id: "other-user", org_id: "o1", surface: "general", title: null };
     const mock = createMockSupabase({ thread });
     const result = await resolveOwnThread("t1", "u1", "o1", mock as any);
     assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.status, 403);
+    if (!result.ok) assert.equal(result.status, 404);
   });
 
-  it("returns 403 for wrong org", async () => {
+  it("returns 404 for wrong org ownership", async () => {
     const { resolveOwnThread } = await import("../src/lib/ai/thread-resolver.ts");
     const thread = { id: "t1", user_id: "u1", org_id: "other-org", surface: "general", title: null };
     const mock = createMockSupabase({ thread });
     const result = await resolveOwnThread("t1", "u1", "o1", mock as any);
     assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.status, 403);
+    if (!result.ok) assert.equal(result.status, 404);
   });
 
   it("returns 404 on query error (never leak existence)", async () => {

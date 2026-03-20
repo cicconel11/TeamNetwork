@@ -108,6 +108,7 @@ CREATE POLICY "Users can insert messages in own threads"
       SELECT 1 FROM ai_threads
       WHERE ai_threads.id = ai_messages.thread_id
         AND ai_threads.user_id = auth.uid()
+        AND ai_threads.deleted_at IS NULL
     )
   );
 
@@ -118,6 +119,7 @@ CREATE POLICY "Users can update messages in own threads"
       SELECT 1 FROM ai_threads
       WHERE ai_threads.id = ai_messages.thread_id
         AND ai_threads.user_id = auth.uid()
+        AND ai_threads.deleted_at IS NULL
     )
   )
   WITH CHECK (
@@ -125,6 +127,7 @@ CREATE POLICY "Users can update messages in own threads"
       SELECT 1 FROM ai_threads
       WHERE ai_threads.id = ai_messages.thread_id
         AND ai_threads.user_id = auth.uid()
+        AND ai_threads.deleted_at IS NULL
     )
   );
 

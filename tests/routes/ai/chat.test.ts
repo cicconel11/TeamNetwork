@@ -31,11 +31,19 @@ interface MockMessage {
   idempotency_key?: string;
 }
 
+interface MockThread {
+  id: string;
+  user_id: string;
+  org_id: string;
+  deleted_at?: string | null;
+}
+
 interface ChatRequest {
   auth: AuthContext;
   orgId: string;
   body?: unknown;
   existingMessages?: MockMessage[];
+  dbThreads?: MockThread[];
   threadInsertError?: boolean;
   userMsgInsertError?: boolean;
   assistantMsgInsertError?: boolean;
@@ -46,9 +54,8 @@ interface ChatResult {
   error?: string;
   details?: unknown;
   threadId?: string;
-  messageId?: string;
-  responseStatus?: string;
   isStream?: boolean;
+  replayed?: boolean;
 }
 
 // ── Simulate getAiOrgContext ───────────────────────────────────────────────────
@@ -132,6 +139,15 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
 
   const { message, surface, threadId: existingThreadId, idempotencyKey } = validation.data;
 
+  if (existingThreadId) {
+    const thread = (req.dbThreads ?? []).find(
+      (candidate) => candidate.id === existingThreadId && !candidate.deleted_at
+    );
+    if (!thread || thread.user_id !== ctx.userId || thread.org_id !== req.orgId) {
+      return { status: 404, error: "Thread not found" };
+    }
+  }
+
   // 5. Idempotency check
   const existingMsg = (req.existingMessages ?? []).find(
     (m) => m.idempotency_key === idempotencyKey
@@ -142,8 +158,8 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
       return {
         status: 200,
         threadId: existingMsg.thread_id,
-        messageId: existingMsg.id,
-        responseStatus: "already_completed",
+        isStream: true,
+        replayed: true,
       };
     }
     return { status: 409, error: "Request already in progress" };
@@ -179,6 +195,7 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
 
 const ORG_ID = "org-uuid-1";
 const OTHER_ORG_ID = "org-uuid-2";
+const ADMIN_USER_ID = "org-admin-user";
 const VALID_IDEMPOTENCY_KEY = "11111111-1111-4111-8111-111111111111";
 const VALID_THREAD_ID = "22222222-2222-4222-8222-222222222222";
 
@@ -204,6 +221,13 @@ const IN_FLIGHT_MESSAGE: MockMessage = {
   content: null,
   status: "pending",
   idempotency_key: VALID_IDEMPOTENCY_KEY,
+};
+
+const OWNED_THREAD: MockThread = {
+  id: VALID_THREAD_ID,
+  user_id: ADMIN_USER_ID,
+  org_id: ORG_ID,
+  deleted_at: null,
 };
 
 // ── Auth tests ────────────────────────────────────────────────────────────────
@@ -347,9 +371,9 @@ test("POST /api/ai/[orgId]/chat returns 200 with already_completed on completed 
     existingMessages: [COMPLETED_MESSAGE],
   });
   assert.strictEqual(result.status, 200);
-  assert.strictEqual(result.responseStatus, "already_completed");
+  assert.strictEqual(result.isStream, true);
+  assert.strictEqual(result.replayed, true);
   assert.strictEqual(result.threadId, VALID_THREAD_ID);
-  assert.strictEqual(result.messageId, COMPLETED_MESSAGE.id);
 });
 
 // ── Error path tests ──────────────────────────────────────────────────────────
@@ -418,12 +442,42 @@ test("POST /api/ai/[orgId]/chat accepts all valid surface values", () => {
 
 test("POST /api/ai/[orgId]/chat accepts optional threadId when valid UUID", () => {
   const result = simulateChatRoute({
-    auth: AuthPresets.orgAdmin(ORG_ID),
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
     orgId: ORG_ID,
     body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [OWNED_THREAD],
   });
   assert.strictEqual(result.status, 200);
   assert.strictEqual(result.isStream, true);
+});
+
+test("POST /api/ai/[orgId]/chat returns 404 when provided thread belongs to another user", () => {
+  const result = simulateChatRoute({
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
+    orgId: ORG_ID,
+    body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [{ ...OWNED_THREAD, user_id: "other-user" }],
+  });
+  assert.strictEqual(result.status, 404);
+});
+
+test("POST /api/ai/[orgId]/chat returns 404 when provided thread is soft-deleted", () => {
+  const result = simulateChatRoute({
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
+    orgId: ORG_ID,
+    body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [{ ...OWNED_THREAD, deleted_at: "2026-03-20T12:00:00.000Z" }],
+  });
+  assert.strictEqual(result.status, 404);
 });
 
 test("POST /api/ai/[orgId]/chat returns 400 when threadId is provided but not a UUID", () => {

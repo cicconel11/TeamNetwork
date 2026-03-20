@@ -1,46 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Bot, User } from "lucide-react";
-
-interface Message {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string | null;
-  status: string;
-  created_at: string;
-}
+import type { AIPanelMessage } from "./panel-state";
 
 interface MessageListProps {
-  orgId: string;
-  threadId: string | null;
+  messages: AIPanelMessage[];
+  loading: boolean;
   streamingContent?: string;
   isStreaming?: boolean;
 }
 
-export function MessageList({ orgId, threadId, streamingContent, isStreaming }: MessageListProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
+export function MessageList({ messages, loading, streamingContent, isStreaming }: MessageListProps) {
+  if (loading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    if (!threadId) {
-      setMessages([]);
-      return;
-    }
-
-    setLoading(true);
-    fetch(`/api/ai/${orgId}/threads/${threadId}/messages`)
-      .then(res => res.json())
-      .then(data => {
-        setMessages(data.messages ?? []);
-      })
-      .catch(() => {
-        // Silent fail — messages will be empty
-      })
-      .finally(() => setLoading(false));
-  }, [orgId, threadId]);
-
-  if (!threadId && !streamingContent) {
+  if (!messages.length && !streamingContent) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
         <div>
@@ -53,18 +32,13 @@ export function MessageList({ orgId, threadId, streamingContent, isStreaming }: 
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      {messages.filter(m => m.role !== "system").map(msg => (
-        <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+      {messages.filter((message) => message.role !== "system").map((msg) => (
+        <div
+          key={msg.id}
+          className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+        >
           {msg.role === "assistant" && (
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
               <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />

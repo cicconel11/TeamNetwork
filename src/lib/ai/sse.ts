@@ -1,8 +1,11 @@
 export type SSEEvent =
   | { type: "chunk"; content: string }
-  | { type: "tool_call"; name: string; args: Record<string, unknown> }
-  | { type: "tool_result"; name: string; data: unknown }
-  | { type: "done"; messageId: string; threadId: string; usage?: { inputTokens: number; outputTokens: number } }
+  | {
+      type: "done";
+      threadId: string;
+      replayed?: boolean;
+      usage?: { inputTokens: number; outputTokens: number };
+    }
   | { type: "error"; message: string; retryable: boolean };
 
 export const SSE_HEADERS = {

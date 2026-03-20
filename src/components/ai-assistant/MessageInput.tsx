@@ -2,37 +2,32 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Send, Square, AlertCircle } from "lucide-react";
-import { useAIStream } from "@/hooks/useAIStream";
 
 interface MessageInputProps {
-  orgId: string;
-  threadId: string | null;
-  onThreadCreated: (threadId: string) => void;
+  isStreaming: boolean;
+  error: string | null;
+  onSend: (message: string) => Promise<void>;
+  onCancel: () => void;
+  onClearError: () => void;
 }
 
-export function MessageInput({ orgId, threadId, onThreadCreated }: MessageInputProps) {
+export function MessageInput({
+  isStreaming,
+  error,
+  onSend,
+  onCancel,
+  onClearError,
+}: MessageInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { isStreaming, error, sendMessage, cancel, clearError, currentContent, threadId: streamThreadId } = useAIStream({ orgId });
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
 
     setInput("");
-    const idempotencyKey = crypto.randomUUID();
-
-    await sendMessage(trimmed, {
-      surface: "general",
-      threadId: threadId ?? undefined,
-      idempotencyKey,
-    });
-
-    // If a new thread was created, notify parent
-    if (!threadId && streamThreadId) {
-      onThreadCreated(streamThreadId);
-    }
-  }, [input, isStreaming, threadId, sendMessage, streamThreadId, onThreadCreated]);
+    await onSend(trimmed);
+  }, [input, isStreaming, onSend]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -47,7 +42,7 @@ export function MessageInput({ orgId, threadId, onThreadCreated }: MessageInputP
         <div className="mb-2 flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-400">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           <span className="flex-1">{error}</span>
-          <button onClick={clearError} className="text-red-500 hover:text-red-700">Dismiss</button>
+          <button onClick={onClearError} className="text-red-500 hover:text-red-700">Dismiss</button>
         </div>
       )}
       {isStreaming && (
@@ -57,7 +52,7 @@ export function MessageInput({ orgId, threadId, onThreadCreated }: MessageInputP
             Thinking...
           </span>
           <button
-            onClick={cancel}
+            onClick={onCancel}
             className="flex items-center gap-1 text-red-500 hover:text-red-700"
           >
             <Square className="h-3 w-3" />
@@ -77,7 +72,7 @@ export function MessageInput({ orgId, threadId, onThreadCreated }: MessageInputP
           className="flex-1 resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-500"
         />
         <button
-          onClick={isStreaming ? cancel : handleSend}
+          onClick={isStreaming ? onCancel : handleSend}
           disabled={!isStreaming && !input.trim()}
           aria-label={isStreaming ? "Stop generation" : "Send message"}
           className="rounded-md bg-indigo-600 p-2 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-gray-900"

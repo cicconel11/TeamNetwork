@@ -1,41 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MessageSquare, Plus, Trash2 } from "lucide-react";
-
-interface Thread {
-  id: string;
-  title: string | null;
-  surface: string;
-  updated_at: string;
-}
+import type { AIPanelThread } from "./panel-state";
 
 interface ThreadListProps {
-  orgId: string;
+  threads: AIPanelThread[];
+  loading: boolean;
   activeThreadId: string | null;
   onSelectThread: (id: string) => void;
   onNewThread: () => void;
+  onDeleteThread: (threadId: string) => Promise<void>;
 }
 
-export function ThreadList({ orgId, activeThreadId, onSelectThread, onNewThread }: ThreadListProps) {
-  const [threads, setThreads] = useState<Thread[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/ai/${orgId}/threads`)
-      .then(res => res.json())
-      .then(data => setThreads(data.threads ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [orgId]);
-
+export function ThreadList({
+  threads,
+  loading,
+  activeThreadId,
+  onSelectThread,
+  onNewThread,
+  onDeleteThread,
+}: ThreadListProps) {
   const handleDelete = async (threadId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const confirmed = window.confirm("Delete this conversation?");
     if (!confirmed) return;
 
-    await fetch(`/api/ai/${orgId}/threads/${threadId}`, { method: "DELETE" });
-    setThreads(prev => prev.filter(t => t.id !== threadId));
+    await onDeleteThread(threadId);
   };
 
   return (
@@ -60,31 +50,37 @@ export function ThreadList({ orgId, activeThreadId, onSelectThread, onNewThread 
           </p>
         ) : (
           <div className="divide-y divide-gray-100 dark:divide-gray-800">
-            {threads.map(thread => (
-              <button
+            {threads.map((thread) => (
+              <div
                 key={thread.id}
-                onClick={() => onSelectThread(thread.id)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                className={`group flex items-center gap-3 px-4 py-3 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 ${
                   activeThreadId === thread.id ? "bg-indigo-50 dark:bg-indigo-900/20" : ""
                 }`}
               >
-                <MessageSquare className="h-4 w-4 shrink-0 text-gray-400" />
-                <div className="flex-1 truncate">
-                  <p className="truncate font-medium text-gray-900 dark:text-white">
-                    {thread.title ?? "Untitled conversation"}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(thread.updated_at).toLocaleDateString()}
-                  </p>
-                </div>
                 <button
+                  type="button"
+                  onClick={() => onSelectThread(thread.id)}
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                >
+                  <MessageSquare className="h-4 w-4 shrink-0 text-gray-400" />
+                  <div className="flex-1 truncate">
+                    <p className="truncate font-medium text-gray-900 dark:text-white">
+                      {thread.title ?? "Untitled conversation"}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(thread.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </button>
+                <button
+                  type="button"
                   onClick={(e) => handleDelete(thread.id, e)}
                   aria-label="Delete thread"
                   className="rounded p-1 text-gray-400 opacity-0 hover:bg-gray-200 hover:text-red-500 group-hover:opacity-100 dark:hover:bg-gray-700"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         )}

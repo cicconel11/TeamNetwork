@@ -14,6 +14,7 @@ import { handleFaqBranch } from "@/lib/ai/branches/faq";
 import { handleActionBranch } from "@/lib/ai/branches/action-executor";
 import { logAiRequest } from "@/lib/ai/audit";
 import { createSSEStream, SSE_HEADERS, type SSEEvent } from "@/lib/ai/sse";
+import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,9 +65,26 @@ export async function POST(
 
   const { message, surface, threadId: existingThreadId, idempotencyKey } = parsed.data;
 
-  // 4. Abandoned stream cleanup (5-min threshold)
+  // 4. Validate provided thread ownership before any cleanup or writes
+  let threadId = existingThreadId;
+  if (threadId) {
+    const resolution = await resolveOwnThread(
+      threadId,
+      ctx.userId,
+      ctx.orgId,
+      ctx.serviceSupabase
+    );
+    if (!resolution.ok) {
+      return NextResponse.json(
+        { error: resolution.message },
+        { status: resolution.status, headers: rateLimit.headers }
+      );
+    }
+  }
+
+  // 5. Abandoned stream cleanup (5-min threshold)
   if (existingThreadId) {
-    await (ctx.serviceSupabase as any)
+    await ctx.supabase
       .from("ai_messages")
       .update({ status: "error", content: "[abandoned]" })
       .eq("thread_id", existingThreadId)
@@ -75,7 +93,7 @@ export async function POST(
       .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
   }
 
-  // 5. Idempotency check — look up by idempotency_key
+  // 6. Idempotency check — look up by idempotency_key
   const { data: existingMsg } = await ctx.supabase
     .from("ai_messages")
     .select("id, status, thread_id")
@@ -84,13 +102,15 @@ export async function POST(
 
   if (existingMsg) {
     if (existingMsg.status === "complete") {
-      return NextResponse.json(
-        {
-          threadId: existingMsg.thread_id,
-          messageId: existingMsg.id,
-          status: "already_completed",
-        },
-        { headers: rateLimit.headers }
+      return new Response(
+        createSSEStream(async (enqueue) => {
+          enqueue({
+            type: "done",
+            threadId: existingMsg.thread_id,
+            replayed: true,
+          });
+        }),
+        { headers: { ...SSE_HEADERS, ...rateLimit.headers } }
       );
     }
     // In-flight — return 409 to signal duplicate
@@ -100,8 +120,7 @@ export async function POST(
     );
   }
 
-  // 6. Upsert thread
-  let threadId = existingThreadId;
+  // 7. Upsert thread
   if (!threadId) {
     const { data: newThread, error: threadError } = await ctx.supabase
       .from("ai_threads")
@@ -124,7 +143,7 @@ export async function POST(
     threadId = newThread.id;
   }
 
-  // 7. Insert user message
+  // 8. Insert user message
   const { error: userMsgError } = await ctx.supabase.from("ai_messages").insert({
     thread_id: threadId,
     role: "user",
@@ -141,7 +160,7 @@ export async function POST(
     );
   }
 
-  // 8. Insert assistant placeholder
+  // 9. Insert assistant placeholder
   const { data: assistantMsg, error: assistantError } = await ctx.supabase
     .from("ai_messages")
     .insert({
@@ -163,7 +182,7 @@ export async function POST(
 
   const assistantMessageId = assistantMsg.id;
 
-  // 9–11. Stream SSE response
+  // 10–12. Stream SSE response
   const stream = createSSEStream(async (enqueue) => {
     let intent = "general";
     let fullContent = "";
@@ -176,13 +195,13 @@ export async function POST(
           "AI assistant is not configured. Please set the ZAI_API_KEY environment variable.";
         enqueue({ type: "chunk", content: msg });
         fullContent = msg;
-        enqueue({ type: "done", messageId: assistantMessageId, threadId: threadId! });
+        enqueue({ type: "done", threadId: threadId! });
         return;
       }
 
       const client = createZaiClient();
 
-      // 9a. Classify intent
+      // 10a. Classify intent
       const classification = await classifyIntent(message, client);
       intent = classification.intent;
 
@@ -192,7 +211,7 @@ export async function POST(
         .update({ intent, status: "streaming" })
         .eq("id", assistantMessageId);
 
-      // 9b. Dispatch to intent branch
+      // 10b. Dispatch to intent branch
       let branchEvents: SSEEvent[] = [];
 
       switch (intent) {
@@ -259,7 +278,6 @@ export async function POST(
               enqueue(event);
               return;
             }
-            // Skip the done event from composeResponse — we emit our own below
           }
           break;
         }
@@ -273,8 +291,8 @@ export async function POST(
         enqueue(event);
       }
 
-      // 10. Done event
-      enqueue({ type: "done", messageId: assistantMessageId, threadId: threadId! });
+      // 11. Done event
+      enqueue({ type: "done", threadId: threadId! });
     } catch (err) {
       console.error("[ai-chat] stream error:", err);
       enqueue({ type: "error", message: "An error occurred", retryable: true });
@@ -288,7 +306,7 @@ export async function POST(
         })
         .eq("id", assistantMessageId);
 
-      // 11. Audit log — fire-and-forget (never awaited)
+      // 12. Audit log — fire-and-forget (never awaited)
       logAiRequest(ctx.serviceSupabase, {
         threadId: threadId!,
         messageId: assistantMessageId,
@@ -302,5 +320,5 @@ export async function POST(
     }
   });
 
-  return new Response(stream, { headers: SSE_HEADERS });
+  return new Response(stream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
 }

@@ -28,6 +28,7 @@ interface MockThread {
   title: string | null;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | null;
 }
 
 interface MockMessage {
@@ -63,12 +64,12 @@ function simulateResolveThread(
   orgId: string,
   threads: MockThread[]
 ): { ok: true; thread: MockThread } | { ok: false; status: 404 | 403; message: string } {
-  const thread = threads.find((t) => t.id === threadId);
+  const thread = threads.find((t) => t.id === threadId && !t.deleted_at);
   if (!thread) {
     return { ok: false, status: 404, message: "Thread not found" };
   }
   if (thread.user_id !== userId || thread.org_id !== orgId) {
-    return { ok: false, status: 403, message: "Access denied" };
+    return { ok: false, status: 404, message: "Thread not found" };
   }
   return { ok: true, thread };
 }
@@ -405,18 +406,17 @@ test("DELETE thread returns 404 when thread does not exist", () => {
   assert.ok(result.error?.includes("not found") || result.error?.includes("Thread"));
 });
 
-test("DELETE thread returns 403 when thread belongs to different user", () => {
+test("DELETE thread returns 404 when thread belongs to different user", () => {
   const result = simulateDeleteThread({
     auth: AuthPresets.orgAdmin(ORG_ID),
     orgId: ORG_ID,
     threadId: OTHER_USER_THREAD.id,
     dbThreads: [OTHER_USER_THREAD],
   });
-  assert.strictEqual(result.status, 403);
-  assert.ok(result.error?.includes("Access denied") || result.error?.includes("denied"));
+  assert.strictEqual(result.status, 404);
 });
 
-test("DELETE thread returns 403 when thread belongs to different org", () => {
+test("DELETE thread returns 404 when thread belongs to different org", () => {
   const crossOrgThread: MockThread = {
     ...THREAD_1,
     org_id: OTHER_ORG_ID,
@@ -427,7 +427,17 @@ test("DELETE thread returns 403 when thread belongs to different org", () => {
     threadId: crossOrgThread.id,
     dbThreads: [crossOrgThread],
   });
-  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.status, 404);
+});
+
+test("DELETE thread returns 404 when thread is soft-deleted", () => {
+  const result = simulateDeleteThread({
+    auth: AuthPresets.orgAdmin(ORG_ID),
+    orgId: ORG_ID,
+    threadId: THREAD_1.id,
+    dbThreads: [{ ...THREAD_1, deleted_at: "2026-03-20T12:00:00.000Z" }],
+  });
+  assert.strictEqual(result.status, 404);
 });
 
 test("DELETE thread returns 200 with success when authorized", () => {
@@ -488,14 +498,14 @@ test("GET messages returns 404 when thread does not exist", () => {
   assert.ok(result.error?.includes("not found") || result.error?.includes("Thread"));
 });
 
-test("GET messages returns 403 when thread belongs to different user", () => {
+test("GET messages returns 404 when thread belongs to different user", () => {
   const result = simulateListMessages({
     auth: AuthPresets.orgAdmin(ORG_ID),
     orgId: ORG_ID,
     threadId: OTHER_USER_THREAD.id,
     dbThreads: [OTHER_USER_THREAD],
   });
-  assert.strictEqual(result.status, 403);
+  assert.strictEqual(result.status, 404);
 });
 
 // ── GET /threads/[threadId]/messages — success tests ─────────────────────────

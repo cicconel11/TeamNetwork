@@ -11,14 +11,80 @@ interface AIStreamState {
   isStreaming: boolean;
   error: string | null;
   currentContent: string;
-  messageId: string | null;
   threadId: string | null;
 }
 
+export interface AIStreamResult {
+  threadId: string;
+  replayed?: boolean;
+  usage?: { inputTokens: number; outputTokens: number };
+}
+
 interface UseAIStreamReturn extends AIStreamState {
-  sendMessage: (message: string, opts: { surface: string; threadId?: string; idempotencyKey: string }) => Promise<void>;
+  sendMessage: (
+    message: string,
+    opts: { surface: string; threadId?: string; idempotencyKey: string }
+  ) => Promise<AIStreamResult | null>;
   cancel: () => void;
   clearError: () => void;
+}
+
+interface StreamCallbacks {
+  onChunk?: (content: string) => void;
+  onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
+  onError?: (message: string) => void;
+}
+
+export async function consumeSSEStream(
+  response: Response,
+  callbacks: StreamCallbacks
+): Promise<AIStreamResult | null> {
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error("No response body");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim();
+      if (!trimmed.startsWith("data: ")) continue;
+
+      try {
+        const event: SSEEvent = JSON.parse(trimmed.slice(6));
+
+        if (event.type === "chunk") {
+          callbacks.onChunk?.(event.content);
+          continue;
+        }
+
+        if (event.type === "error") {
+          callbacks.onError?.(event.message);
+          return null;
+        }
+
+        callbacks.onDone?.(event);
+        return {
+          threadId: event.threadId,
+          replayed: event.replayed,
+          usage: event.usage,
+        };
+      } catch {
+        // Ignore malformed events and keep streaming.
+      }
+    }
+  }
+
+  return null;
 }
 
 export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
@@ -26,7 +92,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     isStreaming: false,
     error: null,
     currentContent: "",
-    messageId: null,
     threadId: null,
   });
   const abortRef = useRef<AbortController | null>(null);
@@ -54,7 +119,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       isStreaming: true,
       error: null,
       currentContent: "",
-      messageId: null,
       threadId: opts.threadId ?? null,
     });
 
@@ -78,78 +142,49 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           isStreaming: false,
           error: body.error || `HTTP ${response.status}`,
         }));
-        return;
+        return null;
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) {
-        setState(prev => ({ ...prev, isStreaming: false, error: "No response body" }));
-        return;
-      }
+      const result = await consumeSSEStream(response, {
+        onChunk: (content) => {
+          setState((prev) => ({
+            ...prev,
+            currentContent: prev.currentContent + content,
+          }));
+        },
+        onDone: (event) => {
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            threadId: event.threadId,
+          }));
+        },
+        onError: (messageText) => {
+          setState((prev) => ({
+            ...prev,
+            isStreaming: false,
+            error: messageText,
+          }));
+        },
+      });
 
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() ?? "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data: ")) continue;
-
-          try {
-            const event: SSEEvent = JSON.parse(trimmed.slice(6));
-
-            switch (event.type) {
-              case "chunk":
-                setState(prev => ({
-                  ...prev,
-                  currentContent: prev.currentContent + event.content,
-                }));
-                break;
-              case "done":
-                setState(prev => ({
-                  ...prev,
-                  isStreaming: false,
-                  messageId: event.messageId,
-                  threadId: event.threadId,
-                }));
-                break;
-              case "error":
-                setState(prev => ({
-                  ...prev,
-                  isStreaming: false,
-                  error: event.message,
-                }));
-                break;
-              // tool_call and tool_result: no UI update needed in v1
-            }
-          } catch {
-            // Skip malformed events
-          }
-        }
-      }
-
-      // If we got here without a done/error event, mark as not streaming
       setState(prev => {
         if (prev.isStreaming) return { ...prev, isStreaming: false };
         return prev;
       });
+
+      return result;
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
         // User cancelled — no error
-        return;
+        return null;
       }
       setState(prev => ({
         ...prev,
         isStreaming: false,
         error: err instanceof Error ? err.message : "Unknown error",
       }));
+      return null;
     } finally {
       if (abortRef.current === controller) {
         abortRef.current = null;

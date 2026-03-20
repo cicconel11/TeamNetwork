@@ -10,9 +10,8 @@ interface ComposeOptions {
 }
 
 /**
- * Streams a composed response from z.ai as SSEEvents.
- * Yields chunk events for each token, then a final done event.
- * Handles missing usage metadata gracefully (omits from done event).
+ * Streams a composed response from z.ai as SSE chunk/error events.
+ * The route owns completion semantics and emits the final done event.
  */
 export async function* composeResponse(
   options: ComposeOptions
@@ -52,13 +51,6 @@ export async function* composeResponse(
       }
     }
 
-    // Note: usage stats may not be available in streaming mode from all providers
-    // The done event omits usage when unavailable
-    yield {
-      type: "done",
-      messageId: "", // Will be set by the caller (chat route)
-      threadId: "", // Will be set by the caller
-    };
   } catch (err) {
     console.error("[response-composer] streaming failed:", err);
     yield {
