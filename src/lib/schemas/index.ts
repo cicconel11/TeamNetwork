@@ -67,3 +67,6 @@ export * from "./media";
 
 // Enterprise schemas
 export * from "./enterprise";
+
+// AI assistant schemas
+export * from "./ai-assistant";
