@@ -51,6 +51,13 @@ const linkedInEnv = [
   "LINKEDIN_TOKEN_ENCRYPTION_KEY",
 ];
 
+const blackbaudEnv = [
+  "BLACKBAUD_CLIENT_ID",
+  "BLACKBAUD_CLIENT_SECRET",
+  "BLACKBAUD_TOKEN_ENCRYPTION_KEY",
+  "BLACKBAUD_SUBSCRIPTION_KEY",
+];
+
 function assertEnv(name, required = true) {
   const value = process.env[name];
   if (required && (!value || value.trim() === "")) {
@@ -108,6 +115,12 @@ function validateBuildEnv() {
   const missingLinkedInVars = linkedInEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingLinkedInVars.length > 0 && missingLinkedInVars.length < linkedInEnv.length) {
     console.warn(`⚠️  Partial LinkedIn config: missing ${missingLinkedInVars.join(", ")}. LinkedIn integration will not work.`);
+  }
+
+  // Optional: warn if Blackbaud env vars are partially configured
+  const missingBlackbaudVars = blackbaudEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingBlackbaudVars.length > 0 && missingBlackbaudVars.length < blackbaudEnv.length) {
+    console.warn(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`);
   }
 
   // Optional: Proxycurl enrichment (enriches member profiles from LinkedIn)
