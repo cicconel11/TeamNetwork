@@ -3,6 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireEnv, validateAuthTestMode, shouldLogAuth, shouldLogAuthFailures, hashForLogging } from "./lib/env";
 import { createMiddlewareAuditEntry, fireAndForgetDevAdminAudit, isDevAdminEmail, redactEmail } from "./lib/auth/dev-admin";
 import { validateSiteUrl } from "./lib/supabase/config";
+import {
+  shouldBypassAuth,
+  isPublicApiPattern as isPublicApiPatternCheck,
+  isPublicRoute as isPublicRouteCheck,
+  isAuthOnlyRoute,
+  getRedirectForMembershipStatus,
+  shouldRedirectToCanonicalHost,
+} from "./lib/middleware/routing-decisions";
 
 // Validate at module load
 validateAuthTestMode();
@@ -10,14 +18,8 @@ validateAuthTestMode();
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
-// Routes that don't require authentication
-const publicRoutes = ["/", "/demos", "/auth/login", "/auth/signup", "/auth/callback", "/auth/error", "/auth/signout", "/terms", "/privacy", "/app/parents-join"];
-
 // Enterprise public routes that don't require enterprise membership
 const enterprisePublicSlugs = ["pricing", "features"];
-
-// Routes that should redirect to /app if user is already authenticated
-const authOnlyRoutes = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
 function fireMiddlewareAudit(params: {
   userId: string;
@@ -49,29 +51,17 @@ export async function middleware(request: NextRequest) {
   const logFailures = shouldLogAuthFailures();
 
   // Bypass routes that should never be blocked by auth middleware
-  const publicApiRoutes = [
-    "/api/stripe/webhook",
-    "/api/stripe/webhook-connect",
-    "/api/auth/validate-age", // Age gate validation during signup
-    "/api/telemetry/error", // Error tracking from unauthenticated contexts
-    // Friction feedback: handlers enforce allowlisted context/trigger + rate limits (see anonymous-friction.ts)
-    "/api/feedback/submit",
-    "/api/feedback/screenshot",
-  ];
-  if (publicApiRoutes.includes(pathname)) {
+  if (shouldBypassAuth(pathname)) {
     return NextResponse.next();
   }
 
   // Dynamic public API routes (unauthenticated endpoints with dynamic path segments)
-  const isPublicApiPattern =
-    // Parent invite acceptance — called from /app/parents-join before account exists
-    (pathname.startsWith("/api/organizations/") && pathname.endsWith("/parents/invite/accept"));
-  if (isPublicApiPattern) {
+  if (isPublicApiPatternCheck(pathname)) {
     return NextResponse.next();
   }
 
   // Canonical host redirect: ensure cookies stay scoped to www domain
-  if (host === "myteamnetwork.com") {
+  if (shouldRedirectToCanonicalHost(host)) {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
     url.host = "www.myteamnetwork.com";
@@ -209,14 +199,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect authenticated users away from auth-only pages
-  if (user && authOnlyRoutes.includes(pathname)) {
+  if (user && isAuthOnlyRoute(pathname)) {
     return NextResponse.redirect(new URL("/app", request.url));
   }
 
-  const isPublicRoute =
-    publicRoutes.some((route) => pathname === route) || pathname.startsWith("/auth/");
-
-  if (isPublicRoute) {
+  if (isPublicRouteCheck(pathname)) {
     return response;
   }
 
@@ -397,18 +384,9 @@ export async function middleware(request: NextRequest) {
           }
           // If !ctx?.found the org doesn't exist — layout.tsx handles the 404 gate
 
-          if (membershipStatus === "revoked") {
-            // User's access has been revoked - redirect to app with error
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("error", "access_revoked");
-            return NextResponse.redirect(redirectUrl);
-          }
-
-          if (membershipStatus === "pending") {
-            // User's membership is pending approval - redirect to app with pending message
-            const redirectUrl = new URL("/app", request.url);
-            redirectUrl.searchParams.set("pending", orgSlug);
-            return NextResponse.redirect(redirectUrl);
+          const membershipRedirect = getRedirectForMembershipStatus(membershipStatus, orgSlug);
+          if (membershipRedirect) {
+            return NextResponse.redirect(new URL(membershipRedirect, request.url));
           }
         } catch (e) {
           // Log error but don't block the request
