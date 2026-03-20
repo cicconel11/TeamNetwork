@@ -31,19 +31,20 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(request, {
-    limitPerIp: 10,
-    limitPerUser: 5,
-    feature: "donations export",
-  });
-  if (!rl.ok) return buildRateLimitResponse(rl);
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized", message: "You must be logged in to export donations." }, { status: 401 });
   }
+
+  const rateLimit = checkRateLimit(request, {
+    limitPerIp: 10,
+    limitPerUser: 5,
+    userId: user.id,
+    feature: "donations export",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   const { data: role } = await supabase
     .from("user_organization_roles")

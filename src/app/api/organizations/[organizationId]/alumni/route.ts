@@ -22,18 +22,19 @@ export async function POST(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(req, {
-    limitPerIp: 30,
-    limitPerUser: 20,
-    feature: "alumni management",
-  });
-  if (!rl.ok) return buildRateLimitResponse(rl);
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = checkRateLimit(req, {
+    limitPerIp: 60,
+    limitPerUser: 40,
+    userId: user.id,
+    feature: "alumni management",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   const serviceSupabase = createServiceClient();
   const { data: roleData, error: roleError } = await serviceSupabase

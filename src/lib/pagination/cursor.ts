@@ -34,9 +34,9 @@ export function decodeCursor(cursor: string): { createdAt: string; id: string } 
       return null;
     }
 
-    // Strict ISO 8601 prefix: YYYY-MM-DDTHH:MM:SS (rejects non-ISO date strings
-    // and prevents PostgREST filter injection via timestamp interpolation)
-    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(payload.t)) {
+    // Strict ISO 8601: YYYY-MM-DDTHH:MM:SS[.fractional](Z|±HH:MM)
+    // Anchored end-to-end to prevent PostgREST filter injection via trailing content
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(payload.t)) {
       return null;
     }
 

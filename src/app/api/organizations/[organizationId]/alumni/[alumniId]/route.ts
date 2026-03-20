@@ -55,18 +55,19 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(req, {
-    limitPerIp: 30,
-    limitPerUser: 20,
-    feature: "alumni record",
-  });
-  if (!rl.ok) return buildRateLimitResponse(rl);
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = checkRateLimit(req, {
+    limitPerIp: 60,
+    limitPerUser: 40,
+    userId: user.id,
+    feature: "alumni record",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   let access;
   try {
@@ -112,7 +113,8 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", alumniId)
-    .eq("organization_id", organizationId);
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null);
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 400 });
@@ -138,18 +140,19 @@ export async function DELETE(req: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   }
 
-  const rl = checkRateLimit(req, {
-    limitPerIp: 30,
-    limitPerUser: 20,
-    feature: "alumni record",
-  });
-  if (!rl.ok) return buildRateLimitResponse(rl);
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rateLimit = checkRateLimit(req, {
+    limitPerIp: 60,
+    limitPerUser: 40,
+    userId: user.id,
+    feature: "alumni record",
+  });
+  if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   let access;
   try {
