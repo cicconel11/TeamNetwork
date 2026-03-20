@@ -4,15 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { sendMessageSchema } from "@/lib/schemas";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
-import { classifyIntent } from "@/lib/ai/intent-classifier";
 import { buildPromptContext } from "@/lib/ai/context-builder";
 import { composeResponse } from "@/lib/ai/response-composer";
-import { handleAnalysisBranch } from "@/lib/ai/branches/analysis";
-import { handleFaqBranch } from "@/lib/ai/branches/faq";
-import { handleActionBranch } from "@/lib/ai/branches/action-executor";
 import { logAiRequest } from "@/lib/ai/audit";
-import { createSSEStream, SSE_HEADERS, type SSEEvent } from "@/lib/ai/sse";
+import { createSSEStream, SSE_HEADERS } from "@/lib/ai/sse";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 
 export const dynamic = "force-dynamic";
@@ -44,25 +41,20 @@ export async function POST(
   if (!ctx.ok) return ctx.response;
 
   // 3. Validate body
-  let body: unknown;
+  let validatedBody: ReturnType<typeof sendMessageSchema.parse> extends infer T ? T : never;
   try {
-    body = await request.json();
-  } catch {
+    validatedBody = await validateJson(request, sendMessageSchema);
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      return validationErrorResponse(err);
+    }
     return NextResponse.json(
       { error: "Invalid JSON" },
       { status: 400, headers: rateLimit.headers }
     );
   }
 
-  const parsed = sendMessageSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid input", details: parsed.error.flatten() },
-      { status: 400, headers: rateLimit.headers }
-    );
-  }
-
-  const { message, surface, threadId: existingThreadId, idempotencyKey } = parsed.data;
+  const { message, surface, threadId: existingThreadId, idempotencyKey } = validatedBody;
 
   // 4. Validate provided thread ownership before any cleanup or writes
   let threadId = existingThreadId;
@@ -183,9 +175,7 @@ export async function POST(
 
   // 10–12. Stream SSE response
   const stream = createSSEStream(async (enqueue) => {
-    let intent = "general";
     let fullContent = "";
-    const toolCallsLog: Array<{ name: string; args: Record<string, unknown> }> = [];
 
     try {
       // Guard: ZAI_API_KEY required
@@ -200,106 +190,55 @@ export async function POST(
 
       const client = createZaiClient();
 
-      // 10a. Classify intent
-      const classification = await classifyIntent(message, client);
-      intent = classification.intent;
-
       // Mark assistant message as streaming
       await ctx.supabase
         .from("ai_messages")
-        .update({ intent, status: "streaming" })
+        .update({ intent: "general", status: "streaming" })
         .eq("id", assistantMessageId);
 
-      // 10b. Dispatch to intent branch
-      let branchEvents: SSEEvent[] = [];
+      // Build context and fetch history in parallel
+      const [{ systemPrompt, orgContextMessage }, { data: history }] = await Promise.all([
+        buildPromptContext({
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          role: ctx.role,
+          serviceSupabase: ctx.serviceSupabase,
+        }),
+        ctx.supabase
+          .from("ai_messages")
+          .select("role, content")
+          .eq("thread_id", threadId)
+          .eq("status", "complete")
+          .order("created_at", { ascending: true })
+          .limit(20),
+      ]);
 
-      switch (intent) {
-        case "analysis":
-          branchEvents = await handleAnalysisBranch(message, threadId!, {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            serviceSupabase: ctx.serviceSupabase,
-          });
-          break;
+      const historyMessages = (history ?? [])
+        .filter((m: any) => m.content)
+        .map((m: any) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content as string,
+        }));
 
-        case "faq":
-          branchEvents = await handleFaqBranch(message, threadId!, {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            serviceSupabase: ctx.serviceSupabase,
-          });
-          break;
+      const contextMessages = orgContextMessage
+        ? [{ role: "user" as const, content: orgContextMessage }, ...historyMessages]
+        : historyMessages;
 
-        case "action":
-          branchEvents = await handleActionBranch(message, threadId!, {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            serviceSupabase: ctx.serviceSupabase,
-          });
-          break;
-
-        default: {
-          // General: compose response via z.ai streaming
-          const promptInput = {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            role: ctx.role,
-            serviceSupabase: ctx.serviceSupabase,
-          };
-          const { systemPrompt, orgContextMessage } = await buildPromptContext(promptInput);
-
-          // Fetch recent thread history for context
-          const { data: history } = await ctx.supabase
-            .from("ai_messages")
-            .select("role, content")
-            .eq("thread_id", threadId)
-            .eq("status", "complete")
-            .order("created_at", { ascending: true })
-            .limit(20);
-
-          const historyMessages = (history ?? [])
-            .filter((m: any) => m.content)
-            .map((m: any) => ({
-              role: m.role as "user" | "assistant",
-              content: m.content as string,
-            }));
-
-          const contextMessages = orgContextMessage
-            ? [
-                {
-                  role: "user" as const,
-                  content: orgContextMessage,
-                },
-                ...historyMessages,
-              ]
-            : historyMessages;
-
-          for await (const event of composeResponse({
-            client,
-            systemPrompt,
-            messages: contextMessages,
-          })) {
-            if (event.type === "chunk") {
-              fullContent += event.content;
-              enqueue(event);
-            } else if (event.type === "error") {
-              enqueue(event);
-              return;
-            }
-          }
-          break;
-        }
-      }
-
-      // Emit branch events (stub branches return SSEEvent arrays)
-      for (const event of branchEvents) {
+      for await (const event of composeResponse({
+        client,
+        systemPrompt,
+        messages: contextMessages,
+      })) {
         if (event.type === "chunk") {
           fullContent += event.content;
+          enqueue(event);
+        } else if (event.type === "error") {
+          enqueue(event);
+          return;
         }
-        enqueue(event);
       }
 
-      // 11. Done event
+      // Done event
       enqueue({ type: "done", threadId: threadId! });
     } catch (err) {
       console.error("[ai-chat] stream error:", err);
@@ -314,14 +253,13 @@ export async function POST(
         })
         .eq("id", assistantMessageId);
 
-      // 12. Audit log — fire-and-forget (never awaited)
+      // Audit log — fire-and-forget (never awaited)
       logAiRequest(ctx.serviceSupabase, {
         threadId: threadId!,
         messageId: assistantMessageId,
         userId: ctx.userId,
         orgId: ctx.orgId,
-        intent,
-        toolCalls: toolCallsLog.length > 0 ? toolCallsLog : undefined,
+        intent: "general",
         latencyMs: Date.now() - startTime,
         model: process.env.ZAI_API_KEY ? getZaiModel() : undefined,
       });

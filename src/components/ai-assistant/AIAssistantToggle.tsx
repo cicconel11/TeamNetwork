@@ -13,15 +13,11 @@ export function AIAssistantToggle({ isAdmin, showLabel = false }: AIAssistantTog
 
   if (!isAdmin) return null;
 
-  const handleClick = () => {
-    togglePanel();
-  };
-
   if (showLabel) {
     return (
       <button
         type="button"
-        onClick={handleClick}
+        onClick={togglePanel}
         aria-label={isOpen ? "Close AI assistant" : "Open AI assistant"}
         aria-pressed={isOpen}
         className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${
@@ -46,7 +42,7 @@ export function AIAssistantToggle({ isAdmin, showLabel = false }: AIAssistantTog
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={togglePanel}
       aria-label={isOpen ? "Close AI assistant" : "Open AI assistant"}
       aria-pressed={isOpen}
       className={`flex cursor-pointer items-center justify-center rounded-lg p-2 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${

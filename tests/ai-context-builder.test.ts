@@ -79,13 +79,25 @@ function createMockServiceSupabase(opts: {
           return { select: () => buildCountQueryable(opts.alumniCount ?? 0) };
         case "parents":
           return { select: () => buildCountQueryable(opts.parentCount ?? 0) };
-        case "events":
-          return {
-            select: (_cols: string, selectOpts?: { count?: string; head?: boolean }) =>
-              selectOpts?.count === "exact" && selectOpts?.head
-                ? buildCountQueryable(opts.eventCount ?? 0)
-                : buildQueryable(opts.upcomingEvents ?? []),
+        case "events": {
+          // Combined query returns both data (rows) and count
+          const eventsData = opts.upcomingEvents ?? [];
+          const eventsCount = opts.eventCount ?? eventsData.length;
+          const eventsChain: Record<string, any> = {};
+          const eventMethods = ["eq", "is", "gte", "lt", "order", "limit", "in"];
+          for (const m of eventMethods) {
+            eventsChain[m] = (..._a: unknown[]) => eventsChain;
+          }
+          eventsChain.select = (..._a: unknown[]) => eventsChain;
+          eventsChain.then = (resolve: (value: unknown) => void) => {
+            resolve(
+              shouldFail
+                ? { data: null, count: null, error: { message: "events failed" } }
+                : { data: eventsData, count: eventsCount, error: null }
+            );
           };
+          return eventsChain;
+        }
         case "announcements":
           return buildQueryable(opts.announcements ?? []);
         case "organization_donation_stats":
