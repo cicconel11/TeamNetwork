@@ -56,7 +56,7 @@ export default async function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link href="#top" className="group flex items-center gap-2.5">
             <Image src="/TeamNetwor.png" alt="" width={541} height={303} sizes="28px" className="h-7 w-auto object-contain" aria-hidden="true" />
-            <span className="hidden sm:inline font-display text-xl font-bold tracking-tight text-landing-cream">
+            <span className="font-display text-base sm:text-xl font-bold tracking-tight text-landing-cream">
               <span className="text-landing-green">Team</span><span className="text-landing-cream">Network</span>
             </span>
           </Link>
