@@ -60,7 +60,7 @@ export async function getAiOrgContext(
     .from("user_organization_roles")
     .select("role")
     .eq("user_id", user.id)
-    .eq("org_id", orgId)
+    .eq("organization_id", orgId)
     .maybeSingle();
 
   if (error) {
