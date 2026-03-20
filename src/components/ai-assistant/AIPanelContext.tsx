@@ -4,7 +4,6 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import {
   AI_PANEL_PREFERENCE_KEY,
   resolveInitialAIPanelOpen,
-  type AIPanelPreference,
 } from "./panel-preferences";
 
 interface AIPanelState {
@@ -20,14 +19,6 @@ interface AIPanelProviderProps {
   autoOpen?: boolean;
 }
 
-function persistPreference(preference: AIPanelPreference) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(AI_PANEL_PREFERENCE_KEY, preference);
-}
-
 export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -36,28 +27,23 @@ export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderP
       return;
     }
 
-    const persisted = window.localStorage.getItem(AI_PANEL_PREFERENCE_KEY);
     const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
 
     setIsOpen(
       resolveInitialAIPanelOpen({
         isAdmin: autoOpen,
         isDesktop,
-        persisted,
       })
     );
+
+    window.localStorage.removeItem(AI_PANEL_PREFERENCE_KEY);
   }, [autoOpen]);
 
   const togglePanel = useCallback(() => {
-    setIsOpen((prev) => {
-      const next = !prev;
-      persistPreference(next ? "open" : "closed");
-      return next;
-    });
+    setIsOpen((prev) => !prev);
   }, []);
 
   const closePanel = useCallback(() => {
-    persistPreference("closed");
     setIsOpen(false);
   }, []);
 
