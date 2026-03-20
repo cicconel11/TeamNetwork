@@ -1,6 +1,7 @@
 "use client";
 
-import { Bot, User } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { Bot, User, Sparkles } from "lucide-react";
 import type { AIPanelMessage } from "./panel-state";
 
 interface MessageListProps {
@@ -11,6 +12,12 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, loading, streamingContent, isStreaming }: MessageListProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, streamingContent]);
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -22,11 +29,16 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
   if (!messages.length && !streamingContent) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
-        <div>
-          <Bot className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600" />
-          <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
-            Ask me about your organization...
-          </p>
+        <div className="space-y-3">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/50">
+            <Sparkles className="h-6 w-6 text-indigo-500" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">How can I help?</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Ask about members, events, analytics, or anything about your organization.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -40,35 +52,36 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
           className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
         >
           {msg.role === "assistant" && (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
               <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             </div>
           )}
-          <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+          <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
             msg.role === "user"
               ? "bg-indigo-600 text-white"
-              : "bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100"
+              : "bg-muted text-foreground"
           }`}>
             {msg.content ?? ""}
           </div>
           {msg.role === "user" && (
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-              <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+              <User className="h-4 w-4 text-muted-foreground" />
             </div>
           )}
         </div>
       ))}
       {isStreaming && streamingContent && (
         <div className="flex gap-3 justify-start">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <div className="max-w-[80%] rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+          <div className="max-w-[80%] rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
             {streamingContent}
-            <span className="ml-1 inline-block h-4 w-1 animate-pulse bg-indigo-500" />
+            <span className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-indigo-500" />
           </div>
         </div>
       )}
+      <div ref={bottomRef} />
     </div>
   );
 }

@@ -26,14 +26,14 @@ describe("resolveInitialAIPanelOpen", () => {
     );
   });
 
-  it("respects persisted closed state", () => {
+  it("ignores stale persisted closed state for desktop admins", () => {
     assert.equal(
       resolveInitialAIPanelOpen({
         isAdmin: true,
         isDesktop: true,
         persisted: "closed",
       }),
-      false
+      true
     );
   });
 });

@@ -574,6 +574,29 @@ body {
   }
 }
 
+/* ========================================
+   AI Panel Slide-In
+   ======================================== */
+
+@keyframes panelSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.ai-panel-enter {
+  animation: panelSlideIn 200ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-panel-enter {
+    animation: fadeIn 200ms ease-out;
+  }
+}
+
 /* Scoreboard — used by org-scoped /[orgSlug]/competition */
 .scoreboard {
   background: linear-gradient(135deg, #0d0d0d 0%, #141414 60%, #0a0a0a 100%);
