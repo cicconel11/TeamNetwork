@@ -70,6 +70,34 @@ describe("encodeCursor / decodeCursor", () => {
     ).toString("base64url");
     assert.strictEqual(decodeCursor(cursor), null);
   });
+
+  it("accepts valid ISO timestamp with +00:00 offset", () => {
+    const ts = "2026-01-15T10:30:00.000+00:00";
+    const id = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    const cursor = encodeCursor(ts, id);
+    const decoded = decodeCursor(cursor);
+    assert.deepStrictEqual(decoded, { createdAt: ts, id });
+  });
+
+  it("returns null for timestamp with parentheses", () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        t: "2026-01-01T00:00:00Z)or(true",
+        i: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      })
+    ).toString("base64url");
+    assert.strictEqual(decodeCursor(cursor), null);
+  });
+
+  it("returns null for timestamp with spaces", () => {
+    const cursor = Buffer.from(
+      JSON.stringify({
+        t: "2026-01-01 00:00:00",
+        i: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      })
+    ).toString("base64url");
+    assert.strictEqual(decodeCursor(cursor), null);
+  });
 });
 
 describe("buildCursorResponse", () => {
