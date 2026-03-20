@@ -2,6 +2,7 @@
 
 import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import type { AIPanelThread } from "./panel-state";
+import { formatThreadUpdatedAt } from "./thread-date";
 
 interface ThreadListProps {
   threads: AIPanelThread[];
@@ -68,7 +69,7 @@ export function ThreadList({
                       {thread.title ?? "Untitled conversation"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(thread.updated_at).toLocaleDateString()}
+                      {formatThreadUpdatedAt(thread.updated_at)}
                     </p>
                   </div>
                 </button>
