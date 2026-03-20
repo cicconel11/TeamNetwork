@@ -67,3 +67,6 @@ export * from "./media";
 
 // Enterprise schemas
 export * from "./enterprise";
+
+// Blackbaud integration schemas
+export * from "./blackbaud";
