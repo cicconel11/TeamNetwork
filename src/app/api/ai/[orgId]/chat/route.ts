@@ -6,9 +6,8 @@ import { sendMessageSchema } from "@/lib/schemas";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { classifyIntent } from "@/lib/ai/intent-classifier";
-import { buildSystemPrompt } from "@/lib/ai/context-builder";
+import { buildPromptContext } from "@/lib/ai/context-builder";
 import { composeResponse } from "@/lib/ai/response-composer";
-import { createToolRegistry } from "@/lib/ai/tool-registry";
 import { handleAnalysisBranch } from "@/lib/ai/branches/analysis";
 import { handleFaqBranch } from "@/lib/ai/branches/faq";
 import { handleActionBranch } from "@/lib/ai/branches/action-executor";
@@ -241,14 +240,13 @@ export async function POST(
 
         default: {
           // General: compose response via z.ai streaming
-          const toolRegistry = createToolRegistry();
-          const systemPrompt = await buildSystemPrompt({
+          const promptInput = {
             orgId: ctx.orgId,
             userId: ctx.userId,
             role: ctx.role,
             serviceSupabase: ctx.serviceSupabase,
-            toolDefinitions: toolRegistry.toFunctionDefinitions(),
-          });
+          };
+          const { systemPrompt, orgContextMessage } = await buildPromptContext(promptInput);
 
           // Fetch recent thread history for context
           const { data: history } = await ctx.supabase
@@ -259,12 +257,22 @@ export async function POST(
             .order("created_at", { ascending: true })
             .limit(20);
 
-          const contextMessages = (history ?? [])
+          const historyMessages = (history ?? [])
             .filter((m: any) => m.content)
             .map((m: any) => ({
               role: m.role as "user" | "assistant",
               content: m.content as string,
             }));
+
+          const contextMessages = orgContextMessage
+            ? [
+                {
+                  role: "user" as const,
+                  content: orgContextMessage,
+                },
+                ...historyMessages,
+              ]
+            : historyMessages;
 
           for await (const event of composeResponse({
             client,

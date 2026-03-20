@@ -39,6 +39,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hook-form": "^7.71.1",
+    "react-markdown": "^10.1.0",
     "resend": "^6.6.0",
     "sonner": "^2.0.7",
     "stripe": "^20.1.2",

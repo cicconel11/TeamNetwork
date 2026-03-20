@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Bot, User, Sparkles } from "lucide-react";
 import type { AIPanelMessage } from "./panel-state";
+import { AssistantMessageContent } from "./AssistantMessageContent";
 
 interface MessageListProps {
   messages: AIPanelMessage[];
@@ -56,12 +57,18 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
               <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             </div>
           )}
-          <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
+          <div className={`max-w-[80%] overflow-hidden rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
             msg.role === "user"
               ? "bg-indigo-600 text-white"
               : "bg-muted text-foreground"
           }`}>
-            {msg.content ?? ""}
+            {msg.role === "assistant" ? (
+              <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+                <AssistantMessageContent content={msg.content ?? ""} />
+              </div>
+            ) : (
+              <div className="whitespace-pre-wrap break-words">{msg.content ?? ""}</div>
+            )}
           </div>
           {msg.role === "user" && (
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -75,8 +82,10 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
           </div>
-          <div className="max-w-[80%] rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+          <div className="max-w-[80%] overflow-hidden rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+            <div className="whitespace-pre-wrap break-words">
             {streamingContent}
+            </div>
             <span className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-indigo-500" />
           </div>
         </div>
