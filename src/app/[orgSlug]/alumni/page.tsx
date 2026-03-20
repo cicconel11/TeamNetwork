@@ -163,7 +163,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
       {alumni && alumni.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
           {alumni.map((alum) => (
-            <Card key={alum.id} interactive className="p-5">
+            <Card key={alum.id} interactive className="p-5" data-testid="alumni-row">
               <div className="flex items-center gap-4">
                 <DirectoryCardLink
                   href={`/${orgSlug}/alumni/${alum.id}`}

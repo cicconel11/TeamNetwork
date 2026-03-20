@@ -347,6 +347,7 @@ export default function NewEventPage() {
           <Input
             label={`${singularLabel} Title`}
             placeholder="e.g., Team Meeting, vs Cornell"
+            data-testid="event-title"
             error={errors.title?.message}
             {...register("title")}
           />
@@ -363,6 +364,7 @@ export default function NewEventPage() {
             <Input
               label="Start Date"
               type="date"
+              data-testid="event-start-date"
               error={errors.start_date?.message}
               {...register("start_date")}
             />
@@ -469,6 +471,7 @@ export default function NewEventPage() {
           <Input
             label="Location"
             placeholder="e.g., Franklin Field, Team Room"
+            data-testid="event-location"
             error={errors.location?.message}
             {...register("location")}
           />
@@ -560,7 +563,7 @@ export default function NewEventPage() {
             <Button type="button" variant="secondary" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button type="submit" data-testid="event-submit" isLoading={isLoading}>
               {repeatType !== "none" && instanceCount > 1
                 ? `Create ${instanceCount} ${singularLabel}s`
                 : `Create ${singularLabel}`

@@ -338,7 +338,7 @@ export function OrgInvitePanel({
             </p>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleCreateInvite} isLoading={isCreating}>
+            <Button data-testid="invite-submit" onClick={handleCreateInvite} isLoading={isCreating}>
               Generate Code
             </Button>
             <Button variant="secondary" onClick={() => onShowFormChange(false)}>
@@ -364,7 +364,7 @@ export function OrgInvitePanel({
             const inviteLink = getInviteLink(invite);
 
             return (
-              <Card key={inviteKey} className={`p-6 ${invalid ? "opacity-60" : ""}`}>
+              <Card key={inviteKey} data-testid="invite-row" className={`p-6 ${invalid ? "opacity-60" : ""}`}>
                 <div className="flex flex-col gap-4">
                   <div className="flex items-center justify-between flex-wrap gap-4">
                     <div className="flex items-center gap-4 flex-wrap">
@@ -430,6 +430,7 @@ export function OrgInvitePanel({
                         <Button
                           variant="ghost"
                           size="sm"
+                          data-testid="invite-revoke"
                           onClick={() => handleRevokeInvite(invite.id)}
                           className="text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
                         >

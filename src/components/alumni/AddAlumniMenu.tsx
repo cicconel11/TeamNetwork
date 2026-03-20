@@ -51,6 +51,7 @@ export function AddAlumniMenu({
       <div className="flex items-stretch rounded-xl overflow-hidden">
         <button
           className={`${SHARED_BUTTON} gap-2 px-4 py-2.5`}
+          data-testid="alumni-new-link"
           onClick={() => router.push(`/${orgSlug}/alumni/new`)}
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">

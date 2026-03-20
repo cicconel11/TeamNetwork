@@ -45,6 +45,7 @@ export function EventDeleteButton({
       organizationId={organizationId}
       redirectTo={redirectTo}
       onAfterDelete={handleAfterDelete}
+      data-testid="event-delete-button"
     />
   );
 }

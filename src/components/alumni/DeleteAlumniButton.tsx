@@ -53,7 +53,7 @@ export function DeleteAlumniButton({
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <Button variant="danger" onClick={handleDelete} isLoading={isLoading}>
+      <Button variant="danger" data-testid="alumni-delete-button" onClick={handleDelete} isLoading={isLoading}>
         Delete
       </Button>
       {error && <p className="text-xs text-red-500">{error}</p>}

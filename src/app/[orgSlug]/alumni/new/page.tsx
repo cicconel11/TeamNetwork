@@ -182,11 +182,13 @@ export default function NewAlumniPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="First Name"
+              data-testid="alumni-first-name"
               error={errors.first_name?.message}
               {...register("first_name")}
             />
             <Input
               label="Last Name"
+              data-testid="alumni-last-name"
               error={errors.last_name?.message}
               {...register("last_name")}
             />
@@ -196,6 +198,7 @@ export default function NewAlumniPage() {
             label="Email"
             type="email"
             placeholder="alumni@example.com"
+            data-testid="alumni-email"
             error={errors.email?.message}
             {...register("email")}
           />
@@ -207,6 +210,7 @@ export default function NewAlumniPage() {
               placeholder="2020"
               min={1900}
               max={2100}
+              data-testid="alumni-graduation-year"
               error={errors.graduation_year?.message}
               {...register("graduation_year")}
             />
@@ -296,6 +300,7 @@ export default function NewAlumniPage() {
             </Button>
             <Button
               type="submit"
+              data-testid="alumni-submit"
               isLoading={isLoading}
               disabled={
                 isLoadingQuota ||

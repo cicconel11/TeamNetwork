@@ -288,6 +288,7 @@ export default function EditEventPage() {
           <Input
             label={`${singularLabel} Title`}
             placeholder="e.g., Team Meeting, vs Cornell"
+            data-testid="event-title"
             error={errors.title?.message}
             {...register("title")}
           />
@@ -304,6 +305,7 @@ export default function EditEventPage() {
             <Input
               label="Start Date"
               type="date"
+              data-testid="event-start-date"
               error={errors.start_date?.message}
               {...register("start_date")}
             />
@@ -333,6 +335,7 @@ export default function EditEventPage() {
           <Input
             label="Location"
             placeholder="e.g., Franklin Field, Team Room"
+            data-testid="event-location"
             error={errors.location?.message}
             {...register("location")}
           />
@@ -369,7 +372,7 @@ export default function EditEventPage() {
             <Button type="button" variant="secondary" onClick={() => router.back()}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isLoading}>
+            <Button type="submit" data-testid="event-edit-submit" isLoading={isLoading}>
               Save Changes
             </Button>
           </div>

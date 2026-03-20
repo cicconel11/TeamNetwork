@@ -64,7 +64,7 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
         description={`${events?.length || 0} ${filters.view === "past" ? "past" : "upcoming"} ${pageLabel.toLowerCase()}`}
         actions={
           isAdmin && (
-            <Link href={`/${orgSlug}/events/new`}>
+            <Link href={`/${orgSlug}/events/new`} data-testid="event-new-link">
               <Button>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
