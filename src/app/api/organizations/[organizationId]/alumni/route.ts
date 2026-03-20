@@ -23,8 +23,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const rl = checkRateLimit(req, {
-    limitPerIp: 60,
-    limitPerUser: 40,
+    limitPerIp: 30,
+    limitPerUser: 20,
     feature: "alumni management",
   });
   if (!rl.ok) return buildRateLimitResponse(rl);
