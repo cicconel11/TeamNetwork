@@ -1,3 +1,9 @@
+/**
+ * STATIC CONTRACT TEST
+ * Asserts on source code structure rather than runtime behavior.
+ * Secondary signal — a failure indicates a pattern violation to investigate,
+ * not necessarily a runtime bug.
+ */
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";

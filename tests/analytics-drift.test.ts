@@ -1,4 +1,10 @@
 /**
+ * STATIC CONTRACT TEST
+ * Asserts on source code structure rather than runtime behavior.
+ * Secondary signal — a failure indicates a pattern violation to investigate,
+ * not necessarily a runtime bug.
+ */
+/**
  * Analytics Drift Tests
  *
  * Catches schema/type misalignment and unwired events.

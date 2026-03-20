@@ -1,4 +1,10 @@
 /**
+ * STATIC CONTRACT TEST
+ * Asserts on source code structure rather than runtime behavior.
+ * Secondary signal — a failure indicates a pattern violation to investigate,
+ * not necessarily a runtime bug.
+ */
+/**
  * SOURCE-LEVEL SECURITY REGRESSION TESTS
  *
  * These tests intentionally assert against source code patterns (not runtime behavior)
