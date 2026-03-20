@@ -8,10 +8,10 @@ export function createZaiClient(): OpenAI {
 
   return new OpenAI({
     apiKey,
-    baseURL: "https://api.x.ai/v1",
+    baseURL: "https://api.z.ai/api/paas/v4",
   });
 }
 
 export function getZaiModel(): string {
-  return process.env.ZAI_MODEL || "grok-3-mini";
+  return process.env.ZAI_MODEL || "glm-5";
 }

@@ -19,7 +19,7 @@ describe("createZaiClient", () => {
     const { createZaiClient } = await import("../src/lib/ai/client.ts");
     const client = createZaiClient();
     assert.ok(client);
-    assert.equal((client as any).baseURL, "https://api.x.ai/v1");
+    assert.equal((client as any).baseURL, "https://api.z.ai/api/paas/v4");
     delete process.env.ZAI_API_KEY;
   });
 
@@ -28,10 +28,10 @@ describe("createZaiClient", () => {
     const { getZaiModel } = await import("../src/lib/ai/client.ts");
     // Default
     delete process.env.ZAI_MODEL;
-    assert.equal(getZaiModel(), "grok-3-mini");
+    assert.equal(getZaiModel(), "glm-5");
     // Override
-    process.env.ZAI_MODEL = "grok-3";
-    assert.equal(getZaiModel(), "grok-3");
+    process.env.ZAI_MODEL = "glm-4.6v";
+    assert.equal(getZaiModel(), "glm-4.6v");
     delete process.env.ZAI_MODEL;
     delete process.env.ZAI_API_KEY;
   });
