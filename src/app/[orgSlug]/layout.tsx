@@ -14,6 +14,7 @@ import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext
 import { ConsentModal } from "@/components/analytics/ConsentModal";
 import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
+import { AIPanelProvider, AIPanel } from "@/components/ai-assistant";
 import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
@@ -181,6 +182,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   return (
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
     <AnalyticsProvider>
+    <AIPanelProvider>
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
@@ -258,7 +260,9 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
           memberCount={memberCount}
         />
       )}
+      {isAdmin && <AIPanel orgId={organization.id} />}
     </div>
+    </AIPanelProvider>
     </AnalyticsProvider>
     </OrgAnalyticsProvider>
   );
