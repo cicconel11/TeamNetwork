@@ -53,10 +53,10 @@ export default async function LandingPage() {
 
       {/* Header */}
       <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link href="#top" className="group flex items-center gap-2.5">
             <Image src="/TeamNetwor.png" alt="" width={541} height={303} sizes="28px" className="h-7 w-auto object-contain" aria-hidden="true" />
-            <span className="font-display text-xl font-bold tracking-tight text-landing-cream">
+            <span className="hidden sm:inline font-display text-xl font-bold tracking-tight text-landing-cream">
               <span className="text-landing-green">Team</span><span className="text-landing-cream">Network</span>
             </span>
           </Link>
@@ -68,10 +68,10 @@ export default async function LandingPage() {
             <Link href="/terms" className="text-landing-cream/70 hover:text-landing-cream transition-colors">Terms</Link>
           </nav>
           <div className="flex items-center gap-3">
-            <ButtonLink href="/auth/login" variant="custom" className="text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
+            <ButtonLink href="/auth/login" variant="custom" size="sm" className="sm:px-4 sm:py-2.5 text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10">
               Sign In
             </ButtonLink>
-            <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-5">
+            <ButtonLink href="/auth/signup" variant="custom" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-3 sm:px-5">
               Get Started
             </ButtonLink>
           </div>
