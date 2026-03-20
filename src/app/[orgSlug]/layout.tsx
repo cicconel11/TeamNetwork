@@ -182,7 +182,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   return (
     <OrgAnalyticsProvider orgId={organization.id} orgType={(organization as Record<string, unknown>).org_type as string || "general"}>
     <AnalyticsProvider>
-    <AIPanelProvider>
+    <AIPanelProvider autoOpen={isAdmin}>
     <div data-org-shell className="min-h-screen">
       <style
         dangerouslySetInnerHTML={{
