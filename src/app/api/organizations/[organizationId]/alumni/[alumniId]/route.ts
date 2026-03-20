@@ -6,6 +6,7 @@ import { baseSchemas, validateJson, ValidationError } from "@/lib/security/valid
 import { editAlumniSchema, type EditAlumniForm } from "@/lib/schemas/member";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { buildAlumniWritePayload, canMutateAlumni } from "@/lib/alumni/mutations";
+import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,6 +54,13 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   if (!baseSchemas.uuid.safeParse(organizationId).success || !baseSchemas.uuid.safeParse(alumniId).success) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   }
+
+  const rl = checkRateLimit(req, {
+    limitPerIp: 30,
+    limitPerUser: 20,
+    feature: "alumni record",
+  });
+  if (!rl.ok) return buildRateLimitResponse(rl);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -124,11 +132,18 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   return NextResponse.json({ success: true });
 }
 
-export async function DELETE(_req: Request, { params }: RouteParams) {
+export async function DELETE(req: Request, { params }: RouteParams) {
   const { organizationId, alumniId } = await params;
   if (!baseSchemas.uuid.safeParse(organizationId).success || !baseSchemas.uuid.safeParse(alumniId).success) {
     return NextResponse.json({ error: "Invalid identifier" }, { status: 400 });
   }
+
+  const rl = checkRateLimit(req, {
+    limitPerIp: 30,
+    limitPerUser: 20,
+    feature: "alumni record",
+  });
+  if (!rl.ok) return buildRateLimitResponse(rl);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
