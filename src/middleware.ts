@@ -54,6 +54,9 @@ export async function middleware(request: NextRequest) {
     "/api/stripe/webhook-connect",
     "/api/auth/validate-age", // Age gate validation during signup
     "/api/telemetry/error", // Error tracking from unauthenticated contexts
+    // Friction feedback: handlers enforce allowlisted context/trigger + rate limits (see anonymous-friction.ts)
+    "/api/feedback/submit",
+    "/api/feedback/screenshot",
   ];
   if (publicApiRoutes.includes(pathname)) {
     return NextResponse.next();
