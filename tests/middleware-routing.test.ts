@@ -18,6 +18,7 @@ describe("middleware routing decisions", () => {
     it("bypasses feedback submit", () => assert.strictEqual(shouldBypassAuth("/api/feedback/submit"), true));
     it("bypasses feedback screenshot", () => assert.strictEqual(shouldBypassAuth("/api/feedback/screenshot"), true));
     it("does not bypass alumni route", () => assert.strictEqual(shouldBypassAuth("/api/organizations/123/alumni"), false));
+    it("does not bypass blackbaud callback (handled after canonical-host redirect)", () => assert.strictEqual(shouldBypassAuth("/api/blackbaud/callback"), false));
   });
 
   describe("isPublicApiPattern", () => {

@@ -6,8 +6,8 @@ import type {
   NormalizedConstituent,
 } from "./types";
 
-function findPrimary<T extends { primary?: boolean; inactive?: boolean }>(items: T[]): T | undefined {
-  const active = items.filter((item) => !item.inactive);
+function findPrimary<T extends { primary?: boolean; inactive?: boolean; do_not_email?: boolean }>(items: T[]): T | undefined {
+  const active = items.filter((item) => !item.inactive && !item.do_not_email);
   return active.find((item) => item.primary) ?? active[0];
 }
 

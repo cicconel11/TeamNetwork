@@ -93,4 +93,47 @@ describe("normalizeConstituent", () => {
 
     assert.equal(result.graduation_year, null);
   });
+
+  it("excludes do_not_email addresses", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "dne1", type: "Individual", first: "G", last: "H" },
+      [
+        { id: "e1", address: "optout@example.com", type: "Email", primary: true, do_not_email: true },
+        { id: "e2", address: "ok@example.com", type: "Email", primary: false },
+      ],
+      [],
+      []
+    );
+
+    assert.equal(result.email, "ok@example.com");
+  });
+
+  it("returns null email when all addresses are do_not_email", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "dne2", type: "Individual", first: "I", last: "J" },
+      [
+        { id: "e1", address: "only@example.com", type: "Email", primary: true, do_not_email: true },
+      ],
+      [],
+      []
+    );
+
+    assert.equal(result.email, null);
+  });
+
+  it("keeps email when do_not_email is false or undefined", async () => {
+    const { normalizeConstituent } = await import("../src/lib/blackbaud/normalize");
+    const result = normalizeConstituent(
+      { id: "dne3", type: "Individual", first: "K", last: "L" },
+      [
+        { id: "e1", address: "ok@example.com", type: "Email", primary: true, do_not_email: false },
+      ],
+      [],
+      []
+    );
+
+    assert.equal(result.email, "ok@example.com");
+  });
 });

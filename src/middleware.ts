@@ -210,6 +210,15 @@ export async function middleware(request: NextRequest) {
   // API routes: keep JSON 401 instead of HTML redirect
   if (pathname.startsWith("/api/")) {
     if (!user) {
+      // Blackbaud OAuth callback: redirect to login instead of JSON 401
+      // so the handler's session-expired recovery flow can work.
+      // This runs AFTER canonical-host redirect to preserve www cookie scoping.
+      if (pathname === "/api/blackbaud/callback") {
+        const redirectUrl = new URL("/auth/login", request.url);
+        redirectUrl.searchParams.set("error", "session_expired");
+        redirectUrl.searchParams.set("redirect", pathname + request.nextUrl.search);
+        return NextResponse.redirect(redirectUrl);
+      }
       return NextResponse.json(
         { error: "Unauthorized", message: "Authentication required" },
         { status: 401 }

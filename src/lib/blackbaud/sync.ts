@@ -69,6 +69,10 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
 
   const totals: SyncResult = { ok: true, created: 0, updated: 0, unchanged: 0, skipped: 0 };
 
+  // Capture cursor BEFORE fetching so records modified during this sync
+  // are re-processed next run (upsert handles overlap harmlessly).
+  const syncStartedAt = new Date().toISOString();
+
   try {
     let offset = 0;
     const limit = 500;
@@ -167,7 +171,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
     await supabase
       .from("org_integrations")
       .update({
-        last_synced_at: new Date().toISOString(),
+        last_synced_at: syncStartedAt,
         last_sync_count: totals.created + totals.updated,
         last_sync_error: null,
         updated_at: new Date().toISOString(),

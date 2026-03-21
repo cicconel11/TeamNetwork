@@ -58,6 +58,31 @@ export async function GET(req: Request) {
     return NextResponse.redirect(`${appUrl}/app?error=blackbaud_state_expired`);
   }
 
+  // Re-check admin access BEFORE consuming state (so transient errors are retryable)
+  const { data: adminRole, error: roleError } = await supabase
+    .from("user_organization_roles")
+    .select("role")
+    .eq("organization_id", oauthState.organization_id)
+    .eq("user_id", user.id)
+    .eq("role", "admin")
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!adminRole && roleError) {
+    // Transient DB error — don't consume state, let user retry
+    debugLog("blackbaud-callback", "admin check transient error", { error: roleError.message });
+    return NextResponse.redirect(`${appUrl}/app?error=blackbaud_admin_check_failed`);
+  }
+
+  if (!adminRole) {
+    // Definitive: user no longer admin — consume state to prevent replay, then reject
+    await (serviceSupabase as any)
+      .from("org_integration_oauth_state")
+      .update({ used: true })
+      .eq("id", oauthState.id);
+    return NextResponse.redirect(`${appUrl}/app?error=blackbaud_access_revoked`);
+  }
+
   // Mark state as used (prevent replay)
   await (serviceSupabase as any)
     .from("org_integration_oauth_state")
