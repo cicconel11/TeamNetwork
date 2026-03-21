@@ -4,6 +4,7 @@ import {
   applyThreadDeletion,
   createOptimisticUserMessage,
   removePanelMessage,
+  resolveRetryRequestIdentity,
 } from "../src/components/ai-assistant/panel-state.ts";
 
 describe("AI panel state helpers", () => {
@@ -31,6 +32,31 @@ describe("AI panel state helpers", () => {
     ];
 
     assert.deepEqual(removePanelMessage(messages, "remove"), [messages[0]]);
+  });
+
+  it("reuses the retry key only when the content and thread both match", () => {
+    const first = resolveRetryRequestIdentity(
+      null,
+      "Hello world",
+      "thread-1",
+      () => "key-1"
+    );
+    const sameThreadRetry = resolveRetryRequestIdentity(
+      first,
+      "Hello world",
+      "thread-1",
+      () => "key-2"
+    );
+    const differentThread = resolveRetryRequestIdentity(
+      first,
+      "Hello world",
+      "thread-2",
+      () => "key-3"
+    );
+
+    assert.equal(first.key, "key-1");
+    assert.equal(sameThreadRetry.key, "key-1");
+    assert.equal(differentThread.key, "key-3");
   });
 
   it("clears the active thread and transcript when that thread is deleted", () => {

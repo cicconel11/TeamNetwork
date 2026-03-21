@@ -14,6 +14,12 @@ export interface AIPanelMessage {
   optimistic?: boolean;
 }
 
+export interface RetryRequestIdentity {
+  content: string;
+  threadId: string | null;
+  key: string;
+}
+
 export function createOptimisticUserMessage(
   content: string,
   now = new Date().toISOString(),
@@ -34,6 +40,27 @@ export function removePanelMessage(
   messageId: string
 ): AIPanelMessage[] {
   return messages.filter((message) => message.id !== messageId);
+}
+
+export function resolveRetryRequestIdentity(
+  previous: RetryRequestIdentity | null,
+  content: string,
+  threadId: string | null,
+  createKey: () => string
+): RetryRequestIdentity {
+  if (
+    previous &&
+    previous.content === content &&
+    previous.threadId === threadId
+  ) {
+    return previous;
+  }
+
+  return {
+    content,
+    threadId,
+    key: createKey(),
+  };
 }
 
 export function applyThreadDeletion(

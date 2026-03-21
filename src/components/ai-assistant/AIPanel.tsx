@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
 import { useAIPanel } from "./AIPanelContext";
@@ -11,8 +11,10 @@ import {
   applyThreadDeletion,
   createOptimisticUserMessage,
   removePanelMessage,
+  resolveRetryRequestIdentity,
   type AIPanelMessage,
   type AIPanelThread,
+  type RetryRequestIdentity,
 } from "./panel-state";
 
 interface AIPanelProps {
@@ -88,27 +90,45 @@ export function AIPanel({ orgId }: AIPanelProps) {
     void loadMessages(activeThreadId);
   }, [activeThreadId, isOpen, loadMessages]);
 
+  // Track the last sent content + key so retries of the same message reuse the key
+  const idempotencyRef = useRef<RetryRequestIdentity | null>(null);
+
   const handleSend = useCallback(
     async (content: string) => {
+      // Reuse keys only for retries of the same content within the same thread.
+      const requestIdentity = resolveRetryRequestIdentity(
+        idempotencyRef.current,
+        content,
+        activeThreadId,
+        () => crypto.randomUUID()
+      );
+      idempotencyRef.current = requestIdentity;
+      const idempotencyKey = requestIdentity.key;
+
       const optimisticMessage = createOptimisticUserMessage(
         content,
         new Date().toISOString(),
-        `optimistic-${crypto.randomUUID()}`
+        `optimistic-${idempotencyKey}`
       );
-      setMessages((prev) => [...prev, optimisticMessage]);
+      setMessages((msgs) => [...msgs, optimisticMessage]);
 
       const result = await sendMessage(content, {
         surface: "general",
         threadId: activeThreadId ?? undefined,
-        idempotencyKey: crypto.randomUUID(),
+        idempotencyKey,
       });
 
       if (!result) {
-        setMessages((prev) => removePanelMessage(prev, optimisticMessage.id));
+        setMessages((msgs) => removePanelMessage(msgs, optimisticMessage.id));
         if (activeThreadId) {
           await loadMessages(activeThreadId);
         }
         return;
+      }
+
+      // Keep the retry key while the original server request is still in flight.
+      if (!result.inFlight) {
+        idempotencyRef.current = null;
       }
 
       if (result.threadId !== activeThreadId) {

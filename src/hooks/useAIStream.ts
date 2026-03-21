@@ -17,6 +17,7 @@ interface AIStreamState {
 export interface AIStreamResult {
   threadId: string;
   replayed?: boolean;
+  inFlight?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
 
@@ -33,6 +34,31 @@ interface StreamCallbacks {
   onChunk?: (content: string) => void;
   onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
   onError?: (message: string) => void;
+}
+
+interface AIErrorBody {
+  error?: string;
+  threadId?: string;
+}
+
+export function parseAIChatFailure(
+  status: number,
+  body: AIErrorBody
+): { result: AIStreamResult | null; error: string | null } {
+  if (status === 409 && body.threadId) {
+    return {
+      result: {
+        threadId: body.threadId,
+        inFlight: true,
+      },
+      error: null,
+    };
+  }
+
+  return {
+    result: null,
+    error: body.error || `HTTP ${status}`,
+  };
 }
 
 export async function consumeSSEStream(
@@ -137,12 +163,14 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({ error: "Request failed" }));
+        const failure = parseAIChatFailure(response.status, body);
         setState(prev => ({
           ...prev,
           isStreaming: false,
-          error: body.error || `HTTP ${response.status}`,
+          threadId: failure.result?.threadId ?? prev.threadId,
+          error: failure.error,
         }));
-        return null;
+        return failure.result;
       }
 
       const result = await consumeSSEStream(response, {

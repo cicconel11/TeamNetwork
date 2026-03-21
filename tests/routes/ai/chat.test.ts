@@ -162,15 +162,17 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
         replayed: true,
       };
     }
-    return { status: 409, error: "Request already in progress" };
+    return {
+      status: 409,
+      error: "Request already in progress",
+      threadId: existingMsg.thread_id,
+    };
   }
 
   // 6. Thread creation — simulate failure
   if (!existingThreadId && req.threadInsertError) {
     return { status: 500, error: "Failed to create thread" };
   }
-
-  const resolvedThreadId = existingThreadId ?? "new-thread-uuid";
 
   // 7. User message insert — simulate failure
   if (req.userMsgInsertError) {
@@ -350,6 +352,7 @@ test("POST /api/ai/[orgId]/chat returns 409 on duplicate idempotency key (in-fli
   });
   assert.strictEqual(result.status, 409);
   assert.ok(result.error?.includes("in progress") || result.error?.includes("already"));
+  assert.strictEqual(result.threadId, VALID_THREAD_ID);
 });
 
 test("POST /api/ai/[orgId]/chat returns 409 for streaming status duplicate", () => {
@@ -361,6 +364,7 @@ test("POST /api/ai/[orgId]/chat returns 409 for streaming status duplicate", () 
     existingMessages: [streamingMsg],
   });
   assert.strictEqual(result.status, 409);
+  assert.strictEqual(result.threadId, VALID_THREAD_ID);
 });
 
 test("POST /api/ai/[orgId]/chat returns 200 with already_completed on completed duplicate", () => {
