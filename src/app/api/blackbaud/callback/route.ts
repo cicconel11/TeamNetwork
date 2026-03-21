@@ -6,6 +6,7 @@ import { createBlackbaudClient } from "@/lib/blackbaud/client";
 import { getAppUrl } from "@/lib/url";
 import { debugLog } from "@/lib/debug";
 import type { BlackbaudConstituent } from "@/lib/blackbaud/types";
+import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -105,7 +106,7 @@ export async function GET(req: Request) {
           refresh_token_enc: encryptToken(tokens.refresh_token),
           token_expires_at: tokenExpiresAt.toISOString(),
           connected_by: user.id,
-          last_sync_error: syncError,
+          last_sync_error: syncError as unknown as Json,
           updated_at: new Date().toISOString(),
         }, { onConflict: "organization_id,provider" });
 
@@ -148,7 +149,7 @@ export async function GET(req: Request) {
     await serviceSupabase
       .from("org_integrations")
       .update({
-        last_sync_error: syncError,
+        last_sync_error: syncError as unknown as Json,
         updated_at: new Date().toISOString(),
       })
       .eq("organization_id", oauthState.organization_id)
