@@ -1,3 +1,5 @@
+export type CacheStatus = "hit_exact" | "hit_semantic" | "miss" | "bypass" | "ineligible";
+
 export type SSEEvent =
   | { type: "chunk"; content: string }
   | {
@@ -5,6 +7,10 @@ export type SSEEvent =
       threadId: string;
       replayed?: boolean;
       usage?: { inputTokens: number; outputTokens: number };
+      cache?: {
+        status: CacheStatus;
+        entryId?: string;
+      };
     }
   | { type: "error"; message: string; retryable: boolean };
 
