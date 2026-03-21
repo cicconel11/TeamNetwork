@@ -1,13 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateCronAuth } from "@/lib/security/cron-auth";
-import {
-  decryptToken,
-  isTokenExpired,
-  refreshAccessToken,
-  encryptToken,
-  getBlackbaudSubscriptionKey,
-} from "@/lib/blackbaud/oauth";
+import { getBlackbaudSubscriptionKey } from "@/lib/blackbaud/oauth";
+import { refreshTokenWithFallback } from "@/lib/blackbaud/token-refresh";
 import { createBlackbaudClient } from "@/lib/blackbaud/client";
 import { runSync } from "@/lib/blackbaud/sync";
 import { getAlumniCapacitySnapshot } from "@/lib/alumni/capacity";
@@ -57,43 +52,7 @@ export async function GET(request: Request) {
     const batchResults = await Promise.all(
       batch.map(async (integration: any) => {
         try {
-          let accessToken: string;
-          const tokenExpiresAt = new Date(integration.token_expires_at);
-
-          if (isTokenExpired(tokenExpiresAt)) {
-            const refreshToken = decryptToken(integration.refresh_token_enc);
-            const newTokens = await refreshAccessToken(refreshToken);
-
-            const { count } = (await (supabase as any)
-              .from("org_integrations")
-              .update({
-                access_token_enc: encryptToken(newTokens.access_token),
-                refresh_token_enc: encryptToken(newTokens.refresh_token),
-                token_expires_at: new Date(
-                  Date.now() + newTokens.expires_in * 1000
-                ).toISOString(),
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", integration.id)
-              .eq("token_expires_at", integration.token_expires_at)
-              .select("id", { count: "exact", head: true })) as {
-              count: number;
-            };
-
-            if (count === 0) {
-              // Another process refreshed — re-read the current token
-              const { data: refreshed } = (await (supabase as any)
-                .from("org_integrations")
-                .select("access_token_enc")
-                .eq("id", integration.id)
-                .single()) as { data: { access_token_enc: string } };
-              accessToken = decryptToken(refreshed.access_token_enc);
-            } else {
-              accessToken = newTokens.access_token;
-            }
-          } else {
-            accessToken = decryptToken(integration.access_token_enc);
-          }
+          const accessToken = await refreshTokenWithFallback(integration, supabase);
 
           const capacity = await getAlumniCapacitySnapshot(
             integration.organization_id,
