@@ -36,15 +36,17 @@ export async function GET(req: Request) {
   const serviceSupabase = createServiceClient();
 
   // Atomic state claim: read + mark as used in one operation.
-  // This prevents replay attacks from concurrent requests.
-  const { data: oauthState, error: claimError } = await (serviceSupabase as any)
+  // Scope the claim to the authenticated user so another session cannot
+  // consume someone else's pending OAuth state.
+  const { data: oauthState, error: claimError } = await serviceSupabase
     .from("org_integration_oauth_state")
     .update({ used: true })
     .eq("id", state)
     .eq("provider", "blackbaud")
     .eq("used", false)
+    .eq("user_id", user.id)
     .select("id, organization_id, provider, user_id, redirect_path, initiated_at, used")
-    .maybeSingle() as { data: any | null; error: any };
+    .maybeSingle();
 
   if (claimError || !oauthState) {
     // Either the state doesn't exist, was already consumed, or DB error
@@ -93,7 +95,7 @@ export async function GET(req: Request) {
         verifyError instanceof Error ? verifyError.message : "API verification failed"
       );
 
-      await (serviceSupabase as any)
+      await serviceSupabase
         .from("org_integrations")
         .upsert({
           organization_id: oauthState.organization_id,
@@ -112,7 +114,7 @@ export async function GET(req: Request) {
     }
 
     // Success: upsert integration row as active
-    const { error: upsertError } = await (serviceSupabase as any)
+    const { error: upsertError } = await serviceSupabase
       .from("org_integrations")
       .upsert({
         organization_id: oauthState.organization_id,
@@ -143,7 +145,7 @@ export async function GET(req: Request) {
       err instanceof Error ? err.message : "Token exchange failed"
     );
 
-    await (serviceSupabase as any)
+    await serviceSupabase
       .from("org_integrations")
       .update({
         last_sync_error: syncError,
