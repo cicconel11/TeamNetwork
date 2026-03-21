@@ -3,13 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireOrgRole } from "@/lib/auth/roles";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import {
-  decryptToken,
-  isTokenExpired,
-  refreshAccessToken,
-  encryptToken,
-  getBlackbaudSubscriptionKey,
-} from "@/lib/blackbaud/oauth";
+import { getBlackbaudSubscriptionKey } from "@/lib/blackbaud/oauth";
+import { refreshTokenWithFallback } from "@/lib/blackbaud/token-refresh";
 import { createBlackbaudClient } from "@/lib/blackbaud/client";
 import { runSync } from "@/lib/blackbaud/sync";
 import { getAlumniCapacitySnapshot } from "@/lib/alumni/capacity";
@@ -74,40 +69,7 @@ export async function POST(
   // Get valid access token (refresh if needed)
   let accessToken: string;
   try {
-    const tokenExpiresAt = new Date(integration.token_expires_at);
-    if (isTokenExpired(tokenExpiresAt)) {
-      const refreshToken = decryptToken(integration.refresh_token_enc);
-      const newTokens = await refreshAccessToken(refreshToken);
-
-      // Optimistic concurrency: only update if token_expires_at hasn't changed
-      const { count } = (await (serviceSupabase as any)
-        .from("org_integrations")
-        .update({
-          access_token_enc: encryptToken(newTokens.access_token),
-          refresh_token_enc: encryptToken(newTokens.refresh_token),
-          token_expires_at: new Date(
-            Date.now() + newTokens.expires_in * 1000
-          ).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", integration.id)
-        .eq("token_expires_at", integration.token_expires_at)
-        .select("id", { count: "exact", head: true })) as { count: number };
-
-      if (count === 0) {
-        // Another process refreshed — re-read
-        const { data: refreshed } = (await (serviceSupabase as any)
-          .from("org_integrations")
-          .select("access_token_enc")
-          .eq("id", integration.id)
-          .single()) as { data: { access_token_enc: string } };
-        accessToken = decryptToken(refreshed.access_token_enc);
-      } else {
-        accessToken = newTokens.access_token;
-      }
-    } else {
-      accessToken = decryptToken(integration.access_token_enc);
-    }
+    accessToken = await refreshTokenWithFallback(integration, serviceSupabase);
   } catch {
     return NextResponse.json(
       { error: "Failed to refresh Blackbaud access token" },
