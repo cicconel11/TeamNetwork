@@ -75,6 +75,7 @@ export function MentorPairManager({ orgId, orgSlug }: MentorPairManagerProps) {
         .select("*")
         .eq("organization_id", orgId)
         .eq("mentor_user_id", user.id)
+        .is("deleted_at", null)
         .maybeSingle();
 
       if (pair) {
@@ -160,9 +161,10 @@ export function MentorPairManager({ orgId, orgSlug }: MentorPairManagerProps) {
 
     const { error: deleteError } = await supabase
       .from("mentorship_pairs")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", pairId)
-      .eq("mentor_user_id", mentorId);
+      .eq("mentor_user_id", mentorId)
+      .is("deleted_at", null);
 
     if (deleteError) {
       setError(deleteError.message);

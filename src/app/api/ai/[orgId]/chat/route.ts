@@ -137,6 +137,8 @@ export async function POST(
   // 8. Insert user message
   const { error: userMsgError } = await ctx.supabase.from("ai_messages").insert({
     thread_id: threadId,
+    org_id: ctx.orgId,
+    user_id: ctx.userId,
     role: "user",
     content: message,
     status: "complete",
@@ -156,6 +158,8 @@ export async function POST(
     .from("ai_messages")
     .insert({
       thread_id: threadId,
+      org_id: ctx.orgId,
+      user_id: ctx.userId,
       role: "assistant",
       status: "pending",
       content: null,

@@ -51,6 +51,7 @@ export default function DocumentSubmitPage() {
           .select("*")
           .eq("document_id", documentId)
           .eq("user_id", user.id)
+          .is("deleted_at", null)
           .order("submitted_at", { ascending: false })
           .limit(1)
           .maybeSingle();

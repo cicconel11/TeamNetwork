@@ -56,6 +56,7 @@ export default function AddPointsPage() {
           .from("competition_teams")
           .select("id,name")
           .eq("competition_id", competitions[0].id)
+          .is("deleted_at", null)
           .order("name");
 
         setTeams(teamRows || []);

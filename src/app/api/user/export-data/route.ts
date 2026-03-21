@@ -235,7 +235,8 @@ export async function GET(request: Request) {
     const { data: submissions } = await (serviceSupabase as any)
       .from("form_submissions")
       .select("form_id, organization_id, submitted_at, responses")
-      .eq("user_id", user.id) as { data: Array<{ form_id: string; organization_id: string; submitted_at: string; responses: unknown }> | null };
+      .eq("user_id", user.id)
+      .is("deleted_at", null) as { data: Array<{ form_id: string; organization_id: string; submitted_at: string; responses: unknown }> | null };
 
     if (submissions) {
       exportData.formSubmissions = submissions.map((s) => ({
@@ -265,12 +266,14 @@ export async function GET(request: Request) {
     const { data: mentorPairs } = await serviceSupabase
       .from("mentorship_pairs")
       .select("id, organization_id, status")
-      .eq("mentor_user_id", user.id);
+      .eq("mentor_user_id", user.id)
+      .is("deleted_at", null);
 
     const { data: menteePairs } = await serviceSupabase
       .from("mentorship_pairs")
       .select("id, organization_id, status")
-      .eq("mentee_user_id", user.id);
+      .eq("mentee_user_id", user.id)
+      .is("deleted_at", null);
 
     if (mentorPairs) {
       exportData.mentorshipPairs.push(

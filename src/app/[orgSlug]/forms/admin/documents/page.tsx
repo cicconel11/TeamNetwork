@@ -32,7 +32,8 @@ export default async function AdminDocumentsPage({ params }: AdminDocumentsPageP
   const { data: submissionCounts } = await supabase
     .from("form_document_submissions")
     .select("document_id")
-    .eq("organization_id", orgId);
+    .eq("organization_id", orgId)
+    .is("deleted_at", null);
 
   const countByDoc = new Map<string, number>();
   submissionCounts?.forEach((s) => {
