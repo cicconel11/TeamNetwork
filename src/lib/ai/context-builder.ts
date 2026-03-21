@@ -196,14 +196,17 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
         return { ok: false };
       }
     })(),
-    safeQuery<RecentAnnouncement[]>("recent announcements", () =>
-      (serviceSupabase as any)
+    safeQuery<RecentAnnouncement[]>("recent announcements", () => {
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      return (serviceSupabase as any)
         .from("announcements")
         .select("title, published_at")
         .eq("organization_id", orgId)
         .is("deleted_at", null)
+        .gte("published_at", twoWeeksAgo)
         .order("published_at", { ascending: false })
-        .limit(5)
+        .limit(5);
+    }
     ).then((result) =>
       result.ok
         ? { ok: true as const, data: result.data ?? [] }
@@ -306,7 +309,7 @@ export async function buildPromptContext(
   }
 
   if (context.recentAnnouncements.ok && context.recentAnnouncements.data.length > 0) {
-    sections.push("", "## Recent Announcements");
+    sections.push("", "## Recent Announcements (last 14 days)");
     for (const announcement of context.recentAnnouncements.data) {
       if (announcement.published_at) {
         sections.push(`- ${announcement.title} - ${formatDate(announcement.published_at)}`);
