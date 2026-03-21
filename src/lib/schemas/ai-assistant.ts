@@ -6,6 +6,7 @@ export const sendMessageSchema = z.object({
   message: safeString(4000),
   surface: z.enum(["general", "members", "analytics", "events"]),
   idempotencyKey: z.string().uuid(),
+  bypassCache: z.boolean().optional(),
 });
 
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
@@ -17,3 +18,26 @@ export const listThreadsSchema = z.object({
 });
 
 export type ListThreadsInput = z.infer<typeof listThreadsSchema>;
+
+const CACHE_INELIGIBLE_REASONS = [
+  "has_thread_context",
+  "contains_temporal_marker",
+  "contains_personalization",
+  "implies_write_or_tool",
+  "bypass_requested",
+  "message_too_short",
+  "message_too_long",
+] as const;
+
+export const cacheEligibilitySchema = z.discriminatedUnion("eligible", [
+  z.object({
+    eligible: z.literal(true),
+    reason: z.literal("cacheable"),
+  }),
+  z.object({
+    eligible: z.literal(false),
+    reason: z.enum(CACHE_INELIGIBLE_REASONS),
+  }),
+]);
+
+export type CacheEligibility = z.infer<typeof cacheEligibilitySchema>;
