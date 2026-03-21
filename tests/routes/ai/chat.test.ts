@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { describe, it } from "node:test";
 import assert from "node:assert";
 import {
   AuthContext,
@@ -6,6 +6,14 @@ import {
   isOrgAdmin,
   AuthPresets,
 } from "../../utils/authMock.ts";
+import {
+  checkCacheEligibility,
+  normalizePrompt,
+  hashPrompt,
+  buildPermissionScopeKey,
+  type CacheEligibility,
+} from "../../../src/lib/ai/semantic-cache-utils.ts";
+import type { CacheLookupResult } from "../../../src/lib/ai/semantic-cache.ts";
 
 /**
  * Tests for POST /api/ai/[orgId]/chat
@@ -47,6 +55,48 @@ interface ChatRequest {
   threadInsertError?: boolean;
   userMsgInsertError?: boolean;
   assistantMsgInsertError?: boolean;
+}
+
+// ── Cache simulation types ────────────────────────────────────────────────────
+
+interface CacheCheckRequest {
+  message: string;
+  surface: "general" | "members" | "analytics" | "events";
+  threadId?: string;
+  bypassCache?: boolean;
+  disableAiCache?: boolean;
+}
+
+type CacheSimResultStatus =
+  | "hit_exact"
+  | "miss"
+  | "bypass"
+  | "ineligible"
+  | "env_disabled";
+
+interface CacheSimResult {
+  /** Whether the cache lookup was attempted at all */
+  lookupAttempted: boolean;
+  /** Whether a write would be attempted after a live response */
+  writeAttempted: boolean;
+  status: CacheSimResultStatus;
+  bypassReason?: string;
+  /** Simulated response content when status === "hit_exact" */
+  responseContent?: string;
+}
+
+interface MockCacheStore {
+  hits: Map<string, string>;
+  lookupCallCount: number;
+  writeCallCount: number;
+}
+
+function createMockCacheStore(): MockCacheStore {
+  return {
+    hits: new Map(),
+    lookupCallCount: 0,
+    writeCallCount: 0,
+  };
 }
 
 interface ChatResult {
@@ -121,6 +171,72 @@ function validateSendMessageBody(
       threadId: b.threadId as string | undefined,
       idempotencyKey: b.idempotencyKey as string,
     },
+  };
+}
+
+// ── Cache flow simulation ─────────────────────────────────────────────────────
+
+/**
+ * Simulates the semantic cache check, hit, miss, bypass logic that lives in
+ * the real route (step 8.5).  This mirrors the production code path:
+ *
+ *   if (DISABLE_AI_CACHE !== "true" && eligibility.eligible)  → lookup
+ *     ok → hit_exact, serve cached content
+ *     !ok → miss/error, proceed to live path, then write on success
+ *   else if (!eligibility.eligible) → bypass with reason
+ *
+ * The `store` argument acts as a lightweight in-memory mock of the DB cache
+ * table.  Callers can pre-populate `store.hits` with a `promptHash → content`
+ * entry to simulate a cache hit.
+ */
+function simulateCacheFlow(
+  req: CacheCheckRequest,
+  store: MockCacheStore
+): CacheSimResult {
+  const { message, surface, threadId, bypassCache, disableAiCache } = req;
+
+  // Env-level kill switch
+  if (disableAiCache) {
+    return { lookupAttempted: false, writeAttempted: false, status: "env_disabled" };
+  }
+
+  const eligibility: CacheEligibility = checkCacheEligibility({
+    message,
+    surface,
+    threadId,
+    bypassCache,
+  });
+
+  if (!eligibility.eligible) {
+    return {
+      lookupAttempted: false,
+      writeAttempted: false,
+      status: "ineligible",
+      bypassReason: eligibility.reason,
+    };
+  }
+
+  // Eligible — attempt lookup
+  store.lookupCallCount += 1;
+  const normalized = normalizePrompt(message);
+  const promptHash = hashPrompt(normalized);
+  const hit = store.hits.get(promptHash);
+
+  if (hit !== undefined) {
+    return {
+      lookupAttempted: true,
+      writeAttempted: false,
+      status: "hit_exact",
+      responseContent: hit,
+    };
+  }
+
+  // Miss — simulate live path completing successfully, then write
+  store.writeCallCount += 1;
+  return {
+    lookupAttempted: true,
+    writeAttempted: true,
+    status: "miss",
   };
 }
 
@@ -500,4 +616,141 @@ test("SSE_HEADERS constant has correct Content-Type for event-stream", async () 
   assert.strictEqual(SSE_HEADERS["Content-Type"], "text/event-stream");
   assert.ok("Cache-Control" in SSE_HEADERS);
   assert.ok("Connection" in SSE_HEADERS);
+});
+
+// ── Semantic cache behavior ───────────────────────────────────────────────────
+
+describe("semantic cache behavior", () => {
+  // Fixture: a standalone eligible prompt with no temporal/personalization markers
+  const ELIGIBLE_MESSAGE = "What are the member benefits?";
+
+  it("cache-eligible standalone prompt returns cache hit when store contains matching entry", () => {
+    const store = createMockCacheStore();
+    // Pre-populate the store with the expected hash for the eligible message
+    const promptHash = hashPrompt(normalizePrompt(ELIGIBLE_MESSAGE));
+    const cachedContent = "Members receive healthcare, dental, and vision benefits.";
+    store.hits.set(promptHash, cachedContent);
+
+    const result = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general" },
+      store
+    );
+
+    assert.strictEqual(result.status, "hit_exact");
+    assert.strictEqual(result.lookupAttempted, true);
+    assert.strictEqual(result.writeAttempted, false);
+    assert.strictEqual(result.responseContent, cachedContent);
+    assert.strictEqual(store.lookupCallCount, 1);
+  });
+
+  it("cache miss falls through to live path and a write is attempted", () => {
+    const store = createMockCacheStore();
+    // Store is empty — no cached entry exists
+
+    const result = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general" },
+      store
+    );
+
+    assert.strictEqual(result.status, "miss");
+    assert.strictEqual(result.lookupAttempted, true);
+    assert.strictEqual(result.writeAttempted, true);
+    assert.strictEqual(store.lookupCallCount, 1);
+    assert.strictEqual(store.writeCallCount, 1);
+  });
+
+  it("bypassCache=true skips lookup and marks status as ineligible with reason bypass_requested", () => {
+    const store = createMockCacheStore();
+    // Even if there is a matching entry, bypass should prevent lookup
+    const promptHash = hashPrompt(normalizePrompt(ELIGIBLE_MESSAGE));
+    store.hits.set(promptHash, "cached content that should never be returned");
+
+    const result = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general", bypassCache: true },
+      store
+    );
+
+    assert.strictEqual(result.lookupAttempted, false);
+    assert.ok(
+      result.status === "ineligible" || result.status === "bypass",
+      `expected ineligible or bypass, got ${result.status}`
+    );
+    assert.strictEqual(result.bypassReason, "bypass_requested");
+    assert.strictEqual(store.lookupCallCount, 0);
+  });
+
+  it("follow-up message with threadId bypasses cache with reason has_thread_context", () => {
+    const store = createMockCacheStore();
+
+    const result = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general", threadId: "existing-thread-uuid" },
+      store
+    );
+
+    assert.strictEqual(result.lookupAttempted, false);
+    assert.strictEqual(result.status, "ineligible");
+    assert.strictEqual(result.bypassReason, "has_thread_context");
+    assert.strictEqual(store.lookupCallCount, 0);
+  });
+
+  it("message with temporal marker bypasses cache with reason contains_temporal_marker", () => {
+    const store = createMockCacheStore();
+
+    const result = simulateCacheFlow(
+      { message: "What events are happening today?", surface: "events" },
+      store
+    );
+
+    assert.strictEqual(result.lookupAttempted, false);
+    assert.strictEqual(result.status, "ineligible");
+    assert.strictEqual(result.bypassReason, "contains_temporal_marker");
+    assert.strictEqual(store.lookupCallCount, 0);
+  });
+
+  it("DISABLE_AI_CACHE=true bypasses cache entirely without attempting lookup", () => {
+    const store = createMockCacheStore();
+    // Pre-populate a hit — it should never be reached
+    const promptHash = hashPrompt(normalizePrompt(ELIGIBLE_MESSAGE));
+    store.hits.set(promptHash, "should not be returned");
+
+    const result = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general", disableAiCache: true },
+      store
+    );
+
+    assert.strictEqual(result.lookupAttempted, false);
+    assert.strictEqual(result.writeAttempted, false);
+    assert.strictEqual(result.status, "env_disabled");
+    assert.strictEqual(store.lookupCallCount, 0);
+    assert.strictEqual(store.writeCallCount, 0);
+  });
+
+  it("cache write is attempted only after a successful live response on a miss", () => {
+    const store = createMockCacheStore();
+
+    // First call — miss, write should be attempted
+    const missResult = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general" },
+      store
+    );
+
+    assert.strictEqual(missResult.status, "miss");
+    assert.strictEqual(missResult.writeAttempted, true);
+    assert.strictEqual(store.writeCallCount, 1);
+
+    // Simulate that the entry is now present in the store (as if the write persisted)
+    const promptHash = hashPrompt(normalizePrompt(ELIGIBLE_MESSAGE));
+    store.hits.set(promptHash, "The live response content.");
+
+    // Second call — should hit the cache, no further write
+    const hitResult = simulateCacheFlow(
+      { message: ELIGIBLE_MESSAGE, surface: "general" },
+      store
+    );
+
+    assert.strictEqual(hitResult.status, "hit_exact");
+    assert.strictEqual(hitResult.writeAttempted, false);
+    // Write count must not have incremented on the second call
+    assert.strictEqual(store.writeCallCount, 1);
+  });
 });
