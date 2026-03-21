@@ -12,6 +12,9 @@ interface AuditEntry {
   inputTokens?: number;
   outputTokens?: number;
   error?: string;
+  cacheStatus?: string; // 'bypass' | 'miss' | 'hit_exact' | 'hit_semantic' | 'ineligible'
+  cacheEntryId?: string; // UUID of the cache entry that was hit
+  cacheBypassReason?: string; // why cache was bypassed (eligibility reason)
 }
 
 function redactSensitive(value: string): string {
@@ -42,6 +45,9 @@ export async function logAiRequest(
       input_tokens: entry.inputTokens ?? null,
       output_tokens: entry.outputTokens ?? null,
       error: entry.error ? entry.error.slice(0, 1000) : null,
+      cache_status: entry.cacheStatus ?? null,
+      cache_entry_id: entry.cacheEntryId ?? null,
+      cache_bypass_reason: entry.cacheBypassReason ?? null,
     };
 
     const { error } = await (serviceSupabase as any)
