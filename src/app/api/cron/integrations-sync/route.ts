@@ -69,12 +69,13 @@ export async function GET(request: Request) {
             debugLog("integrations-cron", "health check failed", {
               integrationId: integration.id,
               reason: health.reason,
+              error: health.error,
             });
             return {
               id: integration.id,
               orgId: integration.organization_id,
               status: "error",
-              error: `Blackbaud health check failed: ${health.reason}`,
+              error: `Blackbaud health check failed: ${health.reason}${health.error ? ` — ${health.error}` : ""}`,
             };
           }
 
