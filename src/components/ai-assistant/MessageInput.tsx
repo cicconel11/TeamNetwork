@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Send, Square, AlertCircle, X } from "lucide-react";
 
 interface MessageInputProps {
@@ -20,6 +20,18 @@ export function MessageInput({
 }: MessageInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  // Reset height when input is programmatically cleared (e.g. after send)
+  useEffect(() => {
+    if (!input) resizeTextarea();
+  }, [input, resizeTextarea]);
 
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
@@ -70,12 +82,15 @@ export function MessageInput({
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            resizeTextarea();
+          }}
           onKeyDown={handleKeyDown}
           placeholder="Ask about your organization..."
           disabled={isStreaming}
           rows={1}
-          className="flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+          className="max-h-32 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
         />
         <button
           onClick={isStreaming ? onCancel : handleSend}

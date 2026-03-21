@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, validationErrorResponse, ValidationError } from "@/lib/security/validation";
 import { createZaiClient, getZaiModel } from "@/lib/ai/client";
 import { buildPromptContext } from "@/lib/ai/context-builder";
-import { composeResponse } from "@/lib/ai/response-composer";
+import { composeResponse, type UsageAccumulator } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
 import { createSSEStream, SSE_HEADERS } from "@/lib/ai/sse";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
@@ -106,7 +106,7 @@ export async function POST(
     }
     // In-flight — return 409 to signal duplicate
     return NextResponse.json(
-      { error: "Request already in progress" },
+      { error: "Request already in progress", threadId: existingMsg.thread_id },
       { status: 409, headers: rateLimit.headers }
     );
   }
@@ -176,6 +176,7 @@ export async function POST(
   // 10–12. Stream SSE response
   const stream = createSSEStream(async (enqueue) => {
     let fullContent = "";
+    const usageRef: { current: UsageAccumulator | null } = { current: null };
 
     try {
       // Guard: ZAI_API_KEY required
@@ -228,6 +229,7 @@ export async function POST(
         client,
         systemPrompt,
         messages: contextMessages,
+        onUsage: (u) => { usageRef.current = u; },
       })) {
         if (event.type === "chunk") {
           fullContent += event.content;
@@ -238,8 +240,13 @@ export async function POST(
         }
       }
 
-      // Done event
-      enqueue({ type: "done", threadId: threadId! });
+      // Done event — include usage if the provider returned it
+      const usage = usageRef.current;
+      enqueue({
+        type: "done",
+        threadId: threadId!,
+        ...(usage ? { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } } : {}),
+      });
     } catch (err) {
       console.error("[ai-chat] stream error:", err);
       enqueue({ type: "error", message: "An error occurred", retryable: true });
@@ -262,6 +269,8 @@ export async function POST(
         intent: "general",
         latencyMs: Date.now() - startTime,
         model: process.env.ZAI_API_KEY ? getZaiModel() : undefined,
+        inputTokens: usageRef.current?.inputTokens,
+        outputTokens: usageRef.current?.outputTokens,
       });
     }
   });

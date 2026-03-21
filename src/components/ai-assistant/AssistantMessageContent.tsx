@@ -2,6 +2,7 @@
 
 import type { ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface AssistantMessageContentProps {
   content: string;
@@ -15,8 +16,9 @@ export function AssistantMessageContent({ content }: AssistantMessageContentProp
 
   return (
     <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
       components={{
-        a: ({ node: _node, ...props }) => (
+        a: (props) => (
           <a
             {...props}
             className="break-all text-indigo-600 underline underline-offset-2 dark:text-indigo-400"
@@ -24,17 +26,17 @@ export function AssistantMessageContent({ content }: AssistantMessageContentProp
             rel="noreferrer noopener"
           />
         ),
-        p: ({ node: _node, ...props }) => <p {...props} className="my-0 leading-relaxed" />,
-        ul: ({ node: _node, ...props }) => <ul {...props} className="ml-5 list-disc space-y-1" />,
-        ol: ({ node: _node, ...props }) => <ol {...props} className="ml-5 list-decimal space-y-1" />,
-        li: ({ node: _node, ...props }) => <li {...props} className="break-words" />,
-        pre: ({ node: _node, ...props }) => (
+        p: (props) => <p {...props} className="my-0 leading-relaxed" />,
+        ul: (props) => <ul {...props} className="ml-5 list-disc space-y-1" />,
+        ol: (props) => <ol {...props} className="ml-5 list-decimal space-y-1" />,
+        li: (props) => <li {...props} className="break-words" />,
+        pre: (props) => (
           <pre
             {...props}
             className="my-2 overflow-x-auto rounded-xl border border-border/70 bg-background/80 p-3 text-xs"
           />
         ),
-        code: ({ node: _node, inline, className, children, ...props }: MarkdownCodeProps) =>
+        code: ({ inline, className, children, ...props }: MarkdownCodeProps) =>
           inline ? (
             <code
               {...props}
@@ -47,6 +49,24 @@ export function AssistantMessageContent({ content }: AssistantMessageContentProp
               {children}
             </code>
           ),
+        table: (props) => (
+          <div className="my-2 overflow-x-auto">
+            <table {...props} className="w-full border-collapse text-xs" />
+          </div>
+        ),
+        thead: (props) => (
+          <thead {...props} className="border-b border-border bg-muted/30" />
+        ),
+        tbody: (props) => <tbody {...props} />,
+        tr: (props) => (
+          <tr {...props} className="border-b border-border/50 even:bg-muted/20" />
+        ),
+        th: (props) => (
+          <th {...props} className="px-2 py-1 text-left font-medium text-foreground" />
+        ),
+        td: (props) => (
+          <td {...props} className="px-2 py-1 text-muted-foreground" />
+        ),
       }}
     >
       {content}
