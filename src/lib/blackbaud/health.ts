@@ -40,3 +40,7 @@ export async function checkBlackbaudHealth(
     return { ok: false, reason: "network_error", error: message };
   }
 }
+
+export function formatBlackbaudHealthError(result: HealthResult): string {
+  return `Blackbaud health check failed: ${result.reason}${result.error ? ` — ${result.error}` : ""}`;
+}

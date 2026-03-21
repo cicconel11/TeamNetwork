@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, beforeEach, mock } from "node:test";
 import assert from "node:assert/strict";
 
@@ -51,29 +52,44 @@ function makeFreshTokenResponse(
 // Minimal supabase stub factory
 function makeSupabase(opts: {
   casUpdateCount?: number;
-  reReadData?: { access_token_enc: string } | null;
+  reReadData?: { access_token_enc: string; token_expires_at?: string } | null;
   reReadError?: { message: string } | null;
+  reReadSequence?: Array<{
+    data: { access_token_enc: string; token_expires_at?: string } | null;
+    error: { message: string } | null;
+  }>;
 } = {}) {
   const casUpdateCount = opts.casUpdateCount ?? 1;
   const reReadData = opts.reReadData !== undefined ? opts.reReadData : null;
   const reReadError = opts.reReadError ?? null;
+  const reReadSequence = opts.reReadSequence ? [...opts.reReadSequence] : null;
 
   let updateCallCount = 0;
   let selectCallCount = 0;
 
   const supabase = {
-    from: (_table: string) => {
+    from: (table: string) => {
+      void table;
       const chain: any = {
-        select: (_cols?: string, _opts?: any) => {
+        select: (cols?: string, options?: any) => {
+          void cols;
+          void options;
           selectCallCount++;
           return chain;
         },
-        update: (_data: any) => chain,
+        update: (data: any) => {
+          void data;
+          return chain;
+        },
         insert: () => chain,
         delete: () => chain,
         eq: () => chain,
         single: () => {
           // Re-read call (select after CAS miss)
+          if (reReadSequence && reReadSequence.length > 0) {
+            const next = reReadSequence.shift()!;
+            return Promise.resolve(next);
+          }
           return Promise.resolve({ data: reReadData, error: reReadError });
         },
         then: (resolve: any) => {
@@ -99,7 +115,7 @@ describe("refreshTokenWithFallback", () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
     let fetchCalled = false;
-    // @ts-ignore — override global fetch
+    // @ts-expect-error test override
     globalThis.fetch = async () => {
       fetchCalled = true;
       return new Response("should not be called", { status: 200 });
@@ -120,8 +136,10 @@ describe("refreshTokenWithFallback", () => {
   it("expired + CAS wins (count > 0) → returns newTokens.access_token", async () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
-    // @ts-ignore — override global fetch for refreshAccessToken
-    globalThis.fetch = async (_url: string, _init: RequestInit) => {
+    // @ts-expect-error test override
+    globalThis.fetch = async (url: string, init: RequestInit) => {
+      void url;
+      void init;
       return new Response(makeFreshTokenResponse("new-access-token", "new-refresh-token"), {
         status: 200,
       });
@@ -142,7 +160,7 @@ describe("refreshTokenWithFallback", () => {
   it("CAS lost (count = 0) → re-reads DB, returns winner's token", async () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
-    // @ts-ignore — override global fetch for refreshAccessToken
+    // @ts-expect-error test override
     globalThis.fetch = async () => {
       return new Response(makeFreshTokenResponse("concurrent-access", "concurrent-refresh"), {
         status: 200,
@@ -169,7 +187,7 @@ describe("refreshTokenWithFallback", () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
     // Simulate Blackbaud returning invalid_grant (consumed refresh token)
-    // @ts-ignore — override global fetch
+    // @ts-expect-error test override
     globalThis.fetch = async () => {
       return new Response("invalid_grant: refresh token consumed", { status: 400 });
     };
@@ -190,10 +208,52 @@ describe("refreshTokenWithFallback", () => {
     assert.equal(result, "winner-after-invalid-grant");
   });
 
+  it("waits for the winner's DB write instead of returning the stale expired token", async () => {
+    const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
+
+    // Simulate the loser hitting invalid_grant while the winner has not committed yet.
+    // @ts-expect-error test override
+    globalThis.fetch = async () => {
+      return new Response("invalid_grant: refresh token consumed", { status: 400 });
+    };
+
+    const staleExpiry = new Date(Date.now() - 60_000).toISOString();
+    const winnersToken = encryptToken("winner-after-race");
+
+    const integration = makeIntegration({
+      token_expires_at: staleExpiry,
+      access_token_enc: encryptToken("stale-expired-access"),
+    });
+
+    const { supabase, getSelectCallCount } = makeSupabase({
+      reReadSequence: [
+        {
+          data: {
+            access_token_enc: integration.access_token_enc,
+            token_expires_at: staleExpiry,
+          },
+          error: null,
+        },
+        {
+          data: {
+            access_token_enc: winnersToken,
+            token_expires_at: new Date(Date.now() + 3600_000).toISOString(),
+          },
+          error: null,
+        },
+      ],
+    });
+
+    const result = await refreshTokenWithFallback(integration, supabase);
+
+    assert.equal(result, "winner-after-race");
+    assert.equal(getSelectCallCount(), 2, "helper should retry until the winner token is visible");
+  });
+
   it("re-read returns null data → throws descriptive error (not TypeError)", async () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
-    // @ts-ignore — override global fetch for refreshAccessToken (CAS wins but we want re-read path)
+    // @ts-expect-error test override
     globalThis.fetch = async () => {
       return new Response("invalid_grant: token consumed", { status: 400 });
     };
@@ -228,7 +288,7 @@ describe("refreshTokenWithFallback", () => {
   it("re-read returns DB error → throws descriptive error", async () => {
     const { refreshTokenWithFallback } = await import("../src/lib/blackbaud/token-refresh");
 
-    // @ts-ignore — override global fetch
+    // @ts-expect-error test override
     globalThis.fetch = async () => {
       return new Response("invalid_grant: token consumed", { status: 400 });
     };

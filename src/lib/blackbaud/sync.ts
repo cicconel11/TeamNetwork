@@ -3,22 +3,35 @@ import type {
   BlackbaudEmail,
   SyncResult,
   NormalizedConstituent,
+  SyncError,
 } from "./types";
 import type { BlackbaudClient } from "./client";
 import { normalizeConstituent } from "./normalize";
 import { upsertConstituents } from "./storage";
 import { makeSyncError } from "./oauth";
+import { checkBlackbaudHealth, formatBlackbaudHealthError } from "./health";
 import { debugLog } from "@/lib/debug";
 
 export interface SyncDeps {
   client: BlackbaudClient;
-  supabase: any;
+  supabase: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   integrationId: string;
   organizationId: string;
   alumniLimit: number | null;
   currentAlumniCount: number;
   syncType: "full" | "incremental" | "manual";
   lastSyncedAt: string | null;
+}
+
+class BlackbaudSyncFailure extends Error {
+  phase: SyncError["phase"];
+  code: string;
+
+  constructor(phase: SyncError["phase"], code: string, message: string) {
+    super(message);
+    this.phase = phase;
+    this.code = code;
+  }
 }
 
 /**
@@ -113,6 +126,15 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
   const syncStartedAt = new Date().toISOString();
 
   try {
+    const health = await checkBlackbaudHealth(client);
+    if (!health.ok) {
+      throw new BlackbaudSyncFailure(
+        "api_verify",
+        "VERIFY_FAILED",
+        formatBlackbaudHealthError(health)
+      );
+    }
+
     let offset = 0;
     const limit = 500;
     let hasMore = true;
@@ -219,8 +241,16 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
 
     return totals;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const syncError = makeSyncError("api_fetch", "SYNC_FAILED", errorMessage);
+    const failure =
+      err instanceof BlackbaudSyncFailure
+        ? err
+        : new BlackbaudSyncFailure(
+            "api_fetch",
+            "SYNC_FAILED",
+            err instanceof Error ? err.message : String(err)
+          );
+    const errorMessage = failure.message;
+    const syncError = makeSyncError(failure.phase, failure.code, errorMessage);
 
     if (syncLogId) {
       await supabase
