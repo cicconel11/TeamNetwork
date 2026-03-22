@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { OrgSidebar } from "@/components/layout/OrgSidebar";
+import { OrgMainContent } from "@/components/layout/OrgMainContent";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { GracePeriodBanner } from "@/components/layout/GracePeriodBanner";
 import { CancelingBanner } from "@/components/layout/CancelingBanner";
@@ -240,9 +241,9 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 
-      <main className={`lg:ml-64 ${(await headers()).get("x-pathname")?.includes("/messages") ? "h-[calc(100dvh-4rem)] lg:h-dvh overflow-hidden pt-16 lg:pt-0" : "p-4 lg:p-8 pt-20 lg:pt-8"} ${orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling ? "mt-12" : ""}`}>
+      <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
         {children}
-      </main>
+      </OrgMainContent>
 
       {isDevAdmin && (
         <DevPanel
