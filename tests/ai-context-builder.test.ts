@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
@@ -63,7 +64,10 @@ function createMockServiceSupabase(opts: {
         const methods = ["eq", "is", "gte", "lt", "order", "limit", "in"];
 
         for (const method of methods) {
-          chain[method] = (..._args: unknown[]) => chain;
+          chain[method] = (...args: unknown[]) => {
+            void args;
+            return chain;
+          };
         }
 
         chain.then = (resolve: (value: unknown) => void) => {
@@ -101,9 +105,15 @@ function createMockServiceSupabase(opts: {
           const eventsChain: Record<string, any> = {};
           const eventMethods = ["eq", "is", "gte", "lt", "order", "limit", "in"];
           for (const m of eventMethods) {
-            eventsChain[m] = (..._a: unknown[]) => eventsChain;
+            eventsChain[m] = (...args: unknown[]) => {
+              void args;
+              return eventsChain;
+            };
           }
-          eventsChain.select = (..._a: unknown[]) => eventsChain;
+          eventsChain.select = (...args: unknown[]) => {
+            void args;
+            return eventsChain;
+          };
           eventsChain.then = (resolve: (value: unknown) => void) => {
             resolve(
               shouldFail

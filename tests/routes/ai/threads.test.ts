@@ -1,4 +1,5 @@
-import test, { beforeEach, mock } from "node:test";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { NextResponse } from "next/server";
 
@@ -65,7 +66,8 @@ function createSupabaseStub() {
     };
 
     const builder: Record<string, any> = {
-      select(_columns: string) {
+      select(columns: string) {
+        void columns;
         return builder;
       },
       update(payload: Record<string, unknown>) {
@@ -169,28 +171,28 @@ function createSupabaseStub() {
 }
 
 let supabaseStub = createSupabaseStub();
+const { createAiThreadsGetHandler } = await import("../../../src/app/api/ai/[orgId]/threads/route.ts");
+const { createAiThreadMessagesGetHandler } = await import(
+  "../../../src/app/api/ai/[orgId]/threads/[threadId]/messages/route.ts"
+);
+const { createAiThreadDeleteHandler } = await import(
+  "../../../src/app/api/ai/[orgId]/threads/[threadId]/route.ts"
+);
 
-mock.module("@/lib/supabase/server", {
-  namedExports: {
-    createClient: async () => supabaseStub,
-  },
+const GET_THREADS = createAiThreadsGetHandler({
+  createClient: async () => supabaseStub as any,
+  getAiOrgContext: async () => aiContext,
 });
-
-mock.module("@/lib/ai/context", {
-  namedExports: {
-    getAiOrgContext: async () => aiContext,
-  },
+const GET_MESSAGES = createAiThreadMessagesGetHandler({
+  createClient: async () => supabaseStub as any,
+  getAiOrgContext: async () => aiContext,
+  resolveOwnThread: async () => threadResolution,
 });
-
-mock.module("@/lib/ai/thread-resolver", {
-  namedExports: {
-    resolveOwnThread: async () => threadResolution,
-  },
+const DELETE_THREAD = createAiThreadDeleteHandler({
+  createClient: async () => supabaseStub as any,
+  getAiOrgContext: async () => aiContext,
+  resolveOwnThread: async () => threadResolution,
 });
-
-const { GET: GET_THREADS } = await import("../../../src/app/api/ai/[orgId]/threads/route.ts");
-const { GET: GET_MESSAGES } = await import("../../../src/app/api/ai/[orgId]/threads/[threadId]/messages/route.ts");
-const { DELETE: DELETE_THREAD } = await import("../../../src/app/api/ai/[orgId]/threads/[threadId]/route.ts");
 
 beforeEach(() => {
   authUser = ADMIN_USER;

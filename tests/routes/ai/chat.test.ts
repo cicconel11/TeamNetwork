@@ -1,4 +1,5 @@
-import test, { beforeEach, mock } from "node:test";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { NextResponse } from "next/server";
 
@@ -30,7 +31,8 @@ function createSupabaseStub() {
     };
 
     const builder: Record<string, any> = {
-      select(_columns: string) {
+      select(columns: string) {
+        void columns;
         return builder;
       },
       insert(payload: Record<string, unknown>) {
@@ -161,69 +163,37 @@ function createSupabaseStub() {
 }
 
 let supabaseStub = createSupabaseStub();
-
-mock.module("@/lib/supabase/server", {
-  namedExports: {
-    createClient: async () => supabaseStub,
+const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/chat/route.ts");
+const POST = createChatPostHandler({
+  createClient: async () => supabaseStub as any,
+  getAiOrgContext: async () => aiContext,
+  buildPromptContext: async () => ({
+    systemPrompt: "System prompt",
+    orgContextMessage: null,
+  }),
+  createZaiClient: () => ({ client: "fake" } as any),
+  getZaiModel: () => "glm-5",
+  composeResponse: (async function* (options: {
+    onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+  }) {
+    options.onUsage?.({ inputTokens: 12, outputTokens: 7 });
+    yield { type: "chunk", content: "Hello" };
+    yield { type: "chunk", content: " world" };
+  }) as any,
+  logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+    auditEntries.push(entry);
   },
-});
-
-mock.module("@/lib/ai/context", {
-  namedExports: {
-    getAiOrgContext: async () => aiContext,
-  },
-});
-
-mock.module("@/lib/ai/context-builder", {
-  namedExports: {
-    buildPromptContext: async () => ({
-      systemPrompt: "System prompt",
-      orgContextMessage: null,
-    }),
-  },
-});
-
-mock.module("@/lib/ai/client", {
-  namedExports: {
-    createZaiClient: () => ({ client: "fake" }),
-    getZaiModel: () => "glm-5",
-  },
-});
-
-mock.module("@/lib/ai/response-composer", {
-  namedExports: {
-    composeResponse: async function* (options: { onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void }) {
-      options.onUsage?.({ inputTokens: 12, outputTokens: 7 });
-      yield { type: "chunk", content: "Hello" };
-      yield { type: "chunk", content: " world" };
+  resolveOwnThread: async () => ({
+    ok: true,
+    thread: {
+      id: "thread-1",
+      user_id: ADMIN_USER.id,
+      org_id: ORG_ID,
+      surface: "general",
+      title: "Thread",
     },
-  },
+  }),
 });
-
-mock.module("@/lib/ai/audit", {
-  namedExports: {
-    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
-      auditEntries.push(entry);
-    },
-  },
-});
-
-mock.module("@/lib/ai/thread-resolver", {
-  namedExports: {
-    resolveOwnThread: async () => ({
-      ok: true,
-      thread: {
-        id: "thread-1",
-        user_id: ADMIN_USER.id,
-        org_id: ORG_ID,
-        surface: "general",
-        title: "Thread",
-      },
-    }),
-  },
-});
-
-const { POST } = await import("../../../src/app/api/ai/[orgId]/chat/route.ts");
 
 beforeEach(() => {
   authUser = ADMIN_USER;
