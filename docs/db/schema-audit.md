@@ -1,8 +1,8 @@
 # Supabase Schema Audit
 
-**Last Updated:** March 12, 2026  
-**Scope:** All migrations in `supabase/migrations/` through `20260701000007_enforce_behavioral_tracking_policy.sql`  
-**Current Migration Count:** 155
+**Last Updated:** March 21, 2026
+**Scope:** All migrations in `supabase/migrations/` through `20260709120000_form_submissions_nullable_user_friction.sql`
+**Current Migration Count:** 166
 
 This document is a current-state schema snapshot. The generated types in `src/types/database.ts` are the best day-to-day source of truth when this doc drifts.
 
@@ -22,6 +22,8 @@ The live schema covers:
 - Analytics, usage analytics, telemetry, and operational events
 - Error tracking, compliance audit, and dev-admin audit logs
 - User deletion requests (GDPR/COPPA)
+- AI assistant (threads, messages, audit log, semantic cache)
+- LinkedIn OAuth connections and enrichment
 
 ---
 
@@ -55,7 +57,7 @@ The live schema covers:
 
 | Table | Purpose | Notes |
 |-------|---------|-------|
-| `members` | Active member profiles | Soft-delete via `deleted_at` |
+| `members` | Active member profiles | Soft-delete via `deleted_at`. Enrichment columns: `current_company`, `school` |
 | `alumni` | Alumni profiles | Extended profile/contact fields including `current_city` |
 | `parents` | Parent/guardian profiles | Relationship, student name, notes, optional linked `user_id` |
 | `parent_invites` | Parent invite onboarding | Code-based invite flow with status, expiry, optional email |
@@ -73,7 +75,8 @@ The live schema covers:
 | `chat_form_responses` | Inline form responses in chat | One response per user per form (`UNIQUE(message_id, user_id)`), immutable by default |
 | `discussion_threads` | Discussion threads | Pinned/locked flags, `reply_count`, `last_activity_at`, soft-delete |
 | `discussion_replies` | Thread replies | Reply content with soft-delete |
-| `feed_posts` | Feed posts | Community feed content, `comment_count`, `like_count` cached |
+| `feed_posts` | Feed posts | Community feed content, `comment_count`, `like_count` cached. `post_type` (`text`/`poll`) and `metadata` JSONB |
+| `feed_poll_votes` | Feed post poll votes | `UNIQUE(post_id, user_id)`, option_index 0–5, org-scoped RLS via `is_org_member()` |
 | `feed_comments` | Feed comments | Post-level replies/comments, soft-delete |
 | `feed_likes` | Feed post likes | Hard delete on unlike; `UNIQUE(post_id, user_id)` |
 
@@ -98,16 +101,16 @@ The live schema covers:
 | Table | Purpose | Notes |
 |-------|---------|-------|
 | `schedule_domain_rules` | Platform-level domain patterns | `UNIQUE(pattern)`, vendor ID, status: `active`/`blocked` |
-| `schedule_allowed_domains` | Verified/pending domain allowlist | `UNIQUE(hostname)`, status: `pending`/`active`/`blocked`, fingerprint JSONB |
+| `schedule_allowed_domains` | Verified/pending domain allowlist | `UNIQUE(hostname)`, status: `pending`/`active`/`blocked`, fingerprint JSONB. FK constraints on `verified_by_user_id` → `auth.users`, `verified_by_org_id` → `organizations` (both `ON DELETE SET NULL`) |
 
 ### Forms and Documents
 
 | Table | Purpose | Notes |
 |-------|---------|-------|
 | `forms` | Dynamic form definitions | Org-scoped, `is_active` flag, soft-delete |
-| `form_submissions` | Form response payloads | `responses` JSONB, user-generated content |
+| `form_submissions` | Form response payloads | `responses` JSONB, user-generated content. Soft-delete via `deleted_at`. `user_id` nullable for anonymous friction feedback (pre-auth flows) |
 | `form_documents` | Document upload templates | Org-scoped, `is_active` flag |
-| `form_document_submissions` | Uploaded document submissions | `file_name`, `file_path`, `mime_type`, `file_size` |
+| `form_document_submissions` | Uploaded document submissions | `file_name`, `file_path`, `mime_type`, `file_size`. Soft-delete via `deleted_at` |
 
 ### Media
 
@@ -121,6 +124,7 @@ The live schema covers:
 **Storage Buckets:**
 - `media-archive` — Public bucket for media archive (50MB limit)
 - `org-media` — Private bucket for org uploads (25MB limit)
+- `feedback-screenshots` — Public bucket for friction feedback screenshots (5MB limit, images only)
 
 ### Jobs and Mentorship
 
@@ -128,8 +132,8 @@ The live schema covers:
 |-------|---------|-------|
 | `job_postings` | Job board posts | Org-scoped, `industry`, `experience_level` fields |
 | `mentor_profiles` | Alumni mentor directory | `UNIQUE(user_id, org_id)`, `expertise_areas` array, `is_active` flag |
-| `mentorship_pairs` | Mentor–mentee pairings | Org-scoped pair records |
-| `mentorship_logs` | Mentorship session logs | `entry_date`, `notes`, `progress_metric` per pair |
+| `mentorship_pairs` | Mentor–mentee pairings | Org-scoped pair records. Soft-delete via `deleted_at` |
+| `mentorship_logs` | Mentorship session logs | `entry_date`, `notes`, `progress_metric` per pair. Soft-delete via `deleted_at` |
 
 ### Workouts and Competition
 
@@ -138,7 +142,7 @@ The live schema covers:
 | `workouts` | Workout content | Title, description, date, optional external URL |
 | `workout_logs` | Workout participation logs | Status: `not_started`, `in_progress`, `completed`; `metrics` JSONB |
 | `competitions` | Competition definitions | Org-scoped competition records |
-| `competition_teams` | Teams within competitions | Named teams per competition |
+| `competition_teams` | Teams within competitions | Named teams per competition. Soft-delete via `deleted_at` |
 | `competition_points` | Point records | Per-user/team, `reason`, `created_by` |
 
 ### Payments, Donations, and Embeds
@@ -147,7 +151,7 @@ The live schema covers:
 |-------|---------|-------|
 | `payment_attempts` | Idempotency ledger | Unique on `idempotency_key`, states: `initiated`, `processing`, `succeeded`, `failed` |
 | `stripe_events` | Webhook dedup | `UNIQUE(event_id)` prevents double-processing |
-| `organization_donations` | Stripe Connect donation records | Per-donation event storage, optional `anonymous` flag |
+| `organization_donations` | Stripe Connect donation records | Per-donation event storage, optional `anonymous` flag. Soft-delete via `deleted_at` (compliance guard) |
 | `organization_donation_stats` | Donation rollups | Aggregate stats per org |
 | `org_donation_embeds` | Donation embed/link storage | Finance surface display |
 | `org_philanthropy_embeds` | Philanthropy embed/link storage | HTTPS-only URLs, `embed_type`: `link`/`iframe` |
@@ -177,6 +181,21 @@ The live schema covers:
 | `error_groups` | Aggregated error groups | `UNIQUE(env, fingerprint)`, severity, rolling counts (`count_1h`, `count_24h`, `total_count`), triage status |
 | `error_events` | Individual error occurrences | Linked to `error_groups`, stores message, stack, route, meta JSONB |
 
+### AI Assistant
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `ai_threads` | AI conversation threads | Scoped to user + org + surface. Soft-delete via `deleted_at`. Surfaces: `general`, `members`, `analytics`, `events` |
+| `ai_messages` | Messages within AI threads | Denormalized `user_id`/`org_id` with composite FK to `ai_threads(id, user_id, org_id)`. Idempotency key. Status: `pending`, `streaming`, `complete`, `error`. Role/content constraint check |
+| `ai_audit_log` | AI request audit trail | Service-role only (RLS enabled, no policies). No FK on `user_id`/`org_id` — intentional for audit survival. TTL: 90 days. Cache columns: `cache_status`, `cache_entry_id`, `cache_bypass_reason` |
+| `ai_semantic_cache` | Semantic response cache | Org-scoped, keyed by `(org_id, surface, permission_scope_key, cache_version, prompt_hash)`. TTL via `expires_at`, soft-invalidation via `invalidated_at`. Service-role only |
+
+### LinkedIn Integration
+
+| Table | Purpose | Notes |
+|-------|---------|-------|
+| `user_linkedin_connections` | LinkedIn OAuth connection state | Mirrors `user_calendar_connections` pattern. `UNIQUE(user_id)`, encrypted tokens, sync status: `connected`/`disconnected`/`error` |
+
 ### Audit Logs
 
 | Table | Purpose | Notes |
@@ -198,6 +217,13 @@ The live schema covers:
 | `media_status` | `pending`, `approved`, `rejected` |
 | `media_upload_status` | `pending`, `ready`, `failed`, `orphaned` |
 | `media_entity_type` | `feed_post`, `discussion_thread`, `job_posting` |
+| `analytics_event_name` | `app_open`, `route_view`, `nav_click`, `page_dwell_bucket`, `directory_view`, `directory_filter_apply`, `profile_card_open`, `events_view`, `event_open`, `rsvp_update`, `donation_flow_start`, `donation_checkout_start`, `donation_checkout_result`, `chat_thread_open`, `chat_message_send`, `chat_participants_change` (realigned Mar 2026 — deprecated events removed) |
+
+## Extensions
+
+| Extension | Schema | Purpose |
+|-----------|--------|---------|
+| `vector` | `extensions` | pgvector — enabled for future embedding-based similarity search (AI semantic cache) |
 
 ---
 
@@ -227,6 +253,10 @@ The live schema covers:
 | `purge_analytics_events()` | Purge expired analytics data | Used by analytics-purge cron |
 | `purge_ops_events()` | Purge expired ops events | Used by analytics-purge cron |
 | `get_subscription_status(...)` | Get org subscription status | `20260430120000` |
+| `save_user_linkedin_url(uuid, text)` | Sync LinkedIn URL across member/alumni/parent profiles | `20260703000000` |
+| `sync_user_linkedin_profile_fields(uuid, text, text, text)` | Sync name/photo from LinkedIn to profiles | `20260704000000` |
+| `sync_user_linkedin_enrichment(uuid, text...)` | Sync Proxycurl enrichment data to member/alumni | `20260707000000` |
+| `purge_expired_ai_semantic_cache()` | TTL cleanup for AI semantic cache (service-role only, batch 500) | `20260321100000` |
 
 ---
 
@@ -272,6 +302,27 @@ Two-tier verification:
 - Usage analytics tables (`usage_events`, `usage_summaries`, `ui_profiles`) are FERPA/COPPA-compliant with no PII.
 - `rate_limit_analytics` prevents analytics abuse; cleaned daily by cron.
 
+### AI Assistant
+
+- `ai_threads` scoped to `(user_id, org_id, surface)` with soft-delete. Surfaces map to feature areas: `general`, `members`, `analytics`, `events`.
+- `ai_messages` denormalized with `user_id`/`org_id` from parent thread. Composite FK `(thread_id, user_id, org_id)` → `ai_threads(id, user_id, org_id)` prevents drift. RLS uses direct `user_id = auth.uid()` + EXISTS for `deleted_at IS NULL` filtering.
+- `ai_messages` enforces role/content invariants via CHECK constraint (user messages require content, assistant messages in `complete` status require content, etc.).
+- `ai_messages.idempotency_key` prevents duplicate user messages from retries (unique partial index where key IS NOT NULL).
+- `ai_audit_log` is service-role-only (no RLS policies). Logs model, tokens, latency, cache status. 90-day TTL via `expires_at`.
+- `ai_semantic_cache` deduplicates by `(org_id, surface, permission_scope_key, cache_version, prompt_hash)` where `invalidated_at IS NULL`. TTL-based expiry with `purge_expired_ai_semantic_cache()` function (batched, service-role only).
+- pgvector extension (`vector` in `extensions` schema) enabled for future embedding-based similarity search.
+
+### LinkedIn Integration
+
+- `user_linkedin_connections` follows the `user_calendar_connections` pattern — one connection per user, encrypted tokens, sync status tracking.
+- Three service-role RPCs propagate LinkedIn data across member/alumni/parent profiles: URL sync, profile field sync (name/photo), and enrichment sync (Proxycurl data).
+- Enrichment RPCs use `COALESCE` to only fill NULL fields, preserving manual user edits.
+
+### Feed Polls
+
+- `feed_posts.post_type` distinguishes `text` vs `poll` posts. Poll options stored in `metadata` JSONB.
+- `feed_poll_votes` mirrors the `feed_likes` RLS pattern: org members can view all votes, users can modify their own. `UNIQUE(post_id, user_id)` allows vote changing via upsert.
+
 ### Error Tracking
 
 - `error_groups` deduplicate by `(env, fingerprint)` with rolling hourly/daily/total counts.
@@ -302,7 +353,7 @@ Two-tier verification:
 | Dec 2025 | Core tables, org invites, RLS policies, donations, RSVP |
 | Jan 2026 | Chat groups, academic schedules, forms, documents |
 | Feb 2026 | Enterprise accounts, error tracking, analytics, graduation, user deletion, compliance |
-| Mar 2026 | Alumni bulk import, quota fixes |
+| Mar 2026 | Alumni bulk import, quota fixes, AI assistant foundations (threads, messages, audit log), semantic response cache (pgvector), architecture fixes (soft-delete on 6 tables, ai_messages denormalization, composite FK integrity, schedule domain FKs), LinkedIn OAuth connections + enrichment RPCs, feed polls, member enrichment columns, analytics event enum realignment, feedback screenshots bucket, anonymous friction feedback |
 | Apr 2026 | Stripe idempotency, Google Calendar sync, calendar feeds, schedule sources/events, schedule domain allowlist, performance/security fixes |
 | May 2026 | Enterprise hybrid pricing, event recurrence, discussions, jobs, mentor profiles, feed, media uploads, dev-admin audit |
 | Jun 2026 | Media archive + moderation + albums, parent invites, parent role propagation (feed, announcements, chat, remaining tables), donations anonymous flag, chat polls/forms, alumni quota fixes, member soft-delete sync |
@@ -315,6 +366,8 @@ Two-tier verification:
 1. **`error_events.user_id`** — Stored as `text`, not `uuid`. No FK to `auth.users`. Intentional: the telemetry endpoint (`/api/telemetry/error`) accepts unauthenticated requests with client-generated user identifiers that may not be valid UUIDs. All other user_id columns in the schema are `uuid` with FK constraints.
 
 2. **`ai_audit_log.user_id` / `ai_audit_log.org_id`** — `uuid NOT NULL` with no FK constraints. Intentional: audit logs must survive user and org deletion. Adding FK with CASCADE would destroy audit data; SET NULL conflicts with NOT NULL. Table is service-role-only (RLS enabled with zero policies).
+
+3. **`ai_messages` composite FK** — `(thread_id, user_id, org_id)` references `ai_threads(id, user_id, org_id)` instead of a simple `thread_id` FK. Intentional: enforces ownership consistency at the DB level so RLS does not need subquery joins for ownership verification — only for `deleted_at` filtering. The composite FK also prevents user_id/org_id drift between messages and their parent thread.
 
 ---
 
