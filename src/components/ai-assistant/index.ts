@@ -1,3 +1,3 @@
 export { AIPanelProvider, useAIPanel } from "./AIPanelContext";
-export { AIAssistantToggle } from "./AIAssistantToggle";
+export { AIEdgeTab } from "./AIEdgeTab";
 export { AIPanel } from "./AIPanel";

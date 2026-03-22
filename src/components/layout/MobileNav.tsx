@@ -6,7 +6,6 @@ import Image from "next/image";
 import { OrgSidebar } from "./OrgSidebar";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
-import { AIAssistantToggle } from "@/components/ai-assistant";
 
 interface MobileNavProps {
   organization: Organization;
@@ -23,8 +22,6 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
   const [isOpen, setIsOpen] = useState(false);
   const [hasEverOpened, setHasEverOpened] = useState(false);
   const basePath = `/${organization.slug}`;
-  const isAdmin = role === "admin" || isDevAdmin;
-
   // Prevent caching issues by forcing re-render of menu when open state changes
   const toggleMenu = () => setIsOpen(!isOpen);
   const closeMenu = () => setIsOpen(false);
@@ -74,7 +71,6 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
         </Link>
 
         <div className="flex items-center gap-1">
-          <AIAssistantToggle isAdmin={isAdmin} />
           <button
             onClick={toggleMenu}
             className="p-2 -mr-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded-lg"

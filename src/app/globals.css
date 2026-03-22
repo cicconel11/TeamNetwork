@@ -591,6 +591,10 @@ body {
   animation: panelSlideIn 200ms ease-out;
 }
 
+.ai-edge-tab:hover {
+  transform: translateX(-2px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ai-panel-enter {
     animation: fadeIn 200ms ease-out;

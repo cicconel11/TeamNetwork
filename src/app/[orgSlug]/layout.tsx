@@ -14,7 +14,16 @@ import { OrgAnalyticsProvider } from "@/components/analytics/OrgAnalyticsContext
 import { ConsentModal } from "@/components/analytics/ConsentModal";
 import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
-import { AIPanelProvider, AIPanel } from "@/components/ai-assistant";
+import { AIPanelProvider } from "@/components/ai-assistant";
+import dynamic from "next/dynamic";
+const AIPanel = dynamic(
+  () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
+  { ssr: false }
+);
+const AIEdgeTab = dynamic(
+  () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
+  { ssr: false }
+);
 import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
 
 interface OrgLayoutProps {
@@ -260,7 +269,12 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
           memberCount={memberCount}
         />
       )}
-      {isAdmin && <AIPanel orgId={organization.id} />}
+      {isAdmin && (
+        <>
+          <AIPanel orgId={organization.id} />
+          <AIEdgeTab isAdmin={isAdmin} />
+        </>
+      )}
     </div>
     </AIPanelProvider>
     </AnalyticsProvider>
