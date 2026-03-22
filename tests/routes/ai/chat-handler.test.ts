@@ -162,7 +162,7 @@ function createSupabaseStub() {
 
 let supabaseStub = createSupabaseStub();
 
-const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/chat/route.ts");
+const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/chat/handler.ts");
 const POST = createChatPostHandler({
   createClient: async () => supabaseStub as any,
   getAiOrgContext: async () => aiContext,

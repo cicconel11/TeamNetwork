@@ -170,12 +170,12 @@ function createSupabaseStub() {
 
 let supabaseStub = createSupabaseStub();
 
-const { createAiThreadsGetHandler } = await import("../../../src/app/api/ai/[orgId]/threads/route.ts");
+const { createAiThreadsGetHandler } = await import("../../../src/app/api/ai/[orgId]/threads/handler.ts");
 const { createAiThreadMessagesGetHandler } = await import(
-  "../../../src/app/api/ai/[orgId]/threads/[threadId]/messages/route.ts"
+  "../../../src/app/api/ai/[orgId]/threads/[threadId]/messages/handler.ts"
 );
 const { createAiThreadDeleteHandler } = await import(
-  "../../../src/app/api/ai/[orgId]/threads/[threadId]/route.ts"
+  "../../../src/app/api/ai/[orgId]/threads/[threadId]/handler.ts"
 );
 
 const GET_THREADS = createAiThreadsGetHandler({
