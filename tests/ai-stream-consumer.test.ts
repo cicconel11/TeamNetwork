@@ -33,6 +33,35 @@ describe("consumeSSEStream", () => {
     });
   });
 
+  it("parses the final buffered event even without a trailing separator", async () => {
+    const seenChunks: string[] = [];
+    let doneThreadId = "";
+
+    const response = new Response(
+      [
+        'data: {"type":"chunk","content":"Hello"}\n\n',
+        'data: {"type":"done","threadId":"thread-456"}',
+      ].join(""),
+      { headers: { "Content-Type": "text/event-stream" } }
+    );
+
+    const result = await consumeSSEStream(response, {
+      onChunk: (content) => seenChunks.push(content),
+      onDone: (event) => {
+        doneThreadId = event.threadId;
+      },
+    });
+
+    assert.deepEqual(seenChunks, ["Hello"]);
+    assert.equal(doneThreadId, "thread-456");
+    assert.deepEqual(result, {
+      threadId: "thread-456",
+      content: "Hello",
+      replayed: undefined,
+      usage: undefined,
+    });
+  });
+
   it("returns null on SSE error events", async () => {
     let seenError = "";
     const response = new Response(

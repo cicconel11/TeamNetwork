@@ -1,10 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
-import {
-  AI_PANEL_PREFERENCE_KEY,
-  resolveInitialAIPanelOpen,
-} from "./panel-preferences";
+import { resolveInitialAIPanelOpen } from "./panel-preferences";
 
 interface AIPanelState {
   isOpen: boolean;
@@ -37,8 +34,6 @@ export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderP
         isDesktop,
       })
     );
-
-    window.localStorage.removeItem(AI_PANEL_PREFERENCE_KEY);
   }, [autoOpen]);
 
   const togglePanel = useCallback(() => {

@@ -77,7 +77,6 @@ describe("MessageList assistant rendering", () => {
         messages: [],
         isStreaming: false,
         previewAssistantContent: "**final answer**",
-        previewAssistantStreaming: false,
       })
     );
 
@@ -97,7 +96,6 @@ describe("MessageList assistant rendering", () => {
           },
         ],
         previewAssistantContent: "final answer",
-        previewAssistantStreaming: false,
       })
     );
 

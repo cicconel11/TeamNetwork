@@ -11,7 +11,6 @@ interface AIStreamState {
   isStreaming: boolean;
   error: string | null;
   currentContent: string;
-  threadId: string | null;
 }
 
 export interface AIStreamResult {
@@ -40,6 +39,47 @@ interface StreamCallbacks {
 interface AIErrorBody {
   error?: string;
   threadId?: string;
+}
+
+function parseSSEDataChunk(
+  chunk: string,
+  callbacks: StreamCallbacks,
+  fullContent: string
+): { result: AIStreamResult | null; fullContent: string; shouldStop: boolean } {
+  const trimmed = chunk.trim();
+  if (!trimmed.startsWith("data: ")) {
+    return { result: null, fullContent, shouldStop: false };
+  }
+
+  try {
+    const event: SSEEvent = JSON.parse(trimmed.slice(6));
+
+    if (event.type === "chunk") {
+      const nextFullContent = fullContent + event.content;
+      callbacks.onChunk?.(event.content);
+      return { result: null, fullContent: nextFullContent, shouldStop: false };
+    }
+
+    if (event.type === "error") {
+      callbacks.onError?.(event.message);
+      return { result: null, fullContent, shouldStop: true };
+    }
+
+    callbacks.onDone?.(event);
+    return {
+      result: {
+        threadId: event.threadId,
+        content: fullContent,
+        replayed: event.replayed,
+        usage: event.usage,
+      },
+      fullContent,
+      shouldStop: true,
+    };
+  } catch {
+    // Ignore malformed events and keep streaming.
+    return { result: null, fullContent, shouldStop: false };
+  }
 }
 
 export function parseAIChatFailure(
@@ -84,33 +124,18 @@ export async function consumeSSEStream(
     buffer = chunks.pop() ?? "";
 
     for (const chunk of chunks) {
-      const trimmed = chunk.trim();
-      if (!trimmed.startsWith("data: ")) continue;
-
-      try {
-        const event: SSEEvent = JSON.parse(trimmed.slice(6));
-
-        if (event.type === "chunk") {
-          fullContent += event.content;
-          callbacks.onChunk?.(event.content);
-          continue;
-        }
-
-        if (event.type === "error") {
-          callbacks.onError?.(event.message);
-          return null;
-        }
-
-        callbacks.onDone?.(event);
-        return {
-          threadId: event.threadId,
-          content: fullContent,
-          replayed: event.replayed,
-          usage: event.usage,
-        };
-      } catch {
-        // Ignore malformed events and keep streaming.
+      const parsed = parseSSEDataChunk(chunk, callbacks, fullContent);
+      fullContent = parsed.fullContent;
+      if (parsed.shouldStop) {
+        return parsed.result;
       }
+    }
+  }
+
+  if (buffer.trim()) {
+    const parsed = parseSSEDataChunk(buffer, callbacks, fullContent);
+    if (parsed.shouldStop) {
+      return parsed.result;
     }
   }
 
@@ -122,7 +147,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     isStreaming: false,
     error: null,
     currentContent: "",
-    threadId: null,
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -149,7 +173,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       isStreaming: true,
       error: null,
       currentContent: "",
-      threadId: opts.threadId ?? null,
     });
 
     try {
@@ -171,7 +194,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         setState(prev => ({
           ...prev,
           isStreaming: false,
-          threadId: failure.result?.threadId ?? prev.threadId,
           error: failure.error,
         }));
         return failure.result;
@@ -188,7 +210,6 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           setState((prev) => ({
             ...prev,
             isStreaming: false,
-            threadId: event.threadId,
           }));
         },
         onError: (messageText) => {
