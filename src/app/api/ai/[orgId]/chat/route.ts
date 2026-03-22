@@ -105,21 +105,29 @@ export async function POST(
 
   // 5. Abandoned stream cleanup (5-min threshold)
   if (existingThreadId) {
-    await ctx.supabase
+    const { error: cleanupError } = await ctx.supabase
       .from("ai_messages")
       .update({ status: "error", content: "[abandoned]" })
       .eq("thread_id", existingThreadId)
       .eq("role", "assistant")
       .in("status", ["pending", "streaming"])
       .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
+    if (cleanupError) {
+      console.error("[ai-chat] abandoned stream cleanup failed:", cleanupError);
+    }
   }
 
   // 6. Idempotency check — look up by idempotency_key
-  const { data: existingMsg } = await ctx.supabase
+  const { data: existingMsg, error: idempError } = await ctx.supabase
     .from("ai_messages")
     .select("id, status, thread_id")
     .eq("idempotency_key", idempotencyKey)
     .maybeSingle();
+
+  if (idempError) {
+    console.error("[ai-chat] idempotency check failed:", idempError);
+    return NextResponse.json({ error: "Failed to check message idempotency" }, { status: 500 });
+  }
 
   if (existingMsg) {
     if (existingMsg.status === "complete") {
@@ -185,6 +193,15 @@ export async function POST(
       { error: "Failed to save message" },
       { status: 500, headers: rateLimit.headers }
     );
+  }
+
+  // Bump thread updated_at so the thread list reflects recency (trigger overwrites the value)
+  const { error: touchError } = await ctx.supabase
+    .from("ai_threads")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", threadId);
+  if (touchError) {
+    console.error("[ai-chat] failed to touch thread updated_at:", touchError);
   }
 
   const insertAssistantMessage = async (input: {
@@ -319,22 +336,29 @@ export async function POST(
         .eq("id", assistantMessageId);
 
       // Build context and fetch history in parallel
-      const [{ systemPrompt, orgContextMessage }, { data: history }] = await Promise.all([
-        buildPromptContext({
-          orgId: ctx.orgId,
-          userId: ctx.userId,
-          role: ctx.role,
-          serviceSupabase: ctx.serviceSupabase,
-          contextMode: usesSharedStaticContext ? "shared_static" : "full",
-        }),
-        ctx.supabase
-          .from("ai_messages")
-          .select("role, content")
-          .eq("thread_id", threadId)
-          .eq("status", "complete")
-          .order("created_at", { ascending: true })
-          .limit(20),
-      ]);
+      const [{ systemPrompt, orgContextMessage }, { data: history, error: historyError }] =
+        await Promise.all([
+          buildPromptContext({
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            role: ctx.role,
+            serviceSupabase: ctx.serviceSupabase,
+            contextMode: usesSharedStaticContext ? "shared_static" : "full",
+          }),
+          ctx.supabase
+            .from("ai_messages")
+            .select("role, content")
+            .eq("thread_id", threadId)
+            .eq("status", "complete")
+            .order("created_at", { ascending: true })
+            .limit(20),
+        ]);
+
+      if (historyError) {
+        console.error("[ai-chat] history fetch failed:", historyError);
+        enqueue({ type: "error", message: "Failed to load conversation history", retryable: true });
+        return;
+      }
 
       const historyMessages = (history ?? [])
         .filter((m: any) => m.content)

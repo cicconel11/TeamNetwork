@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { User } from "@supabase/supabase-js";
 
 // We test the pure logic by injecting mock dependencies
 describe("getAiOrgContext", () => {
@@ -31,11 +32,11 @@ describe("getAiOrgContext", () => {
     };
   }
 
-  const mockRateLimit = { ok: true as const, headers: {} as any, limit: 20, remaining: 19, resetAt: 0, retryAfterSeconds: 60, reason: "" };
+  const mockRateLimit = { ok: true as const, headers: {} as Record<string, string>, limit: 20, remaining: 19, resetAt: 0, retryAfterSeconds: 60, reason: "" };
 
   it("returns 401 when user is null", async () => {
     const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
-    const result = await getAiOrgContext("org-id", null as any, mockRateLimit);
+    const result = await getAiOrgContext("org-id", null, mockRateLimit);
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.response.status, 401);
@@ -46,8 +47,8 @@ describe("getAiOrgContext", () => {
     const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
     const mockUser = { id: "user-id", email: "test@test.com" };
     const mockServiceSupabase = createMockServiceSupabase({ role: "active_member" });
-    const result = await getAiOrgContext("org-id", mockUser as any, mockRateLimit, {
-      serviceSupabase: mockServiceSupabase as any,
+    const result = await getAiOrgContext("org-id", mockUser as unknown as User, mockRateLimit, {
+      serviceSupabase: mockServiceSupabase,
     });
     assert.equal(result.ok, false);
     if (!result.ok) {
@@ -59,8 +60,8 @@ describe("getAiOrgContext", () => {
     const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
     const mockUser = { id: "user-id", email: "test@test.com" };
     const mockServiceSupabase = createMockServiceSupabase({ queryError: true });
-    const result = await getAiOrgContext("org-id", mockUser as any, mockRateLimit, {
-      serviceSupabase: mockServiceSupabase as any,
+    const result = await getAiOrgContext("org-id", mockUser as unknown as User, mockRateLimit, {
+      serviceSupabase: mockServiceSupabase,
     });
     assert.equal(result.ok, false);
     if (!result.ok) {
@@ -72,8 +73,8 @@ describe("getAiOrgContext", () => {
     const { getAiOrgContext } = await import("../src/lib/ai/context.ts");
     const mockUser = { id: "user-id", email: "admin@test.com" };
     const mockServiceSupabase = createMockServiceSupabase({ role: "admin" });
-    const result = await getAiOrgContext("org-id", mockUser as any, mockRateLimit, {
-      serviceSupabase: mockServiceSupabase as any,
+    const result = await getAiOrgContext("org-id", mockUser as unknown as User, mockRateLimit, {
+      serviceSupabase: mockServiceSupabase,
     });
     assert.equal(result.ok, true);
     if (result.ok) {
@@ -89,8 +90,8 @@ describe("getAiOrgContext", () => {
     const mockUser = { id: "user-id", email: "admin@test.com" };
     const mockServiceSupabase = createMockServiceSupabase({ role: "admin" });
 
-    await getAiOrgContext("org-id", mockUser as any, mockRateLimit, {
-      serviceSupabase: mockServiceSupabase as any,
+    await getAiOrgContext("org-id", mockUser as unknown as User, mockRateLimit, {
+      serviceSupabase: mockServiceSupabase,
     });
 
     assert.deepEqual(mockServiceSupabase.eqCalls, [

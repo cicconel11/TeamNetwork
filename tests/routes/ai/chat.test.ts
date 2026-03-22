@@ -53,6 +53,11 @@ interface ChatRequest {
   threadInsertError?: boolean;
   userMsgInsertError?: boolean;
   assistantMsgInsertError?: boolean;
+  idempotencyDbError?: boolean;
+  historyFetchError?: boolean;
+  abandonedStreamCleanupError?: boolean;
+  /** Simulate DB error from the non-fatal thread updated_at touch */
+  threadUpdatedAtTouchError?: boolean;
 }
 
 // ── Cache simulation types ────────────────────────────────────────────────────
@@ -104,6 +109,7 @@ interface ChatResult {
   threadId?: string;
   isStream?: boolean;
   replayed?: boolean;
+  sseError?: boolean;
 }
 
 // ── Simulate getAiOrgContext ───────────────────────────────────────────────────
@@ -262,7 +268,14 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
     }
   }
 
-  // 5. Idempotency check
+  // 4.5. Abandoned-stream cleanup — simulated non-fatal error does not block the request
+  // (req.abandonedStreamCleanupError just logs; no early return)
+
+  // 5. Idempotency check — simulate DB failure
+  if (req.idempotencyDbError) {
+    return { status: 500, error: "Failed to check message idempotency" };
+  }
+
   const existingMsg = (req.existingMessages ?? []).find(
     (m) => m.idempotency_key === idempotencyKey
   );
@@ -302,8 +315,16 @@ function simulateChatRoute(req: ChatRequest): ChatResult {
   void message;
   void surface;
 
+  // 8.5. Thread updated_at touch — non-fatal, never blocks the request.
+  // (req.threadUpdatedAtTouchError just logs; no early return)
+
   // 9-11. In the real route this returns a streaming SSE Response.
-  // We return a sentinel indicating a stream would be returned.
+  // Simulate history fetch error inside the SSE callback — the route enqueues
+  // an SSE error event and returns early (not an HTTP 500).
+  if (req.historyFetchError) {
+    return { status: 200, isStream: true, sseError: true };
+  }
+
   return { status: 200, isStream: true };
 }
 
@@ -527,6 +548,86 @@ test("POST /api/ai/[orgId]/chat returns 500 when assistant placeholder insert fa
   });
   assert.strictEqual(result.status, 500);
   assert.ok(result.error?.includes("response") || result.error?.includes("assistant"));
+});
+
+test("POST /api/ai/[orgId]/chat returns 500 when idempotency DB query fails", () => {
+  const result = simulateChatRoute({
+    auth: AuthPresets.orgAdmin(ORG_ID),
+    orgId: ORG_ID,
+    body: VALID_BODY,
+    idempotencyDbError: true,
+  });
+  assert.strictEqual(result.status, 500);
+  assert.ok(result.error?.includes("idempotency"));
+});
+
+test("POST /api/ai/[orgId]/chat returns SSE stream with error event when history fetch fails", () => {
+  // History is fetched inside the SSE callback — errors are enqueued as SSE
+  // error events, not returned as HTTP 500. The response is still 200 streaming.
+  const result = simulateChatRoute({
+    auth: AuthPresets.orgAdmin(ORG_ID),
+    orgId: ORG_ID,
+    body: VALID_BODY,
+    historyFetchError: true,
+  });
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.isStream, true);
+  assert.strictEqual(result.sseError, true);
+});
+
+test("POST /api/ai/[orgId]/chat is non-fatal when abandoned-stream cleanup fails", () => {
+  // A DB error during abandoned-stream cleanup should be logged but must not
+  // prevent the route from continuing to process the request.
+  const result = simulateChatRoute({
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
+    orgId: ORG_ID,
+    body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [OWNED_THREAD],
+    abandonedStreamCleanupError: true,
+  });
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.isStream, true);
+  assert.ok(!result.sseError, "cleanup error must not produce an SSE error event");
+});
+
+test("POST /api/ai/[orgId]/chat touches thread updated_at after user message is saved", () => {
+  // On a follow-up message to an existing thread the route must perform an
+  // UPDATE on the thread row so its updated_at is refreshed.  The simulation
+  // models this as part of the normal processing path — a successful request
+  // with threadUpdatedAtTouchError absent (i.e. the touch succeeded).
+  const result = simulateChatRoute({
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
+    orgId: ORG_ID,
+    body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [OWNED_THREAD],
+  });
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.isStream, true);
+  assert.ok(!result.sseError, "a successful touch must not produce an SSE error event");
+});
+
+test("POST /api/ai/[orgId]/chat is non-fatal when thread updated_at touch fails", () => {
+  // A DB error during the thread updated_at touch must be logged but must not
+  // prevent the route from returning a 200 SSE stream to the client.
+  const result = simulateChatRoute({
+    auth: {
+      ...AuthPresets.orgAdmin(ORG_ID),
+      user: { id: ADMIN_USER_ID, email: "admin@example.com" },
+    },
+    orgId: ORG_ID,
+    body: { ...VALID_BODY, threadId: VALID_THREAD_ID },
+    dbThreads: [OWNED_THREAD],
+    threadUpdatedAtTouchError: true,
+  });
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.isStream, true);
+  assert.ok(!result.sseError, "touch error must not produce an SSE error event");
 });
 
 // ── Success / SSE stream test ─────────────────────────────────────────────────

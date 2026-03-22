@@ -1,4 +1,8 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+/** Minimal interface satisfied by any Supabase client instance. */
+interface AnySupabaseClient {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  from(relation: string): any;
+}
 
 export type ThreadResolution =
   | { ok: true; thread: { id: string; user_id: string; org_id: string; surface: string; title: string | null } }
@@ -8,11 +12,11 @@ export async function resolveOwnThread(
   threadId: string,
   userId: string,
   orgId: string,
-  serviceSupabase: SupabaseClient
+  serviceSupabase: AnySupabaseClient
 ): Promise<ThreadResolution> {
   // Uses a privileged lookup, but normalizes all inaccessible cases to 404 so
   // thread existence is never exposed to callers outside the owner+org scope.
-  const { data: thread, error } = await (serviceSupabase as any)
+  const { data: thread, error } = await serviceSupabase
     .from("ai_threads")
     .select("id, user_id, org_id, surface, title")
     .eq("id", threadId)

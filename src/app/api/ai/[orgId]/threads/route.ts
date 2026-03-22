@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { listThreadsSchema } from "@/lib/schemas";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { decodeCursor, applyCursorFilter, buildCursorResponse } from "@/lib/pagination/cursor";
 
 export async function GET(
   request: NextRequest,
@@ -39,22 +40,31 @@ export async function GET(
   }
   const { surface, limit, cursor } = parsed.data;
 
+  // Decode and validate the cursor if provided
+  const decoded = cursor ? decodeCursor(cursor) : null;
+  if (cursor && !decoded) {
+    return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+  }
+
   // Query via auth-bound client (RLS enforces ownership + deleted_at IS NULL)
+  // Fetch limit+1 rows so buildCursorResponse can detect hasMore
   let query = ctx.supabase
     .from("ai_threads")
     .select("id, title, surface, created_at, updated_at")
     .eq("org_id", orgId)
-    .order("updated_at", { ascending: false })
-    .limit(limit);
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
 
   if (surface) query = query.eq("surface", surface);
-  if (cursor) query = query.lt("id", cursor);
+  if (decoded) query = applyCursorFilter(query, decoded);
 
-  const { data: threads, error } = await query;
+  const { data, error } = await query;
   if (error) {
     console.error("[ai-threads] list error:", error);
     return NextResponse.json({ error: "Failed to list threads" }, { status: 500 });
   }
 
-  return NextResponse.json({ threads });
+  const result = buildCursorResponse(data ?? [], limit);
+  return NextResponse.json(result, { headers: rateLimit.headers });
 }

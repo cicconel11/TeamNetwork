@@ -34,7 +34,7 @@ export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 export const listThreadsSchema = z.object({
   surface: z.enum(["general", "members", "analytics", "events"]).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
-  cursor: z.string().uuid().optional(),
+  cursor: z.string().optional(),
 });
 
 export type ListThreadsInput = z.infer<typeof listThreadsSchema>;

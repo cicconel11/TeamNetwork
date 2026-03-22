@@ -19,7 +19,7 @@ describe("createZaiClient", () => {
     const { createZaiClient } = await import("../src/lib/ai/client.ts");
     const client = createZaiClient();
     assert.ok(client);
-    assert.equal((client as any).baseURL, "https://api.z.ai/api/paas/v4");
+    assert.equal((client as unknown as { baseURL: string }).baseURL, "https://api.z.ai/api/paas/v4");
     delete process.env.ZAI_API_KEY;
   });
 

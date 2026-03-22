@@ -369,6 +369,8 @@ Two-tier verification:
 
 3. **`ai_messages` composite FK** — `(thread_id, user_id, org_id)` references `ai_threads(id, user_id, org_id)` instead of a simple `thread_id` FK. Intentional: enforces ownership consistency at the DB level so RLS does not need subquery joins for ownership verification — only for `deleted_at` filtering. The composite FK also prevents user_id/org_id drift between messages and their parent thread.
 
+4. **`ai_messages.idempotency_key` uniqueness scope** — The unique constraint on `idempotency_key` is table-wide, not scoped to `(org_id, user_id)`. Intentional: idempotency keys are client-generated UUIDs (v4) that must be globally unique to guarantee exactly-once delivery across the entire cluster. Scoping the constraint to a user or org would allow a key collision across organizations in a hypothetical multi-tenant replay attack scenario. The per-request key generation (`crypto.randomUUID()`) makes accidental cross-org collisions statistically impossible, and the broader constraint gives the strongest safety guarantee with no practical downside. See `src/app/api/ai/[orgId]/chat/route.ts` for key generation and `src/hooks/useAIStream.ts` for client-side handling.
+
 ---
 
 ## Remaining Cautions

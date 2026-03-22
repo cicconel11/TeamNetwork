@@ -45,7 +45,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
       const response = await fetch(`/api/ai/${orgId}/threads`);
       if (!response.ok) return;
       const data = await response.json();
-      setThreads(data.threads ?? []);
+      setThreads(data.data ?? []);
     } catch {
       // Leave the existing UI state intact on transient fetch errors.
     } finally {
