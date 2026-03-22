@@ -9,7 +9,6 @@ describe("resolveInitialAIPanelOpen", () => {
       resolveInitialAIPanelOpen({
         isAdmin: true,
         isDesktop: true,
-        persisted: null,
       }),
       true
     );
@@ -20,20 +19,18 @@ describe("resolveInitialAIPanelOpen", () => {
       resolveInitialAIPanelOpen({
         isAdmin: true,
         isDesktop: false,
-        persisted: null,
       }),
       false
     );
   });
 
-  it("ignores stale persisted closed state for desktop admins", () => {
+  it("stays closed for non-admin desktop users", () => {
     assert.equal(
       resolveInitialAIPanelOpen({
-        isAdmin: true,
+        isAdmin: false,
         isDesktop: true,
-        persisted: "closed",
       }),
-      true
+      false
     );
   });
 });

@@ -26,7 +26,7 @@ interface RecentAnnouncement {
 }
 
 interface DonationStats {
-  total_amount: number | null;
+  total_amount_cents: number | null;
   donation_count: number | null;
   last_donation_at: string | null;
 }
@@ -215,7 +215,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     safeQuery<DonationStats>("donation stats", () =>
       (serviceSupabase as any)
         .from("organization_donation_stats")
-        .select("total_amount, donation_count, last_donation_at")
+        .select("total_amount_cents, donation_count, last_donation_at")
         .eq("organization_id", orgId)
         .maybeSingle()
     ),
@@ -326,7 +326,7 @@ export async function buildPromptContext(
     context.donationStats.data.donation_count > 0
   ) {
     sections.push("", "## Donation Summary");
-    sections.push(`- Total raised: ${formatCurrency(context.donationStats.data.total_amount ?? 0)}`);
+    sections.push(`- Total raised: ${formatCurrency(context.donationStats.data.total_amount_cents ?? 0)}`);
     sections.push(`- Total donations: ${context.donationStats.data.donation_count}`);
     if (context.donationStats.data.last_donation_at) {
       sections.push(`- Last donation: ${formatDate(context.donationStats.data.last_donation_at)}`);

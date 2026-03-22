@@ -10,7 +10,7 @@ function createMockServiceSupabase(opts: {
   eventCount?: number;
   upcomingEvents?: Array<{ title: string; start_date: string; location: string | null }>;
   announcements?: Array<{ title: string; published_at: string | null }>;
-  donationStats?: { total_amount: number; donation_count: number; last_donation_at: string | null } | null;
+  donationStats?: { total_amount_cents: number; donation_count: number; last_donation_at: string | null } | null;
   failedTables?: string[];
 }) {
   const failedTables = new Set(opts.failedTables ?? []);
@@ -21,23 +21,38 @@ function createMockServiceSupabase(opts: {
 
       const buildQueryable = <T,>(data: T) => {
         const chain: Record<string, any> = {};
+        let selectedColumns = "";
         const methods = ["select", "eq", "is", "gte", "lt", "order", "limit", "in"];
 
         for (const method of methods) {
-          chain[method] = (..._args: unknown[]) => chain;
+          chain[method] = (...args: unknown[]) => {
+            if (method === "select" && typeof args[0] === "string") {
+              selectedColumns = args[0];
+            }
+            return chain;
+          };
         }
 
-        chain.maybeSingle = async () =>
-          shouldFail ? { data: null, error: { message: `${table} failed` } } : { data, error: null };
+        const resolveSingle = () => {
+          if (shouldFail) {
+            return { data: null, error: { message: `${table} failed` } };
+          }
+          if (
+            table === "organization_donation_stats" &&
+            selectedColumns &&
+            !selectedColumns.includes("total_amount_cents")
+          ) {
+            return { data: null, error: { message: "column total_amount_cents missing from select" } };
+          }
+          return { data, error: null };
+        };
+
+        chain.maybeSingle = async () => resolveSingle();
 
         chain.single = chain.maybeSingle;
 
         chain.then = (resolve: (value: unknown) => void) => {
-          resolve(
-            shouldFail
-              ? { data: null, error: { message: `${table} failed` } }
-              : { data, error: null }
-          );
+          resolve(resolveSingle());
         };
 
         return chain;
@@ -156,7 +171,11 @@ describe("AI prompt context builder", () => {
           { title: "Spring Gala", start_date: "2026-04-01T18:00:00Z", location: "Main Hall" },
         ],
         announcements: [{ title: "Welcome back", published_at: "2026-03-15T12:00:00Z" }],
-        donationStats: { total_amount: 50000, donation_count: 25, last_donation_at: "2026-03-10T00:00:00Z" },
+        donationStats: {
+          total_amount_cents: 50000,
+          donation_count: 25,
+          last_donation_at: "2026-03-10T00:00:00Z",
+        },
       }) as any,
     });
 
@@ -269,5 +288,25 @@ describe("AI prompt context builder", () => {
 
     assert.ok(contextMessage);
     assert.ok(!contextMessage!.includes("Donation Summary"));
+  });
+
+  it("queries donation stats using total_amount_cents", async () => {
+    const { buildUntrustedOrgContextMessage } = await import("../src/lib/ai/context-builder.ts");
+    const contextMessage = await buildUntrustedOrgContextMessage({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Giving Org", slug: "giving" },
+        donationStats: {
+          total_amount_cents: 120000,
+          donation_count: 12,
+          last_donation_at: "2026-03-10T00:00:00Z",
+        },
+      }) as any,
+    });
+
+    assert.ok(contextMessage);
+    assert.match(contextMessage!, /Total raised: \$1,200/);
   });
 });
