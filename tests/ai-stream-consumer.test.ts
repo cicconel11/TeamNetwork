@@ -25,7 +25,12 @@ describe("consumeSSEStream", () => {
 
     assert.deepEqual(seenChunks, ["Hello", " world"]);
     assert.equal(doneThreadId, "thread-123");
-    assert.deepEqual(result, { threadId: "thread-123", replayed: true, usage: undefined });
+    assert.deepEqual(result, {
+      threadId: "thread-123",
+      content: "Hello world",
+      replayed: true,
+      usage: undefined,
+    });
   });
 
   it("returns null on SSE error events", async () => {

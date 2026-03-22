@@ -10,14 +10,29 @@ interface MessageListProps {
   loading: boolean;
   streamingContent?: string;
   isStreaming?: boolean;
+  previewAssistantContent?: string;
+  previewAssistantStreaming?: boolean;
 }
 
-export function MessageList({ messages, loading, streamingContent, isStreaming }: MessageListProps) {
+export function MessageList({
+  messages,
+  loading,
+  streamingContent,
+  isStreaming,
+  previewAssistantContent,
+  previewAssistantStreaming,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant" && Boolean(message.content));
+  const shouldRenderPreviewAssistant =
+    Boolean(previewAssistantContent) &&
+    lastAssistantMessage?.content !== previewAssistantContent;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, streamingContent]);
+  }, [messages.length, streamingContent, previewAssistantContent]);
 
   if (loading) {
     return (
@@ -27,7 +42,7 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
     );
   }
 
-  if (!messages.length && !streamingContent) {
+  if (!messages.length && !streamingContent && !previewAssistantContent) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-center">
         <div className="space-y-3">
@@ -77,14 +92,29 @@ export function MessageList({ messages, loading, streamingContent, isStreaming }
           )}
         </div>
       ))}
+      {shouldRenderPreviewAssistant && (
+        <div className="flex gap-3 justify-start">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
+            <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div className="max-w-[80%] overflow-hidden rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
+            <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+              <AssistantMessageContent content={previewAssistantContent ?? ""} />
+            </div>
+            {previewAssistantStreaming ? (
+              <span className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-indigo-500" />
+            ) : null}
+          </div>
+        </div>
+      )}
       {isStreaming && streamingContent && (
         <div className="flex gap-3 justify-start">
           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-900/50">
             <Bot className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
           </div>
           <div className="max-w-[80%] overflow-hidden rounded-2xl bg-muted px-3.5 py-2.5 text-sm leading-relaxed text-foreground">
-            <div className="whitespace-pre-wrap break-words">
-            {streamingContent}
+            <div className="space-y-2 break-words [&_table]:block [&_table]:w-full [&_table]:overflow-x-auto [&_table]:text-left">
+              <AssistantMessageContent content={streamingContent} />
             </div>
             <span className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded-full bg-indigo-500" />
           </div>

@@ -16,6 +16,7 @@ interface AIStreamState {
 
 export interface AIStreamResult {
   threadId: string;
+  content?: string;
   replayed?: boolean;
   inFlight?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
@@ -72,6 +73,7 @@ export async function consumeSSEStream(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let fullContent = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -89,6 +91,7 @@ export async function consumeSSEStream(
         const event: SSEEvent = JSON.parse(trimmed.slice(6));
 
         if (event.type === "chunk") {
+          fullContent += event.content;
           callbacks.onChunk?.(event.content);
           continue;
         }
@@ -101,6 +104,7 @@ export async function consumeSSEStream(
         callbacks.onDone?.(event);
         return {
           threadId: event.threadId,
+          content: fullContent,
           replayed: event.replayed,
           usage: event.usage,
         };

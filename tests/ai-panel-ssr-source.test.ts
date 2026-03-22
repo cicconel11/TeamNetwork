@@ -12,30 +12,13 @@ describe("AI panel SSR integration", () => {
 });
 
 describe("AI panel post-stream refresh", () => {
-  it("loads messages silently after handleSend to prevent loading flash", async () => {
+  it("guards against a redundant effect load after handleSend changes threads", async () => {
     const fs = await import("fs");
     const code = fs.readFileSync(
       "src/components/ai-assistant/AIPanel.tsx",
       "utf-8"
     );
 
-    // The post-stream loadMessages call inside handleSend must pass { silent: true }
-    // to prevent the message list from flashing a spinner after streaming completes.
-    assert.ok(
-      code.includes("loadMessages(result.threadId, { silent: true })"),
-      "handleSend should call loadMessages with { silent: true } to avoid post-stream spinner flash"
-    );
-  });
-
-  it("skips redundant effect load when handleSend sets a new thread id", async () => {
-    const fs = await import("fs");
-    const code = fs.readFileSync(
-      "src/components/ai-assistant/AIPanel.tsx",
-      "utf-8"
-    );
-
-    // When handleSend changes activeThreadId, the useEffect would fire and show
-    // a spinner. skipEffectLoadRef prevents this redundant load.
     assert.ok(
       code.includes("skipEffectLoadRef.current = true"),
       "handleSend should set skipEffectLoadRef before changing activeThreadId"

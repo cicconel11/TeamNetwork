@@ -29,6 +29,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [messages, setMessages] = useState<AIPanelMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [pendingAssistantContent, setPendingAssistantContent] = useState<string | null>(null);
   const {
     isStreaming,
     error,
@@ -53,7 +54,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   }, [orgId]);
 
   const loadMessages = useCallback(
-    async (threadId: string, options?: { silent?: boolean }) => {
+    async (threadId: string, options?: { silent?: boolean }): Promise<boolean> => {
       if (!options?.silent) {
         setMessagesLoading(true);
       }
@@ -62,14 +63,17 @@ export function AIPanel({ orgId }: AIPanelProps) {
         if (response.status === 404) {
           setActiveThreadId(null);
           setMessages([]);
+          setPendingAssistantContent(null);
           void loadThreads();
-          return;
+          return false;
         }
-        if (!response.ok) return;
+        if (!response.ok) return false;
         const data = await response.json();
         setMessages(data.messages ?? []);
+        return true;
       } catch {
         // Keep the current message list on transient fetch errors.
+        return false;
       } finally {
         setMessagesLoading(false);
       }
@@ -91,6 +95,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     if (!activeThreadId) {
       setMessages([]);
       setMessagesLoading(false);
+      setPendingAssistantContent(null);
       return;
     }
     if (skipEffectLoadRef.current) {
@@ -105,6 +110,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
 
   const handleSend = useCallback(
     async (content: string) => {
+      setPendingAssistantContent(null);
+
       // Reuse keys only for retries of the same content within the same thread.
       const requestIdentity = resolveRetryRequestIdentity(
         idempotencyRef.current,
@@ -146,10 +153,18 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setActiveThreadId(result.threadId);
       }
 
-      await Promise.all([
+      if (result.content) {
+        setPendingAssistantContent(result.content);
+      }
+
+      const [loadedMessages] = await Promise.all([
         loadMessages(result.threadId, { silent: true }),
         loadThreads(),
       ]);
+
+      if (loadedMessages) {
+        setPendingAssistantContent(null);
+      }
     },
     [activeThreadId, loadMessages, loadThreads, sendMessage]
   );
@@ -218,6 +233,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
               loading={messagesLoading}
               streamingContent={currentContent}
               isStreaming={isStreaming}
+              previewAssistantContent={isStreaming ? currentContent : pendingAssistantContent ?? undefined}
+              previewAssistantStreaming={isStreaming}
             />
             <MessageInput
               isStreaming={isStreaming}
@@ -233,12 +250,14 @@ export function AIPanel({ orgId }: AIPanelProps) {
             loading={threadsLoading}
             activeThreadId={activeThreadId}
             onSelectThread={(id) => {
+              setPendingAssistantContent(null);
               setActiveThreadId(id);
               setView("chat");
             }}
             onNewThread={() => {
               setActiveThreadId(null);
               setMessages([]);
+              setPendingAssistantContent(null);
               setView("chat");
             }}
             onDeleteThread={handleDeleteThread}

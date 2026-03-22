@@ -56,18 +56,52 @@ describe("MessageList assistant rendering", () => {
     assert.match(html, /&lt;img src=x onerror=alert\(1\) \/&gt;/);
   });
 
-  it("keeps streaming content as safe plain text", () => {
+  it("renders streaming content through AssistantMessageContent", () => {
     const html = renderToStaticMarkup(
       createElement(MessageList, {
         loading: false,
         messages: [],
         isStreaming: true,
-        streamingContent: "```ts\nconst x = 1\n",
+        streamingContent: "**bold text**",
       })
     );
 
-    assert.match(html, /```ts/);
-    assert.ok(!html.includes("<pre"));
-    assert.match(html, /whitespace-pre-wrap/);
+    assert.match(html, /<strong>bold text<\/strong>/);
+    assert.ok(!html.includes("whitespace-pre-wrap"), "streaming should not use plain-text wrapper");
+  });
+
+  it("keeps a completed assistant preview visible while the persisted message is still refreshing", () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageList, {
+        loading: false,
+        messages: [],
+        isStreaming: false,
+        previewAssistantContent: "**final answer**",
+        previewAssistantStreaming: false,
+      })
+    );
+
+    assert.match(html, /<strong>final answer<\/strong>/);
+  });
+
+  it("does not duplicate the assistant preview once the persisted assistant message is present", () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageList, {
+        loading: false,
+        messages: [
+          {
+            ...baseMessage,
+            id: "assistant-1",
+            role: "assistant",
+            content: "final answer",
+          },
+        ],
+        previewAssistantContent: "final answer",
+        previewAssistantStreaming: false,
+      })
+    );
+
+    const matches = html.match(/final answer/g) ?? [];
+    assert.equal(matches.length, 1);
   });
 });
