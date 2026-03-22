@@ -206,7 +206,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             currentContent: prev.currentContent + content,
           }));
         },
-        onDone: (event) => {
+        onDone: () => {
           setState((prev) => ({
             ...prev,
             isStreaming: false,
