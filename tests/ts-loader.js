@@ -9,6 +9,11 @@ export async function resolve(specifier, context, defaultResolve) {
     return { ...result, shortCircuit: true };
   }
 
+  if (specifier === "next/headers") {
+    const result = await defaultResolve("next/headers.js", context, defaultResolve);
+    return { ...result, shortCircuit: true };
+  }
+
   if (typeof specifier === "string" && specifier.startsWith("@/")) {
     const basePath = path.join(process.cwd(), "src", specifier.slice(2));
     const candidates = [

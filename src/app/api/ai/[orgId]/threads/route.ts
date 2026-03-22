@@ -5,11 +5,20 @@ import { listThreadsSchema } from "@/lib/schemas";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { decodeCursor, applyCursorFilter, buildCursorResponse } from "@/lib/pagination/cursor";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ orgId: string }> }
-) {
-  const { orgId } = await params;
+export interface AiThreadsRouteDeps {
+  createClient?: typeof createClient;
+  getAiOrgContext?: typeof getAiOrgContext;
+}
+
+export function createAiThreadsGetHandler(deps: AiThreadsRouteDeps = {}) {
+  const createClientFn = deps.createClient ?? createClient;
+  const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
+
+  return async function GET(
+    request: NextRequest,
+    { params }: { params: Promise<{ orgId: string }> }
+  ) {
+    const { orgId } = await params;
 
   // Rate limit before touching the DB
   const rateLimit = checkRateLimit(request, {
@@ -20,12 +29,12 @@ export async function GET(
   if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   // Auth
-  const supabase = await createClient();
+    const supabase = await createClientFn();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const ctx = await getAiOrgContext(orgId, user, rateLimit, { supabase });
+    const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase });
   if (!ctx.ok) return ctx.response;
 
   // Validate query params
@@ -66,5 +75,8 @@ export async function GET(
   }
 
   const result = buildCursorResponse(data ?? [], limit);
-  return NextResponse.json(result, { headers: rateLimit.headers });
+    return NextResponse.json(result, { headers: rateLimit.headers });
+  };
 }
+
+export const GET = createAiThreadsGetHandler();

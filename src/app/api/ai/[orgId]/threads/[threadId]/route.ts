@@ -4,11 +4,22 @@ import { getAiOrgContext } from "@/lib/ai/context";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ orgId: string; threadId: string }> }
-) {
-  const { orgId, threadId } = await params;
+export interface AiThreadDeleteRouteDeps {
+  createClient?: typeof createClient;
+  getAiOrgContext?: typeof getAiOrgContext;
+  resolveOwnThread?: typeof resolveOwnThread;
+}
+
+export function createAiThreadDeleteHandler(deps: AiThreadDeleteRouteDeps = {}) {
+  const createClientFn = deps.createClient ?? createClient;
+  const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
+  const resolveOwnThreadFn = deps.resolveOwnThread ?? resolveOwnThread;
+
+  return async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ orgId: string; threadId: string }> }
+  ) {
+    const { orgId, threadId } = await params;
 
   // Rate limit before touching the DB
   const rateLimit = checkRateLimit(request, {
@@ -19,16 +30,16 @@ export async function DELETE(
   if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   // Auth
-  const supabase = await createClient();
+    const supabase = await createClientFn();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const ctx = await getAiOrgContext(orgId, user, rateLimit, { supabase });
+    const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase });
   if (!ctx.ok) return ctx.response;
 
   // Resolve ownership via service client
-  const resolution = await resolveOwnThread(
+    const resolution = await resolveOwnThreadFn(
     threadId,
     ctx.userId,
     ctx.orgId,
@@ -53,5 +64,8 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete thread" }, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true });
+  };
 }
+
+export const DELETE = createAiThreadDeleteHandler();

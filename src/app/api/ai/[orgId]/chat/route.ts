@@ -22,16 +22,37 @@ import { lookupSemanticCache, writeCacheEntry } from "@/lib/ai/semantic-cache";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ orgId: string }> }
-) {
-  const { orgId } = await params;
-  const startTime = Date.now();
-  const cacheDisabled = process.env.DISABLE_AI_CACHE === "true";
+export interface ChatRouteDeps {
+  createClient?: typeof createClient;
+  getAiOrgContext?: typeof getAiOrgContext;
+  buildPromptContext?: typeof buildPromptContext;
+  createZaiClient?: typeof createZaiClient;
+  getZaiModel?: typeof getZaiModel;
+  composeResponse?: typeof composeResponse;
+  logAiRequest?: typeof logAiRequest;
+  resolveOwnThread?: typeof resolveOwnThread;
+}
+
+export function createChatPostHandler(deps: ChatRouteDeps = {}) {
+  const createClientFn = deps.createClient ?? createClient;
+  const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
+  const buildPromptContextFn = deps.buildPromptContext ?? buildPromptContext;
+  const createZaiClientFn = deps.createZaiClient ?? createZaiClient;
+  const getZaiModelFn = deps.getZaiModel ?? getZaiModel;
+  const composeResponseFn = deps.composeResponse ?? composeResponse;
+  const logAiRequestFn = deps.logAiRequest ?? logAiRequest;
+  const resolveOwnThreadFn = deps.resolveOwnThread ?? resolveOwnThread;
+
+  return async function POST(
+    request: NextRequest,
+    { params }: { params: Promise<{ orgId: string }> }
+  ) {
+    const { orgId } = await params;
+    const startTime = Date.now();
+    const cacheDisabled = process.env.DISABLE_AI_CACHE === "true";
 
   // 1. Rate limit — get user first to allow per-user limiting
-  const supabase = await createClient();
+  const supabase = await createClientFn();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -45,7 +66,7 @@ export async function POST(
   if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
   // 2. Auth — validate admin role
-  const ctx = await getAiOrgContext(orgId, user, rateLimit, { supabase });
+  const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase });
   if (!ctx.ok) return ctx.response;
 
   // 3. Validate body
@@ -89,7 +110,7 @@ export async function POST(
   // 4. Validate provided thread ownership before any cleanup or writes
   let threadId = existingThreadId;
   if (threadId) {
-    const resolution = await resolveOwnThread(
+    const resolution = await resolveOwnThreadFn(
       threadId,
       ctx.userId,
       ctx.orgId,
@@ -262,7 +283,7 @@ export async function POST(
           });
         });
 
-        await logAiRequest(ctx.serviceSupabase, {
+        await logAiRequestFn(ctx.serviceSupabase, {
           threadId: threadId!,
           messageId: cachedAssistantMsg.id,
           userId: ctx.userId,
@@ -327,7 +348,7 @@ export async function POST(
         return;
       }
 
-      const client = createZaiClient();
+      const client = createZaiClientFn();
 
       // Mark assistant message as streaming
       await ctx.supabase
@@ -338,7 +359,7 @@ export async function POST(
       // Build context and fetch history in parallel
       const [{ systemPrompt, orgContextMessage }, { data: history, error: historyError }] =
         await Promise.all([
-          buildPromptContext({
+          buildPromptContextFn({
             orgId: ctx.orgId,
             userId: ctx.userId,
             role: ctx.role,
@@ -371,7 +392,7 @@ export async function POST(
         ? [{ role: "user" as const, content: orgContextMessage }, ...historyMessages]
         : historyMessages;
 
-      for await (const event of composeResponse({
+      for await (const event of composeResponseFn({
         client,
         systemPrompt,
         messages: contextMessages,
@@ -445,14 +466,14 @@ export async function POST(
         });
       }
 
-      await logAiRequest(ctx.serviceSupabase, {
+      await logAiRequestFn(ctx.serviceSupabase, {
         threadId: threadId!,
         messageId: assistantMessageId,
         userId: ctx.userId,
         orgId: ctx.orgId,
         intent: "general",
         latencyMs: Date.now() - startTime,
-        model: process.env.ZAI_API_KEY ? getZaiModel() : undefined,
+        model: process.env.ZAI_API_KEY ? getZaiModelFn() : undefined,
         inputTokens: usageRef.current?.inputTokens,
         outputTokens: usageRef.current?.outputTokens,
         error: auditErrorMessage,
@@ -463,5 +484,8 @@ export async function POST(
     }
   });
 
-  return new Response(stream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
+    return new Response(stream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
+  };
 }
+
+export const POST = createChatPostHandler();
