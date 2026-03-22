@@ -169,6 +169,9 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   experimental: {
+    staleTimes: {
+      dynamic: 0,
+    },
     serverComponentsExternalPackages: ["googleapis"],
   },
   images: {
