@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import {
   AI_PANEL_PREFERENCE_KEY,
   resolveInitialAIPanelOpen,
@@ -21,8 +21,10 @@ interface AIPanelProviderProps {
 
 export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const isMounted = useRef(false);
 
   useEffect(() => {
+    isMounted.current = true;
     if (!autoOpen || typeof window === "undefined") {
       return;
     }
@@ -48,7 +50,7 @@ export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderP
   }, []);
 
   return (
-    <AIPanelContext.Provider value={{ isOpen, togglePanel, closePanel }}>
+    <AIPanelContext.Provider value={{ isOpen: isMounted.current ? isOpen : false, togglePanel, closePanel }}>
       {children}
     </AIPanelContext.Provider>
   );

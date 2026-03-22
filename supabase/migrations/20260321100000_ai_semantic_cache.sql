@@ -1,5 +1,10 @@
 -- AI Semantic Cache
 -- Plan 2: Semantic response cache — deduplicates identical AI responses by prompt hash
+--
+-- RLS NOTE: Both ai_semantic_cache and ai_audit_log use service-role-only
+-- access (createServiceClient). RLS is enabled with no policies — the
+-- service_role key bypasses RLS by design. If user-scoped access is ever
+-- needed, add RLS policies at that time.
 
 -- Vector extension required for future embedding-based similarity search
 CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions;
