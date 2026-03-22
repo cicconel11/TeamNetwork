@@ -49,6 +49,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
         .from("competition_teams")
         .select("*")
         .eq("competition_id", competition.id)
+        .is("deleted_at", null)
         .order("name")
     : { data: [], error: null };
   if (teamsError) console.error("competition_teams fetch error:", teamsError);

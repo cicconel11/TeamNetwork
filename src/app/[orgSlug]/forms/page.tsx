@@ -39,7 +39,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     const { data: allSubmissions, error: subsError } = await supabase
       .from("form_submissions")
       .select("form_id, submitted_at")
-      .eq("organization_id", orgId);
+      .eq("organization_id", orgId)
+      .is("deleted_at", null);
 
     if (subsError)
       console.error("[forms] Failed to fetch submissions:", subsError.message);
@@ -210,7 +211,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     .from("form_submissions")
     .select("form_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   if (subsError)
     console.error("[forms] Failed to fetch submissions:", subsError.message);
@@ -219,7 +221,8 @@ export default async function FormsPage({ params }: FormsPageProps) {
     .from("form_document_submissions")
     .select("document_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   if (docSubsError)
     console.error(

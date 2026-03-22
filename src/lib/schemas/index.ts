@@ -70,3 +70,6 @@ export * from "./enterprise";
 
 // Blackbaud integration schemas
 export * from "./blackbaud";
+
+// AI assistant schemas
+export * from "./ai-assistant";

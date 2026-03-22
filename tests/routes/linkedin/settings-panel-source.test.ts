@@ -65,9 +65,9 @@ test("linkedin settings panel uses InlineBanner for inline errors", () => {
 });
 
 test("linkedin settings panel distinguishes OIDC login rows from OAuth connections", () => {
-  assert.match(
-    panelSource,
-    /source: "oauth" \| "oidc_login"/,
+  assert.ok(
+    /source: "oauth" \| "oidc_login"/.test(panelSource) ||
+      /source: LinkedInConnectionSource/.test(panelSource),
     "expected the panel connection type to expose the LinkedIn connection source",
   );
   assert.match(

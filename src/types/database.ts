@@ -85,6 +85,9 @@ export type Database = {
       }
       ai_audit_log: {
         Row: {
+          cache_bypass_reason: string | null
+          cache_entry_id: string | null
+          cache_status: string | null
           created_at: string
           error: string | null
           expires_at: string
@@ -101,6 +104,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          cache_bypass_reason?: string | null
+          cache_entry_id?: string | null
+          cache_status?: string | null
           created_at?: string
           error?: string | null
           expires_at?: string
@@ -117,6 +123,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          cache_bypass_reason?: string | null
+          cache_entry_id?: string | null
+          cache_status?: string | null
           created_at?: string
           error?: string | null
           expires_at?: string
@@ -145,6 +154,69 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "ai_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_semantic_cache: {
+        Row: {
+          cache_version: number
+          created_at: string
+          expires_at: string
+          id: string
+          invalidated_at: string | null
+          invalidation_reason: string | null
+          org_id: string
+          permission_scope_key: string
+          prompt_hash: string
+          prompt_normalized: string
+          response_content: string
+          source_message_id: string | null
+          surface: string
+        }
+        Insert: {
+          cache_version: number
+          created_at?: string
+          expires_at: string
+          id?: string
+          invalidated_at?: string | null
+          invalidation_reason?: string | null
+          org_id: string
+          permission_scope_key: string
+          prompt_hash: string
+          prompt_normalized: string
+          response_content: string
+          source_message_id?: string | null
+          surface: string
+        }
+        Update: {
+          cache_version?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invalidated_at?: string | null
+          invalidation_reason?: string | null
+          org_id?: string
+          permission_scope_key?: string
+          prompt_hash?: string
+          prompt_normalized?: string
+          response_content?: string
+          source_message_id?: string | null
+          surface?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_semantic_cache_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_semantic_cache_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "ai_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -4945,6 +5017,10 @@ export type Database = {
           announcement_row: Database["public"]["Tables"]["announcements"]["Row"]
         }
         Returns: boolean
+      }
+      purge_expired_ai_semantic_cache: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       check_analytics_rate_limit: {
         Args: {

@@ -128,6 +128,11 @@ function validateBuildEnv() {
     console.log("ℹ️  PROXYCURL_API_KEY not set — LinkedIn profile enrichment disabled");
   }
 
+  // Optional: warn if z.ai (AI assistant) API key is missing
+  if (!process.env.ZAI_API_KEY) {
+    console.log("ℹ️  ZAI_API_KEY not set — AI assistant features disabled");
+  }
+
   // Require NEXT_PUBLIC_SITE_URL on Vercel production (OAuth redirects break without it)
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   let parsedSiteUrl = null;

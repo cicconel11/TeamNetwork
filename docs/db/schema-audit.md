@@ -256,7 +256,7 @@ The live schema covers:
 | `save_user_linkedin_url(uuid, text)` | Sync LinkedIn URL across member/alumni/parent profiles | `20260703000000` |
 | `sync_user_linkedin_profile_fields(uuid, text, text, text)` | Sync name/photo from LinkedIn to profiles | `20260704000000` |
 | `sync_user_linkedin_enrichment(uuid, text...)` | Sync Proxycurl enrichment data to member/alumni | `20260707000000` |
-| `purge_expired_ai_semantic_cache()` | TTL cleanup for AI semantic cache (service-role only, batch 500) | `20260321100000` |
+| `purge_expired_ai_semantic_cache()` | TTL cleanup for AI semantic cache (service-role only, batch 500) | `20260321100001` |
 
 ---
 
@@ -368,6 +368,8 @@ Two-tier verification:
 2. **`ai_audit_log.user_id` / `ai_audit_log.org_id`** — `uuid NOT NULL` with no FK constraints. Intentional: audit logs must survive user and org deletion. Adding FK with CASCADE would destroy audit data; SET NULL conflicts with NOT NULL. Table is service-role-only (RLS enabled with zero policies).
 
 3. **`ai_messages` composite FK** — `(thread_id, user_id, org_id)` references `ai_threads(id, user_id, org_id)` instead of a simple `thread_id` FK. Intentional: enforces ownership consistency at the DB level so RLS does not need subquery joins for ownership verification — only for `deleted_at` filtering. The composite FK also prevents user_id/org_id drift between messages and their parent thread.
+
+4. **`ai_messages.idempotency_key` uniqueness scope** — The unique constraint on `idempotency_key` is table-wide, not scoped to `(org_id, user_id)`. Intentional: idempotency keys are client-generated UUIDs (v4) that must be globally unique to guarantee exactly-once delivery across the entire cluster. Scoping the constraint to a user or org would allow a key collision across organizations in a hypothetical multi-tenant replay attack scenario. The per-request key generation (`crypto.randomUUID()`) makes accidental cross-org collisions statistically impossible, and the broader constraint gives the strongest safety guarantee with no practical downside. See `src/app/api/ai/[orgId]/chat/handler.ts` for key generation and `src/hooks/useAIStream.ts` for client-side handling.
 
 ---
 

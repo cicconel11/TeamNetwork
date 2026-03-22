@@ -36,6 +36,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
       .from("organization_donations")
       .select("*")
       .eq("organization_id", org.id)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     supabase
       .from("events")

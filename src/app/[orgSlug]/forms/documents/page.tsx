@@ -32,7 +32,8 @@ export default async function DocumentFormsPage({ params }: DocumentFormsPagePro
     .from("form_document_submissions")
     .select("document_id")
     .eq("organization_id", orgId)
-    .eq("user_id", orgCtx.userId);
+    .eq("user_id", orgCtx.userId)
+    .is("deleted_at", null);
 
   const submittedDocIds = new Set(submissions?.map((s) => s.document_id) || []);
 

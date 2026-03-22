@@ -37,6 +37,7 @@ export default async function DocumentSubmissionsPage({ params }: DocumentSubmis
     .from("form_document_submissions")
     .select("*, users(name, email)")
     .eq("document_id", documentId)
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: false });
 
   const typedSubmissions = (submissions || []) as (FormDocumentSubmission & { users: Pick<User, "name" | "email"> | null })[];

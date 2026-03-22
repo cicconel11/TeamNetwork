@@ -62,6 +62,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     .from("organization_donations")
     .select("id, donor_name, donor_email, amount_cents, currency, purpose, status, created_at, event_id, events(title)")
     .eq("organization_id", organizationId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (error) {

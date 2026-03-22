@@ -39,6 +39,7 @@ export default async function FormSubmissionsPage({ params }: FormSubmissionsPag
     .from("form_submissions")
     .select("*, users(name, email)")
     .eq("form_id", formId)
+    .is("deleted_at", null)
     .order("submitted_at", { ascending: false });
 
   if (submissionsError) {

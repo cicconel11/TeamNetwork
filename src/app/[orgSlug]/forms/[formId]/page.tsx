@@ -49,6 +49,7 @@ export default function FillFormPage() {
           .select("*")
           .eq("form_id", formId)
           .eq("user_id", user.id)
+          .is("deleted_at", null)
           .maybeSingle();
 
         if (submission) {

@@ -67,11 +67,12 @@ export function MentorshipPairCard({
       return;
     }
 
-    // Delete associated mentorship_logs first (cascade)
+    // Soft-delete associated mentorship_logs first
     const { error: logsError } = await supabase
       .from("mentorship_logs")
-      .delete()
-      .eq("pair_id", pair.id);
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("pair_id", pair.id)
+      .is("deleted_at", null);
 
     if (logsError) {
       setError("Unable to delete mentorship pair. Please try again.");
@@ -79,11 +80,12 @@ export function MentorshipPairCard({
       return;
     }
 
-    // Delete the mentorship_pair record
+    // Soft-delete the mentorship_pair record
     const { error: pairError } = await supabase
       .from("mentorship_pairs")
-      .delete()
-      .eq("id", pair.id);
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", pair.id)
+      .is("deleted_at", null);
 
     if (pairError) {
       setError("Unable to delete mentorship pair. Please try again.");
@@ -134,7 +136,7 @@ export function MentorshipPairCard({
       {showConfirm && (
         <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-3">
           <p className="text-sm text-red-700 dark:text-red-300">
-            Are you sure you want to delete this mentorship pair? This will also remove all associated activity logs. This action cannot be undone.
+            Are you sure you want to archive this mentorship pair? This will also archive all associated activity logs.
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -143,7 +145,7 @@ export function MentorshipPairCard({
               onClick={handleConfirmDelete}
               isLoading={isDeleting}
             >
-              Yes, Delete
+              Yes, Archive
             </Button>
             <Button
               variant="ghost"

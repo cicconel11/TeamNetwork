@@ -28,6 +28,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
       .from("mentorship_pairs")
       .select("*")
       .eq("organization_id", orgId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     orgCtx.userId
       ? supabase
@@ -68,6 +69,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
           .from("mentorship_logs")
           .select("*")
           .eq("organization_id", orgId)
+          .is("deleted_at", null)
           .in("pair_id", pairIds)
           .order("entry_date", { ascending: false })
           .order("created_at", { ascending: false })

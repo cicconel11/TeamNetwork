@@ -38,6 +38,7 @@ export default async function SubmissionDetailPage({ params }: SubmissionDetailP
     .select("*, users(name, email)")
     .eq("id", submissionId)
     .eq("form_id", formId)
+    .is("deleted_at", null)
     .single();
 
   if (subError || !submission) return notFound();
