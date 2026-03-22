@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadActivityLeaderboard } from "./smoke-helpers";
 
 interface BuildPromptInput {
   orgId: string;
@@ -33,6 +34,19 @@ interface DonationStats {
   last_donation_at: string | null;
 }
 
+interface RecentFeedPost {
+  body: string;
+  like_count: number | null;
+  comment_count: number | null;
+  created_at: string;
+}
+
+interface RecentDiscussion {
+  title: string;
+  reply_count: number | null;
+  last_activity_at: string;
+}
+
 interface QuerySuccess<T> {
   ok: true;
   data: T;
@@ -58,6 +72,9 @@ interface PromptContextData {
   upcomingEvents: QueryResult<EventsResult>;
   recentAnnouncements: QueryResult<RecentAnnouncement[]>;
   donationStats: QueryResult<DonationStats | null>;
+  recentFeedPosts: QueryResult<RecentFeedPost[]>;
+  recentDiscussions: QueryResult<RecentDiscussion[]>;
+  activityLeaderboard: QueryResult<string | null>;
 }
 
 const NARROW_PANEL_POLICY = [
@@ -137,6 +154,9 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     upcomingEvents,
     recentAnnouncements,
     donationStats,
+    recentFeedPosts,
+    recentDiscussions,
+    activityLeaderboard,
   ] = await Promise.all([
     safeQuery<OrgInfo>("organization info", () =>
       (serviceSupabase as any)
@@ -236,6 +256,49 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .eq("organization_id", orgId)
           .maybeSingle()
       ),
+    useSharedStaticContext
+      ? Promise.resolve({ ok: false as const })
+      : safeQuery<RecentFeedPost[]>("recent feed posts", () =>
+        (serviceSupabase as any)
+          .from("feed_posts")
+          .select("body, like_count, comment_count, created_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .order("created_at", { ascending: false })
+          .limit(5)
+      ).then((result) =>
+        result.ok
+          ? { ok: true as const, data: result.data ?? [] }
+          : { ok: false as const }
+      ),
+    useSharedStaticContext
+      ? Promise.resolve({ ok: false as const })
+      : safeQuery<RecentDiscussion[]>("recent discussions", () =>
+        (serviceSupabase as any)
+          .from("discussion_threads")
+          .select("title, reply_count, last_activity_at")
+          .eq("organization_id", orgId)
+          .is("deleted_at", null)
+          .order("last_activity_at", { ascending: false })
+          .limit(5)
+      ).then((result) =>
+        result.ok
+          ? { ok: true as const, data: result.data ?? [] }
+          : { ok: false as const }
+      ),
+    useSharedStaticContext
+      ? Promise.resolve({ ok: false as const })
+      : (async (): Promise<QueryResult<string | null>> => {
+        try {
+          const leaderboard = await loadActivityLeaderboard(serviceSupabase, orgId, {
+            includePreamble: false,
+          });
+          return { ok: true, data: leaderboard };
+        } catch (error) {
+          console.warn("[ai-context-builder] omitted activity leaderboard:", error);
+          return { ok: false };
+        }
+      })(),
   ]);
 
   return {
@@ -247,6 +310,9 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
     upcomingEvents,
     recentAnnouncements,
     donationStats,
+    recentFeedPosts,
+    recentDiscussions,
+    activityLeaderboard,
   };
 }
 
@@ -336,6 +402,34 @@ export async function buildPromptContext(
     }
   }
 
+  if (context.recentFeedPosts.ok && context.recentFeedPosts.data.length > 0) {
+    sections.push("", "## Recent Feed Posts");
+    for (const post of context.recentFeedPosts.data) {
+      const summary = post.body.trim().replace(/\s+/g, " ").slice(0, 120);
+      const engagementParts: string[] = [];
+
+      if (typeof post.like_count === "number") {
+        engagementParts.push(`${post.like_count} likes`);
+      }
+      if (typeof post.comment_count === "number") {
+        engagementParts.push(`${post.comment_count} comments`);
+      }
+
+      const engagement = engagementParts.length > 0 ? ` (${engagementParts.join(", ")})` : "";
+      sections.push(`- ${summary} - ${formatDate(post.created_at)}${engagement}`);
+    }
+  }
+
+  if (context.recentDiscussions.ok && context.recentDiscussions.data.length > 0) {
+    sections.push("", "## Active Discussions");
+    for (const discussion of context.recentDiscussions.data) {
+      const replies = typeof discussion.reply_count === "number"
+        ? ` (${discussion.reply_count} replies)`
+        : "";
+      sections.push(`- ${discussion.title} - ${formatDate(discussion.last_activity_at)}${replies}`);
+    }
+  }
+
   if (
     context.donationStats.ok &&
     context.donationStats.data &&
@@ -348,6 +442,10 @@ export async function buildPromptContext(
     if (context.donationStats.data.last_donation_at) {
       sections.push(`- Last donation: ${formatDate(context.donationStats.data.last_donation_at)}`);
     }
+  }
+
+  if (context.activityLeaderboard.ok && context.activityLeaderboard.data) {
+    sections.push("", context.activityLeaderboard.data);
   }
 
   return {

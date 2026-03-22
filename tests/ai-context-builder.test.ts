@@ -5,12 +5,18 @@ import assert from "node:assert/strict";
 function createMockServiceSupabase(opts: {
   org?: { name: string; slug: string; org_type?: string | null; description?: string | null } | null;
   userName?: string | null;
+  activityUsers?: Array<{ id: string; name: string | null; email: string | null }>;
   memberCount?: number;
   alumniCount?: number;
   parentCount?: number;
   eventCount?: number;
   upcomingEvents?: Array<{ title: string; start_date: string; location: string | null }>;
   announcements?: Array<{ title: string; published_at: string | null }>;
+  feedPosts?: Array<{ body: string; like_count: number | null; comment_count: number | null; created_at: string; author_id: string }>;
+  feedComments?: Array<{ author_id: string }>;
+  chatMessages?: Array<{ author_id: string }>;
+  discussionThreads?: Array<{ title: string; reply_count: number | null; last_activity_at: string; author_id: string }>;
+  discussionReplies?: Array<{ author_id: string }>;
   donationStats?: { total_amount_cents: number; donation_count: number; last_donation_at: string | null } | null;
   failedTables?: string[];
 }) {
@@ -23,13 +29,17 @@ function createMockServiceSupabase(opts: {
       const buildQueryable = <T,>(data: T) => {
         const chain: Record<string, any> = {};
         let selectedColumns = "";
-        const methods = ["select", "eq", "is", "gte", "lt", "order", "limit", "in"];
+        let selectedIds: string[] | null = null;
+        const methods = ["select", "eq", "is", "gte", "lt", "order", "limit", "in", "returns"];
 
         for (const method of methods) {
           chain[method] = (...args: unknown[]) => {
             void args;
             if (method === "select" && typeof args[0] === "string") {
               selectedColumns = args[0];
+            }
+            if (method === "in" && args[0] === "id" && Array.isArray(args[1])) {
+              selectedIds = args[1] as string[];
             }
             return chain;
           };
@@ -45,6 +55,12 @@ function createMockServiceSupabase(opts: {
             !selectedColumns.includes("total_amount_cents")
           ) {
             return { data: null, error: { message: "column total_amount_cents missing from select" } };
+          }
+          if (table === "users" && selectedIds) {
+            return {
+              data: (opts.activityUsers ?? []).filter((user) => selectedIds!.includes(user.id)),
+              error: null,
+            };
           }
           return { data, error: null };
         };
@@ -88,7 +104,7 @@ function createMockServiceSupabase(opts: {
         case "users":
           return buildQueryable(
             opts.userName === undefined
-              ? null
+              ? opts.activityUsers ?? null
               : opts.userName === null
                 ? null
                 : { name: opts.userName }
@@ -126,6 +142,16 @@ function createMockServiceSupabase(opts: {
         }
         case "announcements":
           return buildQueryable(opts.announcements ?? []);
+        case "feed_posts":
+          return buildQueryable(opts.feedPosts ?? []);
+        case "feed_comments":
+          return buildQueryable(opts.feedComments ?? []);
+        case "chat_messages":
+          return buildQueryable(opts.chatMessages ?? []);
+        case "discussion_threads":
+          return buildQueryable(opts.discussionThreads ?? []);
+        case "discussion_replies":
+          return buildQueryable(opts.discussionReplies ?? []);
         case "organization_donation_stats":
           return buildQueryable(opts.donationStats ?? null);
         default:
@@ -182,6 +208,30 @@ describe("AI prompt context builder", () => {
           { title: "Spring Gala", start_date: "2026-04-01T18:00:00Z", location: "Main Hall" },
         ],
         announcements: [{ title: "Welcome back", published_at: "2026-03-15T12:00:00Z" }],
+        feedPosts: [
+          {
+            body: "Great turnout at practice this week",
+            like_count: 3,
+            comment_count: 2,
+            created_at: "2026-03-16T12:00:00Z",
+            author_id: "user-1",
+          },
+        ],
+        discussionThreads: [
+          {
+            title: "Travel logistics",
+            reply_count: 4,
+            last_activity_at: "2026-03-16T14:00:00Z",
+            author_id: "user-1",
+          },
+        ],
+        feedComments: [{ author_id: "user-1" }, { author_id: "user-2" }],
+        chatMessages: [{ author_id: "user-1" }, { author_id: "user-1" }, { author_id: "user-2" }],
+        discussionReplies: [{ author_id: "user-1" }],
+        activityUsers: [
+          { id: "user-1", name: "Jane Admin", email: "jane@example.com" },
+          { id: "user-2", name: "Chris Captain", email: "chris@example.com" },
+        ],
         donationStats: {
           total_amount_cents: 50000,
           donation_count: 25,
@@ -198,6 +248,12 @@ describe("AI prompt context builder", () => {
     assert.match(contextMessage!, /Active Members: 42/);
     assert.match(contextMessage!, /Spring Gala/);
     assert.match(contextMessage!, /Welcome back/);
+    assert.match(contextMessage!, /## Recent Feed Posts/);
+    assert.match(contextMessage!, /Great turnout at practice this week/);
+    assert.match(contextMessage!, /## Active Discussions/);
+    assert.match(contextMessage!, /Travel logistics/);
+    assert.match(contextMessage!, /## Most Active Users/);
+    assert.match(contextMessage!, /Jane Admin - 6 total actions/);
     assert.match(contextMessage!, /Total donations: 25/);
   });
 
@@ -344,6 +400,28 @@ describe("AI prompt context builder", () => {
           { title: "Spring Gala", start_date: "2026-04-01T18:00:00Z", location: "Main Hall" },
         ],
         announcements: [{ title: "Welcome back", published_at: "2026-03-15T12:00:00Z" }],
+        feedPosts: [
+          {
+            body: "Practice update",
+            like_count: 1,
+            comment_count: 0,
+            created_at: "2026-03-16T12:00:00Z",
+            author_id: "user-1",
+          },
+        ],
+        discussionThreads: [
+          {
+            title: "Travel logistics",
+            reply_count: 4,
+            last_activity_at: "2026-03-16T14:00:00Z",
+            author_id: "user-1",
+          },
+        ],
+        chatMessages: [{ author_id: "user-1" }],
+        discussionReplies: [{ author_id: "user-1" }],
+        activityUsers: [
+          { id: "user-1", name: "Jane Admin", email: "jane@example.com" },
+        ],
         donationStats: {
           total_amount_cents: 50000,
           donation_count: 25,
@@ -359,6 +437,9 @@ describe("AI prompt context builder", () => {
     assert.ok(!contextMessage!.includes("## Counts"));
     assert.ok(!contextMessage!.includes("## Upcoming Events"));
     assert.ok(!contextMessage!.includes("## Recent Announcements"));
+    assert.ok(!contextMessage!.includes("## Recent Feed Posts"));
+    assert.ok(!contextMessage!.includes("## Active Discussions"));
+    assert.ok(!contextMessage!.includes("## Most Active Users"));
     assert.ok(!contextMessage!.includes("## Donation Summary"));
   });
 
@@ -373,6 +454,26 @@ describe("AI prompt context builder", () => {
       parentCount: 2,
       eventCount: 1,
       announcements: [{ title: "Update", published_at: "2026-03-15T12:00:00Z" }],
+      feedPosts: [
+        {
+          body: "Practice update",
+          like_count: 1,
+          comment_count: 0,
+          created_at: "2026-03-16T12:00:00Z",
+          author_id: "user-1",
+        },
+      ],
+      discussionThreads: [
+        {
+          title: "Travel logistics",
+          reply_count: 4,
+          last_activity_at: "2026-03-16T14:00:00Z",
+          author_id: "user-1",
+        },
+      ],
+      chatMessages: [{ author_id: "user-1" }],
+      discussionReplies: [{ author_id: "user-1" }],
+      activityUsers: [{ id: "user-1", name: "Test User", email: "test@example.com" }],
       donationStats: {
         total_amount_cents: 5000,
         donation_count: 1,
