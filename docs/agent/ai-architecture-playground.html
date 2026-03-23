@@ -710,6 +710,25 @@ const COMPONENTS = [
     ]
   },
   {
+    id: 'validator',
+    label: 'Output Validator',
+    shortLabel: 'Validator',
+    pct: 0,
+    status: 'missing',
+    layer: 'routing',
+    x: 500, y: 170,
+    files: [],
+    built: [],
+    missing: [
+      'No schema validation for structured LLM output',
+      'No safety check (toxicity, PII leakage, off-topic detection)',
+      'No hallucination check (claim verification against RAG sources)',
+      'No confidence scoring or fallback to "I don\'t know"',
+      'No retry loop for failed validation (re-prompt with corrections)',
+      'Would gate all execution paths before actions branch out'
+    ]
+  },
+  {
     id: 'policy',
     label: 'Policy + Permission Gate',
     shortLabel: 'Policy',
@@ -742,7 +761,7 @@ const COMPONENTS = [
     pct: 90,
     status: 'built',
     layer: 'execution',
-    x: 560, y: 40,
+    x: 690, y: 40,
     files: [
       'src/lib/ai/embeddings.ts',
       'src/lib/ai/chunker.ts',
@@ -791,7 +810,7 @@ const COMPONENTS = [
     pct: 10,
     status: 'stub',
     layer: 'execution',
-    x: 560, y: 170,
+    x: 690, y: 170,
     files: [
       'src/lib/ai/response-composer.ts'
     ],
@@ -816,7 +835,7 @@ const COMPONENTS = [
     pct: 0,
     status: 'missing',
     layer: 'execution',
-    x: 560, y: 300,
+    x: 690, y: 300,
     files: [],
     built: [],
     missing: [
@@ -835,7 +854,7 @@ const COMPONENTS = [
     pct: 90,
     status: 'built',
     layer: 'composition',
-    x: 810, y: 105,
+    x: 940, y: 105,
     files: [
       'src/lib/ai/response-composer.ts',
       'src/lib/ai/client.ts',
@@ -861,7 +880,7 @@ const COMPONENTS = [
     pct: 95,
     status: 'built',
     layer: 'delivery',
-    x: 810, y: 260,
+    x: 940, y: 260,
     files: [
       'src/lib/ai/audit.ts',
       'supabase/migrations/20260319000000_ai_assistant_tables.sql',
@@ -899,8 +918,9 @@ const CONNECTIONS = [
   { from: 'composer', to: 'audit', type: 'event', label: 'log + deliver' },
   // Future connections (dashed — not yet wired)
   { from: 'policy', to: 'intent', type: 'data-flow', label: 'classify', dashed: true },
-  { from: 'intent', to: 'actions', type: 'tool-call', label: 'execute', dashed: true },
-  { from: 'intent', to: 'analyst', type: 'tool-call', label: 'query', dashed: true },
+  { from: 'intent', to: 'validator', type: 'data-flow', label: 'validate', dashed: true },
+  { from: 'validator', to: 'actions', type: 'tool-call', label: 'execute', dashed: true },
+  { from: 'validator', to: 'analyst', type: 'tool-call', label: 'query', dashed: true },
   { from: 'actions', to: 'composer', type: 'data-flow', label: 'results', dashed: true },
   { from: 'analyst', to: 'composer', type: 'data-flow', label: 'results', dashed: true }
 ];
@@ -961,7 +981,7 @@ function getVisibleComponents() {
     visible = visible.filter(c => c.status === 'missing' || c.status === 'stub');
   } else if (state.preset === 'critical') {
     visible = visible.filter(c =>
-      ['intake', 'context', 'policy', 'composer', 'audit', 'intent'].includes(c.id)
+      ['intake', 'context', 'policy', 'composer', 'audit', 'intent', 'validator'].includes(c.id)
     );
   }
 
