@@ -18,7 +18,7 @@ CREATE TABLE public.ai_document_chunks (
   chunk_index     smallint NOT NULL DEFAULT 0,
   content_text    text NOT NULL,
   content_hash    text NOT NULL,
-  embedding       extensions.vector(1536),
+  embedding       extensions.vector(768),
   metadata        jsonb NOT NULL DEFAULT '{}',
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
@@ -31,7 +31,7 @@ COMMENT ON COLUMN public.ai_document_chunks.source_id IS 'PK of the source row i
 COMMENT ON COLUMN public.ai_document_chunks.chunk_index IS '0 for single-chunk docs, increments for multi-chunk';
 COMMENT ON COLUMN public.ai_document_chunks.content_text IS 'Rendered text that was embedded';
 COMMENT ON COLUMN public.ai_document_chunks.content_hash IS 'SHA-256 of content_text — skip re-embedding if unchanged';
-COMMENT ON COLUMN public.ai_document_chunks.embedding IS '1536-dim vector from text-embedding-3-small';
+COMMENT ON COLUMN public.ai_document_chunks.embedding IS '768-dim vector from Gemini text-embedding-004';
 COMMENT ON COLUMN public.ai_document_chunks.metadata IS 'Source-specific metadata (title, audience, parent_thread_id, etc.)';
 
 -- Org-scoped lookup by source type

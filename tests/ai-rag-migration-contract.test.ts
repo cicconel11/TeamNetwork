@@ -33,8 +33,8 @@ describe("RAG migration contract", () => {
       assert.ok(sql.includes("CREATE TABLE public.ai_indexing_exclusions"));
     });
 
-    it("ai_document_chunks has vector(1536) embedding column", () => {
-      assert.ok(sql.includes("extensions.vector(1536)"));
+    it("ai_document_chunks has vector(768) embedding column", () => {
+      assert.ok(sql.includes("extensions.vector(768)"));
     });
 
     it("creates HNSW index for vector search", () => {
@@ -97,8 +97,8 @@ describe("RAG migration contract", () => {
       assert.ok(sql.includes("CREATE OR REPLACE FUNCTION public.search_ai_documents"));
     });
 
-    it("search_ai_documents accepts vector(1536) parameter", () => {
-      assert.ok(sql.includes("p_query_embedding extensions.vector(1536)"));
+    it("search_ai_documents accepts vector(768) parameter", () => {
+      assert.ok(sql.includes("p_query_embedding extensions.vector(768)"));
     });
 
     it("search_ai_documents default threshold is 0.5", () => {

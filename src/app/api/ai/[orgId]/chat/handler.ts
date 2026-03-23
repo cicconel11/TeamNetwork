@@ -313,7 +313,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   let ragTopSimilarity: number | undefined;
   let ragError: string | undefined;
 
-  const hasEmbeddingKey = !!(process.env.EMBEDDING_API_KEY || process.env.ZAI_API_KEY);
+  const hasEmbeddingKey = !!process.env.EMBEDDING_API_KEY;
   if (hasEmbeddingKey) {
     try {
       const retrieved = await retrieveRelevantChunksFn({

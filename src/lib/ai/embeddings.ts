@@ -4,13 +4,13 @@ import OpenAI from "openai";
 // Embedding client factory
 // ---------------------------------------------------------------------------
 
-const DEFAULT_BASE_URL = "https://api.z.ai/api/paas/v4";
-const DEFAULT_MODEL = "text-embedding-3-small";
-const EXPECTED_DIMENSIONS = 1536;
+const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai";
+const DEFAULT_MODEL = "text-embedding-004";
+const EXPECTED_DIMENSIONS = 768;
 
 function getEmbeddingConfig() {
   const baseURL = process.env.EMBEDDING_BASE_URL || DEFAULT_BASE_URL;
-  const apiKey = process.env.EMBEDDING_API_KEY || process.env.ZAI_API_KEY;
+  const apiKey = process.env.EMBEDDING_API_KEY;
   const model = process.env.EMBEDDING_MODEL || DEFAULT_MODEL;
   return { baseURL, apiKey, model };
 }
@@ -19,7 +19,7 @@ export function createEmbeddingClient(): OpenAI {
   const { baseURL, apiKey } = getEmbeddingConfig();
   if (!apiKey) {
     throw new Error(
-      "No embedding API key configured. Set EMBEDDING_API_KEY or ZAI_API_KEY."
+      "No embedding API key configured. Set EMBEDDING_API_KEY."
     );
   }
   return new OpenAI({ apiKey, baseURL });

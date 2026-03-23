@@ -68,7 +68,7 @@ CREATE TRIGGER trg_ai_embed_job_postings
 
 CREATE OR REPLACE FUNCTION public.search_ai_documents(
   p_org_id uuid,
-  p_query_embedding extensions.vector(1536),
+  p_query_embedding extensions.vector(768),
   p_match_count integer DEFAULT 5,
   p_similarity_threshold float DEFAULT 0.5,
   p_source_tables text[] DEFAULT NULL

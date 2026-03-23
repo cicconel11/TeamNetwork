@@ -52,7 +52,7 @@ describe("embeddings", () => {
       assert.ok(client, "Client should be created");
     });
 
-    it("falls back to ZAI_API_KEY when EMBEDDING_API_KEY is not set", async () => {
+    it("throws without EMBEDDING_API_KEY even if ZAI_API_KEY is set", async () => {
       delete process.env.EMBEDDING_API_KEY;
       process.env.ZAI_API_KEY = "test-zai-key";
 
@@ -60,18 +60,20 @@ describe("embeddings", () => {
         "../src/lib/ai/embeddings"
       );
 
-      const client = createEmbeddingClient();
-      assert.ok(client, "Client should be created with ZAI fallback");
+      assert.throws(
+        () => createEmbeddingClient(),
+        /No embedding API key configured/
+      );
     });
   });
 
   describe("getEmbeddingModel", () => {
-    it("defaults to text-embedding-3-small", async () => {
+    it("defaults to text-embedding-004", async () => {
       delete process.env.EMBEDDING_MODEL;
 
       const { getEmbeddingModel } = await import("../src/lib/ai/embeddings");
 
-      assert.equal(getEmbeddingModel(), "text-embedding-3-small");
+      assert.equal(getEmbeddingModel(), "text-embedding-004");
     });
 
     it("respects EMBEDDING_MODEL env var", async () => {
