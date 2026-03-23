@@ -635,7 +635,8 @@ const COMPONENTS = [
     x: 60, y: 170,
     files: [
       'src/lib/ai/context-builder.ts',
-      'src/components/ai-assistant/route-surface.ts'
+      'src/components/ai-assistant/route-surface.ts',
+      'supabase/migrations/20260323000000_ai_message_context_surface.sql'
     ],
     built: [
       'Surface-based context selection (general/members/analytics/events)',
@@ -648,7 +649,8 @@ const COMPONENTS = [
       'System prompt with NARROW_PANEL_POLICY',
       'shared_static mode overrides surface for cache-hit contexts',
       'Cross-surface thread reset on navigation (prevents thread/surface mismatch)',
-      'Thread list filtered by current surface'
+      'Thread list filtered by current surface',
+      'context_surface persisted per message (effective surface at send time)'
     ],
     missing: [
       'No richer data sources per surface (e.g., individual member records for members surface)'
