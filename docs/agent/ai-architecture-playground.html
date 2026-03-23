@@ -707,11 +707,11 @@ const COMPONENTS = [
       'Keyword-based intent classifier (resolveSurfaceRouting)',
       'Scores messages across members, analytics, events keyword lists',
       'Detects ambiguous queries when surfaces score equally',
-      'skipRetrieval: true for casual messages (greetings, thanks) via regex',
+      'skipRetrieval: true for exact casual messages (greetings, thanks) via regex',
       'Returns rerouted flag when inferred surface differs from requested',
       'Maps surface → intent: members_query, analytics_query, events_query, general_query, ambiguous_query',
       'Routing based on classified intent — effectiveSurface drives context selection',
-      'Tools passed to LLM based on surface (surface-aware tool gating)'
+      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface'
     ],
     missing: [
       'No plan decomposition for multi-step requests',
@@ -828,9 +828,10 @@ const COMPONENTS = [
     ],
     built: [
       'AI_TOOLS defines 3 OpenAI function-calling tools: list_members, list_events, get_org_stats',
-      'Full Zod argument validation per tool (limit, offset, status, upcoming)',
+      'Full Zod argument validation per tool (limit, upcoming) with fail-closed behavior',
+      'list_members reads valid members columns only and normalizes first_name + last_name into name',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
-      'Two-pass tool loop: Pass 1 streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
+      'Two-pass tool loop: Pass 1 conditionally streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
       'tool_status SSE events emitted: calling, done, error',
       'Malformed args fail closed — no {} fallback, error pushed to tool results',
       'Cache bypass when toolCallMade = true (tool responses are dynamic)',

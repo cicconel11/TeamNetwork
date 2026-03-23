@@ -57,3 +57,16 @@ test("system prompt includes tool usage guidance", async () => {
   assert.match(prompt, /Do NOT use tools for greetings/);
   assert.match(prompt, /do not emit user-visible filler text/i);
 });
+
+test("system prompt includes the injected current local date and time", async () => {
+  const prompt = await buildSystemPrompt({
+    orgId: "org-1",
+    userId: "user-1",
+    role: "admin",
+    serviceSupabase: createStubSupabase(),
+    now: "2026-03-23T21:05:00.000Z",
+    timeZone: "America/Los_Angeles",
+  });
+
+  assert.match(prompt, /Current local date\/time: 2026-03-23 14:05 America\/Los_Angeles\./);
+});

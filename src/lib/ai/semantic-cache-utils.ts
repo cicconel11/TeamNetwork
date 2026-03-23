@@ -7,7 +7,7 @@ import { createHash } from "crypto";
 export const CACHE_SURFACES = ["general", "members", "analytics", "events"] as const;
 export type CacheSurface = (typeof CACHE_SURFACES)[number];
 
-export const CACHE_VERSION = 1 as const;
+export const CACHE_VERSION = 2 as const;
 
 /** Surface-specific TTLs (hours) — shorter for data-heavy surfaces */
 export const CACHE_TTL_HOURS: Record<CacheSurface, number> = {
@@ -54,6 +54,8 @@ const TEMPORAL_MARKERS = [
   "today",
   "latest",
   "current",
+  "current date",
+  "current time",
   "upcoming",
   "recent",
   "this week",
@@ -65,6 +67,9 @@ const TEMPORAL_MARKERS = [
   "yesterday",
   "tomorrow",
   "now",
+  "what date is it",
+  "what time is it",
+  "what day is it",
 ];
 
 const PERSONALIZATION_MARKERS = ["my", "mine", "i am", "i'm", "me", "myself"];

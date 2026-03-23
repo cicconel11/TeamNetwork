@@ -2,7 +2,7 @@
 
 ## Overview
 
-Each incoming chat message flows through a lightweight intent router that classifies the message content and resolves an effective surface for context loading, caching, and RAG retrieval. The system deliberately separates **thread surface** (stable, set at creation, used for UI grouping) from **message context_surface** (per-turn, content-inferred, determines what data the LLM sees). A casual gate additionally short-circuits RAG for greetings, thanks, and farewells.
+Each incoming chat message flows through a lightweight intent router that classifies the message content and resolves an effective surface for context loading, caching, and tool selection. The system deliberately separates **thread surface** (stable, set at creation, used for UI grouping) from **message context_surface** (per-turn, content-inferred, determines what data the LLM sees). A casual gate additionally short-circuits RAG and suppresses pass-1 tool attachment for greetings, thanks, and farewells.
 
 ## File Map
 
@@ -67,12 +67,16 @@ init_ai_chat RPC
   ├─ if !skipRetrieval: retrieveRelevantChunks()
   │    → ragChunks (additive, non-blocking)
   │
-  └─ buildPromptContext({ surface: effectiveSurface, ragChunks })
-       → SURFACE_DATA_SOURCES[effectiveSurface] gates DB queries
-       → token budget trims sections by priority
-            │
-            ▼
-       Stream LLM → logAiRequest({ intent, contextSurface, ragChunkCount })
+  ├─ buildPromptContext({ surface: effectiveSurface, ragChunks, now, timeZone })
+  │    → SURFACE_DATA_SOURCES[effectiveSurface] gates DB queries
+  │    → token budget trims sections by priority
+  │    → trusted system prompt includes current local date/time
+  │
+  ├─ resolve pass-1 tools from effectiveSurface
+  │    → casual exact-match turns attach no tools
+  │    → non-casual turns attach only the relevant read tools
+  │
+  └─ Stream LLM → logAiRequest({ intent, contextSurface, ragChunkCount })
 ```
 
 ## Intent Router Algorithm
@@ -91,7 +95,7 @@ Match against `CASUAL_MESSAGE_PATTERNS`:
 - Farewells: `bye`, `goodbye`, `see you`, `later`, `cya`, `peace`
 - Thanks: `thanks`, `thank you`, `thx`, `ty`, `appreciate it`
 
-These are exact-match checks against the full normalized message. If the entire message is a casual phrase, `skipRetrieval: true`. A hybrid like `"hey, what events are coming up?"` fails the exact match and proceeds to keyword scoring normally.
+These are exact-match checks against the full normalized message. If the entire message is a casual phrase, `skipRetrieval: true` and pass-1 tool attachment is suppressed. A hybrid like `"hey, what events are coming up?"` fails the exact match and proceeds to keyword scoring normally.
 
 ### Step 3 — Keyword Scoring
 Count word-boundary regex matches (`(?<!\w)keyword(?!\w)`) per surface:
@@ -114,7 +118,7 @@ Count word-boundary regex matches (`(?<!\w)keyword(?!\w)`) per surface:
 
 1. **Thread surface is immutable; message context_surface is per-turn.** Thread grouping stays stable for UI (thread list filtering, navigation). Each message independently records its effective surface, enabling per-turn analytics.
 
-2. **Casual gate is additive, not short-circuiting.** `skipRetrieval: true` suppresses RAG only. Context loading, LLM invocation, and surface routing all still run. A greeting on `/members` still gets members context.
+2. **Casual gate is additive, not short-circuiting.** `skipRetrieval: true` suppresses RAG and pass-1 tool attachment only. Context loading, LLM invocation, and surface routing all still run. A greeting on `/members` still gets members context.
 
 3. **Rerouting automatically bypasses cache.** Only `"general"` is cache-eligible in v1. Rerouting to any other surface makes the message cache-ineligible — no coordination needed between router and cache.
 

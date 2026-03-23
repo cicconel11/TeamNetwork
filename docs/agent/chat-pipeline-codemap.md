@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, admin auth, input validation, thread management, semantic cache check, LLM streaming via SSE, message persistence, cache write-back, and audit logging. All orchestration lives in a single route handler with dependency injection for testability.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, admin auth, input validation, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, and audit logging. All orchestration lives in a single route handler with dependency injection for testability.
 
 ## File Map
 
@@ -76,14 +76,22 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ buildPromptContext (surface-gated queries + token budget)
   │       │   ├─ Queries gated by surface: events only loads org+events, etc.
   │       │   ├─ 4000-token budget drops lowest-priority sections first
+  │       │   ├─ Trusted system prompt includes current local date/time
   │       │   ├─ Returns { systemPrompt, orgContextMessage, metadata }
   │       │   └─ "shared_static" mode: org overview only (overrides surface)
   │       └─ Last 20 complete messages from thread
-  ├─ 11. Stream LLM response via SSE (composeResponse async generator)
+  ├─ 11. Resolve pass-1 tools from effectiveSurface
+  │       ├─ Exact casual turns attach no tools
+  │       ├─ members → list_members + get_org_stats
+  │       ├─ events → list_events + get_org_stats
+  │       ├─ analytics → get_org_stats
+  │       └─ general → all tools
+  ├─ 12. Stream LLM response via SSE (composeResponse async generator)
+  │       ├─ Pass 1 may call tools depending on the resolved tool set
   │       └─ Each chunk: { type: "chunk", content: "..." }
-  ├─ 12. Finalize — update assistant message to complete/error
+  ├─ 13. Finalize — update assistant message to complete/error
   │
-  └─ 12.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
+  └─ 13.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
           ├─ Invalidate expired conflicting rows
           ├─ Insert new cache row with surface-specific TTL
           └─ Unique constraint (23505) silently ignored on concurrent writes
@@ -161,7 +169,7 @@ interface ContextMetadata {
 
 Metadata is passed to audit logging (`context_surface`, `context_token_estimate` columns).
 
-The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and multi-column layouts.
+The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and multi-column layouts, plus a trusted `Current local date/time:` line for relative-time questions.
 
 ## Test Coverage
 

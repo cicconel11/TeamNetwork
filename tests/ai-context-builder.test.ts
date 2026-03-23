@@ -397,6 +397,29 @@ describe("AI prompt context builder", () => {
     assert.deepEqual(queriedTables, ["organizations"]);
   });
 
+  it("injects the provided current local date/time into the trusted system prompt in full and shared_static modes", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const input = {
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      now: "2026-03-23T21:05:00.000Z",
+      timeZone: "America/Los_Angeles",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+      }) as any,
+    };
+
+    const fullResult = await buildPromptContext(input);
+    const sharedStaticResult = await buildPromptContext({
+      ...input,
+      contextMode: "shared_static",
+    });
+
+    assert.match(fullResult.systemPrompt, /Current local date\/time: 2026-03-23 14:05 America\/Los_Angeles\./);
+    assert.match(sharedStaticResult.systemPrompt, /Current local date\/time: 2026-03-23 14:05 America\/Los_Angeles\./);
+  });
+
   // --- Phase 1: Surface-based context selection ---
 
   it("events surface only queries org, users, and events tables", async () => {

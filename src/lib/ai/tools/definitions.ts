@@ -11,13 +11,13 @@ export interface ListEventsArgs {
 
 export type GetOrgStatsArgs = Record<string, never>;
 
-export const AI_TOOLS = [
-  {
+const TOOL_BY_NAME = {
+  list_members: {
     type: "function" as const,
     function: {
       name: "list_members" as const,
       description:
-        "List active organization members. Returns name, email, role, and join date. Use for questions about who is in the org, member counts, or searching for people. Only returns active members — alumni and parents are tracked separately.",
+        "List active organization members. Returns name, email, role, and added date. Use for questions about who is in the org, member counts, or searching for people. Only returns active members — alumni and parents are tracked separately.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -32,7 +32,7 @@ export const AI_TOOLS = [
       },
     },
   },
-  {
+  list_events: {
     type: "function" as const,
     function: {
       name: "list_events" as const,
@@ -57,7 +57,7 @@ export const AI_TOOLS = [
       },
     },
   },
-  {
+  get_org_stats: {
     type: "function" as const,
     function: {
       name: "get_org_stats" as const,
@@ -70,6 +70,12 @@ export const AI_TOOLS = [
       },
     },
   },
+} as const;
+
+export const AI_TOOLS = [
+  TOOL_BY_NAME.list_members,
+  TOOL_BY_NAME.list_events,
+  TOOL_BY_NAME.get_org_stats,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 
 // Derived from AI_TOOLS — no manual union to maintain
@@ -78,3 +84,5 @@ export type ToolName = (typeof AI_TOOLS)[number]["function"]["name"];
 export const TOOL_NAMES: ReadonlySet<string> = new Set<ToolName>(
   AI_TOOLS.map((t) => t.function.name)
 );
+
+export const AI_TOOL_MAP = TOOL_BY_NAME;

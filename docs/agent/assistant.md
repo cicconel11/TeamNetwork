@@ -2,7 +2,7 @@
 
 ## Summary
 
-The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and an exact-hash semantic cache for deduplication.
+The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and an exact-hash semantic cache for deduplication. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency.
 
 ## Tech Stack
 
@@ -117,10 +117,10 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 - **What:** Post-response verification that claims are grounded in tool results
 - **Design:** After the LLM generates a response using tool data, run a lightweight entailment check that each factual claim maps to a specific tool result field. Flag ungrounded claims.
 
-### Intent-Aware Tool Selection
+### Deeper Intent-Aware Tool Selection
 - **Paper:** Arch-Router (`2506.16655`), LLM Routing Survey (`2502.00409`)
-- **What:** Only offer relevant tools based on the detected intent/surface
-- **Design:** Use `resolveSurfaceRouting()` to filter `AI_TOOLS` before passing to the LLM. Members surface → only `list_members`. Events surface → only `list_events`. Reduces tool-selection noise.
+- **What:** Extend the current surface-aware tool selection to incorporate richer behavior for `intent_type` such as proactive action handling and navigation-aware responses.
+- **Design:** The current implementation already filters pass-1 tools by `effectiveSurface` and skips tools for exact casual turns. Future work would let `action_request` and `navigation` influence execution strategy without replacing the surface router.
 
 ### Vector Semantic Cache
 - **Paper:** VectorQ — Adaptive Semantic Prompt Caching (`2502.03771`), Domain-Specific Embeddings (`2504.02268`)

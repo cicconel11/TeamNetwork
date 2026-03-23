@@ -7,15 +7,30 @@ import type { ToolExecutionContext } from "../../../src/lib/ai/tools/executor.ts
 const ORG_ID = "org-uuid-1";
 
 function createToolSupabaseStub(overrides: Record<string, any> = {}) {
-  const queries: Array<{ table: string; filters: any[]; method: string }> = [];
+  const queries: Array<{
+    table: string;
+    filters: any[];
+    method: string;
+    columns?: string;
+    orderBy?: { column: string; ascending: boolean };
+    limitValue?: number;
+  }> = [];
 
   function from(table: string) {
-    const entry = { table, filters: [] as any[], method: "select" };
+    const entry = {
+      table,
+      filters: [] as any[],
+      method: "select",
+      columns: undefined as string | undefined,
+      orderBy: undefined as { column: string; ascending: boolean } | undefined,
+      limitValue: undefined as number | undefined,
+    };
     queries.push(entry);
 
     const builder: Record<string, any> = {
       select(columns: string, opts?: any) {
         entry.method = opts?.head ? "count" : "select";
+        entry.columns = columns;
         return builder;
       },
       eq(col: string, val: unknown) {
@@ -34,8 +49,14 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         entry.filters.push({ col, op: "lt", val });
         return builder;
       },
-      order() { return builder; },
-      limit() { return builder; },
+      order(column: string, opts?: { ascending?: boolean }) {
+        entry.orderBy = { column, ascending: opts?.ascending ?? true };
+        return builder;
+      },
+      limit(value: number) {
+        entry.limitValue = value;
+        return builder;
+      },
       maybeSingle() {
         return Promise.resolve(overrides[table]?.maybeSingle ?? { data: null, error: null });
       },
@@ -61,7 +82,19 @@ let stub: ReturnType<typeof createToolSupabaseStub>;
 beforeEach(() => {
   stub = createToolSupabaseStub({
     members: {
-      select: { data: [{ id: "m1", name: "Alice", email: "a@b.com", status: "active" }], error: null },
+      select: {
+        data: [{
+          id: "m1",
+          user_id: "u1",
+          status: "active",
+          role: "admin",
+          created_at: "2026-03-20T12:00:00Z",
+          first_name: "Alice",
+          last_name: "Jones",
+          email: "a@b.com",
+        }],
+        error: null,
+      },
     },
     events: {
       select: { data: [{ id: "e1", title: "Spring Gala", start_date: "2026-04-01" }], error: null },
@@ -76,16 +109,62 @@ test("list_members returns org-scoped members", async () => {
   if (result.ok) {
     assert.ok(Array.isArray(result.data));
     assert.equal((result.data as any[]).length, 1);
+    assert.deepEqual((result.data as any[])[0], {
+      id: "m1",
+      user_id: "u1",
+      status: "active",
+      role: "admin",
+      created_at: "2026-03-20T12:00:00Z",
+      name: "Alice Jones",
+      email: "a@b.com",
+    });
   }
   const memberQuery = stub.queries.find((q) => q.table === "members");
   assert.ok(memberQuery);
+  assert.equal(
+    memberQuery.columns,
+    "id, user_id, status, role, created_at, first_name, last_name, email"
+  );
   assert.ok(memberQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID));
   assert.ok(memberQuery.filters.some((f: any) => f.col === "deleted_at" && f.val === null));
+  assert.ok(memberQuery.filters.some((f: any) => f.col === "status" && f.val === "active"));
+  assert.deepEqual(memberQuery.orderBy, { column: "created_at", ascending: false });
+  assert.equal(memberQuery.limitValue, 20);
+});
+
+test("list_members trims whitespace when composing a normalized name", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [{
+          id: "m2",
+          user_id: null,
+          status: "active",
+          role: null,
+          created_at: "2026-03-19T12:00:00Z",
+          first_name: "Alice",
+          last_name: "",
+          email: null,
+        }],
+        error: null,
+      },
+    },
+  });
+  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal((result.data as any[])[0].name, "Alice");
+  }
 });
 
 test("list_members with limit", async () => {
   const result = await executeToolCall(ctx, { name: "list_members", args: { limit: 5 } });
   assert.equal(result.ok, true);
+  const memberQuery = stub.queries.find((q) => q.table === "members");
+  assert.equal(memberQuery?.limitValue, 5);
 });
 
 test("list_events returns upcoming events by default", async () => {

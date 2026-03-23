@@ -300,6 +300,8 @@ test("POST /api/ai/[orgId]/chat reroutes members questions per message without m
 
   assert.equal(buildPromptContextCalls.length, 1);
   assert.equal(buildPromptContextCalls[0].surface, "members");
+  assert.match(buildPromptContextCalls[0].now, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof buildPromptContextCalls[0].timeZone, "string");
 
   assert.equal(supabaseStub.state.threads.length, 1);
   assert.equal(supabaseStub.state.threads[0].surface, "general");

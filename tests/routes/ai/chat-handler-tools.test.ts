@@ -173,11 +173,13 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       composeResponseCalls.push(options);
       // First call: yield a tool call if tools are provided
       if (options.tools && !options.toolResults) {
+        const firstToolName = options.tools[0]?.function?.name ?? "list_members";
+        const argsJson = firstToolName === "get_org_stats" ? "{}" : '{"limit": 5}';
         yield {
           type: "tool_call_requested",
           id: "call-1",
-          name: "list_members",
-          argsJson: '{"limit": 5}',
+          name: firstToolName,
+          argsJson,
         };
       } else {
         // Second call (with tool results) or no-tools call: yield text
@@ -232,6 +234,11 @@ function makeRequest(message = "List our members") {
   });
 }
 
+function toolNamesForCall(index = 0): string[] | undefined {
+  const tools = composeResponseCalls[index]?.tools;
+  return tools?.map((tool: any) => tool.function.name);
+}
+
 test("tool call: SSE stream contains tool_status calling, done, and final chunk", async () => {
   const response = await POST(makeRequest() as any, {
     params: Promise.resolve({ orgId: ORG_ID }),
@@ -266,7 +273,7 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
   ).text();
 
   assert.equal(composeResponseCalls.length, 2);
-  assert.ok(composeResponseCalls[0].tools, "pass 1 should have tools");
+  assert.deepEqual(toolNamesForCall(0), ["list_members", "get_org_stats"]);
   assert.equal(
     composeResponseCalls[1].tools,
     undefined,
@@ -276,6 +283,66 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
   assert.equal(composeResponseCalls[1].toolResults[0].toolCallId, "call-1");
   assert.equal(composeResponseCalls[1].toolResults[0].name, "list_members");
   assert.deepEqual(composeResponseCalls[1].toolResults[0].args, { limit: 5 });
+});
+
+test("casual messages do not attach tools on pass 1", async () => {
+  await (
+    await POST(makeRequest("hi") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(composeResponseCalls.length, 1);
+  assert.equal(composeResponseCalls[0].tools, undefined);
+  assert.equal(executeToolCallCalls.length, 0);
+});
+
+test("hybrid greeting with events question uses routed events tool set", async () => {
+  await (
+    await POST(makeRequest("hey, what events are coming up?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_events", "get_org_stats"]);
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "list_events");
+});
+
+test("ambiguous queries keep fallback surface tool set", async () => {
+  await (
+    await POST(makeRequest("Compare members and events") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), [
+    "list_members",
+    "list_events",
+    "get_org_stats",
+  ]);
+});
+
+test("analytics surface only attaches get_org_stats", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Show me our donation metrics",
+      surface: "analytics",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["get_org_stats"]);
+  assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {});
 });
 
 test("tool call: audit entry includes toolCalls", async () => {

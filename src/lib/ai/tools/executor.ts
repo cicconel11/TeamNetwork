@@ -108,22 +108,52 @@ async function safeToolCount(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SB = any;
 
+interface MemberToolRow {
+  id: string;
+  user_id: string | null;
+  status: string | null;
+  role: string | null;
+  created_at: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+}
+
+function buildMemberName(firstName: string, lastName: string): string {
+  return [firstName, lastName].filter(Boolean).join(" ").trim();
+}
+
 async function listMembers(
   sb: SB,
   orgId: string,
   args: z.infer<typeof listMembersSchema>
 ): Promise<ToolResult> {
   const limit = Math.min(args.limit ?? 20, 50);
-  return safeToolQuery(() =>
-    sb
+  return safeToolQuery(async () => {
+    const { data, error } = await sb
       .from("members")
-      .select("id, user_id, status, role, joined_at, users(name, email)")
+      .select("id, user_id, status, role, created_at, first_name, last_name, email")
       .eq("organization_id", orgId)
       .is("deleted_at", null)
       .eq("status", "active")
-      .order("joined_at", { ascending: false })
-      .limit(limit)
-  );
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    return {
+      data: Array.isArray(data)
+        ? (data as MemberToolRow[]).map((member) => ({
+            id: member.id,
+            user_id: member.user_id,
+            status: member.status,
+            role: member.role,
+            created_at: member.created_at,
+            name: buildMemberName(member.first_name, member.last_name),
+            email: member.email,
+          }))
+        : data,
+      error,
+    };
+  });
 }
 
 async function listEvents(

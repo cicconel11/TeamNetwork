@@ -251,6 +251,24 @@ describe("checkCacheEligibility", () => {
     assert.equal(result.reason, "contains_temporal_marker");
   });
 
+  it("returns ineligible for direct time questions", () => {
+    const result = checkCacheEligibility({
+      message: "What time is it?",
+      surface: "general",
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "contains_temporal_marker");
+  });
+
+  it("returns ineligible for direct date questions", () => {
+    const result = checkCacheEligibility({
+      message: "What date is it today?",
+      surface: "general",
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "contains_temporal_marker");
+  });
+
   it("returns ineligible with contains_personalization for 'Show me my profile'", () => {
     const result = checkCacheEligibility({
       message: "Show me my profile",

@@ -32,7 +32,7 @@ The user wants something *done* — create, delete, send, invite, schedule, etc.
 
 Keywords: `create`, `add`, `delete`, `remove`, `update`, `send`, `invite`, `schedule`, `change`, `set`, `assign`, `cancel`, `approve`, `reject`, `make`, `edit`, `move`, `rename`, `archive`, `unarchive`, `restore`, `enable`, `disable`, `reset`, `upload`, `post`, `publish`.
 
-**Note**: `action_request` is classified and logged but not yet acted upon differently at runtime. It produces labeled data for when the Action Executor (`src/lib/ai/tools/executor.ts`) gains intent-aware routing.
+**Note**: `action_request` is classified and logged but not yet acted upon differently at runtime. Tool selection in the current system is still driven by `effectiveSurface`, with the only `intent_type`-driven runtime behavior being the casual optimization (`intentType = casual` → skip RAG + skip pass-1 tools). `action_request` produces labeled data for when the Action Executor (`src/lib/ai/tools/executor.ts`) gains intent-aware routing.
 
 ### `navigation`
 The user wants to go somewhere or find a page. Detected by phrase-level regex patterns.
@@ -119,7 +119,7 @@ Every message now has both `intent` and `intent_type` stored. This enables:
 1. **Analytics**: Dashboard queries like `SELECT intent_type, COUNT(*) FROM ai_messages GROUP BY intent_type` to understand what users are trying to do.
 2. **Action Executor routing**: When `action_request` messages should trigger tool calls proactively (rather than relying on the LLM to decide), the `intent_type` label is already present.
 3. **Navigation features**: When deep-linking from AI responses is implemented, `navigation` labels identify the training data.
-4. **Casual optimization**: Confirms which messages can skip expensive operations beyond just RAG retrieval.
+4. **Casual optimization**: Confirms which messages can skip expensive operations such as RAG retrieval and pass-1 tool attachment.
 
 ## Related Docs
 

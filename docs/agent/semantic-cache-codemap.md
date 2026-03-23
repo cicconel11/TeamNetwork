@@ -185,13 +185,13 @@ RLS enabled, **no policies** — service-role only access. The `service_role` ke
 
 ### Cache Version
 
-`CACHE_VERSION = 1` — incrementing this value effectively invalidates all existing entries (they won't match on lookup).
+`CACHE_VERSION = 2` — incrementing this value effectively invalidates all existing entries (they won't match on lookup). The bump reflects the prompt contract change that now injects trusted current local date/time into the system prompt.
 
 ### Ineligibility Markers
 
 Prompts containing these word-boundary patterns are excluded from caching:
 
-- **Temporal**: today, latest, current, upcoming, recent, this week, this month, right now, new, recently, last, yesterday, tomorrow, now
+- **Temporal**: today, latest, current, current date, current time, upcoming, recent, this week, this month, right now, new, recently, last, yesterday, tomorrow, now, what date is it, what time is it, what day is it
 - **Personalization**: my, mine, i am, i'm, me, myself
 - **Live org context**: member(s), alumni, parent(s), event(s), announcement(s), donation(s), stat(s), count(s), total(s), roster, attendance
 - **Write/tool**: create, delete, remove, update, edit, change, add, send, post, submit, pay, donate, schedule, cancel

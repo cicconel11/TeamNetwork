@@ -15,7 +15,10 @@ import {
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
 import { createSSEStream, SSE_HEADERS, type CacheStatus } from "@/lib/ai/sse";
-import { AI_TOOLS } from "@/lib/ai/tools/definitions";
+import {
+  AI_TOOL_MAP,
+  type ToolName,
+} from "@/lib/ai/tools/definitions";
 import { executeToolCall } from "@/lib/ai/tools/executor";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 import {
@@ -23,6 +26,7 @@ import {
   hashPrompt,
   buildPermissionScopeKey,
   checkCacheEligibility,
+  type CacheSurface,
 } from "@/lib/ai/semantic-cache-utils";
 import { lookupSemanticCache, writeCacheEntry } from "@/lib/ai/semantic-cache";
 import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
@@ -40,6 +44,24 @@ export interface ChatRouteDeps {
   resolveOwnThread?: typeof resolveOwnThread;
   retrieveRelevantChunks?: typeof retrieveRelevantChunks;
   executeToolCall?: typeof executeToolCall;
+}
+
+const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
+  general: ["list_members", "list_events", "get_org_stats"],
+  members: ["list_members", "get_org_stats"],
+  analytics: ["get_org_stats"],
+  events: ["list_events", "get_org_stats"],
+};
+
+function getPass1Tools(
+  effectiveSurface: CacheSurface,
+  skipRetrieval: boolean
+) {
+  if (skipRetrieval) {
+    return undefined;
+  }
+
+  return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
@@ -100,6 +122,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const resolvedIntent = routing.intent;
   const resolvedIntentType = routing.intentType;
   const skipRetrieval = routing.skipRetrieval;
+  const requestNow = new Date().toISOString();
+  const requestTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+  const pass1Tools = getPass1Tools(effectiveSurface, skipRetrieval);
 
   // Cache state — declared here so both the cache check block and the finally block can access them
   let cacheStatus: CacheStatus = cacheDisabled
@@ -416,6 +441,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             contextMode: usesSharedStaticContext ? "shared_static" : "full",
             surface: effectiveSurface,
             ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
+            now: requestNow,
+            timeZone: requestTimeZone,
           }),
           ctx.supabase
             .from("ai_messages")
@@ -454,7 +481,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         client,
         systemPrompt,
         messages: contextMessages,
-        tools: [...AI_TOOLS],
+        tools: pass1Tools,
         onUsage: recordUsage,
       })) {
         if (event.type === "chunk") {
@@ -614,7 +641,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         cacheStatus,
         cacheEntryId,
         cacheBypassReason,
-        contextSurface: (contextMetadata?.surface ?? effectiveSurface) as import("@/lib/ai/semantic-cache-utils").CacheSurface,
+        contextSurface: (contextMetadata?.surface ?? effectiveSurface) as CacheSurface,
         contextTokenEstimate: contextMetadata?.estimatedTokens,
         ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
         ragTopSimilarity,
