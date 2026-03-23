@@ -153,8 +153,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
   if (existingMsg) {
     if (existingMsg.status === "complete") {
+      // Replay: fetch the assistant response content for this thread
+      const { data: assistantReplay } = await ctx.supabase
+        .from("ai_messages")
+        .select("content")
+        .eq("thread_id", existingMsg.thread_id)
+        .eq("role", "assistant")
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
       return new Response(
         createSSEStream(async (enqueue) => {
+          if (assistantReplay?.content) {
+            enqueue({ type: "chunk", content: assistantReplay.content });
+          }
           enqueue({
             type: "done",
             threadId: existingMsg.thread_id,
@@ -175,56 +189,29 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     );
   }
 
-  // 7. Upsert thread
-  if (!threadId) {
-    const { data: newThread, error: threadError } = await ctx.supabase
-      .from("ai_threads")
-      .insert({
-        user_id: ctx.userId,
-        org_id: ctx.orgId,
-        surface,
-        title: message.slice(0, 100),
-      })
-      .select("id")
-      .single();
-
-    if (threadError || !newThread) {
-      console.error("[ai-chat] thread creation failed:", threadError);
-      return NextResponse.json(
-        { error: "Failed to create thread" },
-        { status: 500, headers: rateLimit.headers }
-      );
+  // 7+8. Atomically create/reuse thread and insert user message via RPC
+  const { data: initResult, error: initError } = await (ctx.serviceSupabase as any).rpc(
+    "init_ai_chat",
+    {
+      p_user_id: ctx.userId,
+      p_org_id: ctx.orgId,
+      p_surface: surface,
+      p_title: message.slice(0, 100),
+      p_message: message,
+      p_idempotency_key: idempotencyKey,
+      p_thread_id: threadId ?? null,
     }
-    threadId = newThread.id;
-  }
+  );
 
-  // 8. Insert user message
-  const { error: userMsgError } = await ctx.supabase.from("ai_messages").insert({
-    thread_id: threadId,
-    org_id: ctx.orgId,
-    user_id: ctx.userId,
-    role: "user",
-    content: message,
-    status: "complete",
-    idempotency_key: idempotencyKey,
-  });
-
-  if (userMsgError) {
-    console.error("[ai-chat] user message insert failed:", userMsgError);
+  if (initError || !initResult) {
+    console.error("[ai-chat] init_ai_chat RPC failed:", initError);
     return NextResponse.json(
-      { error: "Failed to save message" },
+      { error: "Failed to initialize chat" },
       { status: 500, headers: rateLimit.headers }
     );
   }
 
-  // Bump thread updated_at so the thread list reflects recency (trigger overwrites the value)
-  const { error: touchError } = await ctx.supabase
-    .from("ai_threads")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", threadId);
-  if (touchError) {
-    console.error("[ai-chat] failed to touch thread updated_at:", touchError);
-  }
+  threadId = initResult.thread_id;
 
   const insertAssistantMessage = async (input: {
     content: string | null;
@@ -517,14 +504,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         cacheStatus,
         cacheEntryId,
         cacheBypassReason,
-        contextSurface: contextMetadata?.surface ?? surface,
+        contextSurface: (contextMetadata?.surface ?? surface) as import("@/lib/ai/semantic-cache-utils").CacheSurface,
         contextTokenEstimate: contextMetadata?.estimatedTokens,
         ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
         ragTopSimilarity,
         ragError,
       });
     }
-  });
+  }, request.signal);
 
     return new Response(stream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
   };

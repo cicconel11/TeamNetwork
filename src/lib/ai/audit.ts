@@ -32,9 +32,12 @@ interface AuditInsertClient {
 
 function redactSensitive(value: string): string {
   return value
-    .replace(/sk-[a-zA-Z0-9]+/g, "[REDACTED]")
-    .replace(/key_[a-zA-Z0-9]+/g, "[REDACTED]")
-    .replace(/Bearer [a-zA-Z0-9._-]+/g, "Bearer [REDACTED]");
+    .replace(/sk-[a-zA-Z0-9_-]+/g, "[REDACTED]")                // OpenAI API keys
+    .replace(/key_[a-zA-Z0-9_-]+/g, "[REDACTED]")              // Generic key_ prefixed
+    .replace(/AIza[a-zA-Z0-9_-]{30,}/g, "[REDACTED]")          // Google/Gemini API keys
+    .replace(/sbp_[a-zA-Z0-9]{20,}/g, "[REDACTED]")            // Supabase keys
+    .replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/g, "[REDACTED]") // JWTs
+    .replace(/Bearer [a-zA-Z0-9._-]+/g, "Bearer [REDACTED]");  // Auth headers
 }
 
 export async function logAiRequest(

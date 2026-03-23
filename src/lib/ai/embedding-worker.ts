@@ -100,22 +100,24 @@ async function fetchParentThreads(
   return map;
 }
 
+/**
+ * Fetch exclusions for an org. Returns null on failure (fail-closed).
+ * When null, caller must skip all items for this org.
+ */
 async function fetchExclusions(
   supabase: SupabaseClient,
   orgId: string
-): Promise<Set<string>> {
-  // Build a set of "source_table:source_id" keys for excluded items
+): Promise<Set<string> | null> {
   const { data, error } = await (supabase as any)
     .from("ai_indexing_exclusions")
     .select("source_table, source_id")
     .eq("org_id", orgId);
 
   if (error || !data) {
-    // On error, assume nothing is excluded (fail-open for embedding)
     if (error) {
-      console.error("[embedding-worker] fetch exclusions failed:", error);
+      console.error("[embedding-worker] fetch exclusions failed — skipping org:", error);
     }
-    return new Set();
+    return null; // fail-closed: caller must skip this org
   }
 
   const excluded = new Set<string>();
@@ -125,42 +127,53 @@ async function fetchExclusions(
   return excluded;
 }
 
-async function markProcessed(
-  supabase: SupabaseClient,
-  ids: string[]
-): Promise<void> {
-  if (ids.length === 0) return;
-  const { error } = await (supabase as any)
-    .from("ai_embedding_queue")
-    .update({ processed_at: new Date().toISOString() })
-    .in("id", ids);
-
-  if (error) {
-    console.error("[embedding-worker] mark processed failed:", error);
-  }
-}
-
+/**
+ * Atomically increment attempts and re-enqueue for retry via RPC.
+ * Clears processed_at so the item re-enters the queue.
+ */
 async function incrementAttempts(
   supabase: SupabaseClient,
   id: string,
   errorMsg: string
 ): Promise<void> {
-  // Read current attempts, then increment (Supabase JS has no SQL template literals)
-  const { data: row } = await (supabase as any)
-    .from("ai_embedding_queue")
-    .select("attempts")
-    .eq("id", id)
-    .single();
-
-  if (row) {
-    await (supabase as any)
-      .from("ai_embedding_queue")
-      .update({
-        attempts: (row.attempts ?? 0) + 1,
-        error: errorMsg.slice(0, 500),
-      })
-      .eq("id", id);
+  const { error } = await (supabase as any).rpc("increment_ai_queue_attempts", {
+    p_id: id,
+    p_error: errorMsg.slice(0, 500),
+  });
+  if (error) {
+    console.error("[embedding-worker] increment attempts RPC failed:", error);
   }
+}
+
+/**
+ * Batch-fetch existing chunk hashes for multiple source IDs in one query.
+ * Returns Map<source_id, Map<chunk_index, content_hash>>.
+ */
+async function batchFetchExistingHashes(
+  supabase: SupabaseClient,
+  orgId: string,
+  sourceTable: string,
+  sourceIds: string[]
+): Promise<Map<string, Map<number, string>>> {
+  const hashLookup = new Map<string, Map<number, string>>();
+  if (sourceIds.length === 0) return hashLookup;
+
+  const { data } = await (supabase as any)
+    .from("ai_document_chunks")
+    .select("source_id, chunk_index, content_hash")
+    .eq("org_id", orgId)
+    .eq("source_table", sourceTable)
+    .in("source_id", sourceIds)
+    .is("deleted_at", null);
+
+  if (data) {
+    for (const ec of data as { source_id: string; chunk_index: number; content_hash: string }[]) {
+      if (!hashLookup.has(ec.source_id)) hashLookup.set(ec.source_id, new Map());
+      hashLookup.get(ec.source_id)!.set(ec.chunk_index, ec.content_hash);
+    }
+  }
+
+  return hashLookup;
 }
 
 // ---------------------------------------------------------------------------
@@ -169,8 +182,9 @@ async function incrementAttempts(
 
 /**
  * Process pending items from the embedding queue.
+ * Uses FOR UPDATE SKIP LOCKED via RPC to prevent concurrent processing.
  * Fetches source records, renders chunks, generates embeddings in batch,
- * and upserts into ai_document_chunks.
+ * and atomically replaces chunks via RPC.
  */
 export async function processEmbeddingQueue(
   serviceSupabase: SupabaseClient,
@@ -179,16 +193,10 @@ export async function processEmbeddingQueue(
   const batchSize = options?.batchSize ?? 50;
   const stats: QueueStats = { processed: 0, skipped: 0, failed: 0 };
 
-  // 1. Dequeue pending items
+  // 1. Dequeue pending items with row-level locking (FOR UPDATE SKIP LOCKED)
   const { data: queueItems, error: dequeueError } = await (
     serviceSupabase as any
-  )
-    .from("ai_embedding_queue")
-    .select("id, org_id, source_table, source_id, action")
-    .is("processed_at", null)
-    .lt("attempts", 3)
-    .order("created_at", { ascending: true })
-    .limit(batchSize);
+  ).rpc("dequeue_ai_embeddings", { p_batch_size: batchSize });
 
   if (dequeueError || !queueItems || queueItems.length === 0) {
     if (dequeueError) {
@@ -207,7 +215,7 @@ export async function processEmbeddingQueue(
         `[embedding-worker] unknown source_table: ${item.source_table}`
       );
       stats.skipped++;
-      await markProcessed(serviceSupabase, [item.id]);
+      // Already marked processed_at by dequeue RPC — leave as-is
       continue;
     }
     const list = byTable.get(item.source_table) ?? [];
@@ -241,9 +249,9 @@ export async function processEmbeddingQueue(
     }
   }
 
-  // 3. Check exclusions (per-org)
+  // 3. Check exclusions (per-org) — fail-closed on error
   const orgIds = new Set(items.map((i) => i.org_id));
-  const exclusionsByOrg = new Map<string, Set<string>>();
+  const exclusionsByOrg = new Map<string, Set<string> | null>();
   for (const orgId of orgIds) {
     exclusionsByOrg.set(
       orgId,
@@ -258,11 +266,18 @@ export async function processEmbeddingQueue(
   for (const item of items) {
     if (!isValidSourceTable(item.source_table)) continue;
 
-    const exclusions = exclusionsByOrg.get(item.org_id) ?? new Set();
+    // Fail-closed: if exclusion fetch failed, skip all items for this org
+    const exclusions = exclusionsByOrg.get(item.org_id);
+    if (!exclusions) {
+      stats.failed++;
+      await incrementAttempts(serviceSupabase, item.id, "exclusion_fetch_failed");
+      continue;
+    }
+
     const exclusionKey = `${item.source_table}:${item.source_id}`;
 
     if (exclusions.has(exclusionKey)) {
-      // Issue 4 fix: purge any existing chunks for excluded content
+      // Purge any existing chunks for excluded content
       await (serviceSupabase as any)
         .from("ai_document_chunks")
         .update({ deleted_at: new Date().toISOString() })
@@ -271,7 +286,7 @@ export async function processEmbeddingQueue(
         .eq("source_id", item.source_id)
         .is("deleted_at", null);
       stats.skipped++;
-      await markProcessed(serviceSupabase, [item.id]);
+      // Already marked processed_at by dequeue RPC
       continue;
     }
 
@@ -301,7 +316,7 @@ export async function processEmbeddingQueue(
         await incrementAttempts(serviceSupabase, item.id, error.message);
       } else {
         stats.processed++;
-        await markProcessed(serviceSupabase, [item.id]);
+        // Already marked processed_at by dequeue RPC
       }
     }
   }
@@ -319,8 +334,28 @@ export async function processEmbeddingQueue(
   }
 
   const pendingChunks: PendingChunk[] = [];
-  const processedItemIds: string[] = [];
-  const skippedItemIds: string[] = [];
+
+  // Batch-fetch existing hashes per (org, table) to avoid N+1 queries
+  const hashLookupByKey = new Map<string, Map<string, Map<number, string>>>();
+  for (const [table, tableItems] of byTable) {
+    // Group items by org within table
+    const byOrg = new Map<string, string[]>();
+    for (const item of tableItems) {
+      if (item.action === "delete") continue;
+      const list = byOrg.get(item.org_id) ?? [];
+      list.push(item.source_id);
+      byOrg.set(item.org_id, list);
+    }
+    for (const [orgId, sourceIds] of byOrg) {
+      const hashes = await batchFetchExistingHashes(
+        serviceSupabase,
+        orgId,
+        table,
+        sourceIds
+      );
+      hashLookupByKey.set(`${orgId}:${table}`, hashes);
+    }
+  }
 
   for (const item of upsertItems) {
     const record = sourceRecords.get(item.source_table)!.get(item.source_id)!;
@@ -336,29 +371,31 @@ export async function processEmbeddingQueue(
     );
 
     if (chunks.length === 0) {
-      // Short reply — skipped by chunker
+      // Content too short — clean up any existing chunks for this source
+      await (serviceSupabase as any)
+        .from("ai_document_chunks")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("org_id", item.org_id)
+        .eq("source_table", item.source_table)
+        .eq("source_id", item.source_id)
+        .is("deleted_at", null);
       stats.skipped++;
-      skippedItemIds.push(item.id);
+      // Already marked processed_at by dequeue RPC
       continue;
     }
 
-    // Check existing hashes to skip unchanged content
-    const { data: existingChunks } = await (serviceSupabase as any)
-      .from("ai_document_chunks")
-      .select("chunk_index, content_hash")
-      .eq("org_id", item.org_id)
-      .eq("source_table", item.source_table)
-      .eq("source_id", item.source_id)
-      .is("deleted_at", null);
+    // Use batch-fetched hashes instead of per-item query
+    const lookupKey = `${item.org_id}:${item.source_table}`;
+    const orgTableHashes = hashLookupByKey.get(lookupKey);
+    const existingHashes = orgTableHashes?.get(item.source_id) ?? new Map<number, string>();
 
-    const existingHashes = new Map<number, string>();
-    if (existingChunks) {
-      for (const ec of existingChunks) {
-        existingHashes.set(ec.chunk_index, ec.content_hash);
-      }
-    }
+    // Check for orphaned chunks (old indexes not in new chunks)
+    const newChunkIndexes = new Set(chunks.map((c) => c.chunkIndex));
+    const hasOrphanedChunks = Array.from(existingHashes.keys()).some(
+      (idx) => !newChunkIndexes.has(idx)
+    );
 
-    let allUnchanged = true;
+    let allUnchanged = !hasOrphanedChunks;
     for (const chunk of chunks) {
       const hash = computeContentHash(chunk.text);
       if (existingHashes.get(chunk.chunkIndex) === hash) {
@@ -376,13 +413,8 @@ export async function processEmbeddingQueue(
 
     if (allUnchanged) {
       stats.skipped++;
-      skippedItemIds.push(item.id);
+      // Already marked processed_at by dequeue RPC
     }
-  }
-
-  // Mark skipped items as processed
-  if (skippedItemIds.length > 0) {
-    await markProcessed(serviceSupabase, skippedItemIds);
   }
 
   if (pendingChunks.length === 0) return stats;
@@ -391,8 +423,6 @@ export async function processEmbeddingQueue(
   try {
     const texts = pendingChunks.map((c) => c.text);
     const embeddings = await generateEmbeddings(texts);
-
-    const now = new Date().toISOString();
 
     // Group chunks by queue item for atomic per-item processing
     const chunksByItem = new Map<string, Array<{ chunk: PendingChunk; embedding: number[] }>>();
@@ -405,56 +435,33 @@ export async function processEmbeddingQueue(
 
     for (const [itemId, itemChunks] of chunksByItem) {
       const firstChunk = itemChunks[0].chunk;
-      let itemFailed = false;
 
-      // Issue 3 fix: soft-delete ALL existing chunks for this source record
-      // before inserting — cleans up stale chunks when content shrinks
-      await (serviceSupabase as any)
-        .from("ai_document_chunks")
-        .update({ deleted_at: now })
-        .eq("org_id", firstChunk.item.org_id)
-        .eq("source_table", firstChunk.item.source_table)
-        .eq("source_id", firstChunk.item.source_id)
-        .is("deleted_at", null);
-
-      // Insert all new chunks for this item
-      for (const { chunk, embedding } of itemChunks) {
-        const { error: insertError } = await (serviceSupabase as any)
-          .from("ai_document_chunks")
-          .insert({
-            org_id: chunk.item.org_id,
-            source_table: chunk.item.source_table,
-            source_id: chunk.item.source_id,
+      // Atomic chunk replacement via RPC (delete + insert in one transaction)
+      const { error: replaceError } = await (serviceSupabase as any).rpc(
+        "replace_ai_chunks",
+        {
+          p_org_id: firstChunk.item.org_id,
+          p_source_table: firstChunk.item.source_table,
+          p_source_id: firstChunk.item.source_id,
+          p_chunks: itemChunks.map(({ chunk, embedding }) => ({
             chunk_index: chunk.chunkIndex,
             content_text: chunk.text,
             content_hash: chunk.contentHash,
             embedding: JSON.stringify(embedding),
             metadata: chunk.metadata,
-          });
-
-        if (insertError) {
-          console.error("[embedding-worker] insert chunk failed:", insertError);
-          itemFailed = true;
-          break; // Stop inserting more chunks for this item
+          })),
         }
-      }
+      );
 
-      // Issue 2 fix: only mark processed if ALL chunks for this item succeeded
-      if (itemFailed) {
+      if (replaceError) {
+        console.error("[embedding-worker] replace_ai_chunks RPC failed:", replaceError);
         stats.failed++;
-        await incrementAttempts(
-          serviceSupabase,
-          itemId,
-          "chunk_insert_failed"
-        );
+        await incrementAttempts(serviceSupabase, itemId, "chunk_replace_failed");
       } else {
-        processedItemIds.push(itemId);
         stats.processed++;
+        // Already marked processed_at by dequeue RPC
       }
     }
-
-    // Mark successfully processed queue items
-    await markProcessed(serviceSupabase, processedItemIds);
   } catch (err) {
     // Embedding API failure — increment attempts for all pending items
     const errorMsg =

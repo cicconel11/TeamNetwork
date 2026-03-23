@@ -169,6 +169,7 @@ const POST = createChatPostHandler({
   buildPromptContext: async () => ({
     systemPrompt: "System prompt",
     orgContextMessage: null,
+    metadata: { surface: "general", estimatedTokens: 100 },
   }),
   createZaiClient: () => ({ client: "fake" } as any),
   getZaiModel: () => "glm-5",
@@ -205,7 +206,37 @@ beforeEach(() => {
     userEmail: ADMIN_USER.email,
     role: "admin",
     supabase: supabaseStub,
-    serviceSupabase: {},
+    serviceSupabase: {
+      rpc: async (fn: string, params: any) => {
+        if (fn === "init_ai_chat") {
+          // Simulate atomic thread + user message creation
+          const threadId = params.p_thread_id ?? `thread-${++supabaseStub.state.threadCount}`;
+          supabaseStub.state.threads.push({
+            id: threadId,
+            user_id: params.p_user_id,
+            org_id: params.p_org_id,
+            surface: params.p_surface,
+            title: params.p_title,
+          });
+          supabaseStub.state.messages.push({
+            id: `user-${supabaseStub.state.messages.length + 1}`,
+            thread_id: threadId,
+            org_id: params.p_org_id,
+            user_id: params.p_user_id,
+            role: "user",
+            content: params.p_message,
+            status: "complete",
+            idempotency_key: params.p_idempotency_key,
+            created_at: new Date().toISOString(),
+          });
+          return {
+            data: { thread_id: threadId, user_msg_id: `user-${supabaseStub.state.messages.length}` },
+            error: null,
+          };
+        }
+        return { data: null, error: null };
+      },
+    },
   };
   process.env.ZAI_API_KEY = "test-key";
   process.env.DISABLE_AI_CACHE = "true";

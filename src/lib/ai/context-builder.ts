@@ -249,7 +249,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
       ? safeCount("active member count", () =>
         (serviceSupabase as any)
           .from("members")
-          .select("*", { count: "exact", head: true })
+          .select("*", { count: "estimated", head: true })
           .eq("organization_id", orgId)
           .is("deleted_at", null)
           .eq("status", "active")
@@ -259,7 +259,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
       ? safeCount("alumni count", () =>
         (serviceSupabase as any)
           .from("alumni")
-          .select("*", { count: "exact", head: true })
+          .select("*", { count: "estimated", head: true })
           .eq("organization_id", orgId)
           .is("deleted_at", null)
       )
@@ -268,7 +268,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
       ? safeCount("parent count", () =>
         (serviceSupabase as any)
           .from("parents")
-          .select("*", { count: "exact", head: true })
+          .select("*", { count: "estimated", head: true })
           .eq("organization_id", orgId)
           .is("deleted_at", null)
       )
