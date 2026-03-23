@@ -145,31 +145,21 @@ async function incrementAttempts(
   id: string,
   errorMsg: string
 ): Promise<void> {
-  const { error: updateError } = await (supabase as any)
+  // Read current attempts, then increment (Supabase JS has no SQL template literals)
+  const { data: row } = await (supabase as any)
     .from("ai_embedding_queue")
-    .update({
-      attempts: (supabase as any).sql`attempts + 1`,
-      error: errorMsg.slice(0, 500),
-    })
-    .eq("id", id);
+    .select("attempts")
+    .eq("id", id)
+    .single();
 
-  if (updateError) {
-    // Fallback: raw increment via two-step read+write
-    const { data: row } = await (supabase as any)
+  if (row) {
+    await (supabase as any)
       .from("ai_embedding_queue")
-      .select("attempts")
-      .eq("id", id)
-      .single();
-
-    if (row) {
-      await (supabase as any)
-        .from("ai_embedding_queue")
-        .update({
-          attempts: (row.attempts ?? 0) + 1,
-          error: errorMsg.slice(0, 500),
-        })
-        .eq("id", id);
-    }
+      .update({
+        attempts: (row.attempts ?? 0) + 1,
+        error: errorMsg.slice(0, 500),
+      })
+      .eq("id", id);
   }
 }
 
