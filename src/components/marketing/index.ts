@@ -1,6 +1,5 @@
 export { PricingSection } from "./PricingSection";
 export { LandingAnimations } from "./LandingAnimations";
-export { FloatingParticles } from "./FloatingParticles";
 export { StadiumLightBeams } from "./StadiumLightBeams";
 export { Confetti } from "./Confetti";
 export {
@@ -9,8 +8,6 @@ export {
   useChipDrift,
   useReducedMotion,
   useStadiumLights,
-  useCountUp,
-  useBannerDrop,
   useConfettiBurst,
   useTrophyBounce,
 } from "./use-animations";
