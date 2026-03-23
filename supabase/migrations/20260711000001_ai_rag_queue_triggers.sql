@@ -84,7 +84,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = 'extensions'
 AS $$
 BEGIN
   RETURN QUERY
