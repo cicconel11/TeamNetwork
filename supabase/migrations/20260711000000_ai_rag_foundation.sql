@@ -105,20 +105,8 @@ CREATE POLICY "ai_indexing_exclusions_admin"
   ON public.ai_indexing_exclusions
   FOR ALL
   USING (
-    EXISTS (
-      SELECT 1 FROM public.user_organization_roles
-      WHERE user_id = auth.uid()
-        AND organization_id = ai_indexing_exclusions.org_id
-        AND role = 'admin'
-        AND deleted_at IS NULL
-    )
+    has_active_role(org_id, array['admin'])
   )
   WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.user_organization_roles
-      WHERE user_id = auth.uid()
-        AND organization_id = ai_indexing_exclusions.org_id
-        AND role = 'admin'
-        AND deleted_at IS NULL
-    )
+    has_active_role(org_id, array['admin'])
   );
