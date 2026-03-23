@@ -25,6 +25,7 @@ export const createOrgSchema = z.object({
   primaryColor: hexColorSchema,
   billingInterval: subscriptionIntervalSchema,
   alumniBucket: alumniBucketSchema,
+  withTrial: z.boolean(),
 });
 export type CreateOrgForm = z.infer<typeof createOrgSchema>;
 

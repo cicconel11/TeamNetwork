@@ -12,6 +12,7 @@ export type OrgMetadata = {
   createdBy: string | null;
   baseInterval: SubscriptionInterval;
   alumniBucket: AlumniBucket;
+  isTrial: boolean;
 };
 
 type OrgProvisionerDeps = {
@@ -42,6 +43,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
     createdBy: null,
     baseInterval: normalizeInterval((metadata?.base_interval as string | undefined) ?? null),
     alumniBucket: normalizeBucket((metadata?.alumni_bucket as string | undefined) ?? null),
+    isTrial: metadata?.is_trial === "true",
   });
 
   const resolveCreatorFromPaymentAttempt = async (
@@ -159,6 +161,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
         base_plan_interval: baseInterval,
         alumni_bucket: alumniBucket,
         alumni_plan_interval: alumniPlanInterval,
+        is_trial: metadata.isTrial,
         status: "pending",
         updated_at: new Date().toISOString(),
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Update"];
@@ -175,6 +178,7 @@ export function createOrgProvisioner({ supabase, debugLog }: OrgProvisionerDeps)
         base_plan_interval: baseInterval,
         alumni_bucket: alumniBucket,
         alumni_plan_interval: alumniPlanInterval,
+        is_trial: metadata.isTrial,
         status: "pending",
       } satisfies Database["public"]["Tables"]["organization_subscriptions"]["Insert"];
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button, Card } from "@/components/ui";
@@ -14,11 +15,15 @@ export default async function CreatePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border bg-card">
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link href="/app">
-            <h1 className="text-2xl font-bold text-foreground">
-              Team<span className="text-emerald-500">Network</span>
+            <h1 className="flex items-center gap-2.5">
+              <Image src="/TeamNetwor.png" alt="" width={541} height={303}
+                     className="h-7 w-auto object-contain" aria-hidden="true" />
+              <span className="text-2xl font-bold text-foreground">
+                <span className="text-green-500">Team</span>Network
+              </span>
             </h1>
           </Link>
           <form action="/auth/signout" method="POST">

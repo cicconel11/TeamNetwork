@@ -122,7 +122,7 @@ export function BillingGate({ orgSlug, organizationId, status, gracePeriodExpire
       : "Subscription canceled. Resubscribe to continue using this organization.",
     incomplete: "Your checkout wasn't completed. Click below to finish setting up your subscription.",
     incomplete_expired: "Your previous checkout expired. Start a new checkout to activate your organization.",
-    trialing: "Trial active. Ensure billing is set up before the trial ends.",
+    trialing: "Your free trial is active. Your card will be charged automatically when the trial ends unless you cancel first.",
     complete: "Payment completed but subscription status needs to be synced.",
     completed: "Payment completed but subscription status needs to be synced.",
   };

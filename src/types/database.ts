@@ -3689,6 +3689,7 @@ export type Database = {
           current_period_end: string | null
           grace_period_ends_at: string | null
           id: string
+          is_trial: boolean
           media_storage_quota_bytes: number | null
           organization_id: string
           parents_bucket: string
@@ -3705,6 +3706,7 @@ export type Database = {
           current_period_end?: string | null
           grace_period_ends_at?: string | null
           id?: string
+          is_trial?: boolean
           media_storage_quota_bytes?: number | null
           organization_id: string
           parents_bucket?: string
@@ -3721,6 +3723,7 @@ export type Database = {
           current_period_end?: string | null
           grace_period_ends_at?: string | null
           id?: string
+          is_trial?: boolean
           media_storage_quota_bytes?: number | null
           organization_id?: string
           parents_bucket?: string
@@ -3944,6 +3947,7 @@ export type Database = {
           flow_type: string
           id: string
           idempotency_key: string
+          is_trial: boolean
           last_error: string | null
           metadata: Json | null
           organization_id: string | null
@@ -3965,6 +3969,7 @@ export type Database = {
           flow_type: string
           id?: string
           idempotency_key: string
+          is_trial?: boolean
           last_error?: string | null
           metadata?: Json | null
           organization_id?: string | null
@@ -3986,6 +3991,7 @@ export type Database = {
           flow_type?: string
           id?: string
           idempotency_key?: string
+          is_trial?: boolean
           last_error?: string | null
           metadata?: Json | null
           organization_id?: string | null

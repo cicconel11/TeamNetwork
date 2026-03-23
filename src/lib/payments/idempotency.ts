@@ -69,6 +69,7 @@ export async function ensurePaymentAttempt(params: {
   organizationId?: string | null;
   stripeConnectedAccountId?: string | null;
   requestFingerprint?: string | null;
+  isTrial?: boolean;
   metadata?: PaymentAttemptInsert["metadata"];
 }) {
   const {
@@ -82,6 +83,7 @@ export async function ensurePaymentAttempt(params: {
     organizationId,
     stripeConnectedAccountId,
     requestFingerprint,
+    isTrial,
     metadata,
   } = params;
 
@@ -111,6 +113,7 @@ export async function ensurePaymentAttempt(params: {
     status: "initiated",
     user_id: userId ?? null,
     organization_id: organizationId ?? null,
+    is_trial: isTrial ?? false,
     stripe_connected_account_id: stripeConnectedAccountId ?? null,
     request_fingerprint: fingerprint,
     metadata: metadata ?? null,
