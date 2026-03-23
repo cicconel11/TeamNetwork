@@ -324,6 +324,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const usageRef: { current: UsageAccumulator | null } = { current: null };
     let streamCompletedSuccessfully = false;
     let auditErrorMessage: string | undefined;
+    let contextMetadata: { surface: string; estimatedTokens: number } | undefined;
 
     try {
       // Guard: ZAI_API_KEY required
@@ -354,7 +355,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         .eq("id", assistantMessageId);
 
       // Build context and fetch history in parallel
-      const [{ systemPrompt, orgContextMessage }, { data: history, error: historyError }] =
+      const [contextResult, { data: history, error: historyError }] =
         await Promise.all([
           buildPromptContextFn({
             orgId: ctx.orgId,
@@ -362,6 +363,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             role: ctx.role,
             serviceSupabase: ctx.serviceSupabase,
             contextMode: usesSharedStaticContext ? "shared_static" : "full",
+            surface,
+            userMessage: message,
           }),
           ctx.supabase
             .from("ai_messages")
@@ -371,6 +374,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             .order("created_at", { ascending: true })
             .limit(20),
         ]);
+
+      const { systemPrompt, orgContextMessage, metadata } = contextResult;
+      contextMetadata = metadata;
 
       if (historyError) {
         console.error("[ai-chat] history fetch failed:", historyError);
@@ -477,6 +483,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         cacheStatus,
         cacheEntryId,
         cacheBypassReason,
+        contextSurface: contextMetadata?.surface,
+        contextTokenEstimate: contextMetadata?.estimatedTokens,
       });
     }
   });

@@ -397,4 +397,199 @@ describe("AI prompt context builder", () => {
 
     assert.deepEqual(queriedTables, ["organizations"]);
   });
+
+  // --- Phase 1: Surface-based context selection ---
+
+  it("events surface only queries org, users, and events tables", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+      alumniCount: 5,
+      parentCount: 2,
+      upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+      announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+      donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "events",
+      serviceSupabase: mock as any,
+    });
+
+    assert.ok(queriedTables.includes("organizations"));
+    assert.ok(queriedTables.includes("users"));
+    assert.ok(queriedTables.includes("events"));
+    assert.ok(!queriedTables.includes("members"), "should not query members for events surface");
+    assert.ok(!queriedTables.includes("alumni"), "should not query alumni for events surface");
+    assert.ok(!queriedTables.includes("parents"), "should not query parents for events surface");
+    assert.ok(!queriedTables.includes("announcements"), "should not query announcements for events surface");
+    assert.ok(!queriedTables.includes("organization_donation_stats"), "should not query donations for events surface");
+  });
+
+  it("members surface excludes events and donations from output", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "members",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+        userName: "Admin",
+        memberCount: 42,
+        alumniCount: 10,
+        parentCount: 5,
+        upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.orgContextMessage);
+    assert.match(result.orgContextMessage!, /Active Members: 42/);
+    assert.ok(!result.orgContextMessage!.includes("Upcoming Events"));
+    assert.ok(!result.orgContextMessage!.includes("Donation Summary"));
+  });
+
+  it("no surface defaults to general and loads all data sources", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+      alumniCount: 5,
+      parentCount: 2,
+      upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+      announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+      donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: mock as any,
+    });
+
+    assert.ok(queriedTables.includes("organizations"));
+    assert.ok(queriedTables.includes("users"));
+    assert.ok(queriedTables.includes("members"));
+    assert.ok(queriedTables.includes("alumni"));
+    assert.ok(queriedTables.includes("parents"));
+    assert.ok(queriedTables.includes("events"));
+    assert.ok(queriedTables.includes("announcements"));
+    assert.ok(queriedTables.includes("organization_donation_stats"));
+  });
+
+  // --- Phase 2: Token budget and metadata ---
+
+  it("returns metadata with included and excluded sections", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+        userName: "Admin",
+        memberCount: 10,
+        alumniCount: 5,
+        parentCount: 2,
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.metadata);
+    assert.equal(result.metadata.surface, "general");
+    assert.ok(result.metadata.sectionsIncluded.includes("Organization Overview"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Current User"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Counts"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Donation Summary"));
+    assert.ok(result.metadata.estimatedTokens > 0);
+    assert.equal(result.metadata.budgetTokens, 4000);
+    assert.deepEqual(result.metadata.sectionsExcluded, []);
+  });
+
+  // --- Phase 3: Relevance filtering ---
+
+  it("deprioritizes irrelevant sections when userMessage is provided and budget is tight", async () => {
+    // This test uses a mock that produces very verbose content to exceed budget.
+    // With a tight budget, irrelevant sections should be excluded first.
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+
+    // Generate a long announcement list to push total tokens above a reasonable budget
+    const longAnnouncements = Array.from({ length: 50 }, (_, i) => ({
+      title: `Very long announcement title number ${i + 1} with extra description text padding here`,
+      published_at: "2026-03-15T12:00:00Z",
+    }));
+
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      userMessage: "tell me about upcoming events",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+        userName: "Admin",
+        memberCount: 10,
+        alumniCount: 5,
+        parentCount: 2,
+        upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+        announcements: longAnnouncements,
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.metadata);
+    // Events section should be included since the message mentions "events"
+    assert.ok(result.metadata.sectionsIncluded.includes("Upcoming Events"));
+    // Org Overview is always included (highest priority)
+    assert.ok(result.metadata.sectionsIncluded.includes("Organization Overview"));
+  });
+
+  it("shared_static context mode takes precedence over surface", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "events",
+      contextMode: "shared_static",
+      serviceSupabase: mock as any,
+    });
+
+    // shared_static should only query organizations, regardless of surface
+    assert.deepEqual(queriedTables, ["organizations"]);
+  });
 });

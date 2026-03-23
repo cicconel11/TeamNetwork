@@ -16,6 +16,8 @@ interface AuditEntry {
   cacheStatus?: CacheStatus;
   cacheEntryId?: string; // UUID of the cache entry that was hit
   cacheBypassReason?: string; // why cache was bypassed (eligibility reason)
+  contextSurface?: string; // which surface was used for context selection
+  contextTokenEstimate?: number; // estimated token count of the context message
 }
 
 interface AuditInsertClient {
@@ -55,6 +57,8 @@ export async function logAiRequest(
       cache_status: entry.cacheStatus ?? null,
       cache_entry_id: entry.cacheEntryId ?? null,
       cache_bypass_reason: entry.cacheBypassReason ?? null,
+      context_surface: entry.contextSurface ?? null,
+      context_token_estimate: entry.contextTokenEstimate ?? null,
     };
 
     const { error } = await (serviceSupabase as unknown as AuditInsertClient)
