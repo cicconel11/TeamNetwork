@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface LikeButtonProps {
   postId: string;
@@ -12,6 +12,20 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
   const [liked, setLiked] = useState(initialLiked);
   const [count, setCount] = useState(initialCount);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Re-sync from server props when they change (e.g., after client-side navigation).
+  // Guarded by isLoading so an in-flight optimistic update isn't clobbered by a stale RSC payload.
+  useEffect(() => {
+    if (!isLoading) {
+      setLiked(initialLiked);
+    }
+  }, [initialLiked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isLoading) {
+      setCount(initialCount);
+    }
+  }, [initialCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = async () => {
     if (isLoading) return;
@@ -27,7 +41,10 @@ export function LikeButton({ postId, likeCount: initialCount, likedByUser: initi
         method: "POST",
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        const { data } = await response.json();
+        setLiked(data.liked);
+      } else {
         setLiked(wasLiked);
         setCount((c) => (wasLiked ? c + 1 : c - 1));
       }

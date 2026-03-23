@@ -236,30 +236,6 @@
   animation: scrollBounce 2s ease-in-out infinite;
 }
 
-@media (prefers-reduced-motion: reduce) {
-
-  .gold-shimmer,
-  .scroll-indicator,
-  .gradient-orb,
-  .stripe-pattern,
-  .text-shimmer,
-  .pulse-glow {
-    animation: none;
-  }
-
-  .feature-card:hover {
-    transform: none;
-  }
-
-  /* Ensure visibility with reduced motion */
-  .scroll-reveal,
-  .pricing-card,
-  .feature-card,
-  .terms-card {
-    opacity: 1 !important;
-    transform: none !important;
-  }
-}
 
 /* Terms card hover effect */
 .terms-card {
@@ -663,12 +639,6 @@ noscript~.scroll-reveal {
   animation: modalSlideUp 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .modal-enter {
-    animation: none;
-  }
-}
-
 /* Microphone icon for FAQ */
 .mic-icon {
   width: 1.25rem;
@@ -677,8 +647,173 @@ noscript~.scroll-reveal {
   flex-shrink: 0;
 }
 
-/* Stadium reduced motion preferences */
+/* Infinite scrolling marquee */
+@keyframes marqueeScroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 30s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Bento feature grid */
+.bento-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+.bento-grid > :nth-child(3) {
+  grid-column: 1 / 2;
+}
+
+.bento-grid > :nth-child(4) {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+}
+
+@media (max-width: 639px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bento-grid > :nth-child(n) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .bento-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bento-grid > :nth-child(1) {
+    grid-column: 1 / 3;
+  }
+
+  .bento-grid > :nth-child(n+2) {
+    grid-column: auto;
+  }
+}
+
+/* FAQ accordion smooth height */
+.faq-content-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Breathing glow on stat numbers */
+@keyframes statGlow {
+  0%, 100% {
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    text-shadow: 0 0 20px rgba(34, 197, 94, 0.8), 0 0 40px rgba(34, 197, 94, 0.3);
+  }
+}
+
+.stat-glow {
+  animation: statGlow 4s ease-in-out infinite;
+}
+
+/* Active nav indicator */
+.nav-link-active {
+  color: var(--landing-cream) !important;
+  position: relative;
+}
+
+.nav-link-active::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--landing-green);
+}
+
+/* Marquee fade edges */
+.marquee-container {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
+}
+
+/* Mobile timeline for How It Works */
+@media (max-width: 767px) {
+  .mobile-timeline {
+    position: relative;
+    padding-left: 3rem;
+  }
+
+  .mobile-timeline::before {
+    content: '';
+    position: absolute;
+    left: 1.75rem;
+    top: 1.75rem;
+    bottom: 1.75rem;
+    width: 2px;
+    background: repeating-linear-gradient(
+      180deg,
+      rgba(241, 245, 249, 0.3) 0px,
+      rgba(241, 245, 249, 0.3) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+  }
+
+  .mobile-timeline > * {
+    position: relative;
+  }
+
+  .mobile-timeline .play-marker {
+    position: absolute;
+    left: -3rem;
+    top: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+
+  .gold-shimmer,
+  .scroll-indicator,
+  .gradient-orb,
+  .stripe-pattern,
+  .text-shimmer,
+  .pulse-glow {
+    animation: none;
+  }
+
+  .feature-card:hover {
+    transform: none;
+  }
+
+  /* Ensure visibility with reduced motion */
+  .scroll-reveal,
+  .pricing-card,
+  .feature-card,
+  .terms-card {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .modal-enter {
+    animation: none;
+  }
 
   .light-beam-animate,
   .banner-animate,
@@ -700,5 +835,18 @@ noscript~.scroll-reveal {
   .holo-border:hover::before {
     animation: none;
     opacity: 0.5;
+  }
+
+  .marquee-track {
+    animation: none;
+  }
+
+  .stat-glow {
+    animation: none;
+    text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  }
+
+  .faq-content-wrapper {
+    transition: none;
   }
 }

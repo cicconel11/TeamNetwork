@@ -46,8 +46,8 @@ export const FEATURES = [
 
 export const FAQ_ITEMS = [
   {
-    question: "Is this built for high school programs?",
-    answer: "Yes. TeamNetwork is designed specifically for high school sports teams, booster clubs, and alumni associations that need to bridge the gap between current seasons and past generations.",
+    question: "Who is TeamNetwork built for?",
+    answer: "TeamNetwork is built for any organization that wants to stay connected — sports teams, Greek life chapters, clubs, volunteer groups, and alumni associations. Whether you're managing a high school booster club or a college fraternity, we bridge the gap between active members and alumni.",
   },
   {
     question: "Do you take a cut of our donations?",
@@ -64,5 +64,17 @@ export const FAQ_ITEMS = [
   {
     question: "Is student data secure?",
     answer: "Yes. We use enterprise-grade security (Supabase with Row-Level Security) to ensure current student data is protected and only accessible to authorized administrators.",
+  },
+  {
+    question: "Can I cancel anytime?",
+    answer: "Yes. You can cancel your subscription at any time from your organization settings. Your access continues through the end of the current billing period — no partial refunds, but no surprise charges either.",
+  },
+  {
+    question: "Is there a free trial?",
+    answer: "Every organization starts with a free trial — no credit card required. You can explore the full platform, invite members, and set up your community before committing to a paid plan.",
+  },
+  {
+    question: "What happens to my data if I cancel?",
+    answer: "Your data stays safe. After cancellation, your organization enters a read-only grace period so members can export what they need. We never delete your data without notice.",
   },
 ];

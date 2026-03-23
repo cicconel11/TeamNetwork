@@ -48,9 +48,10 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
           </p>
 
           {/* Toggle */}
-          <div suppressHydrationWarning className="scroll-reveal inline-flex items-center bg-landing-navy-light rounded-full p-1.5 border border-landing-cream/10">
+          <div suppressHydrationWarning role="group" aria-label="Billing interval" className="scroll-reveal inline-flex items-center bg-landing-navy-light rounded-full p-1.5 border border-landing-cream/10">
             <button
               onClick={() => setInterval("month")}
+              aria-pressed={interval === "month"}
               className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all ${interval === "month"
                 ? "bg-landing-green-dark text-white shadow-lg"
                 : "text-landing-cream/60 hover:text-landing-cream"
@@ -60,6 +61,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
             </button>
             <button
               onClick={() => setInterval("year")}
+              aria-pressed={interval === "year"}
               className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${interval === "year"
                 ? "bg-landing-green-dark text-white shadow-lg"
                 : "text-landing-cream/60 hover:text-landing-cream"

@@ -72,11 +72,16 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
   let userLikedPostIds: Set<string> = new Set();
 
   if (postIds.length > 0 && orgCtx.userId) {
-    const { data: likes } = await supabase
+    const { data: likes, error: likesError } = await supabase
       .from("feed_likes")
       .select("post_id")
       .eq("user_id", orgCtx.userId)
       .in("post_id", postIds);
+
+    if (likesError) {
+      console.error("Failed to fetch user likes:", likesError);
+    }
+
     userLikedPostIds = new Set((likes || []).map((l) => l.post_id));
   }
 
