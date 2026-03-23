@@ -1,0 +1,55 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { buildSystemPrompt } from "../../../src/lib/ai/context-builder.ts";
+
+function createStubSupabase() {
+  return {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          is: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: [], error: null, count: 0 }),
+              }),
+              then: (fn: any) => Promise.resolve({ data: [], error: null, count: 0 }).then(fn),
+            }),
+            then: (fn: any) => Promise.resolve({ data: [], error: null, count: 0 }).then(fn),
+            gte: () => ({
+              order: () => ({
+                limit: () => Promise.resolve({ data: [], error: null, count: 0 }),
+              }),
+            }),
+          }),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: { name: "Test Org", slug: "test", org_type: null, description: null },
+              error: null,
+            }),
+        }),
+      }),
+    }),
+  } as any;
+}
+
+test("system prompt includes AVAILABLE TOOLS section", async () => {
+  const prompt = await buildSystemPrompt({
+    orgId: "org-1",
+    userId: "user-1",
+    role: "admin",
+    serviceSupabase: createStubSupabase(),
+  });
+  assert.match(prompt, /AVAILABLE TOOLS/);
+  assert.match(prompt, /read-only tools/);
+  assert.match(prompt, /untrusted data/i);
+});
+
+test("system prompt includes tool usage guidance", async () => {
+  const prompt = await buildSystemPrompt({
+    orgId: "org-1",
+    userId: "user-1",
+    role: "admin",
+    serviceSupabase: createStubSupabase(),
+  });
+  assert.match(prompt, /Do NOT use tools for greetings/);
+});
