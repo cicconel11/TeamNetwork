@@ -12,10 +12,10 @@ The chat pipeline handles the full lifecycle of an AI chat request: rate limitin
 |---|---|---|
 | `src/lib/ai/client.ts` | LLM client factory (OpenAI-compatible, z.ai endpoint) | `createZaiClient` (L3), `getZaiModel` (L15) |
 | `src/lib/ai/context.ts` | Admin auth helper — validates user has admin role in org | `getAiOrgContext` (L41), `AiOrgContext` type (L9), `AiOrgContextDeps` type (L23) |
-| `src/lib/ai/context-builder.ts` | Prompt context assembly — org data, counts, events, announcements | `buildPromptContext` (L265), `buildSystemPrompt` (L253), `buildUntrustedOrgContextMessage` (L258) |
+| `src/lib/ai/context-builder.ts` | Prompt context assembly — surface-gated queries, token budget, ContextMetadata | `buildPromptContext` (L343), `buildSystemPrompt` (L331), `buildUntrustedOrgContextMessage` (L336), `ContextMetadata` (L113) |
 | `src/lib/ai/response-composer.ts` | Async generator streaming LLM response as SSE chunk/error events | `composeResponse` (L22), `UsageAccumulator` type (L5) |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
-| `src/lib/ai/audit.ts` | Audit logging with cache columns, secret redaction | `logAiRequest` (L34) |
+| `src/lib/ai/audit.ts` | Audit logging with cache + context metadata columns, secret redaction | `logAiRequest` (L37) |
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | POST handler — orchestrates the full pipeline | `POST` (L491), `createChatPostHandler` (L36), `ChatRouteDeps` type (L25) |
@@ -26,6 +26,7 @@ The chat pipeline handles the full lifecycle of an AI chat request: rate limitin
 |---|---|
 | `supabase/migrations/20260319000000_ai_assistant_tables.sql` | DDL: `ai_threads`, `ai_messages`, `ai_audit_log`, RLS, indexes |
 | `supabase/migrations/20260321100001_ai_semantic_cache.sql` | DDL: `ai_semantic_cache`, purge RPC, audit columns |
+| `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
 
 ## Dependency Graph
 
@@ -72,8 +73,11 @@ Client POST /api/ai/{orgId}/chat
   │
   ├─ 9.  Insert assistant placeholder (status: pending)
   ├─ 10. Build prompt context + fetch history (parallel)
-  │       ├─ buildPromptContext (org info, counts, events, announcements, donations)
-  │       │   └─ "shared_static" mode: org overview only (no user/mutable data)
+  │       ├─ buildPromptContext (surface-gated queries + token budget)
+  │       │   ├─ Queries gated by surface: events only loads org+events, etc.
+  │       │   ├─ 4000-token budget drops lowest-priority sections first
+  │       │   ├─ Returns { systemPrompt, orgContextMessage, metadata }
+  │       │   └─ "shared_static" mode: org overview only (overrides surface)
   │       └─ Last 20 complete messages from thread
   ├─ 11. Stream LLM response via SSE (composeResponse async generator)
   │       └─ Each chunk: { type: "chunk", content: "..." }
@@ -110,20 +114,52 @@ Client POST /api/ai/{orgId}/chat
 | `ZAI_MODEL` | `glm-5` | Model identifier |
 | `DISABLE_AI_CACHE` | `undefined` | Set `"true"` to disable cache (kill switch) |
 
-### Context Builder: Prompt Sections
+### Context Builder: Surface-Gated Sections
 
-The system prompt and org context message are built from parallel Supabase queries:
+Queries are gated by the `surface` parameter. Each surface only loads the data sources it needs:
 
-| Section | Query Target | Omitted in `shared_static` |
+| Surface | Data Sources Loaded |
+|---|---|
+| `general` (default) | All 8 sources |
+| `members` | org, userName, memberCount, alumniCount, parentCount |
+| `analytics` | org, userName, memberCount, alumniCount, parentCount, donationStats |
+| `events` | org, userName, upcomingEvents |
+
+`shared_static` mode overrides surface — only loads org overview regardless.
+
+#### Sections (priority order, highest first)
+
+| Section | Priority | Query Target |
 |---|---|---|
-| Organization Overview | `organizations` | No |
-| Current User | `users` | Yes |
-| Active Member Count | `members` (count) | Yes |
-| Alumni Count | `alumni` (count) | Yes |
-| Parent Count | `parents` (count) | Yes |
-| Upcoming Events | `events` (next 5 + total count) | Yes |
-| Recent Announcements | `announcements` (last 14 days, limit 5) | Yes |
-| Donation Summary | `organization_donation_stats` | Yes |
+| Organization Overview | 1 | `organizations` |
+| Current User | 2 | `users` |
+| Counts | 3 | `members`, `alumni`, `parents` (counts) |
+| Upcoming Events | 4 | `events` (next 5 + total count) |
+| Recent Announcements | 5 | `announcements` (last 14 days, limit 5) |
+| Donation Summary | 6 | `organization_donation_stats` |
+
+#### Token Budget
+
+- Budget: **4000 tokens** (~16,000 chars at 4 chars/token)
+- When total context exceeds budget, lowest-priority sections are dropped first
+- `estimatedTokens` in metadata is computed from the full assembled message (includes preamble)
+- Typical context is ~300 tokens — budget is a safety net, not a tight constraint
+
+#### ContextMetadata
+
+`buildPromptContext` returns `{ systemPrompt, orgContextMessage, metadata }` where metadata is:
+
+```typescript
+interface ContextMetadata {
+  surface: CacheSurface;
+  sectionsIncluded: SectionName[];
+  sectionsExcluded: SectionName[];
+  estimatedTokens: number;
+  budgetTokens: number;
+}
+```
+
+Metadata is passed to audit logging (`context_surface`, `context_token_estimate` columns).
 
 The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and multi-column layouts.
 
@@ -133,11 +169,11 @@ The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid 
 |---|---|---|
 | `tests/ai-client.test.ts` | 3 | `createZaiClient`, `getZaiModel` |
 | `tests/ai-context.test.ts` | 5 | `getAiOrgContext` — auth, role validation, fail-closed |
-| `tests/ai-context-builder.test.ts` | 10 | `buildPromptContext`, `shared_static` mode, section rendering |
+| `tests/ai-context-builder.test.ts` | 17 | `buildPromptContext`, `shared_static` mode, surface selection, token budget, metadata, section rendering |
 | `tests/ai-audit.test.ts` | 6 | `logAiRequest` — insert, error handling, secret redaction |
 | `tests/ai-thread-resolver.test.ts` | 5 | `resolveOwnThread` — found, not found, wrong user, wrong org, DB error |
 | `tests/ai-stream-consumer.test.ts` | 2 | `consumeSSEStream` — chunk/done parsing |
 | `tests/ai-stream-failures.test.ts` | 2 | `parseAIChatFailure` — 409 handling, error fallback |
 | `tests/ai-middleware-noise.test.ts` | 1 | Middleware suppresses AI route console noise |
-| `tests/routes/ai/chat.test.ts` | 11 | Route simulation: auth, validation, idempotency, streaming, cache flows |
+| `tests/routes/ai/chat.test.ts` | 40 | Route simulation: auth, validation, idempotency, streaming, cache flows, schema aliases |
 | `tests/routes/ai/chat-handler.test.ts` | 1 | Handler factory DI pattern |

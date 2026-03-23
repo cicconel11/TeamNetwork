@@ -57,7 +57,7 @@ export function createAiThreadMessagesGetHandler(
   // Query messages via auth-bound client (RLS enforces thread ownership)
   const { data: messages, error } = await ctx.supabase
     .from("ai_messages")
-    .select("id, role, content, intent, status, created_at")
+    .select("id, role, content, intent, context_surface, status, created_at")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 

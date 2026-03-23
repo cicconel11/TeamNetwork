@@ -18,6 +18,9 @@ import {
   checkCacheEligibility,
 } from "@/lib/ai/semantic-cache-utils";
 import { lookupSemanticCache, writeCacheEntry } from "@/lib/ai/semantic-cache";
+import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
+import type { RagChunkInput } from "@/lib/ai/context-builder";
+import { resolveSurfaceRouting } from "@/lib/ai/intent-router";
 
 export interface ChatRouteDeps {
   createClient?: typeof createClient;
@@ -28,6 +31,7 @@ export interface ChatRouteDeps {
   composeResponse?: typeof composeResponse;
   logAiRequest?: typeof logAiRequest;
   resolveOwnThread?: typeof resolveOwnThread;
+  retrieveRelevantChunks?: typeof retrieveRelevantChunks;
 }
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
@@ -39,6 +43,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const composeResponseFn = deps.composeResponse ?? composeResponse;
   const logAiRequestFn = deps.logAiRequest ?? logAiRequest;
   const resolveOwnThreadFn = deps.resolveOwnThread ?? resolveOwnThread;
+  const retrieveRelevantChunksFn = deps.retrieveRelevantChunks ?? retrieveRelevantChunks;
 
   return async function POST(
     request: NextRequest,
@@ -81,6 +86,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   }
 
   const { message, surface, threadId: existingThreadId, idempotencyKey } = validatedBody;
+  const routing = resolveSurfaceRouting(message, surface);
+  const effectiveSurface = routing.effectiveSurface;
+  const resolvedIntent = routing.intent;
+  const skipRetrieval = routing.skipRetrieval;
 
   // Cache state — declared here so both the cache check block and the finally block can access them
   let cacheStatus: CacheStatus = cacheDisabled
@@ -93,7 +102,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const eligibility = checkCacheEligibility({
     message,
     threadId: existingThreadId,
-    surface,
+    surface: effectiveSurface,
     bypassCache: validatedBody.bypassCache,
   });
   let usesSharedStaticContext = false;
@@ -149,8 +158,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
   if (existingMsg) {
     if (existingMsg.status === "complete") {
+      // Replay: fetch the assistant response content for this thread
+      const { data: assistantReplay } = await ctx.supabase
+        .from("ai_messages")
+        .select("content")
+        .eq("thread_id", existingMsg.thread_id)
+        .eq("role", "assistant")
+        .eq("status", "complete")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
       return new Response(
         createSSEStream(async (enqueue) => {
+          if (assistantReplay?.content) {
+            enqueue({ type: "chunk", content: assistantReplay.content });
+          }
           enqueue({
             type: "done",
             threadId: existingMsg.thread_id,
@@ -171,56 +194,31 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     );
   }
 
-  // 7. Upsert thread
-  if (!threadId) {
-    const { data: newThread, error: threadError } = await ctx.supabase
-      .from("ai_threads")
-      .insert({
-        user_id: ctx.userId,
-        org_id: ctx.orgId,
-        surface,
-        title: message.slice(0, 100),
-      })
-      .select("id")
-      .single();
-
-    if (threadError || !newThread) {
-      console.error("[ai-chat] thread creation failed:", threadError);
-      return NextResponse.json(
-        { error: "Failed to create thread" },
-        { status: 500, headers: rateLimit.headers }
-      );
+  // 7+8. Atomically create/reuse thread and insert user message via RPC
+  const { data: initResult, error: initError } = await (ctx.serviceSupabase as any).rpc(
+    "init_ai_chat",
+    {
+      p_user_id: ctx.userId,
+      p_org_id: ctx.orgId,
+      p_surface: surface,
+      p_title: message.slice(0, 100),
+      p_message: message,
+      p_idempotency_key: idempotencyKey,
+      p_thread_id: threadId ?? null,
+      p_intent: resolvedIntent,
+      p_context_surface: effectiveSurface,
     }
-    threadId = newThread.id;
-  }
+  );
 
-  // 8. Insert user message
-  const { error: userMsgError } = await ctx.supabase.from("ai_messages").insert({
-    thread_id: threadId,
-    org_id: ctx.orgId,
-    user_id: ctx.userId,
-    role: "user",
-    content: message,
-    status: "complete",
-    idempotency_key: idempotencyKey,
-  });
-
-  if (userMsgError) {
-    console.error("[ai-chat] user message insert failed:", userMsgError);
+  if (initError || !initResult) {
+    console.error("[ai-chat] init_ai_chat RPC failed:", initError);
     return NextResponse.json(
-      { error: "Failed to save message" },
+      { error: "Failed to initialize chat" },
       { status: 500, headers: rateLimit.headers }
     );
   }
 
-  // Bump thread updated_at so the thread list reflects recency (trigger overwrites the value)
-  const { error: touchError } = await ctx.supabase
-    .from("ai_threads")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", threadId);
-  if (touchError) {
-    console.error("[ai-chat] failed to touch thread updated_at:", touchError);
-  }
+  threadId = initResult.thread_id;
 
   const insertAssistantMessage = async (input: {
     content: string | null;
@@ -233,6 +231,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         org_id: ctx.orgId,
         user_id: ctx.userId,
         role: "assistant",
+        intent: resolvedIntent,
+        context_surface: effectiveSurface,
         status: input.status,
         content: input.content,
       })
@@ -248,7 +248,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const cacheResult = await lookupSemanticCache({
       promptHash,
       orgId: ctx.orgId,
-      surface,
+      surface: effectiveSurface,
       permissionScopeKey,
       supabase: ctx.serviceSupabase,
     });
@@ -285,10 +285,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           messageId: cachedAssistantMsg.id,
           userId: ctx.userId,
           orgId: ctx.orgId,
-          intent: "general",
+          intent: resolvedIntent,
           latencyMs: Date.now() - startTime,
           cacheStatus: "hit_exact",
           cacheEntryId: cacheResult.hit.id,
+          contextSurface: effectiveSurface,
         });
 
         return new Response(cachedStream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
@@ -299,6 +300,35 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       if (cacheResult.reason === "error") {
         cacheBypassReason = "cache_lookup_failed";
       }
+    }
+  }
+
+  // 8.6 RAG retrieval — additive, never blocking
+  let ragChunks: RagChunkInput[] = [];
+  let ragChunkCount = 0;
+  let ragTopSimilarity: number | undefined;
+  let ragError: string | undefined;
+
+  const hasEmbeddingKey = !!process.env.EMBEDDING_API_KEY;
+  if (hasEmbeddingKey && !skipRetrieval) {
+    try {
+      const retrieved = await retrieveRelevantChunksFn({
+        query: message,
+        orgId: ctx.orgId,
+        serviceSupabase: ctx.serviceSupabase,
+      });
+      ragChunkCount = retrieved.length;
+      if (retrieved.length > 0) {
+        ragTopSimilarity = Math.max(...retrieved.map((c) => c.similarity));
+        ragChunks = retrieved.map((c) => ({
+          contentText: c.contentText,
+          sourceTable: c.sourceTable,
+          metadata: c.metadata,
+        }));
+      }
+    } catch (err) {
+      ragError = err instanceof Error ? err.message : "rag_retrieval_failed";
+      console.error("[ai-chat] RAG retrieval failed (continuing without):", err);
     }
   }
 
@@ -324,6 +354,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const usageRef: { current: UsageAccumulator | null } = { current: null };
     let streamCompletedSuccessfully = false;
     let auditErrorMessage: string | undefined;
+    let contextMetadata: { surface: string; estimatedTokens: number } | undefined;
 
     try {
       // Guard: ZAI_API_KEY required
@@ -350,11 +381,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       // Mark assistant message as streaming
       await ctx.supabase
         .from("ai_messages")
-        .update({ intent: "general", status: "streaming" })
+        .update({ intent: resolvedIntent, context_surface: effectiveSurface, status: "streaming" })
         .eq("id", assistantMessageId);
 
       // Build context and fetch history in parallel
-      const [{ systemPrompt, orgContextMessage }, { data: history, error: historyError }] =
+      const [contextResult, { data: history, error: historyError }] =
         await Promise.all([
           buildPromptContextFn({
             orgId: ctx.orgId,
@@ -362,6 +393,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             role: ctx.role,
             serviceSupabase: ctx.serviceSupabase,
             contextMode: usesSharedStaticContext ? "shared_static" : "full",
+            surface: effectiveSurface,
+            ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
           }),
           ctx.supabase
             .from("ai_messages")
@@ -371,6 +404,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             .order("created_at", { ascending: true })
             .limit(20),
         ]);
+
+      const { systemPrompt, orgContextMessage, metadata } = contextResult;
+      contextMetadata = metadata;
 
       if (historyError) {
         console.error("[ai-chat] history fetch failed:", historyError);
@@ -456,7 +492,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           promptHash,
           responseContent: fullContent,
           orgId: ctx.orgId,
-          surface,
+          surface: effectiveSurface,
           permissionScopeKey,
           sourceMessageId: assistantMessageId,
           supabase: ctx.serviceSupabase,
@@ -468,7 +504,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         messageId: assistantMessageId,
         userId: ctx.userId,
         orgId: ctx.orgId,
-        intent: "general",
+        intent: resolvedIntent,
         latencyMs: Date.now() - startTime,
         model: process.env.ZAI_API_KEY ? getZaiModelFn() : undefined,
         inputTokens: usageRef.current?.inputTokens,
@@ -477,9 +513,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         cacheStatus,
         cacheEntryId,
         cacheBypassReason,
+        contextSurface: (contextMetadata?.surface ?? effectiveSurface) as import("@/lib/ai/semantic-cache-utils").CacheSurface,
+        contextTokenEstimate: contextMetadata?.estimatedTokens,
+        ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
+        ragTopSimilarity,
+        ragError,
       });
     }
-  });
+  }, request.signal);
 
     return new Response(stream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });
   };

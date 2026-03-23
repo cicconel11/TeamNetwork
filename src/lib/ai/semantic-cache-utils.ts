@@ -89,6 +89,10 @@ const LIVE_CONTEXT_MARKERS = [
   "totals",
   "roster",
   "attendance",
+  "knowledge",
+  "faq",
+  "policy",
+  "policies",
 ];
 
 const WRITE_OR_TOOL_MARKERS = [

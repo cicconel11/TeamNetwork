@@ -41,6 +41,7 @@ function createSupabaseStub() {
         role: "user",
         content: "Hello",
         intent: null,
+        context_surface: "general",
         status: "complete",
         created_at: "2024-01-01T10:00:00Z",
       },
@@ -50,6 +51,7 @@ function createSupabaseStub() {
         role: "assistant",
         content: "Hi there",
         intent: "greeting",
+        context_surface: "members",
         status: "complete",
         created_at: "2024-01-01T10:00:05Z",
       },
@@ -258,7 +260,9 @@ test("GET /api/ai/[orgId]/threads/[threadId]/messages returns ordered messages",
   const body = await response.json();
   assert.equal(body.messages.length, 2);
   assert.equal(body.messages[0].id, "msg-1");
+  assert.equal(body.messages[0].context_surface, "general");
   assert.equal(body.messages[1].id, "msg-2");
+  assert.equal(body.messages[1].context_surface, "members");
 });
 
 test("DELETE /api/ai/[orgId]/threads/[threadId] soft-deletes an owned thread", async () => {

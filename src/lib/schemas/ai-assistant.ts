@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { safeString } from "./common";
 
+const aiSurfaceEnum = z.enum(["general", "members", "analytics", "events"]);
+export type AiSurface = z.infer<typeof aiSurfaceEnum>;
+
 const rawSendMessageSchema = z.object({
   threadId: z.string().uuid().optional(),
   message: safeString(4000),
-  surface: z.enum(["general", "members", "analytics", "events"]),
+  surface: aiSurfaceEnum,
   idempotencyKey: z.string().uuid(),
   bypassCache: z.boolean().optional(),
   bypass_cache: z.boolean().optional(),
@@ -32,7 +35,7 @@ export const sendMessageSchema = rawSendMessageSchema.transform(
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
 
 export const listThreadsSchema = z.object({
-  surface: z.enum(["general", "members", "analytics", "events"]).optional(),
+  surface: aiSurfaceEnum.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
   cursor: z.string().optional(),
 });
