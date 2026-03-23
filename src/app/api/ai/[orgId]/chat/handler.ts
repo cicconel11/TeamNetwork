@@ -289,6 +289,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           latencyMs: Date.now() - startTime,
           cacheStatus: "hit_exact",
           cacheEntryId: cacheResult.hit.id,
+          contextSurface: surface,
         });
 
         return new Response(cachedStream, { headers: { ...SSE_HEADERS, ...rateLimit.headers } });

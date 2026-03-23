@@ -485,7 +485,9 @@ export async function buildPromptContext(
     orgContextMessage = [...preamble, "", ...body].join("\n");
   }
 
-  const totalEstimatedTokens = included.reduce((sum, s) => sum + s.estimatedTokens, 0);
+  const totalEstimatedTokens = orgContextMessage
+    ? estimateTokens(orgContextMessage)
+    : 0;
 
   const metadata: ContextMetadata = {
     surface,

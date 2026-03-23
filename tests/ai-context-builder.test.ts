@@ -554,4 +554,53 @@ describe("AI prompt context builder", () => {
     // shared_static should only query organizations, regardless of surface
     assert.deepEqual(queriedTables, ["organizations"]);
   });
+
+  it("estimatedTokens includes preamble and separators, not just section bodies", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+      }) as any,
+    });
+
+    assert.ok(result.orgContextMessage);
+    // The preamble adds "UNTRUSTED ORGANIZATION DATA..." text (~100 chars / ~25 tokens)
+    // estimatedTokens should reflect the full message, not just the section body
+    const expectedTokens = Math.ceil(result.orgContextMessage!.length / 4);
+    assert.equal(result.metadata.estimatedTokens, expectedTokens);
+  });
+
+  it("drops lowest-priority sections when budget is exceeded", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    // Create a very long org description to push section tokens high.
+    // With a 4000-token budget (~16000 chars) we need enough total content to overflow.
+    const longDescription = "A".repeat(15800); // ~3950 tokens for org overview, leaving ~50 for budget
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test", description: longDescription },
+        userName: "Admin",
+        memberCount: 10,
+        alumniCount: 5,
+        parentCount: 2,
+        upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+        announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.metadata);
+    // Org Overview (~3750 tokens) + preamble nearly exhausts the 4000 budget
+    // Lower-priority sections should be excluded
+    assert.ok(result.metadata.sectionsExcluded.length > 0, "some sections should be excluded");
+    // Org Overview (priority 1) should survive since it fits within budget
+    assert.ok(result.metadata.sectionsIncluded.includes("Organization Overview"));
+    // Donation Summary (priority 6, lowest) should be among the excluded
+    assert.ok(result.metadata.sectionsExcluded.includes("Donation Summary"));
+  });
 });
