@@ -20,7 +20,8 @@ export type SSEEvent =
         bypassReason?: string;
       };
     }
-  | { type: "error"; message: string; retryable: boolean };
+  | { type: "error"; message: string; retryable: boolean }
+  | { type: "tool_status"; toolName: string; status: "calling" | "done" | "error" };
 
 export const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
