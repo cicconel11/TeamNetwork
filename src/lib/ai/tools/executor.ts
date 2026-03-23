@@ -12,6 +12,10 @@ export type ToolResult =
   | { ok: true; data: unknown }
   | { ok: false; error: string };
 
+type CountResult =
+  | { ok: true; count: number }
+  | { ok: false; error: string };
+
 // --- Zod schemas for tool argument validation ---
 
 const listMembersSchema = z
@@ -50,31 +54,54 @@ function validateArgs(
   return { valid: true, args: parsed.data };
 }
 
+function getSafeErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.length > 0) {
+      return message;
+    }
+  }
+
+  return "unknown_error";
+}
+
 async function safeToolQuery(
   fn: () => Promise<{ data: unknown; error: unknown }>
 ): Promise<ToolResult> {
   try {
     const { data, error } = await fn();
     if (error) {
-      console.warn("[ai-tools] query failed:", error);
+      console.warn("[ai-tools] query failed:", getSafeErrorMessage(error));
       return { ok: false, error: "Query failed" };
     }
     return { ok: true, data: data ?? [] };
   } catch (err) {
-    console.warn("[ai-tools] unexpected error:", err);
+    console.warn("[ai-tools] unexpected error:", getSafeErrorMessage(err));
     return { ok: false, error: "Unexpected error" };
   }
 }
 
 async function safeToolCount(
   fn: () => Promise<{ count: number | null; error: unknown }>
-): Promise<number | null> {
+): Promise<CountResult> {
   try {
     const { count, error } = await fn();
-    if (error || count === null) return null;
-    return count;
-  } catch {
-    return null;
+    if (error || count === null) {
+      if (error) {
+        console.warn("[ai-tools] count query failed:", getSafeErrorMessage(error));
+      } else {
+        console.warn("[ai-tools] count query failed:", "count_unavailable");
+      }
+      return { ok: false, error: "Query failed" };
+    }
+    return { ok: true, count };
+  } catch (err) {
+    console.warn("[ai-tools] unexpected count error:", getSafeErrorMessage(err));
+    return { ok: false, error: "Unexpected error" };
   }
 }
 
@@ -117,6 +144,8 @@ async function listEvents(
       .limit(limit);
     if (upcoming) {
       query = query.gte("start_date", now);
+    } else {
+      query = query.lt("start_date", now);
     }
     return query;
   });
@@ -163,14 +192,18 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolResult> {
     ),
   ]);
 
+  if (!members.ok || !alumni.ok || !parents.ok || !upcomingEvents.ok || !donations.ok) {
+    return { ok: false, error: "Query failed" };
+  }
+
   return {
     ok: true,
     data: {
-      active_members: members,
-      alumni,
-      parents,
-      upcoming_events: upcomingEvents,
-      donations: donations.ok ? donations.data : null,
+      active_members: members.count,
+      alumni: alumni.count,
+      parents: parents.count,
+      upcoming_events: upcomingEvents.count,
+      donations: donations.data,
     },
   };
 }

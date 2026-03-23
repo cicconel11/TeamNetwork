@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { buildSystemPrompt } from "../../../src/lib/ai/context-builder.ts";
 
 function createStubSupabase() {
+  const emptyResult = { data: [], error: null, count: 0 };
   return {
     from: () => ({
       select: () => ({
@@ -10,14 +11,16 @@ function createStubSupabase() {
           is: () => ({
             eq: () => ({
               order: () => ({
-                limit: () => Promise.resolve({ data: [], error: null, count: 0 }),
+                limit: () => Promise.resolve(emptyResult),
               }),
-              then: (fn: any) => Promise.resolve({ data: [], error: null, count: 0 }).then(fn),
+              then: (fn: (value: typeof emptyResult) => unknown) =>
+                Promise.resolve(emptyResult).then(fn),
             }),
-            then: (fn: any) => Promise.resolve({ data: [], error: null, count: 0 }).then(fn),
+            then: (fn: (value: typeof emptyResult) => unknown) =>
+              Promise.resolve(emptyResult).then(fn),
             gte: () => ({
               order: () => ({
-                limit: () => Promise.resolve({ data: [], error: null, count: 0 }),
+                limit: () => Promise.resolve(emptyResult),
               }),
             }),
           }),
@@ -29,7 +32,7 @@ function createStubSupabase() {
         }),
       }),
     }),
-  } as any;
+  } as unknown as Parameters<typeof buildSystemPrompt>[0]["serviceSupabase"];
 }
 
 test("system prompt includes AVAILABLE TOOLS section", async () => {
@@ -52,4 +55,5 @@ test("system prompt includes tool usage guidance", async () => {
     serviceSupabase: createStubSupabase(),
   });
   assert.match(prompt, /Do NOT use tools for greetings/);
+  assert.match(prompt, /do not emit user-visible filler text/i);
 });

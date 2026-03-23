@@ -30,6 +30,10 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         entry.filters.push({ col, op: "gte", val });
         return builder;
       },
+      lt(col: string, val: unknown) {
+        entry.filters.push({ col, op: "lt", val });
+        return builder;
+      },
       order() { return builder; },
       limit() { return builder; },
       maybeSingle() {
@@ -92,6 +96,9 @@ test("list_events returns upcoming events by default", async () => {
 test("list_events returns past events", async () => {
   const result = await executeToolCall(ctx, { name: "list_events", args: { upcoming: false } });
   assert.equal(result.ok, true);
+  const eventQuery = stub.queries.find((q) => q.table === "events");
+  assert.ok(eventQuery);
+  assert.ok(eventQuery.filters.some((f: any) => f.col === "start_date" && f.op === "lt"));
 });
 
 test("get_org_stats returns counts object", async () => {
@@ -133,6 +140,23 @@ test("DB error returns ok false and does not throw", async () => {
   });
   ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+  assert.equal(result.ok, false);
+});
+
+test("get_org_stats fails closed when a count query fails", async () => {
+  stub = createToolSupabaseStub({
+    members: { select: { data: null, error: { message: "connection refused" }, count: null } },
+    alumni: { select: { data: [], error: null, count: 10 } },
+    parents: { select: { data: [], error: null, count: 5 } },
+    events: { select: { data: [], error: null, count: 3 } },
+    organization_donation_stats: {
+      maybeSingle: { data: { total_amount_cents: 50000, donation_count: 12 }, error: null },
+    },
+  });
+  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+
+  const result = await executeToolCall(ctx, { name: "get_org_stats", args: {} });
+
   assert.equal(result.ok, false);
 });
 

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 
 const ORG_ID = "org-uuid-1";
 const VALID_IDEMPOTENCY_KEY = "22222222-2222-4222-8222-222222222222";
@@ -174,6 +175,7 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       if (options.tools && !options.toolResults) {
         yield {
           type: "tool_call_requested",
+          id: "call-1",
           name: "list_members",
           argsJson: '{"limit": 5}',
         };
@@ -271,7 +273,9 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
     "pass 2 should NOT have tools"
   );
   assert.ok(composeResponseCalls[1].toolResults, "pass 2 should have toolResults");
+  assert.equal(composeResponseCalls[1].toolResults[0].toolCallId, "call-1");
   assert.equal(composeResponseCalls[1].toolResults[0].name, "list_members");
+  assert.deepEqual(composeResponseCalls[1].toolResults[0].args, { limit: 5 });
 });
 
 test("tool call: audit entry includes toolCalls", async () => {
@@ -304,7 +308,56 @@ test("tool call: cache write is prevented (bypassReason set in done event)", asy
   process.env.DISABLE_AI_CACHE = "true";
 });
 
-test("tool call: pass 1 buffered text is discarded on tool call", async () => {
+test("no tool call: first pass chunks stream before completion", async () => {
+  let releaseSecondChunk!: () => void;
+  const secondChunkGate = new Promise<void>((resolve) => {
+    releaseSecondChunk = resolve;
+  });
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        options.onUsage?.({ inputTokens: 8, outputTokens: 4 });
+        yield { type: "chunk", content: "Hello" };
+        await secondChunkGate;
+        yield { type: "chunk", content: " world" };
+      },
+    })
+  );
+
+  const response = await POST(makeRequest("hello") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  const reader = response.body?.getReader();
+  assert.ok(reader, "response should expose a readable stream");
+
+  const firstRead = await Promise.race([
+    reader!.read(),
+    delay(50).then(() => "timeout" as const),
+  ]);
+
+  assert.notEqual(firstRead, "timeout", "first chunk should stream before completion");
+  if (firstRead !== "timeout") {
+    const text = new TextDecoder().decode(firstRead.value);
+    assert.match(text, /"type":"chunk"/);
+    assert.match(text, /Hello/);
+  }
+
+  releaseSecondChunk();
+  const remaining: string[] = [];
+  while (true) {
+    const chunk = await reader!.read();
+    if (chunk.done) break;
+    remaining.push(new TextDecoder().decode(chunk.value));
+  }
+
+  assert.match(remaining.join(""), /world/);
+  assert.match(remaining.join(""), /"type":"done"/);
+});
+
+test("tool call: pass 1 text may stream before tool execution, but pass 2 still completes", async () => {
   POST = createChatPostHandler(
     buildDefaultDeps({
       composeResponse: async function* (options: any) {
@@ -314,6 +367,7 @@ test("tool call: pass 1 buffered text is discarded on tool call", async () => {
           yield { type: "chunk", content: "Let me check..." };
           yield {
             type: "tool_call_requested",
+            id: "call-2",
             name: "get_org_stats",
             argsJson: "{}",
           };
@@ -330,10 +384,10 @@ test("tool call: pass 1 buffered text is discarded on tool call", async () => {
   });
   const body = await response.text();
 
-  // "Let me check..." should NOT appear in the stream
-  assert.doesNotMatch(body, /Let me check/);
-  // Only the pass 2 content should be in the stream
+  assert.match(body, /Let me check/);
   assert.match(body, /You have 42 active members/);
+  assert.match(body, /"type":"tool_status".*"status":"calling"/);
+  assert.match(body, /"type":"tool_status".*"status":"done"/);
 });
 
 test("tool executor error: SSE shows tool_status error, stream completes", async () => {
@@ -344,6 +398,7 @@ test("tool executor error: SSE shows tool_status error, stream completes", async
         if (options.tools && !options.toolResults) {
           yield {
             type: "tool_call_requested",
+            id: "call-1",
             name: "list_members",
             argsJson: "{}",
           };
@@ -364,6 +419,89 @@ test("tool executor error: SSE shows tool_status error, stream completes", async
   assert.match(body, /"type":"tool_status".*"status":"error"/);
   assert.match(body, /I could not look that up/);
   assert.match(body, /"type":"done"/);
+});
+
+test("tool call: multiple tool calls are executed and audited", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: '{"limit": 5}',
+          };
+          yield {
+            type: "tool_call_requested",
+            id: "call-2",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
+          return;
+        }
+
+        options.onUsage?.({ inputTokens: 4, outputTokens: 2 });
+        yield { type: "chunk", content: "Here is the combined result." };
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return { ok: true, data: { tool: call.name } };
+      },
+    })
+  );
+
+  const response = await POST(makeRequest("Give me members and stats") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /combined result/);
+  assert.equal(executeToolCallCalls.length, 2);
+  assert.deepEqual(
+    executeToolCallCalls.map((entry) => entry.call.name),
+    ["list_members", "get_org_stats"]
+  );
+  assert.equal(composeResponseCalls[1].toolResults.length, 2);
+  assert.equal(auditEntries.length, 1);
+  assert.deepEqual(
+    auditEntries[0].toolCalls.map((entry: any) => entry.name),
+    ["list_members", "get_org_stats"]
+  );
+});
+
+test("tool call: usage is accumulated across both passes", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          options.onUsage?.({ inputTokens: 10, outputTokens: 3 });
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: '{"limit": 5}',
+          };
+          return;
+        }
+
+        options.onUsage?.({ inputTokens: 4, outputTokens: 2 });
+        yield { type: "chunk", content: "Here are 5 members..." };
+      },
+    })
+  );
+
+  const response = await POST(makeRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /"usage":\{"inputTokens":14,"outputTokens":5\}/);
+  assert.equal(auditEntries.length, 1);
+  assert.equal(auditEntries[0].inputTokens, 14);
+  assert.equal(auditEntries[0].outputTokens, 5);
 });
 
 test("no tool call: normal flow works without tool loop", async () => {
