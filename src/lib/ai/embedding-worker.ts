@@ -390,27 +390,28 @@ export async function processEmbeddingQueue(
       const chunk = pendingChunks[i];
       const embedding = embeddings[i];
 
-      // Use upsert with the unique index (org_id, source_table, source_id, chunk_index)
+      // Soft-delete any existing chunk for this source+index, then insert fresh
+      await (serviceSupabase as any)
+        .from("ai_document_chunks")
+        .update({ deleted_at: now })
+        .eq("org_id", chunk.item.org_id)
+        .eq("source_table", chunk.item.source_table)
+        .eq("source_id", chunk.item.source_id)
+        .eq("chunk_index", chunk.chunkIndex)
+        .is("deleted_at", null);
+
       const { error: upsertError } = await (serviceSupabase as any)
         .from("ai_document_chunks")
-        .upsert(
-          {
-            org_id: chunk.item.org_id,
-            source_table: chunk.item.source_table,
-            source_id: chunk.item.source_id,
-            chunk_index: chunk.chunkIndex,
-            content_text: chunk.text,
-            content_hash: chunk.contentHash,
-            embedding: JSON.stringify(embedding),
-            metadata: chunk.metadata,
-            updated_at: now,
-            deleted_at: null,
-          },
-          {
-            onConflict: "org_id,source_table,source_id,chunk_index",
-            ignoreDuplicates: false,
-          }
-        );
+        .insert({
+          org_id: chunk.item.org_id,
+          source_table: chunk.item.source_table,
+          source_id: chunk.item.source_id,
+          chunk_index: chunk.chunkIndex,
+          content_text: chunk.text,
+          content_hash: chunk.contentHash,
+          embedding: JSON.stringify(embedding),
+          metadata: chunk.metadata,
+        });
 
       if (upsertError) {
         console.error("[embedding-worker] upsert chunk failed:", upsertError);
