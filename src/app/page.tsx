@@ -2,12 +2,35 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import dynamic from "next/dynamic";
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
 import { PricingSection } from "@/components/marketing/PricingSection";
 import { FeatureIcon } from "@/components/marketing/icons";
 import "./landing-styles.css";
+
+export const metadata: Metadata = {
+  title: "TeamNetwork — The Platform for Athletic Organizations",
+  description:
+    "Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, clubs, and organizations of all kinds.",
+  openGraph: {
+    title: "TeamNetwork — The Platform for Athletic Organizations",
+    description:
+      "Member directories, events, donations, philanthropy, and records — all in one place.",
+    url: "https://myteamnetwork.com",
+    siteName: "TeamNetwork",
+    images: [{ url: "https://myteamnetwork.com/og-image.png", width: 1200, height: 630 }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TeamNetwork — The Platform for Athletic Organizations",
+    description:
+      "Member directories, events, donations, philanthropy, and records — all in one place.",
+    images: ["https://myteamnetwork.com/og-image.png"],
+  },
+};
 
 const FAQAccordion = dynamic(
   () => import("@/components/marketing/FAQAccordion").then((mod) => mod.FAQAccordion),
@@ -44,6 +67,7 @@ const BackToTop = dynamic(
   () => import("@/components/marketing/BackToTop").then((mod) => mod.BackToTop),
   { ssr: false }
 );
+
 
 export default async function LandingPage() {
   const supabase = await createClient();
@@ -204,8 +228,10 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
+
       {/* Features - "Trophy Case" */}
-      <section id="features" className="relative z-10 py-24 px-6">
+      <section id="features" className="relative z-10 py-24 px-6 bg-landing-navy-light/20">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
             <div className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
@@ -243,8 +269,12 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
+
       {/* Pricing */}
       <PricingSection />
+
+      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
 
       {/* Our Commitment — "The Rulebook" */}
       <section id="terms-summary" className="relative z-10 py-24 px-6">
@@ -293,8 +323,10 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
+
       {/* FAQ - "Press Conference" */}
-      <section id="faq" className="relative z-10 py-24 px-6 bg-landing-navy-light/30">
+      <section id="faq" className="relative z-10 py-24 px-6 bg-landing-navy-light/20">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
@@ -306,6 +338,8 @@ export default async function LandingPage() {
           <FAQAccordion items={FAQ_ITEMS} />
         </div>
       </section>
+
+      <div className="h-px bg-gradient-to-r from-transparent via-landing-cream/10 to-transparent" />
 
       {/* Final CTA - "Championship Moment" */}
       <section className="relative z-10 py-24 px-6 overflow-hidden">
@@ -322,7 +356,8 @@ export default async function LandingPage() {
           <div className="scroll-reveal inline-block mb-8">
             <Image
               src="/TeamNetwor.png"
-              alt="TeamNetwork"
+              alt=""
+              aria-hidden="true"
               width={541}
               height={303}
               className="h-32 sm:h-40 lg:h-48 w-auto object-contain mx-auto drop-shadow-[0_0_60px_rgba(34,197,94,0.2)]"
