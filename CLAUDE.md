@@ -72,6 +72,7 @@ src/
 
 supabase/migrations/        # Database migrations
 tests/                      # Test files (unit, routes/, e2e/, fixtures/)
+docs/agent/                 # AI agent architecture & feature docs
 ```
 
 ### Supabase Client Wrappers
@@ -108,6 +109,9 @@ Funds route directly to org's connected Stripe account, never touching the app. 
 
 ### Schedule Domain Allowlist & Security
 External schedule URLs validated before import to prevent SSRF. Domain statuses: `denied` → `pending` → `active` / `blocked`. Files: `src/lib/schedule-security/allowlist.ts`, `safe-fetch.ts`, `verifyAndEnroll.ts`.
+
+### AI Agent
+Architecture, pipeline, and feature docs live in `docs/agent/`. When modifying AI agent code (`src/lib/ai/`, `src/app/api/ai/`, `src/app/[orgSlug]/chat/`), update the relevant doc in `docs/agent/` to reflect structural changes, new features, or revised taxonomy.
 
 ### Schema Validation
 Centralized Zod schemas in `src/lib/schemas/` — see `index.ts` for all available domains. Usage: `import { schemaName } from "@/lib/schemas"`.
