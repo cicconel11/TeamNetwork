@@ -6,24 +6,21 @@
  *   - DELETE /api/enterprise/[enterpriseId]/admins/[userId] (path-based)
  */
 
-// Type for user_enterprise_roles table row (until types are regenerated)
-interface UserEnterpriseRoleRow {
-  id: string;
-  role: "owner" | "billing_admin" | "org_admin";
-}
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
 export async function removeEnterpriseAdmin(
-  serviceSupabase: any, // eslint-disable-line @typescript-eslint/no-explicit-any
+  serviceSupabase: SupabaseClient<Database>,
   enterpriseId: string,
   targetUserId: string
 ): Promise<{ success: true; removedRole: string } | { error: string; status: number }> {
   // Fetch the target user's role
-  const { data: targetRole, error: fetchError } = await (serviceSupabase as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { data: targetRole, error: fetchError } = await serviceSupabase
     .from("user_enterprise_roles")
     .select("id, role")
     .eq("enterprise_id", enterpriseId)
     .eq("user_id", targetUserId)
-    .single() as { data: UserEnterpriseRoleRow | null; error: Error | null };
+    .single();
 
   if (fetchError) {
     console.error("[removeEnterpriseAdmin] role fetch failed:", fetchError);
@@ -36,11 +33,11 @@ export async function removeEnterpriseAdmin(
 
   // If removing an owner, ensure there's at least one other owner
   if (targetRole.role === "owner") {
-    const { count: ownerCount, error: countError } = await (serviceSupabase as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+    const { count: ownerCount, error: countError } = await serviceSupabase
       .from("user_enterprise_roles")
       .select("*", { count: "exact", head: true })
       .eq("enterprise_id", enterpriseId)
-      .eq("role", "owner") as { count: number | null; error: Error | null };
+      .eq("role", "owner");
 
     if (countError) {
       console.error("[removeEnterpriseAdmin] owner count failed:", countError);
@@ -53,10 +50,10 @@ export async function removeEnterpriseAdmin(
   }
 
   // Delete the role
-  const { error: deleteError } = await (serviceSupabase as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+  const { error: deleteError } = await serviceSupabase
     .from("user_enterprise_roles")
     .delete()
-    .eq("id", targetRole.id) as { error: Error | null };
+    .eq("id", targetRole.id);
 
   if (deleteError) {
     console.error("[removeEnterpriseAdmin] delete failed:", deleteError);

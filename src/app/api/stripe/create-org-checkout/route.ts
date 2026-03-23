@@ -21,6 +21,12 @@ import {
   updatePaymentAttempt,
   waitForExistingStripeResource,
 } from "@/lib/payments/idempotency";
+import {
+  buildOrgCheckoutFingerprintPayload,
+  getOrgFreeTrialRequestError,
+  getOrgTrialMetadataValue,
+  ORG_TRIAL_DAYS,
+} from "@/lib/subscription/org-trial";
 import { z } from "zod";
 import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
 
@@ -35,6 +41,7 @@ const createOrgSchema = z
     primaryColor: baseSchemas.hexColor.optional(),
     billingInterval: z.enum(["month", "year"]),
     alumniBucket: z.enum(["none", "0-250", "251-500", "501-1000", "1001-2500", "2500-5000", "5000+"]),
+    withTrial: z.boolean().optional(),
     idempotencyKey: baseSchemas.idempotencyKey.optional(),
     paymentAttemptId: baseSchemas.uuid.optional(),
   })
@@ -75,6 +82,7 @@ export async function POST(req: Request) {
       primaryColor,
       billingInterval,
       alumniBucket,
+      withTrial: requestedTrial,
       idempotencyKey: rawIdempotencyKey,
       paymentAttemptId,
     } = body;
@@ -82,6 +90,17 @@ export async function POST(req: Request) {
     const idempotencyKey = rawIdempotencyKey ?? null;
     const interval: SubscriptionInterval = billingInterval === "year" ? "year" : "month";
     const bucket: AlumniBucket = alumniBucket;
+    const withTrial = requestedTrial === true;
+
+    const trialError = getOrgFreeTrialRequestError({
+      withTrial,
+      billingInterval: interval,
+      alumniBucket: bucket,
+    });
+
+    if (trialError) {
+      return respond({ error: trialError }, 400);
+    }
 
     const { data: existing } = await supabase
       .from("organizations")
@@ -177,23 +196,48 @@ export async function POST(req: Request) {
     let stripeResourceCreated = false;
 
     try {
+      if (withTrial) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: existingTrial, error: existingTrialError } = await (serviceSupabase as any)
+          .from("payment_attempts")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("is_trial", true)
+          .not("organization_id", "is", null)
+          .limit(1);
+
+        if (existingTrialError) {
+          throw existingTrialError;
+        }
+
+        if ((existingTrial?.length ?? 0) > 0) {
+          return respond({ error: "Free trial has already been used on this admin account." }, 409);
+        }
+      }
+
       const { basePrice, alumniPrice } = getPriceIds(interval, bucket);
       const origin = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
       const pendingOrgIdSeed = randomUUID();
-      const fingerprint = hashFingerprint({
-        userId: user.id,
-        name,
-        slug,
-        interval,
-        bucket,
-        primaryColor,
-      });
+      const fingerprint = hashFingerprint(
+        buildOrgCheckoutFingerprintPayload({
+          userId: user.id,
+          name,
+          slug,
+          interval,
+          bucket,
+          primaryColor,
+          withTrial,
+        }),
+      );
+
+      const trialMetadataValue = getOrgTrialMetadataValue(withTrial);
 
       const attemptMetadata = {
         pending_org_id: pendingOrgIdSeed,
         slug,
         alumni_bucket: bucket,
         billing_interval: interval,
+        is_trial: trialMetadataValue,
       };
 
       const { attempt } = await ensurePaymentAttempt({
@@ -205,6 +249,7 @@ export async function POST(req: Request) {
         currency: "usd",
         userId: user.id,
         requestFingerprint: fingerprint,
+        isTrial: withTrial,
         metadata: attemptMetadata,
       });
 
@@ -222,6 +267,7 @@ export async function POST(req: Request) {
         created_by: user.id,
         base_interval: interval,
         payment_attempt_id: attempt.id,
+        is_trial: trialMetadataValue,
       };
 
       const { attempt: claimedAttempt, claimed } = await claimPaymentAttempt({
@@ -278,6 +324,7 @@ export async function POST(req: Request) {
           ],
           subscription_data: {
             metadata,
+            ...(withTrial ? { trial_period_days: ORG_TRIAL_DAYS } : {}),
           },
           metadata,
           success_url: `${origin}/app?org=${slug}&checkout=success`,

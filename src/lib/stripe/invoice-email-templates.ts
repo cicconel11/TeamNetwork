@@ -37,6 +37,20 @@ This is typically required by your bank for security purposes (3D Secure). Your 
   };
 }
 
+export function buildTrialEndingEmail(
+  trialEndDate: string,
+  ctx: InvoiceEmailContext
+): EmailTemplate {
+  return {
+    subject: `Free Trial Ending Soon - ${ctx.entityName}`,
+    body: `Your free trial for ${ctx.entityName} ends on ${trialEndDate}.
+
+Your card on file will be charged automatically when the trial ends unless you cancel before then.
+
+No action is needed if you want the subscription to continue.`,
+  };
+}
+
 export function buildFinalizationFailedEmail(
   errorMessage: string | null,
   ctx: InvoiceEmailContext

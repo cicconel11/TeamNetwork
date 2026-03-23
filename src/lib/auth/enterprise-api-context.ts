@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import type { User } from "@supabase/supabase-js";
+import type { SupabaseClient, User } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 import type { EnterpriseRole } from "@/types/enterprise";
 import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -36,7 +36,7 @@ export interface EnterpriseApiContextDeps {
   serviceSupabase?: ReturnType<typeof createServiceClient>;
   resolveEnterprise?: (
     idOrSlug: string,
-    serviceSupabase: unknown
+    serviceSupabase: SupabaseClient<Database>
   ) => Promise<{
     data: ResolvedEnterpriseParam | null;
     error?: ResolveEnterpriseError;
@@ -75,7 +75,7 @@ export async function getEnterpriseApiContext(
   const resolveEnterprise = deps.resolveEnterprise ?? resolveEnterpriseParam;
   const { data: resolved, error: resolveError } = await resolveEnterprise(
     idOrSlug,
-    serviceSupabase as any
+    serviceSupabase
   );
 
   if (resolveError) {
@@ -92,8 +92,7 @@ export async function getEnterpriseApiContext(
   const enterpriseId = resolved.enterpriseId;
 
   // 3. Check enterprise role (single query via service client, fail-closed)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: roleRow, error: roleError } = await (serviceSupabase as any)
+  const { data: roleRow, error: roleError } = await serviceSupabase
     .from("user_enterprise_roles")
     .select("role")
     .eq("enterprise_id", enterpriseId)
@@ -118,6 +117,6 @@ export async function getEnterpriseApiContext(
     userId: user.id,
     userEmail: user.email ?? "",
     role,
-    serviceSupabase: serviceSupabase as ReturnType<typeof createServiceClient>,
+    serviceSupabase,
   };
 }

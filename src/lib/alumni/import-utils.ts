@@ -2,6 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { lookupAuthUsersByEmail } from "@/lib/supabase/auth-schema";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,20 +32,6 @@ export const IMPORT_STATUS = {
 
 export type ImportStatus = (typeof IMPORT_STATUS)[keyof typeof IMPORT_STATUS];
 
-/** Type-safe cast for querying auth.users via the service client. */
-export interface AuthUsersQuery {
-  schema: (schema: "auth") => {
-    from: (table: "users") => {
-      select: (columns: "id, email") => {
-        in: (
-          column: "email",
-          values: string[],
-        ) => Promise<{ data: Array<{ id: string; email: string }> | null }>;
-      };
-    };
-  };
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /**
@@ -63,12 +50,15 @@ export async function resolveUnmatchedEmailsByUserId<T>(opts: {
   const found = new Map<string, T>();
   if (unmatchedEmails.length === 0) return found;
 
-  const authSupabase = serviceSupabase as unknown as AuthUsersQuery;
-  const { data: authUsers } = await authSupabase
-    .schema("auth")
-    .from("users")
-    .select("id, email")
-    .in("email", unmatchedEmails);
+  const { data: authUsers, error: authError } = await lookupAuthUsersByEmail(
+    serviceSupabase,
+    unmatchedEmails,
+  );
+
+  if (authError) {
+    console.error("[resolveUnmatchedEmailsByUserId] auth lookup failed:", authError);
+    return found;
+  }
 
   if (!authUsers || authUsers.length === 0) return found;
 

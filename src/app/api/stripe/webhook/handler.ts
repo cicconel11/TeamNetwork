@@ -20,11 +20,16 @@ import {
   buildRenewalReminderEmail,
   buildPaymentActionRequiredEmail,
   buildFinalizationFailedEmail,
+  buildTrialEndingEmail,
 } from "@/lib/stripe/invoice-email-templates";
 import { sendEmail } from "@/lib/notifications";
 import { sendInvoiceEmailToAdmins } from "@/lib/stripe/invoice-email-sender";
 import type { BillingInterval } from "@/types/enterprise";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import {
+  isOrgTrialMetadata,
+  shouldProvisionOrgCheckoutOnCompletion,
+} from "@/lib/subscription/org-trial";
 const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
 
 export type StripeWebhookDeps = {
@@ -112,7 +117,7 @@ export async function handleStripeWebhookPost(
 
   const applyUpdate = async (
     match: { organization_id?: string; stripe_subscription_id?: string },
-    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => {
     const payload = {
       ...data,
@@ -134,12 +139,12 @@ export async function handleStripeWebhookPost(
 
   const updateByOrgId = async (
     organizationId: string,
-    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_subscription_id" | "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => applyUpdate({ organization_id: organizationId }, data);
 
   const updateBySubscriptionId = async (
     subscriptionId: string,
-    data: Partial<Pick<OrgSubUpdate, "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at">>
+    data: Partial<Pick<OrgSubUpdate, "stripe_customer_id" | "status" | "current_period_end" | "grace_period_ends_at" | "is_trial">>
   ) => applyUpdate({ stripe_subscription_id: subscriptionId }, data);
 
   const {
@@ -434,7 +439,7 @@ export async function handleStripeWebhookPost(
         }
 
         if (session.mode === "subscription" || subscriptionId) {
-          if (session.payment_status !== "paid") {
+          if (!shouldProvisionOrgCheckoutOnCompletion(session.payment_status, session.metadata)) {
             debugLog("stripe-webhook", "Checkout completed without payment; skipping org provisioning");
             break;
           }
@@ -522,6 +527,7 @@ export async function handleStripeWebhookPost(
           await updateByOrgId(organizationId, {
             stripe_subscription_id: subscriptionId,
             stripe_customer_id: customerId,
+            is_trial: isOrgTrialMetadata(session.metadata),
             status,
             current_period_end: currentPeriodEnd,
           });
@@ -581,18 +587,35 @@ export async function handleStripeWebhookPost(
           await updateByOrgId(organizationId, {
             stripe_subscription_id: subscription.id,
             stripe_customer_id: customerId,
+            is_trial: isOrgTrialMetadata(subscription.metadata),
             status,
             current_period_end: currentPeriodEnd,
             ...(gracePeriodUpdate !== undefined && { grace_period_ends_at: gracePeriodUpdate }),
           });
         } else {
           await updateBySubscriptionId(subscription.id, {
+            is_trial: isOrgTrialMetadata(subscription.metadata),
             status,
             current_period_end: currentPeriodEnd,
             stripe_customer_id: customerId,
             ...(gracePeriodUpdate !== undefined && { grace_period_ends_at: gracePeriodUpdate }),
           });
         }
+        break;
+      }
+      case "customer.subscription.trial_will_end": {
+        const subscription = event.data.object as SubscriptionWithPeriod;
+        const trialEnd = subscription.current_period_end
+          ? formatStripeDateUtc(subscription.current_period_end)
+          : "soon";
+
+        await sendInvoiceEmailToAdmins(
+          supabase,
+          subscription.id,
+          "trial ending reminder",
+          (entityName) => buildTrialEndingEmail(trialEnd, { entityName }),
+          sendEmailFn,
+        );
         break;
       }
       case "invoice.paid": {

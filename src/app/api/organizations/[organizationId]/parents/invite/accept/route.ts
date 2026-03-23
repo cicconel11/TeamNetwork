@@ -58,8 +58,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const serviceSupabase = createServiceClient();
 
   // Look up invite by code using service client (bypasses RLS)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invite, error: inviteError } = await (serviceSupabase as any)
+  const { data: invite, error: inviteError } = await serviceSupabase
     .from("parent_invites")
     .select("id,organization_id,status,expires_at")
     .eq("code", code)
@@ -93,8 +92,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // The expiry guard is included here so a race between the read and the claim cannot
   // result in an expired invite being accepted.
   const claimNow = new Date().toISOString();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: claimedRows, error: claimError } = await (serviceSupabase as any)
+  const { data: claimedRows, error: claimError } = await serviceSupabase
     .from("parent_invites")
     .update({ status: "accepted", accepted_at: claimNow })
     .eq("id", invite.id)
@@ -109,8 +107,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (!claimedRows || claimedRows.length === 0) {
     // Re-fetch to return an accurate status code (expired vs. already accepted vs. revoked)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: current } = await (serviceSupabase as any)
+    const { data: current } = await serviceSupabase
       .from("parent_invites")
       .select("status,expires_at")
       .eq("id", invite.id)
@@ -144,8 +141,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
     // Transient/unexpected error — roll back the invite claim so the parent can retry.
     // Best-effort: if the rollback itself fails we still return 500 (no nested error handling).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (serviceSupabase as any)
+    await serviceSupabase
       .from("parent_invites")
       .update({ status: "pending", accepted_at: null })
       .eq("id", invite.id)
@@ -159,8 +155,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   // Upsert parent record: reuse existing non-deleted record for this org+email if present.
   // This prevents duplicate rows when an admin manually added the parent before sending the invite.
   // Preserves admin-set fields (relationship, student_name, notes, etc.) on the existing record.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existingParent } = await (serviceSupabase as any)
+  const { data: existingParent } = await serviceSupabase
     .from("parents")
     .select("id")
     .eq("organization_id", invite.organization_id)
@@ -172,8 +167,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
   if (existingParent) {
     // Link the existing record to the auth user; update name from the acceptance form.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: linkError } = await (serviceSupabase as any)
+    const { error: linkError } = await serviceSupabase
       .from("parents")
       .update({ user_id: userId, first_name, last_name, updated_at: new Date().toISOString() })
       .eq("id", existingParent.id);
@@ -184,8 +178,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
     parentId = existingParent.id;
   } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: parent, error: parentError } = await (serviceSupabase as any)
+    const { data: parent, error: parentError } = await serviceSupabase
       .from("parents")
       .insert({
         organization_id: invite.organization_id,
@@ -205,8 +198,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Grant org membership — service client bypasses RLS (safe; invite already validated)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: roleError } = await (serviceSupabase as any)
+  const { error: roleError } = await serviceSupabase
     .from("user_organization_roles")
     .insert({
       user_id: userId,
@@ -220,8 +212,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       // User already has an org membership row (could be active or revoked).
       // Only reactivate revoked memberships; leave active memberships untouched.
       // Consistent with redeem_org_invite which returns already_member=true for active users.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: reactivateError } = await (serviceSupabase as any)
+      const { error: reactivateError } = await serviceSupabase
         .from("user_organization_roles")
         .update({ status: "active", role: "parent" })
         .eq("user_id", userId)

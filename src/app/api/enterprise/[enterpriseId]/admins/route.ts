@@ -14,9 +14,9 @@ import {
   ENTERPRISE_ANY_ROLE,
   ENTERPRISE_OWNER_ROLE,
 } from "@/lib/auth/enterprise-api-context";
-import type { EnterpriseRole } from "@/types/enterprise";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
 import { removeEnterpriseAdmin } from "@/lib/enterprise/admin";
+import { lookupAuthUserByEmail } from "@/lib/supabase/auth-schema";
 import { CACHE_HEADERS } from "@/lib/api/response";
 
 export const dynamic = "force-dynamic";
@@ -24,15 +24,6 @@ export const runtime = "nodejs";
 
 interface RouteParams {
   params: Promise<{ enterpriseId: string }>;
-}
-
-// Type for user_enterprise_roles table row (until types are regenerated)
-interface UserEnterpriseRoleRow {
-  id: string;
-  user_id: string;
-  enterprise_id: string;
-  role: EnterpriseRole;
-  created_at: string;
 }
 
 const inviteAdminSchema = z
@@ -72,12 +63,11 @@ export async function GET(req: Request, { params }: RouteParams) {
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
   // Get all enterprise admins with user details
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: admins, error } = await (ctx.serviceSupabase as any)
+  const { data: admins, error } = await ctx.serviceSupabase
     .from("user_enterprise_roles")
     .select("id, user_id, role, created_at")
     .eq("enterprise_id", ctx.enterpriseId)
-    .order("created_at", { ascending: true }) as { data: UserEnterpriseRoleRow[] | null; error: Error | null };
+    .order("created_at", { ascending: true });
 
   if (error) {
     console.error("[enterprise/admins GET] DB error:", error);
@@ -148,16 +138,10 @@ export async function POST(req: Request, { params }: RouteParams) {
     const { email, role } = body;
 
     // Direct Postgres lookup via service role — no pagination cap, no client-side scan
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: userRow, error: lookupError } = await (ctx.serviceSupabase as any)
-      .schema("auth")
-      .from("users")
-      .select("id, email, raw_user_meta_data")
-      .ilike("email", sanitizeIlikeInput(email))
-      .maybeSingle() as {
-        data: { id: string; email: string; raw_user_meta_data: Record<string, unknown> | null } | null;
-        error: { message: string } | null;
-      };
+    const { data: userRow, error: lookupError } = await lookupAuthUserByEmail(
+      ctx.serviceSupabase,
+      sanitizeIlikeInput(email),
+    );
     if (lookupError) {
       console.error("[enterprise/admins] user lookup failed:", lookupError);
       return respond({ error: "Failed to look up user" }, 500);
@@ -171,29 +155,27 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // Check if user already has a role in this enterprise
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existingRole } = await (ctx.serviceSupabase as any)
+    const { data: existingRole } = await ctx.serviceSupabase
       .from("user_enterprise_roles")
       .select("id, role")
       .eq("enterprise_id", ctx.enterpriseId)
       .eq("user_id", targetUser.id)
-      .maybeSingle() as { data: UserEnterpriseRoleRow | null };
+      .maybeSingle();
 
     if (existingRole) {
       return respond({ error: "User already has a role in this enterprise" }, 409);
     }
 
     // Create the role
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: newRole, error: roleError } = await (ctx.serviceSupabase as any)
+    const { data: newRole, error: roleError } = await ctx.serviceSupabase
       .from("user_enterprise_roles")
       .insert({
         enterprise_id: ctx.enterpriseId,
         user_id: targetUser.id,
-        role: role as EnterpriseRole,
+        role,
       })
       .select()
-      .single() as { data: UserEnterpriseRoleRow | null; error: Error | null };
+      .single();
 
     if (roleError) {
       console.error("[enterprise/admins POST] DB error:", roleError);

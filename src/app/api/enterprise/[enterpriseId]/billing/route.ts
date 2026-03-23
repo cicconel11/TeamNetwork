@@ -19,22 +19,6 @@ interface RouteParams {
   params: Promise<{ enterpriseId: string }>;
 }
 
-// Type for enterprise subscription row (until types are regenerated)
-interface EnterpriseSubscriptionRow {
-  id: string;
-  enterprise_id: string;
-  stripe_customer_id: string | null;
-  stripe_subscription_id: string | null;
-  billing_interval: BillingInterval;
-  alumni_bucket_quantity: number;
-  sub_org_quantity: number | null;
-  status: string;
-  current_period_end: string | null;
-  grace_period_ends_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export async function GET(req: Request, { params }: RouteParams) {
   const { enterpriseId } = await params;
 
@@ -59,12 +43,11 @@ export async function GET(req: Request, { params }: RouteParams) {
     NextResponse.json(payload, { status, headers: rateLimit.headers });
 
   // Get subscription details
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
+  const { data: subscription, error: subError } = await ctx.serviceSupabase
     .from("enterprise_subscriptions")
     .select("*")
     .eq("enterprise_id", ctx.enterpriseId)
-    .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
+    .maybeSingle();
 
   if (subError) {
     console.error("[billing] DB error fetching subscription:", subError);
@@ -78,19 +61,20 @@ export async function GET(req: Request, { params }: RouteParams) {
   // Get quota info
   const quota = await getEnterpriseQuota(ctx.enterpriseId);
 
-  // Calculate pricing
+  // Calculate pricing — billing_interval is constrained by DB CHECK but typed as string
   const bucketQuantity = subscription.alumni_bucket_quantity;
+  const billingInterval = subscription.billing_interval as BillingInterval;
   const salesManaged = isSalesLed(bucketQuantity);
   const subOrgPricing = getSubOrgPricing(
     subscription.sub_org_quantity ?? 0,
-    subscription.billing_interval
+    billingInterval
   );
 
   // Build billing overview
   const billing = {
     salesManaged,
     status: subscription.status,
-    billingInterval: subscription.billing_interval,
+    billingInterval,
     alumniBucketQuantity: bucketQuantity,
     alumniCapacity: bucketQuantity * ALUMNI_BUCKET_PRICING.capacityPerBucket,
     subOrgQuantity: subscription.sub_org_quantity ?? null,
@@ -105,7 +89,7 @@ export async function GET(req: Request, { params }: RouteParams) {
           totalCents: null,
         }
       : (() => {
-          const alumniPricing = getAlumniBucketPricing(bucketQuantity, subscription.billing_interval);
+          const alumniPricing = getAlumniBucketPricing(bucketQuantity, billingInterval);
           return {
             alumni: { mode: "self_serve" as const, ...alumniPricing },
             subOrgs: subOrgPricing,
@@ -196,12 +180,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Load current subscription info
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subscription, error: subError } = await (ctx.serviceSupabase as any)
+  const { data: subscription, error: subError } = await ctx.serviceSupabase
     .from("enterprise_subscriptions")
     .select("stripe_subscription_id, stripe_customer_id, alumni_bucket_quantity, billing_interval")
     .eq("enterprise_id", ctx.enterpriseId)
-    .maybeSingle() as { data: EnterpriseSubscriptionRow | null; error: Error | null };
+    .maybeSingle();
 
   if (subError) {
     console.error("[billing] DB error fetching subscription for update:", subError);
@@ -248,8 +231,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     const stripeCustomerId =
       typeof updatedSub.customer === "string" ? updatedSub.customer : updatedSub.customer?.id || null;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (ctx.serviceSupabase as any)
+    const { error: updateError } = await ctx.serviceSupabase
       .from("enterprise_subscriptions")
       .update({
         alumni_bucket_quantity: alumniBucketQuantity,
