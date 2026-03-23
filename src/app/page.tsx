@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
 import { PricingSection } from "@/components/marketing/PricingSection";
-import { FeatureIcon, TermsIcon } from "@/components/marketing/icons";
+import { FeatureIcon } from "@/components/marketing/icons";
 import "./landing-styles.css";
 
 const FAQAccordion = dynamic(
@@ -246,29 +246,34 @@ export default async function LandingPage() {
       {/* Pricing */}
       <PricingSection />
 
-      {/* Our Commitment — compact inline terms */}
+      {/* Our Commitment — "The Rulebook" */}
       <section id="terms-summary" className="relative z-10 py-24 px-6">
-        <div className="max-w-3xl mx-auto">
+        <div className="chalkboard max-w-4xl mx-auto rounded-2xl p-8 sm:p-12">
           <div className="text-center mb-12">
-            <h2 className="scroll-reveal font-display text-3xl sm:text-4xl font-bold mb-4">Our Commitment</h2>
-            <p className="scroll-reveal text-landing-cream/60">
-              Transparency matters. Here are the key points of our terms of service.
+            <div className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
+              Terms
+            </div>
+            <h2 className="scroll-reveal font-display text-3xl sm:text-4xl font-bold mb-4">
+              The <span className="text-landing-cream">Rulebook</span>
+            </h2>
+            <p className="scroll-reveal text-landing-cream/50">
+              Transparency matters. Here are the key points.
             </p>
           </div>
 
-          <div className="scroll-reveal grid sm:grid-cols-2 gap-x-8 mb-10">
+          <div className="scroll-reveal grid sm:grid-cols-2 gap-x-10 gap-y-0 mb-10">
             {[
-              { title: "Eligibility", text: "Must be 16+ to use the service.", index: 0 },
-              { title: "Security", text: "You\u2019re responsible for your credentials.", index: 1 },
-              { title: "Conduct", text: "No illegal, harmful, or infringing content.", index: 2 },
-              { title: "Payments", text: "Fees are non-refundable unless required by law.", index: 3 },
-              { title: "Data & IP", text: "We retain software rights; you retain content rights.", index: 4 },
-              { title: "Disputes", text: "Resolved via binding arbitration in New York.", index: 5 },
-            ].map((item) => (
-              <div key={item.title} className="flex items-start gap-3 py-4 border-b border-landing-cream/10">
-                <div className="w-8 h-8 rounded-lg bg-landing-cream/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <TermsIcon index={item.index} />
-                </div>
+              { title: "Eligibility", text: "Must be 16+ to use the service." },
+              { title: "Security", text: "You\u2019re responsible for your credentials." },
+              { title: "Conduct", text: "No illegal, harmful, or infringing content." },
+              { title: "Payments", text: "Fees are non-refundable unless required by law." },
+              { title: "Data & IP", text: "We retain software rights; you retain content rights." },
+              { title: "Disputes", text: "Resolved via binding arbitration in New York." },
+            ].map((item, i) => (
+              <div key={item.title} className="flex items-start gap-4 py-4 border-b border-landing-cream/10 last:border-b-0">
+                <span className="font-display font-bold text-landing-green/60 text-lg leading-none mt-0.5 flex-shrink-0 w-6 text-right">
+                  {i + 1}
+                </span>
                 <div className="min-w-0">
                   <span className="font-display font-semibold text-landing-cream text-sm">{item.title}</span>
                   <span className="text-landing-cream/50 text-sm"> — {item.text}</span>
@@ -278,9 +283,9 @@ export default async function LandingPage() {
           </div>
 
           <div className="text-center">
-            <Link href="/terms" className="inline-flex items-center gap-2 text-landing-cream/60 hover:text-landing-cream transition-colors">
+            <Link href="/terms" className="inline-flex items-center gap-2 text-landing-cream/60 hover:text-landing-cream transition-colors group">
               <span>Read Full Terms</span>
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
             </Link>
