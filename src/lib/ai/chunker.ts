@@ -147,7 +147,42 @@ function renderJobPosting(record: Record<string, unknown>): ChunkInput[] {
 // ---------------------------------------------------------------------------
 
 /**
+ * Break a single oversized paragraph into pieces at sentence boundaries
+ * or at the hard character limit if no sentence boundary is found.
+ */
+function breakOversizedParagraph(para: string): string[] {
+  if (para.length <= MAX_CHUNK_CHARS) return [para];
+
+  const pieces: string[] = [];
+  let remaining = para;
+
+  while (remaining.length > MAX_CHUNK_CHARS) {
+    // Try to break at a sentence boundary (". ") within the limit
+    const searchWindow = remaining.slice(0, MAX_CHUNK_CHARS);
+    const lastSentence = searchWindow.lastIndexOf(". ");
+
+    let breakPoint: number;
+    if (lastSentence > MAX_CHUNK_CHARS / 2) {
+      breakPoint = lastSentence + 2; // Include the ". "
+    } else {
+      // No good sentence boundary — hard break at limit
+      breakPoint = MAX_CHUNK_CHARS;
+    }
+
+    pieces.push(remaining.slice(0, breakPoint).trimEnd());
+    remaining = remaining.slice(breakPoint).trimStart();
+  }
+
+  if (remaining.length > 0) {
+    pieces.push(remaining);
+  }
+
+  return pieces;
+}
+
+/**
  * Split text into chunks of MAX_CHUNK_CHARS on paragraph boundaries.
+ * Oversized paragraphs are further split on sentence boundaries.
  * Returns ChunkInput[] with sequential chunk indexes.
  */
 function splitIfNeeded(
@@ -158,7 +193,13 @@ function splitIfNeeded(
     return [{ text, chunkIndex: 0, metadata: baseMetadata }];
   }
 
-  const paragraphs = text.split(/\n\n+/);
+  // Split into paragraphs, then break oversized ones
+  const rawParagraphs = text.split(/\n\n+/);
+  const paragraphs: string[] = [];
+  for (const para of rawParagraphs) {
+    paragraphs.push(...breakOversizedParagraph(para));
+  }
+
   const chunks: ChunkInput[] = [];
   let current = "";
   let chunkIndex = 0;

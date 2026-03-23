@@ -163,5 +163,27 @@ describe("chunker", () => {
         assert.ok(chunk.text.length <= 2048 + 100); // Small tolerance for boundary effects
       }
     });
+
+    it("breaks a single oversized paragraph on sentence boundaries", () => {
+      // Create a single paragraph (no \n\n) that exceeds 2048 chars
+      const sentences = Array.from({ length: 20 }, (_, i) =>
+        `Sentence number ${i + 1} has some content here.`
+      );
+      const longParagraph = sentences.join(" ");
+
+      const chunks = renderChunks("discussion_threads", {
+        title: "Thread with huge body",
+        body: longParagraph,
+      });
+
+      // Should produce at least 1 chunk, all within the limit
+      assert.ok(chunks.length >= 1);
+      for (const chunk of chunks) {
+        assert.ok(
+          chunk.text.length <= 2048,
+          `Chunk exceeded limit: ${chunk.text.length} chars`
+        );
+      }
+    });
   });
 });

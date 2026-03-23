@@ -58,5 +58,4 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.search_ai_documents FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.search_ai_documents FROM anon;
-GRANT EXECUTE ON FUNCTION public.search_ai_documents TO authenticated;
 GRANT EXECUTE ON FUNCTION public.search_ai_documents TO service_role;

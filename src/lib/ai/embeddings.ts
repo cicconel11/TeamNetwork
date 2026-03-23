@@ -67,6 +67,13 @@ export async function generateEmbeddings(
     dimensions: EXPECTED_DIMENSIONS,
   });
 
+  // Validate response count matches input count
+  if (response.data.length !== texts.length) {
+    throw new Error(
+      `Embedding response count mismatch: expected ${texts.length}, got ${response.data.length}`
+    );
+  }
+
   // Response data is sorted by index — map back to input order
   const sorted = response.data.sort((a, b) => a.index - b.index);
   return sorted.map((d) => d.embedding);

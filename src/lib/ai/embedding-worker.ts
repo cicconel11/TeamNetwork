@@ -262,6 +262,14 @@ export async function processEmbeddingQueue(
     const exclusionKey = `${item.source_table}:${item.source_id}`;
 
     if (exclusions.has(exclusionKey)) {
+      // Issue 4 fix: purge any existing chunks for excluded content
+      await (serviceSupabase as any)
+        .from("ai_document_chunks")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("org_id", item.org_id)
+        .eq("source_table", item.source_table)
+        .eq("source_id", item.source_id)
+        .is("deleted_at", null);
       stats.skipped++;
       await markProcessed(serviceSupabase, [item.id]);
       continue;
@@ -384,49 +392,64 @@ export async function processEmbeddingQueue(
     const texts = pendingChunks.map((c) => c.text);
     const embeddings = await generateEmbeddings(texts);
 
-    // Upsert chunks into ai_document_chunks
     const now = new Date().toISOString();
+
+    // Group chunks by queue item for atomic per-item processing
+    const chunksByItem = new Map<string, Array<{ chunk: PendingChunk; embedding: number[] }>>();
     for (let i = 0; i < pendingChunks.length; i++) {
       const chunk = pendingChunks[i];
-      const embedding = embeddings[i];
+      const list = chunksByItem.get(chunk.item.id) ?? [];
+      list.push({ chunk, embedding: embeddings[i] });
+      chunksByItem.set(chunk.item.id, list);
+    }
 
-      // Soft-delete any existing chunk for this source+index, then insert fresh
+    for (const [itemId, itemChunks] of chunksByItem) {
+      const firstChunk = itemChunks[0].chunk;
+      let itemFailed = false;
+
+      // Issue 3 fix: soft-delete ALL existing chunks for this source record
+      // before inserting — cleans up stale chunks when content shrinks
       await (serviceSupabase as any)
         .from("ai_document_chunks")
         .update({ deleted_at: now })
-        .eq("org_id", chunk.item.org_id)
-        .eq("source_table", chunk.item.source_table)
-        .eq("source_id", chunk.item.source_id)
-        .eq("chunk_index", chunk.chunkIndex)
+        .eq("org_id", firstChunk.item.org_id)
+        .eq("source_table", firstChunk.item.source_table)
+        .eq("source_id", firstChunk.item.source_id)
         .is("deleted_at", null);
 
-      const { error: upsertError } = await (serviceSupabase as any)
-        .from("ai_document_chunks")
-        .insert({
-          org_id: chunk.item.org_id,
-          source_table: chunk.item.source_table,
-          source_id: chunk.item.source_id,
-          chunk_index: chunk.chunkIndex,
-          content_text: chunk.text,
-          content_hash: chunk.contentHash,
-          embedding: JSON.stringify(embedding),
-          metadata: chunk.metadata,
-        });
+      // Insert all new chunks for this item
+      for (const { chunk, embedding } of itemChunks) {
+        const { error: insertError } = await (serviceSupabase as any)
+          .from("ai_document_chunks")
+          .insert({
+            org_id: chunk.item.org_id,
+            source_table: chunk.item.source_table,
+            source_id: chunk.item.source_id,
+            chunk_index: chunk.chunkIndex,
+            content_text: chunk.text,
+            content_hash: chunk.contentHash,
+            embedding: JSON.stringify(embedding),
+            metadata: chunk.metadata,
+          });
 
-      if (upsertError) {
-        console.error("[embedding-worker] upsert chunk failed:", upsertError);
+        if (insertError) {
+          console.error("[embedding-worker] insert chunk failed:", insertError);
+          itemFailed = true;
+          break; // Stop inserting more chunks for this item
+        }
+      }
+
+      // Issue 2 fix: only mark processed if ALL chunks for this item succeeded
+      if (itemFailed) {
         stats.failed++;
         await incrementAttempts(
           serviceSupabase,
-          chunk.item.id,
-          upsertError.message
+          itemId,
+          "chunk_insert_failed"
         );
       } else {
-        // Track which queue items had successful chunks
-        if (!processedItemIds.includes(chunk.item.id)) {
-          processedItemIds.push(chunk.item.id);
-          stats.processed++;
-        }
+        processedItemIds.push(itemId);
+        stats.processed++;
       }
     }
 

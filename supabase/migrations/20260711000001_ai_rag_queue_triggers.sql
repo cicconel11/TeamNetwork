@@ -110,7 +110,6 @@ COMMENT ON FUNCTION public.search_ai_documents IS 'Vector similarity search acro
 
 REVOKE EXECUTE ON FUNCTION public.search_ai_documents FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.search_ai_documents FROM anon;
-GRANT EXECUTE ON FUNCTION public.search_ai_documents TO authenticated;
 GRANT EXECUTE ON FUNCTION public.search_ai_documents TO service_role;
 
 -- =============================================================================
@@ -235,6 +234,7 @@ BEGIN
     SELECT id
     FROM public.ai_embedding_queue
     WHERE created_at < now() - interval '7 days'
+      AND (processed_at IS NOT NULL OR attempts >= 3)
     ORDER BY created_at
     LIMIT 1000
   )

@@ -305,7 +305,7 @@ describe("checkCacheEligibility", () => {
 
   it("returns ineligible for write markers: 'send'", () => {
     const result = checkCacheEligibility({
-      message: "Send the policy summary to the board",
+      message: "Send the report summary to the board",
       surface: "general",
     });
     assert.equal(result.eligible, false);

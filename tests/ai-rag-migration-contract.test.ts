@@ -124,9 +124,10 @@ describe("RAG migration contract", () => {
       assert.ok(sql.includes("CREATE OR REPLACE FUNCTION public.purge_ai_embedding_queue"));
     });
 
-    it("search RPC is granted to authenticated and service_role", () => {
-      assert.ok(sql.includes("GRANT EXECUTE ON FUNCTION public.search_ai_documents TO authenticated"));
+    it("search RPC is granted to service_role only", () => {
       assert.ok(sql.includes("GRANT EXECUTE ON FUNCTION public.search_ai_documents TO service_role"));
+      assert.ok(!sql.includes("GRANT EXECUTE ON FUNCTION public.search_ai_documents TO authenticated"),
+        "search_ai_documents should NOT be granted to authenticated (cross-org risk)");
     });
 
     it("backfill RPC is service_role only", () => {
@@ -153,6 +154,46 @@ describe("RAG migration contract", () => {
 
     it("adds rag_error column", () => {
       assert.ok(sql.includes("rag_error"));
+    });
+  });
+
+  describe("20260711100000_ai_rag_gemini_768_dims.sql", () => {
+    let sql: string;
+
+    it("migration file exists", () => {
+      sql = readMigration("20260711100000_ai_rag_gemini_768_dims.sql");
+      assert.ok(sql.length > 0);
+    });
+
+    it("changes embedding column to vector(768)", () => {
+      assert.ok(sql.includes("vector(768)"));
+    });
+
+    it("recreates HNSW index", () => {
+      assert.ok(sql.includes("idx_ai_chunks_embedding_hnsw"));
+      assert.ok(sql.includes("USING hnsw"));
+    });
+
+    it("recreates search RPC with vector(768)", () => {
+      assert.ok(sql.includes("search_ai_documents"));
+      assert.ok(sql.includes("p_query_embedding extensions.vector(768)"));
+    });
+  });
+
+  describe("20260711100001_ai_rag_security_fixes.sql", () => {
+    let sql: string;
+
+    it("migration file exists", () => {
+      sql = readMigration("20260711100001_ai_rag_security_fixes.sql");
+      assert.ok(sql.length > 0);
+    });
+
+    it("revokes authenticated access to search_ai_documents", () => {
+      assert.ok(sql.includes("REVOKE EXECUTE ON FUNCTION public.search_ai_documents FROM authenticated"));
+    });
+
+    it("purge only deletes completed or dead-letter items", () => {
+      assert.ok(sql.includes("processed_at IS NOT NULL OR attempts >= 3"));
     });
   });
 });
