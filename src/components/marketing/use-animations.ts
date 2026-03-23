@@ -315,6 +315,65 @@ export function useStadiumLights(beamSelector: string) {
   }, [beamSelector, reduced]);
 }
 
+// Banner drop animation with swing physics
+export function useBannerDrop(selector: string) {
+  const reduced = prefersReducedMotion();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const banners = document.querySelectorAll<HTMLElement>(selector);
+    if (!banners.length) return;
+
+    if (reduced) {
+      banners.forEach((banner) => {
+        banner.style.opacity = "1";
+        banner.style.transform = "none";
+      });
+      return;
+    }
+
+    // Set initial state
+    banners.forEach((banner) => {
+      banner.style.opacity = "0";
+      banner.style.transform = "translateY(-100%) rotate(-2deg)";
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const container = entry.target as HTMLElement;
+            const items = container.querySelectorAll<HTMLElement>(selector);
+
+            loadAnime().then((anime) => {
+              anime.animate(items, {
+                opacity: [0, 1],
+                translateY: ["-100%", "5px", "-2px", "0"],
+                rotate: ["-2deg", "1deg", "-0.5deg", "0"],
+                duration: 800,
+                ease: "spring(1, 80, 12, 0)",
+                delay: anime.stagger(100),
+              });
+            });
+
+            observer.unobserve(container);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    // Observe the parent container
+    const parent = banners[0]?.parentElement;
+    if (parent) {
+      observer.observe(parent);
+    }
+
+    return () => observer.disconnect();
+  }, [selector, reduced]);
+}
+
 // Confetti burst trigger
 export function useConfettiBurst(containerRef: React.RefObject<HTMLElement | null>) {
   const [shouldBurst, setShouldBurst] = useState(false);
