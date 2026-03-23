@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/ai-cache-purge",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/ai-embed-process",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

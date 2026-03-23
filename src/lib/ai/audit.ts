@@ -19,6 +19,9 @@ interface AuditEntry {
   cacheBypassReason?: string; // why cache was bypassed (eligibility reason)
   contextSurface?: CacheSurface; // which surface was used for context selection
   contextTokenEstimate?: number; // estimated token count of the context message
+  ragChunkCount?: number; // number of RAG chunks injected into context
+  ragTopSimilarity?: number; // highest cosine similarity score
+  ragError?: string; // error message if RAG retrieval failed
 }
 
 interface AuditInsertClient {
@@ -60,6 +63,9 @@ export async function logAiRequest(
       cache_bypass_reason: entry.cacheBypassReason ?? null,
       context_surface: entry.contextSurface ?? null,
       context_token_estimate: entry.contextTokenEstimate ?? null,
+      rag_chunk_count: entry.ragChunkCount ?? null,
+      rag_top_similarity: entry.ragTopSimilarity ?? null,
+      rag_error: entry.ragError ? entry.ragError.slice(0, 500) : null,
     };
 
     const { error } = await (serviceSupabase as unknown as AuditInsertClient)

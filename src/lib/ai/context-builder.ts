@@ -2,6 +2,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheSurface } from "./semantic-cache-utils";
 
+export interface RagChunkInput {
+  contentText: string;
+  sourceTable: string;
+  metadata: Record<string, unknown>;
+}
+
 interface BuildPromptInput {
   orgId: string;
   userId: string;
@@ -9,6 +15,7 @@ interface BuildPromptInput {
   serviceSupabase: SupabaseClient;
   contextMode?: "full" | "shared_static";
   surface?: CacheSurface;
+  ragChunks?: RagChunkInput[];
 }
 
 interface OrgInfo {
@@ -87,6 +94,7 @@ type SectionName =
   | "Organization Overview"
   | "Current User"
   | "Counts"
+  | "Retrieved Knowledge"
   | "Upcoming Events"
   | "Recent Announcements"
   | "Donation Summary";
@@ -98,9 +106,10 @@ const SECTION_PRIORITY: Record<SectionName, number> = {
   "Organization Overview": 1,
   "Current User": 2,
   "Counts": 3,
-  "Upcoming Events": 4,
-  "Recent Announcements": 5,
-  "Donation Summary": 6,
+  "Retrieved Knowledge": 4,
+  "Upcoming Events": 5,
+  "Recent Announcements": 6,
+  "Donation Summary": 7,
 };
 
 interface ContextSection {
@@ -408,6 +417,21 @@ export async function buildPromptContext(
     contextSections.push({
       name: "Counts",
       priority: SECTION_PRIORITY["Counts"],
+      lines,
+      estimatedTokens: estimateTokens(text),
+    });
+  }
+
+  // RAG-retrieved knowledge (injected from rag-retriever.ts)
+  if (input.ragChunks && input.ragChunks.length > 0) {
+    const lines: string[] = ["## Retrieved Knowledge"];
+    for (const chunk of input.ragChunks) {
+      lines.push(`- [${chunk.sourceTable}] ${chunk.contentText}`);
+    }
+    const text = lines.join("\n");
+    contextSections.push({
+      name: "Retrieved Knowledge",
+      priority: SECTION_PRIORITY["Retrieved Knowledge"],
       lines,
       estimatedTokens: estimateTokens(text),
     });

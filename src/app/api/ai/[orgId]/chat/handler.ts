@@ -18,6 +18,8 @@ import {
   checkCacheEligibility,
 } from "@/lib/ai/semantic-cache-utils";
 import { lookupSemanticCache, writeCacheEntry } from "@/lib/ai/semantic-cache";
+import { retrieveRelevantChunks } from "@/lib/ai/rag-retriever";
+import type { RagChunkInput } from "@/lib/ai/context-builder";
 
 export interface ChatRouteDeps {
   createClient?: typeof createClient;
@@ -28,6 +30,7 @@ export interface ChatRouteDeps {
   composeResponse?: typeof composeResponse;
   logAiRequest?: typeof logAiRequest;
   resolveOwnThread?: typeof resolveOwnThread;
+  retrieveRelevantChunks?: typeof retrieveRelevantChunks;
 }
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
@@ -39,6 +42,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const composeResponseFn = deps.composeResponse ?? composeResponse;
   const logAiRequestFn = deps.logAiRequest ?? logAiRequest;
   const resolveOwnThreadFn = deps.resolveOwnThread ?? resolveOwnThread;
+  const retrieveRelevantChunksFn = deps.retrieveRelevantChunks ?? retrieveRelevantChunks;
 
   return async function POST(
     request: NextRequest,
@@ -303,6 +307,35 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     }
   }
 
+  // 8.6 RAG retrieval — additive, never blocking
+  let ragChunks: RagChunkInput[] = [];
+  let ragChunkCount = 0;
+  let ragTopSimilarity: number | undefined;
+  let ragError: string | undefined;
+
+  const hasEmbeddingKey = !!(process.env.EMBEDDING_API_KEY || process.env.ZAI_API_KEY);
+  if (hasEmbeddingKey) {
+    try {
+      const retrieved = await retrieveRelevantChunksFn({
+        query: message,
+        orgId: ctx.orgId,
+        serviceSupabase: ctx.serviceSupabase,
+      });
+      ragChunkCount = retrieved.length;
+      if (retrieved.length > 0) {
+        ragTopSimilarity = Math.max(...retrieved.map((c) => c.similarity));
+        ragChunks = retrieved.map((c) => ({
+          contentText: c.contentText,
+          sourceTable: c.sourceTable,
+          metadata: c.metadata,
+        }));
+      }
+    } catch (err) {
+      ragError = err instanceof Error ? err.message : "rag_retrieval_failed";
+      console.error("[ai-chat] RAG retrieval failed (continuing without):", err);
+    }
+  }
+
   // 9. Insert assistant placeholder
   const { data: assistantMsg, error: assistantError } = await insertAssistantMessage({
     content: null,
@@ -365,6 +398,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             serviceSupabase: ctx.serviceSupabase,
             contextMode: usesSharedStaticContext ? "shared_static" : "full",
             surface,
+            ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
           }),
           ctx.supabase
             .from("ai_messages")
@@ -485,6 +519,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         cacheBypassReason,
         contextSurface: contextMetadata?.surface ?? surface,
         contextTokenEstimate: contextMetadata?.estimatedTokens,
+        ragChunkCount: ragChunkCount > 0 ? ragChunkCount : undefined,
+        ragTopSimilarity,
+        ragError,
       });
     }
   });
