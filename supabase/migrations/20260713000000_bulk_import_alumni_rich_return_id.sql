@@ -195,3 +195,9 @@ BEGIN
   END LOOP;
 END;
 $$;
+
+-- Re-apply ACL after DROP/CREATE to prevent authenticated/anon from calling directly
+REVOKE EXECUTE ON FUNCTION public.bulk_import_alumni_rich FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.bulk_import_alumni_rich FROM anon;
+REVOKE EXECUTE ON FUNCTION public.bulk_import_alumni_rich FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.bulk_import_alumni_rich TO service_role;

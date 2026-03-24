@@ -140,6 +140,11 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
       const toPreview = displayRows.filter((r) => r.status !== "invalid" && r.status !== "duplicate");
       if (toPreview.length === 0) return;
 
+      // Build mapping: server's filtered position → original rowIndex
+      // Server keys results as row:0, row:1, ... based on the filtered array order
+      const serverIndexToRowIndex = new Map<number, number>();
+      toPreview.forEach((r, i) => serverIndexToRowIndex.set(i, r.rowIndex));
+
       setIsPreviewing(true);
       setRows((prev) =>
         prev.map((r) =>
@@ -166,11 +171,21 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
         if (response.ok) {
           const data: ImportResult = await response.json();
           if (data.preview) {
+            // Remap server keys (row:0, row:1, ...) back to original rowIndex
+            const statusByOriginalIndex = new Map<number, RowStatus>();
+            for (const [serverKey, status] of Object.entries(data.preview)) {
+              const serverIdx = parseInt(serverKey.replace("row:", ""), 10);
+              const originalIdx = serverIndexToRowIndex.get(serverIdx);
+              if (originalIdx !== undefined) {
+                statusByOriginalIndex.set(originalIdx, status as RowStatus);
+              }
+            }
+
             setRows((prev) =>
               prev.map((r) => {
                 if (r.status === "invalid" || r.status === "duplicate") return r;
-                const previewStatus = data.preview?.[`row:${r.rowIndex}`];
-                return { ...r, status: (previewStatus as RowStatus) ?? "will_create" };
+                const previewStatus = statusByOriginalIndex.get(r.rowIndex);
+                return { ...r, status: previewStatus ?? "will_create" };
               }),
             );
           }
