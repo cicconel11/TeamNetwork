@@ -28,24 +28,24 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
   const organizationId = orgIdResult.data;
 
-  // Auth
+  // Rate limit (before auth to throttle unauthenticated traffic)
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  // Rate limit
   const rateLimit = checkRateLimit(req, {
     limitPerIp: 20,
     limitPerUser: 10,
-    userId: user.id,
+    userId: user?.id ?? null,
     feature: "alumni-bulk-delete",
   });
   if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
+
+  // Auth
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: rateLimit.headers });
+  }
 
   // Admin role check
   const serviceSupabase = createServiceClient();

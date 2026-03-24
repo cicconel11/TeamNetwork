@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -6,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Badge, Card } from "@/components/ui";
 import { parseCsvData, generateCsvTemplate, type CsvImportRow, type CsvImportPreviewStatus } from "@/lib/alumni/csv-import";
 import { useFileDrop } from "@/hooks/useFileDrop";
-import { summarizeRows, type ImportResultBase } from "@/lib/alumni/import-utils";
+import { summarizeRows, type ImportResultBase, type CreatedAlumniRecord } from "@/lib/alumni/import-utils";
 import { ImportDropZone } from "./ImportDropZone";
 import { ImportPasteArea } from "./ImportPasteArea";
 import { ImportPreviewSummary } from "./ImportPreviewSummary";
@@ -26,13 +25,6 @@ type RowStatus =
 interface DisplayRow extends CsvImportRow {
   status: RowStatus;
   rowIndex: number;
-}
-
-interface CreatedAlumniRecord {
-  id: string;
-  email?: string;
-  firstName: string;
-  lastName: string;
 }
 
 interface ImportResult extends ImportResultBase {
@@ -72,6 +64,13 @@ function parsedRowsToDisplay(rows: CsvImportRow[]): DisplayRow[] {
   }));
 }
 
+/** Strip display-only fields before sending rows to the server. */
+function stripDisplayFields(row: DisplayRow): CsvImportRow {
+  const { status, rowIndex, ...csvRow } = row;
+  void status; void rowIndex;
+  return csvRow;
+}
+
 function downloadCsvTemplate() {
   const csv = generateCsvTemplate();
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -94,6 +93,8 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
   const [isImporting, setIsImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const previewAbortRef = useRef<AbortController | null>(null);
+  const previewSeqRef = useRef(0);
 
   // Feature A: Preview row selection + exclusion
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
@@ -141,6 +142,12 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
       const toPreview = displayRows.filter((r) => r.status !== "invalid" && r.status !== "duplicate");
       if (toPreview.length === 0) return;
 
+      // Abort any in-flight preview request
+      previewAbortRef.current?.abort();
+      const abortController = new AbortController();
+      previewAbortRef.current = abortController;
+      const seq = ++previewSeqRef.current;
+
       // Build mapping: server's filtered position → original rowIndex
       // Server keys results as row:0, row:1, ... based on the filtered array order
       const serverIndexToRowIndex = new Map<number, number>();
@@ -162,12 +169,16 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              rows: toPreview.map(({ status: _s, rowIndex: _i, ...rest }) => rest),
+              rows: toPreview.map((r) => stripDisplayFields(r)),
               overwrite: shouldOverwrite,
               dryRun: true,
             }),
+            signal: abortController.signal,
           },
         );
+
+        // Discard stale response if a newer preview was triggered
+        if (seq !== previewSeqRef.current) return;
 
         if (response.ok) {
           const data: ImportResult = await response.json();
@@ -195,12 +206,15 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
             prev.map((r) => (r.status === "checking" ? { ...r, status: "will_create" as const } : r)),
           );
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         setRows((prev) =>
           prev.map((r) => (r.status === "checking" ? { ...r, status: "will_create" as const } : r)),
         );
       } finally {
-        setIsPreviewing(false);
+        if (seq === previewSeqRef.current) {
+          setIsPreviewing(false);
+        }
       }
     },
     [organizationId],
@@ -214,9 +228,10 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overwrite]);
 
-  // Scroll into view on mount
+  // Scroll into view on mount + abort in-flight previews on unmount
   useEffect(() => {
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return () => { previewAbortRef.current?.abort(); };
   }, []);
 
   // ─── Selection handlers ───────────────────────────────────────────────
@@ -317,7 +332,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rows: validRows.map(({ status: _s, rowIndex: _i, ...rest }) => rest),
+            rows: validRows.map((r) => stripDisplayFields(r)),
             overwrite,
             dryRun: false,
             sendInvites,
@@ -325,9 +340,20 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
         },
       );
 
-      const data: ImportResult = await response.json();
-      setResult(data);
-      if (data.created > 0 || data.updated > 0) {
+      const data = await response.json();
+      if (!response.ok) {
+        setResult({
+          created: 0,
+          updated: 0,
+          skipped: 0,
+          quotaBlocked: 0,
+          errors: [data.error ?? "Import failed"],
+        });
+        return;
+      }
+      const importResult = data as ImportResult;
+      setResult(importResult);
+      if (importResult.created > 0 || importResult.updated > 0) {
         router.refresh();
       }
     } catch {

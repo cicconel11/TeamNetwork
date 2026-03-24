@@ -1,12 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { sendEmail } from "@/lib/notifications";
 import { validateAlumniImportRequest } from "@/lib/alumni/validate-import-request";
 import { getAppUrl } from "@/lib/url";
-import { IMPORT_STATUS, resolveUnmatchedEmailsByUserId, type ImportResultBase } from "@/lib/alumni/import-utils";
+import { IMPORT_STATUS, resolveUnmatchedEmailsByUserId, type ImportResultBase, type CreatedAlumniRecord } from "@/lib/alumni/import-utils";
 import {
   planCsvImport,
   type CsvImportPreviewStatus,
@@ -45,13 +43,6 @@ const importBodySchema = z.object({
 });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-interface CreatedAlumniRecord {
-  id: string;
-  email?: string;
-  firstName: string;
-  lastName: string;
-}
 
 interface ImportResult extends ImportResultBase {
   preview?: Record<string, CsvImportPreviewStatus>;
@@ -134,12 +125,17 @@ export async function POST(req: Request, { params }: RouteParams) {
   const alumniByEmail = new Map<string, { id: string; hasData: boolean }>();
 
   if (emailsInRequest.length > 0) {
+    // Case-insensitive email match — emailsInRequest is already lowercased.
+    // Use .in() which is case-sensitive, but also include original-case fallback
+    // by lowercasing results when building the map (line 157).
+    // To handle mixed-case DB emails, we use an OR of ilike conditions.
+    const orFilter = emailsInRequest.map((e) => `email.ilike.${e}`).join(",");
     const { data: alumniData, error: alumniError } = await serviceSupabase
       .from("alumni")
       .select("id, email, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
-      .in("email", emailsInRequest);
+      .or(orFilter);
 
     if (alumniError) {
       console.error("[alumni/import-csv POST] Failed to fetch alumni:", alumniError);
@@ -233,7 +229,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     for (const { error } of results) {
       if (error) {
         updateErrors++;
-        errors.push(error.message);
+        console.error("[alumni/import-csv POST] Update failed:", error.message);
+        errors.push("Failed to update one or more alumni records");
       }
     }
   }
@@ -252,7 +249,7 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     if (createError) {
       console.error("[alumni/import-csv POST] RPC bulk_import_alumni_rich failed:", createError);
-      errors.push(createError.message);
+      errors.push("Failed to create alumni records. Please try again.");
     } else {
       for (const row of createResults ?? []) {
         if (row.out_status === IMPORT_STATUS.CREATED) {

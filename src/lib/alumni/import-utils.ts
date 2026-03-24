@@ -14,6 +14,13 @@ export interface ImportResultBase {
   errors: string[];
 }
 
+export interface CreatedAlumniRecord {
+  id: string;
+  email?: string;
+  firstName: string;
+  lastName: string;
+}
+
 export interface ImportSummary {
   willCreate: number;
   willUpdate: number;
