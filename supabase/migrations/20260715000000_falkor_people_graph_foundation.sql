@@ -65,7 +65,7 @@ BEGIN
     );
   END IF;
 
-  IF NEW.deleted_at IS NOT NULL OR COALESCE(NEW.status, '') <> 'active' THEN
+  IF NEW.deleted_at IS NOT NULL OR NEW.status IS DISTINCT FROM 'active' THEN
     v_action := 'delete';
   ELSE
     v_action := 'upsert';
@@ -156,7 +156,7 @@ BEGIN
     );
   END IF;
 
-  IF NEW.deleted_at IS NOT NULL OR COALESCE(NEW.status, '') <> 'active' THEN
+  IF NEW.deleted_at IS NOT NULL OR NEW.status IS DISTINCT FROM 'active' THEN
     v_action := 'delete';
   ELSE
     v_action := 'upsert';
