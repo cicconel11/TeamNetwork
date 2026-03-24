@@ -105,6 +105,8 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteCount, setDeleteCount] = useState(0);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Derived state (filters out excluded rows) ────────────────────────────
 
@@ -283,6 +285,11 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     handlePreview(remaining, overwrite);
   }, [rows, excludedIndices, handlePreview, overwrite]);
 
+  const handleRestoreAll = useCallback(() => {
+    setExcludedIndices(new Set());
+    handlePreview(rows, overwrite);
+  }, [rows, handlePreview, overwrite]);
+
   // ─── File handling ──────────────────────────────────────────────────────
 
   const processText = useCallback(
@@ -371,10 +378,21 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
 
   // ─── Post-import bulk delete ──────────────────────────────────────────
 
-  const handleBulkDelete = useCallback(async () => {
+  const handleDeleteClick = useCallback(() => {
     if (postImportSelected.size === 0) return;
-    const count = postImportSelected.size;
-    if (!window.confirm(`Delete ${count} alumni record${count !== 1 ? "s" : ""}? This action can be undone by an admin.`)) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      confirmTimeoutRef.current = setTimeout(() => setConfirmDelete(false), 3000);
+      return;
+    }
+    // Clear confirm state and proceed with delete
+    setConfirmDelete(false);
+    if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
+    void executeDelete();
+  }, [postImportSelected, confirmDelete]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const executeDelete = useCallback(async () => {
+    if (postImportSelected.size === 0) return;
 
     setIsDeleting(true);
     setDeleteError(null);
@@ -428,6 +446,8 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     setPostImportSelected(new Set());
     setDeleteCount(0);
     setDeleteError(null);
+    setConfirmDelete(false);
+    if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current);
     fileDrop.resetFileInput();
   }, [fileDrop]);
 
@@ -503,9 +523,28 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
             <ImportPreviewSummary summary={summary} isPreviewing={isPreviewing} />
 
             {excludedIndices.size > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {excludedIndices.size} row{excludedIndices.size !== 1 ? "s" : ""} excluded from import
-              </p>
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/15 text-xs text-amber-600 dark:text-amber-400">
+                <span>{excludedIndices.size} row{excludedIndices.size !== 1 ? "s" : ""} excluded from import</span>
+                <button onClick={handleRestoreAll} className="font-medium hover:underline transition-colors duration-150">
+                  Restore all
+                </button>
+              </div>
+            )}
+
+            {/* Selection toolbar */}
+            {selectedIndices.size > 0 && (
+              <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-org-secondary/5 border border-org-secondary/20 text-xs animate-fade-in">
+                <span className="font-medium text-org-secondary">{selectedIndices.size} selected</span>
+                <Button size="sm" variant="ghost" onClick={handleRemoveSelected} disabled={isImporting}>
+                  Remove from import
+                </Button>
+                <button
+                  onClick={() => setSelectedIndices(new Set())}
+                  className="text-muted-foreground hover:text-foreground transition-colors duration-150"
+                >
+                  Deselect all
+                </button>
+              </div>
             )}
 
             {/* Horizontally scrollable table with checkbox column */}
@@ -522,7 +561,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                         }}
                         onChange={toggleSelectAll}
                         disabled={isImporting || selectableIndices.size === 0}
-                        className="rounded border-border"
+                        className="rounded border-border accent-emerald-500"
                         aria-label="Select all rows"
                       />
                     </th>
@@ -546,21 +585,23 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                     return (
                       <tr
                         key={row.rowIndex}
-                        className={
+                        className={`transition-colors duration-150 ${
                           isExcluded
                             ? "opacity-40"
-                            : row.status === "invalid"
-                              ? "bg-red-500/5"
-                              : row.status === "quota_blocked"
-                                ? "opacity-50"
-                                : ""
-                        }
+                            : selectedIndices.has(row.rowIndex)
+                              ? "bg-org-secondary/5"
+                              : row.status === "invalid"
+                                ? "bg-red-500/5"
+                                : row.status === "quota_blocked"
+                                  ? "opacity-50"
+                                  : "hover:bg-muted/30"
+                        }`}
                       >
                         <td className="sticky left-0 z-10 bg-card px-3 py-2 w-8">
                           {isExcluded ? (
                             <button
                               onClick={() => handleRestoreRow(row.rowIndex)}
-                              className="text-[10px] text-org-secondary hover:text-org-secondary/80 whitespace-nowrap"
+                              className="text-xs font-medium text-org-secondary hover:text-org-secondary/80 hover:underline whitespace-nowrap transition-colors duration-150"
                             >
                               Restore
                             </button>
@@ -570,7 +611,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                               checked={selectedIndices.has(row.rowIndex)}
                               onChange={() => toggleRowSelection(row.rowIndex)}
                               disabled={isImporting}
-                              className="rounded border-border"
+                              className="rounded border-border accent-emerald-500"
                               aria-label={`Select ${row.first_name} ${row.last_name}`}
                             />
                           ) : null}
@@ -612,16 +653,6 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                   ? "Importing\u2026"
                   : `Import ${actionableCount} Record${actionableCount !== 1 ? "s" : ""}`}
               </Button>
-              {selectedIndices.size > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleRemoveSelected}
-                  disabled={isImporting}
-                >
-                  Remove {selectedIndices.size} Selected
-                </Button>
-              )}
               <Button size="sm" variant="ghost" onClick={handleReset}>
                 Reset
               </Button>
@@ -632,7 +663,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                     checked={overwrite}
                     onChange={(e) => setOverwrite(e.target.checked)}
                     disabled={isImporting}
-                    className="rounded border-border"
+                    className="rounded border-border accent-emerald-500"
                   />
                   Overwrite existing data
                 </label>
@@ -642,7 +673,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                     checked={sendInvites}
                     onChange={(e) => setSendInvites(e.target.checked)}
                     disabled={isImporting || !hasEmailRows}
-                    className="rounded border-border"
+                    className="rounded border-border accent-emerald-500"
                   />
                   Send invite emails to new alumni
                 </label>
@@ -682,33 +713,51 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
 
             {/* Post-import: created records with bulk delete */}
             {createdRecords.length > 0 && (
-              <div className="space-y-3">
+              <div className="border-t border-border pt-4 mt-1 space-y-3">
                 {deleteError && (
-                  <p className="text-xs text-red-400 bg-red-500/10 rounded px-3 py-2">
+                  <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                    </svg>
                     {deleteError}
-                  </p>
+                  </div>
                 )}
 
                 <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-medium text-muted-foreground">
-                    Created Records ({createdRecords.length})
-                    {deleteCount > 0 && (
-                      <span className="ml-2 text-amber-400">{deleteCount} deleted</span>
-                    )}
-                  </h4>
+                  <div>
+                    <h4 className="text-xs font-medium text-foreground">
+                      Created Records ({createdRecords.length})
+                      {deleteCount > 0 && (
+                        <span className="ml-2 text-amber-500 dark:text-amber-400">{deleteCount} deleted</span>
+                      )}
+                    </h4>
+                    <p className="text-xs text-muted-foreground mt-0.5">Select any incorrectly imported records to remove them</p>
+                  </div>
                   {postImportSelected.size > 0 && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleBulkDelete}
-                      disabled={isDeleting}
-                      isLoading={isDeleting}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                    >
-                      {isDeleting
-                        ? "Deleting\u2026"
-                        : `Delete ${postImportSelected.size} Selected`}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant={confirmDelete ? "danger" : "ghost"}
+                        onClick={handleDeleteClick}
+                        disabled={isDeleting}
+                        isLoading={isDeleting}
+                        className={confirmDelete ? "" : "text-red-500 hover:text-red-400 hover:bg-red-500/10"}
+                      >
+                        {isDeleting
+                          ? "Deleting\u2026"
+                          : confirmDelete
+                            ? `Confirm Delete ${postImportSelected.size}?`
+                            : `Delete ${postImportSelected.size} Selected`}
+                      </Button>
+                      {confirmDelete && (
+                        <button
+                          onClick={() => { setConfirmDelete(false); if (confirmTimeoutRef.current) clearTimeout(confirmTimeoutRef.current); }}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors duration-150"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -731,7 +780,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                               }
                             }}
                             disabled={isDeleting}
-                            className="rounded border-border"
+                            className="rounded border-border accent-emerald-500"
                             aria-label="Select all created records"
                           />
                         </th>
@@ -741,7 +790,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                     </thead>
                     <tbody className="divide-y divide-border">
                       {createdRecords.map((record) => (
-                        <tr key={record.id}>
+                        <tr key={record.id} className={`transition-colors duration-100 ${postImportSelected.has(record.id) ? "bg-red-500/5" : "hover:bg-muted/50"}`}>
                           <td className="px-3 py-2 w-8">
                             <input
                               type="checkbox"
@@ -758,7 +807,7 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                                 });
                               }}
                               disabled={isDeleting}
-                              className="rounded border-border"
+                              className="rounded border-border accent-emerald-500"
                               aria-label={`Select ${record.firstName} ${record.lastName}`}
                             />
                           </td>
