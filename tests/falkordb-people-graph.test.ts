@@ -228,7 +228,7 @@ test("buildSourcePerson matches buildProjectedPeople for merged member+alumni", 
     created_at: "2026-03-01T00:00:00.000Z",
   };
 
-  const fromBuild = buildSourcePerson({ memberRow, alumniRow, orgId: ORG_ID });
+  const fromBuild = buildSourcePerson({ memberRows: [memberRow], alumniRows: [alumniRow] });
   const fromProjection = buildProjectedPeople({
     members: [memberRow],
     alumni: [alumniRow],
@@ -253,7 +253,7 @@ test("buildSourcePerson matches buildProjectedPeople for member-only", () => {
     created_at: "2026-03-01T00:00:00.000Z",
   };
 
-  const fromBuild = buildSourcePerson({ memberRow, alumniRow: null, orgId: ORG_ID });
+  const fromBuild = buildSourcePerson({ memberRows: [memberRow], alumniRows: [] });
   const fromProjection = buildProjectedPeople({ members: [memberRow], alumni: [] });
 
   assert.deepEqual(fromBuild, fromProjection.get("member:member-solo"));
@@ -278,15 +278,70 @@ test("buildSourcePerson matches buildProjectedPeople for alumni-only", () => {
     created_at: "2026-03-01T00:00:00.000Z",
   };
 
-  const fromBuild = buildSourcePerson({ memberRow: null, alumniRow, orgId: ORG_ID });
+  const fromBuild = buildSourcePerson({ memberRows: [], alumniRows: [alumniRow] });
   const fromProjection = buildProjectedPeople({ members: [], alumni: [alumniRow] });
 
   assert.deepEqual(fromBuild, fromProjection.get("alumni:alumni-solo"));
 });
 
 test("buildSourcePerson returns null for empty input", () => {
-  const result = buildSourcePerson({ memberRow: null, alumniRow: null, orgId: ORG_ID });
+  const result = buildSourcePerson({ memberRows: [], alumniRows: [] });
   assert.equal(result, null);
+});
+
+test("buildSourcePerson matches buildProjectedPeople for duplicate complement rows", () => {
+  const alumniRow = {
+    id: "alumni-source",
+    organization_id: ORG_ID,
+    user_id: "shared-user",
+    deleted_at: null,
+    first_name: "Alex",
+    last_name: "Source",
+    email: "alex@example.com",
+    major: null,
+    current_company: null,
+    industry: null,
+    current_city: null,
+    graduation_year: null,
+    position_title: null,
+    job_title: null,
+    created_at: "2026-03-03T00:00:00.000Z",
+  };
+  const memberRows = [
+    {
+      id: "member-newer",
+      organization_id: ORG_ID,
+      user_id: "shared-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      role: "Vice President",
+      current_company: "Beta",
+      graduation_year: 2025,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+    {
+      id: "member-older",
+      organization_id: ORG_ID,
+      user_id: "shared-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      role: "President",
+      current_company: "Acme",
+      graduation_year: 2024,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+  ];
+
+  const fromBuild = buildSourcePerson({ memberRows, alumniRows: [alumniRow] });
+  const fromProjection = buildProjectedPeople({ members: memberRows, alumni: [alumniRow] });
+
+  assert.deepEqual(fromBuild, fromProjection.get("user:shared-user"));
 });
 
 test("suggestConnections returns deterministic SQL fallback ranking", async () => {
@@ -344,7 +399,7 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
   const stub = createSupabaseStub();
   seedSuggestionFixture(stub);
 
-  const graphRows = [
+  const candidateRows = [
     {
       personKey: "user:00000000-0000-0000-0000-000000000002",
       personType: "alumni",
@@ -357,7 +412,6 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       industry: null,
       graduationYear: 2018,
       currentCity: null,
-      mentorshipDistance: 1,
     },
     {
       personKey: "user:00000000-0000-0000-0000-000000000003",
@@ -371,7 +425,6 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       industry: "Technology",
       graduationYear: null,
       currentCity: "Austin",
-      mentorshipDistance: 2,
     },
     {
       personKey: "user:00000000-0000-0000-0000-000000000004",
@@ -385,7 +438,6 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       industry: "Technology",
       graduationYear: 2018,
       currentCity: "Austin",
-      mentorshipDistance: null,
     },
     {
       personKey: "user:00000000-0000-0000-0000-000000000005",
@@ -399,8 +451,12 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       industry: null,
       graduationYear: null,
       currentCity: null,
-      mentorshipDistance: null,
     },
+  ];
+
+  const distanceRows = [
+    { personKey: "user:00000000-0000-0000-0000-000000000002", distance: 1 },
+    { personKey: "user:00000000-0000-0000-0000-000000000003", distance: 2 },
   ];
 
   const graphClient = {
@@ -409,7 +465,10 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       if (cypher.includes("RETURN source.personKey AS personKey")) {
         return [{ personKey: "user:00000000-0000-0000-0000-000000000001" }];
       }
-      return graphRows;
+      if (cypher.includes("shortestPath")) {
+        return distanceRows;
+      }
+      return candidateRows;
     },
   };
 
@@ -438,6 +497,125 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
 
   assert.equal(graphResult.mode, "falkor");
   assert.deepEqual(graphResult.results, fallbackResult.results);
+});
+
+test("suggestConnections graph mode preserves merged source attributes with duplicate complement rows", async () => {
+  const stub = createSupabaseStub();
+
+  stub.seed("alumni", [
+    {
+      id: "source-alumni",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      major: null,
+      current_company: null,
+      industry: null,
+      current_city: null,
+      graduation_year: null,
+      position_title: null,
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-03T00:00:00.000Z",
+    },
+  ]);
+
+  stub.seed("members", [
+    {
+      id: "member-newer",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      role: "Vice President",
+      current_company: "Beta",
+      graduation_year: 2025,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+    {
+      id: "member-older",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      role: "President",
+      current_company: "Acme",
+      graduation_year: 2024,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+  ]);
+
+  const graphClient = {
+    isAvailable: () => true,
+    query: async (_orgId: string, cypher: string) => {
+      if (cypher.includes("RETURN source.personKey AS personKey")) {
+        return [{ personKey: "user:source-user" }];
+      }
+      if (cypher.includes("shortestPath")) {
+        return [];
+      }
+      return [
+        {
+          personKey: "user:candidate-user",
+          personType: "alumni",
+          personId: "candidate-alumni",
+          name: "Casey Candidate",
+          userId: "candidate-user",
+          role: "Engineer",
+          major: null,
+          currentCompany: "Acme",
+          industry: null,
+          graduationYear: 2024,
+          currentCity: null,
+        },
+      ];
+    },
+  };
+
+  const result = await suggestConnections({
+    orgId: ORG_ID,
+    serviceSupabase: stub as any,
+    args: {
+      person_type: "alumni",
+      person_id: "source-alumni",
+    },
+    graphClient,
+  });
+
+  assert.equal(result.mode, "falkor");
+  assert.deepEqual(result.results, [
+    {
+      person_type: "alumni",
+      person_id: "candidate-alumni",
+      name: "Casey Candidate",
+      score: 28,
+      preview: {
+        role: "Engineer",
+        current_company: "Acme",
+        graduation_year: 2024,
+      },
+      reasons: [
+        {
+          code: "shared_company",
+          weight: 20,
+          value: "Acme",
+        },
+        {
+          code: "shared_graduation_year",
+          weight: 8,
+          value: 2024,
+        },
+      ],
+    },
+  ]);
 });
 
 test("processGraphSyncQueue merges shared-user people and syncs mentorship edges", async () => {

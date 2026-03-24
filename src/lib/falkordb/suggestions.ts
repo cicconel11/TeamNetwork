@@ -144,43 +144,57 @@ async function fetchSourceWithComplement(
   serviceSupabase: SupabaseClient,
   orgId: string,
   args: SuggestConnectionsArgs
-): Promise<{ memberRow: MemberPersonRow | null; alumniRow: AlumniPersonRow | null }> {
+): Promise<{ memberRows: MemberPersonRow[]; alumniRows: AlumniPersonRow[] }> {
   const sourceRow = await fetchSourceRow(serviceSupabase, orgId, args);
 
   if (!sourceRow) {
-    return { memberRow: null, alumniRow: null };
+    return { memberRows: [], alumniRows: [] };
   }
 
   if (args.person_type === "member") {
     const memberRow = sourceRow as MemberPersonRow;
     if (!memberRow.user_id) {
-      return { memberRow, alumniRow: null };
+      return { memberRows: [memberRow], alumniRows: [] };
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (serviceSupabase as any)
+    const { data, error } = await (serviceSupabase as any)
       .from("alumni")
       .select(ALUMNI_PERSON_SELECT)
       .eq("organization_id", orgId)
       .eq("user_id", memberRow.user_id)
-      .is("deleted_at", null)
-      .maybeSingle();
-    return { memberRow, alumniRow: (data as AlumniPersonRow | null) ?? null };
+      .is("deleted_at", null);
+
+    if (error) {
+      throw new Error("Failed to load source alumni complement");
+    }
+
+    return {
+      memberRows: [memberRow],
+      alumniRows: (data as AlumniPersonRow[] | null) ?? [],
+    };
   }
 
   const alumniRow = sourceRow as AlumniPersonRow;
   if (!alumniRow.user_id) {
-    return { memberRow: null, alumniRow };
+    return { memberRows: [], alumniRows: [alumniRow] };
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (serviceSupabase as any)
+  const { data, error } = await (serviceSupabase as any)
     .from("members")
     .select(MEMBER_PERSON_SELECT)
     .eq("organization_id", orgId)
     .eq("user_id", alumniRow.user_id)
     .eq("status", "active")
-    .is("deleted_at", null)
-    .maybeSingle();
-  return { memberRow: (data as MemberPersonRow | null) ?? null, alumniRow };
+    .is("deleted_at", null);
+
+  if (error) {
+    throw new Error("Failed to load source member complement");
+  }
+
+  return {
+    memberRows: (data as MemberPersonRow[] | null) ?? [],
+    alumniRows: [alumniRow],
+  };
 }
 
 async function fetchMentorshipDistances(
@@ -317,37 +331,76 @@ async function fetchGraphSuggestions(input: {
     throw new FalkorQueryError("Source person is not present in Falkor");
   }
 
-  const rows = await input.graphClient.query<GraphSuggestionRow>(
-    input.orgId,
-    `
-      MATCH (source:Person {personKey: $sourceKey})
-      MATCH (candidate:Person)
-      WHERE candidate.personKey <> source.personKey
-      OPTIONAL MATCH p = shortestPath((source)-[:MENTORS*1..2]-(candidate))
-      RETURN
-        candidate.personKey AS personKey,
-        candidate.personType AS personType,
-        candidate.personId AS personId,
-        candidate.name AS name,
-        candidate.userId AS userId,
-        candidate.role AS role,
-        candidate.major AS major,
-        candidate.currentCompany AS currentCompany,
-        candidate.industry AS industry,
-        candidate.graduationYear AS graduationYear,
-        candidate.currentCity AS currentCity,
-        CASE WHEN p IS NULL THEN NULL ELSE length(p) END AS mentorshipDistance
-    `,
-    {
-      sourceKey: input.source.personKey,
-    }
-  );
+  // FalkorDB only supports shortestPath in WITH/RETURN, not OPTIONAL MATCH.
+  // Split into two queries: candidates + mentorship distances.
+  const [candidateRows, distanceRows] = await Promise.all([
+    input.graphClient.query<Omit<GraphSuggestionRow, "mentorshipDistance">>(
+      input.orgId,
+      `
+        MATCH (source:Person {personKey: $sourceKey})
+        MATCH (candidate:Person)
+        WHERE candidate.personKey <> source.personKey
+        RETURN
+          candidate.personKey AS personKey,
+          candidate.personType AS personType,
+          candidate.personId AS personId,
+          candidate.name AS name,
+          candidate.userId AS userId,
+          candidate.role AS role,
+          candidate.major AS major,
+          candidate.currentCompany AS currentCompany,
+          candidate.industry AS industry,
+          candidate.graduationYear AS graduationYear,
+          candidate.currentCity AS currentCity
+      `,
+      { sourceKey: input.source.personKey }
+    ),
+    // FalkorDB requires directed shortestPath — query both directions and pick the shortest.
+    (async () => {
+      const [fwd, rev] = await Promise.all([
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})
+            MATCH (candidate:Person)
+            WHERE candidate.personKey <> source.personKey
+            WITH source, candidate, shortestPath((source)-[:MENTORS*1..2]->(candidate)) AS p
+            WHERE p IS NOT NULL
+            RETURN candidate.personKey AS personKey, length(p) AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})
+            MATCH (candidate:Person)
+            WHERE candidate.personKey <> source.personKey
+            WITH source, candidate, shortestPath((source)<-[:MENTORS*1..2]-(candidate)) AS p
+            WHERE p IS NOT NULL
+            RETURN candidate.personKey AS personKey, length(p) AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+      ]);
+      return [...fwd, ...rev];
+    })(),
+  ]);
 
-  const candidatesWithDistance = rows
+  const distanceMap = new Map<string, number>();
+  for (const row of distanceRows) {
+    if (row.personKey && typeof row.distance === "number") {
+      const existing = distanceMap.get(row.personKey);
+      if (existing === undefined || row.distance < existing) {
+        distanceMap.set(row.personKey, row.distance);
+      }
+    }
+  }
+
+  const candidatesWithDistance = candidateRows
     .map((row) => ({
-      candidate: graphRowToProjectedPerson(row),
-      mentorshipDistance:
-        typeof row.mentorshipDistance === "number" ? row.mentorshipDistance : null,
+      candidate: graphRowToProjectedPerson({ ...row, mentorshipDistance: null }),
+      mentorshipDistance: distanceMap.get(row.personKey) ?? null,
     }))
     .filter(
       (entry): entry is { candidate: ProjectedPerson; mentorshipDistance: number | null } =>
@@ -377,13 +430,13 @@ export async function suggestConnections(input: {
   const limit = clampSuggestionsLimit(input.args.limit);
   const { orgId, serviceSupabase } = input;
 
-  const { memberRow, alumniRow } = await fetchSourceWithComplement(
+  const { memberRows, alumniRows } = await fetchSourceWithComplement(
     serviceSupabase,
     orgId,
     input.args
   );
 
-  const source = buildSourcePerson({ memberRow, alumniRow, orgId });
+  const source = buildSourcePerson({ memberRows, alumniRows });
   if (!source) {
     throw new SuggestConnectionsLookupError("Person not found");
   }
