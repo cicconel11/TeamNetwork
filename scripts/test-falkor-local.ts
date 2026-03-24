@@ -25,6 +25,7 @@ for (const line of readFileSync(envPath, "utf-8").split("\n")) {
 import { processGraphSyncQueue } from "../src/lib/falkordb/sync";
 import { suggestConnections } from "../src/lib/falkordb/suggestions";
 import { falkorClient } from "../src/lib/falkordb/client";
+import { buildPersonKey } from "../src/lib/falkordb/people";
 
 const DEFAULT_ORG_ID = "ce2e47f8-388a-4e06-9a2d-6d5b851ee899";
 
@@ -107,6 +108,33 @@ async function main() {
     return;
   }
 
+  // Resolve the graph key the same way production code does.
+  const sourceTable = source.person_type === "member" ? "members" : "alumni";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: sourceRow } = await (supabase as any)
+    .from(sourceTable)
+    .select("id, user_id, first_name, last_name")
+    .eq("organization_id", orgId)
+    .eq("id", source.person_id)
+    .maybeSingle();
+
+  const expectedKey = buildPersonKey(
+    sourceTable,
+    source.person_id,
+    (sourceRow as { user_id?: string | null } | null)?.user_id ?? null
+  );
+
+  if (sourceRow) {
+    const namedSource = sourceRow as {
+      first_name?: string | null;
+      last_name?: string | null;
+    };
+    const label = [namedSource.first_name ?? "", namedSource.last_name ?? ""].join(" ").trim();
+    if (label) {
+      source = { ...source, label };
+    }
+  }
+
   // Step 3b: Verify Falkor has nodes
   try {
     const nodes = await falkorClient.query<{ personKey: string; name: string }>(
@@ -118,8 +146,9 @@ async function main() {
     console.log(`\n[3a] Falkor query failed: ${err instanceof Error ? err.message : err}`);
   }
 
+  console.log(`\n[3b] Source: ${source.label} (${expectedKey})`);
+
   // Check if the source person exists in Falkor
-  const expectedKey = `${source.person_type}:${source.person_id}`;
   try {
     const sourceInGraph = await falkorClient.query<{ personKey: string }>(
       orgId,

@@ -529,7 +529,7 @@
     </div>
     <div class="progress-stats">
       <span class="progress-pct" id="progressPct">74%</span>
-      <span id="progressLabel">9 of 11 components</span>
+      <span id="progressLabel">10 of 12 components</span>
     </div>
   </div>
 
@@ -844,7 +844,7 @@ const COMPONENTS = [
       'src/app/api/ai/[orgId]/chat/handler.ts'
     ],
     built: [
-      'AI_TOOLS defines 3 OpenAI function-calling tools: list_members, list_events, get_org_stats',
+      'AI_TOOLS defines 4 OpenAI function-calling tools: list_members, list_events, get_org_stats, suggest_connections',
       'Full Zod argument validation per tool (limit, upcoming) with fail-closed behavior',
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
@@ -880,6 +880,44 @@ const COMPONENTS = [
       'No chart/visualization generation',
       'No trend analysis or comparisons',
       'Would enable: "How many members joined this month?"'
+    ]
+  },
+  {
+    id: 'falkor',
+    label: 'People Graph (Falkor)',
+    shortLabel: 'Graph',
+    pct: 85,
+    status: 'built',
+    layer: 'execution',
+    x: 690, y: 430,
+    files: [
+      'src/lib/falkordb/client.ts',
+      'src/lib/falkordb/people.ts',
+      'src/lib/falkordb/suggestions.ts',
+      'src/lib/falkordb/sync.ts',
+      'src/lib/falkordb/scoring.ts',
+      'src/app/api/cron/graph-sync-process/route.ts',
+      'supabase/migrations/20260715000000_falkor_people_graph_foundation.sql'
+    ],
+    built: [
+      'Org-scoped graph: Person nodes + directed MENTORS edges in FalkorDB',
+      'Identity merge model: user_id links member+alumni into single person',
+      'DB triggers on members/alumni/mentorship_pairs auto-enqueue changes',
+      'Queue worker: SKIP LOCKED concurrency, reconciliatory re-read from DB',
+      'Cron endpoint drains queue (25s loop + 7-day purge)',
+      'Dual-mode read path: Falkor graph queries with automatic SQL fallback',
+      'Seven weighted scoring reasons (mentorship, company, industry, major, grad year, city)',
+      'Scoring parity between Falkor and SQL paths',
+      'Source person cross-table complement resolution (merged attributes)',
+      'Per-org freshness tracking with stale threshold',
+      'Embedded mode (local dev) and remote mode (production)',
+      'Backfill RPC for initial org population'
+    ],
+    missing: [
+      'No event attendance or interaction edges (Person + MENTORS only)',
+      'No weighted graph affinity or PageRank-style scoring',
+      'No graph management UI',
+      'No real-time sync (queue-based, cron-driven)'
     ]
   },
   {
@@ -962,6 +1000,9 @@ const CONNECTIONS = [
   { from: 'policy', to: 'intent', type: 'data-flow', label: 'classify' },
   { from: 'composer', to: 'actions', type: 'tool-call', label: 'tool call' },
   { from: 'actions', to: 'composer', type: 'data-flow', label: 'tool results' },
+  // Falkor graph tool call
+  { from: 'actions', to: 'falkor', type: 'tool-call', label: 'suggest' },
+  { from: 'falkor', to: 'actions', type: 'data-flow', label: 'ranked results' },
   // Future connections (dashed — not yet wired)
   { from: 'analyst', to: 'composer', type: 'data-flow', label: 'results', dashed: true }
 ];
@@ -1022,7 +1063,7 @@ function getVisibleComponents() {
     visible = visible.filter(c => c.status === 'missing' || c.status === 'stub');
   } else if (state.preset === 'critical') {
     visible = visible.filter(c =>
-      ['intake', 'context', 'policy', 'composer', 'audit', 'intent', 'actions'].includes(c.id)
+      ['intake', 'context', 'policy', 'composer', 'audit', 'intent', 'actions', 'falkor'].includes(c.id)
     );
   }
 

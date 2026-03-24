@@ -2,12 +2,7 @@
 
 ## Overview
 
-The Falkor people graph powers the AI tool `suggest_connections`, which recommends member and alumni outreach targets for an organization. The graph is org-scoped, built from `members`, `alumni`, and `mentorship_pairs`, and is designed to have a SQL fallback with equivalent ranking semantics when Falkor is disabled or unavailable.
-
-The runtime has two paths:
-
-- `mode: "falkor"`: read candidate people from Falkor and score them in app code.
-- `mode: "sql_fallback"`: load the org projection and mentorship distances directly from Supabase and score them with the same deterministic weights.
+The Falkor people graph powers the AI tool `suggest_connections`, which recommends member and alumni outreach targets for an organization. The graph is org-scoped, built from `members`, `alumni`, and `mentorship_pairs`. Falkor and SQL fallback share the same scoring (see **Step 6** and **Step 7**).
 
 Relevant code:
 
@@ -19,9 +14,80 @@ Relevant code:
 - `supabase/migrations/20260715000000_falkor_people_graph_foundation.sql`: queue, triggers, RPCs
 - `supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql`: freshness query index
 
+## How it works (end-to-end)
+
+### Step 1 — Data model (`people.ts`)
+
+Members and alumni from Supabase are merged into `ProjectedPerson` objects. The identity model is the foundation: if a member and alumni share a `user_id`, they merge under `user:<userId>`. Unlinked rows stay separate as `member:<id>` or `alumni:<id>`. Both write and read paths use `buildProjectedPeople()`.
+
+### Step 2 — Infrastructure (`client.ts`)
+
+`FalkorClientImpl` manages the connection. Config resolves from env vars in priority order: `FALKOR_URL` (remote) → `FALKOR_HOST` (remote discrete) → `FALKOR_EMBEDDED` (local dev with falkordblite). Each org gets its own graph named `teamnetwork_people_<orgId>`. The `FalkorQueryClient` interface is the DI seam — tests inject stubs here.
+
+### Step 3 — Database foundation (migration SQL)
+
+Triggers on `members`, `alumni`, and `mentorship_pairs` fire on INSERT/UPDATE, compare relevant fields, and enqueue changed rows to `graph_sync_queue` with old-key context in the payload. Four service-role RPCs: `dequeue_graph_sync_queue` (SKIP LOCKED for concurrency), `increment_graph_sync_attempts`, `purge_graph_sync_queue`, `backfill_graph_sync_queue`. Plus `get_mentorship_distances` — a recursive CTE that walks mentorship edges up to depth 2 for the SQL fallback.
+
+### Step 4 — Write path (`sync.ts`)
+
+Queue items are processed per `source_table`. For people: re-read all active source rows for the identity key, rebuild the projection, upsert or delete the `Person` node, then reconcile adjacent `MENTORS` edges. For mentorship pairs: reconcile both old and current endpoints. The worker is reconciliatory — it never trusts the queue payload as source of truth; it always re-reads current DB state.
+
+### Step 5 — Cron endpoint (`route.ts`)
+
+`GET /api/cron/graph-sync-process` loops `processGraphSyncQueue` for up to 25 seconds, then purges rows older than 7 days. Auth via `CRON_SECRET` bearer token.
+
+### Step 6 — Scoring (`scoring.ts`)
+
+Seven weighted reason codes; Falkor and SQL paths use identical scoring:
+
+| Reason | Weight |
+|--------|--------|
+| `direct_mentorship` | 100 |
+| `second_degree_mentorship` | 50 |
+| `shared_company` | 20 |
+| `shared_industry` | 12 |
+| `shared_major` | 10 |
+| `shared_graduation_year` | 8 |
+| `shared_city` | 5 |
+
+Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
+
+### Step 7 — Read path (`suggestions.ts`)
+
+`suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), then branches:
+
+- **Falkor mode:** parallel Cypher queries — all candidates plus six directed mentorship distance queries (outgoing d=1, incoming d=1, four mixed-direction d=2 patterns). Scores in app code.
+- **SQL fallback:** loads full org projection and mentorship distances via the recursive CTE RPC. Scores identically.
+
+If Falkor throws, the implementation silently falls back to SQL.
+
+### Step 8 — Testing
+
+Tests verify graph/SQL parity, projection deduplication, merged source attributes, and sync worker integration. `scripts/test-falkor-local.ts` runs a full in-process cycle: backfill → sync → query → suggest.
+
+### Current state
+
+**What is built and working**
+
+- Full write path: triggers → queue → sync worker → Falkor graph
+- Full read path: dual-mode suggestions with automatic fallback
+- Graph model: `Person` nodes + directed `MENTORS` edges
+- Scoring parity between Falkor and SQL paths
+- Embedded mode for local dev, remote mode for production
+- Test coverage for projection, scoring, parity, and sync integration
+
+**Typical in-flight work** (adjust as branches land; paths from recent `codex/falkor-people-graph` work)
+
+- `src/lib/falkordb/people.ts` and `suggestions.ts`
+- `docs/agent/falkor-people-graph.md` and related docs
+- `tests/falkordb-people-graph.test.ts`
+- New or touched scripts/tests: `scripts/test-falkor-local.ts`, `tests/create-org-checkout-integration.test.ts`
+
+The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity — scoring is attribute-based (shared company, industry, etc.) plus mentorship proximity. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
+
 ## Graph Model
 
-The graph stores `Person` nodes plus directed `MENTORS` edges.
+Node/edge shape matches **Current state** above. This section lists persisted properties and edge semantics.
 
 ### `Person` node properties
 
@@ -44,13 +110,7 @@ The sync worker writes a compact projection of a person into Falkor:
 
 ### Identity model
 
-Identity is keyed by `personKey`, not raw row id:
-
-- `user:<user_id>` when the member/alumni rows share a real user
-- `member:<member_id>` when an active member has no `user_id`
-- `alumni:<alumni_id>` when an alumni row has no `user_id`
-
-This lets the graph merge member + alumni records for the same real person while still representing unlinked rows cleanly.
+`personKey` on each node follows the rules in **Step 1 — Data model** (`user:…`, `member:…`, `alumni:…`).
 
 ### Mentorship edges
 
@@ -58,54 +118,10 @@ This lets the graph merge member + alumni records for the same real person while
 
 ## How Sync Works
 
-The graph is updated asynchronously through `graph_sync_queue`.
+End-to-end behavior is **Steps 3–5** (triggers/RPCs, `sync.ts` worker, cron route). Extra detail worth keeping here:
 
-### 1. Database triggers enqueue work
-
-The migration adds trigger functions for:
-
-- `members`
-- `alumni`
-- `mentorship_pairs`
-
-Each trigger compares the old and new row. If a relevant field changed, it writes a queue row with:
-
-- `org_id`
-- `source_table`
-- `source_id`
-- `action`
-- `payload`
-
-The payload carries old keys like prior `user_id`, prior `organization_id`, or prior mentorship endpoints so the worker can reconcile both the old graph identity and the new one.
-
-### 2. Cron route drains the queue
-
-`GET /api/cron/graph-sync-process` calls `processGraphSyncQueue()` in a loop for up to 25 seconds, then purges old processed/dead-letter rows.
-
-Auth is bearer-token based:
-
-```text
-Authorization: Bearer $CRON_SECRET
-```
-
-If `CRON_SECRET` is missing, the route returns a 500 and sync will not run.
-
-### 3. Worker reconciles graph state
-
-For people rows:
-
-- load all active rows that belong to the resolved graph identity
-- rebuild the projected person
-- upsert the `Person` node if a live projection exists
-- delete the node if no live projection remains
-- reconcile mentorship edges for the person if they have a `userId`
-
-For mentorship pairs:
-
-- reconcile both the old and current mentor/mentee endpoints
-- add or remove the `MENTORS` edge depending on current DB truth
-
-The worker is intentionally reconciliatory: it does not trust the queue payload as the full source of truth, and instead re-reads the current DB state before deciding what the graph should look like.
+- Each queue row includes `org_id`, `source_table`, `source_id`, `action`, and `payload`. The payload carries old keys (e.g. prior `user_id`, `organization_id`, mentorship endpoints) so the worker can reconcile old and new graph identities.
+- Cron auth: `Authorization: Bearer $CRON_SECRET`. If `CRON_SECRET` is missing, the route returns 500 and sync does not run.
 
 ## Setup
 
@@ -245,7 +261,7 @@ The per-org freshness lookup is supported by:
 
 ### Fallback behavior
 
-If Falkor is disabled, unavailable, or a graph query throws, the feature falls back to SQL and still returns ranked results. This keeps the tool usable during setup, outages, or local development without Falkor.
+Same as **Step 7** (disabled/unavailable Falkor or thrown graph query → SQL, still ranked). This keeps the tool usable during setup, outages, or local dev without Falkor.
 
 ## How To Test It
 

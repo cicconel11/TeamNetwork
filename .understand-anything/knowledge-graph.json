@@ -1,0 +1,1246 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "TeamNetwork — Falkor People Graph",
+    "languages": [
+      "typescript",
+      "sql"
+    ],
+    "frameworks": [
+      "next.js",
+      "supabase",
+      "falkordb"
+    ],
+    "description": "FalkorDB-powered people graph for org-scoped connection suggestions, with async queue-driven sync and SQL fallback parity. The graph stores Person nodes and directed MENTORS edges, synced asynchronously from members, alumni, and mentorship_pairs tables via database triggers and a cron-driven queue worker.",
+    "analyzedAt": "2026-03-24T00:00:00.000Z",
+    "gitCommitHash": "2f8063f5c2bc621dbfc7bf7e7eba1dee09d738f2"
+  },
+  "nodes": [
+    {
+      "id": "file:src/lib/falkordb/client.ts",
+      "name": "client.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "FalkorDB client connection manager. Resolves config from env vars (FALKOR_ENABLED, FALKOR_URL, FALKOR_HOST, FALKOR_EMBEDDED), supports remote and embedded modes, provides lazy singleton connection with org-scoped graph selection. Exports the shared falkorClient instance.",
+      "tags": [
+        "client",
+        "connection",
+        "configuration",
+        "singleton"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/lib/falkordb/people.ts",
+      "name": "people.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Person projection model and identity rules. Defines MemberPersonRow, AlumniPersonRow, MentorshipPairSyncRow interfaces. Implements the identity-merge logic: members and alumni sharing a user_id are merged into one ProjectedPerson keyed by 'user:<userId>'. Unlinked rows get 'member:<id>' or 'alumni:<id>' keys.",
+      "tags": [
+        "model",
+        "projection",
+        "identity",
+        "merge"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/lib/falkordb/suggestions.ts",
+      "name": "suggestions.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "Connection suggestion read path. Main entry: suggestConnections(). Two modes: 'falkor' reads candidates from FalkorDB graph and scores them; 'sql_fallback' loads the full org projection from Supabase and scores identically. Includes freshness check, source person resolution with cross-table complement, and graceful fallback on graph errors.",
+      "tags": [
+        "read-path",
+        "suggestions",
+        "dual-mode",
+        "fallback"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/lib/falkordb/sync.ts",
+      "name": "sync.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "Graph sync worker. Processes graph_sync_queue items: upserts/deletes Person nodes and reconciles MENTORS edges. Reconciliatory design — re-reads current DB state rather than trusting queue payload. Handles member, alumni, and mentorship_pairs source tables. Supports identity key changes (old_user_id, old_organization_id).",
+      "tags": [
+        "sync",
+        "worker",
+        "queue",
+        "reconciliation",
+        "write-path"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:src/lib/falkordb/scoring.ts",
+      "name": "scoring.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Connection scoring and ranking. Defines weighted reason codes: direct_mentorship(100), second_degree_mentorship(50), shared_company(20), shared_industry(12), shared_major(10), shared_graduation_year(8), shared_city(5). Deterministic sorting by score, reason count, name, person_id.",
+      "tags": [
+        "scoring",
+        "ranking",
+        "weights",
+        "deterministic"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:src/lib/falkordb/utils.ts",
+      "name": "utils.ts",
+      "type": "file",
+      "filePath": "src/lib/falkordb/utils.ts",
+      "summary": "Shared error utility. Single function toErrorMessage() that safely extracts error messages from unknown error types with a fallback default.",
+      "tags": [
+        "utility",
+        "error-handling"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:src/app/api/cron/graph-sync-process/route.ts",
+      "name": "route.ts (graph-sync-process)",
+      "type": "file",
+      "filePath": "src/app/api/cron/graph-sync-process/route.ts",
+      "summary": "Cron API route that drains the graph sync queue. Calls processGraphSyncQueue in a loop for up to 25 seconds, then purges old rows. Auth via CRON_SECRET bearer token. Returns processing stats (processed, skipped, failed, iterations, purgedQueueRows, durationMs).",
+      "tags": [
+        "cron",
+        "api-route",
+        "queue-drain",
+        "next.js"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:tests/falkordb-people-graph.test.ts",
+      "name": "falkordb-people-graph.test.ts",
+      "type": "file",
+      "filePath": "tests/falkordb-people-graph.test.ts",
+      "summary": "Test suite covering: buildProjectedPeople deduplication, buildSourcePerson parity with full projection, suggestConnections SQL fallback ranking, graph/fallback ordering parity, mixed-direction second-degree mentorship, merged source attributes with duplicate complements, and processGraphSyncQueue integration.",
+      "tags": [
+        "test",
+        "unit-test",
+        "integration-test",
+        "parity"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/test-falkor-local.ts",
+      "name": "test-falkor-local.ts",
+      "type": "file",
+      "filePath": "scripts/test-falkor-local.ts",
+      "summary": "Local end-to-end test script. Loads .env.local, backfills org queue via RPC, processes queue in-process, verifies Falkor has Person nodes, runs direct graph queries, and calls suggestConnections. Designed for embedded mode where Falkor is ephemeral per process.",
+      "tags": [
+        "script",
+        "e2e",
+        "local-testing",
+        "embedded"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "name": "falkor_people_graph_foundation.sql",
+      "type": "file",
+      "filePath": "supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "summary": "Foundation migration creating: graph_sync_queue table with RLS, trigger functions for members/alumni/mentorship_pairs (comparing relevant fields and enqueuing on change), dequeue/increment/purge/backfill RPCs (service_role only), and get_mentorship_distances recursive CTE for SQL fallback.",
+      "tags": [
+        "migration",
+        "schema",
+        "triggers",
+        "rpc",
+        "queue"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql",
+      "name": "graph_sync_queue_org_freshness_index.sql",
+      "type": "file",
+      "filePath": "supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql",
+      "summary": "Adds partial index idx_graph_sync_queue_org_freshness on (org_id, created_at) WHERE processed_at IS NULL AND attempts < 3. Supports the per-org freshness lookup in suggestConnections.",
+      "tags": [
+        "migration",
+        "index",
+        "performance"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/agent/falkor-people-graph.md",
+      "name": "falkor-people-graph.md",
+      "type": "file",
+      "filePath": "docs/agent/falkor-people-graph.md",
+      "summary": "Comprehensive documentation: graph model (Person nodes, MENTORS edges), identity model (personKey rules), sync architecture (triggers → queue → worker → graph), setup guide (remote/embedded modes, backfill, cron), testing runbook, Falkor query limitations, and troubleshooting.",
+      "tags": [
+        "documentation",
+        "architecture",
+        "runbook"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/client.ts:FalkorQueryClient",
+      "name": "FalkorQueryClient",
+      "type": "class",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Interface defining the Falkor query contract: isAvailable() and query<T>(orgId, cypher, params). Used as the dependency injection point for testing and fallback logic.",
+      "tags": [
+        "interface",
+        "contract",
+        "dependency-injection"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+      "name": "FalkorClientImpl",
+      "type": "class",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Concrete FalkorQueryClient implementation. Lazy-initializes a singleton connection (embedded via falkordblite or remote via falkordb npm package). Selects per-org graphs using graphNameForOrg(). Includes close() and deleteGraphForTests() for lifecycle management.",
+      "tags": [
+        "implementation",
+        "singleton",
+        "lazy-connection"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:src/lib/falkordb/client.ts:FalkorUnavailableError",
+      "name": "FalkorUnavailableError",
+      "type": "class",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Custom error thrown when Falkor is disabled or connection fails. Caught by suggestConnections to trigger SQL fallback.",
+      "tags": [
+        "error",
+        "availability"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/client.ts:FalkorQueryError",
+      "name": "FalkorQueryError",
+      "type": "class",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Custom error thrown when a Falkor Cypher query fails. Preserves the original cause. Caught by suggestConnections to trigger SQL fallback.",
+      "tags": [
+        "error",
+        "query-failure"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/suggestions.ts:SuggestConnectionsLookupError",
+      "name": "SuggestConnectionsLookupError",
+      "type": "class",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "Thrown when the source person cannot be found by person_type + person_id. Not caught internally — propagates to the caller (AI tool executor).",
+      "tags": [
+        "error",
+        "lookup"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/people.ts:ProjectedPerson",
+      "name": "ProjectedPerson",
+      "type": "class",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Core data interface representing a merged person projection. Fields: orgId, personKey, personType, personId, memberId, alumniId, userId, name, role, major, currentCompany, industry, graduationYear, currentCity. Used by both sync (write) and suggestions (read) paths.",
+      "tags": [
+        "interface",
+        "model",
+        "core"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/people.ts:MemberPersonRow",
+      "name": "MemberPersonRow",
+      "type": "class",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Interface for rows from the members table. Includes id, organization_id, user_id, deleted_at, status, first_name, last_name, email, role, current_company, graduation_year, created_at.",
+      "tags": [
+        "interface",
+        "model",
+        "member"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/people.ts:AlumniPersonRow",
+      "name": "AlumniPersonRow",
+      "type": "class",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Interface for rows from the alumni table. Extends member fields with major, industry, current_city, position_title, job_title.",
+      "tags": [
+        "interface",
+        "model",
+        "alumni"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/people.ts:MentorshipPairSyncRow",
+      "name": "MentorshipPairSyncRow",
+      "type": "class",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Interface for mentorship_pairs rows: id, organization_id, mentor_user_id, mentee_user_id, status, deleted_at.",
+      "tags": [
+        "interface",
+        "model",
+        "mentorship"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/scoring.ts:SuggestedConnection",
+      "name": "SuggestedConnection",
+      "type": "class",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Output interface for a ranked suggestion: person_type, person_id, name, score, preview (role, major, current_company, industry, graduation_year, current_city), reasons[].",
+      "tags": [
+        "interface",
+        "output",
+        "suggestion"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/scoring.ts:SuggestConnectionsResult",
+      "name": "SuggestConnectionsResult",
+      "type": "class",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Top-level result wrapper: mode ('falkor' | 'sql_fallback'), freshness (state, as_of, lag_seconds?), results (SuggestedConnection[]).",
+      "tags": [
+        "interface",
+        "output",
+        "result"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:src/lib/falkordb/scoring.ts:ConnectionReason",
+      "name": "ConnectionReason",
+      "type": "class",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Reason for suggesting a connection: code (ConnectionReasonCode), weight (number), optional value (shared attribute).",
+      "tags": [
+        "interface",
+        "scoring",
+        "reason"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "func:src/lib/falkordb/client.ts:getFalkorConfig",
+      "name": "getFalkorConfig",
+      "type": "function",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Resolves Falkor config from environment variables. Priority: FALKOR_URL → FALKOR_HOST → FALKOR_EMBEDDED. Returns { enabled: false, reason } or { enabled: true, mode, graphPrefix, ... }.",
+      "tags": [
+        "configuration",
+        "env-vars"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/client.ts:graphNameForOrg",
+      "name": "graphNameForOrg",
+      "type": "function",
+      "filePath": "src/lib/falkordb/client.ts",
+      "summary": "Builds per-org graph name: '<prefix>_<orgId with non-alnum replaced by _>'. Default prefix: 'teamnetwork_people'.",
+      "tags": [
+        "naming",
+        "org-scoped"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/people.ts:buildProjectedPeople",
+      "name": "buildProjectedPeople",
+      "type": "function",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Core projection function. Takes members[] and alumni[], filters active rows, groups by personKey (merging records sharing a user_id), and produces Map<personKey, ProjectedPerson> with merged attributes using stable row sorting and first-non-null value selection.",
+      "tags": [
+        "projection",
+        "merge",
+        "core-logic"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "func:src/lib/falkordb/people.ts:buildSourcePerson",
+      "name": "buildSourcePerson",
+      "type": "function",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Convenience wrapper around buildProjectedPeople for single-person lookup. Returns the first projected person from input rows, or null if empty.",
+      "tags": [
+        "projection",
+        "source-lookup"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/people.ts:buildPersonKey",
+      "name": "buildPersonKey",
+      "type": "function",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Identity key builder: returns 'user:<userId>' if userId present, else 'member:<id>' or 'alumni:<id>' based on source table.",
+      "tags": [
+        "identity",
+        "key-generation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "name": "suggestConnections",
+      "type": "function",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "Main entry point for connection suggestions. Resolves source person with complement, then routes to Falkor graph path or SQL fallback. Graph path: fetchGraphSuggestions + freshness check. SQL path: loadProjectedPeople + fetchMentorshipDistances + scoreProjectedCandidates. Both use identical scoring.",
+      "tags": [
+        "entry-point",
+        "dual-mode",
+        "orchestration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+      "name": "fetchGraphSuggestions",
+      "type": "function",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "Reads candidates from FalkorDB. First verifies source exists in graph. Then runs parallel queries: all candidates MATCH + 6 directed mentorship distance queries (outgoing d=1, incoming d=1, 4 mixed-direction d=2). Builds distance map, scores each candidate, sorts and limits.",
+      "tags": [
+        "graph-query",
+        "cypher",
+        "parallel"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/suggestions.ts:fetchGraphFreshness",
+      "name": "fetchGraphFreshness",
+      "type": "function",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "Checks oldest pending queue item for org. If lag exceeds GRAPH_STALE_AFTER_SECONDS (120s), returns { state: 'stale', lag_seconds }. Otherwise returns { state: 'fresh' }.",
+      "tags": [
+        "freshness",
+        "queue-check"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+      "name": "buildSuggestionForCandidate",
+      "type": "function",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Scores one candidate against a source person. Checks 7 reason types with weighted scores. Returns null if no reasons found (filters out unrelated people). Score is sum of reason weights.",
+      "tags": [
+        "scoring",
+        "candidate-evaluation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/scoring.ts:sortSuggestedConnections",
+      "name": "sortSuggestedConnections",
+      "type": "function",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "Deterministic sort: score desc → reason count desc → name asc → person_id asc. Returns a new sorted array (immutable).",
+      "tags": [
+        "sorting",
+        "deterministic",
+        "immutable"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "name": "processGraphSyncQueue",
+      "type": "function",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "Main sync entry point. Dequeues batch via RPC, processes each item by source_table (members, alumni, mentorship_pairs). Returns stats { processed, skipped, failed }. Failed items get attempts incremented via RPC.",
+      "tags": [
+        "sync",
+        "queue-processing",
+        "entry-point"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "name": "reconcilePersonByKey",
+      "type": "function",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "Reconciles a person node in the graph by personKey. Loads all active source rows for the key (by userId, memberId, or alumniId), rebuilds projection, upserts or deletes the graph node, then reconciles adjacent mentorship edges.",
+      "tags": [
+        "sync",
+        "reconciliation",
+        "person-node"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/sync.ts:reconcilePairByUsers",
+      "name": "reconcilePairByUsers",
+      "type": "function",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "Reconciles a MENTORS edge between two users. Checks if an active pair exists in DB, then MERGEs or DELETEs the graph edge accordingly.",
+      "tags": [
+        "sync",
+        "reconciliation",
+        "mentorship-edge"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/sync.ts:upsertPersonNode",
+      "name": "upsertPersonNode",
+      "type": "function",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "MERGE + SET on a Person node in Falkor using compacted properties (omitting nulls). Uses personKey as the merge key.",
+      "tags": [
+        "sync",
+        "graph-write",
+        "upsert"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/sync.ts:deletePersonNode",
+      "name": "deletePersonNode",
+      "type": "function",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "MATCH + DETACH DELETE on a Person node by personKey. Removes the node and all connected edges.",
+      "tags": [
+        "sync",
+        "graph-write",
+        "delete"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "func:src/lib/falkordb/utils.ts:toErrorMessage",
+      "name": "toErrorMessage",
+      "type": "function",
+      "filePath": "src/lib/falkordb/utils.ts",
+      "summary": "Extracts error message from unknown error. Checks Error instance, then 'message' property, falls back to provided default.",
+      "tags": [
+        "utility",
+        "error-handling"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "func:src/app/api/cron/graph-sync-process/route.ts:GET",
+      "name": "GET (graph-sync-process)",
+      "type": "function",
+      "filePath": "src/app/api/cron/graph-sync-process/route.ts",
+      "summary": "Next.js GET handler for /api/cron/graph-sync-process. Validates CRON_SECRET auth, loops processGraphSyncQueue for up to 25s, purges old rows, returns JSON stats.",
+      "tags": [
+        "api-handler",
+        "cron",
+        "next.js"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:identity-model",
+      "name": "Person Identity Model",
+      "type": "concept",
+      "filePath": "src/lib/falkordb/people.ts",
+      "summary": "Identity keying strategy: user:<userId> for linked accounts, member:<id> or alumni:<id> for unlinked rows. Enables merging member+alumni records for the same real person while keeping unlinked rows distinct.",
+      "tags": [
+        "concept",
+        "identity",
+        "merge-strategy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:dual-mode",
+      "name": "Dual-Mode Architecture (Falkor + SQL Fallback)",
+      "type": "concept",
+      "filePath": "src/lib/falkordb/suggestions.ts",
+      "summary": "The suggest_connections feature has two execution paths using identical scoring: 'falkor' mode reads from the graph database, 'sql_fallback' mode loads from Supabase. The system falls back to SQL when Falkor is unavailable, disabled, or throws errors, ensuring the feature always works.",
+      "tags": [
+        "concept",
+        "architecture",
+        "resilience"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:async-sync",
+      "name": "Async Queue-Driven Graph Sync",
+      "type": "concept",
+      "filePath": "src/lib/falkordb/sync.ts",
+      "summary": "Database triggers on members/alumni/mentorship_pairs enqueue changes to graph_sync_queue. A cron job dequeues and processes items, reconciling graph state by re-reading current DB truth. Design is reconciliatory (not event-sourced) — the queue carries hints but the worker always verifies.",
+      "tags": [
+        "concept",
+        "architecture",
+        "eventual-consistency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "concept:scoring-model",
+      "name": "Weighted Connection Scoring",
+      "type": "concept",
+      "filePath": "src/lib/falkordb/scoring.ts",
+      "summary": "7 weighted reason types: direct_mentorship(100) > second_degree_mentorship(50) > shared_company(20) > shared_industry(12) > shared_major(10) > shared_graduation_year(8) > shared_city(5). Score = sum of matching weights. Deterministic tiebreaking by reason count, name, person_id.",
+      "tags": [
+        "concept",
+        "scoring",
+        "algorithm"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "file:src/lib/falkordb/people.ts",
+      "type": "imports",
+      "label": "imports projection model and builders",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "file:src/lib/falkordb/scoring.ts",
+      "type": "imports",
+      "label": "imports scoring functions and constants",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "file:src/lib/falkordb/client.ts",
+      "type": "imports",
+      "label": "imports falkorClient, error types, FalkorQueryClient interface",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "file:src/lib/falkordb/people.ts",
+      "type": "imports",
+      "label": "imports projection model, builders, and row types",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "file:src/lib/falkordb/client.ts",
+      "type": "imports",
+      "label": "imports falkorClient and FalkorQueryClient interface",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "file:src/lib/falkordb/utils.ts",
+      "type": "imports",
+      "label": "imports toErrorMessage",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/client.ts",
+      "target": "file:src/lib/falkordb/utils.ts",
+      "type": "imports",
+      "label": "imports toErrorMessage",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/scoring.ts",
+      "target": "file:src/lib/falkordb/people.ts",
+      "type": "imports",
+      "label": "imports ProjectedPerson type",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/app/api/cron/graph-sync-process/route.ts",
+      "target": "file:src/lib/falkordb/sync.ts",
+      "type": "imports",
+      "label": "imports processGraphSyncQueue",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/people.ts",
+      "type": "imports",
+      "label": "imports buildProjectedPeople, buildSourcePerson",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/suggestions.ts",
+      "type": "imports",
+      "label": "imports suggestConnections",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/sync.ts",
+      "type": "imports",
+      "label": "imports processGraphSyncQueue",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:scripts/test-falkor-local.ts",
+      "target": "file:src/lib/falkordb/sync.ts",
+      "type": "imports",
+      "label": "imports processGraphSyncQueue",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:scripts/test-falkor-local.ts",
+      "target": "file:src/lib/falkordb/suggestions.ts",
+      "type": "imports",
+      "label": "imports suggestConnections",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:scripts/test-falkor-local.ts",
+      "target": "file:src/lib/falkordb/client.ts",
+      "type": "imports",
+      "label": "imports falkorClient",
+      "weight": 0.7,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "type": "reads_from",
+      "label": "queries graph_sync_queue for freshness, calls get_mentorship_distances RPC",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "type": "reads_from",
+      "label": "calls dequeue_graph_sync_queue and increment_graph_sync_attempts RPCs",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/app/api/cron/graph-sync-process/route.ts",
+      "target": "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "type": "reads_from",
+      "label": "calls purge_graph_sync_queue RPC",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "file:supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql",
+      "target": "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+      "type": "depends_on",
+      "label": "index on graph_sync_queue table defined in foundation migration",
+      "weight": 0.6,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/people.ts",
+      "type": "tested_by",
+      "label": "tests buildProjectedPeople and buildSourcePerson",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/suggestions.ts",
+      "type": "tested_by",
+      "label": "tests suggestConnections in both modes",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "file:tests/falkordb-people-graph.test.ts",
+      "target": "file:src/lib/falkordb/sync.ts",
+      "type": "tested_by",
+      "label": "tests processGraphSyncQueue integration",
+      "weight": 0.5,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "target": "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+      "type": "calls",
+      "label": "calls when Falkor is available",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "target": "func:src/lib/falkordb/suggestions.ts:fetchGraphFreshness",
+      "type": "calls",
+      "label": "parallel with fetchGraphSuggestions",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "target": "func:src/lib/falkordb/people.ts:buildSourcePerson",
+      "type": "calls",
+      "label": "builds merged source person",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "target": "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+      "type": "calls",
+      "label": "via scoreProjectedCandidates in SQL fallback path",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+      "target": "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+      "type": "calls",
+      "label": "scores each graph candidate",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+      "target": "func:src/lib/falkordb/scoring.ts:sortSuggestedConnections",
+      "type": "calls",
+      "label": "sorts and limits results",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "target": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "type": "calls",
+      "label": "via handlePersonQueueItem",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "target": "func:src/lib/falkordb/sync.ts:reconcilePairByUsers",
+      "type": "calls",
+      "label": "via handleMentorshipQueueItem",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "target": "func:src/lib/falkordb/sync.ts:upsertPersonNode",
+      "type": "calls",
+      "label": "writes Person node if projection exists",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "target": "func:src/lib/falkordb/sync.ts:deletePersonNode",
+      "type": "calls",
+      "label": "removes Person node if no live projection",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "target": "func:src/lib/falkordb/people.ts:buildProjectedPeople",
+      "type": "calls",
+      "label": "rebuilds projection from DB rows",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "func:src/app/api/cron/graph-sync-process/route.ts:GET",
+      "target": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "type": "calls",
+      "label": "loops until queue empty or timeout",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+      "target": "class:src/lib/falkordb/client.ts:FalkorQueryClient",
+      "type": "implements",
+      "label": "implements FalkorQueryClient interface",
+      "weight": 0.9,
+      "direction": "forward"
+    },
+    {
+      "source": "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+      "target": "func:src/lib/falkordb/client.ts:getFalkorConfig",
+      "type": "calls",
+      "label": "resolves config on each operation",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+      "target": "func:src/lib/falkordb/client.ts:graphNameForOrg",
+      "type": "calls",
+      "label": "selects per-org graph",
+      "weight": 0.8,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/client.ts",
+      "target": "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/client.ts",
+      "target": "class:src/lib/falkordb/client.ts:FalkorQueryClient",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/client.ts",
+      "target": "class:src/lib/falkordb/client.ts:FalkorUnavailableError",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/client.ts",
+      "target": "class:src/lib/falkordb/client.ts:FalkorQueryError",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/people.ts",
+      "target": "class:src/lib/falkordb/people.ts:ProjectedPerson",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/people.ts",
+      "target": "class:src/lib/falkordb/people.ts:MemberPersonRow",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/people.ts",
+      "target": "class:src/lib/falkordb/people.ts:AlumniPersonRow",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/people.ts",
+      "target": "func:src/lib/falkordb/people.ts:buildProjectedPeople",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/people.ts",
+      "target": "func:src/lib/falkordb/people.ts:buildPersonKey",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/scoring.ts",
+      "target": "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/scoring.ts",
+      "target": "func:src/lib/falkordb/scoring.ts:sortSuggestedConnections",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/scoring.ts",
+      "target": "class:src/lib/falkordb/scoring.ts:SuggestedConnection",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/suggestions.ts",
+      "target": "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/lib/falkordb/sync.ts",
+      "target": "func:src/lib/falkordb/sync.ts:reconcilePairByUsers",
+      "type": "contains",
+      "weight": 1,
+      "direction": "forward"
+    },
+    {
+      "source": "concept:dual-mode",
+      "target": "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+      "type": "related",
+      "label": "suggestConnections implements the dual-mode pattern",
+      "weight": 0.5,
+      "direction": "bidirectional"
+    },
+    {
+      "source": "concept:identity-model",
+      "target": "func:src/lib/falkordb/people.ts:buildPersonKey",
+      "type": "related",
+      "label": "buildPersonKey implements the identity model",
+      "weight": 0.5,
+      "direction": "bidirectional"
+    },
+    {
+      "source": "concept:async-sync",
+      "target": "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+      "type": "related",
+      "label": "processGraphSyncQueue implements the async sync pattern",
+      "weight": 0.5,
+      "direction": "bidirectional"
+    },
+    {
+      "source": "concept:scoring-model",
+      "target": "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+      "type": "related",
+      "label": "buildSuggestionForCandidate implements the scoring model",
+      "weight": 0.5,
+      "direction": "bidirectional"
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:data-model",
+      "name": "Data Model",
+      "description": "Interfaces, type definitions, and identity/projection logic that define how members, alumni, and mentorship pairs are represented and merged",
+      "nodeIds": [
+        "file:src/lib/falkordb/people.ts",
+        "class:src/lib/falkordb/people.ts:ProjectedPerson",
+        "class:src/lib/falkordb/people.ts:MemberPersonRow",
+        "class:src/lib/falkordb/people.ts:AlumniPersonRow",
+        "class:src/lib/falkordb/people.ts:MentorshipPairSyncRow",
+        "func:src/lib/falkordb/people.ts:buildProjectedPeople",
+        "func:src/lib/falkordb/people.ts:buildSourcePerson",
+        "func:src/lib/falkordb/people.ts:buildPersonKey",
+        "concept:identity-model"
+      ]
+    },
+    {
+      "id": "layer:infrastructure",
+      "name": "Infrastructure",
+      "description": "FalkorDB client connection, configuration, error types, and shared utilities",
+      "nodeIds": [
+        "file:src/lib/falkordb/client.ts",
+        "file:src/lib/falkordb/utils.ts",
+        "class:src/lib/falkordb/client.ts:FalkorQueryClient",
+        "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+        "class:src/lib/falkordb/client.ts:FalkorUnavailableError",
+        "class:src/lib/falkordb/client.ts:FalkorQueryError",
+        "func:src/lib/falkordb/client.ts:getFalkorConfig",
+        "func:src/lib/falkordb/client.ts:graphNameForOrg",
+        "func:src/lib/falkordb/utils.ts:toErrorMessage"
+      ]
+    },
+    {
+      "id": "layer:scoring",
+      "name": "Scoring & Ranking",
+      "description": "Weighted scoring algorithm, reason codes, deterministic sorting, and result types shared by both execution paths",
+      "nodeIds": [
+        "file:src/lib/falkordb/scoring.ts",
+        "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+        "func:src/lib/falkordb/scoring.ts:sortSuggestedConnections",
+        "func:src/lib/falkordb/scoring.ts:clampSuggestionsLimit",
+        "class:src/lib/falkordb/scoring.ts:SuggestedConnection",
+        "class:src/lib/falkordb/scoring.ts:SuggestConnectionsResult",
+        "class:src/lib/falkordb/scoring.ts:ConnectionReason",
+        "concept:scoring-model"
+      ]
+    },
+    {
+      "id": "layer:read-path",
+      "name": "Read Path (Suggestions)",
+      "description": "Connection suggestion orchestration — source resolution, graph vs SQL fallback routing, freshness check, candidate fetching",
+      "nodeIds": [
+        "file:src/lib/falkordb/suggestions.ts",
+        "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+        "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+        "func:src/lib/falkordb/suggestions.ts:fetchGraphFreshness",
+        "class:src/lib/falkordb/suggestions.ts:SuggestConnectionsLookupError",
+        "concept:dual-mode"
+      ]
+    },
+    {
+      "id": "layer:write-path",
+      "name": "Write Path (Sync)",
+      "description": "Async graph sync worker — queue processing, person node reconciliation, mentorship edge reconciliation",
+      "nodeIds": [
+        "file:src/lib/falkordb/sync.ts",
+        "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+        "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+        "func:src/lib/falkordb/sync.ts:reconcilePairByUsers",
+        "func:src/lib/falkordb/sync.ts:upsertPersonNode",
+        "func:src/lib/falkordb/sync.ts:deletePersonNode",
+        "concept:async-sync"
+      ]
+    },
+    {
+      "id": "layer:api",
+      "name": "API & Cron",
+      "description": "HTTP cron endpoint that drives the sync worker",
+      "nodeIds": [
+        "file:src/app/api/cron/graph-sync-process/route.ts",
+        "func:src/app/api/cron/graph-sync-process/route.ts:GET"
+      ]
+    },
+    {
+      "id": "layer:database",
+      "name": "Database Schema",
+      "description": "PostgreSQL migrations — queue table, triggers, RPCs, indexes",
+      "nodeIds": [
+        "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+        "file:supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql"
+      ]
+    },
+    {
+      "id": "layer:testing",
+      "name": "Testing & Tooling",
+      "description": "Test suites and local development scripts",
+      "nodeIds": [
+        "file:tests/falkordb-people-graph.test.ts",
+        "file:scripts/test-falkor-local.ts",
+        "file:docs/agent/falkor-people-graph.md"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Data Model: How People Are Represented",
+      "description": "The foundation is the person projection model in people.ts. Members and alumni from Supabase are merged into ProjectedPerson objects using a personKey identity model: 'user:<userId>' for linked accounts, 'member:<id>' or 'alumni:<id>' for unlinked rows. buildProjectedPeople() is the core merge function used by both the sync worker and the SQL fallback read path.",
+      "nodeIds": [
+        "file:src/lib/falkordb/people.ts",
+        "class:src/lib/falkordb/people.ts:ProjectedPerson",
+        "func:src/lib/falkordb/people.ts:buildProjectedPeople",
+        "func:src/lib/falkordb/people.ts:buildPersonKey",
+        "concept:identity-model"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Infrastructure: FalkorDB Client & Configuration",
+      "description": "client.ts manages the FalkorDB connection. Configuration resolves from env vars: FALKOR_URL for remote mode, FALKOR_EMBEDDED for local dev. The FalkorQueryClient interface serves as the DI point — tests and the SQL fallback path inject stubs. Each org gets its own graph (e.g., 'teamnetwork_people_<orgId>').",
+      "nodeIds": [
+        "file:src/lib/falkordb/client.ts",
+        "class:src/lib/falkordb/client.ts:FalkorQueryClient",
+        "class:src/lib/falkordb/client.ts:FalkorClientImpl",
+        "func:src/lib/falkordb/client.ts:getFalkorConfig"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "Database Foundation: Queue, Triggers, and RPCs",
+      "description": "The foundation migration creates graph_sync_queue and adds AFTER INSERT/UPDATE triggers on members, alumni, and mentorship_pairs. Each trigger compares relevant fields and enqueues changed rows with old-key context in the payload. Four RPCs handle queue operations: dequeue (with SKIP LOCKED), increment attempts, purge, and backfill. A recursive CTE RPC (get_mentorship_distances) powers the SQL fallback path.",
+      "nodeIds": [
+        "file:supabase/migrations/20260715000000_falkor_people_graph_foundation.sql",
+        "file:supabase/migrations/20260715000001_graph_sync_queue_org_freshness_index.sql"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "Write Path: Queue-Driven Graph Sync",
+      "description": "sync.ts processes queue items: for people rows, it re-reads all active source rows for the identity key, rebuilds the projection, and upserts or deletes the Person node plus reconciles adjacent MENTORS edges. For mentorship pairs, it reconciles both old and current endpoints. The worker is reconciliatory — it never trusts the queue payload as sole truth.",
+      "nodeIds": [
+        "file:src/lib/falkordb/sync.ts",
+        "func:src/lib/falkordb/sync.ts:processGraphSyncQueue",
+        "func:src/lib/falkordb/sync.ts:reconcilePersonByKey",
+        "func:src/lib/falkordb/sync.ts:reconcilePairByUsers",
+        "concept:async-sync"
+      ]
+    },
+    {
+      "order": 5,
+      "title": "Cron Endpoint: Draining the Queue",
+      "description": "The Next.js cron route at /api/cron/graph-sync-process loops processGraphSyncQueue for up to 25 seconds, then purges old rows. Auth is bearer-token via CRON_SECRET.",
+      "nodeIds": [
+        "file:src/app/api/cron/graph-sync-process/route.ts",
+        "func:src/app/api/cron/graph-sync-process/route.ts:GET"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "Scoring: How Connections Are Ranked",
+      "description": "scoring.ts defines 7 weighted reason codes (direct_mentorship=100 down to shared_city=5). buildSuggestionForCandidate() evaluates each candidate against the source person, producing a score = sum of matching weights. sortSuggestedConnections() provides deterministic ordering. Both graph and SQL paths use identical scoring.",
+      "nodeIds": [
+        "file:src/lib/falkordb/scoring.ts",
+        "func:src/lib/falkordb/scoring.ts:buildSuggestionForCandidate",
+        "func:src/lib/falkordb/scoring.ts:sortSuggestedConnections",
+        "concept:scoring-model"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "Read Path: Dual-Mode Suggestions",
+      "description": "suggestConnections() orchestrates the read path. It resolves the source person with cross-table complement, then branches: if Falkor is available, fetchGraphSuggestions() runs parallel Cypher queries (all candidates + 6 directed mentorship distance queries). If Falkor fails or is disabled, the SQL fallback loads the full org projection and mentorship distances from Supabase. Both paths score and sort identically.",
+      "nodeIds": [
+        "file:src/lib/falkordb/suggestions.ts",
+        "func:src/lib/falkordb/suggestions.ts:suggestConnections",
+        "func:src/lib/falkordb/suggestions.ts:fetchGraphSuggestions",
+        "func:src/lib/falkordb/suggestions.ts:fetchGraphFreshness",
+        "concept:dual-mode"
+      ]
+    },
+    {
+      "order": 8,
+      "title": "Testing: Parity and Integration",
+      "description": "The test suite verifies projection deduplication, buildSourcePerson parity with buildProjectedPeople, deterministic SQL fallback ranking, graph-vs-fallback ordering parity, mixed-direction second-degree mentorship, merged source attributes with duplicate complements, and sync worker integration with mentorship edge creation.",
+      "nodeIds": [
+        "file:tests/falkordb-people-graph.test.ts",
+        "file:scripts/test-falkor-local.ts",
+        "file:docs/agent/falkor-people-graph.md"
+      ]
+    }
+  ]
+}

@@ -135,6 +135,19 @@ export default function EditMemberPage() {
 
   const handleAccessUpdate = async () => {
     if (!accessData.userId || !orgId) return;
+
+    const validStatuses = ["active", "revoked", "pending"];
+    const validRoles = ["admin", "active_member", "alumni", "parent"];
+
+    if (!validStatuses.includes(accessData.status)) {
+      setAccessError("Invalid access status");
+      return;
+    }
+    if (!validRoles.includes(accessData.role)) {
+      setAccessError("Invalid role");
+      return;
+    }
+
     setIsUpdatingAccess(true);
     setAccessError(null);
 
@@ -185,15 +198,13 @@ export default function EditMemberPage() {
 
     const supabase = createClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from("members")
       .update({
         first_name: data.first_name,
         last_name: data.last_name,
         email: data.email || null,
         role: data.role || null,
-        status: data.status,
         graduation_year: data.graduation_year ? parseInt(data.graduation_year) : null,
         expected_graduation_date: data.expected_graduation_date || null,
         photo_url: data.photo_url || null,
@@ -245,7 +256,16 @@ export default function EditMemberPage() {
 
       <div className="grid gap-6">
         <Card className="max-w-2xl">
-          <form data-testid="member-edit-form" onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
+          <form
+            data-testid="member-edit-form"
+            onSubmit={handleSubmit(onSubmit)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.target instanceof HTMLInputElement) {
+                e.preventDefault();
+              }
+            }}
+            className="p-6 space-y-6"
+          >
             <div>
               <h3 className="font-semibold text-foreground mb-4">Profile Information</h3>
               {error && (
