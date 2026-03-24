@@ -196,6 +196,12 @@ BEGIN
 END;
 $$;
 
+-- Functional index for the per-row lower(email) lookup in the RPC loop.
+-- Without this, each iteration does a sequential scan filtered by org + lower(email).
+CREATE INDEX IF NOT EXISTS idx_alumni_org_lower_email
+  ON public.alumni (organization_id, lower(email))
+  WHERE deleted_at IS NULL AND email IS NOT NULL;
+
 -- Re-apply ACL after DROP/CREATE to prevent authenticated/anon from calling directly
 REVOKE EXECUTE ON FUNCTION public.bulk_import_alumni_rich FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION public.bulk_import_alumni_rich FROM anon;

@@ -215,7 +215,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   let quotaBlocked = importPlan.quotaBlocked;
   let skipped = importPlan.skipped;
 
-  // Batch updates (20 at a time)
+  // Batch updates (20 at a time) — guard with deleted_at IS NULL to avoid
+  // updating concurrently soft-deleted records
   const BATCH_SIZE = 20;
   for (let i = 0; i < importPlan.toUpdate.length; i += BATCH_SIZE) {
     const batch = importPlan.toUpdate.slice(i, i + BATCH_SIZE);
@@ -224,7 +225,8 @@ export async function POST(req: Request, { params }: RouteParams) {
         .from("alumni")
         .update(data)
         .eq("id", alumniId)
-        .eq("organization_id", organizationId),
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null),
     );
 
     const results = await Promise.all(updates);
