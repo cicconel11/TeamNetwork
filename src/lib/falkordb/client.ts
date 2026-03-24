@@ -56,7 +56,19 @@ function resolveEmbeddedRedisServerPath() {
   return undefined;
 }
 
+let cachedConfig: FalkorConfig | null = null;
+
 function getFalkorConfig(): FalkorConfig {
+  if (cachedConfig) {
+    return cachedConfig;
+  }
+
+  const config = parseFalkorConfig();
+  cachedConfig = config;
+  return config;
+}
+
+function parseFalkorConfig(): FalkorConfig {
   if (process.env.FALKOR_ENABLED !== "true") {
     return { enabled: false, reason: "disabled_via_env" };
   }

@@ -12,7 +12,7 @@ import {
   type ProjectedPerson,
 } from "@/lib/falkordb/people";
 import { falkorClient, type FalkorQueryClient } from "@/lib/falkordb/client";
-import { toErrorMessage } from "@/lib/falkordb/utils";
+import { readOptionalString, toErrorMessage } from "@/lib/falkordb/utils";
 
 export interface GraphQueueStats {
   processed: number;
@@ -23,7 +23,7 @@ export interface GraphQueueStats {
 interface GraphQueueItem {
   id: string;
   org_id: string;
-  source_table: string;
+  source_table: "members" | "alumni" | "mentorship_pairs";
   source_id: string;
   action: string;
   payload: Record<string, unknown> | null;
@@ -32,10 +32,6 @@ interface GraphQueueItem {
 interface ProcessOptions {
   batchSize?: number;
   graphClient?: FalkorQueryClient;
-}
-
-function readOptionalString(value: unknown) {
-  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 function compactGraphProperties(person: ProjectedPerson) {
