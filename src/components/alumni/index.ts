@@ -1,5 +1,6 @@
 export { AlumniFilters } from "./AlumniFilters";
-export { AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel } from "./AlumniActions";
+export { AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel, useAlumniSelectMode } from "./AlumniActions";
+export { AlumniSelectableGrid } from "./AlumniSelectableGrid";
 export { BulkLinkedInImporter } from "./BulkLinkedInImporter";
 export { BulkCsvImporter } from "./BulkCsvImporter";
 export { SingleLinkedInAttacher } from "./SingleLinkedInAttacher";
