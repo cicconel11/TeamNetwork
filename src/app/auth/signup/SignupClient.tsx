@@ -37,12 +37,14 @@ function clearAgeGateData() {
 
 interface SignupClientProps {
   hcaptchaSiteKey: string;
+  linkedinOauthAvailable: boolean;
   redirectTo?: string;
   initialError?: string | null;
 }
 
 export function SignupClient({
   hcaptchaSiteKey,
+  linkedinOauthAvailable,
   redirectTo = "/app",
   initialError = null,
 }: SignupClientProps) {
@@ -273,18 +275,20 @@ export function SignupClient({
         Continue with Google
       </Button>
 
-      <Button
-        type="button"
-        variant="secondary"
-        className="w-full mb-6"
-        onClick={() => handleSocialSignup(LINKEDIN_OIDC_PROVIDER)}
-        isLoading={isLinkedInLoading}
-        disabled={isSocialLoading}
-        data-testid="signup-linkedin"
-      >
-        <LinkedInIcon className="h-5 w-5 mr-2" />
-        Continue with LinkedIn
-      </Button>
+      {linkedinOauthAvailable && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full mb-6"
+          onClick={() => handleSocialSignup(LINKEDIN_OIDC_PROVIDER)}
+          isLoading={isLinkedInLoading}
+          disabled={isSocialLoading}
+          data-testid="signup-linkedin"
+        >
+          <LinkedInIcon className="h-5 w-5 mr-2" />
+          Continue with LinkedIn
+        </Button>
+      )}
 
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">

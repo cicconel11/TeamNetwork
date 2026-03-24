@@ -19,9 +19,11 @@ import { AIPanelProvider } from "@/components/ai-assistant";
 import dynamic from "next/dynamic";
 const AIPanel = dynamic(
   () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
+  { ssr: false },
 );
 const AIEdgeTab = dynamic(
   () => import("@/components/ai-assistant/AIEdgeTab").then((m) => m.AIEdgeTab),
+  { ssr: false },
 );
 import { computeOrgThemeVariables, safeHexColor } from "@/lib/theming/org-colors";
 

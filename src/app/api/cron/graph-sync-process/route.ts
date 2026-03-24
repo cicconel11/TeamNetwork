@@ -39,7 +39,7 @@ export async function GET(request: Request) {
     }
 
     const { data: purgedCount, error: purgeError } = await (
-      supabase.rpc.bind(supabase) as RpcInvoker
+      supabase.rpc.bind(supabase) as unknown as RpcInvoker
     )("purge_graph_sync_queue");
 
     if (purgeError) {

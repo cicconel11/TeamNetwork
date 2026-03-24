@@ -234,16 +234,16 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: submissions } = await (serviceSupabase as any)
       .from("form_submissions")
-      .select("form_id, organization_id, submitted_at, responses")
+      .select("form_id, organization_id, submitted_at, data")
       .eq("user_id", user.id)
-      .is("deleted_at", null) as { data: Array<{ form_id: string; organization_id: string; submitted_at: string; responses: unknown }> | null };
+      .is("deleted_at", null) as { data: Array<{ form_id: string; organization_id: string; submitted_at: string; data: unknown }> | null };
 
     if (submissions) {
       exportData.formSubmissions = submissions.map((s) => ({
         formId: s.form_id,
         organizationId: s.organization_id,
         submittedAt: s.submitted_at,
-        data: s.responses,
+        data: s.data,
       }));
     }
 

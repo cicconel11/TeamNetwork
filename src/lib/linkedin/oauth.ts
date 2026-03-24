@@ -14,7 +14,6 @@ import {
   fetchLinkedInEnrichment,
   mapEnrichmentToFields,
   isProxycurlConfigured,
-  type ProxycurlEnrichmentResult,
 } from "@/lib/linkedin/proxycurl";
 
 // ---------------------------------------------------------------------------

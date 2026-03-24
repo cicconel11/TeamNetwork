@@ -29,7 +29,7 @@ describe("newParentSchema validation", () => {
       photo_url: "https://example.com/photo.jpg",
       linkedin_url: "https://linkedin.com/in/jane",
       student_name: "Alex Smith",
-      relationship: "mother",
+      relationship: "Mother",
       notes: "Volunteer coach",
     });
     assert.ok(result.success, "should accept full valid body");
@@ -44,13 +44,14 @@ describe("newParentSchema validation", () => {
     assert.ok(!result.success, "HTTP photo_url must be rejected");
   });
 
-  it("rejects HTTP linkedin_url (HTTPS required)", () => {
+  it("normalizes HTTP linkedin_url to HTTPS", () => {
     const result = newParentSchema.safeParse({
       first_name: "Jane",
       last_name: "Smith",
       linkedin_url: "http://linkedin.com/in/jane",
     });
-    assert.ok(!result.success, "HTTP linkedin_url must be rejected");
+    assert.ok(result.success, "HTTP linkedin_url should be normalized to HTTPS");
+    assert.equal(result.data.linkedin_url, "https://www.linkedin.com/in/jane");
   });
 
   it("accepts HTTPS photo_url", () => {

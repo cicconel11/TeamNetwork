@@ -3,6 +3,10 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: "Plus Jakarta Sans";
+  --font-display: "Bitter";
+  --font-mono: "Space Mono";
+
   /* Dynamic org color - will be overridden per-org */
   --color-org-primary: #1e3a5f;
   --color-org-primary-light: #2d4a6f;

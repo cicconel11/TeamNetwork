@@ -46,13 +46,14 @@ describe("upsertConstituents — soft-deleted alumni", () => {
           update: () => chain,
           delete: () => {
             return {
-              eq: (_col: string, val: string) => {
+              eq: (...args: [string, string]) => {
+                const val = args[1];
                 if (table === "alumni_external_ids") deletedMappingIds.push(val);
                 return Promise.resolve({ error: null });
               },
             };
           },
-          eq: (_col: string, _val: any) => chain,
+          eq: () => chain,
           is: () => chain,
           maybeSingle: () => {
             if (table === "alumni_external_ids") {
@@ -130,13 +131,14 @@ describe("upsertConstituents — soft-deleted alumni", () => {
           update: () => chain,
           delete: () => {
             return {
-              eq: (_col: string, val: string) => {
+              eq: (...args: [string, string]) => {
+                const val = args[1];
                 if (table === "alumni_external_ids") deletedMappingIds.push(val);
                 return Promise.resolve({ error: null });
               },
             };
           },
-          eq: (_col: string, _val: any) => chain,
+          eq: () => chain,
           is: () => chain,
           maybeSingle: () => {
             if (table === "alumni_external_ids") {

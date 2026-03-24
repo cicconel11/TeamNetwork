@@ -50,9 +50,9 @@ describe("ConnectedAccountsSection source", () => {
     assert.doesNotMatch(source, /useAutoDismiss/);
   });
 
-  it("imports showFeedback", () => {
+  it("does not import showFeedback directly", () => {
     const source = readSource();
-    assert.match(
+    assert.doesNotMatch(
       source,
       /import.*showFeedback.*from.*@\/lib\/feedback\/show-feedback/,
     );

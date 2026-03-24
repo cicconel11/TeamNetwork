@@ -60,32 +60,43 @@ describe("hCaptcha Integration", () => {
     });
 
     it("should reject invalid tokens", async () => {
-      // This test verifies that random non-empty strings are rejected
-      // We can't actually call hCaptcha API in tests, so we verify the function
-      // properly handles the token and would send it for verification
-
       process.env.NODE_ENV = "production";
+      const originalFetch = globalThis.fetch;
 
-      await fc.assert(
-        fc.asyncProperty(
-          // Generate random non-empty strings that are clearly not valid hCaptcha tokens
-          fc.string({ minLength: 1, maxLength: 100 }).filter((s) => s.trim().length > 0),
-          async (invalidToken) => {
-            const result = await verifyCaptcha(invalidToken, undefined, {
-              secretKey: "test-secret-key",
-              skipInDevelopment: false,
-              timeout: 100, // Short timeout since we expect network failure in test env
-            });
+      try {
+        globalThis.fetch = async () =>
+          new Response(
+            JSON.stringify({
+              success: false,
+              "error-codes": ["invalid-input-response"],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            }
+          );
 
-            // Invalid tokens should fail (either network error in test env or actual rejection)
-            assert.strictEqual(result.success, false, "Invalid token should not succeed");
-            assert.ok(result.error_codes && result.error_codes.length > 0, "Should have error codes");
-          }
-        ),
-        { numRuns: 100 }
-      );
+        await fc.assert(
+          fc.asyncProperty(
+            // Generate random non-empty strings that are clearly not valid hCaptcha tokens
+            fc.string({ minLength: 1, maxLength: 100 }).filter((s) => s.trim().length > 0),
+            async (invalidToken) => {
+              const result = await verifyCaptcha(invalidToken, undefined, {
+                secretKey: "test-secret-key",
+                skipInDevelopment: false,
+                timeout: 100,
+              });
 
-      resetEnv();
+              assert.strictEqual(result.success, false, "Invalid token should not succeed");
+              assert.ok(result.error_codes?.includes("invalid-input-response"));
+            }
+          ),
+          { numRuns: 100 }
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+        resetEnv();
+      }
     });
 
     it("should respect timeout settings", async () => {

@@ -387,14 +387,15 @@ export async function suggestConnections(input: {
   if (!source) {
     throw new SuggestConnectionsLookupError("Person not found");
   }
+  const resolvedSource: ProjectedPerson = source;
 
   async function computeSqlFallback(): Promise<SuggestConnectionsResult> {
     const [projectedPeople, mentorshipDistances] = await Promise.all([
       loadProjectedPeople(serviceSupabase, orgId),
-      fetchMentorshipDistances(serviceSupabase, orgId, source),
+      fetchMentorshipDistances(serviceSupabase, orgId, resolvedSource),
     ]);
     const results = scoreProjectedCandidates({
-      source: projectedPeople.get(source.personKey) ?? source,
+      source: projectedPeople.get(resolvedSource.personKey) ?? resolvedSource,
       candidates: projectedPeople.values(),
       mentorshipDistances,
       limit,
@@ -411,7 +412,7 @@ export async function suggestConnections(input: {
       fetchGraphFreshness(serviceSupabase, orgId),
       fetchGraphSuggestions({
         orgId,
-        source,
+        source: resolvedSource,
         limit,
         graphClient,
       }),

@@ -14,6 +14,8 @@ import { CompactStatsWidget } from "@/components/feed/CompactStatsWidget";
 import type { StatItem } from "@/components/feed/CompactStatsWidget";
 import type { PollMetadata } from "@/components/feed/types";
 
+export const dynamic = "force-dynamic";
+
 interface HomePageProps {
   params: Promise<{ orgSlug: string }>;
   searchParams: Promise<{ page?: string }>;
@@ -45,7 +47,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     { data: posts, error: postsError, count: postsCount },
     userName,
   ] = await Promise.all([
-    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).eq("status", "active"),
+    queryClient.from("members").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).is("graduated_at", null).eq("status", "active"),
     queryClient.from("alumni").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("parents").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null),
     queryClient.from("events").select("*", { count: "exact", head: true }).eq("organization_id", org.id).is("deleted_at", null).gte("start_date", new Date().toISOString()),

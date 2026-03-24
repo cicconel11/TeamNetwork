@@ -178,29 +178,11 @@ export async function checkAlumniCapacity(
 
   const currentCount = count || 0;
 
-  // Cross-reference: also count from user_organization_roles for consistency check
-  const { count: roleCount, error: roleCountError } = await supabase
-    .from("user_organization_roles")
-    .select("*", { count: "exact", head: true })
-    .eq("organization_id", orgId)
-    .eq("role", "alumni")
-    .eq("status", "active");
-
-  const roleAlumniCount = roleCountError ? -1 : (roleCount || 0);
-
-  if (!roleCountError && roleAlumniCount !== currentCount) {
-    console.warn(
-      `[graduation] ALUMNI COUNT MISMATCH: org=${maskPII(orgId)} alumni_table=${currentCount} roles_table=${roleAlumniCount}. ` +
-      "The alumni table and user_organization_roles disagree. This may indicate a failed DB trigger (handle_org_member_sync)."
-    );
-  }
-
   debugLog("graduation", "checkAlumniCapacity", {
     orgId: maskPII(orgId),
     bucket: alumniBucket,
     limit,
     alumniTableCount: currentCount,
-    rolesTableCount: roleAlumniCount,
     hasCapacity: currentCount < limit,
   });
 

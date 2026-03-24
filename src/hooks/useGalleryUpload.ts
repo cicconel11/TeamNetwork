@@ -456,12 +456,13 @@ export function useGalleryUpload({ orgId, onFileComplete }: UseGalleryUploadOpti
 
   // ------- Cleanup preview URLs on unmount -------
   useEffect(() => {
+    const xhrMap = xhrRefs.current;
     return () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
       state.files.forEach((f) => {
         if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
       });
-      xhrRefs.current.forEach((xhr) => xhr.abort());
+      xhrMap.forEach((xhr) => xhr.abort());
     };
     // We intentionally only run this on unmount
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -8,9 +8,21 @@ import { refreshTokenWithFallback } from "@/lib/blackbaud/token-refresh";
 import { createBlackbaudClient } from "@/lib/blackbaud/client";
 import { runSync } from "@/lib/blackbaud/sync";
 import { getAlumniCapacitySnapshot } from "@/lib/alumni/capacity";
+import type { Database } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+type OrgIntegrationRow = Database["public"]["Tables"]["org_integrations"]["Row"];
+type BlackbaudIntegration = Pick<
+  OrgIntegrationRow,
+  "id" | "access_token_enc" | "refresh_token_enc" | "token_expires_at" | "last_synced_at"
+>;
+type BlackbaudIntegrationWithTokens = BlackbaudIntegration & {
+  access_token_enc: string;
+  refresh_token_enc: string;
+  token_expires_at: string;
+};
 
 export async function POST(
   req: Request,
@@ -49,7 +61,7 @@ export async function POST(
   }
 
   const serviceSupabase = createServiceClient();
-  const { data: integration } = (await (serviceSupabase as any)
+  const { data: integration } = await serviceSupabase
     .from("org_integrations")
     .select(
       "id, status, access_token_enc, refresh_token_enc, token_expires_at, last_synced_at"
@@ -57,7 +69,7 @@ export async function POST(
     .eq("organization_id", organizationId)
     .eq("provider", "blackbaud")
     .eq("status", "active")
-    .maybeSingle()) as { data: any | null };
+    .maybeSingle();
 
   if (!integration) {
     return NextResponse.json(
@@ -66,10 +78,28 @@ export async function POST(
     );
   }
 
+  const activeIntegration = integration as BlackbaudIntegration;
+  if (
+    !activeIntegration.access_token_enc ||
+    !activeIntegration.refresh_token_enc ||
+    !activeIntegration.token_expires_at
+  ) {
+    return NextResponse.json(
+      { error: "Blackbaud connection is missing token data" },
+      { status: 502, headers: rateLimit.headers }
+    );
+  }
+  const hydratedIntegration: BlackbaudIntegrationWithTokens = {
+    ...activeIntegration,
+    access_token_enc: activeIntegration.access_token_enc,
+    refresh_token_enc: activeIntegration.refresh_token_enc,
+    token_expires_at: activeIntegration.token_expires_at,
+  };
+
   // Get valid access token (refresh if needed)
   let accessToken: string;
   try {
-    accessToken = await refreshTokenWithFallback(integration, serviceSupabase);
+    accessToken = await refreshTokenWithFallback(hydratedIntegration, serviceSupabase);
   } catch {
     return NextResponse.json(
       { error: "Failed to refresh Blackbaud access token" },
@@ -90,12 +120,12 @@ export async function POST(
   const result = await runSync({
     client,
     supabase: serviceSupabase,
-    integrationId: integration.id,
+    integrationId: activeIntegration.id,
     organizationId,
     alumniLimit: capacity.alumniLimit,
     currentAlumniCount: capacity.currentAlumniCount,
     syncType: "manual",
-    lastSyncedAt: integration.last_synced_at,
+    lastSyncedAt: activeIntegration.last_synced_at,
   });
 
   return NextResponse.json(

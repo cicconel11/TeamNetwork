@@ -2607,29 +2607,29 @@ export type Database = {
       }
       form_submissions: {
         Row: {
+          data: Json
           deleted_at: string | null
           form_id: string
           id: string
           organization_id: string
-          responses: Json
           submitted_at: string | null
           user_id: string | null
         }
         Insert: {
+          data?: Json
           deleted_at?: string | null
           form_id: string
           id?: string
           organization_id: string
-          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }
         Update: {
+          data?: Json
           deleted_at?: string | null
           form_id?: string
           id?: string
           organization_id?: string
-          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }

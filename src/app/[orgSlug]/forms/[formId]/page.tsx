@@ -54,7 +54,7 @@ export default function FillFormPage() {
 
         if (submission) {
           setExistingSubmission(submission as FormSubmission);
-          setResponses((submission.responses as Record<string, unknown>) || {});
+          setResponses((((submission as FormSubmission & { data?: unknown }).data) as Record<string, unknown>) || {});
         }
       }
 

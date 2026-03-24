@@ -9,6 +9,7 @@ module.exports = [
     ignores: [
       "**/.next/**",
       "**/node_modules/**",
+      "**/.worktrees/**",
       "apps/**",
       "packages/**",
       "playwright-report/**",
@@ -25,6 +26,23 @@ module.exports = [
   {
     rules: {
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    files: [
+      "src/app/api/blackbaud/**/*.ts",
+      "src/lib/blackbaud/**/*.ts",
+      "tests/blackbaud-*.test.ts",
+      "tests/utils/supabaseIntegration.ts",
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+  {
+    files: ["tests/blackbaud-sync-guard.test.ts"],
+    rules: {
+      "@typescript-eslint/no-unused-vars": "off",
     },
   },
 ];
