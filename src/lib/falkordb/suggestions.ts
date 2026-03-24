@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ALUMNI_PERSON_SELECT,
@@ -73,12 +72,14 @@ async function loadProjectedPeople(
   orgId: string
 ): Promise<Map<string, ProjectedPerson>> {
   const [membersResponse, alumniResponse] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (serviceSupabase as any)
       .from("members")
       .select(MEMBER_PERSON_SELECT)
       .eq("organization_id", orgId)
       .eq("status", "active")
       .is("deleted_at", null),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (serviceSupabase as any)
       .from("alumni")
       .select(ALUMNI_PERSON_SELECT)
@@ -106,6 +107,7 @@ async function fetchSourceRow(
   args: SuggestConnectionsArgs
 ) {
   if (args.person_type === "member") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (serviceSupabase as any)
       .from("members")
       .select(MEMBER_PERSON_SELECT)
@@ -122,6 +124,7 @@ async function fetchSourceRow(
     return data as MemberPersonRow | null;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("alumni")
     .select(ALUMNI_PERSON_SELECT)
@@ -146,6 +149,7 @@ async function fetchMentorshipDistances(
     return new Map<string, number>();
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any).rpc("get_mentorship_distances", {
     p_org_id: orgId,
     p_user_id: source.userId,
@@ -169,6 +173,7 @@ async function fetchGraphFreshness(
   orgId: string
 ): Promise<SuggestConnectionsFreshness> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (serviceSupabase as any)
       .from("graph_sync_queue")
       .select("created_at")

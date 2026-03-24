@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ALUMNI_PERSON_SELECT,
@@ -68,6 +67,7 @@ async function incrementAttempts(
   id: string,
   errorMessage: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (serviceSupabase as any).rpc("increment_graph_sync_attempts", {
     p_id: id,
     p_error: errorMessage.slice(0, 500),
@@ -110,6 +110,7 @@ async function fetchActiveMembersByUserId(
   orgId: string,
   userId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("members")
     .select(MEMBER_PERSON_SELECT)
@@ -130,6 +131,7 @@ async function fetchActiveAlumniByUserId(
   orgId: string,
   userId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("alumni")
     .select(ALUMNI_PERSON_SELECT)
@@ -149,6 +151,7 @@ async function fetchActiveMemberById(
   orgId: string,
   memberId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("members")
     .select(MEMBER_PERSON_SELECT)
@@ -170,6 +173,7 @@ async function fetchActiveAlumniById(
   orgId: string,
   alumniId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("alumni")
     .select(ALUMNI_PERSON_SELECT)
@@ -186,6 +190,7 @@ async function fetchActiveAlumniById(
 }
 
 async function fetchPairById(serviceSupabase: SupabaseClient, pairId: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("mentorship_pairs")
     .select(MENTORSHIP_PAIR_SELECT)
@@ -205,6 +210,7 @@ async function fetchPersonRecordById(
   sourceId: string
 ) {
   const select = sourceTable === "members" ? MEMBER_PERSON_SELECT : ALUMNI_PERSON_SELECT;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from(sourceTable)
     .select(select)
@@ -223,6 +229,7 @@ async function fetchAdjacentPairs(
   orgId: string,
   userId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("mentorship_pairs")
     .select(MENTORSHIP_PAIR_SELECT)
@@ -244,6 +251,7 @@ async function hasActivePair(
   mentorUserId: string,
   menteeUserId: string
 ) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (serviceSupabase as any)
     .from("mentorship_pairs")
     .select("id")
@@ -445,6 +453,7 @@ export async function processGraphSyncQueue(
     return stats;
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: queueItems, error: dequeueError } = await (serviceSupabase as any).rpc(
     "dequeue_graph_sync_queue",
     { p_batch_size: batchSize }
