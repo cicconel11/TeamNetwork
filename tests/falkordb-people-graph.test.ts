@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createSupabaseStub } from "./utils/supabaseStub.ts";
-import { buildProjectedPeople } from "../src/lib/falkordb/people.ts";
+import { buildProjectedPeople, buildSourcePerson } from "../src/lib/falkordb/people.ts";
 import { suggestConnections } from "../src/lib/falkordb/suggestions.ts";
 import { processGraphSyncQueue } from "../src/lib/falkordb/sync.ts";
 
@@ -193,6 +193,100 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
   });
   assert.ok(projected.has("member:member-2"));
   assert.ok(projected.has("alumni:alumni-2"));
+});
+
+test("buildSourcePerson matches buildProjectedPeople for merged member+alumni", () => {
+  const memberRow = {
+    id: "member-1",
+    organization_id: ORG_ID,
+    user_id: "shared-user",
+    deleted_at: null,
+    status: "active",
+    first_name: "Mia",
+    last_name: "Member",
+    email: "mia@example.com",
+    role: "Captain",
+    current_company: "Acme",
+    graduation_year: 2025,
+    created_at: "2026-03-01T00:00:00.000Z",
+  };
+  const alumniRow = {
+    id: "alumni-1",
+    organization_id: ORG_ID,
+    user_id: "shared-user",
+    deleted_at: null,
+    first_name: "Mia",
+    last_name: "Alumni",
+    email: "mia@example.com",
+    major: "Computer Science",
+    current_company: "Acme",
+    industry: "Technology",
+    current_city: "Austin",
+    graduation_year: 2023,
+    position_title: "Engineer",
+    job_title: null,
+    created_at: "2026-03-01T00:00:00.000Z",
+  };
+
+  const fromBuild = buildSourcePerson({ memberRow, alumniRow, orgId: ORG_ID });
+  const fromProjection = buildProjectedPeople({
+    members: [memberRow],
+    alumni: [alumniRow],
+  });
+
+  assert.deepEqual(fromBuild, fromProjection.get("user:shared-user"));
+});
+
+test("buildSourcePerson matches buildProjectedPeople for member-only", () => {
+  const memberRow = {
+    id: "member-solo",
+    organization_id: ORG_ID,
+    user_id: null,
+    deleted_at: null,
+    status: "active",
+    first_name: "Solo",
+    last_name: "Member",
+    email: "solo@example.com",
+    role: "Treasurer",
+    current_company: "Beta",
+    graduation_year: 2024,
+    created_at: "2026-03-01T00:00:00.000Z",
+  };
+
+  const fromBuild = buildSourcePerson({ memberRow, alumniRow: null, orgId: ORG_ID });
+  const fromProjection = buildProjectedPeople({ members: [memberRow], alumni: [] });
+
+  assert.deepEqual(fromBuild, fromProjection.get("member:member-solo"));
+});
+
+test("buildSourcePerson matches buildProjectedPeople for alumni-only", () => {
+  const alumniRow = {
+    id: "alumni-solo",
+    organization_id: ORG_ID,
+    user_id: null,
+    deleted_at: null,
+    first_name: "Solo",
+    last_name: "Alumni",
+    email: "solo-alumni@example.com",
+    major: "History",
+    current_company: null,
+    industry: null,
+    current_city: null,
+    graduation_year: null,
+    position_title: null,
+    job_title: null,
+    created_at: "2026-03-01T00:00:00.000Z",
+  };
+
+  const fromBuild = buildSourcePerson({ memberRow: null, alumniRow, orgId: ORG_ID });
+  const fromProjection = buildProjectedPeople({ members: [], alumni: [alumniRow] });
+
+  assert.deepEqual(fromBuild, fromProjection.get("alumni:alumni-solo"));
+});
+
+test("buildSourcePerson returns null for empty input", () => {
+  const result = buildSourcePerson({ memberRow: null, alumniRow: null, orgId: ORG_ID });
+  assert.equal(result, null);
 });
 
 test("suggestConnections returns deterministic SQL fallback ranking", async () => {

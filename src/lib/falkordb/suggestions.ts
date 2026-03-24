@@ -1,8 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ALUMNI_PERSON_SELECT,
-  buildPersonKey,
   buildProjectedPeople,
+  buildSourcePerson,
   MEMBER_PERSON_SELECT,
   type AlumniPersonRow,
   type MemberPersonRow,
@@ -34,7 +34,7 @@ interface MentorshipDistanceRow {
   distance: number;
 }
 
-interface GraphSuggestionRow {
+interface GraphSuggestionRow extends Record<string, unknown> {
   personKey: string;
   personType: "member" | "alumni";
   personId: string;
@@ -138,6 +138,49 @@ async function fetchSourceRow(
   }
 
   return data as AlumniPersonRow | null;
+}
+
+async function fetchSourceWithComplement(
+  serviceSupabase: SupabaseClient,
+  orgId: string,
+  args: SuggestConnectionsArgs
+): Promise<{ memberRow: MemberPersonRow | null; alumniRow: AlumniPersonRow | null }> {
+  const sourceRow = await fetchSourceRow(serviceSupabase, orgId, args);
+
+  if (!sourceRow) {
+    return { memberRow: null, alumniRow: null };
+  }
+
+  if (args.person_type === "member") {
+    const memberRow = sourceRow as MemberPersonRow;
+    if (!memberRow.user_id) {
+      return { memberRow, alumniRow: null };
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (serviceSupabase as any)
+      .from("alumni")
+      .select(ALUMNI_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("user_id", memberRow.user_id)
+      .is("deleted_at", null)
+      .maybeSingle();
+    return { memberRow, alumniRow: (data as AlumniPersonRow | null) ?? null };
+  }
+
+  const alumniRow = sourceRow as AlumniPersonRow;
+  if (!alumniRow.user_id) {
+    return { memberRow: null, alumniRow };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (serviceSupabase as any)
+    .from("members")
+    .select(MEMBER_PERSON_SELECT)
+    .eq("organization_id", orgId)
+    .eq("user_id", alumniRow.user_id)
+    .eq("status", "active")
+    .is("deleted_at", null)
+    .maybeSingle();
+  return { memberRow: (data as MemberPersonRow | null) ?? null, alumniRow };
 }
 
 async function fetchMentorshipDistances(
@@ -332,52 +375,42 @@ export async function suggestConnections(input: {
 }): Promise<SuggestConnectionsResult> {
   const graphClient = input.graphClient ?? falkorClient;
   const limit = clampSuggestionsLimit(input.args.limit);
+  const { orgId, serviceSupabase } = input;
 
-  const [sourceRow, projectedPeople] = await Promise.all([
-    fetchSourceRow(input.serviceSupabase, input.orgId, input.args),
-    loadProjectedPeople(input.serviceSupabase, input.orgId),
-  ]);
+  const { memberRow, alumniRow } = await fetchSourceWithComplement(
+    serviceSupabase,
+    orgId,
+    input.args
+  );
 
-  if (!sourceRow) {
+  const source = buildSourcePerson({ memberRow, alumniRow, orgId });
+  if (!source) {
     throw new SuggestConnectionsLookupError("Person not found");
   }
 
-  const sourceKey =
-    input.args.person_type === "member"
-      ? buildPersonKey("members", sourceRow.id, sourceRow.user_id)
-      : buildPersonKey("alumni", sourceRow.id, sourceRow.user_id);
-
-  const source = projectedPeople.get(sourceKey);
-  if (!source) {
-    throw new SuggestConnectionsLookupError("Person is not eligible for suggestions");
+  async function computeSqlFallback(): Promise<SuggestConnectionsResult> {
+    const [projectedPeople, mentorshipDistances] = await Promise.all([
+      loadProjectedPeople(serviceSupabase, orgId),
+      fetchMentorshipDistances(serviceSupabase, orgId, source),
+    ]);
+    const results = scoreProjectedCandidates({
+      source: projectedPeople.get(source.personKey) ?? source,
+      candidates: projectedPeople.values(),
+      mentorshipDistances,
+      limit,
+    });
+    return { mode: "sql_fallback", freshness: buildFreshnessFromNow(), results };
   }
 
-  const mentorshipDistances = await fetchMentorshipDistances(
-    input.serviceSupabase,
-    input.orgId,
-    source
-  );
-
-  const sqlFallbackResults = scoreProjectedCandidates({
-    source,
-    candidates: projectedPeople.values(),
-    mentorshipDistances,
-    limit,
-  });
-
   if (!graphClient.isAvailable()) {
-    return {
-      mode: "sql_fallback",
-      freshness: buildFreshnessFromNow(),
-      results: sqlFallbackResults,
-    };
+    return computeSqlFallback();
   }
 
   try {
     const [freshness, graphResults] = await Promise.all([
-      fetchGraphFreshness(input.serviceSupabase, input.orgId),
+      fetchGraphFreshness(serviceSupabase, orgId),
       fetchGraphSuggestions({
-        orgId: input.orgId,
+        orgId,
         source,
         limit,
         graphClient,
@@ -394,10 +427,6 @@ export async function suggestConnections(input: {
       console.warn("[suggest-connections] graph path failed:", error);
     }
 
-    return {
-      mode: "sql_fallback",
-      freshness: buildFreshnessFromNow(),
-      results: sqlFallbackResults,
-    };
+    return computeSqlFallback();
   }
 }

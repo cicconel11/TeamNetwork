@@ -251,3 +251,20 @@ export function buildProjectedPeople(input: {
 
   return projected;
 }
+
+export function buildSourcePerson(input: {
+  memberRow: MemberPersonRow | null;
+  alumniRow: AlumniPersonRow | null;
+  orgId: string;
+}): ProjectedPerson | null {
+  const members = input.memberRow ? [input.memberRow] : [];
+  const alumni = input.alumniRow ? [input.alumniRow] : [];
+
+  if (members.length === 0 && alumni.length === 0) {
+    return null;
+  }
+
+  const projected = buildProjectedPeople({ members, alumni });
+  const entry = projected.values().next();
+  return entry.done ? null : entry.value;
+}
