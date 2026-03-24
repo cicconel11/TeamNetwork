@@ -40,6 +40,10 @@ import {
 } from "@/lib/ai/tool-grounding";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
 import {
+  assessAiMessageSafety,
+  sanitizeHistoryMessageForPrompt,
+} from "@/lib/ai/message-safety";
+import {
   createStageAbortSignal,
   isStageTimeoutError,
   PASS1_MODEL_TIMEOUT_MS,
@@ -83,6 +87,12 @@ function getPass1Tools(
 function recordStageFailure(stage: string, failureKind: string) {
   console.warn("[ai-chat] stage failure", { stage, failure_kind: failureKind });
 }
+
+const MESSAGE_SAFETY_FALLBACK =
+  "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
+
+const TOOL_GROUNDING_FALLBACK =
+  "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const createClientFn = deps.createClient ?? createClient;
@@ -142,7 +152,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   }
 
   const { message, surface, threadId: existingThreadId, idempotencyKey } = validatedBody;
-  const routing = resolveSurfaceRouting(message, surface);
+  const messageSafety = assessAiMessageSafety(message);
+  const routing = resolveSurfaceRouting(messageSafety.promptSafeMessage, surface);
   const effectiveSurface = routing.effectiveSurface;
   const resolvedIntent = routing.intent;
   const resolvedIntentType = routing.intentType;
@@ -158,13 +169,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   let cacheEntryId: string | undefined;
   let cacheBypassReason: string | undefined;
   const eligibility = checkCacheEligibility({
-    message,
+    message: messageSafety.promptSafeMessage,
     threadId: existingThreadId,
     surface: effectiveSurface,
     bypassCache: validatedBody.bypassCache,
   });
   const executionPolicy = buildTurnExecutionPolicyFn({
-    message,
+    message: messageSafety.promptSafeMessage,
     threadId: existingThreadId,
     requestedSurface: surface,
     routing,
@@ -322,10 +333,69 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       .select("id")
       .single();
 
+  if (messageSafety.riskLevel !== "none") {
+    cacheStatus = "bypass";
+    cacheBypassReason = `message_safety_${messageSafety.riskLevel}`;
+
+    const { data: safetyAssistantMsg, error: safetyAssistantError } =
+      await insertAssistantMessage({
+        content: MESSAGE_SAFETY_FALLBACK,
+        status: "complete",
+      });
+
+    if (safetyAssistantError || !safetyAssistantMsg) {
+      console.error("[ai-chat] safety assistant message failed:", safetyAssistantError);
+      return NextResponse.json(
+        { error: "Failed to create response" },
+        { status: 500, headers: rateLimit.headers }
+      );
+    }
+
+    void trackOpsEventServerFn(
+      "api_error",
+      {
+        endpoint_group: "ai-safety",
+        http_status: 200,
+        error_code: `message_safety_${messageSafety.riskLevel}`,
+        retryable: false,
+      },
+      ctx.orgId
+    );
+
+    await logAiRequestFn(ctx.serviceSupabase, {
+      threadId: threadId!,
+      messageId: safetyAssistantMsg.id,
+      userId: ctx.userId,
+      orgId: ctx.orgId,
+      intent: resolvedIntent,
+      intentType: resolvedIntentType,
+      latencyMs: Date.now() - startTime,
+      error: `message_safety_${messageSafety.riskLevel}:${messageSafety.reasons.join(",")}`,
+      cacheStatus,
+      cacheBypassReason,
+      contextSurface: effectiveSurface,
+    });
+
+    return new Response(
+      createSSEStream(async (enqueue) => {
+        enqueue({ type: "chunk", content: MESSAGE_SAFETY_FALLBACK });
+        enqueue({
+          type: "done",
+          threadId: threadId!,
+          cache: {
+            status: cacheStatus,
+            ...(cacheBypassReason ? { bypassReason: cacheBypassReason } : {}),
+          },
+        });
+      }),
+      { headers: { ...SSE_HEADERS, ...rateLimit.headers } }
+    );
+  }
+
   // 8.5 Semantic cache check
   if (!cacheDisabled && executionPolicy.cachePolicy === "lookup_exact") {
     const cacheKey = buildSemanticCacheKeyParts({
-      message,
+      message: messageSafety.promptSafeMessage,
       orgId: ctx.orgId,
       role: ctx.role,
     });
@@ -397,7 +467,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   if (hasEmbeddingKey && !skipRagRetrieval) {
     try {
       const retrieved = await retrieveRelevantChunksFn({
-        query: message,
+        query: messageSafety.promptSafeMessage,
         orgId: ctx.orgId,
         serviceSupabase: ctx.serviceSupabase,
       });
@@ -435,13 +505,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   // 10–12. Stream SSE response
   const stream = createSSEStream(async (enqueue, streamSignal) => {
     let fullContent = "";
+    let pass1BufferedContent = "";
+    let pass2BufferedContent = "";
     const usageRef: { current: UsageAccumulator | null } = { current: null };
     let streamCompletedSuccessfully = false;
     let auditErrorMessage: string | undefined;
     let contextMetadata: { surface: string; estimatedTokens: number } | undefined;
     let toolCallMade = false;
     let toolCallSucceeded = false;
-    let ranSecondPass = false;
     let terminateTurn = false;
     let toolPassBreakerOpen = false;
     const auditToolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
@@ -566,8 +637,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         .filter((m: any) => m.content)
         .map((m: any) => ({
           role: m.role as "user" | "assistant",
-          content: m.content as string,
-        }));
+          content:
+            m.role === "user"
+              ? sanitizeHistoryMessageForPrompt(m.content as string).promptSafeMessage
+              : (m.content as string),
+        }))
+        .filter((m: { content: string }) => Boolean(m.content));
 
       const contextMessages = orgContextMessage
         ? [{ role: "user" as const, content: orgContextMessage }, ...historyMessages]
@@ -586,8 +661,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         },
         async (event) => {
           if (event.type === "chunk") {
-            fullContent += event.content;
-            enqueue(event);
+            if (pass1Tools) {
+              pass1BufferedContent += event.content;
+            } else {
+              fullContent += event.content;
+              enqueue(event);
+            }
             return "continue";
           }
 
@@ -688,8 +767,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         return;
       }
 
+      if (!toolCallMade && pass1Tools && pass1BufferedContent) {
+        fullContent += pass1BufferedContent;
+        enqueue({ type: "chunk", content: pass1BufferedContent });
+      }
+
       if (toolCallMade && toolResults.length > 0) {
-        ranSecondPass = true;
         const pass2Outcome = await runModelStage(
           "pass2_model",
           PASS2_MODEL_TIMEOUT_MS,
@@ -702,8 +785,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           },
           (event) => {
             if (event.type === "chunk") {
-              fullContent += event.content;
-              enqueue(event);
+              pass2BufferedContent += event.content;
               return "continue";
             }
 
@@ -719,6 +801,45 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
         if (pass2Outcome !== "completed") {
           return;
+        }
+
+        const groundedToolSummary =
+          executionPolicy.groundingPolicy === "verify_tool_summary" &&
+          toolCallSucceeded &&
+          successfulToolResults.length > 0;
+
+        if (groundedToolSummary) {
+          const groundingResult = verifyToolBackedResponseFn({
+            content: pass2BufferedContent,
+            toolResults: successfulToolResults,
+          });
+
+          if (!groundingResult.grounded) {
+            auditErrorMessage = "tool_grounding_failed";
+            console.warn("[ai-grounding] verification failed:", {
+              orgId: ctx.orgId,
+              threadId,
+              messageId: assistantMessageId,
+              tools: successfulToolResults.map((result) => result.name),
+              failures: groundingResult.failures,
+            });
+            void trackOpsEventServerFn(
+              "api_error",
+              {
+                endpoint_group: "ai-grounding",
+                http_status: 200,
+                error_code: "tool_grounding_failed",
+                retryable: false,
+              },
+              ctx.orgId
+            );
+            pass2BufferedContent = TOOL_GROUNDING_FALLBACK;
+          }
+        }
+
+        if (pass2BufferedContent) {
+          fullContent += pass2BufferedContent;
+          enqueue({ type: "chunk", content: pass2BufferedContent });
         }
       }
 
@@ -758,38 +879,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         auditErrorMessage ??= "assistant_finalize_failed";
       }
 
-      if (
-        streamCompletedSuccessfully &&
-        executionPolicy.groundingPolicy === "verify_tool_summary" &&
-        toolCallSucceeded &&
-        ranSecondPass &&
-        successfulToolResults.length > 0
-      ) {
-        const groundingResult = verifyToolBackedResponseFn({
-          content: finalContent,
-          toolResults: successfulToolResults,
-        });
-        if (!groundingResult.grounded) {
-          console.warn("[ai-grounding] verification failed:", {
-            orgId: ctx.orgId,
-            threadId,
-            messageId: assistantMessageId,
-            tools: successfulToolResults.map((result) => result.name),
-            failures: groundingResult.failures,
-          });
-          void trackOpsEventServerFn(
-            "api_error",
-            {
-              endpoint_group: "ai-grounding",
-              http_status: 200,
-              error_code: "tool_grounding_failed",
-              retryable: false,
-            },
-            ctx.orgId
-          );
-        }
-      }
-
       // Tool calls bypass cache — response depends on live data
       if (toolCallMade && !cacheBypassReason && executionPolicy.cachePolicy === "lookup_exact") {
         cacheBypassReason = "tool_call_made";
@@ -804,7 +893,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
       if (canWriteCache) {
         const cacheKey = buildSemanticCacheKeyParts({
-          message,
+          message: messageSafety.promptSafeMessage,
           orgId: ctx.orgId,
           role: ctx.role,
         });

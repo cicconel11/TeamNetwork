@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and audit-only grounding verification for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely.
 
 ## File Map
 
@@ -17,6 +17,7 @@ The chat pipeline handles the full lifecycle of an AI chat request: rate limitin
 | `src/lib/ai/timeout.ts` | Turn-stage timeout constants and abort helpers | `PASS1_MODEL_TIMEOUT_MS`, `PASS2_MODEL_TIMEOUT_MS`, `TOOL_EXECUTION_TIMEOUT_MS`, `createStageAbortSignal`, `withStageTimeout` |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
 | `src/lib/ai/audit.ts` | Audit logging with cache + context metadata columns, secret redaction | `logAiRequest` (L37) |
+| `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries | `verifyToolBackedResponse` |
 | `src/lib/ai/tools/executor.ts` | Read-tool executor with executor-side active-admin recheck and discriminated result union | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
@@ -46,6 +47,7 @@ src/app/api/ai/[orgId]/chat/route.ts  (orchestrator)
   ├── src/lib/ai/sse.ts                 (createSSEStream, SSE_HEADERS, encodeSSE)
   ├── src/lib/ai/audit.ts               (logAiRequest)
   │     └── src/lib/ai/sse.ts           (CacheStatus type)
+  ├── src/lib/ai/message-safety.ts      (message risk assessment + history sanitization)
   ├── src/lib/ai/thread-resolver.ts     (resolveOwnThread)
   ├── src/lib/ai/semantic-cache-utils.ts (normalizePrompt, hashPrompt, buildPermissionScopeKey, checkCacheEligibility)
   ├── src/lib/ai/semantic-cache.ts      (lookupSemanticCache, writeCacheEntry)
@@ -62,6 +64,10 @@ Client POST /api/ai/{orgId}/chat
   ├─ 1.  Rate limit check (30/IP, 20/user per window)
   ├─ 2.  Auth — getAiOrgContext (validates admin role, fail-closed)
   ├─ 3.  Validate body (sendMessageSchema: normalizes bypass_cache → bypassCache)
+  ├─ 3.5 Assess message safety
+  │       ├─ Strip transport noise (zero-width/control chars, normalize Unicode)
+  │       ├─ Classify `none` / `suspicious` / `blocked`
+  │       └─ Derive prompt-safe text for routing, cache, RAG, and history replay
   ├─ 4.  Thread ownership check (resolveOwnThread if threadId provided)
   ├─ 5.  Abandoned stream cleanup (mark pending/streaming msgs >5 min as error)
   ├─ 6.  Idempotency check (by idempotencyKey → ai_messages unique index)
@@ -70,6 +76,9 @@ Client POST /api/ai/{orgId}/chat
   ├─ 7.  Upsert thread (insert new if no threadId, title = first 100 chars)
   ├─ 8.  Insert user message (status: complete) + touch thread updated_at
   │
+  ├─ 8.25 Safety short-circuit
+  │       ├─ `suspicious` / `blocked` → insert assistant refusal, skip model/tools/RAG/cache write
+  │       └─ emit ops telemetry + audit row with `cache_status: bypass`
   ├─ 8.5 Build TurnExecutionPolicy
   │       ├─ casual            → no cache, no tools, no RAG
   │       ├─ static_general    → exact cache lookup, shared_static, no tools, no RAG
@@ -95,6 +104,7 @@ Client POST /api/ai/{orgId}/chat
   │       │   ├─ Returns { systemPrompt, orgContextMessage, metadata }
   │       │   └─ "shared_static" mode: org overview only (overrides surface)
   │       └─ Last 20 complete messages from thread
+  │            └─ user-role history re-assessed and sanitized before model replay
   ├─ 11. Resolve pass-1 tools from execution policy
   │       ├─ `none` for casual / static_general / out_of_scope
   │       └─ surface-gated read tools for follow_up / live_lookup
@@ -104,11 +114,14 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
+  │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
   │       ├─ Pass 2 runs with a 15s timeout budget when tool results exist
-  │       └─ Each text chunk still streams as `{ type: "chunk", content: "..." }`
+  │       ├─ Pass-2 text is buffered server-side, never streamed immediately
+  │       └─ `tool_status` SSE events still stream live during tool execution
   ├─ 13. Finalize — update assistant message to complete/error
   ├─ 13.2 If pass-2 used successful read tools: verifyToolBackedResponse()
-  │       └─ log warning + ops telemetry on unsupported summaries, never fail request
+  │       ├─ grounded   → emit buffered answer, persist it, continue normally
+  │       └─ ungrounded → discard buffered answer, emit/persist fallback, log ops telemetry
   │
   └─ 13.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
           ├─ Invalidate expired conflicting rows

@@ -2,7 +2,7 @@
 
 ## Summary
 
-The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`.
+The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`.
 
 ## Tech Stack
 
@@ -114,8 +114,8 @@ The following features are deferred from v1 tool calling. Each is mapped to the 
 
 ### Output Validation / Hallucination Detection
 - **Paper:** NeMo Guardrails (`2310.10501`), LettuceDetect (`2502.17125`), FACTOID (`2403.19113`)
-- **What:** Post-response verification that claims are grounded in tool results
-- **Design:** After the LLM generates a response using tool data, run a lightweight entailment check that each factual claim maps to a specific tool result field. Flag ungrounded claims.
+- **What:** Richer entailment and non-tool hallucination checks beyond the shipped deterministic verifier
+- **Design:** The current system already buffers tool-backed pass-2 prose and runs `verifyToolBackedResponse()` before emitting it. Future work can extend this from deterministic field checks to broader entailment-style validation for more answer shapes and non-tool responses.
 
 ### Deeper Intent-Aware Tool Selection
 - **Paper:** Arch-Router (`2506.16655`), LLM Routing Survey (`2502.00409`)
