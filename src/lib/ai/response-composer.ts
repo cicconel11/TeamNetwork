@@ -28,6 +28,7 @@ interface ComposeOptions {
   toolResults?: ToolResultMessage[];
   tools?: OpenAI.Chat.ChatCompletionTool[];
   onUsage?: (usage: UsageAccumulator) => void;
+  signal?: AbortSignal;
 }
 
 /**
@@ -40,7 +41,7 @@ interface ComposeOptions {
 export async function* composeResponse(
   options: ComposeOptions
 ): AsyncGenerator<SSEEvent | ToolCallRequestedEvent> {
-  const { client, systemPrompt, messages, toolResults, tools, onUsage } = options;
+  const { client, systemPrompt, messages, toolResults, tools, onUsage, signal } = options;
 
   // Build message array
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -73,15 +74,18 @@ export async function* composeResponse(
   }
 
   try {
-    const stream = await client.chat.completions.create({
-      model: getZaiModel(),
-      messages: apiMessages,
-      ...(tools ? { tools, tool_choice: "auto" as const } : {}),
-      stream: true,
-      stream_options: { include_usage: true },
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
+    const stream = await client.chat.completions.create(
+      {
+        model: getZaiModel(),
+        messages: apiMessages,
+        ...(tools ? { tools, tool_choice: "auto" as const } : {}),
+        stream: true,
+        stream_options: { include_usage: true },
+        temperature: 0.7,
+        max_tokens: 2000,
+      },
+      signal ? { signal } : undefined
+    );
 
     const toolCalls = new Map<number, { id: string; name: string; argsJson: string }>();
 
@@ -130,6 +134,9 @@ export async function* composeResponse(
       }
     }
   } catch (err) {
+    if (signal?.aborted) {
+      throw signal.reason ?? err;
+    }
     console.error("[response-composer] streaming failed:", err);
     yield {
       type: "error",

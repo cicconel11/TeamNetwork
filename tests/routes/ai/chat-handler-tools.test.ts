@@ -2,6 +2,7 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
+import { StageTimeoutError } from "../../../src/lib/ai/timeout.ts";
 
 const ORG_ID = "org-uuid-1";
 const VALID_IDEMPOTENCY_KEY = "22222222-2222-4222-8222-222222222222";
@@ -10,6 +11,10 @@ const ADMIN_USER = { id: "org-admin-user", email: "admin@example.com" };
 let auditEntries: any[] = [];
 let executeToolCallCalls: any[] = [];
 let composeResponseCalls: any[] = [];
+
+function okToolResult(data: unknown) {
+  return { kind: "ok" as const, data };
+}
 
 function createSupabaseStub() {
   const state = {
@@ -203,7 +208,7 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
     }),
     executeToolCall: async (ctx: any, call: any) => {
       executeToolCallCalls.push({ ctx, call });
-      return { ok: true, data: [{ id: "m1", name: "Alice" }] };
+      return okToolResult([{ id: "m1", name: "Alice" }]);
     },
     ...overrides,
   };
@@ -261,6 +266,7 @@ test("tool call: executor receives correct context and args", async () => {
 
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].ctx.orgId, ORG_ID);
+  assert.equal(executeToolCallCalls[0].ctx.userId, ADMIN_USER.id);
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
   assert.deepEqual(executeToolCallCalls[0].call.args, { limit: 5 });
 });
@@ -457,7 +463,7 @@ test("tool call: pass 1 text may stream before tool execution, but pass 2 still 
   assert.match(body, /"type":"tool_status".*"status":"done"/);
 });
 
-test("tool executor error: SSE shows tool_status error, stream completes", async () => {
+test("tool_error keeps the turn alive and pass 2 completes", async () => {
   POST = createChatPostHandler(
     buildDefaultDeps({
       composeResponse: async function* (options: any) {
@@ -474,7 +480,7 @@ test("tool executor error: SSE shows tool_status error, stream completes", async
           yield { type: "chunk", content: "I could not look that up." };
         }
       },
-      executeToolCall: async () => ({ ok: false, error: "Query failed" }),
+      executeToolCall: async () => ({ kind: "tool_error", error: "Query failed" }),
     })
   );
 
@@ -486,6 +492,171 @@ test("tool executor error: SSE shows tool_status error, stream completes", async
   assert.match(body, /"type":"tool_status".*"status":"error"/);
   assert.match(body, /I could not look that up/);
   assert.match(body, /"type":"done"/);
+});
+
+test("timeout opens the breaker, skips later tools, and still runs pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: "{}",
+          };
+          yield {
+            type: "tool_call_requested",
+            id: "call-2",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
+          return;
+        }
+
+        yield { type: "chunk", content: "Tool request timed out, please retry." };
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        if (call.name === "list_members") {
+          return { kind: "timeout", error: "Tool timed out" };
+        }
+        return okToolResult({ tool: call.name });
+      },
+    })
+  );
+
+  const response = await POST(makeRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "list_members");
+  assert.match(body, /"type":"tool_status".*"status":"calling"/);
+  assert.match(body, /"type":"tool_status".*"status":"error"/);
+  assert.match(body, /Tool request timed out, please retry/);
+  assert.match(body, /"type":"done"/);
+  assert.equal(composeResponseCalls[1].toolResults.length, 1);
+  assert.match(JSON.stringify(composeResponseCalls[1].toolResults[0].data), /Tool timed out/);
+});
+
+test("forbidden tool result is turn-fatal and skips pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield { type: "chunk", content: "Checking access..." };
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: "{}",
+          };
+          return;
+        }
+
+        yield { type: "chunk", content: "should not run" };
+      },
+      executeToolCall: async () => ({ kind: "forbidden", error: "Forbidden" }),
+    })
+  );
+
+  const response = await POST(makeRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /Checking access/);
+  assert.match(body, /Your access to AI tools for this organization has changed/);
+  assert.doesNotMatch(body, /should not run/);
+  assert.doesNotMatch(body, /"type":"done"/);
+  assert.equal(composeResponseCalls.length, 1);
+});
+
+test("auth_error is turn-fatal and logs no retryable prompt", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: "{}",
+          };
+        }
+      },
+      executeToolCall: async () => ({ kind: "auth_error", error: "Auth check failed" }),
+    })
+  );
+
+  const response = await POST(makeRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /Unable to verify access to AI tools right now/);
+  assert.doesNotMatch(body, /"retryable":true/);
+  assert.doesNotMatch(body, /"type":"done"/);
+  assert.equal(composeResponseCalls.length, 1);
+});
+
+test("pass 1 timeout preserves partial text and ends without done", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.signal?.aborted) {
+          throw options.signal.reason;
+        }
+        yield { type: "chunk", content: "Partial answer..." };
+        throw new StageTimeoutError("pass1_model", 15_000);
+      },
+    })
+  );
+
+  const response = await POST(makeRequest("hello") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /Partial answer/);
+  assert.match(body, /The response timed out\. Please try again/);
+  assert.doesNotMatch(body, /"type":"done"/);
+});
+
+test("pass 2 timeout preserves earlier text and ends without done", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: "{}",
+          };
+          return;
+        }
+        yield { type: "chunk", content: "Fallback summary..." };
+        throw new StageTimeoutError("pass2_model", 15_000);
+      },
+    })
+  );
+
+  const response = await POST(makeRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /Fallback summary/);
+  assert.match(body, /The response timed out\. Please try again/);
+  assert.doesNotMatch(body, /"type":"done"/);
 });
 
 test("tool call: multiple tool calls are executed and audited", async () => {
@@ -514,7 +685,7 @@ test("tool call: multiple tool calls are executed and audited", async () => {
       },
       executeToolCall: async (ctx: any, call: any) => {
         executeToolCallCalls.push({ ctx, call });
-        return { ok: true, data: { tool: call.name } };
+        return okToolResult({ tool: call.name });
       },
     })
   );

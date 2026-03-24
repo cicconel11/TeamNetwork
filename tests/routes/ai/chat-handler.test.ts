@@ -668,7 +668,7 @@ test("POST /api/ai/[orgId]/chat logs grounding failures for unsupported tool sum
       yield { type: "chunk", content: "Your organization has 99 active members." };
     }) as any,
     executeToolCall: async () => ({
-      ok: true,
+      kind: "ok",
       data: { active_members: 23, alumni: 10, parents: 1, upcoming_events: 4, donations: null },
     }),
     logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
@@ -742,7 +742,7 @@ test("POST /api/ai/[orgId]/chat does not log grounding warnings for grounded too
       yield { type: "chunk", content: "Your organization has 23 active members and a total of 34 people." };
     }) as any,
     executeToolCall: async () => ({
-      ok: true,
+      kind: "ok",
       data: { active_members: 23, alumni: 10, parents: 1, upcoming_events: 4, donations: null },
     }),
     logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {

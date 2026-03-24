@@ -2,21 +2,28 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ToolName } from "./definitions";
 import { TOOL_NAMES } from "./definitions";
+import {
+  isStageTimeoutError,
+  TOOL_EXECUTION_TIMEOUT_MS,
+  withStageTimeout,
+} from "@/lib/ai/timeout";
 
 export interface ToolExecutionContext {
   orgId: string;
+  userId: string;
   serviceSupabase: SupabaseClient;
 }
 
-export type ToolResult =
-  | { ok: true; data: unknown }
-  | { ok: false; error: string };
+export type ToolExecutionResult =
+  | { kind: "ok"; data: unknown }
+  | { kind: "forbidden"; error: "Forbidden" }
+  | { kind: "auth_error"; error: "Auth check failed" }
+  | { kind: "tool_error"; error: string }
+  | { kind: "timeout"; error: "Tool timed out" };
 
 type CountResult =
   | { ok: true; count: number }
   | { ok: false; error: string };
-
-// --- Zod schemas for tool argument validation ---
 
 const listMembersSchema = z
   .object({
@@ -69,19 +76,26 @@ function getSafeErrorMessage(error: unknown): string {
   return "unknown_error";
 }
 
+function toolError(error: string): ToolExecutionResult {
+  return { kind: "tool_error", error };
+}
+
 async function safeToolQuery(
   fn: () => Promise<{ data: unknown; error: unknown }>
-): Promise<ToolResult> {
+): Promise<ToolExecutionResult> {
   try {
     const { data, error } = await fn();
     if (error) {
       console.warn("[ai-tools] query failed:", getSafeErrorMessage(error));
-      return { ok: false, error: "Query failed" };
+      return toolError("Query failed");
     }
-    return { ok: true, data: data ?? [] };
+    return { kind: "ok", data: data ?? [] };
   } catch (err) {
+    if (isStageTimeoutError(err)) {
+      throw err;
+    }
     console.warn("[ai-tools] unexpected error:", getSafeErrorMessage(err));
-    return { ok: false, error: "Unexpected error" };
+    return toolError("Unexpected error");
   }
 }
 
@@ -100,6 +114,9 @@ async function safeToolCount(
     }
     return { ok: true, count };
   } catch (err) {
+    if (isStageTimeoutError(err)) {
+      throw err;
+    }
     console.warn("[ai-tools] unexpected count error:", getSafeErrorMessage(err));
     return { ok: false, error: "Unexpected error" };
   }
@@ -122,6 +139,11 @@ interface MemberToolRow {
 interface UserNameRow {
   id: string;
   name: string | null;
+}
+
+interface MembershipRow {
+  role: string | null;
+  status: string | null;
 }
 
 function buildMemberName(firstName: string, lastName: string): string {
@@ -147,7 +169,7 @@ async function listMembers(
   sb: SB,
   orgId: string,
   args: z.infer<typeof listMembersSchema>
-): Promise<ToolResult> {
+): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 20, 50);
   return safeToolQuery(async () => {
     const { data, error } = await sb
@@ -223,7 +245,7 @@ async function listEvents(
   sb: SB,
   orgId: string,
   args: z.infer<typeof listEventsSchema>
-): Promise<ToolResult> {
+): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
   const upcoming = args.upcoming ?? true;
   const now = new Date().toISOString();
@@ -244,7 +266,7 @@ async function listEvents(
   });
 }
 
-async function getOrgStats(sb: SB, orgId: string): Promise<ToolResult> {
+async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> {
   const [members, alumni, parents, upcomingEvents, donations] = await Promise.all([
     safeToolCount(() =>
       sb
@@ -285,12 +307,12 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolResult> {
     ),
   ]);
 
-  if (!members.ok || !alumni.ok || !parents.ok || !upcomingEvents.ok || !donations.ok) {
-    return { ok: false, error: "Query failed" };
+  if (!members.ok || !alumni.ok || !parents.ok || !upcomingEvents.ok || donations.kind !== "ok") {
+    return toolError("Query failed");
   }
 
   return {
-    ok: true,
+    kind: "ok",
     data: {
       active_members: members.count,
       alumni: alumni.count,
@@ -301,27 +323,74 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolResult> {
   };
 }
 
+async function verifyExecutorAccess(
+  ctx: ToolExecutionContext
+): Promise<{ kind: "allowed" } | Extract<ToolExecutionResult, { kind: "forbidden" | "auth_error" }>> {
+  try {
+    const { data: membership, error } = await (ctx.serviceSupabase as SB)
+      .from("user_organization_roles")
+      .select("role, status")
+      .eq("user_id", ctx.userId)
+      .eq("organization_id", ctx.orgId)
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[ai-tools] auth check failed:", getSafeErrorMessage(error));
+      return { kind: "auth_error", error: "Auth check failed" };
+    }
+
+    const membershipRow = membership as MembershipRow | null;
+    if (
+      !membershipRow ||
+      membershipRow.role !== "admin" ||
+      membershipRow.status !== "active"
+    ) {
+      return { kind: "forbidden", error: "Forbidden" };
+    }
+
+    return { kind: "allowed" };
+  } catch (err) {
+    console.warn("[ai-tools] auth check failed:", getSafeErrorMessage(err));
+    return { kind: "auth_error", error: "Auth check failed" };
+  }
+}
+
 export async function executeToolCall(
   ctx: ToolExecutionContext,
   call: { name: string; args: unknown }
-): Promise<ToolResult> {
+): Promise<ToolExecutionResult> {
   if (!TOOL_NAMES.has(call.name)) {
-    return { ok: false, error: `Unknown tool: ${call.name}` };
+    return toolError(`Unknown tool: ${call.name}`);
   }
   const toolName = call.name as ToolName;
 
   const validation = validateArgs(toolName, call.args);
-  if (!validation.valid) return { ok: false, error: validation.error };
+  if (!validation.valid) return toolError(validation.error);
   const args = validation.args;
+
+  const access = await verifyExecutorAccess(ctx);
+  if (access.kind !== "allowed") {
+    return access;
+  }
 
   const sb = ctx.serviceSupabase;
 
-  switch (toolName) {
-    case "list_members":
-      return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>);
-    case "list_events":
-      return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>);
-    case "get_org_stats":
-      return getOrgStats(sb, ctx.orgId);
+  try {
+    return await withStageTimeout(`tool_${toolName}`, TOOL_EXECUTION_TIMEOUT_MS, async () => {
+      switch (toolName) {
+        case "list_members":
+          return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>);
+        case "list_events":
+          return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>);
+        case "get_org_stats":
+          return getOrgStats(sb, ctx.orgId);
+      }
+    });
+  } catch (err) {
+    if (isStageTimeoutError(err)) {
+      return { kind: "timeout", error: "Tool timed out" };
+    }
+    console.warn("[ai-tools] unexpected error:", getSafeErrorMessage(err));
+    return toolError("Unexpected error");
   }
 }

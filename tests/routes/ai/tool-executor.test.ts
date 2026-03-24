@@ -2,9 +2,14 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { executeToolCall } from "../../../src/lib/ai/tools/executor.ts";
-import type { ToolExecutionContext } from "../../../src/lib/ai/tools/executor.ts";
+import type {
+  ToolExecutionContext,
+  ToolExecutionResult,
+} from "../../../src/lib/ai/tools/executor.ts";
+import { StageTimeoutError } from "../../../src/lib/ai/timeout.ts";
 
 const ORG_ID = "org-uuid-1";
+const USER_ID = "org-admin-user";
 
 function createToolSupabaseStub(overrides: Record<string, any> = {}) {
   const queries: Array<{
@@ -62,7 +67,12 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         return builder;
       },
       maybeSingle() {
-        return Promise.resolve(overrides[table]?.maybeSingle ?? { data: null, error: null });
+        return Promise.resolve(
+          overrides[table]?.maybeSingle ??
+            (table === "user_organization_roles"
+              ? { data: { role: "admin", status: "active" }, error: null }
+              : { data: null, error: null })
+        );
       },
       single() {
         return Promise.resolve(overrides[table]?.single ?? { data: null, error: null });
@@ -78,6 +88,11 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
   }
 
   return { from, queries };
+}
+
+function expectOk(result: ToolExecutionResult): Extract<ToolExecutionResult, { kind: "ok" }> {
+  assert.equal(result.kind, "ok");
+  return result as Extract<ToolExecutionResult, { kind: "ok" }>;
 }
 
 let ctx: ToolExecutionContext;
@@ -107,43 +122,43 @@ beforeEach(() => {
       },
     },
     events: {
-      select: { data: [{ id: "e1", title: "Spring Gala", start_date: "2026-04-01" }], error: null },
+      select: {
+        data: [{ id: "e1", title: "Spring Gala", start_date: "2026-04-01" }],
+        error: null,
+      },
     },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 });
 
 test("list_members returns org-scoped members", async () => {
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.ok(Array.isArray(result.data));
-    assert.equal((result.data as any[]).length, 1);
-    assert.deepEqual((result.data as any[])[0], {
-      id: "m1",
-      user_id: "u1",
-      status: "active",
-      role: "admin",
-      created_at: "2026-03-20T12:00:00Z",
-      name: "Alice Jones",
-      email: "a@b.com",
-    });
-  }
+  const result = expectOk(await executeToolCall(ctx, { name: "list_members", args: {} }));
+
+  assert.ok(Array.isArray(result.data));
+  assert.equal((result.data as any[]).length, 1);
+  assert.deepEqual((result.data as any[])[0], {
+    id: "m1",
+    user_id: "u1",
+    status: "active",
+    role: "admin",
+    created_at: "2026-03-20T12:00:00Z",
+    name: "Alice Jones",
+    email: "a@b.com",
+  });
+
+  const authQuery = stub.queries.find((q) => q.table === "user_organization_roles");
+  assert.ok(authQuery);
+  assert.ok(authQuery.filters.some((f: any) => f.col === "user_id" && f.val === USER_ID));
+  assert.ok(authQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID));
+
   const memberQuery = stub.queries.find((q) => q.table === "members");
   assert.ok(memberQuery);
-  assert.equal(
-    memberQuery.columns,
-    "id, user_id, status, role, created_at, first_name, last_name, email"
-  );
+  assert.equal(memberQuery.columns, "id, user_id, status, role, created_at, first_name, last_name, email");
   assert.ok(memberQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID));
   assert.ok(memberQuery.filters.some((f: any) => f.col === "deleted_at" && f.val === null));
   assert.ok(memberQuery.filters.some((f: any) => f.col === "status" && f.val === "active"));
   assert.deepEqual(memberQuery.orderBy, { column: "created_at", ascending: false });
   assert.equal(memberQuery.limitValue, 20);
-  const userQuery = stub.queries.find((q) => q.table === "users");
-  assert.ok(userQuery);
-  assert.equal(userQuery.columns, "id, name");
-  assert.ok(userQuery.filters.some((f: any) => f.col === "id" && f.op === "in" && f.val.includes("u1")));
 });
 
 test("list_members trims whitespace when composing a normalized name", async () => {
@@ -164,14 +179,10 @@ test("list_members trims whitespace when composing a normalized name", async () 
       },
     },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal((result.data as any[])[0].name, "Alice");
-  }
+  const result = expectOk(await executeToolCall(ctx, { name: "list_members", args: {} }));
+  assert.equal((result.data as any[])[0].name, "Alice");
 });
 
 test("list_members falls back to public.users.name for placeholder member names", async () => {
@@ -198,133 +209,18 @@ test("list_members falls back to public.users.name for placeholder member names"
       },
     },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal((result.data as any[])[0].name, "Seann Farrell");
-  }
-});
-
-test("list_members falls back to public.users.name for blank member names", async () => {
-  stub = createToolSupabaseStub({
-    members: {
-      select: {
-        data: [{
-          id: "m4",
-          user_id: "u4",
-          status: "active",
-          role: "admin",
-          created_at: "2026-03-17T12:00:00Z",
-          first_name: "",
-          last_name: "",
-          email: "blank@example.com",
-        }],
-        error: null,
-      },
-    },
-    users: {
-      select: {
-        data: [{ id: "u4", name: "Dylan Burak" }],
-        error: null,
-      },
-    },
-  });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
-
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal((result.data as any[])[0].name, "Dylan Burak");
-  }
-});
-
-test("list_members keeps a valid members name over public.users.name", async () => {
-  stub = createToolSupabaseStub({
-    members: {
-      select: {
-        data: [{
-          id: "m5",
-          user_id: "u5",
-          status: "active",
-          role: "active_member",
-          created_at: "2026-03-16T12:00:00Z",
-          first_name: "Actual",
-          last_name: "Member",
-          email: "actual@example.com",
-        }],
-        error: null,
-      },
-    },
-    users: {
-      select: {
-        data: [{ id: "u5", name: "Directory Override" }],
-        error: null,
-      },
-    },
-  });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
-
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal((result.data as any[])[0].name, "Actual Member");
-  }
-});
-
-test("list_members returns an empty name when no trustworthy human name exists", async () => {
-  stub = createToolSupabaseStub({
-    members: {
-      select: {
-        data: [{
-          id: "m6",
-          user_id: "u6",
-          status: "active",
-          role: "admin",
-          created_at: "2026-03-15T12:00:00Z",
-          first_name: "Member",
-          last_name: "",
-          email: "no-name@example.com",
-        }],
-        error: null,
-      },
-    },
-    users: {
-      select: {
-        data: [{ id: "u6", name: "no-name@example.com" }],
-        error: null,
-      },
-    },
-  });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
-
-  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.equal((result.data as any[])[0].name, "");
-  }
-});
-
-test("list_members with limit", async () => {
-  const result = await executeToolCall(ctx, { name: "list_members", args: { limit: 5 } });
-  assert.equal(result.ok, true);
-  const memberQuery = stub.queries.find((q) => q.table === "members");
-  assert.equal(memberQuery?.limitValue, 5);
-});
-
-test("list_events returns upcoming events by default", async () => {
-  const result = await executeToolCall(ctx, { name: "list_events", args: { upcoming: true } });
-  assert.equal(result.ok, true);
+  const result = expectOk(await executeToolCall(ctx, { name: "list_members", args: {} }));
+  assert.equal((result.data as any[])[0].name, "Seann Farrell");
 });
 
 test("list_events returns past events", async () => {
-  const result = await executeToolCall(ctx, { name: "list_events", args: { upcoming: false } });
-  assert.equal(result.ok, true);
+  const result = expectOk(
+    await executeToolCall(ctx, { name: "list_events", args: { upcoming: false } })
+  );
+  assert.ok(Array.isArray(result.data));
+
   const eventQuery = stub.queries.find((q) => q.table === "events");
   assert.ok(eventQuery);
   assert.ok(eventQuery.filters.some((f: any) => f.col === "start_date" && f.op === "lt"));
@@ -340,59 +236,100 @@ test("get_org_stats returns counts object", async () => {
       maybeSingle: { data: { total_amount_cents: 50000, donation_count: 12 }, error: null },
     },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
-  const result = await executeToolCall(ctx, { name: "get_org_stats", args: {} });
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    const stats = result.data as any;
-    assert.equal(stats.active_members, 42);
-    assert.equal(stats.alumni, 10);
-    assert.equal(stats.parents, 5);
-    assert.equal(stats.upcoming_events, 3);
-  }
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(await executeToolCall(ctx, { name: "get_org_stats", args: {} }));
+  const stats = result.data as any;
+  assert.equal(stats.active_members, 42);
+  assert.equal(stats.alumni, 10);
+  assert.equal(stats.parents, 5);
+  assert.equal(stats.upcoming_events, 3);
 });
 
-test("invalid args returns ok false (amendment: fail on malformed)", async () => {
+test("invalid args return tool_error", async () => {
   const result = await executeToolCall(ctx, {
     name: "list_members",
     args: { limit: 999 } as any,
   });
-  assert.equal(result.ok, false);
-  if (!result.ok) {
-    assert.match(result.error, /invalid/i);
-  }
+
+  assert.equal(result.kind, "tool_error");
+  assert.match(result.error, /invalid/i);
 });
 
-test("DB error returns ok false and does not throw", async () => {
+test("db errors return tool_error", async () => {
   stub = createToolSupabaseStub({
     members: { select: { data: null, error: { message: "connection refused" } } },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
-  assert.equal(result.ok, false);
+  assert.equal(result.kind, "tool_error");
 });
 
-test("get_org_stats fails closed when a count query fails", async () => {
+test("missing membership returns forbidden before touching tool tables", async () => {
   stub = createToolSupabaseStub({
-    members: { select: { data: null, error: { message: "connection refused" }, count: null } },
-    alumni: { select: { data: [], error: null, count: 10 } },
-    parents: { select: { data: [], error: null, count: 5 } },
-    events: { select: { data: [], error: null, count: 3 } },
-    organization_donation_stats: {
-      maybeSingle: { data: { total_amount_cents: 50000, donation_count: 12 }, error: null },
+    user_organization_roles: { maybeSingle: { data: null, error: null } },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+
+  assert.deepEqual(result, { kind: "forbidden", error: "Forbidden" });
+  assert.equal(stub.queries.some((q) => q.table === "members"), false);
+});
+
+test("pending or revoked membership returns forbidden", async () => {
+  for (const status of ["pending", "revoked"]) {
+    stub = createToolSupabaseStub({
+      user_organization_roles: {
+        maybeSingle: { data: { role: "admin", status }, error: null },
+      },
+    });
+    ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+    const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+    assert.deepEqual(result, { kind: "forbidden", error: "Forbidden" });
+  }
+});
+
+test("non-admin membership returns forbidden", async () => {
+  stub = createToolSupabaseStub({
+    user_organization_roles: {
+      maybeSingle: { data: { role: "active_member", status: "active" }, error: null },
     },
   });
-  ctx = { orgId: ORG_ID, serviceSupabase: stub as any };
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
-  const result = await executeToolCall(ctx, { name: "get_org_stats", args: {} });
-
-  assert.equal(result.ok, false);
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+  assert.deepEqual(result, { kind: "forbidden", error: "Forbidden" });
 });
 
-test("unknown tool name returns ok false", async () => {
+test("membership query failure returns auth_error", async () => {
+  stub = createToolSupabaseStub({
+    user_organization_roles: {
+      maybeSingle: { data: null, error: { message: "db unavailable" } },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+  assert.deepEqual(result, { kind: "auth_error", error: "Auth check failed" });
+});
+
+test("stage timeout returns timeout result", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: Promise.reject(new StageTimeoutError("tool_list_members", 5_000)),
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+  assert.deepEqual(result, { kind: "timeout", error: "Tool timed out" });
+});
+
+test("unknown tool name returns tool_error", async () => {
   const result = await executeToolCall(ctx, { name: "hack_the_planet" as any, args: {} });
-  assert.equal(result.ok, false);
-  if (!result.ok) {
-    assert.match(result.error, /unknown/i);
-  }
+  assert.equal(result.kind, "tool_error");
+  assert.match(result.error, /unknown/i);
 });

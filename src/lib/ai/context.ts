@@ -58,7 +58,7 @@ export async function getAiOrgContext(
   // 3. Check admin role — fail closed on DB error
   const { data: membership, error } = await (serviceSupabase as any)
     .from("user_organization_roles")
-    .select("role")
+    .select("role, status")
     .eq("user_id", user.id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -68,7 +68,7 @@ export async function getAiOrgContext(
     return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
   }
 
-  if (!membership || membership.role !== "admin") {
+  if (!membership || membership.role !== "admin" || membership.status !== "active") {
     return {
       ok: false,
       response: respond({ error: "AI assistant requires admin role" }, 403),

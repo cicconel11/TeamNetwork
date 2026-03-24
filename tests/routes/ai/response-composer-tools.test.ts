@@ -67,11 +67,16 @@ test("composeResponse yields normal chunks when no tools param", async () => {
 
 test("composeResponse passes tools and tool_choice to API call", async () => {
   let capturedParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming | undefined;
+  let capturedOptions: OpenAI.RequestOptions | undefined;
   const client = {
     chat: {
       completions: {
-        create: async (params: OpenAI.Chat.ChatCompletionCreateParamsStreaming) => {
+        create: async (
+          params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
+          options?: OpenAI.RequestOptions
+        ) => {
           capturedParams = params;
+          capturedOptions = options;
           return { [Symbol.asyncIterator]: async function* () {} };
         },
       },
@@ -84,12 +89,14 @@ test("composeResponse passes tools and tool_choice to API call", async () => {
     systemPrompt: "test",
     messages: [],
     tools: tools as OpenAI.Chat.ChatCompletionTool[],
+    signal: new AbortController().signal,
   })) {
     void event;
   }
 
   assert.deepEqual(capturedParams.tools, tools);
   assert.equal(capturedParams.tool_choice, "auto");
+  assert.ok(capturedOptions?.signal instanceof AbortSignal);
 });
 
 test("composeResponse does NOT pass tools/tool_choice when tools is undefined", async () => {
@@ -230,4 +237,33 @@ test("composeResponse replays tool results as assistant and tool messages", asyn
   assert.equal(toolMessage.role, "tool");
   assert.equal(toolMessage.tool_call_id, "call-1");
   assert.equal(toolMessage.content, JSON.stringify([{ id: "m1", name: "Alice" }]));
+});
+
+test("composeResponse rethrows aborts instead of yielding error events", async () => {
+  const abortController = new AbortController();
+  abortController.abort(new Error("aborted"));
+
+  const client = {
+    chat: {
+      completions: {
+        create: async () => {
+          throw new Error("ignored because signal is already aborted");
+        },
+      },
+    },
+  } as unknown as OpenAI;
+
+  await assert.rejects(
+    async () => {
+      for await (const event of composeResponse({
+        client,
+        systemPrompt: "test",
+        messages: [],
+        signal: abortController.signal,
+      })) {
+        void event;
+      }
+    },
+    /aborted/
+  );
 });

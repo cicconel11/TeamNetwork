@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, admin auth, input validation, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and audit-only grounding verification for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and audit-only grounding verification for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely.
 
 ## File Map
 
@@ -14,10 +14,12 @@ The chat pipeline handles the full lifecycle of an AI chat request: rate limitin
 | `src/lib/ai/context.ts` | Admin auth helper — validates user has admin role in org | `getAiOrgContext` (L41), `AiOrgContext` type (L9), `AiOrgContextDeps` type (L23) |
 | `src/lib/ai/context-builder.ts` | Prompt context assembly — surface-gated queries, token budget, ContextMetadata | `buildPromptContext` (L343), `buildSystemPrompt` (L331), `buildUntrustedOrgContextMessage` (L336), `ContextMetadata` (L113) |
 | `src/lib/ai/response-composer.ts` | Async generator streaming LLM response as SSE chunk/error events | `composeResponse` (L22), `UsageAccumulator` type (L5) |
+| `src/lib/ai/timeout.ts` | Turn-stage timeout constants and abort helpers | `PASS1_MODEL_TIMEOUT_MS`, `PASS2_MODEL_TIMEOUT_MS`, `TOOL_EXECUTION_TIMEOUT_MS`, `createStageAbortSignal`, `withStageTimeout` |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
 | `src/lib/ai/audit.ts` | Audit logging with cache + context metadata columns, secret redaction | `logAiRequest` (L37) |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries | `verifyToolBackedResponse` |
+| `src/lib/ai/tools/executor.ts` | Read-tool executor with executor-side active-admin recheck and discriminated result union | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | POST handler — orchestrates the full pipeline | `POST` (L491), `createChatPostHandler` (L36), `ChatRouteDeps` type (L25) |
@@ -97,8 +99,13 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ `none` for casual / static_general / out_of_scope
   │       └─ surface-gated read tools for follow_up / live_lookup
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
-  │       ├─ Pass 1 may call tools depending on the resolved tool set
-  │       └─ Each chunk: { type: "chunk", content: "..." }
+  │       ├─ Pass 1 runs with a 15s timeout budget
+  │       ├─ Each requested tool is re-authorized in the executor (`role = admin`, `status = active`) and runs with a 5s timeout budget
+  │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
+  │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
+  │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
+  │       ├─ Pass 2 runs with a 15s timeout budget when tool results exist
+  │       └─ Each text chunk still streams as `{ type: "chunk", content: "..." }`
   ├─ 13. Finalize — update assistant message to complete/error
   ├─ 13.2 If pass-2 used successful read tools: verifyToolBackedResponse()
   │       └─ log warning + ops telemetry on unsupported summaries, never fail request
@@ -126,6 +133,16 @@ Client POST /api/ai/{orgId}/chat
 | Temperature | 0.7 |
 | Max tokens | 2000 |
 | Stream | `true` (with `include_usage`) |
+
+### Stage Timeouts
+
+| Stage | Budget |
+|---|---|
+| Pass 1 model call | `15s` |
+| Each tool execution | `5s` |
+| Pass 2 model call | `15s` |
+
+Timeouts are launch-time code constants, not env-configurable knobs.
 
 ### Environment Variables
 
@@ -183,6 +200,25 @@ interface ContextMetadata {
 Metadata is passed to audit logging (`context_surface`, `context_token_estimate` columns).
 
 The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and multi-column layouts, plus a trusted `Current local date/time:` line for relative-time questions. It also instructs the LLM to prefer real human names over raw emails in member/admin lists, avoid placeholder renderings like `Member(email@example.com)`, and describe remaining no-name records as email-only member/admin accounts.
+
+## Tool Execution Semantics
+
+`executeToolCall()` now returns a discriminated union so the route can respond deterministically:
+
+```typescript
+type ToolExecutionResult =
+  | { kind: "ok"; data: unknown }
+  | { kind: "forbidden"; error: "Forbidden" }
+  | { kind: "auth_error"; error: "Auth check failed" }
+  | { kind: "tool_error"; error: string }
+  | { kind: "timeout"; error: "Tool timed out" };
+```
+
+- `ok`: emit `tool_status:done`, append trusted tool result, continue.
+- `tool_error`: emit `tool_status:error`, append error payload, continue later tools in the same pass.
+- `timeout`: emit `tool_status:error`, append timeout payload, open the current-pass breaker, skip later tools in that pass, then run one fallback pass 2.
+- `forbidden`: emit `tool_status:error`, emit a non-retryable SSE error, finalize the turn as `error`, and skip pass 2.
+- `auth_error`: same user-visible behavior as `forbidden`, but logged separately as executor auth infrastructure failure.
 
 ## Test Coverage
 

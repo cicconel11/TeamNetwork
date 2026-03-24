@@ -14,7 +14,7 @@ import {
   type UsageAccumulator,
 } from "@/lib/ai/response-composer";
 import { logAiRequest } from "@/lib/ai/audit";
-import { createSSEStream, SSE_HEADERS, type CacheStatus } from "@/lib/ai/sse";
+import { createSSEStream, SSE_HEADERS, type CacheStatus, type SSEEvent } from "@/lib/ai/sse";
 import {
   AI_TOOL_MAP,
   type ToolName,
@@ -39,6 +39,12 @@ import {
   type SuccessfulToolSummary,
 } from "@/lib/ai/tool-grounding";
 import { trackOpsEventServer } from "@/lib/analytics/events-server";
+import {
+  createStageAbortSignal,
+  isStageTimeoutError,
+  PASS1_MODEL_TIMEOUT_MS,
+  PASS2_MODEL_TIMEOUT_MS,
+} from "@/lib/ai/timeout";
 
 export interface ChatRouteDeps {
   createClient?: typeof createClient;
@@ -72,6 +78,10 @@ function getPass1Tools(
   }
 
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
+}
+
+function recordStageFailure(stage: string, failureKind: string) {
+  console.warn("[ai-chat] stage failure", { stage, failure_kind: failureKind });
 }
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
@@ -423,7 +433,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const assistantMessageId = assistantMsg.id;
 
   // 10–12. Stream SSE response
-  const stream = createSSEStream(async (enqueue) => {
+  const stream = createSSEStream(async (enqueue, streamSignal) => {
     let fullContent = "";
     const usageRef: { current: UsageAccumulator | null } = { current: null };
     let streamCompletedSuccessfully = false;
@@ -432,6 +442,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     let toolCallMade = false;
     let toolCallSucceeded = false;
     let ranSecondPass = false;
+    let terminateTurn = false;
+    let toolPassBreakerOpen = false;
     const auditToolCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
     const successfulToolResults: SuccessfulToolSummary[] = [];
     const recordUsage = (usage: UsageAccumulator) => {
@@ -440,9 +452,55 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         outputTokens: (usageRef.current?.outputTokens ?? 0) + usage.outputTokens,
       };
     };
+    const emitTimeoutError = () =>
+      enqueue({
+        type: "error",
+        message: "The response timed out. Please try again.",
+        retryable: true,
+      });
+    const runModelStage = async (
+      stage: "pass1_model" | "pass2_model",
+      timeoutMs: number,
+      options: Parameters<typeof composeResponseFn>[0],
+      onEvent: (event: SSEEvent | ToolCallRequestedEvent) => Promise<"continue" | "stop"> | "continue" | "stop"
+    ): Promise<"completed" | "stopped" | "timeout" | "aborted"> => {
+      const stageSignal = createStageAbortSignal({
+        stage,
+        timeoutMs,
+        parentSignal: streamSignal,
+      });
+
+      try {
+        for await (const event of composeResponseFn({
+          ...options,
+          signal: stageSignal.signal,
+        })) {
+          const disposition = await onEvent(event as SSEEvent | ToolCallRequestedEvent);
+          if (disposition === "stop") {
+            return "stopped";
+          }
+        }
+        return "completed";
+      } catch (err) {
+        const failureReason = stageSignal.signal.reason ?? err;
+        if (isStageTimeoutError(failureReason)) {
+          recordStageFailure(stage, "timeout");
+          auditErrorMessage = `${stage}:timeout`;
+          emitTimeoutError();
+          return "timeout";
+        }
+        if (streamSignal.aborted || stageSignal.signal.aborted) {
+          recordStageFailure(stage, "request_aborted");
+          auditErrorMessage = `${stage}:request_aborted`;
+          return "aborted";
+        }
+        throw err;
+      } finally {
+        stageSignal.cleanup();
+      }
+    };
 
     try {
-      // Guard: ZAI_API_KEY required
       if (!process.env.ZAI_API_KEY) {
         const msg =
           "AI assistant is not configured. Please set the ZAI_API_KEY environment variable.";
@@ -463,13 +521,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
       const client = createZaiClientFn();
 
-      // Mark assistant message as streaming
       await ctx.supabase
         .from("ai_messages")
-        .update({ intent: resolvedIntent, intent_type: resolvedIntentType, context_surface: effectiveSurface, status: "streaming" })
+        .update({
+          intent: resolvedIntent,
+          intent_type: resolvedIntentType,
+          context_surface: effectiveSurface,
+          status: "streaming",
+        })
         .eq("id", assistantMessageId);
 
-      // Build context and fetch history in parallel
       const [contextResult, { data: history, error: historyError }] =
         await Promise.all([
           buildPromptContextFn({
@@ -512,31 +573,39 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         ? [{ role: "user" as const, content: orgContextMessage }, ...historyMessages]
         : historyMessages;
 
-      // --- Tool loop (two-pass) ---
       const toolResults: ToolResultMessage[] = [];
+      const pass1Outcome = await runModelStage(
+        "pass1_model",
+        PASS1_MODEL_TIMEOUT_MS,
+        {
+          client,
+          systemPrompt,
+          messages: contextMessages,
+          tools: pass1Tools,
+          onUsage: recordUsage,
+        },
+        async (event) => {
+          if (event.type === "chunk") {
+            fullContent += event.content;
+            enqueue(event);
+            return "continue";
+          }
 
-      // Pass 1: LLM call with tools — may produce text OR a tool call
-      for await (const event of composeResponseFn({
-        client,
-        systemPrompt,
-        messages: contextMessages,
-        tools: pass1Tools,
-        onUsage: recordUsage,
-      })) {
-        if (event.type === "chunk") {
-          fullContent += event.content;
-          enqueue(event);
-        } else if ((event as ToolCallRequestedEvent).type === "tool_call_requested") {
+          if (event.type === "error") {
+            auditErrorMessage = event.message;
+            enqueue(event);
+            return "stop";
+          }
+
           const toolEvent = event as ToolCallRequestedEvent;
-          enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
+          toolCallMade = true;
 
-          // Amendment #5: Fail on malformed args — no {} fallback
           let parsedArgs: Record<string, unknown>;
           try {
             parsedArgs = JSON.parse(toolEvent.argsJson);
           } catch {
+            recordStageFailure(`tool_${toolEvent.name}`, "tool_error");
             enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-            toolCallMade = true;
             auditToolCalls.push({ name: toolEvent.name, args: {} });
             toolResults.push({
               toolCallId: toolEvent.id,
@@ -544,69 +613,115 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               args: {},
               data: { error: "Malformed tool arguments" },
             });
-            continue;
+            return "continue";
           }
 
+          auditToolCalls.push({ name: toolEvent.name, args: parsedArgs });
+
+          if (toolPassBreakerOpen) {
+            return "continue";
+          }
+
+          enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
+
           const result = await executeToolCallFn(
-            { orgId: ctx.orgId, serviceSupabase: ctx.serviceSupabase },
+            { orgId: ctx.orgId, userId: ctx.userId, serviceSupabase: ctx.serviceSupabase },
             { name: toolEvent.name, args: parsedArgs }
           );
 
-          toolCallMade = true;
-          auditToolCalls.push({ name: toolEvent.name, args: parsedArgs });
-
-          if (result.ok) {
-            enqueue({ type: "tool_status", toolName: toolEvent.name, status: "done" });
-            toolCallSucceeded = true;
-            toolResults.push({
-              toolCallId: toolEvent.id,
-              name: toolEvent.name,
-              args: parsedArgs,
-              data: result.data,
-            });
-            successfulToolResults.push({
-              name: toolEvent.name as ToolName,
-              data: result.data,
-            });
-          } else {
-            enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
-            toolResults.push({
-              toolCallId: toolEvent.id,
-              name: toolEvent.name,
-              args: parsedArgs,
-              data: { error: result.error },
-            });
+          switch (result.kind) {
+            case "ok":
+              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "done" });
+              toolCallSucceeded = true;
+              toolResults.push({
+                toolCallId: toolEvent.id,
+                name: toolEvent.name,
+                args: parsedArgs,
+                data: result.data,
+              });
+              successfulToolResults.push({
+                name: toolEvent.name as ToolName,
+                data: result.data,
+              });
+              return "continue";
+            case "tool_error":
+              recordStageFailure(`tool_${toolEvent.name}`, "tool_error");
+              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
+              toolResults.push({
+                toolCallId: toolEvent.id,
+                name: toolEvent.name,
+                args: parsedArgs,
+                data: { error: result.error },
+              });
+              return "continue";
+            case "timeout":
+              recordStageFailure(`tool_${toolEvent.name}`, "timeout");
+              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
+              toolResults.push({
+                toolCallId: toolEvent.id,
+                name: toolEvent.name,
+                args: parsedArgs,
+                data: { error: result.error },
+              });
+              toolPassBreakerOpen = true;
+              return "continue";
+            case "forbidden":
+            case "auth_error":
+              recordStageFailure(`tool_${toolEvent.name}`, result.kind);
+              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "error" });
+              auditErrorMessage = `tool_${toolEvent.name}:${result.kind}`;
+              terminateTurn = true;
+              enqueue({
+                type: "error",
+                message:
+                  result.kind === "forbidden"
+                    ? "Your access to AI tools for this organization has changed."
+                    : "Unable to verify access to AI tools right now.",
+                retryable: false,
+              });
+              return "stop";
           }
-        } else if (event.type === "error") {
-          auditErrorMessage = event.message;
-          enqueue(event);
+        }
+      );
+
+      if (terminateTurn || pass1Outcome !== "completed") {
+        return;
+      }
+
+      if (toolCallMade && toolResults.length > 0) {
+        ranSecondPass = true;
+        const pass2Outcome = await runModelStage(
+          "pass2_model",
+          PASS2_MODEL_TIMEOUT_MS,
+          {
+            client,
+            systemPrompt,
+            messages: contextMessages,
+            toolResults,
+            onUsage: recordUsage,
+          },
+          (event) => {
+            if (event.type === "chunk") {
+              fullContent += event.content;
+              enqueue(event);
+              return "continue";
+            }
+
+            if (event.type === "error") {
+              auditErrorMessage = event.message;
+              enqueue(event);
+              return "stop";
+            }
+
+            return "continue";
+          }
+        );
+
+        if (pass2Outcome !== "completed") {
           return;
         }
       }
 
-      // Pass 2: only if a tool was called — feed result back, no tools (prevents chaining)
-      if (toolCallMade && toolResults.length > 0) {
-        ranSecondPass = true;
-        for await (const event of composeResponseFn({
-          client,
-          systemPrompt,
-          messages: contextMessages,
-          toolResults,
-          onUsage: recordUsage,
-        })) {
-          if (event.type === "chunk") {
-            fullContent += event.content;
-            enqueue(event);
-          } else if (event.type === "error") {
-            auditErrorMessage = event.message;
-            enqueue(event);
-            return;
-          }
-          // Silently ignore tool_call_requested on pass 2
-        }
-      }
-
-      // Done event — include usage if the provider returned it
       const usage = usageRef.current;
       enqueue({
         type: "done",
@@ -622,7 +737,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     } catch (err) {
       console.error("[ai-chat] stream error:", err);
       auditErrorMessage = err instanceof Error ? err.message : "stream_failed";
-      enqueue({ type: "error", message: "An error occurred", retryable: true });
+      if (!streamSignal.aborted) {
+        enqueue({ type: "error", message: "An error occurred", retryable: true });
+      }
     } finally {
       // Update assistant message row to final state
       const finalStatus = streamCompletedSuccessfully ? "complete" : "error";
