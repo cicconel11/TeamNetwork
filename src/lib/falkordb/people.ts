@@ -253,18 +253,17 @@ export function buildProjectedPeople(input: {
 }
 
 export function buildSourcePerson(input: {
-  memberRow: MemberPersonRow | null;
-  alumniRow: AlumniPersonRow | null;
-  orgId: string;
+  memberRows: MemberPersonRow[];
+  alumniRows: AlumniPersonRow[];
 }): ProjectedPerson | null {
-  const members = input.memberRow ? [input.memberRow] : [];
-  const alumni = input.alumniRow ? [input.alumniRow] : [];
-
-  if (members.length === 0 && alumni.length === 0) {
+  if (input.memberRows.length === 0 && input.alumniRows.length === 0) {
     return null;
   }
 
-  const projected = buildProjectedPeople({ members, alumni });
+  const projected = buildProjectedPeople({
+    members: input.memberRows,
+    alumni: input.alumniRows,
+  });
   const entry = projected.values().next();
   return entry.done ? null : entry.value;
 }

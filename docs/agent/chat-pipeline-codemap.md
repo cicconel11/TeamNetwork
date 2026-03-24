@@ -4,6 +4,8 @@
 
 The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The current read-tool set now includes `suggest_connections`, which can answer member/alumni outreach questions through a Falkor people graph with a functionally equivalent SQL fallback.
 
+For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
+
 ## File Map
 
 ### Source

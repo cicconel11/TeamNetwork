@@ -331,8 +331,10 @@ async function fetchGraphSuggestions(input: {
     throw new FalkorQueryError("Source person is not present in Falkor");
   }
 
-  // FalkorDB only supports shortestPath in WITH/RETURN, not OPTIONAL MATCH.
-  // Split into two queries: candidates + mentorship distances.
+  // FalkorDB has partial shortestPath support, and the SQL fallback treats
+  // mentorship edges as undirected up to depth 2. Query the direct and
+  // second-degree shapes explicitly so Falkor mode preserves the same
+  // semantics without relying on unsupported Cypher forms.
   const [candidateRows, distanceRows] = await Promise.all([
     input.graphClient.query<Omit<GraphSuggestionRow, "mentorshipDistance">>(
       input.orgId,
@@ -355,35 +357,64 @@ async function fetchGraphSuggestions(input: {
       `,
       { sourceKey: input.source.personKey }
     ),
-    // FalkorDB requires directed shortestPath — query both directions and pick the shortest.
     (async () => {
-      const [fwd, rev] = await Promise.all([
+      const distanceQueryResults = await Promise.all([
         input.graphClient.query<{ personKey: string; distance: number }>(
           input.orgId,
           `
-            MATCH (source:Person {personKey: $sourceKey})
-            MATCH (candidate:Person)
-            WHERE candidate.personKey <> source.personKey
-            WITH source, candidate, shortestPath((source)-[:MENTORS*1..2]->(candidate)) AS p
-            WHERE p IS NOT NULL
-            RETURN candidate.personKey AS personKey, length(p) AS distance
+            MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 1 AS distance
           `,
           { sourceKey: input.source.personKey }
         ),
         input.graphClient.query<{ personKey: string; distance: number }>(
           input.orgId,
           `
-            MATCH (source:Person {personKey: $sourceKey})
-            MATCH (candidate:Person)
-            WHERE candidate.personKey <> source.personKey
-            WITH source, candidate, shortestPath((source)<-[:MENTORS*1..2]-(candidate)) AS p
-            WHERE p IS NOT NULL
-            RETURN candidate.personKey AS personKey, length(p) AS distance
+            MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 1 AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)-[:MENTORS]->(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 2 AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)<-[:MENTORS]-(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 2 AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)-[:MENTORS]->(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 2 AS distance
+          `,
+          { sourceKey: input.source.personKey }
+        ),
+        input.graphClient.query<{ personKey: string; distance: number }>(
+          input.orgId,
+          `
+            MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)<-[:MENTORS]-(candidate:Person)
+            WHERE candidate.personKey <> $sourceKey
+            RETURN candidate.personKey AS personKey, 2 AS distance
           `,
           { sourceKey: input.source.personKey }
         ),
       ]);
-      return [...fwd, ...rev];
+      return distanceQueryResults.flat();
     })(),
   ]);
 

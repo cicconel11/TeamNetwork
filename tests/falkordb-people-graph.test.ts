@@ -465,7 +465,7 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
       if (cypher.includes("RETURN source.personKey AS personKey")) {
         return [{ personKey: "user:00000000-0000-0000-0000-000000000001" }];
       }
-      if (cypher.includes("shortestPath")) {
+      if (cypher.includes(" AS distance")) {
         return distanceRows;
       }
       return candidateRows;
@@ -488,6 +488,110 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
     args: {
       person_type: "alumni",
       person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1",
+    },
+    graphClient: {
+      isAvailable: () => false,
+      query: async () => [],
+    },
+  });
+
+  assert.equal(graphResult.mode, "falkor");
+  assert.deepEqual(graphResult.results, fallbackResult.results);
+});
+
+test("suggestConnections graph mode matches SQL fallback for mixed-direction second-degree mentorship", async () => {
+  const stub = createSupabaseStub();
+
+  stub.seed("alumni", [
+    {
+      id: "source-alumni",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      first_name: "Alex",
+      last_name: "Source",
+      email: "alex@example.com",
+      major: null,
+      current_company: null,
+      industry: null,
+      current_city: null,
+      graduation_year: null,
+      position_title: null,
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      id: "candidate-alumni",
+      organization_id: ORG_ID,
+      user_id: "candidate-user",
+      first_name: "Casey",
+      last_name: "Candidate",
+      email: "casey@example.com",
+      major: null,
+      current_company: null,
+      industry: null,
+      current_city: null,
+      graduation_year: null,
+      position_title: "Founder",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+  ]);
+
+  stub.registerRpc("get_mentorship_distances", () => [
+    {
+      user_id: "candidate-user",
+      distance: 2,
+    },
+  ]);
+
+  const graphClient = {
+    isAvailable: () => true,
+    query: async (_orgId: string, cypher: string) => {
+      if (cypher.includes("RETURN source.personKey AS personKey")) {
+        return [{ personKey: "user:source-user" }];
+      }
+      if (cypher.includes("<-[:MENTORS]-(:Person)-[:MENTORS]->")) {
+        return [{ personKey: "user:candidate-user", distance: 2 }];
+      }
+      if (cypher.includes(" AS distance")) {
+        return [];
+      }
+      return [
+        {
+          personKey: "user:candidate-user",
+          personType: "alumni",
+          personId: "candidate-alumni",
+          name: "Casey Candidate",
+          userId: "candidate-user",
+          role: "Founder",
+          major: null,
+          currentCompany: null,
+          industry: null,
+          graduationYear: null,
+          currentCity: null,
+        },
+      ];
+    },
+  };
+
+  const graphResult = await suggestConnections({
+    orgId: ORG_ID,
+    serviceSupabase: stub as any,
+    args: {
+      person_type: "alumni",
+      person_id: "source-alumni",
+    },
+    graphClient,
+  });
+
+  const fallbackResult = await suggestConnections({
+    orgId: ORG_ID,
+    serviceSupabase: stub as any,
+    args: {
+      person_type: "alumni",
+      person_id: "source-alumni",
     },
     graphClient: {
       isAvailable: () => false,
@@ -559,7 +663,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
       if (cypher.includes("RETURN source.personKey AS personKey")) {
         return [{ personKey: "user:source-user" }];
       }
-      if (cypher.includes("shortestPath")) {
+      if (cypher.includes(" AS distance")) {
         return [];
       }
       return [
