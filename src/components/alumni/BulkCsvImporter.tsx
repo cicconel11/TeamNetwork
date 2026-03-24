@@ -28,10 +28,18 @@ interface DisplayRow extends CsvImportRow {
   rowIndex: number;
 }
 
+interface CreatedAlumniRecord {
+  id: string;
+  email?: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface ImportResult extends ImportResultBase {
   preview?: Record<string, CsvImportPreviewStatus>;
   emailsSent?: number;
   emailErrors?: number;
+  createdRecords?: CreatedAlumniRecord[];
 }
 
 interface BulkCsvImporterProps {
@@ -52,6 +60,7 @@ const STATUS_BADGE: Record<RowStatus, { label: string; variant: "success" | "war
 };
 
 const INVALID_STATUSES = ["invalid", "duplicate"];
+const NON_SELECTABLE_STATUSES = new Set<string>(["invalid", "duplicate"]);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,7 +80,6 @@ function downloadCsvTemplate() {
   link.href = url;
   link.download = "alumni-import-template.csv";
   link.click();
-  // Delay revocation so the browser can fetch the blob before it's freed
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
@@ -87,15 +95,43 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
   const [result, setResult] = useState<ImportResult | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Feature A: Preview row selection + exclusion
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [excludedIndices, setExcludedIndices] = useState<Set<number>>(new Set());
+
+  // Feature B: Post-import selection + deletion
+  const [postImportSelected, setPostImportSelected] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteCount, setDeleteCount] = useState(0);
+
+  // ─── Derived state (filters out excluded rows) ────────────────────────────
+
+  const activeRows = useMemo(
+    () => rows.filter((r) => !excludedIndices.has(r.rowIndex)),
+    [rows, excludedIndices],
+  );
+
   const validRows = useMemo(
-    () => rows.filter((r) => r.status !== "invalid" && r.status !== "duplicate"),
-    [rows],
+    () => activeRows.filter((r) => r.status !== "invalid" && r.status !== "duplicate"),
+    [activeRows],
   );
 
   const hasEmailRows = useMemo(
-    () => rows.some((r) => r.email && r.status !== "invalid" && r.status !== "duplicate"),
-    [rows],
+    () => activeRows.some((r) => r.email && r.status !== "invalid" && r.status !== "duplicate"),
+    [activeRows],
   );
+
+  const selectableIndices = useMemo(
+    () => new Set(
+      rows
+        .filter((r) => !excludedIndices.has(r.rowIndex) && !NON_SELECTABLE_STATUSES.has(r.status))
+        .map((r) => r.rowIndex)
+    ),
+    [rows, excludedIndices],
+  );
+
+  const allSelectableChecked = selectableIndices.size > 0 && [...selectableIndices].every((i) => selectedIndices.has(i));
+  const someSelectableChecked = [...selectableIndices].some((i) => selectedIndices.has(i));
 
   // ─── Preview (dry run) ──────────────────────────────────────────────────
 
@@ -156,8 +192,8 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
 
   // Re-run preview when overwrite toggle changes
   useEffect(() => {
-    if (rows.length > 0 && !isImporting && !result) {
-      handlePreview(rows, overwrite);
+    if (activeRows.length > 0 && !isImporting && !result) {
+      handlePreview(activeRows, overwrite);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overwrite]);
@@ -167,11 +203,64 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, []);
 
+  // ─── Selection handlers ───────────────────────────────────────────────
+
+  const toggleRowSelection = useCallback((rowIndex: number) => {
+    setSelectedIndices((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowIndex)) {
+        next.delete(rowIndex);
+      } else {
+        next.add(rowIndex);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (allSelectableChecked) {
+      setSelectedIndices(new Set());
+    } else {
+      setSelectedIndices(new Set(selectableIndices));
+    }
+  }, [allSelectableChecked, selectableIndices]);
+
+  const handleRemoveSelected = useCallback(() => {
+    if (selectedIndices.size === 0) return;
+    const newExcluded = new Set(excludedIndices);
+    for (const idx of selectedIndices) {
+      newExcluded.add(idx);
+    }
+    setExcludedIndices(newExcluded);
+    setSelectedIndices(new Set());
+
+    // Re-run preview with remaining rows
+    const remaining = rows.filter((r) => !newExcluded.has(r.rowIndex));
+    if (remaining.length > 0) {
+      handlePreview(remaining, overwrite);
+    }
+  }, [selectedIndices, excludedIndices, rows, handlePreview, overwrite]);
+
+  const handleRestoreRow = useCallback((rowIndex: number) => {
+    setExcludedIndices((prev) => {
+      const next = new Set(prev);
+      next.delete(rowIndex);
+      return next;
+    });
+    // Re-run preview after restore
+    const remaining = rows.filter((r) => !excludedIndices.has(r.rowIndex) || r.rowIndex === rowIndex);
+    handlePreview(remaining, overwrite);
+  }, [rows, excludedIndices, handlePreview, overwrite]);
+
   // ─── File handling ──────────────────────────────────────────────────────
 
   const processText = useCallback(
     (text: string) => {
       setResult(null);
+      setSelectedIndices(new Set());
+      setExcludedIndices(new Set());
+      setPostImportSelected(new Set());
+      setDeleteCount(0);
       const parsed = parseCsvData(text);
       const display = parsedRowsToDisplay(parsed);
       setRows(display);
@@ -236,7 +325,49 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     } finally {
       setIsImporting(false);
     }
-  }, [organizationId, validRows, overwrite, sendInvites]);
+  }, [organizationId, validRows, overwrite, sendInvites, router]);
+
+  // ─── Post-import bulk delete ──────────────────────────────────────────
+
+  const handleBulkDelete = useCallback(async () => {
+    if (postImportSelected.size === 0) return;
+    const count = postImportSelected.size;
+    if (!window.confirm(`Delete ${count} alumni record${count !== 1 ? "s" : ""}? This action can be undone by an admin.`)) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/organizations/${organizationId}/alumni/bulk-delete`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alumniIds: [...postImportSelected] }),
+        },
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setDeleteCount((prev) => prev + data.deleted);
+        // Remove deleted records from the result
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                createdRecords: prev.createdRecords?.filter(
+                  (r) => !postImportSelected.has(r.id)
+                ),
+              }
+            : null
+        );
+        setPostImportSelected(new Set());
+        router.refresh();
+      }
+    } catch {
+      // Network error — selection preserved so user can retry
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [organizationId, postImportSelected, router]);
 
   // ─── Reset ──────────────────────────────────────────────────────────────
 
@@ -245,14 +376,24 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
     setResult(null);
     setOverwrite(false);
     setSendInvites(false);
+    setSelectedIndices(new Set());
+    setExcludedIndices(new Set());
+    setPostImportSelected(new Set());
+    setDeleteCount(0);
     fileDrop.resetFileInput();
   }, [fileDrop]);
 
   // ─── Summary ────────────────────────────────────────────────────────────
 
-  const summary = useMemo(() => summarizeRows(rows, INVALID_STATUSES), [rows]);
+  const summary = useMemo(() => summarizeRows(activeRows, INVALID_STATUSES), [activeRows]);
   const actionableCount = summary.willUpdate + summary.willCreate;
   const importDisabled = actionableCount === 0 || isImporting || isPreviewing;
+
+  // ─── Post-import selection helpers ────────────────────────────────────
+
+  const createdRecords = result?.createdRecords ?? [];
+  const allPostImportChecked = createdRecords.length > 0 && createdRecords.every((r) => postImportSelected.has(r.id));
+  const somePostImportChecked = createdRecords.some((r) => postImportSelected.has(r.id));
 
   return (
     <Card ref={panelRef} padding="none" className="mb-6 overflow-hidden animate-fade-in">
@@ -313,11 +454,30 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
           <>
             <ImportPreviewSummary summary={summary} isPreviewing={isPreviewing} />
 
-            {/* Horizontally scrollable table */}
+            {excludedIndices.size > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {excludedIndices.size} row{excludedIndices.size !== 1 ? "s" : ""} excluded from import
+              </p>
+            )}
+
+            {/* Horizontally scrollable table with checkbox column */}
             <div className="max-h-64 overflow-y-auto overflow-x-auto rounded-lg border border-border">
               <table className="min-w-max text-sm">
-                <thead className="bg-muted/50 sticky top-0">
+                <thead className="bg-muted/50 sticky top-0 z-10">
                   <tr>
+                    <th className="sticky left-0 z-20 bg-muted/50 px-3 py-2 w-8">
+                      <input
+                        type="checkbox"
+                        checked={allSelectableChecked}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelectableChecked && !allSelectableChecked;
+                        }}
+                        onChange={toggleSelectAll}
+                        disabled={isImporting || selectableIndices.size === 0}
+                        className="rounded border-border"
+                        aria-label="Select all rows"
+                      />
+                    </th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">First Name</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Last Name</th>
                     <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground whitespace-nowrap">Email</th>
@@ -332,18 +492,41 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                 </thead>
                 <tbody className="divide-y divide-border">
                   {rows.map((row) => {
+                    const isExcluded = excludedIndices.has(row.rowIndex);
+                    const isSelectable = selectableIndices.has(row.rowIndex);
                     const badge = STATUS_BADGE[row.status];
                     return (
                       <tr
                         key={row.rowIndex}
                         className={
-                          row.status === "invalid"
-                            ? "bg-red-500/5"
-                            : row.status === "quota_blocked"
-                              ? "opacity-50"
-                              : ""
+                          isExcluded
+                            ? "opacity-40"
+                            : row.status === "invalid"
+                              ? "bg-red-500/5"
+                              : row.status === "quota_blocked"
+                                ? "opacity-50"
+                                : ""
                         }
                       >
+                        <td className="sticky left-0 z-10 bg-card px-3 py-2 w-8">
+                          {isExcluded ? (
+                            <button
+                              onClick={() => handleRestoreRow(row.rowIndex)}
+                              className="text-[10px] text-org-secondary hover:text-org-secondary/80 whitespace-nowrap"
+                            >
+                              Restore
+                            </button>
+                          ) : isSelectable ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedIndices.has(row.rowIndex)}
+                              onChange={() => toggleRowSelection(row.rowIndex)}
+                              disabled={isImporting}
+                              className="rounded border-border"
+                              aria-label={`Select ${row.first_name} ${row.last_name}`}
+                            />
+                          ) : null}
+                        </td>
                         <td className="px-3 py-2 text-xs text-foreground whitespace-nowrap">{row.first_name}</td>
                         <td className="px-3 py-2 text-xs text-foreground whitespace-nowrap">{row.last_name}</td>
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">{row.email ?? ""}</td>
@@ -356,7 +539,11 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                           {row.linkedin_url ?? ""}
                         </td>
                         <td className="px-3 py-2 text-right whitespace-nowrap">
-                          <Badge variant={badge.variant}>{badge.label}</Badge>
+                          {isExcluded ? (
+                            <Badge variant="muted">Excluded</Badge>
+                          ) : (
+                            <Badge variant={badge.variant}>{badge.label}</Badge>
+                          )}
                         </td>
                       </tr>
                     );
@@ -377,6 +564,16 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
                   ? "Importing\u2026"
                   : `Import ${actionableCount} Record${actionableCount !== 1 ? "s" : ""}`}
               </Button>
+              {selectedIndices.size > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleRemoveSelected}
+                  disabled={isImporting}
+                >
+                  Remove {selectedIndices.size} Selected
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={handleReset}>
                 Reset
               </Button>
@@ -419,20 +616,112 @@ export function BulkCsvImporter({ organizationId, onClose }: BulkCsvImporterProp
 
         {/* Result banner */}
         {result && (
-          <ImportResultBanner
-            result={result}
-            onReset={handleReset}
-            onClose={onClose}
-            extraDetail={
-              result.emailsSent !== undefined ? (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {result.emailErrors
-                    ? `${result.emailsSent} invite email${result.emailsSent !== 1 ? "s" : ""} sent, ${result.emailErrors} failed`
-                    : `${result.emailsSent} invite email${result.emailsSent !== 1 ? "s" : ""} sent`}
-                </p>
-              ) : undefined
-            }
-          />
+          <>
+            <ImportResultBanner
+              result={result}
+              onReset={handleReset}
+              onClose={onClose}
+              extraDetail={
+                result.emailsSent !== undefined ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {result.emailErrors
+                      ? `${result.emailsSent} invite email${result.emailsSent !== 1 ? "s" : ""} sent, ${result.emailErrors} failed`
+                      : `${result.emailsSent} invite email${result.emailsSent !== 1 ? "s" : ""} sent`}
+                  </p>
+                ) : undefined
+              }
+            />
+
+            {/* Post-import: created records with bulk delete */}
+            {createdRecords.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-medium text-muted-foreground">
+                    Created Records ({createdRecords.length})
+                    {deleteCount > 0 && (
+                      <span className="ml-2 text-amber-400">{deleteCount} deleted</span>
+                    )}
+                  </h4>
+                  {postImportSelected.size > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleBulkDelete}
+                      disabled={isDeleting}
+                      isLoading={isDeleting}
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    >
+                      {isDeleting
+                        ? "Deleting\u2026"
+                        : `Delete ${postImportSelected.size} Selected`}
+                    </Button>
+                  )}
+                </div>
+
+                <div className="max-h-48 overflow-y-auto overflow-x-auto rounded-lg border border-border">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-muted/50 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-3 py-2 w-8">
+                          <input
+                            type="checkbox"
+                            checked={allPostImportChecked}
+                            ref={(el) => {
+                              if (el) el.indeterminate = somePostImportChecked && !allPostImportChecked;
+                            }}
+                            onChange={() => {
+                              if (allPostImportChecked) {
+                                setPostImportSelected(new Set());
+                              } else {
+                                setPostImportSelected(new Set(createdRecords.map((r) => r.id)));
+                              }
+                            }}
+                            disabled={isDeleting}
+                            className="rounded border-border"
+                            aria-label="Select all created records"
+                          />
+                        </th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Name</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Email</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {createdRecords.map((record) => (
+                        <tr key={record.id}>
+                          <td className="px-3 py-2 w-8">
+                            <input
+                              type="checkbox"
+                              checked={postImportSelected.has(record.id)}
+                              onChange={() => {
+                                setPostImportSelected((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(record.id)) {
+                                    next.delete(record.id);
+                                  } else {
+                                    next.add(record.id);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              disabled={isDeleting}
+                              className="rounded border-border"
+                              aria-label={`Select ${record.firstName} ${record.lastName}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-xs text-foreground whitespace-nowrap">
+                            {record.firstName} {record.lastName}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                            {record.email ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Card>

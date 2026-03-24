@@ -46,10 +46,18 @@ const importBodySchema = z.object({
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+interface CreatedAlumniRecord {
+  id: string;
+  email?: string;
+  firstName: string;
+  lastName: string;
+}
+
 interface ImportResult extends ImportResultBase {
   preview?: Record<string, CsvImportPreviewStatus>;
   emailsSent?: number;
   emailErrors?: number;
+  createdRecords?: CreatedAlumniRecord[];
 }
 
 interface BulkImportAlumniRichRpc {
@@ -75,7 +83,7 @@ interface BulkImportAlumniRichRpc {
       p_overwrite: boolean;
     },
   ) => Promise<{
-    data: Array<{ out_email: string; out_first_name: string; out_last_name: string; out_status: string }> | null;
+    data: Array<{ out_id: string | null; out_email: string; out_first_name: string; out_last_name: string; out_status: string }> | null;
     error: { message: string } | null;
   }>;
 }
@@ -229,8 +237,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Bulk create via RPC
-  type CreatedRecord = { out_email: string; out_first_name: string; out_last_name: string; out_status: string };
-  const createdRecords: CreatedRecord[] = [];
+  type RpcRow = { out_id: string | null; out_email: string; out_first_name: string; out_last_name: string; out_status: string };
+  const rpcCreatedRows: RpcRow[] = [];
 
   if (importPlan.toCreate.length > 0) {
     const rpcSupabase = serviceSupabase as unknown as BulkImportAlumniRichRpc;
@@ -247,7 +255,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       for (const row of createResults ?? []) {
         if (row.out_status === IMPORT_STATUS.CREATED) {
           created++;
-          createdRecords.push(row);
+          rpcCreatedRows.push(row);
         } else if (row.out_status === IMPORT_STATUS.UPDATED_EXISTING) {
           concurrentUpdates++;
         } else if (row.out_status === IMPORT_STATUS.SKIPPED_EXISTING) {
@@ -259,12 +267,22 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
   }
 
+  const createdRecords: CreatedAlumniRecord[] = rpcCreatedRows
+    .filter((r) => r.out_id)
+    .map((r) => ({
+      id: r.out_id!,
+      email: r.out_email || undefined,
+      firstName: r.out_first_name,
+      lastName: r.out_last_name,
+    }));
+
   const result: ImportResult = {
     updated: importPlan.toUpdate.length - updateErrors + concurrentUpdates,
     created,
     skipped,
     quotaBlocked,
     errors,
+    createdRecords: createdRecords.length > 0 ? createdRecords : undefined,
   };
 
   // Invalidate enterprise alumni stats cache if any alumni were written
@@ -281,8 +299,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Phase 2: Send invite emails if requested
-  if (sendInvites && createdRecords.length > 0) {
-    const createdWithEmail = createdRecords.filter((r) => r.out_email);
+  if (sendInvites && rpcCreatedRows.length > 0) {
+    const createdWithEmail = rpcCreatedRows.filter((r) => r.out_email);
 
     if (createdWithEmail.length > 0) {
       // Create org invite with limited uses
