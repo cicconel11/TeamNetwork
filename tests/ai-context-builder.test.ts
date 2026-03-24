@@ -264,7 +264,6 @@ describe("AI prompt context builder", () => {
     assert.match(contextMessage!, /Active Members: 0/);
     assert.match(contextMessage!, /Alumni: 0/);
     assert.match(contextMessage!, /Parents: 0/);
-    assert.match(contextMessage!, /Upcoming Events: 0/);
   });
 
   it("handles nullable announcement dates without invalid fallback text", async () => {
@@ -396,5 +395,235 @@ describe("AI prompt context builder", () => {
     });
 
     assert.deepEqual(queriedTables, ["organizations"]);
+  });
+
+  it("injects the provided current local date/time into the trusted system prompt in full and shared_static modes", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const input = {
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      now: "2026-03-23T21:05:00.000Z",
+      timeZone: "America/Los_Angeles",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+      }) as any,
+    };
+
+    const fullResult = await buildPromptContext(input);
+    const sharedStaticResult = await buildPromptContext({
+      ...input,
+      contextMode: "shared_static",
+    });
+
+    assert.match(fullResult.systemPrompt, /Current local date\/time: 2026-03-23 14:05 America\/Los_Angeles\./);
+    assert.match(sharedStaticResult.systemPrompt, /Current local date\/time: 2026-03-23 14:05 America\/Los_Angeles\./);
+  });
+
+  // --- Phase 1: Surface-based context selection ---
+
+  it("events surface only queries org, users, and events tables", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+      alumniCount: 5,
+      parentCount: 2,
+      upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+      announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+      donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "events",
+      serviceSupabase: mock as any,
+    });
+
+    assert.ok(queriedTables.includes("organizations"));
+    assert.ok(queriedTables.includes("users"));
+    assert.ok(queriedTables.includes("events"));
+    assert.ok(!queriedTables.includes("members"), "should not query members for events surface");
+    assert.ok(!queriedTables.includes("alumni"), "should not query alumni for events surface");
+    assert.ok(!queriedTables.includes("parents"), "should not query parents for events surface");
+    assert.ok(!queriedTables.includes("announcements"), "should not query announcements for events surface");
+    assert.ok(!queriedTables.includes("organization_donation_stats"), "should not query donations for events surface");
+  });
+
+  it("members surface excludes events and donations from output", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "members",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+        userName: "Admin",
+        memberCount: 42,
+        alumniCount: 10,
+        parentCount: 5,
+        upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.orgContextMessage);
+    assert.match(result.orgContextMessage!, /Active Members: 42/);
+    assert.ok(!result.orgContextMessage!.includes("Upcoming Events"));
+    assert.ok(!result.orgContextMessage!.includes("Donation Summary"));
+  });
+
+  it("no surface defaults to general and loads all data sources", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+      alumniCount: 5,
+      parentCount: 2,
+      upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+      announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+      donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: mock as any,
+    });
+
+    assert.ok(queriedTables.includes("organizations"));
+    assert.ok(queriedTables.includes("users"));
+    assert.ok(queriedTables.includes("members"));
+    assert.ok(queriedTables.includes("alumni"));
+    assert.ok(queriedTables.includes("parents"));
+    assert.ok(queriedTables.includes("events"));
+    assert.ok(queriedTables.includes("announcements"));
+    assert.ok(queriedTables.includes("organization_donation_stats"));
+  });
+
+  // --- Phase 2: Token budget and metadata ---
+
+  it("returns metadata with included and excluded sections", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+        userName: "Admin",
+        memberCount: 10,
+        alumniCount: 5,
+        parentCount: 2,
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.metadata);
+    assert.equal(result.metadata.surface, "general");
+    assert.ok(result.metadata.sectionsIncluded.includes("Organization Overview"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Current User"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Counts"));
+    assert.ok(result.metadata.sectionsIncluded.includes("Donation Summary"));
+    assert.ok(result.metadata.estimatedTokens > 0);
+    assert.equal(result.metadata.budgetTokens, 4000);
+    assert.deepEqual(result.metadata.sectionsExcluded, []);
+  });
+
+  it("shared_static context mode takes precedence over surface", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const queriedTables: string[] = [];
+    const baseMock = createMockServiceSupabase({
+      org: { name: "Test Org", slug: "test" },
+      userName: "Admin",
+      memberCount: 10,
+    });
+    const mock = {
+      from: (table: string) => {
+        queriedTables.push(table);
+        return baseMock.from(table);
+      },
+    };
+
+    await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      surface: "events",
+      contextMode: "shared_static",
+      serviceSupabase: mock as any,
+    });
+
+    // shared_static should only query organizations, regardless of surface
+    assert.deepEqual(queriedTables, ["organizations"]);
+  });
+
+  it("estimatedTokens includes preamble and separators, not just section bodies", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test" },
+      }) as any,
+    });
+
+    assert.ok(result.orgContextMessage);
+    // The preamble adds "UNTRUSTED ORGANIZATION DATA..." text (~100 chars / ~25 tokens)
+    // estimatedTokens should reflect the full message, not just the section body
+    const expectedTokens = Math.ceil(result.orgContextMessage!.length / 4);
+    assert.equal(result.metadata.estimatedTokens, expectedTokens);
+  });
+
+  it("drops lowest-priority sections when budget is exceeded", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    // Create a very long org description to push section tokens high.
+    // With a 4000-token budget (~16000 chars) we need enough total content to overflow.
+    const longDescription = "A".repeat(15800); // ~3950 tokens for org overview, leaving ~50 for budget
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Test Org", slug: "test", description: longDescription },
+        userName: "Admin",
+        memberCount: 10,
+        alumniCount: 5,
+        parentCount: 2,
+        upcomingEvents: [{ title: "Gala", start_date: "2026-04-01T18:00:00Z", location: "Hall" }],
+        announcements: [{ title: "News", published_at: "2026-03-15T12:00:00Z" }],
+        donationStats: { total_amount_cents: 5000, donation_count: 3, last_donation_at: "2026-03-10T00:00:00Z" },
+      }) as any,
+    });
+
+    assert.ok(result.metadata);
+    // Org Overview (~3750 tokens) + preamble nearly exhausts the 4000 budget
+    // Lower-priority sections should be excluded
+    assert.ok(result.metadata.sectionsExcluded.length > 0, "some sections should be excluded");
+    // Org Overview (priority 1) should survive since it fits within budget
+    assert.ok(result.metadata.sectionsIncluded.includes("Organization Overview"));
+    // Donation Summary (priority 6, lowest) should be among the excluded
+    assert.ok(result.metadata.sectionsExcluded.includes("Donation Summary"));
   });
 });

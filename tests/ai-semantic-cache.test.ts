@@ -10,6 +10,9 @@ import {
   normalizePrompt,
   hashPrompt,
   buildPermissionScopeKey,
+  buildSemanticCacheKeyParts,
+  CACHE_CONTRACT_VERSION,
+  CACHE_KEY_SALT,
   checkCacheEligibility,
   getCacheExpiresAt,
 } from "../src/lib/ai/semantic-cache-utils.ts";
@@ -20,6 +23,11 @@ import {
 
 interface MockSelectResult {
   data: unknown;
+  error: { code?: string; message: string } | null;
+}
+
+interface MockInsertResult {
+  data: { id: string } | null;
   error: { code?: string; message: string } | null;
 }
 
@@ -42,7 +50,7 @@ interface MockInvalidationRow {
 
 function createMockServiceSupabase(opts: {
   selectResult?: MockSelectResult;
-  insertResult?: MockSelectResult;
+  insertResult?: MockInsertResult;
   captureInsertRow?: (row: MockInsertRow) => void;
   captureInvalidationRow?: (row: MockInvalidationRow) => void;
 }) {
@@ -65,9 +73,12 @@ function createMockServiceSupabase(opts: {
           },
         };
       },
-      insert: async (row: MockInsertRow) => {
+      insert: (row: MockInsertRow) => {
         opts.captureInsertRow?.(row);
-        return opts.insertResult ?? { data: null, error: null };
+        return {
+          select: function () { return this; },
+          single: async () => opts.insertResult ?? { data: { id: "cache-row-1" }, error: null },
+        };
       },
     }),
   };
@@ -128,6 +139,12 @@ describe("hashPrompt", () => {
     const hash = hashPrompt("test input");
     assert.match(hash, /^[0-9a-f]{64}$/);
   });
+
+  it("changes when the cache key salt changes", () => {
+    const hash = hashPrompt("test input");
+    const differentSaltHash = hashPrompt("test input", "different-salt");
+    assert.notEqual(hash, differentSaltHash);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -158,6 +175,26 @@ describe("buildPermissionScopeKey", () => {
   it("returns a 64-character hex string", () => {
     const key = buildPermissionScopeKey("org-1", "admin");
     assert.match(key, /^[0-9a-f]{64}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSemanticCacheKeyParts
+// ---------------------------------------------------------------------------
+
+describe("buildSemanticCacheKeyParts", () => {
+  it("returns normalized prompt, hashed key parts, and contract metadata", () => {
+    const result = buildSemanticCacheKeyParts({
+      message: "  WHAT are the bylaws?  ",
+      orgId: "org-1",
+      role: "admin",
+    });
+
+    assert.equal(result.normalizedPrompt, "what are the bylaws?");
+    assert.equal(result.permissionScopeKey, buildPermissionScopeKey("org-1", "admin"));
+    assert.equal(result.promptHash, hashPrompt("what are the bylaws?"));
+    assert.equal(result.cacheVersion, CACHE_CONTRACT_VERSION);
+    assert.equal(result.cacheSalt, CACHE_KEY_SALT);
   });
 });
 
@@ -251,6 +288,24 @@ describe("checkCacheEligibility", () => {
     assert.equal(result.reason, "contains_temporal_marker");
   });
 
+  it("returns ineligible for direct time questions", () => {
+    const result = checkCacheEligibility({
+      message: "What time is it?",
+      surface: "general",
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "contains_temporal_marker");
+  });
+
+  it("returns ineligible for direct date questions", () => {
+    const result = checkCacheEligibility({
+      message: "What date is it today?",
+      surface: "general",
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "contains_temporal_marker");
+  });
+
   it("returns ineligible with contains_personalization for 'Show me my profile'", () => {
     const result = checkCacheEligibility({
       message: "Show me my profile",
@@ -305,7 +360,7 @@ describe("checkCacheEligibility", () => {
 
   it("returns ineligible for write markers: 'send'", () => {
     const result = checkCacheEligibility({
-      message: "Send the policy summary to the board",
+      message: "Send the report summary to the board",
       surface: "general",
     });
     assert.equal(result.eligible, false);
@@ -323,18 +378,18 @@ describe("getCacheExpiresAt", () => {
     assert.ok(!isNaN(Date.parse(result)), `Expected valid ISO string, got: ${result}`);
   });
 
-  it("general surface TTL is approximately 24 hours ahead", () => {
+  it("general surface TTL is approximately 12 hours ahead", () => {
     const before = Date.now();
     const result = getCacheExpiresAt("general");
     const after = Date.now();
 
     const expiresMs = Date.parse(result);
-    const expectedMin = before + 23.9 * 60 * 60 * 1000;
-    const expectedMax = after + 24.1 * 60 * 60 * 1000;
+    const expectedMin = before + 11.9 * 60 * 60 * 1000;
+    const expectedMax = after + 12.1 * 60 * 60 * 1000;
 
     assert.ok(
       expiresMs >= expectedMin && expiresMs <= expectedMax,
-      `Expected ~24h TTL, got ${result}`
+      `Expected ~12h TTL, got ${result}`
     );
   });
 
@@ -375,10 +430,13 @@ describe("getCacheExpiresAt", () => {
 
 describe("lookupSemanticCache", () => {
   const baseParams = {
-    promptHash: hashPrompt("what are the organization bylaws?"),
     orgId: "org-1",
     surface: "general" as const,
-    permissionScopeKey: buildPermissionScopeKey("org-1", "admin"),
+    cacheKey: buildSemanticCacheKeyParts({
+      message: "what are the organization bylaws?",
+      orgId: "org-1",
+      role: "admin",
+    }),
   };
 
   it("returns { ok: true, hit } when cache entry found", async () => {
@@ -442,12 +500,14 @@ describe("lookupSemanticCache", () => {
 
 describe("writeCacheEntry", () => {
   const baseParams = {
-    normalizedPrompt: "what are the organization bylaws?",
-    promptHash: hashPrompt("what are the organization bylaws?"),
+    cacheKey: buildSemanticCacheKeyParts({
+      message: "what are the organization bylaws?",
+      orgId: "org-1",
+      role: "admin",
+    }),
     responseContent: "The bylaws cover membership, voting, and finances.",
     orgId: "org-1",
     surface: "general" as const,
-    permissionScopeKey: buildPermissionScopeKey("org-1", "admin"),
     sourceMessageId: "msg-42",
   };
 
@@ -455,29 +515,30 @@ describe("writeCacheEntry", () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     let capturedRow: MockInsertRow | null = null;
     const mock = createMockServiceSupabase({
-      insertResult: { data: null, error: null },
+      insertResult: { data: { id: "cache-row-1" }, error: null },
       captureInsertRow: (row) => { capturedRow = row; },
     });
 
-    await writeCacheEntry({ ...baseParams, supabase: mock as any });
+    const result = await writeCacheEntry({ ...baseParams, supabase: mock as any });
 
     assert.ok(capturedRow !== null, "insert should have been called");
     assert.equal(capturedRow.org_id, "org-1");
     assert.equal(capturedRow.surface, "general");
-    assert.equal(capturedRow.permission_scope_key, baseParams.permissionScopeKey);
-    assert.equal(capturedRow.prompt_normalized, baseParams.normalizedPrompt);
-    assert.equal(capturedRow.prompt_hash, baseParams.promptHash);
+    assert.equal(capturedRow.permission_scope_key, baseParams.cacheKey.permissionScopeKey);
+    assert.equal(capturedRow.prompt_normalized, baseParams.cacheKey.normalizedPrompt);
+    assert.equal(capturedRow.prompt_hash, baseParams.cacheKey.promptHash);
     assert.equal(capturedRow.response_content, baseParams.responseContent);
     assert.equal(capturedRow.source_message_id, "msg-42");
     assert.ok(capturedRow.expires_at, "expires_at should be set");
     assert.ok(capturedRow.cache_version !== undefined, "cache_version should be set");
+    assert.deepEqual(result, { status: "inserted", entryId: "cache-row-1" });
   });
 
   it("invalidates expired conflicting rows before inserting a replacement", async () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     let invalidationRow: MockInvalidationRow | null = null;
     const mock = createMockServiceSupabase({
-      insertResult: { data: null, error: null },
+      insertResult: { data: { id: "cache-row-1" }, error: null },
       captureInvalidationRow: (row) => { invalidationRow = row; },
     });
 
@@ -491,47 +552,45 @@ describe("writeCacheEntry", () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     let insertCalled = false;
     const mock = createMockServiceSupabase({
-      insertResult: { data: null, error: null },
+      insertResult: { data: { id: "cache-row-1" }, error: null },
       captureInsertRow: () => { insertCalled = true; },
     });
 
-    await writeCacheEntry({
+    const result = await writeCacheEntry({
       ...baseParams,
       responseContent: "x".repeat(16001),
       supabase: mock as any,
     });
 
     assert.equal(insertCalled, false, "insert should not be called for oversized content");
+    assert.deepEqual(result, { status: "skipped_too_large" });
   });
 
-  it("does not throw on unique constraint violation (code 23505)", async () => {
+  it("returns duplicate on unique constraint violation (code 23505)", async () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     const mock = createMockServiceSupabase({
       insertResult: { data: null, error: { code: "23505", message: "duplicate key value" } },
     });
 
-    // Should resolve without throwing
-    await assert.doesNotReject(() =>
-      writeCacheEntry({ ...baseParams, supabase: mock as any })
-    );
+    const result = await writeCacheEntry({ ...baseParams, supabase: mock as any });
+    assert.deepEqual(result, { status: "duplicate" });
   });
 
-  it("does not throw on any other database error", async () => {
+  it("returns error on any other database error", async () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     const mock = createMockServiceSupabase({
       insertResult: { data: null, error: { code: "42P01", message: "table does not exist" } },
     });
 
-    await assert.doesNotReject(() =>
-      writeCacheEntry({ ...baseParams, supabase: mock as any })
-    );
+    const result = await writeCacheEntry({ ...baseParams, supabase: mock as any });
+    assert.deepEqual(result, { status: "error" });
   });
 
   it("accepts exactly 16000 chars (boundary — should write)", async () => {
     const { writeCacheEntry } = await import("../src/lib/ai/semantic-cache.ts");
     let insertCalled = false;
     const mock = createMockServiceSupabase({
-      insertResult: { data: null, error: null },
+      insertResult: { data: { id: "cache-row-1" }, error: null },
       captureInsertRow: () => { insertCalled = true; },
     });
 

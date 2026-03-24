@@ -88,17 +88,23 @@ export type Database = {
           cache_bypass_reason: string | null
           cache_entry_id: string | null
           cache_status: string | null
+          context_surface: string | null
+          context_token_estimate: number | null
           created_at: string
           error: string | null
           expires_at: string
           id: string
           input_tokens: number | null
           intent: string | null
+          intent_type: string | null
           latency_ms: number | null
           message_id: string | null
           model: string | null
           org_id: string
           output_tokens: number | null
+          rag_chunk_count: number | null
+          rag_error: string | null
+          rag_top_similarity: number | null
           thread_id: string | null
           tool_calls: Json | null
           user_id: string
@@ -107,17 +113,23 @@ export type Database = {
           cache_bypass_reason?: string | null
           cache_entry_id?: string | null
           cache_status?: string | null
+          context_surface?: string | null
+          context_token_estimate?: number | null
           created_at?: string
           error?: string | null
           expires_at?: string
           id?: string
           input_tokens?: number | null
           intent?: string | null
+          intent_type?: string | null
           latency_ms?: number | null
           message_id?: string | null
           model?: string | null
           org_id: string
           output_tokens?: number | null
+          rag_chunk_count?: number | null
+          rag_error?: string | null
+          rag_top_similarity?: number | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id: string
@@ -126,17 +138,23 @@ export type Database = {
           cache_bypass_reason?: string | null
           cache_entry_id?: string | null
           cache_status?: string | null
+          context_surface?: string | null
+          context_token_estimate?: number | null
           created_at?: string
           error?: string | null
           expires_at?: string
           id?: string
           input_tokens?: number | null
           intent?: string | null
+          intent_type?: string | null
           latency_ms?: number | null
           message_id?: string | null
           model?: string | null
           org_id?: string
           output_tokens?: number | null
+          rag_chunk_count?: number | null
+          rag_error?: string | null
+          rag_top_similarity?: number | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id?: string
@@ -155,6 +173,194 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "ai_threads"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_document_chunks: {
+        Row: {
+          chunk_index: number
+          content_hash: string
+          content_text: string
+          created_at: string
+          deleted_at: string | null
+          embedding: string | null
+          id: string
+          metadata: Json
+          org_id: string
+          source_id: string
+          source_table: string
+          updated_at: string
+        }
+        Insert: {
+          chunk_index?: number
+          content_hash: string
+          content_text: string
+          created_at?: string
+          deleted_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          org_id: string
+          source_id: string
+          source_table: string
+          updated_at?: string
+        }
+        Update: {
+          chunk_index?: number
+          content_hash?: string
+          content_text?: string
+          created_at?: string
+          deleted_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          org_id?: string
+          source_id?: string
+          source_table?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_document_chunks_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_embedding_queue: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          org_id: string
+          processed_at: string | null
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          org_id: string
+          processed_at?: string | null
+          source_id: string
+          source_table: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          org_id?: string
+          processed_at?: string | null
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_embedding_queue_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_indexing_exclusions: {
+        Row: {
+          created_at: string
+          excluded_by: string
+          id: string
+          org_id: string
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          created_at?: string
+          excluded_by: string
+          id?: string
+          org_id: string
+          source_id: string
+          source_table: string
+        }
+        Update: {
+          created_at?: string
+          excluded_by?: string
+          id?: string
+          org_id?: string
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_indexing_exclusions_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_messages: {
+        Row: {
+          content: string | null
+          context_surface: string | null
+          created_at: string
+          id: string
+          idempotency_key: string | null
+          intent: string | null
+          intent_type: string | null
+          org_id: string
+          role: string
+          status: string
+          thread_id: string
+          tool_calls: Json | null
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          context_surface?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          intent?: string | null
+          intent_type?: string | null
+          org_id: string
+          role: string
+          status?: string
+          thread_id: string
+          tool_calls?: Json | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          context_surface?: string | null
+          created_at?: string
+          id?: string
+          idempotency_key?: string | null
+          intent?: string | null
+          intent_type?: string | null
+          org_id?: string
+          role?: string
+          status?: string
+          thread_id?: string
+          tool_calls?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_thread_owner_fkey"
+            columns: ["thread_id", "user_id", "org_id"]
+            isOneToOne: false
+            referencedRelation: "ai_threads"
+            referencedColumns: ["id", "user_id", "org_id"]
           },
         ]
       }
@@ -217,50 +423,6 @@ export type Database = {
             columns: ["source_message_id"]
             isOneToOne: false
             referencedRelation: "ai_messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ai_messages: {
-        Row: {
-          content: string | null
-          created_at: string
-          id: string
-          idempotency_key: string | null
-          intent: string | null
-          role: string
-          status: string
-          thread_id: string
-          tool_calls: Json | null
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          idempotency_key?: string | null
-          intent?: string | null
-          role: string
-          status?: string
-          thread_id: string
-          tool_calls?: Json | null
-        }
-        Update: {
-          content?: string | null
-          created_at?: string
-          id?: string
-          idempotency_key?: string | null
-          intent?: string | null
-          role?: string
-          status?: string
-          thread_id?: string
-          tool_calls?: Json | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ai_messages_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "ai_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -1183,6 +1345,7 @@ export type Database = {
         Row: {
           competition_id: string
           created_at: string
+          deleted_at: string | null
           id: string
           name: string
           organization_id: string
@@ -1190,6 +1353,7 @@ export type Database = {
         Insert: {
           competition_id: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name: string
           organization_id: string
@@ -1197,6 +1361,7 @@ export type Database = {
         Update: {
           competition_id?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           name?: string
           organization_id?: string
@@ -2318,6 +2483,7 @@ export type Database = {
       }
       form_document_submissions: {
         Row: {
+          deleted_at: string | null
           document_id: string
           file_name: string
           file_path: string
@@ -2329,6 +2495,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          deleted_at?: string | null
           document_id: string
           file_name: string
           file_path: string
@@ -2340,6 +2507,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          deleted_at?: string | null
           document_id?: string
           file_name?: string
           file_path?: string
@@ -2439,6 +2607,7 @@ export type Database = {
       }
       form_submissions: {
         Row: {
+          deleted_at: string | null
           form_id: string
           id: string
           organization_id: string
@@ -2447,6 +2616,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          deleted_at?: string | null
           form_id: string
           id?: string
           organization_id: string
@@ -2455,6 +2625,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          deleted_at?: string | null
           form_id?: string
           id?: string
           organization_id?: string
@@ -3100,6 +3271,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          deleted_at: string | null
           entry_date: string
           id: string
           notes: string | null
@@ -3111,6 +3283,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by: string
+          deleted_at?: string | null
           entry_date?: string
           id?: string
           notes?: string | null
@@ -3122,6 +3295,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string
+          deleted_at?: string | null
           entry_date?: string
           id?: string
           notes?: string | null
@@ -3150,6 +3324,7 @@ export type Database = {
       mentorship_pairs: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
           mentee_user_id: string
           mentor_user_id: string
@@ -3159,6 +3334,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           mentee_user_id: string
           mentor_user_id: string
@@ -3168,6 +3344,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
           mentee_user_id?: string
           mentor_user_id?: string
@@ -3570,6 +3747,7 @@ export type Database = {
           anonymous: boolean
           created_at: string
           currency: string
+          deleted_at: string | null
           donor_email: string | null
           donor_name: string | null
           event_id: string | null
@@ -3587,6 +3765,7 @@ export type Database = {
           anonymous?: boolean
           created_at?: string
           currency?: string
+          deleted_at?: string | null
           donor_email?: string | null
           donor_name?: string | null
           event_id?: string | null
@@ -3604,6 +3783,7 @@ export type Database = {
           anonymous?: boolean
           created_at?: string
           currency?: string
+          deleted_at?: string | null
           donor_email?: string | null
           donor_name?: string | null
           event_id?: string | null
@@ -4205,7 +4385,15 @@ export type Database = {
           verified_by_org_id?: string | null
           verified_by_user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_schedule_allowed_domains_verified_by_org"
+            columns: ["verified_by_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       schedule_domain_rules: {
         Row: {
@@ -4415,6 +4603,7 @@ export type Database = {
           created_at: string
           event_id: string
           id: string
+          leased_at: string | null
           payload_json: Json | null
           processed_at: string | null
           type: string
@@ -4423,6 +4612,7 @@ export type Database = {
           created_at?: string
           event_id: string
           id?: string
+          leased_at?: string | null
           payload_json?: Json | null
           processed_at?: string | null
           type: string
@@ -4431,6 +4621,7 @@ export type Database = {
           created_at?: string
           event_id?: string
           id?: string
+          leased_at?: string | null
           payload_json?: Json | null
           processed_at?: string | null
           type?: string
@@ -4992,6 +5183,7 @@ export type Database = {
       alumni_bucket_limit: { Args: { p_bucket: string }; Returns: number }
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
+      backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
       bulk_import_alumni_rich: {
         Args: { p_organization_id: string; p_overwrite?: boolean; p_rows: Json }
         Returns: {
@@ -5024,10 +5216,6 @@ export type Database = {
         }
         Returns: boolean
       }
-      purge_expired_ai_semantic_cache: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
       check_analytics_rate_limit: {
         Args: {
           p_max_events?: number
@@ -5040,6 +5228,24 @@ export type Database = {
       check_in_event_attendee: {
         Args: { p_rsvp_id: string; p_undo?: boolean }
         Returns: Json
+      }
+      claim_stale_stripe_event: {
+        Args: { p_event_id: string }
+        Returns: {
+          created_at: string
+          event_id: string
+          id: string
+          leased_at: string | null
+          payload_json: Json | null
+          processed_at: string | null
+          type: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "stripe_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       complete_enterprise_invite_redemption: {
         Args: { p_organization_id: string; p_token: string }
@@ -5186,7 +5392,9 @@ export type Database = {
         }[]
       }
       parents_bucket_limit: { Args: { p_bucket: string }; Returns: number }
+      purge_ai_embedding_queue: { Args: never; Returns: number }
       purge_analytics_events: { Args: never; Returns: Json }
+      purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
       purge_ops_events: { Args: never; Returns: Json }
@@ -5207,6 +5415,24 @@ export type Database = {
       save_user_linkedin_url: {
         Args: { p_linkedin_url: string; p_user_id: string }
         Returns: Json
+      }
+      search_ai_documents: {
+        Args: {
+          p_match_count?: number
+          p_org_id: string
+          p_query_embedding: string
+          p_similarity_threshold?: number
+          p_source_tables?: string[]
+        }
+        Returns: {
+          chunk_index: number
+          content_text: string
+          id: string
+          metadata: Json
+          similarity: number
+          source_id: string
+          source_table: string
+        }[]
       }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }

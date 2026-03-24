@@ -29,7 +29,7 @@ export function ImportResultBanner({ result, onReset, onClose, extraDetail }: Im
         {result.created} created, {result.updated} updated, {result.skipped} skipped, {result.quotaBlocked} quota blocked
       </p>
       {extraDetail}
-      {result.errors.length > 0 && (
+      {Array.isArray(result.errors) && result.errors.length > 0 && (
         <div className="text-xs text-red-400 mt-1">
           {result.errors.map((err, i) => (
             <p key={i}>{err}</p>

@@ -101,13 +101,16 @@ export async function consumeSSEStream(
           return null;
         }
 
-        callbacks.onDone?.(event);
-        return {
-          threadId: event.threadId,
-          content: fullContent,
-          replayed: event.replayed,
-          usage: event.usage,
-        };
+        if (event.type === "done") {
+          callbacks.onDone?.(event);
+          return {
+            threadId: event.threadId,
+            content: fullContent,
+            replayed: event.replayed,
+            usage: event.usage,
+          };
+        }
+        // Skip unrecognized event types (e.g., tool_status)
       } catch {
         // Ignore malformed events and keep streaming.
       }

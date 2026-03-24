@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Assistant Architecture — Gap Analysis Playground</title>
+<title>AI Assistant Architecture — Pipeline Status</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -520,7 +520,7 @@
 <div class="sidebar">
   <div class="sidebar-header">
     <h1>AI Assistant Pipeline</h1>
-    <div class="subtitle">Architecture Gap Analysis</div>
+    <div class="subtitle">Pipeline Status &amp; Gap Analysis</div>
   </div>
 
   <div class="progress-section">
@@ -528,8 +528,8 @@
       <div class="progress-bar-fill" id="progressFill"></div>
     </div>
     <div class="progress-stats">
-      <span class="progress-pct" id="progressPct">48%</span>
-      <span id="progressLabel">5 of 10 components</span>
+      <span class="progress-pct" id="progressPct">74%</span>
+      <span id="progressLabel">9 of 11 components</span>
     </div>
   </div>
 
@@ -610,14 +610,18 @@ const COMPONENTS = [
     x: 60, y: 40,
     files: [
       'src/app/api/ai/[orgId]/chat/route.ts',
+      'src/app/api/ai/[orgId]/chat/handler.ts',
       'src/lib/schemas/ai-assistant.ts'
     ],
     built: [
       'POST endpoint with streaming SSE response',
-      'Zod request validation (message, threadId, surface)',
+      'Zod request validation (message, threadId, surface, idempotencyKey)',
       'Rate limiting: 30 req/min IP, 20 req/min user',
       'Idempotency via idempotency_key + localStorage',
-      'Duplicate detection with 409 recovery'
+      'Duplicate detection with 409 recovery for in-flight requests',
+      'Abandoned stream cleanup (5-min threshold, status → error)',
+      'Atomic init_ai_chat RPC for thread create/reuse + message insert',
+      'Route-derived surface from pathname via routeToSurface()'
     ],
     missing: []
   },
@@ -625,66 +629,112 @@ const COMPONENTS = [
     id: 'context',
     label: 'Context Enrichment',
     shortLabel: 'Context',
-    pct: 85,
+    pct: 100,
     status: 'built',
     layer: 'composition',
     x: 60, y: 170,
     files: [
-      'src/lib/ai/context-builder.ts'
+      'src/lib/ai/context-builder.ts',
+      'src/components/ai-assistant/route-surface.ts',
+      'supabase/migrations/20260323000000_ai_message_context_surface.sql'
     ],
     built: [
-      '8 parallel queries (org, user, members, alumni, parents, events, announcements, donations)',
+      'Surface-based context selection (general/members/analytics/events)',
+      'Route-derived surface — pathname mapped to surface via routeToSurface()',
+      'Queries gated by surface — events skips members, alumni, parents, announcements, donations',
+      '4000-token budget with priority-based section dropping',
+      'SectionName union type for compile-time section name safety',
+      'ContextMetadata returned (sectionsIncluded, sectionsExcluded, estimatedTokens)',
       'Untrusted org context injected as user role (prompt injection safe)',
       'System prompt with NARROW_PANEL_POLICY',
-      'Conditional donation stats (only if count > 0)'
+      'shared_static mode overrides surface for cache-eligible miss contexts',
+      'Cross-surface thread reset on navigation (prevents thread/surface mismatch)',
+      'Thread list filtered by current surface',
+      'context_surface persisted per message (effective surface at send time)',
+      'AVAILABLE TOOLS section in system prompt instructs LLM on tool usage and trust boundary'
     ],
     missing: [
-      'No dynamic context selection based on intent/surface',
-      'No semantic relevance filtering',
-      'No context budget or token-aware truncation'
+      'No richer data sources per surface (e.g., individual member records for members surface)'
     ]
   },
   {
     id: 'cache',
     label: 'Semantic Cache',
     shortLabel: 'Cache',
-    pct: 0,
-    status: 'missing',
+    pct: 90,
+    status: 'built',
     layer: 'routing',
     x: 310, y: 40,
-    files: [],
-    built: [],
+    files: [
+      'src/lib/ai/semantic-cache.ts',
+      'src/lib/ai/semantic-cache-utils.ts',
+      'supabase/migrations/20260321100001_ai_semantic_cache.sql'
+    ],
+    built: [
+      'Exact-hash SHA-256 prompt deduplication',
+      'Surface-specific TTLs defined: general 12h, members 4h, analytics 2h, events 4h',
+      'Permission scope key (SHA-256 of orgId:role)',
+      'Cache eligibility filtering (temporal, personalization, live context, write markers)',
+      'Prompt normalization before hashing',
+      'Cache write-back on successful responses',
+      'Purge function for expired entries',
+      'pgvector extension pre-loaded for future similarity search',
+      'DISABLE_AI_CACHE env kill switch'
+    ],
     missing: [
-      'No embedding-based similarity cache',
-      'No cache layer exists at all',
-      'Idempotency dedup only (exact key match, not semantic)',
-      'Would need pgvector or Redis + embeddings',
-      'Estimated: reduce LLM calls by 30-40% for repeated questions'
+      'No embedding-based similarity matching (v2 — pgvector ready)',
+      'Eligibility gate blocks non-general surfaces (TTL infra ready but guard returns unsupported_surface)',
+      'Lifting multi-surface cache requires validating invalidation safety per surface'
     ]
   },
   {
     id: 'intent',
     label: 'Intent + Plan Builder',
     shortLabel: 'Intent',
-    pct: 10,
-    status: 'stub',
+    pct: 75,
+    status: 'built',
     layer: 'routing',
     x: 310, y: 170,
     files: [
+      'src/lib/ai/intent-router.ts',
       'supabase/migrations/20260319000000_ai_assistant_tables.sql',
       'src/lib/schemas/ai-assistant.ts'
     ],
     built: [
       'intent column on ai_messages (DB schema ready)',
       'surface enum: general, members, analytics, events',
-      'Thread surface stored and accessible'
+      'Thread surface stored and accessible',
+      'Keyword-based intent classifier (resolveSurfaceRouting)',
+      'Scores messages across members, analytics, events keyword lists',
+      'Detects ambiguous queries when surfaces score equally',
+      'skipRetrieval: true for exact casual messages (greetings, thanks) via regex',
+      'Returns rerouted flag when inferred surface differs from requested',
+      'Maps surface → intent: members_query, analytics_query, events_query, general_query, ambiguous_query',
+      'Routing based on classified intent — effectiveSurface drives context selection',
+      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface'
     ],
     missing: [
-      'No intent classification logic',
-      'No routing based on classified intent',
       'No plan decomposition for multi-step requests',
-      'Surface-specific prompts not implemented',
-      'No function/tool selection based on intent'
+      'No ML-based classification (current is keyword heuristic)'
+    ]
+  },
+  {
+    id: 'validator',
+    label: 'Output Validator',
+    shortLabel: 'Validator',
+    pct: 0,
+    status: 'missing',
+    layer: 'routing',
+    x: 500, y: 170,
+    files: [],
+    built: [],
+    missing: [
+      'No schema validation for structured LLM output',
+      'No safety check (toxicity, PII leakage, off-topic detection)',
+      'No hallucination check (claim verification against RAG sources)',
+      'No confidence scoring or fallback to "I don\'t know"',
+      'No retry loop for failed validation (re-prompt with corrections)',
+      'Would gate all execution paths before actions branch out'
     ]
   },
   {
@@ -706,53 +756,93 @@ const COMPONENTS = [
       'Thread ownership validation (resolveOwnThread)',
       'Never leaks thread existence to non-owners',
       'Rate limiting at IP and user level',
-      'RLS policies on ai_threads and ai_messages'
+      'RLS policies on ai_threads and ai_messages',
+      'Abandoned stream detection (5-min timeout, prevents stuck threads)'
     ],
     missing: [
-      'No per-action permission checks (future tool calls)',
+      'No per-action permission checks for write tools (read-only tools execute freely)'
     ]
   },
   {
     id: 'rag',
     label: 'FAQ / RAG',
     shortLabel: 'RAG',
-    pct: 0,
-    status: 'missing',
+    pct: 90,
+    status: 'built',
     layer: 'execution',
-    x: 560, y: 40,
-    files: [],
-    built: [],
+    x: 690, y: 40,
+    files: [
+      'src/lib/ai/embeddings.ts',
+      'src/lib/ai/chunker.ts',
+      'src/lib/ai/embedding-worker.ts',
+      'src/lib/ai/rag-retriever.ts',
+      'src/app/api/cron/ai-embed-process/route.ts',
+      'supabase/migrations/20260711000000_ai_rag_foundation.sql',
+      'supabase/migrations/20260711000001_ai_rag_queue_triggers.sql',
+      'supabase/migrations/20260711000002_ai_audit_rag_columns.sql',
+      'supabase/migrations/20260711100000_ai_rag_gemini_768_dims.sql',
+      'supabase/migrations/20260711100001_ai_rag_security_fixes.sql',
+      'supabase/migrations/20260712000000_ai_rag_hardening.sql'
+    ],
+    built: [
+      'pgvector extension + ai_document_chunks table (768-dim vectors)',
+      'Gemini embedding-001 client via OpenAI-compatible API (EMBEDDING_API_KEY)',
+      'Batch embedding generation (single API call for multiple texts)',
+      'Document chunker: 5 source tables, 2048-char max, parent thread context for replies',
+      'SHA-256 content hashing for change detection (skip unchanged chunks)',
+      'Embedding queue (ai_embedding_queue) with FOR UPDATE SKIP LOCKED concurrency',
+      'DB triggers auto-enqueue on insert/update/delete for all 5 source tables',
+      'Content-change-aware triggers (skip updates where title/body unchanged)',
+      'Cron endpoint: loops processEmbeddingQueue, purges dead-letter items',
+      'Per-org indexing exclusions (ai_indexing_exclusions) — fail-closed on error',
+      'Atomic chunk replacement via replace_ai_chunks RPC',
+      'Batch hash fetch via batchFetchExistingHashes (no N+1)',
+      'Orphaned chunk detection (old indexes not present in new render)',
+      'Dedupe partial unique index on pending queue items',
+      'Dead-letter purge via purge_ai_embedding_queue RPC',
+      'Vector similarity retrieval via search_ai_documents RPC',
+      'Parent thread title/body enrichment on retrieved replies',
+      'RAG wired end-to-end in chat handler — additive, never blocking',
+      'RAG silently skipped when EMBEDDING_API_KEY absent (graceful degradation)',
+      'RAG metrics in audit log (rag_chunk_count, rag_top_similarity, rag_error)'
+    ],
     missing: [
-      'No pgvector extension enabled',
-      'No embedding generation pipeline',
-      'No vector similarity search',
-      'No document chunking or indexing',
-      'No knowledge base management',
-      'Would enable: FAQ answers, policy lookups, historical data search'
+      'No manual knowledge base management UI (add/remove custom FAQ entries)',
+      'Retrieval is org-wide — not yet surface-aware (no surface filter on chunks)',
+      'No chunk-level relevance feedback or user correction loop'
     ]
   },
   {
     id: 'actions',
     label: 'Action Executor',
     shortLabel: 'Actions',
-    pct: 10,
-    status: 'stub',
+    pct: 80,
+    status: 'built',
     layer: 'execution',
-    x: 560, y: 170,
+    x: 690, y: 170,
     files: [
-      'src/lib/ai/response-composer.ts'
+      'src/lib/ai/tools/definitions.ts',
+      'src/lib/ai/tools/executor.ts',
+      'src/lib/ai/response-composer.ts',
+      'src/app/api/ai/[orgId]/chat/handler.ts'
     ],
     built: [
-      'toolResults parameter exists in ComposeOptions',
-      'Tool results injected as framed user message'
+      'AI_TOOLS defines 3 OpenAI function-calling tools: list_members, list_events, get_org_stats',
+      'Full Zod argument validation per tool (limit, upcoming) with fail-closed behavior',
+      'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
+      'executeToolCall with safeToolQuery/safeToolCount error wrappers',
+      'Two-pass tool loop: Pass 1 conditionally streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
+      'tool_status SSE events emitted: calling, done, error',
+      'Malformed args fail closed — no {} fallback, error pushed to tool results',
+      'Cache bypass when toolCallMade = true (tool responses are dynamic)',
+      'Usage accumulated across both passes via usageRef',
+      'Tool calls recorded in audit log (toolCalls array)'
     ],
     missing: [
-      'No tool/function definitions registered',
-      'No OpenAI-compatible function calling',
-      'No action confirmation workflow',
-      'No write-action safety checks',
-      'Tool result injection is unwired (no callers pass tools)',
-      'Would enable: create events, send announcements, manage members'
+      'No write actions (create events, send announcements, manage members)',
+      'No action confirmation workflow for write actions',
+      'No tool chaining (intentionally limited to single pass)',
+      'No streaming tool execution (tools run synchronously between passes)'
     ]
   },
   {
@@ -762,13 +852,13 @@ const COMPONENTS = [
     pct: 0,
     status: 'missing',
     layer: 'execution',
-    x: 560, y: 300,
+    x: 690, y: 300,
     files: [],
     built: [],
     missing: [
       'No dynamic SQL generation or execution',
       'No safe query sandbox',
-      'Only pre-fetched aggregate stats in context',
+      'Only pre-fetched aggregate stats in context (via context-builder)',
       'No chart/visualization generation',
       'No trend analysis or comparisons',
       'Would enable: "How many members joined this month?"'
@@ -781,7 +871,7 @@ const COMPONENTS = [
     pct: 90,
     status: 'built',
     layer: 'composition',
-    x: 810, y: 105,
+    x: 940, y: 105,
     files: [
       'src/lib/ai/response-composer.ts',
       'src/lib/ai/client.ts',
@@ -789,10 +879,14 @@ const COMPONENTS = [
     ],
     built: [
       'AsyncGenerator-based SSE streaming',
-      'OpenAI-compatible client (z.ai / glm-5)',
+      'OpenAI-compatible client (z.ai / glm-5 via ZAI_MODEL env)',
       'Token usage accumulation (input + output)',
-      'SSE encoding with chunk/done/error events',
-      'Configurable temperature (0.7) and max_tokens (2000)'
+      'SSE encoding with chunk/done/error/tool_status events',
+      'Configurable temperature (0.7) and max_tokens (2000)',
+      'streaming → complete status transitions on ai_messages',
+      'Tool call detection: streams OpenAI deltas, assembles multi-chunk argsJson by index',
+      'Yields tool_call_requested events with assembled tool call data',
+      'Pass 2 mode: reconstructs assistant + tool role messages per OpenAI function-calling protocol'
     ],
     missing: [
       'No structured output parsing',
@@ -803,22 +897,29 @@ const COMPONENTS = [
     id: 'audit',
     label: 'Audit + Deliver',
     shortLabel: 'Audit',
-    pct: 90,
+    pct: 95,
     status: 'built',
     layer: 'delivery',
-    x: 810, y: 260,
+    x: 940, y: 260,
     files: [
       'src/lib/ai/audit.ts',
-      'supabase/migrations/20260319000000_ai_assistant_tables.sql'
+      'supabase/migrations/20260319000000_ai_assistant_tables.sql',
+      'supabase/migrations/20260710100000_ai_audit_log_context_columns.sql',
+      'supabase/migrations/20260711000002_ai_audit_rag_columns.sql'
     ],
     built: [
       'ai_audit_log table with 90-day TTL',
       'Fire-and-forget audit logging',
-      'Secret redaction (sk-*, key_*, Bearer *)',
+      'Secret redaction (sk-*, key_*, AIza*, sbp_*, eyJ*, Bearer *)',
       'Token usage tracking (input + output)',
       'Latency measurement',
-      'Model and intent recorded',
-      'SSE delivery to client with replayed flag'
+      'Model and intent recorded (keyword classifier live, maps to surface-specific intents)',
+      'Cache telemetry (status, entry ID, bypass reason)',
+      'Context metadata (surface, token estimate, contextMode) on all paths',
+      'SSE delivery to client with replayed flag',
+      'RAG telemetry (rag_chunk_count, rag_top_similarity, rag_error)',
+      'toolCalls array in audit entries (names + args of all executed tools)',
+      'cacheBypassReason: tool_call_made recorded when tools used'
     ],
     missing: [
       'No real-time monitoring dashboard',
@@ -828,19 +929,20 @@ const COMPONENTS = [
 ];
 
 const CONNECTIONS = [
+  // Active data flow (solid lines)
   { from: 'intake', to: 'policy', type: 'data-flow', label: 'validate' },
   { from: 'policy', to: 'context', type: 'data-flow', label: 'enrich' },
-  { from: 'intake', to: 'cache', type: 'data-flow', label: 'check cache', dashed: true },
+  { from: 'intake', to: 'cache', type: 'data-flow', label: 'check cache' },
   { from: 'cache', to: 'composer', type: 'data-flow', label: 'cache hit', dashed: true },
-  { from: 'policy', to: 'intent', type: 'data-flow', label: 'classify', dashed: true },
-  { from: 'intent', to: 'rag', type: 'tool-call', label: 'FAQ query', dashed: true },
-  { from: 'intent', to: 'actions', type: 'tool-call', label: 'execute', dashed: true },
-  { from: 'intent', to: 'analyst', type: 'tool-call', label: 'query', dashed: true },
+  { from: 'context', to: 'rag', type: 'data-flow', label: 'retrieve' },
   { from: 'context', to: 'composer', type: 'data-flow', label: 'prompt' },
-  { from: 'rag', to: 'composer', type: 'data-flow', label: 'results', dashed: true },
-  { from: 'actions', to: 'composer', type: 'data-flow', label: 'results', dashed: true },
-  { from: 'analyst', to: 'composer', type: 'data-flow', label: 'results', dashed: true },
-  { from: 'composer', to: 'audit', type: 'event', label: 'log + deliver' }
+  { from: 'rag', to: 'composer', type: 'data-flow', label: 'chunks' },
+  { from: 'composer', to: 'audit', type: 'event', label: 'log + deliver' },
+  { from: 'policy', to: 'intent', type: 'data-flow', label: 'classify' },
+  { from: 'composer', to: 'actions', type: 'tool-call', label: 'tool call' },
+  { from: 'actions', to: 'composer', type: 'data-flow', label: 'tool results' },
+  // Future connections (dashed — not yet wired)
+  { from: 'analyst', to: 'composer', type: 'data-flow', label: 'results', dashed: true }
 ];
 
 const LAYER_LABELS = {
@@ -899,7 +1001,7 @@ function getVisibleComponents() {
     visible = visible.filter(c => c.status === 'missing' || c.status === 'stub');
   } else if (state.preset === 'critical') {
     visible = visible.filter(c =>
-      ['intake', 'context', 'policy', 'composer', 'audit', 'intent'].includes(c.id)
+      ['intake', 'context', 'policy', 'composer', 'audit', 'intent', 'actions'].includes(c.id)
     );
   }
 

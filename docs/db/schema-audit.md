@@ -187,7 +187,7 @@ The live schema covers:
 |-------|---------|-------|
 | `ai_threads` | AI conversation threads | Scoped to user + org + surface. Soft-delete via `deleted_at`. Surfaces: `general`, `members`, `analytics`, `events` |
 | `ai_messages` | Messages within AI threads | Denormalized `user_id`/`org_id` with composite FK to `ai_threads(id, user_id, org_id)`. Idempotency key. Status: `pending`, `streaming`, `complete`, `error`. Role/content constraint check |
-| `ai_audit_log` | AI request audit trail | Service-role only (RLS enabled, no policies). No FK on `user_id`/`org_id` — intentional for audit survival. TTL: 90 days. Cache columns: `cache_status`, `cache_entry_id`, `cache_bypass_reason` |
+| `ai_audit_log` | AI request audit trail | Service-role only (RLS enabled, no policies). No FK on `user_id`/`org_id` — intentional for audit survival. TTL: 90 days. Cache columns: `cache_status`, `cache_entry_id`, `cache_bypass_reason`. Context columns: `context_surface`, `context_token_estimate` |
 | `ai_semantic_cache` | Semantic response cache | Org-scoped, keyed by `(org_id, surface, permission_scope_key, cache_version, prompt_hash)`. TTL via `expires_at`, soft-invalidation via `invalidated_at`. Service-role only |
 
 ### LinkedIn Integration
@@ -357,7 +357,7 @@ Two-tier verification:
 | Apr 2026 | Stripe idempotency, Google Calendar sync, calendar feeds, schedule sources/events, schedule domain allowlist, performance/security fixes |
 | May 2026 | Enterprise hybrid pricing, event recurrence, discussions, jobs, mentor profiles, feed, media uploads, dev-admin audit |
 | Jun 2026 | Media archive + moderation + albums, parent invites, parent role propagation (feed, announcements, chat, remaining tables), donations anonymous flag, chat polls/forms, alumni quota fixes, member soft-delete sync |
-| Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy) |
+| Jul 2026 | Parent invite redemption fixes, analytics hardening (allowlisted props, enum validation, behavioral tracking policy), AI context enrichment columns (`context_surface`, `context_token_estimate` on `ai_audit_log`) |
 
 ---
 

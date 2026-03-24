@@ -39,6 +39,16 @@ describe("critical query column shapes", () => {
     assert.ifError(error);
   });
 
+  it("members select — columns used by AI list_members tool", async (t) => {
+    if (skipWithoutSupabase(t)) return;
+    const { error } = await ctx.supabase
+      .from("members")
+      .select("id, user_id, status, role, created_at, first_name, last_name, email")
+      .order("created_at", { ascending: false })
+      .limit(0);
+    assert.ifError(error);
+  });
+
   it("events select — columns used by philanthropy export", async (t) => {
     if (skipWithoutSupabase(t)) return;
     const { error } = await ctx.supabase

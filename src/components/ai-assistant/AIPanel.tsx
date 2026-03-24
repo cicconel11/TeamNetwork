@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
 import { useAIPanel } from "./AIPanelContext";
+import { routeToSurface } from "./route-surface";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { ThreadList } from "./ThreadList";
@@ -23,6 +25,8 @@ interface AIPanelProps {
 
 export function AIPanel({ orgId }: AIPanelProps) {
   const { isOpen, closePanel } = useAIPanel();
+  const pathname = usePathname();
+  const surface = routeToSurface(pathname);
   const [view, setView] = useState<"chat" | "threads">("chat");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<AIPanelThread[]>([]);
@@ -42,7 +46,9 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const loadThreads = useCallback(async () => {
     setThreadsLoading(true);
     try {
-      const response = await fetch(`/api/ai/${orgId}/threads`);
+      const response = await fetch(
+        `/api/ai/${orgId}/threads?surface=${encodeURIComponent(surface)}`
+      );
       if (!response.ok) return;
       const data = await response.json();
       setThreads(data.data ?? []);
@@ -51,7 +57,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     } finally {
       setThreadsLoading(false);
     }
-  }, [orgId]);
+  }, [orgId, surface]);
 
   const loadMessages = useCallback(
     async (threadId: string, options?: { silent?: boolean }): Promise<boolean> => {
@@ -85,6 +91,19 @@ export function AIPanel({ orgId }: AIPanelProps) {
     if (!isOpen) return;
     void loadThreads();
   }, [isOpen, loadThreads]);
+
+  // Reset thread when surface changes (e.g. navigating from /members to /events)
+  // to prevent cross-surface thread continuation.
+  const prevSurfaceRef = useRef(surface);
+  useEffect(() => {
+    if (prevSurfaceRef.current !== surface) {
+      prevSurfaceRef.current = surface;
+      setActiveThreadId(null);
+      setMessages([]);
+      setPendingAssistantContent(null);
+      void loadThreads();
+    }
+  }, [surface, loadThreads]);
 
   // Skip the activeThreadId effect's redundant load after handleSend already
   // refreshed messages silently.
@@ -130,7 +149,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
       setMessages((msgs) => [...msgs, optimisticMessage]);
 
       const result = await sendMessage(content, {
-        surface: "general",
+        surface,
         threadId: activeThreadId ?? undefined,
         idempotencyKey,
       });
@@ -166,7 +185,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setPendingAssistantContent(null);
       }
     },
-    [activeThreadId, loadMessages, loadThreads, sendMessage]
+    [activeThreadId, loadMessages, loadThreads, sendMessage, surface]
   );
 
   const handleDeleteThread = useCallback(

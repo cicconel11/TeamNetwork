@@ -20,7 +20,8 @@ export type SSEEvent =
         bypassReason?: string;
       };
     }
-  | { type: "error"; message: string; retryable: boolean };
+  | { type: "error"; message: string; retryable: boolean }
+  | { type: "tool_status"; toolName: string; status: "calling" | "done" | "error" };
 
 export const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
@@ -33,19 +34,45 @@ export function encodeSSE(event: SSEEvent): Uint8Array {
   return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
 }
 
+/**
+ * Create an SSE stream with optional AbortSignal for cancellation.
+ * When the client disconnects, the cancel() callback aborts the internal
+ * controller, which propagates to the generator via the signal parameter.
+ */
 export function createSSEStream(
-  generator: (enqueue: (event: SSEEvent) => void) => Promise<void>
+  generator: (enqueue: (event: SSEEvent) => void, signal: AbortSignal) => Promise<void>,
+  externalSignal?: AbortSignal
 ): ReadableStream<Uint8Array> {
+  const abortController = new AbortController();
+
+  // Link external signal (e.g. request.signal) to internal abort
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      abortController.abort();
+    } else {
+      externalSignal.addEventListener("abort", () => abortController.abort(), { once: true });
+    }
+  }
+
   return new ReadableStream({
-    async start(controller) {
-      const enqueue = (event: SSEEvent) => controller.enqueue(encodeSSE(event));
+    async start(streamController) {
+      const enqueue = (event: SSEEvent) => {
+        if (!abortController.signal.aborted) {
+          streamController.enqueue(encodeSSE(event));
+        }
+      };
       try {
-        await generator(enqueue);
+        await generator(enqueue, abortController.signal);
       } catch {
-        enqueue({ type: "error", message: "Internal error", retryable: false });
+        if (!abortController.signal.aborted) {
+          enqueue({ type: "error", message: "Internal error", retryable: false });
+        }
       } finally {
-        controller.close();
+        streamController.close();
       }
+    },
+    cancel() {
+      abortController.abort();
     },
   });
 }

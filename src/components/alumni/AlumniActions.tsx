@@ -24,6 +24,8 @@ interface ImporterContextValue {
   openLinkedInImporter: () => void;
   openCsvImporter: () => void;
   closeImporter: () => void;
+  selectMode: boolean;
+  toggleSelectMode: () => void;
 }
 
 const ImporterContext = createContext<ImporterContextValue>({
@@ -32,18 +34,22 @@ const ImporterContext = createContext<ImporterContextValue>({
   openLinkedInImporter: () => {},
   openCsvImporter: () => {},
   closeImporter: () => {},
+  selectMode: false,
+  toggleSelectMode: () => {},
 });
 
 // Provider wraps the entire alumni page section
 export function AlumniActionsProvider({ children }: { children: ReactNode }) {
   const [importMode, setImportMode] = useState<ImportMode>(null);
+  const [selectMode, setSelectMode] = useState(false);
   const openSingleLinkedInAttacher = useCallback(() => setImportMode("single_linkedin"), []);
   const openLinkedInImporter = useCallback(() => setImportMode("linkedin"), []);
   const openCsvImporter = useCallback(() => setImportMode("csv"), []);
   const closeImporter = useCallback(() => setImportMode(null), []);
+  const toggleSelectMode = useCallback(() => setSelectMode((prev) => !prev), []);
 
   return (
-    <ImporterContext.Provider value={{ importMode, openSingleLinkedInAttacher, openLinkedInImporter, openCsvImporter, closeImporter }}>
+    <ImporterContext.Provider value={{ importMode, openSingleLinkedInAttacher, openLinkedInImporter, openCsvImporter, closeImporter, selectMode, toggleSelectMode }}>
       {children}
     </ImporterContext.Provider>
   );
@@ -56,7 +62,7 @@ interface AlumniActionsMenuProps {
 }
 
 export function AlumniActionsMenu({ orgSlug, actionLabel }: AlumniActionsMenuProps) {
-  const { openSingleLinkedInAttacher, openLinkedInImporter, openCsvImporter } = useContext(ImporterContext);
+  const { openSingleLinkedInAttacher, openLinkedInImporter, openCsvImporter, selectMode, toggleSelectMode } = useContext(ImporterContext);
 
   return (
     <AddAlumniMenu
@@ -65,8 +71,16 @@ export function AlumniActionsMenu({ orgSlug, actionLabel }: AlumniActionsMenuPro
       onSingleLinkedInClick={openSingleLinkedInAttacher}
       onImportClick={openLinkedInImporter}
       onCsvImportClick={openCsvImporter}
+      selectMode={selectMode}
+      onToggleSelectMode={toggleSelectMode}
     />
   );
+}
+
+/** Hook for child components to read selectMode from context. */
+export function useAlumniSelectMode() {
+  const { selectMode, toggleSelectMode } = useContext(ImporterContext);
+  return { selectMode, toggleSelectMode };
 }
 
 // The import panel, rendered in the page body between filters and grid

@@ -31,7 +31,11 @@
     },
     {
       "path": "/api/cron/ai-cache-purge",
-      "schedule": "0 5 * * *"
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-embed-process",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

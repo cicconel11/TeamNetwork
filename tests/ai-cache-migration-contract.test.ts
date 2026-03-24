@@ -116,9 +116,14 @@ describe("ai_semantic_cache migration contract", () => {
       crons?: Array<{ path: string; schedule: string }>;
     };
 
+    const cachePurgeCron = parsed.crons?.find(
+      (cron) => cron.path === "/api/cron/ai-cache-purge"
+    );
+
     assert.ok(
-      parsed.crons?.some((cron) => cron.path === "/api/cron/ai-cache-purge"),
+      cachePurgeCron,
       "expected vercel.json to schedule /api/cron/ai-cache-purge"
     );
+    assert.equal(cachePurgeCron?.schedule, "0 * * * *");
   });
 });

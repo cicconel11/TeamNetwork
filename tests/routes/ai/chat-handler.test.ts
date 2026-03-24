@@ -10,6 +10,61 @@ const ADMIN_USER = { id: "org-admin-user", email: "admin@example.com" };
 let authUser: { id: string; email: string } | null = ADMIN_USER;
 let aiContext: any;
 let auditEntries: any[] = [];
+let buildPromptContextCalls: any[] = [];
+let initChatCalls: any[] = [];
+let retrieveRelevantChunksCalls: any[] = [];
+let trackedOpsEvents: any[] = [];
+
+function createSemanticCacheServiceSupabase(options: {
+  rpc: (fn: string, params: any) => Promise<{ data: any; error: any }>;
+  lookupRow?: { id: string; response_content: string; created_at: string } | null;
+  insertId?: string;
+  onLookup?: () => void;
+}) {
+  const insertedRows: Array<Record<string, unknown>> = [];
+
+  return {
+    insertedRows,
+    rpc: options.rpc,
+    from(table: string) {
+      if (table !== "ai_semantic_cache") {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+
+      return {
+        select() {
+          return {
+            eq() { return this; },
+            is() { return this; },
+            gt() { return this; },
+            maybeSingle: async () => ({
+              ...(options.onLookup?.(), {}),
+              data: options.lookupRow ?? null,
+              error: null,
+            }),
+          };
+        },
+        update() {
+          return {
+            eq() { return this; },
+            is() { return this; },
+            lte: async () => ({ data: null, error: null }),
+          };
+        },
+        insert(row: Record<string, unknown>) {
+          insertedRows.push(row);
+          return {
+            select() { return this; },
+            single: async () => ({
+              data: options.insertId ? { id: options.insertId } : null,
+              error: null,
+            }),
+          };
+        },
+      };
+    },
+  };
+}
 
 function createSupabaseStub() {
   const state = {
@@ -163,41 +218,16 @@ function createSupabaseStub() {
 let supabaseStub = createSupabaseStub();
 
 const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/chat/handler.ts");
-const POST = createChatPostHandler({
-  createClient: async () => supabaseStub as any,
-  getAiOrgContext: async () => aiContext,
-  buildPromptContext: async () => ({
-    systemPrompt: "System prompt",
-    orgContextMessage: null,
-  }),
-  createZaiClient: () => ({ client: "fake" } as any),
-  getZaiModel: () => "glm-5",
-  composeResponse: (async function* (options: {
-    onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
-  }) {
-    options.onUsage?.({ inputTokens: 12, outputTokens: 7 });
-    yield { type: "chunk", content: "Hello" };
-    yield { type: "chunk", content: " world" };
-  }) as any,
-  logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
-    auditEntries.push(entry);
-  },
-  resolveOwnThread: async () => ({
-    ok: true,
-    thread: {
-      id: "thread-1",
-      user_id: ADMIN_USER.id,
-      org_id: ORG_ID,
-      surface: "general",
-      title: "Thread",
-    },
-  }),
-});
+let POST = createChatPostHandler();
 
 beforeEach(() => {
   authUser = ADMIN_USER;
   supabaseStub = createSupabaseStub();
   auditEntries = [];
+  buildPromptContextCalls = [];
+  initChatCalls = [];
+  retrieveRelevantChunksCalls = [];
+  trackedOpsEvents = [];
   aiContext = {
     ok: true,
     orgId: ORG_ID,
@@ -205,13 +235,96 @@ beforeEach(() => {
     userEmail: ADMIN_USER.email,
     role: "admin",
     supabase: supabaseStub,
-    serviceSupabase: {},
+    serviceSupabase: {
+      rpc: async (fn: string, params: any) => {
+        if (fn === "init_ai_chat") {
+          initChatCalls.push(params);
+          // Simulate atomic thread + user message creation
+          const threadId = params.p_thread_id ?? `thread-${++supabaseStub.state.threadCount}`;
+          supabaseStub.state.threads.push({
+            id: threadId,
+            user_id: params.p_user_id,
+            org_id: params.p_org_id,
+            surface: params.p_surface,
+            title: params.p_title,
+          });
+          supabaseStub.state.messages.push({
+            id: `user-${supabaseStub.state.messages.length + 1}`,
+            thread_id: threadId,
+            org_id: params.p_org_id,
+            user_id: params.p_user_id,
+            role: "user",
+            content: params.p_message,
+            intent: params.p_intent ?? null,
+            intent_type: params.p_intent_type ?? null,
+            context_surface: params.p_context_surface ?? params.p_surface,
+            status: "complete",
+            idempotency_key: params.p_idempotency_key,
+            created_at: new Date().toISOString(),
+          });
+          return {
+            data: { thread_id: threadId, user_msg_id: `user-${supabaseStub.state.messages.length}` },
+            error: null,
+          };
+        }
+        return { data: null, error: null };
+      },
+    },
   };
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: {
+      onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+    }) {
+      options.onUsage?.({ inputTokens: 12, outputTokens: 7 });
+      yield { type: "chunk", content: "Hello" };
+      yield { type: "chunk", content: " world" };
+    }) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async (input: any) => {
+      retrieveRelevantChunksCalls.push(input);
+      return [
+        {
+          contentText: "Knowledge chunk",
+          sourceTable: "announcements",
+          similarity: 0.91,
+          metadata: { id: "chunk-1" },
+        },
+      ];
+    },
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
   process.env.ZAI_API_KEY = "test-key";
   process.env.DISABLE_AI_CACHE = "true";
+  delete process.env.EMBEDDING_API_KEY;
 });
 
-test("POST /api/ai/[orgId]/chat streams a response for authorized admin requests", async () => {
+test("POST /api/ai/[orgId]/chat reroutes members questions per message without mutating thread surface", async () => {
   const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -235,10 +348,443 @@ test("POST /api/ai/[orgId]/chat streams a response for authorized admin requests
   assert.match(body, /"type":"done"/);
   assert.match(body, /"usage":\{"inputTokens":12,"outputTokens":7\}/);
 
+  assert.equal(initChatCalls.length, 1);
+  assert.equal(initChatCalls[0].p_surface, "general");
+  assert.equal(initChatCalls[0].p_context_surface, "members");
+  assert.equal(initChatCalls[0].p_intent, "members_query");
+  assert.equal(initChatCalls[0].p_intent_type, "knowledge_query");
+
+  assert.equal(buildPromptContextCalls.length, 1);
+  assert.equal(buildPromptContextCalls[0].surface, "members");
+  assert.match(buildPromptContextCalls[0].now, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(typeof buildPromptContextCalls[0].timeZone, "string");
+
+  assert.equal(supabaseStub.state.threads.length, 1);
+  assert.equal(supabaseStub.state.threads[0].surface, "general");
+
+  const userMessage = supabaseStub.state.messages.find((message) => message.role === "user");
+  const assistantMessage = supabaseStub.state.messages.find((message) => message.role === "assistant");
+
+  assert.equal(userMessage?.intent, "members_query");
+  assert.equal(userMessage?.intent_type, "knowledge_query");
+  assert.equal(userMessage?.context_surface, "members");
+  assert.equal(assistantMessage?.intent, "members_query");
+  assert.equal(assistantMessage?.intent_type, "knowledge_query");
+  assert.equal(assistantMessage?.context_surface, "members");
+
   assert.equal(auditEntries.length, 1);
   assert.equal(auditEntries[0].orgId, ORG_ID);
+  assert.equal(auditEntries[0].intent, "members_query");
+  assert.equal(auditEntries[0].intentType, "knowledge_query");
+  assert.equal(auditEntries[0].contextSurface, "members");
   assert.equal(auditEntries[0].inputTokens, 12);
   assert.equal(auditEntries[0].outputTokens, 7);
+});
+
+test("POST /api/ai/[orgId]/chat falls back to the current surface when intent is mixed", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Compare members, donations, and events",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+  assert.equal(initChatCalls.length, 1);
+  assert.equal(initChatCalls[0].p_surface, "general");
+  assert.equal(initChatCalls[0].p_context_surface, "general");
+  assert.equal(initChatCalls[0].p_intent, "ambiguous_query");
+  assert.equal(initChatCalls[0].p_intent_type, "knowledge_query");
+  assert.equal(buildPromptContextCalls[0].surface, "general");
+
+  const userMessage = supabaseStub.state.messages.find((message) => message.role === "user");
+  assert.equal(userMessage?.context_surface, "general");
+  assert.equal(userMessage?.intent_type, "knowledge_query");
+  assert.equal(auditEntries[0].intent, "ambiguous_query");
+  assert.equal(auditEntries[0].intentType, "knowledge_query");
+  assert.equal(auditEntries[0].contextSurface, "general");
+});
+
+test("POST /api/ai/[orgId]/chat skips RAG retrieval for casual messages regardless of surface", async () => {
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  delete process.env.DISABLE_AI_CACHE;
+
+  let cacheLookupCount = 0;
+  const cacheServiceSupabase = createSemanticCacheServiceSupabase({
+    rpc: aiContext.serviceSupabase.rpc,
+    lookupRow: null,
+    onLookup: () => {
+      cacheLookupCount += 1;
+    },
+  });
+  aiContext.serviceSupabase = cacheServiceSupabase;
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "thanks!",
+      surface: "members",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(buildPromptContextCalls.length, 1);
+  assert.equal(buildPromptContextCalls[0].surface, "members");
+  assert.equal(buildPromptContextCalls[0].ragChunks, undefined);
+  assert.equal(auditEntries[0].intentType, "casual");
+  assert.equal(auditEntries[0].cacheStatus, "ineligible");
+  assert.equal(auditEntries[0].cacheBypassReason, "casual_turn");
+  assert.equal(auditEntries[0].ragChunkCount, undefined);
+  assert.equal(auditEntries[0].ragTopSimilarity, undefined);
+  assert.equal(auditEntries[0].ragError, undefined);
+  assert.equal(cacheLookupCount, 0);
+  assert.equal(cacheServiceSupabase.insertedRows.length, 0);
+});
+
+test("POST /api/ai/[orgId]/chat skips RAG retrieval for cache-eligible prompts and records inserted cache_entry_id", async () => {
+  delete process.env.DISABLE_AI_CACHE;
+  process.env.EMBEDDING_API_KEY = "embed-key";
+
+  const cacheServiceSupabase = createSemanticCacheServiceSupabase({
+    rpc: aiContext.serviceSupabase.rpc,
+    lookupRow: null,
+    insertId: "cache-entry-1",
+  });
+  aiContext.serviceSupabase = cacheServiceSupabase;
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Explain the organization history",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(buildPromptContextCalls.length, 1);
+  assert.equal(buildPromptContextCalls[0].contextMode, "shared_static");
+  assert.equal(buildPromptContextCalls[0].ragChunks, undefined);
+  assert.equal(cacheServiceSupabase.insertedRows.length, 1);
+  assert.equal(auditEntries[0].cacheStatus, "miss");
+  assert.equal(auditEntries[0].cacheEntryId, "cache-entry-1");
+  assert.equal(auditEntries[0].cacheBypassReason, undefined);
+});
+
+test("POST /api/ai/[orgId]/chat still runs RAG retrieval for non-casual messages", async () => {
+  process.env.EMBEDDING_API_KEY = "embed-key";
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "What policies should members follow?",
+      surface: "members",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 1);
+  assert.equal(retrieveRelevantChunksCalls[0].query, "What policies should members follow?");
+  assert.equal(retrieveRelevantChunksCalls[0].orgId, ORG_ID);
+  assert.equal(buildPromptContextCalls.length, 1);
+  assert.equal(buildPromptContextCalls[0].surface, "members");
+  assert.deepEqual(buildPromptContextCalls[0].ragChunks, [
+    {
+      contentText: "Knowledge chunk",
+      sourceTable: "announcements",
+      metadata: { id: "chunk-1" },
+    },
+  ]);
+  assert.equal(auditEntries[0].ragChunkCount, 1);
+  assert.equal(auditEntries[0].ragTopSimilarity, 0.91);
+  assert.equal(auditEntries[0].ragError, undefined);
+});
+
+test("POST /api/ai/[orgId]/chat records cache_write_skipped_too_large when miss content exceeds cache limit", async () => {
+  delete process.env.DISABLE_AI_CACHE;
+
+  const cacheServiceSupabase = createSemanticCacheServiceSupabase({
+    rpc: aiContext.serviceSupabase.rpc,
+    lookupRow: null,
+    insertId: "cache-entry-oversized",
+  });
+  aiContext.serviceSupabase = cacheServiceSupabase;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: {
+      onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void;
+    }) {
+      options.onUsage?.({ inputTokens: 12, outputTokens: 7 });
+      yield { type: "chunk", content: "x".repeat(16001) };
+    }) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async (input: any) => {
+      retrieveRelevantChunksCalls.push(input);
+      return [];
+    },
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Explain the organization history",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(cacheServiceSupabase.insertedRows.length, 0);
+  assert.equal(auditEntries[0].cacheStatus, "miss");
+  assert.equal(auditEntries[0].cacheEntryId, undefined);
+  assert.equal(auditEntries[0].cacheBypassReason, "cache_write_skipped_too_large");
+});
+
+test("POST /api/ai/[orgId]/chat treats governance document asks as out_of_scope", async () => {
+  delete process.env.DISABLE_AI_CACHE;
+  process.env.EMBEDDING_API_KEY = "embed-key";
+
+  let cacheLookupCount = 0;
+  const cacheServiceSupabase = createSemanticCacheServiceSupabase({
+    rpc: aiContext.serviceSupabase.rpc,
+    lookupRow: null,
+    onLookup: () => {
+      cacheLookupCount += 1;
+    },
+  });
+  aiContext.serviceSupabase = cacheServiceSupabase;
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Explain the organization bylaws",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(cacheLookupCount, 0);
+  assert.equal(cacheServiceSupabase.insertedRows.length, 0);
+  assert.equal(auditEntries[0].cacheStatus, "ineligible");
+  assert.equal(auditEntries[0].cacheBypassReason, "out_of_scope_request");
+});
+
+test("POST /api/ai/[orgId]/chat logs grounding failures for unsupported tool summaries without failing the stream", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      yield {
+        type: "tool_call_requested",
+        id: "tool-call-1",
+        name: "get_org_stats",
+        argsJson: "{}",
+      };
+      yield { type: "chunk", content: "Your organization has 99 active members." };
+    }) as any,
+    executeToolCall: async () => ({
+      ok: true,
+      data: { active_members: 23, alumni: 10, parents: 1, upcoming_events: 4, donations: null },
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async (input: any) => {
+      retrieveRelevantChunksCalls.push(input);
+      return [];
+    },
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many members do we have?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /tool_status/);
+  assert.match(body, /"type":"done"/);
+  assert.equal(trackedOpsEvents.length, 1);
+  assert.equal(trackedOpsEvents[0][0], "api_error");
+  assert.equal(trackedOpsEvents[0][1].error_code, "tool_grounding_failed");
+});
+
+test("POST /api/ai/[orgId]/chat does not log grounding warnings for grounded tool summaries", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      yield {
+        type: "tool_call_requested",
+        id: "tool-call-1",
+        name: "get_org_stats",
+        argsJson: "{}",
+      };
+      yield { type: "chunk", content: "Your organization has 23 active members and a total of 34 people." };
+    }) as any,
+    executeToolCall: async () => ({
+      ok: true,
+      data: { active_members: 23, alumni: 10, parents: 1, upcoming_events: 4, donations: null },
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async (input: any) => {
+      retrieveRelevantChunksCalls.push(input);
+      return [];
+    },
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many members do we have?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /"type":"done"/);
+  assert.equal(trackedOpsEvents.length, 0);
 });
 
 test("POST /api/ai/[orgId]/chat returns 403 when org access is unauthorized", async () => {

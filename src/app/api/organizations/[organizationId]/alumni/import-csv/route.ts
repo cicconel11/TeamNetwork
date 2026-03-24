@@ -1,12 +1,10 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 import { validateJson, ValidationError } from "@/lib/security/validation";
 import { sendEmail } from "@/lib/notifications";
 import { validateAlumniImportRequest } from "@/lib/alumni/validate-import-request";
 import { getAppUrl } from "@/lib/url";
-import { IMPORT_STATUS, resolveUnmatchedEmailsByUserId, type ImportResultBase } from "@/lib/alumni/import-utils";
+import { IMPORT_STATUS, resolveUnmatchedEmailsByUserId, type ImportResultBase, type CreatedAlumniRecord } from "@/lib/alumni/import-utils";
 import {
   planCsvImport,
   type CsvImportPreviewStatus,
@@ -50,6 +48,7 @@ interface ImportResult extends ImportResultBase {
   preview?: Record<string, CsvImportPreviewStatus>;
   emailsSent?: number;
   emailErrors?: number;
+  createdRecords?: CreatedAlumniRecord[];
 }
 
 interface BulkImportAlumniRichRpc {
@@ -75,7 +74,7 @@ interface BulkImportAlumniRichRpc {
       p_overwrite: boolean;
     },
   ) => Promise<{
-    data: Array<{ out_email: string; out_first_name: string; out_last_name: string; out_status: string }> | null;
+    data: Array<{ out_id: string | null; out_email: string; out_first_name: string; out_last_name: string; out_status: string }> | null;
     error: { message: string } | null;
   }>;
 }
@@ -126,12 +125,17 @@ export async function POST(req: Request, { params }: RouteParams) {
   const alumniByEmail = new Map<string, { id: string; hasData: boolean }>();
 
   if (emailsInRequest.length > 0) {
+    // Case-insensitive email match — emailsInRequest is already lowercased.
+    // Use .in() which is case-sensitive, but also include original-case fallback
+    // by lowercasing results when building the map (line 157).
+    // To handle mixed-case DB emails, we use an OR of ilike conditions.
+    const orFilter = emailsInRequest.map((e) => `email.ilike.${e}`).join(",");
     const { data: alumniData, error: alumniError } = await serviceSupabase
       .from("alumni")
       .select("id, email, first_name, last_name, graduation_year, major, job_title, notes, linkedin_url, phone_number, industry, current_company, current_city, position_title")
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
-      .in("email", emailsInRequest);
+      .or(orFilter);
 
     if (alumniError) {
       console.error("[alumni/import-csv POST] Failed to fetch alumni:", alumniError);
@@ -207,7 +211,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   let quotaBlocked = importPlan.quotaBlocked;
   let skipped = importPlan.skipped;
 
-  // Batch updates (20 at a time)
+  // Batch updates (20 at a time) — guard with deleted_at IS NULL to avoid
+  // updating concurrently soft-deleted records
   const BATCH_SIZE = 20;
   for (let i = 0; i < importPlan.toUpdate.length; i += BATCH_SIZE) {
     const batch = importPlan.toUpdate.slice(i, i + BATCH_SIZE);
@@ -216,21 +221,23 @@ export async function POST(req: Request, { params }: RouteParams) {
         .from("alumni")
         .update(data)
         .eq("id", alumniId)
-        .eq("organization_id", organizationId),
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null),
     );
 
     const results = await Promise.all(updates);
     for (const { error } of results) {
       if (error) {
         updateErrors++;
-        errors.push(error.message);
+        console.error("[alumni/import-csv POST] Update failed:", error.message);
+        errors.push("Failed to update one or more alumni records");
       }
     }
   }
 
   // Bulk create via RPC
-  type CreatedRecord = { out_email: string; out_first_name: string; out_last_name: string; out_status: string };
-  const createdRecords: CreatedRecord[] = [];
+  type RpcRow = { out_id: string | null; out_email: string; out_first_name: string; out_last_name: string; out_status: string };
+  const rpcCreatedRows: RpcRow[] = [];
 
   if (importPlan.toCreate.length > 0) {
     const rpcSupabase = serviceSupabase as unknown as BulkImportAlumniRichRpc;
@@ -242,12 +249,12 @@ export async function POST(req: Request, { params }: RouteParams) {
 
     if (createError) {
       console.error("[alumni/import-csv POST] RPC bulk_import_alumni_rich failed:", createError);
-      errors.push(createError.message);
+      errors.push("Failed to create alumni records. Please try again.");
     } else {
       for (const row of createResults ?? []) {
         if (row.out_status === IMPORT_STATUS.CREATED) {
           created++;
-          createdRecords.push(row);
+          rpcCreatedRows.push(row);
         } else if (row.out_status === IMPORT_STATUS.UPDATED_EXISTING) {
           concurrentUpdates++;
         } else if (row.out_status === IMPORT_STATUS.SKIPPED_EXISTING) {
@@ -259,12 +266,22 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
   }
 
+  const createdRecords: CreatedAlumniRecord[] = rpcCreatedRows
+    .filter((r) => r.out_id)
+    .map((r) => ({
+      id: r.out_id!,
+      email: r.out_email || undefined,
+      firstName: r.out_first_name,
+      lastName: r.out_last_name,
+    }));
+
   const result: ImportResult = {
     updated: importPlan.toUpdate.length - updateErrors + concurrentUpdates,
     created,
     skipped,
     quotaBlocked,
     errors,
+    createdRecords: createdRecords.length > 0 ? createdRecords : undefined,
   };
 
   // Invalidate enterprise alumni stats cache if any alumni were written
@@ -281,8 +298,8 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // Phase 2: Send invite emails if requested
-  if (sendInvites && createdRecords.length > 0) {
-    const createdWithEmail = createdRecords.filter((r) => r.out_email);
+  if (sendInvites && rpcCreatedRows.length > 0) {
+    const createdWithEmail = rpcCreatedRows.filter((r) => r.out_email);
 
     if (createdWithEmail.length > 0) {
       // Create org invite with limited uses

@@ -121,4 +121,40 @@ describe("logAiRequest", () => {
     assert.equal(mock.insertedRows[0].cache_entry_id, "cache-1");
     assert.equal(mock.insertedRows[0].cache_bypass_reason, "unsupported_surface");
   });
+
+  it("persists RAG telemetry fields", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      orgId: "o1",
+      ragChunkCount: 3,
+      ragTopSimilarity: 0.85,
+      ragError: undefined,
+    });
+
+    assert.equal(mock.insertedRows[0].rag_chunk_count, 3);
+    assert.equal(mock.insertedRows[0].rag_top_similarity, 0.85);
+    assert.equal(mock.insertedRows[0].rag_error, null);
+  });
+
+  it("persists RAG error when retrieval fails", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      orgId: "o1",
+      ragChunkCount: 0,
+      ragError: "embedding_api_timeout",
+    });
+
+    assert.equal(mock.insertedRows[0].rag_chunk_count, 0);
+    assert.equal(mock.insertedRows[0].rag_error, "embedding_api_timeout");
+  });
 });

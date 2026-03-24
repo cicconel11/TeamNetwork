@@ -802,6 +802,20 @@ describe("semantic cache behavior", () => {
     assert.strictEqual(store.lookupCallCount, 0);
   });
 
+  it("direct time question bypasses cache with reason contains_temporal_marker", () => {
+    const store = createMockCacheStore();
+
+    const result = simulateCacheFlow(
+      { message: "What time is it right now?", surface: "general" },
+      store
+    );
+
+    assert.strictEqual(result.lookupAttempted, false);
+    assert.strictEqual(result.status, "ineligible");
+    assert.strictEqual(result.bypassReason, "contains_temporal_marker");
+    assert.strictEqual(store.lookupCallCount, 0);
+  });
+
   it("non-general surfaces are always ineligible for shared cache", () => {
     const store = createMockCacheStore();
 

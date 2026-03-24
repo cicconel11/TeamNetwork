@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
-import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel } from "@/components/alumni";
+import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel, AlumniSelectableGrid } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
@@ -161,51 +161,59 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
 
       {/* Alumni Grid */}
       {alumni && alumni.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
-          {alumni.map((alum) => (
-            <Card key={alum.id} interactive className="p-5" data-testid="alumni-row">
-              <div className="flex items-center gap-4">
-                <DirectoryCardLink
-                  href={`/${orgSlug}/alumni/${alum.id}`}
-                  organizationId={org.id}
-                  directoryType="alumni"
-                  className="flex min-w-0 flex-1 items-center gap-4"
-                >
-                  <Avatar
-                    src={alum.photo_url}
-                    name={`${alum.first_name} ${alum.last_name}`}
-                    size="lg"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-foreground truncate">
-                      {alum.first_name} {alum.last_name}
-                    </h3>
-                    {(alum.position_title || alum.job_title) && (
-                      <p className="text-sm text-muted-foreground truncate">
-                        {alum.position_title || alum.job_title}
-                        {alum.current_company && ` at ${alum.current_company}`}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {alum.graduation_year && (
-                        <Badge variant="muted">Class of {alum.graduation_year}</Badge>
+        canEdit ? (
+          <AlumniSelectableGrid
+            alumni={alumni}
+            orgSlug={orgSlug}
+            organizationId={org.id}
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+            {alumni.map((alum) => (
+              <Card key={alum.id} interactive className="p-5" data-testid="alumni-row">
+                <div className="flex items-center gap-4">
+                  <DirectoryCardLink
+                    href={`/${orgSlug}/alumni/${alum.id}`}
+                    organizationId={org.id}
+                    directoryType="alumni"
+                    className="flex min-w-0 flex-1 items-center gap-4"
+                  >
+                    <Avatar
+                      src={alum.photo_url}
+                      name={`${alum.first_name} ${alum.last_name}`}
+                      size="lg"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-foreground truncate">
+                        {alum.first_name} {alum.last_name}
+                      </h3>
+                      {(alum.position_title || alum.job_title) && (
+                        <p className="text-sm text-muted-foreground truncate">
+                          {alum.position_title || alum.job_title}
+                          {alum.current_company && ` at ${alum.current_company}`}
+                        </p>
                       )}
-                      {alum.industry && (
-                        <Badge variant="primary">{alum.industry}</Badge>
-                      )}
-                      {alum.current_city && (
-                        <span className="text-xs text-muted-foreground truncate">
-                          {alum.current_city}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        {alum.graduation_year && (
+                          <Badge variant="muted">Class of {alum.graduation_year}</Badge>
+                        )}
+                        {alum.industry && (
+                          <Badge variant="primary">{alum.industry}</Badge>
+                        )}
+                        {alum.current_city && (
+                          <span className="text-xs text-muted-foreground truncate">
+                            {alum.current_city}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </DirectoryCardLink>
-                <LinkedInBadge linkedinUrl={alum.linkedin_url} className="shrink-0" />
-              </div>
-            </Card>
-          ))}
-        </div>
+                  </DirectoryCardLink>
+                  <LinkedInBadge linkedinUrl={alum.linkedin_url} className="shrink-0" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        )
       ) : (
         <Card>
           <EmptyState

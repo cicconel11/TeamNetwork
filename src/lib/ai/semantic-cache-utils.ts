@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { normalizeAiMessage } from "@/lib/ai/message-normalization";
 
 // ---------------------------------------------------------------------------
 // Surface constants and TTLs
@@ -7,11 +8,20 @@ import { createHash } from "crypto";
 export const CACHE_SURFACES = ["general", "members", "analytics", "events"] as const;
 export type CacheSurface = (typeof CACHE_SURFACES)[number];
 
-export const CACHE_VERSION = 1 as const;
+/**
+ * Manual cache-contract version.
+ *
+ * Bump this whenever a change would alter the safety or meaning of cached
+ * responses, such as prompt-contract updates, cache-key logic changes, or
+ * freshness policy changes that should invalidate existing rows.
+ */
+export const CACHE_CONTRACT_VERSION = 3 as const;
+export const CACHE_VERSION = CACHE_CONTRACT_VERSION;
+export const CACHE_KEY_SALT = `ai-semantic-cache:v${CACHE_CONTRACT_VERSION}`;
 
 /** Surface-specific TTLs (hours) — shorter for data-heavy surfaces */
 export const CACHE_TTL_HOURS: Record<CacheSurface, number> = {
-  general: 24,
+  general: 12,
   members: 4,
   analytics: 2,
   events: 4,
@@ -43,6 +53,14 @@ export type CacheEligibility =
   | { eligible: true; reason: "cacheable" }
   | { eligible: false; reason: CacheIneligibleReason };
 
+export interface SemanticCacheKeyParts {
+  normalizedPrompt: string;
+  promptHash: string;
+  permissionScopeKey: string;
+  cacheVersion: number;
+  cacheSalt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -54,6 +72,8 @@ const TEMPORAL_MARKERS = [
   "today",
   "latest",
   "current",
+  "current date",
+  "current time",
   "upcoming",
   "recent",
   "this week",
@@ -65,6 +85,9 @@ const TEMPORAL_MARKERS = [
   "yesterday",
   "tomorrow",
   "now",
+  "what date is it",
+  "what time is it",
+  "what day is it",
 ];
 
 const PERSONALIZATION_MARKERS = ["my", "mine", "i am", "i'm", "me", "myself"];
@@ -89,6 +112,10 @@ const LIVE_CONTEXT_MARKERS = [
   "totals",
   "roster",
   "attendance",
+  "knowledge",
+  "faq",
+  "policy",
+  "policies",
 ];
 
 const WRITE_OR_TOOL_MARKERS = [
@@ -126,19 +153,17 @@ function containsWordBoundary(text: string, markers: string[]): boolean {
  * Does NOT apply stemming, lemmatization, stopword removal, or synonym collapsing.
  */
 export function normalizePrompt(message: string): string {
-  return message
-    .normalize("NFC")
-    .toLowerCase()
-    // Strip zero-width characters
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    // Collapse multiple whitespace to single space
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeAiMessage(message);
 }
 
-/** SHA-256 hex hash of a normalized prompt string. */
-export function hashPrompt(normalizedPrompt: string): string {
-  return createHash("sha256").update(normalizedPrompt, "utf8").digest("hex");
+/** SHA-256 hex hash of a normalized prompt string, salted by cache contract. */
+export function hashPrompt(
+  normalizedPrompt: string,
+  salt: string = CACHE_KEY_SALT
+): string {
+  return createHash("sha256")
+    .update(`${salt}:${normalizedPrompt}`, "utf8")
+    .digest("hex");
 }
 
 /**
@@ -153,6 +178,27 @@ export function buildPermissionScopeKey(orgId: string, role: string): string {
   return createHash("sha256")
     .update(`${orgId}:${role}`, "utf8")
     .digest("hex");
+}
+
+/**
+ * Build the full cache key contract from the request + auth context.
+ * Both lookup and write paths should consume this helper so versioning and
+ * key derivation stay synchronized.
+ */
+export function buildSemanticCacheKeyParts(params: {
+  message: string;
+  orgId: string;
+  role: string;
+}): SemanticCacheKeyParts {
+  const normalizedPrompt = normalizePrompt(params.message);
+
+  return {
+    normalizedPrompt,
+    promptHash: hashPrompt(normalizedPrompt),
+    permissionScopeKey: buildPermissionScopeKey(params.orgId, params.role),
+    cacheVersion: CACHE_VERSION,
+    cacheSalt: CACHE_KEY_SALT,
+  };
 }
 
 /** Determine whether a request is eligible for semantic caching. */

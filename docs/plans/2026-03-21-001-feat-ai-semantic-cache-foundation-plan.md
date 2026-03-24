@@ -51,7 +51,7 @@ Vector similarity becomes a v2 feature with its own plan, informed by v1 hit-rat
 
 Add a production-ready semantic cache in the AI chat pipeline so cache-eligible, read-only informational requests can return a stored assistant response before the expensive context-build plus model call runs.
 
-The first milestone should match the target architecture in [docs/agents/ai-architecture-playground.html:648](docs/agents/ai-architecture-playground.html) while staying conservative about correctness:
+The first milestone should match the target architecture in [docs/agent/ai-architecture-playground.html:648](docs/agent/ai-architecture-playground.html) while staying conservative about correctness:
 
 - Cache the final assistant response, not a new planner artifact.
 - Share entries within an org only when they remain inside the same permission envelope.
@@ -909,7 +909,7 @@ export const CACHE_TTL_HOURS: Record<CacheSurface, number> = {
 - Existing AI audit shape: `src/lib/ai/audit.ts:3`
 - Existing AI tables and RLS pattern: `supabase/migrations/20260319000000_ai_assistant_tables.sql:4`
 - Existing org-safe cache convention: `src/lib/cached-queries.ts:4`
-- Target architecture gap: `docs/agents/ai-architecture-playground.html:648`
+- Target architecture gap: `docs/agent/ai-architecture-playground.html:648`
 - Existing request schema: `src/lib/schemas/ai-assistant.ts:4`
 - Existing route test seam: `tests/routes/ai/chat.test.ts:9`
 - SSE event types: `src/lib/ai/sse.ts`
