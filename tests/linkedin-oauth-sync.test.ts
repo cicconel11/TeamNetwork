@@ -413,4 +413,28 @@ test("syncLinkedInProfile returns a reconnect error for OIDC-only LinkedIn rows"
     result.error,
     "Unable to get a valid LinkedIn token. Please reconnect your account.",
   );
+
+  const connection = stub.getRows("user_linkedin_connections")[0];
+  assert.equal(connection.status, "connected");
+  assert.equal(connection.sync_error ?? null, null);
+});
+
+test("getValidLinkedInToken marks expired OAuth connections without refresh tokens for reconnect", async () => {
+  const stub = createSupabaseStub();
+  stub.seed("user_linkedin_connections", [{
+    user_id: USER_ID,
+    access_token_encrypted: encryptToken("expired-access-token"),
+    refresh_token_encrypted: null,
+    token_expires_at: "1970-01-01T00:00:00.000Z",
+    status: "connected",
+    linkedin_data: { source: "oauth" },
+  }]);
+
+  const token = await getValidLinkedInToken(stub as never, USER_ID);
+
+  assert.equal(token, null);
+
+  const connection = stub.getRows("user_linkedin_connections")[0];
+  assert.equal(connection.status, "error");
+  assert.equal(connection.sync_error, "LinkedIn session expired. Please reconnect.");
 });

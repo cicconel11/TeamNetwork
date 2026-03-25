@@ -114,7 +114,7 @@ export function getLinkedInAuthUrl(state: string): string {
     client_id: getLinkedInClientId(),
     redirect_uri: getLinkedInRedirectUri(),
     state,
-    scope: "openid profile email offline_access",
+    scope: "openid profile email",
   });
   return `${LINKEDIN_AUTH_URL}?${params.toString()}`;
 }
@@ -440,7 +440,7 @@ export async function getValidLinkedInToken(
     await updateLinkedInConnection(
       supabase,
       userId,
-      { status: "error", sync_error: "No refresh token available" },
+      { status: "error", sync_error: "LinkedIn session expired. Please reconnect." },
       "mark connection as error after missing refresh token",
     );
     return null;
@@ -602,21 +602,44 @@ export async function runBrightDataEnrichment(
   }
 }
 
+async function getLatestLinkedInUrl(
+  supabase: SupabaseClient<Database>,
+  table: "members" | "alumni" | "parents",
+  userId: string,
+): Promise<string | null> {
+  // parents is not fully covered by generated types in this codepath.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from(table)
+    .select("linkedin_url, updated_at, created_at")
+    .eq("user_id", userId)
+    .is("deleted_at", null)
+    .not("linkedin_url", "is", null)
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(`Failed to fetch LinkedIn URL from ${table}: ${error.message}`);
+  }
+
+  return data?.[0]?.linkedin_url ?? null;
+}
+
 /**
- * Looks up the user's LinkedIn URL from their connection record.
+ * Backward-compatible wrapper for the LinkedIn profile URL lookup.
  */
 export async function getLinkedInUrlForUser(
   supabase: SupabaseClient<Database>,
   userId: string,
 ): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
-    .from("user_linkedin_connections")
-    .select("linkedin_profile_url")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const membersUrl = await getLatestLinkedInUrl(supabase, "members", userId);
+  if (membersUrl) return membersUrl;
 
-  return data?.linkedin_profile_url || null;
+  const alumniUrl = await getLatestLinkedInUrl(supabase, "alumni", userId);
+  if (alumniUrl) return alumniUrl;
+
+  return getLatestLinkedInUrl(supabase, "parents", userId);
 }
 
 /**

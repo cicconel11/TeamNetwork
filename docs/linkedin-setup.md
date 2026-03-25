@@ -58,6 +58,7 @@ Connecting LinkedIn does NOT auto-populate the profile URL, and vice versa. The 
 ## OIDC Limitations (MVP)
 
 The integration uses standard OpenID Connect scopes only (`openid profile email`).
+We do not request `offline_access`, so treat the connection as reconnect-required after the access token expires.
 
 **Returns:** `sub`, `given_name`, `family_name`, `email`, `picture`, `email_verified`, `locale`
 
@@ -65,7 +66,7 @@ The integration uses standard OpenID Connect scopes only (`openid profile email`
 
 Other limitations:
 - No token revocation endpoint — disconnect deletes the local record only
-- Refresh tokens expire after ~365 days; after expiry the user must reconnect
+- If LinkedIn expires the access token and does not issue a refresh token, the user must reconnect
 
 ## API Operations
 
@@ -73,7 +74,7 @@ Other limitations:
 |---|---|---|
 | Re-sync | `POST /api/linkedin/sync` | Fetches fresh profile from userinfo endpoint |
 | Disconnect | `POST /api/linkedin/disconnect` | Deletes the DB record (no remote revocation) |
-| Token refresh | Automatic | `getValidLinkedInToken()` refreshes expired access tokens. On failure, status set to `error` and user prompted to reconnect. |
+| Token refresh | Best effort | `getValidLinkedInToken()` refreshes expired access tokens when a refresh token is present. On failure, status is set to `error` and the user is prompted to reconnect. |
 
 ### Error Status
 
@@ -87,7 +88,7 @@ A connection is marked `error` if token refresh fails or profile fetch fails. Re
 | "There is a server configuration issue" | Partial env config | Ensure all 3 vars are set together |
 | Redirect URI mismatch error from LinkedIn | URI not registered | Add exact callback URL in LinkedIn dev console |
 | Connection status shows "error" after a temporary LinkedIn outage | Profile fetch failed transiently | Click **Sync Now** to retry and clear the error state |
-| Connection status shows "error" and sync keeps failing | Token refresh failed or refresh token expired | Reconnect LinkedIn |
+| Connection status shows "error" and sync keeps failing | Token refresh failed, or no refresh token was available after expiry | Reconnect LinkedIn |
 | Profile photo not loading | CSP blocking `media.licdn.com` | Already added to CSP in `next.config.mjs` |
 | Build warning about partial LinkedIn config | Only 1-2 of 3 vars set | Set all 3 or none |
 
