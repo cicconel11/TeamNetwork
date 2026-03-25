@@ -10,20 +10,20 @@ describe("resolveSurfaceRouting — surface axis", () => {
     assert.equal(result.effectiveSurface, "members");
     assert.equal(result.inferredSurface, null);
     assert.equal(result.rerouted, false);
-    assert.equal(result.skipRetrieval, true);
+    assert.equal(result.intentType, "casual");
   });
 
-  it("marks gratitude messages to skip retrieval", () => {
+  it("marks gratitude messages as casual", () => {
     const result = resolveSurfaceRouting("Thanks!!", "general");
 
-    assert.equal(result.skipRetrieval, true);
+    assert.equal(result.intentType, "casual");
     assert.equal(result.effectiveSurface, "general");
   });
 
-  it("does not skip retrieval when a greeting includes a knowledge request", () => {
+  it("does not classify a greeting plus question as casual", () => {
     const result = resolveSurfaceRouting("hey, what events are coming up?", "general");
 
-    assert.equal(result.skipRetrieval, false);
+    assert.equal(result.intentType, "knowledge_query");
     assert.equal(result.intent, "events_query");
     assert.equal(result.effectiveSurface, "events");
     assert.equal(result.rerouted, true);
@@ -61,7 +61,6 @@ describe("resolveSurfaceRouting — intent type axis", () => {
     const result = resolveSurfaceRouting("hello", "general");
 
     assert.equal(result.intentType, "casual");
-    assert.equal(result.skipRetrieval, true);
   });
 
   it("classifies a farewell as casual", () => {
@@ -217,7 +216,6 @@ describe("resolveSurfaceRouting — intent type priority", () => {
 
     assert.equal(result.intentType, "action_request");
     assert.equal(result.intent, "events_query");
-    assert.equal(result.skipRetrieval, false);
   });
 
   it("greeting + navigation is classified as navigation, not casual", () => {
@@ -225,6 +223,5 @@ describe("resolveSurfaceRouting — intent type priority", () => {
 
     assert.equal(result.intentType, "navigation");
     assert.equal(result.intent, "members_query");
-    assert.equal(result.skipRetrieval, false);
   });
 });

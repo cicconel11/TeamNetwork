@@ -86,6 +86,31 @@ test("verifyToolBackedResponse flags event dates absent from tool rows", () => {
   assert.match(result.failures.join("\n"), /2026-05-01/i);
 });
 
+test("verifyToolBackedResponse flags announcement titles absent from tool rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Recent announcements",
+      "- Welcome back - 2026-03-20 - audience: all",
+      "- Ghost update - 2026-03-21 - audience: members",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_announcements",
+        data: [
+          {
+            title: "Welcome back",
+            published_at: "2026-03-20T12:00:00.000Z",
+            audience: "all",
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /ghost update/i);
+});
+
 test("verifyToolBackedResponse flags unsupported suggest_connections reasons", () => {
   const result = verifyToolBackedResponse({
     content: [

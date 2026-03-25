@@ -17,10 +17,6 @@ describe("logAiRequest", () => {
           }
           return { error: null };
         },
-        select: () => ({
-          // For count query in pruning
-          count: async () => ({ count: 0, error: null }),
-        }),
       }),
     };
   }
@@ -156,5 +152,67 @@ describe("logAiRequest", () => {
 
     assert.equal(mock.insertedRows[0].rag_chunk_count, 0);
     assert.equal(mock.insertedRows[0].rag_error, "embedding_api_timeout");
+  });
+
+  it("persists stage timing telemetry with redaction", async () => {
+    const { logAiRequest } = await import("../src/lib/ai/audit.ts");
+    const mock = createMockServiceSupabase();
+
+    await logAiRequest(mock as any, {
+      threadId: "t1",
+      messageId: "m1",
+      userId: "u1",
+      orgId: "o1",
+      stageTimings: {
+        schema_version: 1,
+        request: {
+          outcome: "completed",
+          total_duration_ms: 123,
+        },
+        retrieval: {
+          decision: "skip",
+          reason: "tool_only_structured_query",
+        },
+        stages: {
+          auth_org_context: { status: "completed", duration_ms: 1 },
+          request_validation_policy: { status: "completed", duration_ms: 2 },
+          thread_resolution: { status: "skipped", duration_ms: 0 },
+          abandoned_stream_cleanup: { status: "skipped", duration_ms: 0 },
+          idempotency_lookup: { status: "completed", duration_ms: 1 },
+          init_chat_rpc: { status: "completed", duration_ms: 2 },
+          cache_lookup: { status: "skipped", duration_ms: 0 },
+          rag_retrieval: { status: "skipped", duration_ms: 0 },
+          assistant_placeholder_write: { status: "completed", duration_ms: 1 },
+          context_build: { status: "completed", duration_ms: 3 },
+          history_load: { status: "completed", duration_ms: 2 },
+          pass1_model: { status: "completed", duration_ms: 20 },
+          tools: {
+            status: "completed",
+            duration_ms: 4,
+            calls: [
+              {
+                name: "list_members",
+                status: "completed",
+                duration_ms: 4,
+                auth_mode: "db_lookup",
+                error_kind: "Bearer eyJhbGciOi",
+              },
+            ],
+          },
+          pass2: { status: "skipped", duration_ms: 0 },
+          grounding: { status: "skipped", duration_ms: 0 },
+          assistant_finalize_write: { status: "completed", duration_ms: 1 },
+          cache_write: { status: "skipped", duration_ms: 0 },
+        },
+      },
+    });
+
+    assert.equal(
+      (mock.insertedRows[0].stage_timings as any).request.total_duration_ms,
+      123
+    );
+    const stored = JSON.stringify(mock.insertedRows[0].stage_timings);
+    assert.ok(!stored.includes("Bearer eyJhbGciOi"));
+    assert.match(stored, /\[REDACTED\]/);
   });
 });

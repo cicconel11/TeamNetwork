@@ -194,6 +194,20 @@ function expectOk(result: ToolExecutionResult): Extract<ToolExecutionResult, { k
   return result as Extract<ToolExecutionResult, { kind: "ok" }>;
 }
 
+function makeCtx(
+  serviceSupabase: any,
+  authorization: ToolExecutionContext["authorization"] = {
+    kind: "verify_membership",
+  }
+): ToolExecutionContext {
+  return {
+    orgId: ORG_ID,
+    userId: USER_ID,
+    serviceSupabase,
+    authorization,
+  };
+}
+
 let ctx: ToolExecutionContext;
 let stub: ReturnType<typeof createToolSupabaseStub>;
 
@@ -229,8 +243,30 @@ beforeEach(() => {
         error: null,
       },
     },
+    announcements: {
+      select: {
+        data: [
+          {
+            id: "a1",
+            title: "Welcome back",
+            body: "Practice starts Monday in the main gym.",
+            audience: "all",
+            is_pinned: true,
+            published_at: "2026-03-20T12:00:00Z",
+            created_at: "2026-03-20T12:00:00Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    organizations: {
+      maybeSingle: {
+        data: { slug: "acme", nav_config: null },
+        error: null,
+      },
+    },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 });
 
 test("list_members returns org-scoped members", async () => {
@@ -283,7 +319,7 @@ test("list_members trims whitespace when composing a normalized name", async () 
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(await executeToolCall(ctx, { name: "list_members", args: {} }));
   assert.equal((result.data as any[])[0].name, "Alice");
@@ -315,7 +351,7 @@ test("list_members falls back to public.users.name for placeholder member names"
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(await executeToolCall(ctx, { name: "list_members", args: {} }));
   assert.equal((result.data as any[])[0].name, "Seann Farrell");
@@ -342,7 +378,7 @@ test("get_org_stats returns counts object", async () => {
       maybeSingle: { data: { total_amount_cents: 50000, donation_count: 12 }, error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(await executeToolCall(ctx, { name: "get_org_stats", args: {} }));
   const stats = result.data as any;
@@ -350,6 +386,50 @@ test("get_org_stats returns counts object", async () => {
   assert.equal(stats.alumni, 10);
   assert.equal(stats.parents, 5);
   assert.equal(stats.upcoming_events, 3);
+});
+
+test("list_announcements returns recent announcements", async () => {
+  const result = expectOk(await executeToolCall(ctx, { name: "list_announcements", args: {} }));
+
+  assert.ok(Array.isArray(result.data));
+  assert.deepEqual((result.data as any[])[0], {
+    id: "a1",
+    title: "Welcome back",
+    audience: "all",
+    is_pinned: true,
+    published_at: "2026-03-20T12:00:00Z",
+    body_preview: "Practice starts Monday in the main gym.",
+  });
+
+  const announcementQuery = stub.queries.find((q) => q.table === "announcements");
+  assert.ok(announcementQuery);
+  assert.equal(
+    announcementQuery.columns,
+    "id, title, body, audience, is_pinned, published_at, created_at"
+  );
+  assert.ok(
+    announcementQuery.filters.some((f: any) => f.col === "organization_id" && f.val === ORG_ID)
+  );
+  assert.ok(
+    announcementQuery.filters.some((f: any) => f.col === "deleted_at" && f.val === null)
+  );
+  assert.deepEqual(announcementQuery.orderBy, { column: "published_at", ascending: false });
+  assert.equal(announcementQuery.limitValue, 10);
+});
+
+test("find_navigation_targets returns org-scoped page matches", async () => {
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "find_navigation_targets",
+      args: { query: "create announcement" },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "resolved");
+  assert.equal(payload.query, "create announcement");
+  assert.equal(payload.matches[0].label, "New Announcement");
+  assert.equal(payload.matches[0].href, "/acme/announcements/new");
 });
 
 test("suggest_connections returns ranked SQL fallback suggestions", async () => {
@@ -422,7 +502,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -501,7 +581,7 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -538,7 +618,7 @@ test("suggest_connections resolves a person_query directly", async () => {
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -588,7 +668,7 @@ test("suggest_connections resolves Matt-family aliases to the same source person
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const [matthewResult, shorthandResult] = await Promise.all([
     executeToolCall(ctx, {
@@ -630,7 +710,7 @@ test("suggest_connections returns ambiguous state for matching person_query", as
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -683,7 +763,7 @@ test("suggest_connections returns ambiguous state for close fuzzy Matt-family ma
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -712,7 +792,7 @@ test("suggest_connections returns not_found for unknown person_query", async () 
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -748,7 +828,7 @@ test("suggest_connections returns no_suggestions when the source has no supporte
       select: { data: [], error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -808,7 +888,7 @@ test("suggest_connections returns weak fallback matches for sparse member-source
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -897,7 +977,7 @@ test("suggest_connections derives employer and industry from member company-role
       },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = expectOk(
     await executeToolCall(ctx, {
@@ -932,17 +1012,32 @@ test("db errors return tool_error", async () => {
   stub = createToolSupabaseStub({
     members: { select: { data: null, error: { message: "connection refused" } } },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
   assert.equal(result.kind, "tool_error");
+});
+
+test("preverified admin authorization skips duplicate membership lookup", async () => {
+  stub = createToolSupabaseStub();
+  ctx = makeCtx(stub as any, {
+    kind: "preverified_admin",
+    source: "ai_org_context",
+  });
+
+  const result = await executeToolCall(ctx, { name: "list_members", args: {} });
+  assert.equal(result.kind, "ok");
+  assert.equal(
+    stub.queries.some((query) => query.table === "user_organization_roles"),
+    false
+  );
 });
 
 test("missing membership returns forbidden before touching tool tables", async () => {
   stub = createToolSupabaseStub({
     user_organization_roles: { maybeSingle: { data: null, error: null } },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
 
@@ -957,7 +1052,7 @@ test("pending or revoked membership returns forbidden", async () => {
         maybeSingle: { data: { role: "admin", status }, error: null },
       },
     });
-    ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+    ctx = makeCtx(stub as any);
 
     const result = await executeToolCall(ctx, { name: "list_members", args: {} });
     assert.deepEqual(result, { kind: "forbidden", error: "Forbidden" });
@@ -970,7 +1065,7 @@ test("non-admin membership returns forbidden", async () => {
       maybeSingle: { data: { role: "active_member", status: "active" }, error: null },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
   assert.deepEqual(result, { kind: "forbidden", error: "Forbidden" });
@@ -982,7 +1077,7 @@ test("membership query failure returns auth_error", async () => {
       maybeSingle: { data: null, error: { message: "db unavailable" } },
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
   assert.deepEqual(result, { kind: "auth_error", error: "Auth check failed" });
@@ -994,7 +1089,7 @@ test("stage timeout returns timeout result", async () => {
       select: Promise.reject(new StageTimeoutError("tool_list_members", 5_000)),
     },
   });
-  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+  ctx = makeCtx(stub as any);
 
   const result = await executeToolCall(ctx, { name: "list_members", args: {} });
   assert.deepEqual(result, { kind: "timeout", error: "Tool timed out" });
