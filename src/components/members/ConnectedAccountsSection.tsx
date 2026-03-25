@@ -48,6 +48,9 @@ function ConnectedAccountsSectionContent({
           isConnected={linkedIn.isConnected}
           connectionLoading={linkedIn.connectionLoading}
           oauthAvailable={linkedIn.oauthAvailable}
+          resyncEnabled={linkedIn.resyncEnabled}
+          resyncRemaining={linkedIn.resyncRemaining}
+          resyncMaxPerMonth={linkedIn.resyncMaxPerMonth}
           onConnect={linkedIn.onConnect}
           onSync={linkedIn.onSync}
           onDisconnect={linkedIn.onDisconnect}

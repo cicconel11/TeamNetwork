@@ -16,6 +16,11 @@ interface LinkedInStatusResponse {
     oauthAvailable: boolean;
     reason: "not_configured" | null;
   };
+  resync?: {
+    enabled: boolean;
+    remaining: number;
+    max_per_month: number;
+  };
 }
 
 export interface UseLinkedInReturn {
@@ -24,6 +29,9 @@ export interface UseLinkedInReturn {
   connectionLoading: boolean;
   oauthAvailable: boolean;
   isConnected: boolean;
+  resyncEnabled: boolean;
+  resyncRemaining: number;
+  resyncMaxPerMonth: number;
   onLinkedInUrlSave: (url: string) => Promise<void>;
   onConnect: () => void;
   onSync: () => Promise<{ message: string }>;
@@ -39,6 +47,9 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
   const [connection, setConnection] = useState<LinkedInConnection | null>(null);
   const [connectionLoading, setConnectionLoading] = useState(true);
   const [oauthAvailable, setOauthAvailable] = useState(true);
+  const [resyncEnabled, setResyncEnabled] = useState(false);
+  const [resyncRemaining, setResyncRemaining] = useState(2);
+  const [resyncMaxPerMonth, setResyncMaxPerMonth] = useState(2);
 
   // Read LinkedIn OAuth callback query params on mount
   useEffect(() => {
@@ -93,6 +104,11 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
       setLinkedInUrl(data.linkedin_url ?? "");
       setConnection(data.connection ?? null);
       setOauthAvailable(data.integration?.oauthAvailable ?? true);
+      if (data.resync) {
+        setResyncEnabled(data.resync.enabled);
+        setResyncRemaining(data.resync.remaining);
+        setResyncMaxPerMonth(data.resync.max_per_month);
+      }
     } catch {
       // Silently continue — panel will show its own loading/error state
     } finally {
@@ -191,9 +207,13 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     }
 
     const data = await res.json();
+    const syncData = data as { message?: string; remaining_syncs?: number };
+    if (typeof syncData.remaining_syncs === "number") {
+      setResyncRemaining(syncData.remaining_syncs);
+    }
     await refreshLinkedInStatus();
 
-    return { message: (data as { message?: string }).message ?? "LinkedIn profile synced" };
+    return { message: syncData.message ?? "LinkedIn profile synced" };
   }, [refreshLinkedInStatus]);
 
   const onDisconnect = useCallback(async () => {
@@ -222,6 +242,9 @@ export function useLinkedIn(options?: UseLinkedInOptions): UseLinkedInReturn {
     connectionLoading,
     oauthAvailable,
     isConnected,
+    resyncEnabled,
+    resyncRemaining,
+    resyncMaxPerMonth,
     onLinkedInUrlSave,
     onConnect,
     onSync,
