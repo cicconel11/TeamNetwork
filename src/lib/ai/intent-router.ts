@@ -24,7 +24,6 @@ export interface SurfaceRoutingDecision {
   inferredSurface: AiSurface | null;
   confidence: "high" | "low";
   rerouted: boolean;
-  skipRetrieval: boolean;
 }
 
 const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]> = {
@@ -141,7 +140,6 @@ export function resolveSurfaceRouting(
 ): SurfaceRoutingDecision {
   const normalized = normalizeMessage(message);
   const intentType = classifyIntentType(message, normalized);
-  const skipRetrieval = intentType === "casual";
   const scores = {
     members: countMatches(normalized, SURFACE_KEYWORDS.members),
     analytics: countMatches(normalized, SURFACE_KEYWORDS.analytics),
@@ -160,7 +158,6 @@ export function resolveSurfaceRouting(
       inferredSurface: null,
       confidence: "low",
       rerouted: false,
-      skipRetrieval,
     };
   }
 
@@ -175,7 +172,6 @@ export function resolveSurfaceRouting(
       inferredSurface: null,
       confidence: "low",
       rerouted: false,
-      skipRetrieval,
     };
   }
 
@@ -186,6 +182,5 @@ export function resolveSurfaceRouting(
     inferredSurface: winner,
     confidence: "high",
     rerouted: winner !== requestedSurface,
-    skipRetrieval,
   };
 }

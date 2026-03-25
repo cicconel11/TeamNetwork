@@ -3,11 +3,16 @@ import { safeString } from "./common";
 
 const aiSurfaceEnum = z.enum(["general", "members", "analytics", "events"]);
 export type AiSurface = z.infer<typeof aiSurfaceEnum>;
+const aiCurrentPathSchema = safeString(200).regex(
+  /^\/[A-Za-z0-9/_-]*$/,
+  "currentPath must be an absolute app path"
+);
 
 const rawSendMessageSchema = z.object({
   threadId: z.string().uuid().optional(),
   message: safeString(4000),
   surface: aiSurfaceEnum,
+  currentPath: aiCurrentPathSchema.optional(),
   idempotencyKey: z.string().uuid(),
   bypassCache: z.boolean().optional(),
   bypass_cache: z.boolean().optional(),
