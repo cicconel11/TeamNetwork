@@ -1,6 +1,7 @@
 export type GraphQueueDrainState = "processed" | "empty" | "unavailable" | "degraded";
 
 export type GraphFallbackReason = "disabled" | "unavailable" | "query_failure";
+export type SuggestionResultStrength = "strong" | "weak_fallback" | "none";
 
 export interface GraphDrainTelemetrySnapshot {
   state: GraphQueueDrainState;
@@ -34,6 +35,9 @@ export interface SuggestionObservabilitySnapshot {
   totalRequests: number;
   falkorCount: number;
   sqlFallbackCount: number;
+  strongResultCount: number;
+  weakFallbackCount: number;
+  emptyResultCount: number;
   fallbackReasonCounts: Record<GraphFallbackReason, number>;
   staleReadCount: number;
   degradedReadCount: number;
@@ -41,6 +45,7 @@ export interface SuggestionObservabilitySnapshot {
   lastMode: "falkor" | "sql_fallback" | null;
   lastFallbackReason: GraphFallbackReason | null;
   lastFreshnessState: "fresh" | "stale" | "degraded" | "unknown" | null;
+  lastResultStrength: SuggestionResultStrength | null;
   lastRequestedAt: string | null;
   recentTopCandidateCounts: Array<{ personId: string; appearances: number }>;
 }
@@ -100,6 +105,9 @@ function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot
     totalRequests: 0,
     falkorCount: 0,
     sqlFallbackCount: 0,
+    strongResultCount: 0,
+    weakFallbackCount: 0,
+    emptyResultCount: 0,
     fallbackReasonCounts: {
       disabled: 0,
       unavailable: 0,
@@ -111,6 +119,7 @@ function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot
     lastMode: null,
     lastFallbackReason: null,
     lastFreshnessState: null,
+    lastResultStrength: null,
     lastRequestedAt: null,
     recentTopCandidateCounts: [],
   };
@@ -217,12 +226,14 @@ export function recordSuggestionExecution(input: {
   mode: "falkor" | "sql_fallback";
   fallbackReason: GraphFallbackReason | null;
   freshnessState: "fresh" | "stale" | "degraded" | "unknown";
+  resultStrength: SuggestionResultStrength;
 }) {
   const state = suggestionTelemetryByOrg.get(input.orgId) ?? emptySuggestionSnapshot(input.orgId);
   state.totalRequests += 1;
   state.lastMode = input.mode;
   state.lastFallbackReason = input.fallbackReason;
   state.lastFreshnessState = input.freshnessState;
+  state.lastResultStrength = input.resultStrength;
   state.lastRequestedAt = nowIso();
 
   if (input.mode === "falkor") {
@@ -233,6 +244,14 @@ export function recordSuggestionExecution(input: {
 
   if (input.fallbackReason) {
     state.fallbackReasonCounts[input.fallbackReason] += 1;
+  }
+
+  if (input.resultStrength === "strong") {
+    state.strongResultCount += 1;
+  } else if (input.resultStrength === "weak_fallback") {
+    state.weakFallbackCount += 1;
+  } else {
+    state.emptyResultCount += 1;
   }
 
   if (input.freshnessState === "stale") {

@@ -1251,7 +1251,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
   ]);
 });
 
-test("suggestConnections returns no_suggestions for weak-only sparse member matches", async () => {
+test("suggestConnections returns weak fallback matches for sparse member profiles", async () => {
   const stub = createSupabaseStub();
 
   stub.seed("members", [
@@ -1335,9 +1335,13 @@ test("suggestConnections returns no_suggestions for weak-only sparse member matc
     },
   });
 
-  assert.equal(result.state, "no_suggestions");
+  assert.equal(result.state, "resolved");
   assert.equal(result.source_person?.name, "Louis Ciccone");
-  assert.equal(result.suggestions.length, 0);
+  assert.deepEqual(result.suggestions.map((row) => row.name), ["Dana Coach"]);
+  assert.deepEqual(
+    result.suggestions[0]?.reasons.map((reason) => reason.code),
+    ["shared_city", "graduation_proximity"]
+  );
 });
 
 test("scoreProjectedCandidates prefers shared role family over weak support only", () => {
@@ -1374,6 +1378,36 @@ test("scoreProjectedCandidates prefers shared role family over weak support only
   assert.deepEqual(
     suggestions[0].reasons.map((reason) => reason.code),
     ["shared_role_family"]
+  );
+});
+
+test("scoreProjectedCandidates falls back to weak support when no professional matches exist", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    graduationYear: 2026,
+    currentCity: "Philadelphia",
+  });
+  const weakOnlyMatch = makeProjectedPerson({
+    personKey: "user:weak-only",
+    personId: "weak-only",
+    name: "Weak Match",
+    currentCity: "Philadelphia",
+    graduationYear: 2027,
+  });
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [source, weakOnlyMatch],
+    candidates: [weakOnlyMatch],
+    limit: 3,
+  });
+
+  assert.deepEqual(suggestions.map((row) => row.name), ["Weak Match"]);
+  assert.deepEqual(
+    suggestions[0].reasons.map((reason) => reason.code),
+    ["shared_city", "graduation_proximity"]
   );
 });
 
@@ -2768,6 +2802,8 @@ test("suggestConnections stays recommendation-safe after graph transitions and r
   assert.equal(telemetry.falkorCount, 1);
   assert.equal(telemetry.sqlFallbackCount, 1);
   assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
+  assert.equal(telemetry.strongResultCount, 2);
+  assert.equal(telemetry.lastResultStrength, "strong");
 });
 
 test("graph health surface exposes lag, retries, degraded freshness, dead letters, and preserves failure evidence after recovery", async () => {
