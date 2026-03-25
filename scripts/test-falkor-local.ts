@@ -239,10 +239,22 @@ async function main() {
 
   console.log(`\n    Mode: ${result.mode}`);
   console.log(`    Freshness: ${result.freshness.state} (as_of: ${result.freshness.as_of})`);
-  console.log(`    Results (${result.results.length}):`);
-  for (const r of result.results) {
-    const reasons = r.reasons.map((reason) => reason.code).join(", ");
-    console.log(`      - ${r.name} (score: ${r.score}) [${reasons}]`);
+  console.log(`    State: ${result.state}`);
+  if (result.source_person) {
+    console.log(`    Source: ${result.source_person.name}`);
+  }
+
+  if (result.disambiguation_options?.length) {
+    console.log(`    Disambiguation options (${result.disambiguation_options.length}):`);
+    for (const option of result.disambiguation_options) {
+      console.log(`      - ${option.name}${option.subtitle ? ` (${option.subtitle})` : ""}`);
+    }
+  }
+
+  console.log(`    Suggestions (${result.suggestions.length}):`);
+  for (const suggestion of result.suggestions) {
+    const reasons = suggestion.reasons.map((reason) => reason.code).join(", ");
+    console.log(`      - ${suggestion.name} (score: ${suggestion.score}) [${reasons}]`);
   }
 
   // Cleanup

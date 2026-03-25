@@ -70,17 +70,25 @@ test("verifyToolBackedResponse flags event dates absent from tool rows", () => {
 
 test("verifyToolBackedResponse flags unsupported suggest_connections reasons", () => {
   const result = verifyToolBackedResponse({
-    content: "- Dina Direct — direct mentorship and shared city",
+    content: [
+      "Who Alex Source should connect with",
+      "1. Dina Direct - VP Product • Acme",
+      "Why: direct mentorship and shared city",
+    ].join("\n"),
     toolResults: [
       {
         name: "suggest_connections",
         data: {
+          state: "resolved",
           mode: "sql_fallback",
+          source_person: {
+            name: "Alex Source",
+          },
           freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          results: [
+          suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", weight: 100 }],
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
             },
           ],
         },
@@ -90,4 +98,109 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
 
   assert.equal(result.grounded, false);
   assert.match(result.failures.join("\n"), /shared_city/i);
+});
+
+test("verifyToolBackedResponse accepts fixed-template suggest_connections output", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Who Alex Source should connect with",
+      "1. Dina Direct - VP Product • Acme",
+      "Why: direct mentorship, shared company, shared graduation year",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "suggest_connections",
+        data: {
+          state: "resolved",
+          mode: "sql_fallback",
+          source_person: {
+            name: "Alex Source",
+          },
+          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
+          suggestions: [
+            {
+              name: "Dina Direct",
+              reasons: [
+                { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
+                { code: "shared_company", label: "shared company", weight: 20 },
+                { code: "shared_graduation_year", label: "shared graduation year", weight: 8 },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse rejects out-of-order suggest_connections output", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Who Alex Source should connect with",
+      "1. Sam Second - Founder",
+      "Why: second-degree mentorship",
+      "2. Dina Direct - VP Product • Acme",
+      "Why: direct mentorship",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "suggest_connections",
+        data: {
+          state: "resolved",
+          mode: "sql_fallback",
+          source_person: {
+            name: "Alex Source",
+          },
+          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
+          suggestions: [
+            {
+              name: "Dina Direct",
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
+            },
+            {
+              name: "Sam Second",
+              reasons: [{ code: "second_degree_mentorship", label: "second-degree mentorship", weight: 50 }],
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /out of ranked order/i);
+});
+
+test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as shared_city", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Who Alex Source should connect with",
+      "1. Dina Direct - VP Product • Acme",
+      "Why: direct mentorship and both in the finance sector",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "suggest_connections",
+        data: {
+          state: "resolved",
+          mode: "sql_fallback",
+          source_person: {
+            name: "Alex Source",
+          },
+          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
+          suggestions: [
+            {
+              name: "Dina Direct",
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
 });

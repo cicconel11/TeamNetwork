@@ -28,7 +28,22 @@ export interface SurfaceRoutingDecision {
 }
 
 const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]> = {
-  members: ["member", "members", "alumni", "parent", "parents", "roster", "directory", "mentorship"],
+  members: [
+    "member",
+    "members",
+    "alumni",
+    "parent",
+    "parents",
+    "roster",
+    "directory",
+    "mentorship",
+    "connection",
+    "connections",
+    "connect",
+    "networking",
+    "introduce",
+    "introduction",
+  ],
   analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance"],
   events: ["event", "events", "calendar", "schedule", "schedules", "meeting", "meetings", "ceremony", "game", "games", "rsvp"],
 };

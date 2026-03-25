@@ -12,8 +12,9 @@ export interface ListEventsArgs {
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
-  person_type: "member" | "alumni";
-  person_id: string;
+  person_type?: "member" | "alumni";
+  person_id?: string;
+  person_query?: string;
   limit?: number;
 }
 
@@ -81,7 +82,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "suggest_connections" as const,
       description:
-        "Suggest same-organization members or alumni that a person should reach out to. Use this for introduction, alumni matching, networking, or outreach questions like who someone should meet next. Returns ranked suggestions with deterministic reasons such as direct or second-degree mentorship, shared company, shared industry, shared major, shared graduation year, and shared city.",
+        "Suggest same-organization members or alumni that a person should reach out to. Use this for introductions, alumni matching, networking, or outreach questions like who someone should meet next. Prefer calling this tool directly for person-name connection questions. It can either resolve a person by query string or accept an explicit person_type plus person_id. Returns a chat-ready payload with deterministic suggestions and normalized reasons such as direct mentorship, second-degree mentorship, shared company, shared industry, shared major, shared graduation year, and shared city.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -94,6 +95,11 @@ const TOOL_BY_NAME = {
             type: "string" as const,
             description: "UUID of the source member or alumni record.",
           },
+          person_query: {
+            type: "string" as const,
+            description:
+              "Name or email of the source person when the user asked about connections in natural language.",
+          },
           limit: {
             type: "integer" as const,
             minimum: 1,
@@ -101,7 +107,6 @@ const TOOL_BY_NAME = {
             description: "Max ranked suggestions to return (default 10)",
           },
         },
-        required: ["person_type", "person_id"],
         additionalProperties: false as const,
       },
     },

@@ -21,9 +21,9 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/audit.ts` | Audit logging with cache + context metadata columns, secret redaction | `logAiRequest` (L37) |
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
-| `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries, including `suggest_connections` names and reason codes | `verifyToolBackedResponse` |
+| `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries, including connection-template validation against `suggest_connections` payload states, names, order, and reasons | `verifyToolBackedResponse` |
 | `src/lib/ai/tools/executor.ts` | Read-tool executor with executor-side active-admin recheck and discriminated result union | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
-| `src/lib/falkordb/suggestions.ts` | `suggest_connections` implementation: unified person projection, SQL fallback parity, graph freshness metadata | `suggestConnections` |
+| `src/lib/falkordb/suggestions.ts` | `suggest_connections` implementation: unified person projection, server-side person-query resolution, chat-ready payload normalization, SQL fallback parity, graph freshness metadata | `suggestConnections` |
 | `src/lib/falkordb/client.ts` | Falkor client wrapper with env-gated availability and graph-scoped query helper | `falkorClient`, `FalkorUnavailableError`, `FalkorQueryError` |
 | `src/lib/falkordb/sync.ts` | Graph sync worker for members, alumni, and mentorship pairs | `processGraphSyncQueue` |
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
@@ -117,11 +117,13 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Pass 1 runs with a 15s timeout budget
   │       ├─ Each requested tool is re-authorized in the executor (`role = admin`, `status = active`) and runs with a 5s timeout budget
   │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
-  │       ├─ `suggest_connections` may return either `mode: "falkor"` or `mode: "sql_fallback"` plus `freshness` metadata
+  │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
+  │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
+  │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
   │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
-  │       ├─ Pass 2 runs with a 15s timeout budget when tool results exist
+  │       ├─ Pass 2 runs with a 15s timeout budget when tool results exist and receives an extra fixed-template contract for `suggest_connections`
   │       ├─ Pass-2 text is buffered server-side, never streamed immediately
   │       └─ `tool_status` SSE events still stream live during tool execution
   ├─ 13. Finalize — update assistant message to complete/error
@@ -243,13 +245,16 @@ type ToolExecutionResult =
 
 ### `suggest_connections`
 
-- **Inputs:** `person_type`, `person_id`, optional `limit` (default 10, max 25)
-- **Outputs:** `{ mode, freshness, results }`
+- **Inputs:** either `person_query` for chat-driven name/email lookups, or `person_type` plus `person_id`; optional `limit` (default 10, max 25)
+- **Outputs:** `{ state, source_person, suggestions, disambiguation_options?, mode, freshness, fallback_reason }`
+- `state`: `resolved`, `ambiguous`, `not_found`, or `no_suggestions`
 - `mode`: `"falkor"` when the graph path succeeds, `"sql_fallback"` when Falkor is disabled or query execution fails
-- `freshness`: `{ state: "fresh" | "stale", as_of, lag_seconds? }`
-- `results[]`: ranked same-org member/alumni suggestions with deterministic `score`, compact `preview`, and machine-readable `reasons[]`
+- `freshness`: `{ state: "fresh" | "stale" | "degraded" | "unknown", as_of, lag_seconds?, reason? }`
+- `source_person`: display-ready source identity used by pass 2
+- `suggestions[]`: ranked same-org member/alumni suggestions in final display order with deterministic `score`, compact `subtitle`, normalized `reasons[]`, and preview fields
+- `disambiguation_options[]`: display-ready candidate people when `person_query` matched multiple org people
 - **Ranking contract:** direct mentorship `100`, second-degree mentorship `50`, shared company `20`, shared industry `12`, shared major `10`, shared graduation year `8`, shared city `5`
-- **Grounding contract:** pass-2 prose may name only returned suggestions and may claim only returned reason codes for those people
+- **Grounding contract:** pass-2 connection prose may only render the fixed connection template, may name only returned `source_person` / `suggestions`, must preserve ranked order, and may claim only returned normalized reason codes for each suggestion
 
 ## Test Coverage
 

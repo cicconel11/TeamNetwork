@@ -49,6 +49,7 @@ export interface ProjectedPerson {
   alumniId: string | null;
   userId: string | null;
   name: string;
+  email: string | null;
   role: string | null;
   major: string | null;
   currentCompany: string | null;
@@ -232,6 +233,10 @@ export function buildProjectedPeople(input: {
       alumniId: primaryAlumni?.id ?? null,
       userId: group.userId,
       name,
+      email: pickFirstText([
+        ...group.members.map((member) => member.email),
+        ...group.alumni.map((alumni) => alumni.email),
+      ]),
       role: pickFirstText([
         primaryAlumni?.position_title,
         primaryAlumni?.job_title,

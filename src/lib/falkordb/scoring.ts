@@ -32,6 +32,29 @@ export interface SuggestedConnection {
   reasons: ConnectionReason[];
 }
 
+export interface DisplayReadyConnectionReason extends ConnectionReason {
+  label: string;
+}
+
+export interface DisplayReadyConnectionPerson {
+  person_type: "member" | "alumni";
+  person_id: string;
+  name: string;
+  subtitle: string | null;
+}
+
+export interface DisplayReadySuggestedConnection extends DisplayReadyConnectionPerson {
+  score: number;
+  preview: SuggestedConnection["preview"];
+  reasons: DisplayReadyConnectionReason[];
+}
+
+export type SuggestConnectionsState =
+  | "resolved"
+  | "ambiguous"
+  | "not_found"
+  | "no_suggestions";
+
 export interface SuggestConnectionsFreshness {
   state: "fresh" | "stale" | "degraded" | "unknown";
   as_of: string;
@@ -43,7 +66,10 @@ export interface SuggestConnectionsResult {
   mode: "falkor" | "sql_fallback";
   fallback_reason: GraphFallbackReason | null;
   freshness: SuggestConnectionsFreshness;
-  results: SuggestedConnection[];
+  state: SuggestConnectionsState;
+  source_person: DisplayReadyConnectionPerson | null;
+  suggestions: DisplayReadySuggestedConnection[];
+  disambiguation_options?: DisplayReadyConnectionPerson[];
 }
 
 export const DEFAULT_SUGGESTIONS_LIMIT = 10;
@@ -96,6 +122,81 @@ function buildPreview(person: ProjectedPerson): SuggestedConnection["preview"] {
   if (person.currentCity) preview.current_city = person.currentCity;
 
   return preview;
+}
+
+export function formatConnectionReasonLabel(code: ConnectionReasonCode): string {
+  switch (code) {
+    case "direct_mentorship":
+      return "direct mentorship";
+    case "second_degree_mentorship":
+      return "second-degree mentorship";
+    case "shared_company":
+      return "shared company";
+    case "shared_industry":
+      return "shared industry";
+    case "shared_major":
+      return "shared major";
+    case "shared_graduation_year":
+      return "shared graduation year";
+    case "shared_city":
+      return "shared city";
+  }
+}
+
+export function buildConnectionSubtitle(input: {
+  role?: string | null;
+  currentCompany?: string | null;
+  industry?: string | null;
+  major?: string | null;
+  currentCity?: string | null;
+}): string | null {
+  const parts = [
+    input.role?.trim(),
+    input.currentCompany?.trim(),
+    input.industry?.trim(),
+    input.major?.trim(),
+    input.currentCity?.trim(),
+  ].filter((value): value is string => Boolean(value));
+
+  return parts.length > 0 ? parts.slice(0, 2).join(" • ") : null;
+}
+
+export function buildDisplayReadyConnectionPerson(person: ProjectedPerson): DisplayReadyConnectionPerson {
+  return {
+    person_type: person.personType,
+    person_id: person.personId,
+    name: person.name,
+    subtitle: buildConnectionSubtitle({
+      role: person.role,
+      currentCompany: person.currentCompany,
+      industry: person.industry,
+      major: person.major,
+      currentCity: person.currentCity,
+    }),
+  };
+}
+
+export function buildDisplayReadySuggestedConnection(
+  suggestion: SuggestedConnection
+): DisplayReadySuggestedConnection {
+  return {
+    person_type: suggestion.person_type,
+    person_id: suggestion.person_id,
+    name: suggestion.name,
+    subtitle: buildConnectionSubtitle({
+      role: suggestion.preview.role,
+      currentCompany: suggestion.preview.current_company,
+      industry: suggestion.preview.industry,
+      major: suggestion.preview.major,
+      currentCity: suggestion.preview.current_city,
+    }),
+    score: suggestion.score,
+    preview: suggestion.preview,
+    reasons: suggestion.reasons.map((reason) => ({
+      ...reason,
+      label: formatConnectionReasonLabel(reason.code),
+    })),
+  };
 }
 
 export function clampSuggestionsLimit(limit?: number) {

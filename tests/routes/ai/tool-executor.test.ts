@@ -363,17 +363,239 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   assert.equal(payload.mode, "sql_fallback");
   assert.equal(payload.fallback_reason, "disabled");
   assert.equal(payload.freshness.state, "unknown");
-  assert.equal(payload.results.length, 1);
-  assert.equal(payload.results[0].name, "Dina Direct");
-  assert.equal(payload.results[0].score, 128);
+  assert.equal(payload.state, "resolved");
+  assert.equal(payload.source_person.name, "Alex Source");
+  assert.equal(payload.suggestions.length, 1);
+  assert.equal(payload.suggestions[0].name, "Dina Direct");
+  assert.equal(payload.suggestions[0].score, 128);
   assert.deepEqual(
-    payload.results[0].reasons.map((reason: any) => reason.code),
+    payload.suggestions[0].reasons.map((reason: any) => reason.code),
     ["direct_mentorship", "shared_company", "shared_graduation_year"]
+  );
+  assert.deepEqual(
+    payload.suggestions[0].reasons.map((reason: any) => reason.label),
+    ["direct mentorship", "shared company", "shared graduation year"]
   );
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
   assert.equal(telemetry.sqlFallbackCount, 1);
   assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
+});
+
+test("suggest_connections resolves a person_query directly", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          {
+            id: "member-1",
+            organization_id: ORG_ID,
+            user_id: "user-1",
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            role: "Captain",
+            current_company: "Acme",
+            graduation_year: 2024,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            organization_id: ORG_ID,
+            user_id: "user-2",
+            status: "active",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            role: "Coach",
+            current_company: "Acme",
+            graduation_year: 2024,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: {
+        data: [],
+        error: null,
+      },
+    },
+    rpc: {
+      get_mentorship_distances: [
+        {
+          user_id: "user-2",
+          distance: 1,
+        },
+      ],
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "Louis Ciccone",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "resolved");
+  assert.equal(payload.source_person.name, "Louis Ciccone");
+  assert.equal(payload.suggestions[0].name, "Dana Coach");
+});
+
+test("suggest_connections returns ambiguous state for matching person_query", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          {
+            id: "member-1",
+            organization_id: ORG_ID,
+            user_id: null,
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis.one@example.com",
+            role: "Captain",
+            current_company: null,
+            graduation_year: 2024,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            organization_id: ORG_ID,
+            user_id: null,
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis.two@example.com",
+            role: "Manager",
+            current_company: null,
+            graduation_year: 2025,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: {
+        data: [],
+        error: null,
+      },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "Louis Ciccone",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "ambiguous");
+  assert.equal(payload.suggestions.length, 0);
+  assert.equal(payload.disambiguation_options.length, 2);
+});
+
+test("suggest_connections returns not_found for unknown person_query", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: { data: [], error: null },
+    },
+    alumni: {
+      select: { data: [], error: null },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "Ghost Person",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "not_found");
+  assert.equal(payload.suggestions.length, 0);
+});
+
+test("suggest_connections returns no_suggestions when the source has no supported matches", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          {
+            id: "member-1",
+            organization_id: ORG_ID,
+            user_id: "user-1",
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            role: "Captain",
+            current_company: null,
+            graduation_year: null,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            organization_id: ORG_ID,
+            user_id: "user-2",
+            status: "active",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            role: "Coach",
+            current_company: null,
+            graduation_year: null,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: { data: [], error: null },
+    },
+    rpc: {
+      get_mentorship_distances: [],
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "Louis Ciccone",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "no_suggestions");
+  assert.equal(payload.source_person.name, "Louis Ciccone");
+  assert.equal(payload.suggestions.length, 0);
 });
 
 test("invalid args return tool_error", async () => {

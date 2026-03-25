@@ -405,6 +405,7 @@ export async function buildPromptContext(
     "You have access to read-only tools for querying live organization data.",
     "Use tools when the user asks about specific members, events, or statistics that are not in the context above.",
     "Do NOT use tools for greetings, general questions, or anything answerable from context.",
+    "For networking, connection, or introduction questions about a named person, call suggest_connections directly. It can resolve the person from a natural-language person_query and return a chat-ready payload.",
     "When listing members or admins, prefer real human names over raw emails whenever a trustworthy name is available.",
     "Do NOT present placeholder identities like Member(email@example.com).",
     "If a member or admin has no trustworthy human name, describe them as an email-only member account or email-only admin account and include the email only when it is the only identifier or the user explicitly asks for emails.",

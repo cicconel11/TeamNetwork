@@ -9,6 +9,8 @@ import {
   type ProjectedPerson,
 } from "@/lib/falkordb/people";
 import {
+  buildDisplayReadyConnectionPerson,
+  buildDisplayReadySuggestedConnection,
   buildSuggestionForCandidate,
   clampSuggestionsLimit,
   GRAPH_STALE_AFTER_SECONDS,
@@ -30,8 +32,9 @@ import {
 import { MAX_GRAPH_SYNC_ATTEMPTS, readOptionalString } from "@/lib/falkordb/utils";
 
 export interface SuggestConnectionsArgs {
-  person_type: "member" | "alumni";
-  person_id: string;
+  person_type?: "member" | "alumni";
+  person_id?: string;
+  person_query?: string;
   limit?: number;
 }
 
@@ -47,6 +50,7 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   memberId: string | null;
   alumniId: string | null;
   name: string;
+  email: string | null;
   userId: string | null;
   role: string | null;
   major: string | null;
@@ -56,6 +60,8 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   currentCity: string | null;
   mentorshipDistance: number | null;
 }
+
+const CHAT_CONNECTION_SUGGESTION_LIMIT = 3;
 
 export class SuggestConnectionsLookupError extends Error {
   constructor(message: string) {
@@ -123,6 +129,10 @@ async function fetchSourceRow(
   orgId: string,
   args: SuggestConnectionsArgs
 ) {
+  if (!args.person_type || !args.person_id) {
+    return null;
+  }
+
   if (args.person_type === "member") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (serviceSupabase as any)
@@ -212,6 +222,41 @@ async function fetchSourceWithComplement(
     memberRows: (data as MemberPersonRow[] | null) ?? [],
     alumniRows: [alumniRow],
   };
+}
+
+function normalizeLookupValue(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function resolveSourceFromQuery(
+  projectedPeople: Map<string, ProjectedPerson>,
+  personQuery: string
+):
+  | { state: "resolved"; source: ProjectedPerson }
+  | { state: "ambiguous"; options: ProjectedPerson[] }
+  | { state: "not_found" } {
+  const normalizedQuery = normalizeLookupValue(personQuery);
+  const matches = [...projectedPeople.values()].filter((person) => {
+    const normalizedName = normalizeLookupValue(person.name);
+    const normalizedEmail = person.email ? normalizeLookupValue(person.email) : null;
+    return normalizedName === normalizedQuery || normalizedEmail === normalizedQuery;
+  });
+
+  if (matches.length === 0) {
+    return { state: "not_found" };
+  }
+
+  matches.sort((left, right) => {
+    const leftName = left.name.localeCompare(right.name);
+    if (leftName !== 0) return leftName;
+    return left.personId.localeCompare(right.personId);
+  });
+
+  if (matches.length > 1) {
+    return { state: "ambiguous", options: matches };
+  }
+
+  return { state: "resolved", source: matches[0] };
 }
 
 async function fetchMentorshipDistances(
@@ -314,6 +359,53 @@ function scoreProjectedCandidates(input: {
   return sortSuggestedConnections(suggestions).slice(0, input.limit);
 }
 
+function buildLookupOnlyResult(input: {
+  state: "ambiguous" | "not_found";
+  sourcePerson?: ProjectedPerson | null;
+  options?: ProjectedPerson[];
+}): SuggestConnectionsResult {
+  return {
+    mode: "sql_fallback",
+    fallback_reason: null,
+    freshness: {
+      state: "unknown",
+      as_of: new Date().toISOString(),
+    },
+    state: input.state,
+    source_person: input.sourcePerson ? buildDisplayReadyConnectionPerson(input.sourcePerson) : null,
+    suggestions: [],
+    ...(input.options
+      ? {
+          disambiguation_options: input.options.map((person) =>
+            buildDisplayReadyConnectionPerson(person)
+          ),
+        }
+      : {}),
+  };
+}
+
+function buildResolvedResult(input: {
+  mode: "falkor" | "sql_fallback";
+  fallbackReason: GraphFallbackReason | null;
+  freshness: SuggestConnectionsFreshness;
+  source: ProjectedPerson;
+  results: ReturnType<typeof sortSuggestedConnections>;
+  displayLimit: number;
+}): SuggestConnectionsResult {
+  const displaySuggestions = input.results
+    .slice(0, input.displayLimit)
+    .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion));
+
+  return {
+    mode: input.mode,
+    fallback_reason: input.fallbackReason,
+    freshness: input.freshness,
+    state: displaySuggestions.length > 0 ? "resolved" : "no_suggestions",
+    source_person: buildDisplayReadyConnectionPerson(input.source),
+    suggestions: displaySuggestions,
+  };
+}
+
 function graphRowToProjectedPerson(
   row: GraphSuggestionRow,
   orgId: string
@@ -331,6 +423,7 @@ function graphRowToProjectedPerson(
     alumniId: row.alumniId ?? (row.personType === "alumni" ? row.personId : null),
     userId: row.userId ?? null,
     name: row.name,
+    email: row.email ?? null,
     role: row.role ?? null,
     major: row.major ?? null,
     currentCompany: row.currentCompany ?? null,
@@ -484,6 +577,7 @@ async function fetchGraphSuggestions(input: {
           candidate.memberId AS memberId,
           candidate.alumniId AS alumniId,
           candidate.name AS name,
+          candidate.email AS email,
           candidate.userId AS userId,
           candidate.role AS role,
           candidate.major AS major,
@@ -553,41 +647,78 @@ export async function suggestConnections(input: {
 }): Promise<SuggestConnectionsResult> {
   const graphClient = input.graphClient ?? falkorClient;
   const limit = clampSuggestionsLimit(input.args.limit);
+  const displayLimit = Math.min(limit, CHAT_CONNECTION_SUGGESTION_LIMIT);
   const { orgId, serviceSupabase } = input;
+  let resolvedSource: ProjectedPerson | null = null;
+  let projectedPeopleForLookup: Map<string, ProjectedPerson> | null = null;
 
-  const { memberRows, alumniRows } = await fetchSourceWithComplement(
-    serviceSupabase,
-    orgId,
-    input.args
-  );
+  if (input.args.person_query) {
+    projectedPeopleForLookup = await loadProjectedPeople(serviceSupabase, orgId);
+    const resolution = resolveSourceFromQuery(
+      projectedPeopleForLookup,
+      input.args.person_query
+    );
 
-  const source = buildSourcePerson({ memberRows, alumniRows });
-  if (!source) {
-    throw new SuggestConnectionsLookupError("Person not found");
+    if (resolution.state === "not_found") {
+      return buildLookupOnlyResult({ state: "not_found" });
+    }
+
+    if (resolution.state === "ambiguous") {
+      return buildLookupOnlyResult({
+        state: "ambiguous",
+        options: resolution.options,
+      });
+    }
+
+    resolvedSource = resolution.source;
+  } else {
+    const { memberRows, alumniRows } = await fetchSourceWithComplement(
+      serviceSupabase,
+      orgId,
+      input.args
+    );
+
+    const source = buildSourcePerson({ memberRows, alumniRows });
+    if (!source) {
+      throw new SuggestConnectionsLookupError("Person not found");
+    }
+
+    resolvedSource = source;
   }
 
-  const resolvedSource: ProjectedPerson = source;
+  if (!resolvedSource) {
+    throw new SuggestConnectionsLookupError("Person not found");
+  }
 
   async function computeSqlFallback(
     fallbackReason: GraphFallbackReason,
     freshness: SuggestConnectionsFreshness
   ): Promise<SuggestConnectionsResult> {
+    const source = resolvedSource;
+    if (!source) {
+      throw new SuggestConnectionsLookupError("Person not found");
+    }
+
     const [projectedPeople, mentorshipDistances] = await Promise.all([
-      loadProjectedPeople(serviceSupabase, orgId),
-      fetchMentorshipDistances(serviceSupabase, orgId, resolvedSource),
+      projectedPeopleForLookup
+        ? Promise.resolve(projectedPeopleForLookup)
+        : loadProjectedPeople(serviceSupabase, orgId),
+      fetchMentorshipDistances(serviceSupabase, orgId, source),
     ]);
     const results = scoreProjectedCandidates({
-      source: projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource,
+      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
       candidates: projectedPeople.values(),
       mentorshipDistances,
       limit,
     });
-    return {
+    return buildResolvedResult({
       mode: "sql_fallback",
-      fallback_reason: fallbackReason,
+      fallbackReason,
       freshness,
+      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
       results,
-    };
+      displayLimit,
+    });
   }
 
   function finalizeResult(result: SuggestConnectionsResult) {
@@ -624,7 +755,11 @@ export async function suggestConnections(input: {
       mode: "falkor",
       fallback_reason: null,
       freshness,
-      results: graphResults,
+      state: graphResults.length > 0 ? "resolved" : "no_suggestions",
+      source_person: buildDisplayReadyConnectionPerson(resolvedSource),
+      suggestions: graphResults
+        .slice(0, displayLimit)
+        .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion)),
     });
   } catch (error) {
     if (!(error instanceof FalkorUnavailableError) && !(error instanceof FalkorQueryError)) {

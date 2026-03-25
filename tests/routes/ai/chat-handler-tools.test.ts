@@ -179,7 +179,12 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       // First call: yield a tool call if tools are provided
       if (options.tools && !options.toolResults) {
         const firstToolName = options.tools[0]?.function?.name ?? "list_members";
-        const argsJson = firstToolName === "get_org_stats" ? "{}" : '{"limit": 5}';
+        const argsJson =
+          firstToolName === "get_org_stats"
+            ? "{}"
+            : firstToolName === "suggest_connections"
+              ? '{"person_query":"Louis Ciccone"}'
+              : '{"limit": 5}';
         yield {
           type: "tool_call_requested",
           id: "call-1",
@@ -208,6 +213,24 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
     }),
     executeToolCall: async (ctx: any, call: any) => {
       executeToolCallCalls.push({ ctx, call });
+      if (call.name === "suggest_connections") {
+        return okToolResult({
+          state: "resolved",
+          mode: "sql_fallback",
+          fallback_reason: "disabled",
+          freshness: { state: "unknown", as_of: "2026-03-24T00:00:00.000Z" },
+          source_person: { name: "Louis Ciccone", subtitle: "Captain • Acme" },
+          suggestions: [
+            {
+              name: "Dina Direct",
+              subtitle: "VP Product • Acme",
+              reasons: [
+                { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
+              ],
+            },
+          ],
+        });
+      }
       return okToolResult([{ id: "m1", name: "Alice" }]);
     },
     verifyToolBackedResponse: () => ({ grounded: true, failures: [] }),
@@ -216,6 +239,7 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
 }
 
 beforeEach(() => {
+  (globalThis as { __rateLimitStore?: Map<string, unknown> }).__rateLimitStore?.clear();
   supabaseStub = createSupabaseStub();
   auditEntries = [];
   executeToolCallCalls = [];
@@ -368,6 +392,64 @@ test("tool call: audit entry includes toolCalls", async () => {
   assert.ok(auditEntries[0].toolCalls);
   assert.equal(auditEntries[0].toolCalls[0].name, "list_members");
   assert.deepEqual(auditEntries[0].toolCalls[0].args, { limit: 5 });
+});
+
+test("direct-name connection prompts only attach suggest_connections on pass 1", async () => {
+  await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["suggest_connections"]);
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "suggest_connections");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    person_query: "Louis Ciccone",
+  });
+});
+
+test("direct-name connection prompts pass a fixed-template contract into pass 2", async () => {
+  await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(composeResponseCalls.length, 2);
+  assert.match(composeResponseCalls[1].systemPrompt, /CONNECTION ANSWER CONTRACT/);
+  assert.deepEqual(composeResponseCalls[1].toolResults[0].data, {
+    state: "resolved",
+    mode: "sql_fallback",
+    fallback_reason: "disabled",
+    freshness: { state: "unknown", as_of: "2026-03-24T00:00:00.000Z" },
+    source_person: { name: "Louis Ciccone", subtitle: "Captain • Acme" },
+    suggestions: [
+      {
+        name: "Dina Direct",
+        subtitle: "VP Product • Acme",
+        reasons: [
+          { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
+        ],
+      },
+    ],
+  });
+});
+
+test("direct-name connection prompts log suggest_connections in audit metadata", async () => {
+  await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(auditEntries.length, 1);
+  assert.equal(auditEntries[0].contextSurface, "members");
+  assert.equal(auditEntries[0].toolCalls[0].name, "suggest_connections");
+  assert.deepEqual(auditEntries[0].toolCalls[0].args, {
+    person_query: "Louis Ciccone",
+  });
+  assert.notEqual(auditEntries[0].error, "tool_grounding_failed");
 });
 
 test("tool call: cache write is prevented (bypassReason set in done event)", async () => {

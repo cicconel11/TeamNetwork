@@ -241,12 +241,15 @@ The response includes:
 
 ### Source person resolution
 
-Before querying Falkor, the app builds a source projection using the same merge rules as the full SQL projection:
+Before querying Falkor, the app resolves the source person on the server:
 
+- chat-driven prompts may pass `person_query` (name or email) directly to `suggest_connections`
+- internal callers may still pass `person_type` plus `person_id`
+- once a concrete source is identified, the app builds a merged source projection using the same rules as the full SQL projection
 - if the source has a `user_id`, it loads all matching complement rows from the other table
 - it then builds a single merged source person
 
-This matters because scoring reasons like shared company or shared graduation year depend on the merged source attributes, not just the row the admin clicked on.
+This matters because scoring reasons like shared company or shared graduation year depend on the merged source attributes, not just the row the admin clicked on. It also means the AI route no longer depends on the model discovering a separate `list_members -> suggest_connections` tool chain for direct-name prompts.
 
 ### Freshness
 
@@ -262,6 +265,18 @@ The per-org freshness lookup is supported by:
 ### Fallback behavior
 
 Same as **Step 7** (disabled/unavailable Falkor or thrown graph query → SQL, still ranked). This keeps the tool usable during setup, outages, or local dev without Falkor.
+
+### Chat-ready payload
+
+After ranking, both Falkor and SQL fallback normalize into the same chat-ready envelope:
+
+- `state`: `resolved`, `ambiguous`, `not_found`, `no_suggestions`
+- `source_person`: display-ready source identity
+- `suggestions`: top suggestions in final display order with `subtitle`, `score`, preview fields, and normalized reason labels
+- `disambiguation_options`: present only for ambiguous `person_query` matches
+- `mode`, `freshness`, and `fallback_reason`
+
+This is the integration boundary between the people graph and the AI route. Pass 2 receives this payload directly and renders a fixed connection template. Grounding verifies the rendered answer against this normalized payload instead of against raw graph rows.
 
 ## How To Test It
 

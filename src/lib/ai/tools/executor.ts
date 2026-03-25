@@ -45,10 +45,19 @@ const listEventsSchema = z
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
   .object({
-    person_type: z.enum(["member", "alumni"]),
-    person_id: z.string().uuid(),
+    person_type: z.enum(["member", "alumni"]).optional(),
+    person_id: z.string().uuid().optional(),
+    person_query: z.string().trim().min(1).optional(),
     limit: z.number().int().min(1).max(25).optional(),
   })
+  .refine(
+    (value) =>
+      (typeof value.person_query === "string" && value.person_query.length > 0) ||
+      (typeof value.person_type === "string" && typeof value.person_id === "string"),
+    {
+      message: "Expected person_query or both person_type and person_id",
+    }
+  )
   .strict();
 
 const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {

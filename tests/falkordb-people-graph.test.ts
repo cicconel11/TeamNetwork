@@ -344,6 +344,7 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
     alumniId: "alumni-1",
     userId: "shared-user",
     name: "Mia Member",
+    email: "mia@example.com",
     role: "Engineer",
     major: "Computer Science",
     currentCompany: "Acme",
@@ -524,8 +525,10 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
   assert.equal(result.mode, "sql_fallback");
   assert.equal(result.fallback_reason, "unavailable");
   assert.equal(result.freshness.state, "unknown");
+  assert.equal(result.state, "resolved");
+  assert.equal(result.source_person?.name, "Alex Source");
   assert.deepEqual(
-    result.results.map((row) => ({
+    result.suggestions.map((row) => ({
       name: row.name,
       score: row.score,
       reasonCodes: row.reasons.map((reason) => reason.code),
@@ -658,7 +661,7 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
 
   assert.equal(graphResult.mode, "falkor");
   assert.equal(graphResult.fallback_reason, null);
-  assert.deepEqual(graphResult.results, fallbackResult.results);
+  assert.deepEqual(graphResult.suggestions, fallbackResult.suggestions);
 });
 
 test("suggestConnections graph mode matches SQL fallback for mixed-direction second-degree mentorship", async () => {
@@ -763,7 +766,7 @@ test("suggestConnections graph mode matches SQL fallback for mixed-direction sec
 
   assert.equal(graphResult.mode, "falkor");
   assert.equal(graphResult.fallback_reason, null);
-  assert.deepEqual(graphResult.results, fallbackResult.results);
+  assert.deepEqual(graphResult.suggestions, fallbackResult.suggestions);
 });
 
 test("suggestConnections graph mode preserves merged source attributes with duplicate complement rows", async () => {
@@ -859,11 +862,13 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
 
   assert.equal(result.mode, "falkor");
   assert.equal(result.fallback_reason, null);
-  assert.deepEqual(result.results, [
+  assert.equal(result.state, "resolved");
+  assert.deepEqual(result.suggestions, [
     {
       person_type: "alumni",
       person_id: "candidate-alumni",
       name: "Casey Candidate",
+      subtitle: "Engineer • Acme",
       score: 28,
       preview: {
         role: "Engineer",
@@ -873,11 +878,13 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
       reasons: [
         {
           code: "shared_company",
+          label: "shared company",
           weight: 20,
           value: "Acme",
         },
         {
           code: "shared_graduation_year",
+          label: "shared graduation year",
           weight: 8,
           value: 2024,
         },
@@ -2061,14 +2068,14 @@ test("suggestConnections stays recommendation-safe after graph transitions and r
 
   assert.equal(graphResult.mode, "falkor");
   assert.deepEqual(
-    graphResult.results.map((row) => row.person_id),
+    graphResult.suggestions.map((row) => row.person_id),
     [
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
     ]
   );
-  assert.deepEqual(graphResult.results, sqlFallback.results);
+  assert.deepEqual(graphResult.suggestions, sqlFallback.suggestions);
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
   assert.equal(telemetry.falkorCount, 1);

@@ -38,6 +38,15 @@ describe("resolveSurfaceRouting — surface axis", () => {
     assert.equal(result.confidence, "high");
   });
 
+  it("reroutes connection questions from general surface to members", () => {
+    const result = resolveSurfaceRouting("Give me connection for Louis Ciccone", "general");
+
+    assert.equal(result.intent, "members_query");
+    assert.equal(result.effectiveSurface, "members");
+    assert.equal(result.rerouted, true);
+    assert.equal(result.confidence, "high");
+  });
+
   it("returns ambiguous_query when multiple surfaces tie", () => {
     const result = resolveSurfaceRouting("Compare members and events", "general");
 

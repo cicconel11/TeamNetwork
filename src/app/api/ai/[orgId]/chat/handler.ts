@@ -73,12 +73,34 @@ const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   events: ["list_events", "get_org_stats"],
 };
 
+const CONNECTION_PROMPT_PATTERN =
+  /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
+
+const CONNECTION_PASS2_TEMPLATE = [
+  "CONNECTION ANSWER CONTRACT:",
+  "- If suggest_connections returned state=resolved, respond using this exact shape:",
+  "  Who [source person name] should connect with",
+  "  1. [suggestion name] - [subtitle if present]",
+  "  Why: [reason], [reason], [reason]",
+  "- Use at most 3 suggestions.",
+  "- Use only the returned source_person, suggestions, subtitles, and normalized reason labels.",
+  "- Do not mention scores, UUIDs, Falkor, SQL fallback, freshness, or internal tool details.",
+  "- If state=ambiguous, ask the user which returned option they mean.",
+  "- If state=not_found, say you couldn't find that person in the organization's member or alumni data and ask for a narrower identifier.",
+  "- If state=no_suggestions, say you found the person but do not have supported connection recommendations yet.",
+].join("\n");
+
 function getPass1Tools(
+  message: string,
   effectiveSurface: CacheSurface,
   toolPolicy: TurnExecutionPolicy["toolPolicy"]
 ) {
   if (toolPolicy !== "surface_read_tools") {
     return undefined;
+  }
+
+  if (effectiveSurface === "members" && CONNECTION_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.suggest_connections];
   }
 
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
@@ -201,6 +223,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   }
   const skipRagRetrieval = executionPolicy.retrievalPolicy === "skip";
   const pass1Tools = getPass1Tools(
+    messageSafety.promptSafeMessage,
     effectiveSurface,
     executionPolicy.toolPolicy
   );
@@ -773,12 +796,18 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       }
 
       if (toolCallMade && toolResults.length > 0) {
+        const pass2SystemPrompt = successfulToolResults.some(
+          (result) => result.name === "suggest_connections"
+        )
+          ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}`
+          : systemPrompt;
+
         const pass2Outcome = await runModelStage(
           "pass2_model",
           PASS2_MODEL_TIMEOUT_MS,
           {
             client,
-            systemPrompt,
+            systemPrompt: pass2SystemPrompt,
             messages: contextMessages,
             toolResults,
             onUsage: recordUsage,

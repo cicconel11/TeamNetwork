@@ -66,13 +66,14 @@ test("get_org_stats has no required parameters", () => {
   assert.equal(params.required, undefined);
 });
 
-test("suggest_connections requires person_type and person_id", () => {
+test("suggest_connections supports person_query or person_type plus person_id", () => {
   const tool = AI_TOOLS.find((t) => t.function.name === "suggest_connections")!;
   const params = tool.function.parameters as ToolParameters;
   const props = params.properties as ToolProperties;
 
   assert.ok(props.person_type);
   assert.ok(props.person_id);
+  assert.ok(props.person_query);
   assert.equal(props.limit.maximum, 25);
-  assert.deepEqual(params.required, ["person_type", "person_id"]);
+  assert.equal(params.required, undefined);
 });
