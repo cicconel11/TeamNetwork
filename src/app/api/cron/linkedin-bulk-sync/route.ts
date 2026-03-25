@@ -94,12 +94,13 @@ export async function GET(request: Request) {
 
           try {
             processedUserIds.add(userId);
-            const profile = await fetchBrightDataProfile(linkedinUrl);
-
-            if (!profile) {
+            const fetchResult = await fetchBrightDataProfile(linkedinUrl);
+            if (!fetchResult.ok) {
+              console.error(`[linkedin-bulk-sync] Bright Data fetch failed for ${userId}:`, fetchResult.kind, fetchResult.upstreamStatus ?? "");
               return "not_found" as const;
             }
 
+            const profile = fetchResult.profile;
             const fields = mapBrightDataToFields(profile);
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

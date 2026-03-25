@@ -1,6 +1,7 @@
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import assert from "node:assert/strict";
 import {
+  fetchBrightDataProfile,
   mapBrightDataToFields,
   isBrightDataConfigured,
   type BrightDataProfileResult,
@@ -48,6 +49,8 @@ describe("Bright Data LinkedIn client", () => {
       const profile: BrightDataProfileResult = {
         name: "Jane Doe",
         city: "San Francisco",
+        position: null,
+        current_company: null,
         current_company_name: "Acme Corp",
         experience: [
           { title: "CEO", company: "Acme Corp", location: "SF", end_date: null },
@@ -73,6 +76,8 @@ describe("Bright Data LinkedIn client", () => {
       const profile: BrightDataProfileResult = {
         name: "Bob",
         city: null,
+        position: null,
+        current_company: null,
         current_company_name: null,
         experience: [
           { title: "Engineer", company: "OldCo", location: "LA", end_date: "2023" },
@@ -93,6 +98,8 @@ describe("Bright Data LinkedIn client", () => {
       const profile: BrightDataProfileResult = {
         name: null,
         city: null,
+        position: null,
+        current_company: null,
         current_company_name: null,
         experience: [],
         education: [],
@@ -112,6 +119,8 @@ describe("Bright Data LinkedIn client", () => {
       const profile: BrightDataProfileResult = {
         name: null,
         city: null,
+        position: null,
+        current_company: null,
         current_company_name: "Top-Level Company",
         experience: [
           { title: "Dev", company: "Experience Co", location: null, end_date: null },
@@ -127,6 +136,8 @@ describe("Bright Data LinkedIn client", () => {
       const profile = {
         name: null,
         city: null,
+        position: null,
+        current_company: null,
         current_company_name: null,
         experience: null as unknown as BrightDataProfileResult["experience"],
         education: "invalid" as unknown as BrightDataProfileResult["education"],
@@ -135,6 +146,92 @@ describe("Bright Data LinkedIn client", () => {
       const fields = mapBrightDataToFields(profile);
       assert.equal(fields.job_title, null);
       assert.equal(fields.school, null);
+    });
+
+    it("uses documented current_company and position fields when experience is absent", () => {
+      const profile: BrightDataProfileResult = {
+        name: "Satya Nadella",
+        city: "Redmond, Washington, United States",
+        position: "Chairman and CEO at Microsoft",
+        current_company: "Microsoft",
+        current_company_name: null,
+        experience: [],
+        education: [],
+      };
+
+      const fields = mapBrightDataToFields(profile);
+      assert.equal(fields.job_title, "Chairman and CEO at Microsoft");
+      assert.equal(fields.current_company, "Microsoft");
+      assert.equal(fields.position_title, "Chairman and CEO at Microsoft");
+    });
+  });
+
+  describe("fetchBrightDataProfile", () => {
+    it("normalizes the documented Bright Data profile payload", async () => {
+      process.env.BRIGHT_DATA_API_KEY = "test-key-123";
+      const mockFetch = mock.fn(async () => {
+        return new Response(JSON.stringify({
+          name: "Satya Nadella",
+          city: "Redmond, Washington, United States",
+          position: "Chairman and CEO at Microsoft",
+          current_company: { name: "Microsoft" },
+          education: [{ school: "University of Chicago", field_of_study: null }],
+        }), { status: 200 });
+      });
+
+      const result = await fetchBrightDataProfile(
+        "https://www.linkedin.com/in/satyanadella",
+        { fetchFn: mockFetch as unknown as typeof fetch },
+      );
+
+      assert.equal(result.ok, true);
+      if (!result.ok) return;
+      assert.deepEqual(result.profile, {
+        name: "Satya Nadella",
+        city: "Redmond, Washington, United States",
+        position: "Chairman and CEO at Microsoft",
+        current_company: "Microsoft",
+        current_company_name: null,
+        experience: [],
+        education: [{ school: "University of Chicago", field_of_study: null }],
+      });
+    });
+
+    it("classifies non-200 responses as upstream errors", async () => {
+      process.env.BRIGHT_DATA_API_KEY = "test-key-123";
+      const mockFetch = mock.fn(async () => {
+        return new Response(JSON.stringify({ error: "bad request" }), { status: 400 });
+      });
+
+      const result = await fetchBrightDataProfile(
+        "https://www.linkedin.com/in/satyanadella",
+        { fetchFn: mockFetch as unknown as typeof fetch },
+      );
+
+      assert.deepEqual(result, {
+        ok: false,
+        kind: "upstream_error",
+        error: "Bright Data rejected the profile lookup.",
+        upstreamStatus: 400,
+      });
+    });
+
+    it("classifies malformed payloads instead of pretending no data was returned", async () => {
+      process.env.BRIGHT_DATA_API_KEY = "test-key-123";
+      const mockFetch = mock.fn(async () => {
+        return new Response(JSON.stringify({ hello: "world" }), { status: 200 });
+      });
+
+      const result = await fetchBrightDataProfile(
+        "https://www.linkedin.com/in/satyanadella",
+        { fetchFn: mockFetch as unknown as typeof fetch },
+      );
+
+      assert.deepEqual(result, {
+        ok: false,
+        kind: "malformed_payload",
+        error: "Bright Data returned an unexpected profile payload.",
+      });
     });
   });
 });

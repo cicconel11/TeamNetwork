@@ -87,18 +87,19 @@ export async function GET(request: Request) {
           .update({ enrichment_snapshot_id: null })
           .eq("id", alum.id);
 
-        const profile = await fetchBrightDataProfile(normalized);
-        if (!profile) {
+        const fetchResult = await fetchBrightDataProfile(normalized);
+        if (!fetchResult.ok) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await (supabase as any).rpc("increment_enrichment_retry", {
             p_alumni_ids: [alum.id],
-            p_error: "bright_data_fetch_failed",
+            p_error: fetchResult.kind,
             p_max_retries: MAX_RETRIES,
           });
           failedCount += 1;
           continue;
         }
 
+        const profile = fetchResult.profile;
         const fields = mapBrightDataToFields(profile);
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -561,21 +561,32 @@ export async function runBrightDataEnrichment(
   supabase: SupabaseClient<Database>,
   userId: string,
   linkedinUrl: string | null | undefined,
-): Promise<{ enriched: boolean; error?: string }> {
+): Promise<{
+  enriched: boolean;
+  error?: string;
+  failureKind?: "not_configured" | "invalid_url" | "upstream_error" | "malformed_payload" | "network_error" | "rpc_error";
+  upstreamStatus?: number;
+}> {
   if (!linkedinUrl) {
     return { enriched: false };
   }
 
   if (!isBrightDataConfigured()) {
-    return { enriched: false };
+    return { enriched: false, failureKind: "not_configured", error: "Bright Data sync is not configured in this environment." };
   }
 
   try {
-    const profile = await fetchBrightDataProfile(linkedinUrl);
-    if (!profile) {
-      return { enriched: false, error: "Bright Data returned no data" };
+    const fetchResult = await fetchBrightDataProfile(linkedinUrl);
+    if (!fetchResult.ok) {
+      return {
+        enriched: false,
+        error: fetchResult.error,
+        failureKind: fetchResult.kind,
+        upstreamStatus: fetchResult.upstreamStatus,
+      };
     }
 
+    const profile = fetchResult.profile;
     const fields = mapBrightDataToFields(profile);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -592,13 +603,17 @@ export async function runBrightDataEnrichment(
 
     if (error) {
       console.error("[bright-data-enrichment] RPC error:", error);
-      return { enriched: false, error: error.message };
+      return { enriched: false, error: error.message, failureKind: "rpc_error" };
     }
 
     return { enriched: true };
   } catch (err) {
     console.error("[bright-data-enrichment] Unexpected error:", err);
-    return { enriched: false, error: err instanceof Error ? err.message : "Unknown error" };
+    return {
+      enriched: false,
+      error: err instanceof Error ? err.message : "Unknown error",
+      failureKind: "network_error",
+    };
   }
 }
 

@@ -34,9 +34,26 @@ export interface BrightDataEducation {
 export interface BrightDataProfileResult {
   name: string | null;
   city: string | null;
+  position: string | null;
+  current_company: string | null;
   current_company_name: string | null;
   experience: BrightDataExperience[];
   education: BrightDataEducation[];
+}
+
+export type BrightDataFetchFailureKind =
+  | "not_configured"
+  | "invalid_url"
+  | "upstream_error"
+  | "malformed_payload"
+  | "network_error";
+
+export type BrightDataFetchResult =
+  | { ok: true; profile: BrightDataProfileResult }
+  | { ok: false; kind: BrightDataFetchFailureKind; error: string; upstreamStatus?: number };
+
+interface FetchBrightDataProfileOptions {
+  fetchFn?: typeof fetch;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,20 +84,31 @@ const BRIGHT_DATA_PROFILES_URL = "https://api.brightdata.com/linkedin/profiles/c
  */
 export async function fetchBrightDataProfile(
   linkedinUrl: string,
-): Promise<BrightDataProfileResult | null> {
+  options: FetchBrightDataProfileOptions = {},
+): Promise<BrightDataFetchResult> {
   const apiKey = getBrightDataApiKey();
+  const fetchFn = options.fetchFn ?? fetch;
+
   if (!apiKey) {
     console.log("[bright-data] Skipping enrichment — BRIGHT_DATA_API_KEY not configured");
-    return null;
+    return {
+      ok: false,
+      kind: "not_configured",
+      error: "Bright Data is not configured.",
+    };
   }
 
   if (!linkedinUrl || !isLinkedInProfileUrl(linkedinUrl)) {
     console.warn("[bright-data] Invalid LinkedIn URL, skipping");
-    return null;
+    return {
+      ok: false,
+      kind: "invalid_url",
+      error: "Invalid LinkedIn profile URL.",
+    };
   }
 
   try {
-    const res = await fetch(BRIGHT_DATA_PROFILES_URL, {
+    const res = await fetchFn(BRIGHT_DATA_PROFILES_URL, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -92,21 +120,71 @@ export async function fetchBrightDataProfile(
     if (!res.ok) {
       const body = await res.text().catch(() => "");
       console.error("[bright-data] API error:", res.status, body.substring(0, 200));
-      return null;
+      return {
+        ok: false,
+        kind: "upstream_error",
+        error: "Bright Data rejected the profile lookup.",
+        upstreamStatus: res.status,
+      };
     }
 
-    const data = await res.json();
-    return {
-      name: (data.name as string) || null,
-      city: (data.city as string) || null,
-      current_company_name: (data.current_company_name as string) || null,
-      experience: Array.isArray(data.experience) ? data.experience : [],
-      education: Array.isArray(data.education) ? data.education : [],
-    };
+    const data = await res.json().catch(() => null);
+    const profile = normalizeBrightDataProfile(data);
+    if (!profile) {
+      console.error("[bright-data] Malformed payload:", data);
+      return {
+        ok: false,
+        kind: "malformed_payload",
+        error: "Bright Data returned an unexpected profile payload.",
+      };
+    }
+
+    return { ok: true, profile };
   } catch (err) {
     console.error("[bright-data] Network error:", err);
+    return {
+      ok: false,
+      kind: "network_error",
+      error: "Unable to reach Bright Data.",
+    };
+  }
+}
+
+function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | null {
+  if (!data || typeof data !== "object") return null;
+
+  const raw = data as Record<string, unknown>;
+  const hasPrimaryIdentity =
+    typeof raw.name === "string" ||
+    typeof raw.position === "string" ||
+    typeof raw.current_company === "string" ||
+    typeof raw.current_company_name === "string" ||
+    Array.isArray(raw.experience) ||
+    Array.isArray(raw.education);
+
+  if (!hasPrimaryIdentity) {
     return null;
   }
+
+  return {
+    name: typeof raw.name === "string" ? raw.name : null,
+    city: typeof raw.city === "string" ? raw.city : null,
+    position: typeof raw.position === "string" ? raw.position : null,
+    current_company: normalizeCurrentCompany(raw.current_company),
+    current_company_name:
+      typeof raw.current_company_name === "string" ? raw.current_company_name : null,
+    experience: Array.isArray(raw.experience) ? raw.experience as BrightDataExperience[] : [],
+    education: Array.isArray(raw.education) ? raw.education as BrightDataEducation[] : [],
+  };
+}
+
+function normalizeCurrentCompany(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "name" in value) {
+    const name = (value as { name?: unknown }).name;
+    return typeof name === "string" ? name : null;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -130,14 +208,16 @@ export function mapBrightDataToFields(
 
   const currentJob = experiences.find((e) => !e.end_date) ?? experiences[0] ?? null;
   const latestEdu = education[0] ?? null;
+  const derivedCompany = profile.current_company || profile.current_company_name || currentJob?.company || null;
+  const derivedTitle = currentJob?.title || profile.position || null;
 
   return {
-    job_title: currentJob?.title || null,
-    current_company: profile.current_company_name || currentJob?.company || null,
+    job_title: derivedTitle,
+    current_company: derivedCompany,
     industry: null,
     current_city: profile.city || currentJob?.location || null,
     school: latestEdu?.school || null,
     major: latestEdu?.field_of_study || null,
-    position_title: currentJob?.title || null,
+    position_title: derivedTitle,
   };
 }

@@ -164,3 +164,34 @@ test("performBrightDataSync returns 503 when Bright Data is not configured", asy
     },
   });
 });
+
+test("performBrightDataSync keeps upstream Bright Data failures as 502 with a stable error", async () => {
+  const supabase = createSupabaseStub();
+  seedMembershipContext(supabase);
+  supabase.seed("members", [{
+    user_id: USER_ID,
+    linkedin_url: LINKEDIN_URL,
+    deleted_at: null,
+  }]);
+  supabase.registerRpc("claim_linkedin_resync", () => ({
+    allowed: true,
+    remaining: 1,
+  }));
+
+  const result = await performBrightDataSync(supabase as never, USER_ID, {
+    isConfigured: () => true,
+    runEnrichment: async () => ({
+      enriched: false,
+      failureKind: "upstream_error",
+      error: "Bright Data rejected the profile lookup.",
+    }),
+  });
+
+  assert.deepEqual(result, {
+    status: 502,
+    body: {
+      error: "Bright Data rejected the profile lookup.",
+      remaining_syncs: 1,
+    },
+  });
+});

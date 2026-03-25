@@ -36,7 +36,12 @@ interface PerformBrightDataSyncDependencies {
     supabase: SupabaseClient<Database>,
     userId: string,
     linkedinUrl: string,
-  ) => Promise<{ enriched: boolean; error?: string }>;
+  ) => Promise<{
+    enriched: boolean;
+    error?: string;
+    failureKind?: "not_configured" | "invalid_url" | "upstream_error" | "malformed_payload" | "network_error" | "rpc_error";
+    upstreamStatus?: number;
+  }>;
 }
 
 async function getLinkedInResyncAccessContext(
@@ -203,8 +208,15 @@ export async function performBrightDataSync(
 
   const enrichment = await runEnrichment(supabase, userId, linkedinUrl);
   if (!enrichment.enriched) {
+    const status =
+      enrichment.failureKind === "invalid_url"
+        ? 400
+        : enrichment.failureKind === "not_configured"
+          ? 503
+          : 502;
+
     return {
-      status: 502,
+      status,
       body: {
         error: enrichment.error || "Unable to sync LinkedIn data right now.",
         remaining_syncs: claim.remaining ?? undefined,
