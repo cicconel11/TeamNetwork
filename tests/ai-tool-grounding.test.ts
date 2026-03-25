@@ -122,7 +122,7 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
               name: "Dina Direct",
               reasons: [
                 { code: "direct_mentorship", label: "direct mentorship", weight: 5 },
-                { code: "shared_company", label: "shared company", weight: 40 },
+                { code: "shared_company", label: "shared company", weight: 30 },
                 { code: "graduation_proximity", label: "graduation proximity", weight: 10 },
               ],
             },

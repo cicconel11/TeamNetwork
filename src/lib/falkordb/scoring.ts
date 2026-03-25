@@ -76,8 +76,8 @@ export const MAX_SUGGESTIONS_LIMIT = 25;
 export const GRAPH_STALE_AFTER_SECONDS = 120;
 
 export const CONNECTION_REASON_WEIGHTS: Record<ConnectionReasonCode, number> = {
-  shared_company: 40,
-  shared_industry: 30,
+  shared_company: 30,
+  shared_industry: 40,
   shared_city: 15,
   graduation_proximity: 10,
   direct_mentorship: 5,
@@ -85,8 +85,8 @@ export const CONNECTION_REASON_WEIGHTS: Record<ConnectionReasonCode, number> = {
 };
 
 const CONNECTION_REASON_ORDER: ConnectionReasonCode[] = [
-  "shared_company",
   "shared_industry",
+  "shared_company",
   "shared_city",
   "graduation_proximity",
   "direct_mentorship",
@@ -110,6 +110,45 @@ function chooseSharedTextValue(a: string | null | undefined, b: string | null | 
   }
 
   return a?.trim() || b?.trim() || null;
+}
+
+export interface ConnectionScoringContext {
+  genericCompanyValues?: Iterable<string | null | undefined>;
+}
+
+export function normalizeConnectionText(value: string | null | undefined): string | null {
+  return normalizeText(value);
+}
+
+function buildGenericCompanySet(values: Iterable<string | null | undefined>) {
+  const normalized = new Set<string>();
+
+  for (const value of values) {
+    const normalizedValue = normalizeText(value);
+    if (normalizedValue) {
+      normalized.add(normalizedValue);
+    }
+  }
+
+  return normalized;
+}
+
+function chooseSharedCompanyValue(
+  a: string | null | undefined,
+  b: string | null | undefined,
+  genericCompanyValues: Set<string>
+) {
+  const sharedValue = chooseSharedTextValue(a, b);
+  if (!sharedValue) {
+    return null;
+  }
+
+  const normalizedSharedValue = normalizeText(sharedValue);
+  if (!normalizedSharedValue || genericCompanyValues.has(normalizedSharedValue)) {
+    return null;
+  }
+
+  return sharedValue;
 }
 
 function buildPreview(person: ProjectedPerson): SuggestedConnection["preview"] {
@@ -207,6 +246,7 @@ export function buildSuggestionForCandidate(input: {
   source: ProjectedPerson;
   candidate: ProjectedPerson;
   mentorshipDistance: number | null;
+  scoringContext?: ConnectionScoringContext;
 }): SuggestedConnection | null {
   const { source, candidate, mentorshipDistance } = input;
 
@@ -228,7 +268,15 @@ export function buildSuggestionForCandidate(input: {
     });
   }
 
-  const sharedCompany = chooseSharedTextValue(source.currentCompany, candidate.currentCompany);
+  const genericCompanyValues = buildGenericCompanySet([
+    ...(input.scoringContext?.genericCompanyValues ?? []),
+  ]);
+
+  const sharedCompany = chooseSharedCompanyValue(
+    source.currentCompany,
+    candidate.currentCompany,
+    genericCompanyValues
+  );
   if (sharedCompany) {
     reasons.push({
       code: "shared_company",
