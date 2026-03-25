@@ -233,7 +233,6 @@ beforeEach(() => {
     ok: true,
     orgId: ORG_ID,
     userId: ADMIN_USER.id,
-    userEmail: ADMIN_USER.email,
     role: "admin",
     supabase: supabaseStub,
     serviceSupabase: {
@@ -342,6 +341,7 @@ test("POST /api/ai/[orgId]/chat reroutes members questions per message without m
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "text/event-stream");
+  assert.equal(response.headers.get("x-ai-thread-id"), "thread-1");
 
   const body = await response.text();
   assert.match(body, /"type":"chunk"/);
@@ -455,8 +455,38 @@ test("POST /api/ai/[orgId]/chat skips RAG retrieval for casual messages regardle
   assert.equal(auditEntries[0].ragChunkCount, undefined);
   assert.equal(auditEntries[0].ragTopSimilarity, undefined);
   assert.equal(auditEntries[0].ragError, undefined);
+  assert.equal(auditEntries[0].stageTimings.retrieval.reason, "casual_turn");
   assert.equal(cacheLookupCount, 0);
   assert.equal(cacheServiceSupabase.insertedRows.length, 0);
+});
+
+test("POST /api/ai/[orgId]/chat skips RAG retrieval for direct structured member queries", async () => {
+  process.env.EMBEDDING_API_KEY = "embed-key";
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many members do we have?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(auditEntries[0].stageTimings.retrieval.decision, "skip");
+  assert.equal(
+    auditEntries[0].stageTimings.retrieval.reason,
+    "tool_only_structured_query"
+  );
+  assert.equal(auditEntries[0].stageTimings.stages.rag_retrieval.status, "skipped");
 });
 
 test("POST /api/ai/[orgId]/chat skips RAG retrieval for cache-eligible prompts and records inserted cache_entry_id", async () => {
@@ -532,6 +562,90 @@ test("POST /api/ai/[orgId]/chat still runs RAG retrieval for non-casual messages
   assert.equal(auditEntries[0].ragChunkCount, 1);
   assert.equal(auditEntries[0].ragTopSimilarity, 0.91);
   assert.equal(auditEntries[0].ragError, undefined);
+  assert.equal(auditEntries[0].stageTimings.retrieval.decision, "allow");
+  assert.equal(auditEntries[0].stageTimings.retrieval.reason, "general_knowledge_query");
+  assert.equal(auditEntries[0].stageTimings.stages.rag_retrieval.status, "completed");
+});
+
+test("POST /api/ai/[orgId]/chat skips RAG on tool-only follow-up refinements but still loads history", async () => {
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  const existingThreadId = "11111111-1111-4111-8111-111111111119";
+  supabaseStub.state.messages.push({
+    id: "assistant-existing",
+    thread_id: existingThreadId,
+    org_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    role: "assistant",
+    content: "Earlier assistant reply",
+    status: "complete",
+    created_at: "2026-03-23T00:00:01.000Z",
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "and alumni?",
+      surface: "members",
+      threadId: existingThreadId,
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(auditEntries[0].stageTimings.retrieval.decision, "skip");
+  assert.equal(
+    auditEntries[0].stageTimings.retrieval.reason,
+    "tool_only_structured_query"
+  );
+  assert.equal(auditEntries[0].stageTimings.stages.history_load.status, "completed");
+});
+
+test("POST /api/ai/[orgId]/chat keeps RAG for context-dependent follow-ups", async () => {
+  process.env.EMBEDDING_API_KEY = "embed-key";
+  const existingThreadId = "11111111-1111-4111-8111-111111111120";
+  supabaseStub.state.messages.push({
+    id: "assistant-existing",
+    thread_id: existingThreadId,
+    org_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    role: "assistant",
+    content: "Earlier assistant reply",
+    status: "complete",
+    created_at: "2026-03-23T00:00:01.000Z",
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "summarize that policy discussion",
+      surface: "general",
+      threadId: existingThreadId,
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(retrieveRelevantChunksCalls.length, 1);
+  assert.equal(auditEntries[0].stageTimings.retrieval.decision, "allow");
+  assert.equal(
+    auditEntries[0].stageTimings.retrieval.reason,
+    "follow_up_requires_context"
+  );
 });
 
 test("POST /api/ai/[orgId]/chat records cache_write_skipped_too_large when miss content exceeds cache limit", async () => {

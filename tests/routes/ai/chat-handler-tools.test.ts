@@ -152,7 +152,6 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       ok: true,
       orgId: ORG_ID,
       userId: ADMIN_USER.id,
-      userEmail: ADMIN_USER.email,
       role: "admin",
       supabase: supabaseStub,
       serviceSupabase: {
@@ -182,6 +181,10 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
         const argsJson =
           firstToolName === "get_org_stats"
             ? "{}"
+            : firstToolName === "find_navigation_targets"
+              ? '{"query":"open announcements"}'
+              : firstToolName === "list_announcements"
+                ? '{"limit": 5}'
             : firstToolName === "suggest_connections"
               ? '{"person_query":"Louis Ciccone"}'
               : '{"limit": 5}';
@@ -231,6 +234,32 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             },
           ],
         });
+      }
+      if (call.name === "find_navigation_targets") {
+        return okToolResult({
+          state: "resolved",
+          query: "open announcements",
+          matches: [
+            {
+              label: "Announcements",
+              href: "/acme/announcements",
+              description: "Open the announcements page.",
+              kind: "page",
+            },
+          ],
+        });
+      }
+      if (call.name === "list_announcements") {
+        return okToolResult([
+          {
+            id: "announcement-1",
+            title: "Welcome back",
+            audience: "all",
+            is_pinned: true,
+            published_at: "2026-03-20T12:00:00Z",
+            body_preview: "Practice starts Monday.",
+          },
+        ]);
       }
       return okToolResult([{ id: "m1", name: "Alice" }]);
     },
@@ -293,6 +322,10 @@ test("tool call: executor receives correct context and args", async () => {
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].ctx.orgId, ORG_ID);
   assert.equal(executeToolCallCalls[0].ctx.userId, ADMIN_USER.id);
+  assert.deepEqual(executeToolCallCalls[0].ctx.authorization, {
+    kind: "preverified_admin",
+    source: "ai_org_context",
+  });
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
   assert.deepEqual(executeToolCallCalls[0].call.args, { limit: 5 });
 });
@@ -355,6 +388,7 @@ test("ambiguous queries keep fallback surface tool set", async () => {
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
     "list_events",
+    "list_announcements",
     "get_org_stats",
     "suggest_connections",
   ]);
@@ -382,6 +416,68 @@ test("analytics surface only attaches get_org_stats", async () => {
   assert.deepEqual(executeToolCallCalls[0].call.args, {});
 });
 
+test("navigation requests only attach find_navigation_targets on pass 1", async () => {
+  const body = await (
+    await POST(makeRequest("Open announcements") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["find_navigation_targets"]);
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "find_navigation_targets");
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /\[Announcements\]\(\/acme\/announcements\)/);
+  assert.match(body, /"type":"done"/);
+});
+
+test("action requests do not get forced into find_navigation_targets", async () => {
+  await (
+    await POST(makeRequest("Send a reminder to all members") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), [
+    "list_members",
+    "get_org_stats",
+    "suggest_connections",
+  ]);
+  assert.equal(executeToolCallCalls[0].call.name, "list_members");
+});
+
+test("navigation phrasings recognized by the intent router attach find_navigation_targets", async () => {
+  await (
+    await POST(makeRequest("show me the members page") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["find_navigation_targets"]);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  await (
+    await POST(makeRequest("where is navigation settings") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["find_navigation_targets"]);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  await (
+    await POST(makeRequest("find the page for announcements") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["find_navigation_targets"]);
+});
+
 test("tool call: audit entry includes toolCalls", async () => {
   await (
     await POST(makeRequest() as any, {
@@ -393,6 +489,10 @@ test("tool call: audit entry includes toolCalls", async () => {
   assert.ok(auditEntries[0].toolCalls);
   assert.equal(auditEntries[0].toolCalls[0].name, "list_members");
   assert.deepEqual(auditEntries[0].toolCalls[0].args, { limit: 5 });
+  assert.equal(
+    auditEntries[0].stageTimings.stages.tools.calls[0].auth_mode,
+    "reused_verified_admin"
+  );
 });
 
 test("direct-name connection prompts only attach suggest_connections on pass 1", async () => {
@@ -553,6 +653,39 @@ test("direct-name connection prompts log suggest_connections in audit metadata",
     person_query: "Louis Ciccone",
   });
   assert.notEqual(auditEntries[0].error, "tool_grounding_failed");
+});
+
+test("single-tool announcement results render deterministic copy without pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_announcements",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+
+        throw new Error("list_announcements should not require a second model pass");
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Show recent announcements") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Recent announcements/);
+  assert.match(body, /Welcome back/);
+  assert.match(body, /audience: all/i);
+  assert.match(body, /"type":"done"/);
 });
 
 test("tool call: cache write is prevented (bypassReason set in done event)", async () => {

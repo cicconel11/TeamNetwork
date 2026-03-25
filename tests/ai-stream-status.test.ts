@@ -38,8 +38,10 @@ function makeSSEEventStream(events: unknown[]): Response {
 test("formatToolStatusLabel maps known tools and falls back safely", () => {
   assert.equal(formatToolStatusLabel("list_members"), "Looking up members...");
   assert.equal(formatToolStatusLabel("list_events"), "Looking up events...");
+  assert.equal(formatToolStatusLabel("list_announcements"), "Looking up announcements...");
   assert.equal(formatToolStatusLabel("get_org_stats"), "Checking organization stats...");
   assert.equal(formatToolStatusLabel("suggest_connections"), "Finding connections...");
+  assert.equal(formatToolStatusLabel("find_navigation_targets"), "Finding the right page...");
   assert.equal(formatToolStatusLabel("future_tool"), "Working...");
 });
 
@@ -130,6 +132,16 @@ test("useAIStream resets tool status during key lifecycle transitions", () => {
     source,
     /setState\(prev => \(\{ \.\.\.prev, isStreaming: false, toolStatusLabel: null \}\)\);/,
     "cancel should clear tool status"
+  );
+  assert.match(
+    source,
+    /responseThreadId = response\.headers\.get\("x-ai-thread-id"\) \?\? responseThreadId;/,
+    "successful responses should capture the server thread id header for reload recovery"
+  );
+  assert.match(
+    source,
+    /return \{ threadId: responseThreadId, interrupted: true \};/,
+    "aborted requests should preserve the known thread id when available"
   );
   assert.match(
     source,
