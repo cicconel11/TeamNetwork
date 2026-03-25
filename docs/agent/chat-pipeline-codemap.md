@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, RAG, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The current read-tool set now includes `suggest_connections`, which can answer member/alumni outreach questions through a Falkor people graph with a functionally equivalent SQL fallback.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The read-tool set now includes recent announcements plus `find_navigation_targets` for page/deep-link lookup, while navigation/action requests short-circuit to that tool instead of routing through the broader read-tool set. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -18,7 +18,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/response-composer.ts` | Async generator streaming LLM response as SSE chunk/error events | `composeResponse` (L22), `UsageAccumulator` type (L5) |
 | `src/lib/ai/timeout.ts` | Turn-stage timeout constants and abort helpers | `PASS1_MODEL_TIMEOUT_MS`, `PASS2_MODEL_TIMEOUT_MS`, `TOOL_EXECUTION_TIMEOUT_MS`, `createStageAbortSignal`, `withStageTimeout` |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
-| `src/lib/ai/audit.ts` | Audit logging with cache + context metadata columns, secret redaction | `logAiRequest` (L37) |
+| `src/lib/ai/audit.ts` | Audit logging with cache/context metadata plus `stage_timings`, secret redaction | `logAiRequest` (L37) |
+| `src/lib/ai/chat-telemetry.ts` | Shared retrieval/stage timing contracts for AI audit payloads | `AiAuditStageTimings`, `AiAuditStageName` |
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries, including connection-template validation against `suggest_connections` payload states, names, order, and reasons | `verifyToolBackedResponse` |
@@ -37,6 +38,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `supabase/migrations/20260319000000_ai_assistant_tables.sql` | DDL: `ai_threads`, `ai_messages`, `ai_audit_log`, RLS, indexes |
 | `supabase/migrations/20260321100001_ai_semantic_cache.sql` | DDL: `ai_semantic_cache`, purge RPC, audit columns |
 | `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
+| `supabase/migrations/20260719000000_ai_audit_stage_timings.sql` | Adds `stage_timings` JSONB to `ai_audit_log` |
 
 ## Dependency Graph
 
@@ -85,11 +87,11 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ `suspicious` / `blocked` → insert assistant refusal, skip model/tools/RAG/cache write
   │       └─ emit ops telemetry + audit row with `cache_status: bypass`
   ├─ 8.5 Build TurnExecutionPolicy
-  │       ├─ casual            → no cache, no tools, no RAG
-  │       ├─ static_general    → exact cache lookup, shared_static, no tools, no RAG
-  │       ├─ live_lookup       → full context, tools allowed, RAG allowed
-  │       ├─ follow_up         → full context, tools allowed, no shared cache
-  │       └─ out_of_scope      → no cache, no tools, no RAG
+  │       ├─ casual            → no cache, no tools, retrieval skipped (`casual_turn`)
+  │       ├─ static_general    → exact cache lookup, shared_static, retrieval skipped (`general_knowledge_query`)
+  │       ├─ live_lookup       → full context, tools allowed, retrieval may be allowed or skipped
+  │       ├─ follow_up         → full context, tools allowed, no shared cache, retrieval depends on follow-up shape
+  │       └─ out_of_scope      → no cache, no tools, retrieval skipped (`out_of_scope_request`)
   │
   ├─ 8.6 CACHE CHECK (if policy allows lookup_exact)
   │       ├─ HIT → insert assistant message (complete), stream cached content, audit, return
@@ -97,8 +99,10 @@ Client POST /api/ai/{orgId}/chat
   │       └─ ERROR → continue to live path with full context
   │
   ├─ 8.7 RAG retrieval
-  │       ├─ casual / static_general / out_of_scope skip retrieval
-  │       └─ follow_up / live_lookup may retrieve additive chunks
+  │       ├─ skip when policy says structured tool-only / casual / out-of-scope / cache-hit
+  │       ├─ allow for mixed asks, ambiguous asks, and context-dependent follow-ups
+  │       ├─ this is why member/event/parent count turns now feel noticeably faster than discussion explainers
+  │       └─ record final retrieval decision/reason in audit `stage_timings`
   │
   ├─ 9.  Insert assistant placeholder (status: pending)
   ├─ 10. Build prompt context + fetch history (parallel)
@@ -115,15 +119,20 @@ Client POST /api/ai/{orgId}/chat
   │       └─ surface-gated read tools for follow_up / live_lookup
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
   │       ├─ Pass 1 runs with a 15s timeout budget
-  │       ├─ Each requested tool is re-authorized in the executor (`role = admin`, `status = active`) and runs with a 5s timeout budget
+  │       ├─ Each requested tool runs with a 5s timeout budget
+  │       ├─ Chat route calls pass an explicit `preverified_admin` authorization contract so duplicate membership lookups can be skipped safely
+  │       ├─ Non-chat executor callers still use the fallback membership verification path
   │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
   │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
+  │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
+  │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
   │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
+  │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the Falkor/suggestions stack separately
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
   │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
-  │       ├─ Single-tool `suggest_connections` results are rendered deterministically in-route, then grounded against the normalized payload
+  │       ├─ Single-tool `suggest_connections`, `list_announcements`, and `find_navigation_targets` results are rendered deterministically in-route
   │       ├─ Pass 2 runs with a 15s timeout budget for the remaining tool-backed turns and still receives an extra fixed-template contract for `suggest_connections` when mixed tool results require model synthesis
   │       ├─ Pass-2 text is buffered server-side, never streamed immediately
   │       └─ `tool_status` SSE events still stream live during tool execution
@@ -131,6 +140,9 @@ Client POST /api/ai/{orgId}/chat
   ├─ 13.2 If pass-2 used successful read tools: verifyToolBackedResponse()
   │       ├─ grounded   → emit buffered answer, persist it, continue normally
   │       └─ ungrounded → discard buffered answer, emit/persist fallback, log ops telemetry
+  ├─ 13.3 Persist stage timings
+  │       ├─ per-stage duration/status for auth, policy, cache, RAG, prompt build, history, pass 1, tools, pass 2, grounding, finalize, cache write
+  │       └─ tool call timing includes `auth_mode` and error classification
   │
   └─ 13.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
           ├─ Invalidate expired conflicting rows
@@ -219,7 +231,7 @@ interface ContextMetadata {
 }
 ```
 
-Metadata is passed to audit logging (`context_surface`, `context_token_estimate` columns).
+Metadata is passed to audit logging (`context_surface`, `context_token_estimate`, and `stage_timings` payloads).
 
 The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and multi-column layouts, plus a trusted `Current local date/time:` line for relative-time questions. It also instructs the LLM to prefer real human names over raw emails in member/admin lists, avoid placeholder renderings like `Member(email@example.com)`, and describe remaining no-name records as email-only member/admin accounts.
 
@@ -243,6 +255,18 @@ type ToolExecutionResult =
 - `auth_error`: same user-visible behavior as `forbidden`, but logged separately as executor auth infrastructure failure.
 
 ## Tool Catalog
+
+### `list_announcements`
+
+- **Inputs:** optional `limit` (default 10, max 25)
+- **Outputs:** recent announcement rows with `title`, `published_at`, `audience`, `is_pinned`, and `body_preview`
+- **Deterministic path:** single-tool announcement turns are rendered in-route as a compact `Recent announcements` list instead of paying for a second model pass
+
+### `find_navigation_targets`
+
+- **Inputs:** `query`, optional `limit` (default 5, max 10)
+- **Outputs:** `{ state, query, matches[] }` where each match includes org-scoped `href`, `label`, `description`, and `kind`
+- **Deterministic path:** single-tool navigation turns are rendered in-route as clickable markdown links so the panel can deep-link users directly to matched pages
 
 ### `suggest_connections`
 
