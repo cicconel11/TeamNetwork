@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
 import { Card, Button } from "@/components/ui";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { PermissionRoleCard } from "@/components/ui/PermissionRoleCard";
 import { PageHeader } from "@/components/layout";
 import { OrgNameCard } from "@/components/settings/OrgNameCard";
@@ -86,6 +87,12 @@ function OrgSettingsContent() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaSuccess, setMediaSuccess] = useState<string | null>(null);
 
+  // LinkedIn resync toggle state
+  const [linkedinResyncEnabled, setLinkedinResyncEnabled] = useState(false);
+  const [linkedinResyncSaving, setLinkedinResyncSaving] = useState(false);
+  const [linkedinResyncError, setLinkedinResyncError] = useState<string | null>(null);
+  const [linkedinResyncSuccess, setLinkedinResyncSuccess] = useState<string | null>(null);
+
   // Bootstrap fetch
   useEffect(() => {
     const load = async () => {
@@ -94,7 +101,7 @@ function OrgSettingsContent() {
 
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles")
+        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled")
         .eq("slug", orgSlug)
         .maybeSingle();
 
@@ -113,6 +120,7 @@ function OrgSettingsContent() {
       setJobPostRoles((org as Record<string, unknown>).job_post_roles as string[] || ["admin", "alumni"]);
       setDiscussionPostRoles((org as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni"]);
       setMediaUploadRoles((org as Record<string, unknown>).media_upload_roles as string[] || ["admin"]);
+      setLinkedinResyncEnabled((org as Record<string, unknown>).linkedin_resync_enabled === true);
 
       const {
         data: { user },
@@ -255,6 +263,42 @@ function OrgSettingsContent() {
   const handleMediaRolesSave = makeRoleSaveHandler("media_upload_roles", mediaUploadRoles, setMediaSaving, setMediaError, setMediaSuccess, setMediaUploadRoles, "Media upload");
   const toggleMediaRole = makeToggleHandler(setMediaUploadRoles, setMediaSuccess);
 
+  const handleLinkedinResyncToggle = async (enabled: boolean) => {
+    if (!orgId) return;
+    if (role !== "admin") {
+      setLinkedinResyncError("Only admins can change this setting.");
+      return;
+    }
+
+    setLinkedinResyncEnabled(enabled);
+    setLinkedinResyncSaving(true);
+    setLinkedinResyncError(null);
+    setLinkedinResyncSuccess(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkedin_resync_enabled: enabled }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setLinkedinResyncEnabled(!enabled); // revert
+        throw new Error(data?.error || "Unable to update LinkedIn sync setting");
+      }
+
+      if (typeof data?.linkedin_resync_enabled === "boolean") {
+        setLinkedinResyncEnabled(data.linkedin_resync_enabled);
+      }
+      setLinkedinResyncSuccess(enabled ? "LinkedIn profile sync enabled." : "LinkedIn profile sync disabled.");
+    } catch (err) {
+      setLinkedinResyncError(err instanceof Error ? err.message : "Unable to update setting");
+    } finally {
+      setLinkedinResyncSaving(false);
+    }
+  };
+
   const isAdmin = role === "admin";
 
   return (
@@ -394,6 +438,37 @@ function OrgSettingsContent() {
               error={mediaError}
               success={mediaSuccess}
             />
+          )}
+
+          {/* LinkedIn Profile Sync Toggle (admin-only) */}
+          {isAdmin && (
+            <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 14.652" />
+                    </svg>
+                    <p className="font-semibold text-foreground">LinkedIn Profile Sync</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Allow members to refresh their LinkedIn employment data. When enabled, members can manually sync up to 2 times per month, and a quarterly bulk sync runs automatically for all members with a LinkedIn URL.
+                  </p>
+                </div>
+                <ToggleSwitch
+                  checked={linkedinResyncEnabled}
+                  onChange={handleLinkedinResyncToggle}
+                  disabled={linkedinResyncSaving}
+                  size="md"
+                />
+              </div>
+              {linkedinResyncError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{linkedinResyncError}</p>
+              )}
+              {linkedinResyncSuccess && (
+                <p className="text-sm text-green-600 dark:text-green-400">{linkedinResyncSuccess}</p>
+              )}
+            </Card>
           )}
 
           {/* Storage Usage Card (admin-only) */}
