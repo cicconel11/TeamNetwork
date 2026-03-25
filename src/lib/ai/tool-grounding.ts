@@ -250,8 +250,8 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   if (/(shared industry|same industry)/.test(normalized)) {
     matches.add("shared_industry");
   }
-  if (/(shared major|same major|both studied)/.test(normalized)) {
-    matches.add("shared_major");
+  if (/(graduation proximity|graduated within 3 years|within 3 years of graduating|similar graduation year)/.test(normalized)) {
+    matches.add("graduation_proximity");
   }
   if (/(shared graduation year|same graduation year|class of)/.test(normalized)) {
     matches.add("shared_graduation_year");
@@ -362,9 +362,9 @@ function verifySuggestConnections(content: string, data: unknown): string[] {
       : null;
   const sourceHeader = stripMarkdown(content)
     .split("\n")
-    .find((line) => /should connect with/i.test(line));
+    .find((line) => /top connections for/i.test(line));
   if (sourceName && sourceHeader) {
-    const match = sourceHeader.match(/who\s+(.+?)\s+should connect with/i);
+    const match = sourceHeader.match(/top connections for\s+(.+)/i);
     const renderedSource = match?.[1] ? normalizeIdentifier(match[1]) : null;
     if (renderedSource && renderedSource !== sourceName) {
       failures.push(`source person ${renderedSource} did not match ${sourceName}`);

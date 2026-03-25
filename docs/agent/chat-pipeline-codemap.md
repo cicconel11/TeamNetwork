@@ -253,7 +253,7 @@ type ToolExecutionResult =
 - `source_person`: display-ready source identity used by pass 2
 - `suggestions[]`: ranked same-org member/alumni suggestions in final display order with deterministic `score`, compact `subtitle`, normalized `reasons[]`, and preview fields
 - `disambiguation_options[]`: display-ready candidate people when `person_query` matched multiple org people
-- **Ranking contract:** direct mentorship `100`, second-degree mentorship `50`, shared company `20`, shared industry `12`, shared major `10`, shared graduation year `8`, shared city `5`
+- **Ranking contract:** shared company `40`, shared industry `30`, shared city `15`, graduation proximity `10` (within 3 years), direct mentorship `5`, second-degree mentorship `2`
 - **Grounding contract:** pass-2 connection prose may only render the fixed connection template, may name only returned `source_person` / `suggestions`, must preserve ranked order, and may claim only returned normalized reason codes for each suggestion
 
 ## Test Coverage

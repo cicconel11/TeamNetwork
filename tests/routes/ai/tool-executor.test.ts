@@ -24,6 +24,29 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
     limitValue?: number;
   }> = [];
 
+  function applyFilters(rows: any[], filters: any[]) {
+    return rows.filter((row) =>
+      filters.every((filter) => {
+        if (!Object.prototype.hasOwnProperty.call(row, filter.col) && filter.val == null) {
+          return true;
+        }
+        if (filter.op === "in") {
+          return Array.isArray(filter.val) && filter.val.includes(row[filter.col]);
+        }
+        if (filter.op === "gte") {
+          return row[filter.col] >= filter.val;
+        }
+        if (filter.op === "lt") {
+          return row[filter.col] < filter.val;
+        }
+        if (filter.val == null) {
+          return row[filter.col] == null;
+        }
+        return row[filter.col] === filter.val;
+      })
+    );
+  }
+
   function from(table: string) {
     const entry = {
       table,
@@ -70,11 +93,20 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
         return builder;
       },
       maybeSingle() {
+        if (overrides[table]?.maybeSingle) {
+          return Promise.resolve(overrides[table].maybeSingle);
+        }
+
+        const selectData = overrides[table]?.select?.data;
+        if (Array.isArray(selectData)) {
+          const filtered = applyFilters(selectData, entry.filters);
+          return Promise.resolve({ data: filtered[0] ?? null, error: null });
+        }
+
         return Promise.resolve(
-          overrides[table]?.maybeSingle ??
-            (table === "user_organization_roles"
-              ? { data: { role: "admin", status: "active" }, error: null }
-              : { data: null, error: null })
+          table === "user_organization_roles"
+            ? { data: { role: "admin", status: "active" }, error: null }
+            : { data: null, error: null }
         );
       },
       single() {
@@ -84,6 +116,12 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
 
     builder.then = (onFulfilled: any, onRejected?: any) => {
       const result = overrides[table]?.select ?? { data: [], error: null, count: 0 };
+      if (Array.isArray(result.data)) {
+        const filtered = applyFilters(result.data, entry.filters);
+        const limited =
+          typeof entry.limitValue === "number" ? filtered.slice(0, entry.limitValue) : filtered;
+        return Promise.resolve({ ...result, data: limited }).then(onFulfilled, onRejected);
+      }
       return Promise.resolve(result).then(onFulfilled, onRejected);
     };
 
@@ -127,6 +165,7 @@ beforeEach(() => {
       select: {
         data: [{
           id: "m1",
+          organization_id: ORG_ID,
           user_id: "u1",
           status: "active",
           role: "admin",
@@ -134,6 +173,7 @@ beforeEach(() => {
           first_name: "Alice",
           last_name: "Jones",
           email: "a@b.com",
+          deleted_at: null,
         }],
         error: null,
       },
@@ -190,6 +230,7 @@ test("list_members trims whitespace when composing a normalized name", async () 
       select: {
         data: [{
           id: "m2",
+          organization_id: ORG_ID,
           user_id: null,
           status: "active",
           role: null,
@@ -197,6 +238,7 @@ test("list_members trims whitespace when composing a normalized name", async () 
           first_name: "Alice",
           last_name: "",
           email: null,
+          deleted_at: null,
         }],
         error: null,
       },
@@ -214,6 +256,7 @@ test("list_members falls back to public.users.name for placeholder member names"
       select: {
         data: [{
           id: "m3",
+          organization_id: ORG_ID,
           user_id: "u3",
           status: "active",
           role: "admin",
@@ -221,6 +264,7 @@ test("list_members falls back to public.users.name for placeholder member names"
           first_name: "Member",
           last_name: "",
           email: "placeholder@example.com",
+          deleted_at: null,
         }],
         error: null,
       },
@@ -367,14 +411,14 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   assert.equal(payload.source_person.name, "Alex Source");
   assert.equal(payload.suggestions.length, 1);
   assert.equal(payload.suggestions[0].name, "Dina Direct");
-  assert.equal(payload.suggestions[0].score, 128);
+  assert.equal(payload.suggestions[0].score, 55);
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["direct_mentorship", "shared_company", "shared_graduation_year"]
+    ["shared_company", "graduation_proximity", "direct_mentorship"]
   );
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.label),
-    ["direct mentorship", "shared company", "shared graduation year"]
+    ["shared company", "graduation proximity", "direct mentorship"]
   );
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
@@ -596,6 +640,133 @@ test("suggest_connections returns no_suggestions when the source has no supporte
   assert.equal(payload.state, "no_suggestions");
   assert.equal(payload.source_person.name, "Louis Ciccone");
   assert.equal(payload.suggestions.length, 0);
+});
+
+test("suggest_connections keeps sparse member-sourced queries actionable with fallback signals", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      maybeSingle: {
+        data: {
+          id: "11111111-1111-4111-8111-111111111111",
+          organization_id: ORG_ID,
+          user_id: "user-source",
+          status: "active",
+          deleted_at: null,
+          first_name: "Louis",
+          last_name: "Ciccone",
+          email: "louis@example.com",
+          role: "Captain",
+          current_company: null,
+          graduation_year: 2024,
+          created_at: "2026-03-01T00:00:00.000Z",
+        },
+        error: null,
+      },
+      select: {
+        data: [
+          {
+            id: "11111111-1111-4111-8111-111111111111",
+            organization_id: ORG_ID,
+            user_id: "user-source",
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            role: "Captain",
+            current_company: null,
+            graduation_year: 2024,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "22222222-2222-4222-8222-222222222222",
+            organization_id: ORG_ID,
+            user_id: "user-match",
+            status: "active",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            role: "Coach",
+            current_company: null,
+            graduation_year: 2026,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: {
+        data: [
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            organization_id: ORG_ID,
+            user_id: "user-source",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            major: null,
+            current_company: null,
+            industry: null,
+            current_city: "Philadelphia",
+            graduation_year: 2024,
+            position_title: null,
+            job_title: null,
+            created_at: "2026-03-03T00:00:00.000Z",
+          },
+          {
+            id: "44444444-4444-4444-8444-444444444444",
+            organization_id: ORG_ID,
+            user_id: "user-match",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            major: null,
+            current_company: null,
+            industry: null,
+            current_city: "Philadelphia",
+            graduation_year: 2026,
+            position_title: "Advisor",
+            job_title: null,
+            created_at: "2026-03-04T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    rpc: {
+      get_mentorship_distances: [
+        {
+          user_id: "user-match",
+          distance: 1,
+        },
+      ],
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_type: "member",
+        person_id: "11111111-1111-4111-8111-111111111111",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "resolved");
+  assert.equal(payload.source_person.name, "Louis Ciccone");
+  assert.equal(payload.suggestions.length, 1);
+  assert.equal(payload.suggestions[0].name, "Dana Coach");
+  assert.deepEqual(
+    payload.suggestions[0].reasons.map((reason: any) => reason.code),
+    ["shared_city", "graduation_proximity", "direct_mentorship"]
+  );
 });
 
 test("invalid args return tool_error", async () => {

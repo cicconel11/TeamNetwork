@@ -225,7 +225,8 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               name: "Dina Direct",
               subtitle: "VP Product • Acme",
               reasons: [
-                { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
+                { code: "shared_company", label: "shared company", weight: 40 },
+                { code: "shared_industry", label: "shared industry", weight: 30 },
               ],
             },
           ],
@@ -418,6 +419,7 @@ test("direct-name connection prompts pass a fixed-template contract into pass 2"
 
   assert.equal(composeResponseCalls.length, 2);
   assert.match(composeResponseCalls[1].systemPrompt, /CONNECTION ANSWER CONTRACT/);
+  assert.match(composeResponseCalls[1].systemPrompt, /Top connections for \[source person name\]/);
   assert.deepEqual(composeResponseCalls[1].toolResults[0].data, {
     state: "resolved",
     mode: "sql_fallback",
@@ -429,7 +431,8 @@ test("direct-name connection prompts pass a fixed-template contract into pass 2"
         name: "Dina Direct",
         subtitle: "VP Product • Acme",
         reasons: [
-          { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
+          { code: "shared_company", label: "shared company", weight: 40 },
+          { code: "shared_industry", label: "shared industry", weight: 30 },
         ],
       },
     ],
