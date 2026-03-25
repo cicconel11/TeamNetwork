@@ -247,6 +247,12 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   if (/(shared industry|same industry)/.test(normalized)) {
     matches.add("shared_industry");
   }
+  if (/(shared role family|same role family|similar role family)/.test(normalized)) {
+    matches.add("shared_role_family");
+  }
+  if (/(adjacent role family|adjacent role|adjacent background)/.test(normalized)) {
+    matches.add("adjacent_role_family");
+  }
   if (/(graduation proximity|graduated within 3 years|within 3 years of graduating|similar graduation year)/.test(normalized)) {
     matches.add("graduation_proximity");
   }

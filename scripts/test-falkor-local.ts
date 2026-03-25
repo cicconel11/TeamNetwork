@@ -10,7 +10,7 @@
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Load .env.local manually (no dotenv dependency)
 const envPath = resolve(import.meta.dirname ?? __dirname, "..", ".env.local");
@@ -24,10 +24,14 @@ for (const line of readFileSync(envPath, "utf-8").split("\n")) {
   if (!process.env[key]) process.env[key] = value;
 }
 import { processGraphSyncQueue } from "../src/lib/falkordb/sync";
-import { suggestConnections } from "../src/lib/falkordb/suggestions";
+import {
+  scoreProjectedCandidates,
+  suggestConnections,
+} from "../src/lib/falkordb/suggestions";
 import { falkorClient } from "../src/lib/falkordb/client";
 import {
   ALUMNI_PERSON_SELECT,
+  buildProjectedPeople,
   buildPersonKey,
   buildSourcePerson,
   MEMBER_PERSON_SELECT,
@@ -35,6 +39,7 @@ import {
   type MemberPersonRow,
   type ProjectedPerson,
 } from "../src/lib/falkordb/people";
+import { normalizeConnectionText } from "../src/lib/falkordb/scoring";
 
 const DEFAULT_ORG_ID = "ce2e47f8-388a-4e06-9a2d-6d5b851ee899";
 
@@ -57,16 +62,14 @@ function calculateOverlap(left: string[], right: string[]) {
 }
 
 async function loadSourceProjection(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient,
   orgId: string,
   source: SourceRef
 ): Promise<ProjectedPerson | null> {
   const sourceTable = source.person_type === "member" ? "members" : "alumni";
   const select = source.person_type === "member" ? MEMBER_PERSON_SELECT : ALUMNI_PERSON_SELECT;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: sourceRow } = await (supabase as any)
+  const { data: sourceRow } = await supabase
     .from(sourceTable)
     .select(select)
     .eq("organization_id", orgId)
@@ -78,13 +81,12 @@ async function loadSourceProjection(
   }
 
   if (source.person_type === "member") {
-    const memberRow = sourceRow as MemberPersonRow;
+    const memberRow = sourceRow as unknown as MemberPersonRow;
     if (!memberRow.user_id) {
       return buildSourcePerson({ memberRows: [memberRow], alumniRows: [] });
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: alumniRows } = await (supabase as any)
+    const { data: alumniRows } = await supabase
       .from("alumni")
       .select(ALUMNI_PERSON_SELECT)
       .eq("organization_id", orgId)
@@ -97,13 +99,12 @@ async function loadSourceProjection(
     });
   }
 
-  const alumniRow = sourceRow as AlumniPersonRow;
+  const alumniRow = sourceRow as unknown as AlumniPersonRow;
   if (!alumniRow.user_id) {
     return buildSourcePerson({ memberRows: [], alumniRows: [alumniRow] });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: memberRows } = await (supabase as any)
+  const { data: memberRows } = await supabase
     .from("members")
     .select(MEMBER_PERSON_SELECT)
     .eq("organization_id", orgId)
@@ -117,16 +118,38 @@ async function loadSourceProjection(
   });
 }
 
+async function loadProjectedPeopleForOrg(
+  supabase: SupabaseClient,
+  orgId: string
+) {
+  const [membersResponse, alumniResponse] = await Promise.all([
+    supabase
+      .from("members")
+      .select(MEMBER_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .eq("status", "active")
+      .is("deleted_at", null),
+    supabase
+      .from("alumni")
+      .select(ALUMNI_PERSON_SELECT)
+      .eq("organization_id", orgId)
+      .is("deleted_at", null),
+  ]);
+
+  return buildProjectedPeople({
+    members: (membersResponse.data as MemberPersonRow[] | null) ?? [],
+    alumni: (alumniResponse.data as AlumniPersonRow[] | null) ?? [],
+  });
+}
+
 async function listSampleSources(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient,
   orgId: string,
   limit = 3
 ) {
   const sources: SourceRef[] = [];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: members } = await (supabase as any)
+  const { data: members } = await supabase
     .from("members")
     .select("id, first_name, last_name")
     .eq("organization_id", orgId)
@@ -143,30 +166,56 @@ async function listSampleSources(
 }
 
 async function runSuggestionDebug(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
+  supabase: SupabaseClient,
   orgId: string,
   source: SourceRef
 ) {
   const projection = await loadSourceProjection(supabase, orgId, source);
+  const projectedPeople = await loadProjectedPeopleForOrg(supabase, orgId);
+  const { data: organization } = await supabase
+    .from("organizations")
+    .select("name")
+    .eq("id", orgId)
+    .maybeSingle();
+  const organizationName =
+    organization && typeof organization === "object" && typeof organization.name === "string"
+      ? organization.name
+      : null;
   const result = await suggestConnections({
     orgId,
     serviceSupabase: supabase,
     args: { person_type: source.person_type, person_id: source.person_id, limit: 5 },
   });
+  const scoredSuggestions = projection
+    ? scoreProjectedCandidates({
+        source: projection,
+        allPeople: projectedPeople.values(),
+        candidates: projectedPeople.values(),
+        limit: 5,
+        scoringContext: {
+          genericCompanyValues: ["TeamNetwork", normalizeConnectionText(organizationName)],
+        },
+      })
+    : [];
 
   console.log(`\n    Source: ${source.label}`);
   if (projection) {
     console.log(`      company=${projection.currentCompany ?? "—"}`);
     console.log(`      industry=${projection.industry ?? "—"}`);
+    console.log(`      roleFamily=${projection.roleFamily ?? "—"}`);
     console.log(`      city=${projection.currentCity ?? "—"}`);
     console.log(`      graduationYear=${projection.graduationYear ?? "—"}`);
   }
   console.log(`      state=${result.state} mode=${result.mode}`);
   console.log(`      suggestions=${result.suggestions.length}`);
-  for (const suggestion of result.suggestions) {
+  for (const suggestion of scoredSuggestions) {
     console.log(
       `      - ${suggestion.name} (score: ${suggestion.score}) [${formatReasonList(suggestion)}]`
+    );
+    console.log(
+      `        qualifiers=${suggestion.debug?.qualificationCodes.join(", ") ?? "—"} rarity=${JSON.stringify(
+        suggestion.debug?.rarityMultipliers ?? {}
+      )} exposurePenalty=${suggestion.debug?.exposurePenalty ?? 0}`
     );
   }
 
