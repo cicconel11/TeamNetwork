@@ -30,16 +30,27 @@ export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderP
     }
 
     const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+    const storedPreference = window.localStorage.getItem(AI_PANEL_PREFERENCE_KEY);
 
     setIsOpen(
       resolveInitialAIPanelOpen({
         isAdmin: autoOpen,
         isDesktop,
+        storedPreference,
       })
     );
-
-    window.localStorage.removeItem(AI_PANEL_PREFERENCE_KEY);
   }, [autoOpen]);
+
+  useEffect(() => {
+    if (!isMounted.current || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      AI_PANEL_PREFERENCE_KEY,
+      isOpen ? "open" : "closed"
+    );
+  }, [isOpen]);
 
   const togglePanel = useCallback(() => {
     setIsOpen((prev) => !prev);

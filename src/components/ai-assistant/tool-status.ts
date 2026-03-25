@@ -8,10 +8,14 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Looking up members...";
     case "list_events":
       return "Looking up events...";
+    case "list_announcements":
+      return "Looking up announcements...";
     case "get_org_stats":
       return "Checking organization stats...";
     case "suggest_connections":
       return "Finding connections...";
+    case "find_navigation_targets":
+      return "Finding the right page...";
     default:
       return "Working...";
   }

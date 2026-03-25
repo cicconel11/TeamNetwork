@@ -11,6 +11,8 @@ interface MessageListProps {
   streamingContent?: string;
   isStreaming?: boolean;
   previewAssistantContent?: string;
+  suggestedPrompts?: string[];
+  onSelectPrompt?: (message: string) => Promise<void> | void;
 }
 
 export function MessageList({
@@ -19,6 +21,8 @@ export function MessageList({
   streamingContent,
   isStreaming,
   previewAssistantContent,
+  suggestedPrompts,
+  onSelectPrompt,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastAssistantMessage = [...messages]
@@ -53,6 +57,20 @@ export function MessageList({
               Ask about members, events, analytics, or anything about your organization.
             </p>
           </div>
+          {suggestedPrompts && suggestedPrompts.length > 0 ? (
+            <div className="flex flex-wrap justify-center gap-2">
+              {suggestedPrompts.slice(0, 3).map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => void onSelectPrompt?.(prompt)}
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-muted"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     );

@@ -21,13 +21,14 @@ export interface AIStreamResult {
   content?: string;
   replayed?: boolean;
   inFlight?: boolean;
+  interrupted?: boolean;
   usage?: { inputTokens: number; outputTokens: number };
 }
 
 interface UseAIStreamReturn extends AIStreamState {
   sendMessage: (
     message: string,
-    opts: { surface: string; threadId?: string; idempotencyKey: string }
+    opts: { surface: string; currentPath?: string; threadId?: string; idempotencyKey: string }
   ) => Promise<AIStreamResult | null>;
   cancel: () => void;
   clearError: () => void;
@@ -148,7 +149,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
 
   const sendMessage = useCallback(async (
     message: string,
-    opts: { surface: string; threadId?: string; idempotencyKey: string }
+    opts: { surface: string; currentPath?: string; threadId?: string; idempotencyKey: string }
   ) => {
     // Cancel any in-flight request
     abortRef.current?.abort();
@@ -162,6 +163,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       threadId: opts.threadId ?? null,
       toolStatusLabel: null,
     });
+    let responseThreadId = opts.threadId ?? null;
 
     try {
       const response = await fetch(`/api/ai/${orgId}/chat`, {
@@ -170,11 +172,16 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         body: JSON.stringify({
           message,
           surface: opts.surface,
+          currentPath: opts.currentPath,
           threadId: opts.threadId,
           idempotencyKey: opts.idempotencyKey,
         }),
         signal: controller.signal,
       });
+      responseThreadId = response.headers.get("x-ai-thread-id") ?? responseThreadId;
+      if (responseThreadId) {
+        setState(prev => ({ ...prev, threadId: responseThreadId }));
+      }
 
       if (!response.ok) {
         const body = await response.json().catch(() => ({ error: "Request failed" }));
@@ -228,7 +235,9 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       return result;
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") {
-        // User cancelled — no error
+        if (responseThreadId) {
+          return { threadId: responseThreadId, interrupted: true };
+        }
         return null;
       }
       setState(prev => ({
