@@ -225,8 +225,8 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               name: "Dina Direct",
               subtitle: "VP Product • Acme",
               reasons: [
-                { code: "shared_company", label: "shared company", weight: 40 },
-                { code: "shared_industry", label: "shared industry", weight: 30 },
+                { code: "shared_company", label: "shared company", weight: 30 },
+                { code: "shared_industry", label: "shared industry", weight: 40 },
               ],
             },
           ],
@@ -431,8 +431,8 @@ test("direct-name connection prompts pass a fixed-template contract into pass 2"
         name: "Dina Direct",
         subtitle: "VP Product • Acme",
         reasons: [
-          { code: "shared_company", label: "shared company", weight: 40 },
-          { code: "shared_industry", label: "shared industry", weight: 30 },
+          { code: "shared_company", label: "shared company", weight: 30 },
+          { code: "shared_industry", label: "shared industry", weight: 40 },
         ],
       },
     ],
