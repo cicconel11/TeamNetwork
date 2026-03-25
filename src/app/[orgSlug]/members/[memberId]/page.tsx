@@ -64,11 +64,35 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
 
   const userOrgRole = orgRoleResult.data?.role || null;
 
-  // Extract bio from LinkedIn enrichment data if available
+  // Extract enrichment data from LinkedIn connection (stored by Bright Data sync)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const linkedinData = (enrichmentResult as any)?.data?.linkedin_data;
   const enrichment = linkedinData?.enrichment;
   const linkedinBio: string | null = enrichment?.about || enrichment?.summary || null;
+
+  // Experience and education from enrichment JSON
+  interface EnrichmentExperience {
+    title?: string | null;
+    company?: string | null;
+    company_id?: string | null;
+    location?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    description_html?: string | null;
+    company_logo_url?: string | null;
+  }
+  interface EnrichmentEducation {
+    title?: string | null; // school name
+    degree?: string | null;
+    field_of_study?: string | null;
+    start_year?: string | null;
+    end_year?: string | null;
+    description?: string | null;
+    institute_logo_url?: string | null;
+  }
+
+  const enrichmentExperience: EnrichmentExperience[] = Array.isArray(enrichment?.experience) ? enrichment.experience : [];
+  const enrichmentEducation: EnrichmentEducation[] = Array.isArray(enrichment?.education) ? enrichment.education : [];
 
   const isAdmin = await isOrgAdmin(org.id);
   const currentUserId = user?.id ?? null;
@@ -82,6 +106,10 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
   const jobTitle = m.role || null;
   const currentCompany = m.current_company || null;
   const school = m.school || null;
+
+  // Determine what to show: prefer enrichment data, fall back to flat fields
+  const hasEnrichmentExperience = enrichmentExperience.length > 0;
+  const hasEnrichmentEducation = enrichmentEducation.length > 0;
 
   // Org role label for the badge
   const orgRoleLabels: Record<string, string> = {
@@ -226,7 +254,7 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
         )}
 
         {/* ─── Experience ─── */}
-        {(jobTitle || currentCompany) && (
+        {(hasEnrichmentExperience || jobTitle || currentCompany) && (
           <Card className="p-6">
             <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
               <svg className="h-5 w-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -234,24 +262,54 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               </svg>
               Experience
             </h3>
-            <div className="flex gap-4">
-              <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">
-                <svg className="h-6 w-6 text-muted-foreground opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <p className="font-medium text-foreground text-sm">{jobTitle}</p>
-                {currentCompany && (
-                  <p className="text-muted-foreground text-sm">{currentCompany}</p>
-                )}
-              </div>
+
+            <div className="space-y-0">
+              {hasEnrichmentExperience ? (
+                enrichmentExperience.map((job, i) => (
+                  <div key={i} className={`flex gap-4 py-4 ${i > 0 ? "border-t border-border/50" : ""}`}>
+                    <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center text-muted-foreground">
+                      {job.company_logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={job.company_logo_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                      ) : (
+                        <svg className="h-6 w-6 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground text-sm">{job.title || "Position"}</p>
+                      <p className="text-muted-foreground text-sm">
+                        {job.company}
+                        {job.location && <span className="text-muted-foreground/60"> &middot; {job.location}</span>}
+                      </p>
+                      {(job.start_date || job.end_date) && (
+                        <p className="text-muted-foreground/60 text-xs mt-0.5">
+                          {job.start_date || "?"} &ndash; {job.end_date || "Present"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex gap-4 py-1">
+                  <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-muted-foreground opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground text-sm">{jobTitle}</p>
+                    {currentCompany && <p className="text-muted-foreground text-sm">{currentCompany}</p>}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         )}
 
         {/* ─── Education ─── */}
-        {(school || member.graduation_year) && (
+        {(hasEnrichmentEducation || school || member.graduation_year) && (
           <Card className="p-6">
             <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
               <svg className="h-5 w-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -259,18 +317,51 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
               </svg>
               Education
             </h3>
-            <div className="flex gap-4">
-              <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">
-                <svg className="h-6 w-6 text-muted-foreground opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                {school && <p className="font-medium text-foreground text-sm">{school}</p>}
-                {member.graduation_year && (
-                  <p className="text-muted-foreground text-sm">Class of {member.graduation_year}</p>
-                )}
-              </div>
+
+            <div className="space-y-0">
+              {hasEnrichmentEducation ? (
+                enrichmentEducation.map((edu, i) => (
+                  <div key={i} className={`flex gap-4 py-4 ${i > 0 ? "border-t border-border/50" : ""}`}>
+                    <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">
+                      {edu.institute_logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={edu.institute_logo_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                      ) : (
+                        <svg className="h-6 w-6 text-muted-foreground opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-foreground text-sm">{edu.title || "School"}</p>
+                      {(edu.degree || edu.field_of_study) && (
+                        <p className="text-muted-foreground text-sm">
+                          {[edu.degree, edu.field_of_study].filter(Boolean).join(", ")}
+                        </p>
+                      )}
+                      {(edu.start_year || edu.end_year) && (
+                        <p className="text-muted-foreground/60 text-xs mt-0.5">
+                          {edu.start_year || "?"} &ndash; {edu.end_year || "Present"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex gap-4 py-1">
+                  <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">
+                    <svg className="h-6 w-6 text-muted-foreground opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    {school && <p className="font-medium text-foreground text-sm">{school}</p>}
+                    {member.graduation_year && (
+                      <p className="text-muted-foreground text-sm">Class of {member.graduation_year}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
         )}
