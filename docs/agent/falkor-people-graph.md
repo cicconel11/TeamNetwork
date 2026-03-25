@@ -258,6 +258,10 @@ The response includes:
 Before querying Falkor, the app resolves the source person on the server:
 
 - chat-driven prompts may pass `person_query` (name or email) directly to `suggest_connections`
+- direct email and full-name matches still resolve immediately
+- if no exact name/email match exists, the resolver now applies a small deterministic in-memory name matcher over the org's projected people
+- v1 fuzzy support is intentionally narrow: Matt-family aliases (`mat`, `matt`, `matthew`) plus two-token first/last prefix shorthand such as `mat leo`
+- fuzzy matches only auto-resolve when one candidate clearly beats the runner-up; otherwise the tool returns `ambiguous`
 - internal callers may still pass `person_type` plus `person_id`
 - once a concrete source is identified, the app builds a merged source projection using the same rules as the full SQL projection
 - if the source has a `user_id`, it loads all matching complement rows from the other table

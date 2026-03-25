@@ -553,6 +553,61 @@ test("suggest_connections resolves a person_query directly", async () => {
   assert.equal(payload.suggestions[0].name, "Dana Coach");
 });
 
+test("suggest_connections resolves Matt-family aliases to the same source person", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          makeMemberRow({
+            id: "member-matt",
+            user_id: "user-matt",
+            first_name: "Matt",
+            last_name: "Leonard",
+            email: "matt@example.com",
+            current_company: "Acme",
+            graduation_year: 2024,
+          }),
+          makeMemberRow({
+            id: "member-dana",
+            user_id: "user-dana",
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            role: "Coach",
+            current_company: "Acme",
+            graduation_year: 2024,
+            created_at: "2026-03-02T00:00:00.000Z",
+          }),
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: { data: [], error: null },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const [matthewResult, shorthandResult] = await Promise.all([
+    executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: { person_query: "Matthew Leonard" },
+    }),
+    executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: { person_query: "mat leo" },
+    }),
+  ]);
+
+  const matthewPayload = expectOk(matthewResult).data as any;
+  const shorthandPayload = expectOk(shorthandResult).data as any;
+
+  assert.equal(matthewPayload.state, "resolved");
+  assert.equal(matthewPayload.source_person.name, "Matt Leonard");
+  assert.equal(shorthandPayload.state, "resolved");
+  assert.equal(shorthandPayload.source_person.name, "Matt Leonard");
+});
+
 test("suggest_connections returns ambiguous state for matching person_query", async () => {
   stub = createToolSupabaseStub({
     members: {
@@ -588,6 +643,62 @@ test("suggest_connections returns ambiguous state for matching person_query", as
   assert.equal(payload.state, "ambiguous");
   assert.equal(payload.suggestions.length, 0);
   assert.equal(payload.disambiguation_options.length, 2);
+});
+
+test("suggest_connections returns ambiguous state for close fuzzy Matt-family matches", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          makeMemberRow({
+            id: "member-matt",
+            user_id: "user-matt",
+            first_name: "Matt",
+            last_name: "Leonard",
+            email: "matt@example.com",
+          }),
+          makeMemberRow({
+            id: "member-matthew",
+            user_id: "user-matthew",
+            first_name: "Matthew",
+            last_name: "Leonard",
+            email: "matthew@example.com",
+            created_at: "2026-03-02T00:00:00.000Z",
+          }),
+          makeMemberRow({
+            id: "member-dana",
+            user_id: "user-dana",
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            created_at: "2026-03-03T00:00:00.000Z",
+          }),
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: { data: [], error: null },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "mat leo",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "ambiguous");
+  assert.equal(payload.suggestions.length, 0);
+  assert.deepEqual(
+    payload.disambiguation_options.map((option: any) => option.name),
+    ["Matt Leonard", "Matthew Leonard"]
+  );
 });
 
 test("suggest_connections returns not_found for unknown person_query", async () => {

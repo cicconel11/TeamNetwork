@@ -40,6 +40,10 @@ import {
   type GraphFallbackReason,
 } from "@/lib/falkordb/telemetry";
 import { MAX_GRAPH_SYNC_ATTEMPTS, readOptionalString } from "@/lib/falkordb/utils";
+import {
+  findBestProjectedPersonNameMatches,
+  normalizeHumanNameText,
+} from "@/lib/falkordb/name-matching";
 
 export interface SuggestConnectionsArgs {
   person_type?: "member" | "alumni";
@@ -229,9 +233,7 @@ async function fetchSourceWithComplement(
   };
 }
 
-function normalizeLookupValue(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+const MIN_FUZZY_AUTORESOLVE_MARGIN = 15;
 
 function resolveSourceFromQuery(
   projectedPeople: Map<string, ProjectedPerson>,
@@ -240,28 +242,59 @@ function resolveSourceFromQuery(
   | { state: "resolved"; source: ProjectedPerson }
   | { state: "ambiguous"; options: ProjectedPerson[] }
   | { state: "not_found" } {
-  const normalizedQuery = normalizeLookupValue(personQuery);
-  const matches = [...projectedPeople.values()].filter((person) => {
-    const normalizedName = normalizeLookupValue(person.name);
-    const normalizedEmail = person.email ? normalizeLookupValue(person.email) : null;
-    return normalizedName === normalizedQuery || normalizedEmail === normalizedQuery;
+  const normalizedQuery = normalizeHumanNameText(personQuery);
+
+  const emailMatches = [...projectedPeople.values()].filter((person) => {
+    const normalizedEmail = person.email ? normalizeHumanNameText(person.email) : "";
+    return normalizedEmail.length > 0 && normalizedEmail === normalizedQuery;
   });
 
-  if (matches.length === 0) {
+  if (emailMatches.length === 1) {
+    return { state: "resolved", source: emailMatches[0] };
+  }
+
+  if (emailMatches.length > 1) {
+    emailMatches.sort((left, right) => {
+      const leftName = left.name.localeCompare(right.name);
+      if (leftName !== 0) return leftName;
+      return left.personId.localeCompare(right.personId);
+    });
+    return { state: "ambiguous", options: emailMatches };
+  }
+
+  const exactNameMatches = [...projectedPeople.values()].filter((person) => {
+    const normalizedName = normalizeHumanNameText(person.name);
+    return normalizedName.length > 0 && normalizedName === normalizedQuery;
+  });
+
+  if (exactNameMatches.length === 1) {
+    return { state: "resolved", source: exactNameMatches[0] };
+  }
+
+  if (exactNameMatches.length > 1) {
+    exactNameMatches.sort((left, right) => {
+      const leftName = left.name.localeCompare(right.name);
+      if (leftName !== 0) return leftName;
+      return left.personId.localeCompare(right.personId);
+    });
+    return { state: "ambiguous", options: exactNameMatches };
+  }
+
+  const fuzzyMatches = findBestProjectedPersonNameMatches(projectedPeople.values(), personQuery);
+  if (fuzzyMatches.length === 0) {
     return { state: "not_found" };
   }
 
-  matches.sort((left, right) => {
-    const leftName = left.name.localeCompare(right.name);
-    if (leftName !== 0) return leftName;
-    return left.personId.localeCompare(right.personId);
-  });
-
-  if (matches.length > 1) {
-    return { state: "ambiguous", options: matches };
+  const topMatch = fuzzyMatches[0];
+  const runnerUp = fuzzyMatches[1] ?? null;
+  if (!runnerUp || topMatch.score - runnerUp.score >= MIN_FUZZY_AUTORESOLVE_MARGIN) {
+    return { state: "resolved", source: topMatch.person };
   }
 
-  return { state: "resolved", source: matches[0] };
+  return {
+    state: "ambiguous",
+    options: fuzzyMatches.map((match) => match.person),
+  };
 }
 
 async function fetchGraphFreshness(
