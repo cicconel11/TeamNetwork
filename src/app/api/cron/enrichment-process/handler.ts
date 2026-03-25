@@ -115,14 +115,14 @@ export function createEnrichmentProcessGetHandler(
         }
 
         try {
-          const profile = await fetchBrightDataProfileFn(normalizedLinkedInUrl);
-          if (!profile) {
+          const result = await fetchBrightDataProfileFn(normalizedLinkedInUrl);
+          if (!result || !result.ok) {
             await incrementRetry(supabase, [alumni.id], "bright_data_fetch_failed");
             failed += 1;
             continue;
           }
 
-          const fields = mapBrightDataToFieldsFn(profile);
+          const fields = mapBrightDataToFieldsFn(result.profile);
           const { error: enrichError } = await supabase.rpc("enrich_alumni_by_id", {
             p_alumni_id: alumni.id,
             p_organization_id: alumni.organization_id,
