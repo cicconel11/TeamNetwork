@@ -48,14 +48,13 @@ POST /api/ai/{orgId}/chat { message, surface: "members", ... }
        ▼
 resolveSurfaceRouting(message, surface)
   ├─ normalizeMessage()               NFC, lowercase, strip zero-width chars
-  ├─ isCasualMessage()                → skipRetrieval: true/false
+  ├─ isCasualMessage()                → intentType = "casual" for exact greetings/thanks
   ├─ countMatches() × 3 surfaces     keyword scoring
   └─ returns SurfaceRoutingDecision
        ├─ effectiveSurface            may differ from requested surface
        ├─ intent                      e.g. "members_query", "events_query"
        ├─ confidence                  "high" (single winner) / "low" (no matches)
-       ├─ rerouted                    true if effectiveSurface !== requested
-       └─ skipRetrieval               true for casual messages
+       └─ rerouted                    true if effectiveSurface !== requested
             │
             ▼
 init_ai_chat RPC
@@ -69,11 +68,11 @@ init_ai_chat RPC
   ├─ buildTurnExecutionPolicy(...)
   │    ├─ profile: follow_up | casual | static_general | live_lookup | out_of_scope
   │    ├─ toolPolicy
-  │    ├─ retrievalPolicy
+  │    ├─ retrieval.mode / retrieval.reason
   │    ├─ contextPolicy
   │    └─ cachePolicy
   │
-  ├─ if retrievalPolicy = allow: retrieveRelevantChunks()
+  ├─ if retrieval.mode = allow: retrieveRelevantChunks()
   │    → ragChunks (additive, non-blocking)
   │
   ├─ buildPromptContext({ surface: effectiveSurface, ragChunks, now, timeZone, contextMode })
@@ -106,7 +105,7 @@ Match against `CASUAL_MESSAGE_PATTERNS`:
 - Farewells: `bye`, `goodbye`, `see you`, `later`, `cya`, `peace`
 - Thanks: `thanks`, `thank you`, `thx`, `ty`, `appreciate it`
 
-These are exact-match checks against the full normalized message. If the entire message is a casual phrase, `skipRetrieval: true` and pass-1 tool attachment is suppressed. A hybrid like `"hey, what events are coming up?"` fails the exact match and proceeds to keyword scoring normally.
+These are exact-match checks against the full normalized message. If the entire message is a casual phrase, `intentType` becomes `"casual"`. Retrieval skipping now happens later in `buildTurnExecutionPolicy()`, which can also skip retrieval for structured tool-only turns and keep it enabled for mixed or context-heavy asks. A hybrid like `"hey, what events are coming up?"` fails the exact match and proceeds to keyword scoring normally.
 
 ### Step 3 — Keyword Scoring
 Count word-boundary regex matches (`(?<!\w)keyword(?!\w)`) per surface:

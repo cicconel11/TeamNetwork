@@ -95,7 +95,6 @@ resolveSurfaceRouting(message, surface)
        ├─ intent            e.g. "members_query"      → ai_messages.intent
        ├─ intentType        e.g. "action_request"     → ai_messages.intent_type
        ├─ effectiveSurface  e.g. "members"            → ai_messages.context_surface
-       ├─ skipRetrieval     true when intentType = "casual"
        └─ confidence, rerouted, inferredSurface (unchanged)
             │
             ▼
