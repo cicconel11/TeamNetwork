@@ -88,7 +88,7 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
+              reasons: [{ code: "shared_city", label: "shared city", weight: 15 }],
             },
           ],
         },
@@ -97,7 +97,7 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
   });
 
   assert.equal(result.grounded, false);
-  assert.match(result.failures.join("\n"), /shared_city/i);
+  assert.match(result.failures.join("\n"), /unsupported_mentorship/i);
 });
 
 test("verifyToolBackedResponse accepts fixed-template suggest_connections output", () => {
@@ -105,7 +105,7 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
     content: [
       "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
-      "Why: direct mentorship, shared company, graduation proximity",
+      "Why: shared industry, shared company, graduation proximity",
     ].join("\n"),
     toolResults: [
       {
@@ -121,7 +121,7 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
             {
               name: "Dina Direct",
               reasons: [
-                { code: "direct_mentorship", label: "direct mentorship", weight: 5 },
+                { code: "shared_industry", label: "shared industry", weight: 40 },
                 { code: "shared_company", label: "shared company", weight: 30 },
                 { code: "graduation_proximity", label: "graduation proximity", weight: 10 },
               ],
@@ -141,9 +141,9 @@ test("verifyToolBackedResponse rejects out-of-order suggest_connections output",
     content: [
       "Top connections for Alex Source",
       "1. Sam Second - Founder",
-      "Why: second-degree mentorship",
+      "Why: shared city",
       "2. Dina Direct - VP Product • Acme",
-      "Why: direct mentorship",
+      "Why: shared industry",
     ].join("\n"),
     toolResults: [
       {
@@ -158,11 +158,11 @@ test("verifyToolBackedResponse rejects out-of-order suggest_connections output",
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
+              reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }],
             },
             {
               name: "Sam Second",
-              reasons: [{ code: "second_degree_mentorship", label: "second-degree mentorship", weight: 2 }],
+              reasons: [{ code: "shared_city", label: "shared city", weight: 15 }],
             },
           ],
         },
@@ -179,7 +179,7 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
     content: [
       "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
-      "Why: direct mentorship and both in the finance sector",
+      "Why: shared industry and both in the finance sector",
     ].join("\n"),
     toolResults: [
       {
@@ -194,7 +194,7 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
+              reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }],
             },
           ],
         },

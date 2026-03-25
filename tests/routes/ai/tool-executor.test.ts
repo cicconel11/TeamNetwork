@@ -382,14 +382,6 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
         error: null,
       },
     },
-    rpc: {
-      get_mentorship_distances: [
-        {
-          user_id: "00000000-0000-4000-8000-000000000002",
-          distance: 1,
-        },
-      ],
-    },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
@@ -411,14 +403,14 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   assert.equal(payload.source_person.name, "Alex Source");
   assert.equal(payload.suggestions.length, 1);
   assert.equal(payload.suggestions[0].name, "Dina Direct");
-  assert.equal(payload.suggestions[0].score, 45);
+  assert.equal(payload.suggestions[0].score, 40);
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_company", "graduation_proximity", "direct_mentorship"]
+    ["shared_company", "graduation_proximity"]
   );
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.label),
-    ["shared company", "graduation proximity", "direct mentorship"]
+    ["shared company", "graduation proximity"]
   );
 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
@@ -510,9 +502,6 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
         error: null,
       },
     },
-    rpc: {
-      get_mentorship_distances: [{ user_id: "user-2", distance: 1 }],
-    },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
@@ -527,7 +516,7 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
   assert.equal(payload.state, "resolved");
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_industry", "shared_city", "graduation_proximity", "direct_mentorship"]
+    ["shared_industry", "shared_city", "graduation_proximity"]
   );
 });
 
@@ -573,14 +562,6 @@ test("suggest_connections resolves a person_query directly", async () => {
         data: [],
         error: null,
       },
-    },
-    rpc: {
-      get_mentorship_distances: [
-        {
-          user_id: "user-2",
-          distance: 1,
-        },
-      ],
     },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
@@ -726,9 +707,6 @@ test("suggest_connections returns no_suggestions when the source has no supporte
     alumni: {
       select: { data: [], error: null },
     },
-    rpc: {
-      get_mentorship_distances: [],
-    },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
@@ -842,14 +820,6 @@ test("suggest_connections keeps sparse member-sourced queries actionable with fa
         error: null,
       },
     },
-    rpc: {
-      get_mentorship_distances: [
-        {
-          user_id: "user-match",
-          distance: 1,
-        },
-      ],
-    },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
 
@@ -870,7 +840,90 @@ test("suggest_connections keeps sparse member-sourced queries actionable with fa
   assert.equal(payload.suggestions[0].name, "Dana Coach");
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_city", "graduation_proximity", "direct_mentorship"]
+    ["shared_city", "graduation_proximity"]
+  );
+});
+
+test("suggest_connections derives employer and industry from member company-role strings", async () => {
+  stub = createToolSupabaseStub({
+    members: {
+      select: {
+        data: [
+          {
+            id: "member-1",
+            organization_id: ORG_ID,
+            user_id: "user-source",
+            status: "active",
+            deleted_at: null,
+            first_name: "Tyler",
+            last_name: "Morrison",
+            email: "tyler@example.com",
+            role: "Student",
+            current_company: "Microsoft (SWE intern)",
+            graduation_year: 2028,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            organization_id: ORG_ID,
+            user_id: "user-match",
+            status: "active",
+            deleted_at: null,
+            first_name: "Sarah",
+            last_name: "Chen",
+            email: "sarah@example.com",
+            role: "Engineer",
+            current_company: "Google",
+            graduation_year: 2021,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: {
+        data: [
+          {
+            id: "alumni-2",
+            organization_id: ORG_ID,
+            user_id: "user-match",
+            deleted_at: null,
+            first_name: "Sarah",
+            last_name: "Chen",
+            email: "sarah@example.com",
+            major: "Computer Science",
+            current_company: "Google",
+            industry: "Technology",
+            current_city: "San Francisco",
+            graduation_year: 2021,
+            position_title: "Engineer",
+            job_title: null,
+            created_at: "2026-03-03T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: {
+        person_query: "Tyler Morrison",
+      },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "resolved");
+  assert.equal(payload.source_person.subtitle, "Student • Microsoft");
+  assert.equal(payload.suggestions[0].name, "Sarah Chen");
+  assert.deepEqual(
+    payload.suggestions[0].reasons.map((reason: any) => reason.code),
+    ["shared_industry"]
   );
 });
 

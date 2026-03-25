@@ -1,3 +1,4 @@
+import { normalizeCareerText } from "@/lib/falkordb/career-signals";
 import type { ProjectedPerson } from "@/lib/falkordb/people";
 import type { GraphFallbackReason } from "@/lib/falkordb/telemetry";
 
@@ -5,9 +6,7 @@ export type ConnectionReasonCode =
   | "shared_company"
   | "shared_industry"
   | "shared_city"
-  | "graduation_proximity"
-  | "direct_mentorship"
-  | "second_degree_mentorship";
+  | "graduation_proximity";
 
 export interface ConnectionReason {
   code: ConnectionReasonCode;
@@ -80,8 +79,6 @@ export const CONNECTION_REASON_WEIGHTS: Record<ConnectionReasonCode, number> = {
   shared_industry: 40,
   shared_city: 15,
   graduation_proximity: 10,
-  direct_mentorship: 5,
-  second_degree_mentorship: 2,
 };
 
 const CONNECTION_REASON_ORDER: ConnectionReasonCode[] = [
@@ -89,22 +86,11 @@ const CONNECTION_REASON_ORDER: ConnectionReasonCode[] = [
   "shared_company",
   "shared_city",
   "graduation_proximity",
-  "direct_mentorship",
-  "second_degree_mentorship",
 ];
 
-function normalizeText(value: string | null | undefined): string | null {
-  const normalized = (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ");
-  return normalized.length > 0 ? normalized : null;
-}
-
 function chooseSharedTextValue(a: string | null | undefined, b: string | null | undefined) {
-  const normalizedA = normalizeText(a);
-  const normalizedB = normalizeText(b);
+  const normalizedA = normalizeCareerText(a);
+  const normalizedB = normalizeCareerText(b);
   if (!normalizedA || normalizedA !== normalizedB) {
     return null;
   }
@@ -117,14 +103,14 @@ export interface ConnectionScoringContext {
 }
 
 export function normalizeConnectionText(value: string | null | undefined): string | null {
-  return normalizeText(value);
+  return normalizeCareerText(value);
 }
 
 function buildGenericCompanySet(values: Iterable<string | null | undefined>) {
   const normalized = new Set<string>();
 
   for (const value of values) {
-    const normalizedValue = normalizeText(value);
+    const normalizedValue = normalizeCareerText(value);
     if (normalizedValue) {
       normalized.add(normalizedValue);
     }
@@ -143,7 +129,7 @@ function chooseSharedCompanyValue(
     return null;
   }
 
-  const normalizedSharedValue = normalizeText(sharedValue);
+  const normalizedSharedValue = normalizeCareerText(sharedValue);
   if (!normalizedSharedValue || genericCompanyValues.has(normalizedSharedValue)) {
     return null;
   }
@@ -174,10 +160,6 @@ export function formatConnectionReasonLabel(code: ConnectionReasonCode): string 
       return "shared city";
     case "graduation_proximity":
       return "graduation proximity";
-    case "direct_mentorship":
-      return "direct mentorship";
-    case "second_degree_mentorship":
-      return "second-degree mentorship";
   }
 }
 
@@ -245,28 +227,15 @@ export function clampSuggestionsLimit(limit?: number) {
 export function buildSuggestionForCandidate(input: {
   source: ProjectedPerson;
   candidate: ProjectedPerson;
-  mentorshipDistance: number | null;
   scoringContext?: ConnectionScoringContext;
 }): SuggestedConnection | null {
-  const { source, candidate, mentorshipDistance } = input;
+  const { source, candidate } = input;
 
   if (source.personKey === candidate.personKey) {
     return null;
   }
 
   const reasons: ConnectionReason[] = [];
-
-  if (mentorshipDistance === 1) {
-    reasons.push({
-      code: "direct_mentorship",
-      weight: CONNECTION_REASON_WEIGHTS.direct_mentorship,
-    });
-  } else if (mentorshipDistance === 2) {
-    reasons.push({
-      code: "second_degree_mentorship",
-      weight: CONNECTION_REASON_WEIGHTS.second_degree_mentorship,
-    });
-  }
 
   const genericCompanyValues = buildGenericCompanySet([
     ...(input.scoringContext?.genericCompanyValues ?? []),
