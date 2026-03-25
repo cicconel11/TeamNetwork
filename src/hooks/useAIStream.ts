@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import type { SSEEvent } from "@/lib/ai/sse";
+import { deriveToolStatusLabel } from "@/components/ai-assistant/tool-status";
 
 interface UseAIStreamOptions {
   orgId: string;
@@ -12,6 +13,7 @@ interface AIStreamState {
   error: string | null;
   currentContent: string;
   threadId: string | null;
+  toolStatusLabel: string | null;
 }
 
 export interface AIStreamResult {
@@ -35,6 +37,7 @@ interface StreamCallbacks {
   onChunk?: (content: string) => void;
   onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
   onError?: (message: string) => void;
+  onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
 }
 
 interface AIErrorBody {
@@ -110,7 +113,10 @@ export async function consumeSSEStream(
             usage: event.usage,
           };
         }
-        // Skip unrecognized event types (e.g., tool_status)
+
+        if (event.type === "tool_status") {
+          callbacks.onToolStatus?.(event);
+        }
       } catch {
         // Ignore malformed events and keep streaming.
       }
@@ -126,13 +132,14 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     error: null,
     currentContent: "",
     threadId: null,
+    toolStatusLabel: null,
   });
   const abortRef = useRef<AbortController | null>(null);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setState(prev => ({ ...prev, isStreaming: false }));
+    setState(prev => ({ ...prev, isStreaming: false, toolStatusLabel: null }));
   }, []);
 
   const clearError = useCallback(() => {
@@ -153,6 +160,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       error: null,
       currentContent: "",
       threadId: opts.threadId ?? null,
+      toolStatusLabel: null,
     });
 
     try {
@@ -176,6 +184,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           isStreaming: false,
           threadId: failure.result?.threadId ?? prev.threadId,
           error: failure.error,
+          toolStatusLabel: null,
         }));
         return failure.result;
       }
@@ -192,6 +201,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             ...prev,
             isStreaming: false,
             threadId: event.threadId,
+            toolStatusLabel: null,
           }));
         },
         onError: (messageText) => {
@@ -199,6 +209,13 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
             ...prev,
             isStreaming: false,
             error: messageText,
+            toolStatusLabel: null,
+          }));
+        },
+        onToolStatus: (event) => {
+          setState((prev) => ({
+            ...prev,
+            toolStatusLabel: deriveToolStatusLabel(prev.toolStatusLabel, event),
           }));
         },
       });
@@ -218,6 +235,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         ...prev,
         isStreaming: false,
         error: err instanceof Error ? err.message : "Unknown error",
+        toolStatusLabel: null,
       }));
       return null;
     } finally {
