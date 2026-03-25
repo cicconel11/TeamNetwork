@@ -488,12 +488,13 @@ export function buildSuggestionForCandidate(input: {
   );
 
   const exposurePenalty = input.scoringContext?.exposurePenaltyByPersonId?.get(candidate.personId) ?? 0;
+  const rawScore = reasons.reduce((sum, reason) => sum + reason.weight, 0) - exposurePenalty;
 
   return {
     person_type: candidate.personType,
     person_id: candidate.personId,
     name: candidate.name,
-    score: reasons.reduce((sum, reason) => sum + reason.weight, 0) - exposurePenalty,
+    score: Math.max(0, rawScore),
     preview: buildPreview(candidate),
     reasons,
     debug: {

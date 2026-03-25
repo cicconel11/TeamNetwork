@@ -65,6 +65,15 @@ test("canonicalizeRoleFamily leaves ambiguous generic titles unclassified", () =
   assert.equal(canonicalizeRoleFamily("associate", "Unknown Company", null), null);
 });
 
+test("canonicalizeRoleFamily does not over-match generic analyst titles to Finance", () => {
+  assert.equal(canonicalizeRoleFamily("data analyst", "Acme", null), "Data");
+  assert.equal(canonicalizeRoleFamily("research analyst", "Acme", null), "Research");
+  assert.equal(canonicalizeRoleFamily("operations analyst", "Acme", null), "Operations");
+  assert.equal(canonicalizeRoleFamily("policy analyst", "Acme", null), null);
+  assert.equal(canonicalizeRoleFamily("financial analyst", "Acme", null), "Finance");
+  assert.equal(canonicalizeRoleFamily("investment banking analyst", "Acme", null), "Finance");
+});
+
 test("role family adjacency is available for candidate expansion only", () => {
   assert.equal(areAdjacentRoleFamilies("Engineering", "Data"), true);
   assert.equal(areAdjacentRoleFamilies("Finance", "Consulting"), true);

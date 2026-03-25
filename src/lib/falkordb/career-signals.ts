@@ -111,7 +111,14 @@ const ROLE_FAMILY_KEYWORDS: Array<{ family: string; keywords: string[] }> = [
   },
   {
     family: "Finance",
-    keywords: ["analyst", "investment", "banking", "private equity", "trader"],
+    keywords: [
+      "financial analyst",
+      "investment banking analyst",
+      "investment",
+      "banking",
+      "private equity",
+      "trader",
+    ],
   },
   {
     family: "Consulting",
