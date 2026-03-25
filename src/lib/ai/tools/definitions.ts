@@ -82,7 +82,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "suggest_connections" as const,
       description:
-        "Suggest same-organization members or alumni that a person should reach out to. Use this for introductions, alumni matching, networking, or outreach questions like who someone should meet next. Prefer calling this tool directly for person-name connection questions. It can either resolve a person by query string or accept an explicit person_type plus person_id. Returns a chat-ready payload with deterministic suggestions and normalized reasons such as shared company, shared industry, shared city, graduation proximity, direct mentorship, and second-degree mentorship.",
+        "Suggest same-organization members or alumni that a person should reach out to. Use this for introductions, alumni matching, networking, or outreach questions like who someone should meet next. Prefer calling this tool directly for person-name connection questions. It can either resolve a person by query string or accept an explicit person_type plus person_id. Returns a chat-ready payload with deterministic suggestions and normalized reasons such as shared company, shared industry, shared city, and graduation proximity.",
       parameters: {
         type: "object" as const,
         properties: {

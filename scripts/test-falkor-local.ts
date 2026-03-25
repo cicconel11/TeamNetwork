@@ -311,7 +311,7 @@ async function main() {
     console.log(`    Source lookup failed: ${err instanceof Error ? err.message : err}`);
   }
 
-  // Step 4: Test supported Falkor queries directly
+  // Step 4: Test candidate enumeration directly
   console.log(`\n[4] Direct Falkor graph queries...`);
   try {
     const candidates = await falkorClient.query<Record<string, unknown>>(
@@ -328,56 +328,6 @@ async function main() {
     }
   } catch (err) {
     console.log(`    Candidates query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const directOutgoing = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(candidate:Person)
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Direct outgoing edges: ${directOutgoing.length} rows`);
-  } catch (err) {
-    console.log(`    Direct outgoing query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const directIncoming = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(candidate:Person)
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Direct incoming edges: ${directIncoming.length} rows`);
-  } catch (err) {
-    console.log(`    Direct incoming query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const sharedMentor = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)-[:MENTORS]->(candidate:Person)
-       WHERE candidate.personKey <> $sourceKey
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Mixed second-degree (shared mentor): ${sharedMentor.length} rows`);
-  } catch (err) {
-    console.log(`    Shared mentor query FAILED: ${err instanceof Error ? err.message : err}`);
-  }
-
-  try {
-    const sharedMentee = await falkorClient.query<Record<string, unknown>>(
-      orgId,
-      `MATCH (source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)<-[:MENTORS]-(candidate:Person)
-       WHERE candidate.personKey <> $sourceKey
-       RETURN candidate.personKey AS personKey, candidate.name AS name`,
-      { sourceKey: expectedKey }
-    );
-    console.log(`    Mixed second-degree (shared mentee): ${sharedMentee.length} rows`);
-  } catch (err) {
-    console.log(`    Shared mentee query FAILED: ${err instanceof Error ? err.message : err}`);
   }
 
   console.log(`\n[5] Testing suggestConnections...`);

@@ -238,11 +238,8 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   const matches = new Set<string>();
   const normalized = line.toLowerCase();
 
-  if (/direct mentorship/.test(normalized)) {
-    matches.add("direct_mentorship");
-  }
-  if (/(second[- ]degree mentorship|second degree|two[- ]hop mentorship|two hop)/.test(normalized)) {
-    matches.add("second_degree_mentorship");
+  if (/(direct mentorship|second[- ]degree mentorship|second degree|two[- ]hop mentorship|two hop)/.test(normalized)) {
+    matches.add("unsupported_mentorship");
   }
   if (/(shared company|same company)/.test(normalized)) {
     matches.add("shared_company");
