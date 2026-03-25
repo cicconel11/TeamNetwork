@@ -538,23 +538,248 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
         name: "Ava Attribute",
         score: 95,
         reasonCodes: [
-          "shared_company",
           "shared_industry",
+          "shared_company",
           "shared_city",
           "graduation_proximity",
         ],
       },
       {
-        name: "Dina Direct",
-        score: 55,
-        reasonCodes: ["shared_company", "graduation_proximity", "direct_mentorship"],
-      },
-      {
         name: "Sam Second",
-        score: 47,
+        score: 57,
         reasonCodes: ["shared_industry", "shared_city", "second_degree_mentorship"],
       },
+      {
+        name: "Dina Direct",
+        score: 45,
+        reasonCodes: ["shared_company", "graduation_proximity", "direct_mentorship"],
+      },
     ]
+  );
+});
+
+test("suggestConnections suppresses generic company matches and keeps sources differentiated", async () => {
+  const stub = createSupabaseStub();
+
+  stub.seed("organizations", [
+    {
+      id: ORG_ID,
+      name: "Test Organization",
+      slug: "test-organization",
+    },
+  ]);
+
+  stub.seed("members", [
+    {
+      id: "member-louis",
+      organization_id: ORG_ID,
+      user_id: "user-louis",
+      deleted_at: null,
+      status: "active",
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "louis@example.com",
+      role: "Captain",
+      current_company: "TeamNetwork",
+      graduation_year: 2024,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      id: "member-matt",
+      organization_id: ORG_ID,
+      user_id: "user-matt",
+      deleted_at: null,
+      status: "active",
+      first_name: "Matt",
+      last_name: "Leonard",
+      email: "matt@example.com",
+      role: "Admin",
+      current_company: "TeamNetwork",
+      graduation_year: 2024,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+    {
+      id: "member-matthew",
+      organization_id: ORG_ID,
+      user_id: "user-matthew",
+      deleted_at: null,
+      status: "active",
+      first_name: "Matthew",
+      last_name: "McKilloop",
+      email: "matthew@example.com",
+      role: "Admin",
+      current_company: "TeamNetwork",
+      graduation_year: 2027,
+      created_at: "2026-03-03T00:00:00.000Z",
+    },
+  ]);
+
+  stub.seed("alumni", [
+    {
+      id: "alumni-louis",
+      organization_id: ORG_ID,
+      user_id: "user-louis",
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "louis@example.com",
+      major: null,
+      current_company: "TeamNetwork",
+      industry: "Sports",
+      current_city: "Philadelphia",
+      graduation_year: 2024,
+      position_title: "Founder",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-04T00:00:00.000Z",
+    },
+    {
+      id: "alumni-matt",
+      organization_id: ORG_ID,
+      user_id: "user-matt",
+      first_name: "Matt",
+      last_name: "Leonard",
+      email: "matt@example.com",
+      major: null,
+      current_company: "TeamNetwork",
+      industry: "Sports",
+      current_city: "Philadelphia",
+      graduation_year: 2024,
+      position_title: "Coach",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-05T00:00:00.000Z",
+    },
+    {
+      id: "alumni-matthew",
+      organization_id: ORG_ID,
+      user_id: "user-matthew",
+      first_name: "Matthew",
+      last_name: "McKilloop",
+      email: "matthew@example.com",
+      major: null,
+      current_company: "TeamNetwork",
+      industry: "Finance",
+      current_city: "New York",
+      graduation_year: 2027,
+      position_title: "Analyst",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-06T00:00:00.000Z",
+    },
+    {
+      id: "alumni-dylan",
+      organization_id: ORG_ID,
+      user_id: "user-dylan",
+      first_name: "Dylan",
+      last_name: "Burak",
+      email: "dylan@example.com",
+      major: null,
+      current_company: "Wharton Sports Group",
+      industry: "Sports",
+      current_city: "Philadelphia",
+      graduation_year: 2025,
+      position_title: "Advisor",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-07T00:00:00.000Z",
+    },
+    {
+      id: "alumni-aarav",
+      organization_id: ORG_ID,
+      user_id: "user-aarav",
+      first_name: "Aarav",
+      last_name: "Doshi",
+      email: "aarav@example.com",
+      major: null,
+      current_company: "Penn Athletics",
+      industry: "Sports",
+      current_city: "Philadelphia",
+      graduation_year: 2022,
+      position_title: "Mentor",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-08T00:00:00.000Z",
+    },
+    {
+      id: "alumni-alex",
+      organization_id: ORG_ID,
+      user_id: "user-alex",
+      first_name: "Alex",
+      last_name: "Gonzalez",
+      email: "alex@example.com",
+      major: null,
+      current_company: "Goldman Sachs",
+      industry: "Finance",
+      current_city: "New York",
+      graduation_year: 2028,
+      position_title: "Mentor",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-09T00:00:00.000Z",
+    },
+  ]);
+
+  stub.registerRpc("get_mentorship_distances", ({ p_user_id }) => {
+    switch (p_user_id) {
+      case "user-louis":
+        return [
+          { user_id: "user-dylan", distance: 1 },
+          { user_id: "user-aarav", distance: 2 },
+        ];
+      case "user-matt":
+        return [{ user_id: "user-aarav", distance: 1 }];
+      case "user-matthew":
+        return [{ user_id: "user-alex", distance: 1 }];
+      default:
+        return [];
+    }
+  });
+
+  const graphClient = {
+    isAvailable: () => false,
+    query: async () => [],
+  };
+
+  const [louis, matt, matthew] = await Promise.all([
+    suggestConnections({
+      orgId: ORG_ID,
+      serviceSupabase: stub as any,
+      args: { person_query: "Louis Ciccone" },
+      graphClient,
+    }),
+    suggestConnections({
+      orgId: ORG_ID,
+      serviceSupabase: stub as any,
+      args: { person_query: "Matt Leonard" },
+      graphClient,
+    }),
+    suggestConnections({
+      orgId: ORG_ID,
+      serviceSupabase: stub as any,
+      args: { person_query: "Matthew McKilloop" },
+      graphClient,
+    }),
+  ]);
+
+  const louisNames = louis.suggestions.map((row) => row.name);
+  const mattNames = matt.suggestions.map((row) => row.name);
+  const matthewNames = matthew.suggestions.map((row) => row.name);
+
+  assert.notDeepEqual(louisNames, mattNames);
+  assert.notDeepEqual(louisNames, matthewNames);
+  assert.notDeepEqual(mattNames, matthewNames);
+
+  assert.equal(
+    louis.suggestions.some((row) => row.reasons.some((reason) => reason.code === "shared_company")),
+    false
+  );
+  assert.equal(
+    matt.suggestions.some((row) => row.reasons.some((reason) => reason.code === "shared_company")),
+    false
+  );
+  assert.equal(
+    matthew.suggestions.some((row) => row.reasons.some((reason) => reason.code === "shared_company")),
+    false
   );
 });
 
@@ -868,7 +1093,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
       person_id: "candidate-alumni",
       name: "Casey Candidate",
       subtitle: "Engineer • Acme",
-      score: 50,
+      score: 40,
       preview: {
         role: "Engineer",
         current_company: "Acme",
@@ -878,7 +1103,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
         {
           code: "shared_company",
           label: "shared company",
-          weight: 40,
+          weight: 30,
           value: "Acme",
         },
         {
@@ -2171,8 +2396,8 @@ test("suggestConnections stays recommendation-safe after graph transitions and r
     graphResult.suggestions.map((row) => row.person_id),
     [
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
-      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
+      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
     ]
   );
   assert.deepEqual(graphResult.suggestions, sqlFallback.suggestions);

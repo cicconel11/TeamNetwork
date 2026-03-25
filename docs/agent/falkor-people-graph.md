@@ -44,14 +44,14 @@ Six weighted reason codes; Falkor and SQL paths use identical scoring:
 
 | Reason | Weight |
 |--------|--------|
-| `shared_company` | 40 |
-| `shared_industry` | 30 |
+| `shared_industry` | 40 |
+| `shared_company` | 30 |
 | `shared_city` | 15 |
 | `graduation_proximity` | 10 |
 | `direct_mentorship` | 5 |
 | `second_degree_mentorship` | 2 |
 
-`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
+`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. `shared_company` is suppressed when the normalized company value is the platform name (`TeamNetwork`) or the current organization's name, so generic org-internal company strings do not flatten rankings across the whole org. Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
 
 ### Step 7 — Read path (`suggestions.ts`)
 

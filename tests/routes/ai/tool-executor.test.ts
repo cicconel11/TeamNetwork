@@ -411,7 +411,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   assert.equal(payload.source_person.name, "Alex Source");
   assert.equal(payload.suggestions.length, 1);
   assert.equal(payload.suggestions[0].name, "Dina Direct");
-  assert.equal(payload.suggestions[0].score, 55);
+  assert.equal(payload.suggestions[0].score, 45);
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
     ["shared_company", "graduation_proximity", "direct_mentorship"]
@@ -424,6 +424,111 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
   assert.equal(telemetry.sqlFallbackCount, 1);
   assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
+});
+
+test("suggest_connections suppresses TeamNetwork and org-name company matches", async () => {
+  stub = createToolSupabaseStub({
+    organizations: {
+      select: {
+        data: [{ id: ORG_ID, name: "Test Organization" }],
+        error: null,
+      },
+    },
+    members: {
+      select: {
+        data: [
+          {
+            id: "member-1",
+            organization_id: ORG_ID,
+            user_id: "user-1",
+            status: "active",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            role: "Captain",
+            current_company: "TeamNetwork",
+            graduation_year: 2024,
+            created_at: "2026-03-01T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            organization_id: ORG_ID,
+            user_id: "user-2",
+            status: "active",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            role: "Coach",
+            current_company: "TeamNetwork",
+            graduation_year: 2025,
+            created_at: "2026-03-02T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    alumni: {
+      select: {
+        data: [
+          {
+            id: "alumni-1",
+            organization_id: ORG_ID,
+            user_id: "user-1",
+            deleted_at: null,
+            first_name: "Louis",
+            last_name: "Ciccone",
+            email: "louis@example.com",
+            major: null,
+            current_company: "TeamNetwork",
+            industry: "Sports",
+            current_city: "Philadelphia",
+            graduation_year: 2024,
+            position_title: null,
+            job_title: null,
+            created_at: "2026-03-03T00:00:00.000Z",
+          },
+          {
+            id: "alumni-2",
+            organization_id: ORG_ID,
+            user_id: "user-2",
+            deleted_at: null,
+            first_name: "Dana",
+            last_name: "Coach",
+            email: "dana@example.com",
+            major: null,
+            current_company: "Test Organization",
+            industry: "Sports",
+            current_city: "Philadelphia",
+            graduation_year: 2025,
+            position_title: "Advisor",
+            job_title: null,
+            created_at: "2026-03-04T00:00:00.000Z",
+          },
+        ],
+        error: null,
+      },
+    },
+    rpc: {
+      get_mentorship_distances: [{ user_id: "user-2", distance: 1 }],
+    },
+  });
+  ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "suggest_connections",
+      args: { person_query: "Louis Ciccone" },
+    })
+  );
+
+  const payload = result.data as any;
+  assert.equal(payload.state, "resolved");
+  assert.deepEqual(
+    payload.suggestions[0].reasons.map((reason: any) => reason.code),
+    ["shared_industry", "shared_city", "graduation_proximity", "direct_mentorship"]
+  );
 });
 
 test("suggest_connections resolves a person_query directly", async () => {

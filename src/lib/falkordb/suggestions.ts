@@ -14,7 +14,9 @@ import {
   buildSuggestionForCandidate,
   clampSuggestionsLimit,
   GRAPH_STALE_AFTER_SECONDS,
+  normalizeConnectionText,
   sortSuggestedConnections,
+  type ConnectionScoringContext,
   type SuggestConnectionsFreshness,
   type SuggestConnectionsResult,
 } from "@/lib/falkordb/scoring";
@@ -335,11 +337,39 @@ async function fetchGraphFreshness(
   }
 }
 
+async function loadOrganizationName(
+  serviceSupabase: SupabaseClient,
+  orgId: string
+): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (serviceSupabase as any)
+      .from("organizations")
+      .select("name")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (error) {
+      return null;
+    }
+
+    const name =
+      data && typeof data === "object" && typeof (data as { name?: unknown }).name === "string"
+        ? (data as { name: string }).name
+        : null;
+
+    return name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function scoreProjectedCandidates(input: {
   source: ProjectedPerson;
   candidates: Iterable<ProjectedPerson>;
   mentorshipDistances: Map<string, number>;
   limit: number;
+  scoringContext?: ConnectionScoringContext;
 }) {
   const suggestions = [];
 
@@ -350,6 +380,7 @@ function scoreProjectedCandidates(input: {
       source: input.source,
       candidate,
       mentorshipDistance,
+      scoringContext: input.scoringContext,
     });
     if (suggestion) {
       suggestions.push(suggestion);
@@ -558,6 +589,7 @@ async function fetchGraphSuggestions(input: {
   source: ProjectedPerson;
   limit: number;
   graphClient: FalkorQueryClient;
+  scoringContext?: ConnectionScoringContext;
 }) {
   // FalkorDB has partial shortestPath support, and the SQL fallback treats
   // mentorship edges as undirected up to depth 2. Query the direct and
@@ -632,6 +664,7 @@ async function fetchGraphSuggestions(input: {
         source: input.source,
         candidate,
         mentorshipDistance,
+        scoringContext: input.scoringContext,
       })
     )
     .filter((suggestion): suggestion is NonNullable<typeof suggestion> => suggestion !== null);
@@ -651,6 +684,13 @@ export async function suggestConnections(input: {
   const { orgId, serviceSupabase } = input;
   let resolvedSource: ProjectedPerson | null = null;
   let projectedPeopleForLookup: Map<string, ProjectedPerson> | null = null;
+  const organizationName = await loadOrganizationName(serviceSupabase, orgId);
+  const scoringContext: ConnectionScoringContext = {
+    genericCompanyValues: [
+      "TeamNetwork",
+      normalizeConnectionText(organizationName),
+    ],
+  };
 
   if (input.args.person_query) {
     projectedPeopleForLookup = await loadProjectedPeople(serviceSupabase, orgId);
@@ -710,6 +750,7 @@ export async function suggestConnections(input: {
       candidates: projectedPeople.values(),
       mentorshipDistances,
       limit,
+      scoringContext,
     });
     return buildResolvedResult({
       mode: "sql_fallback",
@@ -749,6 +790,7 @@ export async function suggestConnections(input: {
       source: resolvedSource,
       limit,
       graphClient,
+      scoringContext,
     });
 
     return finalizeResult({
