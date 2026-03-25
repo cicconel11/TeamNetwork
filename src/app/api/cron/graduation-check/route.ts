@@ -169,9 +169,9 @@ export async function GET(request: Request) {
       const [gradOrgs, gradAdminEmails, capacityMap] = await Promise.all([
         batchGetOrganizations(supabase, gradOrgIds),
         batchGetOrgAdminEmails(supabase, gradOrgIds),
-        // TODO: checkAlumniCapacity (called inside batchCheckAlumniCapacity) throws on DB error
-        // rather than returning hasCapacity: false, which is correct fail-closed behavior.
-        // If this throw propagates, the entire graduation step fails and can be retried.
+        // NOTE: batchCheckAlumniCapacity throws on DB error (fail-closed by design).
+        // A throw here fails the entire graduation step so it can be retried on the
+        // next cron run rather than silently graduating members without a capacity check.
         batchCheckAlumniCapacity(supabase, gradOrgIds),
       ]);
 
