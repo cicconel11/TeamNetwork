@@ -300,5 +300,51 @@ describe("Bright Data sync pipeline", () => {
       assert.equal(fields.school, "Stanford");
       assert.equal(fields.major, "Computer Science"); // Falls back to field_of_study when degree is null
     });
+
+    it("falls back to educations_details when education[].title is missing", () => {
+      // Real scenario: Bright Data returns education entries without title but has educations_details
+      const profile: BrightDataProfileResult = {
+        name: "Louis Ciccone",
+        city: "New York City Metropolitan Area",
+        position: null,
+        about: null,
+        current_company: "C1",
+        current_company_name: "C1",
+        experience: [],
+        education: [
+          { start_year: "2018", end_year: "2021", description: null, description_html: null, institute_logo_url: null },
+        ],
+        educations_details: "University of Michigan - School of Information",
+        avatar: "https://media.licdn.com/photo.jpg",
+      };
+
+      const fields = mapBrightDataToFields(profile);
+      assert.equal(fields.school, "University of Michigan - School of Information");
+      assert.equal(fields.current_company, "C1");
+      assert.equal(fields.current_city, "New York City Metropolitan Area");
+      assert.equal(fields.job_title, null); // No experience, no position
+      assert.equal(fields.major, null); // No degree or field_of_study
+    });
+
+    it("prefers education[].title over educations_details when both exist", () => {
+      const profile: BrightDataProfileResult = {
+        name: null,
+        city: null,
+        position: null,
+        about: null,
+        current_company: null,
+        current_company_name: null,
+        experience: [],
+        education: [
+          { title: "Harvard University", degree: "BA", field_of_study: null, url: null, start_year: null, end_year: null, description: null, description_html: null, institute_logo_url: null },
+        ],
+        educations_details: "Harvard University",
+        avatar: null,
+      };
+
+      const fields = mapBrightDataToFields(profile);
+      assert.equal(fields.school, "Harvard University"); // title takes precedence
+      assert.equal(fields.major, "BA");
+    });
   });
 });

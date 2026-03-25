@@ -56,6 +56,8 @@ async function main() {
   console.log(`City: ${profile.city ?? "(none)"}`);
   console.log(`Current Company: ${profile.current_company ?? "(none)"}`);
   console.log(`Current Company Name: ${profile.current_company_name ?? "(none)"}`);
+  console.log(`Educations Details: ${profile.educations_details ?? "(none)"}`);
+  console.log(`Avatar: ${profile.avatar ?? "(none)"}`);
 
   console.log(`\n--- EXPERIENCE (${profile.experience.length} entries) ---\n`);
   if (profile.experience.length === 0) {

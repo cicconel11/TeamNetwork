@@ -52,6 +52,10 @@ export interface BrightDataProfileResult {
   current_company_name: string | null;
   experience: BrightDataExperience[];
   education: BrightDataEducation[];
+  /** Summary string like "University of Michigan - School of Information" — fallback for school name */
+  educations_details: string | null;
+  /** Profile photo URL */
+  avatar: string | null;
 }
 
 export type BrightDataFetchFailureKind =
@@ -90,7 +94,8 @@ export function isBrightDataConfigured(): boolean {
 // ---------------------------------------------------------------------------
 
 const BRIGHT_DATA_DATASET_ID = "gd_l1viktl72bvl7bjuj0";
-const BRIGHT_DATA_PROFILES_URL = `https://api.brightdata.com/datasets/v3/scrape?dataset_id=${BRIGHT_DATA_DATASET_ID}&format=json`;
+// clean=1 bypasses Bright Data's cache so we always get the latest profile data
+const BRIGHT_DATA_PROFILES_URL = `https://api.brightdata.com/datasets/v3/scrape?dataset_id=${BRIGHT_DATA_DATASET_ID}&format=json&clean=1`;
 
 /**
  * Fetches a LinkedIn profile via Bright Data's Profiles API.
@@ -206,6 +211,7 @@ function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | nu
     typeof raw.name === "string" ||
     typeof raw.position === "string" ||
     typeof raw.current_company === "string" ||
+    (raw.current_company && typeof raw.current_company === "object") ||
     typeof raw.current_company_name === "string" ||
     Array.isArray(raw.experience) ||
     Array.isArray(raw.education);
@@ -222,8 +228,12 @@ function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | nu
     current_company: normalizeCurrentCompany(raw.current_company),
     current_company_name:
       typeof raw.current_company_name === "string" ? raw.current_company_name : null,
+    // Bright Data may return experience as null (not just empty array) for private profiles
     experience: Array.isArray(raw.experience) ? raw.experience as BrightDataExperience[] : [],
     education: Array.isArray(raw.education) ? raw.education as BrightDataEducation[] : [],
+    educations_details:
+      typeof raw.educations_details === "string" ? raw.educations_details : null,
+    avatar: typeof raw.avatar === "string" ? raw.avatar : null,
   };
 }
 
@@ -261,13 +271,16 @@ export function mapBrightDataToFields(
   const derivedCompany = profile.current_company || profile.current_company_name || currentJob?.company || null;
   const derivedTitle = currentJob?.title || profile.position || null;
 
+  // Bright Data uses "title" for school name. If missing, fall back to
+  // educations_details (a summary string like "University of Michigan - School of Information").
+  const schoolName = latestEdu?.title || profile.educations_details || null;
+
   return {
     job_title: derivedTitle,
     current_company: derivedCompany,
     industry: null,
     current_city: profile.city || currentJob?.location || null,
-    // Bright Data uses "title" for school name (not "school")
-    school: latestEdu?.title || null,
+    school: schoolName,
     // Try degree, then field_of_study (Bright Data may have either or neither)
     major: latestEdu?.degree || latestEdu?.field_of_study || null,
     position_title: derivedTitle,
