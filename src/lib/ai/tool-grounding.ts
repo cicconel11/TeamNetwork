@@ -250,14 +250,11 @@ function extractSuggestConnectionReasonCodes(line: string): string[] {
   if (/(shared role family|same role family|similar role family)/.test(normalized)) {
     matches.add("shared_role_family");
   }
-  if (/(adjacent role family|adjacent role|adjacent background)/.test(normalized)) {
-    matches.add("adjacent_role_family");
-  }
   if (/(graduation proximity|graduated within 3 years|within 3 years of graduating|similar graduation year)/.test(normalized)) {
     matches.add("graduation_proximity");
   }
   if (/(shared graduation year|same graduation year|class of)/.test(normalized)) {
-    matches.add("shared_graduation_year");
+    matches.add("graduation_proximity");
   }
   if (/(shared city|same city|both (?:live|based|located) in)/.test(normalized)) {
     matches.add("shared_city");
