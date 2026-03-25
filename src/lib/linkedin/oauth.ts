@@ -15,6 +15,11 @@ import {
   mapEnrichmentToFields,
   isProxycurlConfigured,
 } from "@/lib/linkedin/proxycurl";
+import {
+  fetchBrightDataProfile,
+  mapBrightDataToFields,
+  isBrightDataConfigured,
+} from "@/lib/linkedin/bright-data";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -601,6 +606,61 @@ export async function runProxycurlEnrichment(
     return { enriched: true };
   } catch (err) {
     console.error("[linkedin-enrichment] Unexpected error:", err);
+    return { enriched: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bright Data enrichment
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs Bright Data enrichment for a user and writes the results to
+ * members/alumni records via the sync_user_linkedin_enrichment RPC.
+ *
+ * Same contract as runProxycurlEnrichment — best-effort, never throws.
+ */
+export async function runBrightDataEnrichment(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  linkedinUrl: string | null | undefined,
+): Promise<{ enriched: boolean; error?: string }> {
+  if (!linkedinUrl) {
+    return { enriched: false };
+  }
+
+  if (!isBrightDataConfigured()) {
+    return { enriched: false };
+  }
+
+  try {
+    const profile = await fetchBrightDataProfile(linkedinUrl);
+    if (!profile) {
+      return { enriched: false, error: "Bright Data returned no data" };
+    }
+
+    const fields = mapBrightDataToFields(profile);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).rpc("sync_user_linkedin_enrichment", {
+      p_user_id: userId,
+      p_job_title: fields.job_title,
+      p_current_company: fields.current_company,
+      p_current_city: fields.current_city,
+      p_school: fields.school,
+      p_major: fields.major,
+      p_position_title: fields.position_title,
+      p_enrichment_json: profile as unknown,
+    });
+
+    if (error) {
+      console.error("[bright-data-enrichment] RPC error:", error);
+      return { enriched: false, error: error.message };
+    }
+
+    return { enriched: true };
+  } catch (err) {
+    console.error("[bright-data-enrichment] Unexpected error:", err);
     return { enriched: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }

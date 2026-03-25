@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/graph-sync-process",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/linkedin-bulk-sync",
+      "schedule": "0 2 1 1,4,7,10 *"
     }
   ]
 }
