@@ -6,9 +6,9 @@ import {
   type LinkedInConnectionSource,
 } from "@/lib/linkedin/connection-source";
 import {
-  mapEnrichmentToFields,
-  type ProxycurlEnrichmentResult,
-} from "@/lib/linkedin/proxycurl";
+  mapBrightDataToFields,
+  type BrightDataProfileResult,
+} from "@/lib/linkedin/bright-data";
 
 type LinkedInProfileTable = "members" | "alumni" | "parents";
 
@@ -97,8 +97,8 @@ export async function getLinkedInStatusForUser(
   // Extract enrichment data from linkedin_data JSONB if present
   let enrichment: LinkedInEnrichmentInfo | null = null;
   if (connectionRow?.linkedin_data?.enrichment) {
-    const fields = mapEnrichmentToFields(
-      connectionRow.linkedin_data.enrichment as ProxycurlEnrichmentResult,
+    const fields = mapBrightDataToFields(
+      connectionRow.linkedin_data.enrichment as BrightDataProfileResult,
     );
     enrichment = {
       jobTitle: fields.job_title,

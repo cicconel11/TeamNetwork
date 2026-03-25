@@ -36,6 +36,10 @@
     {
       "path": "/api/cron/ai-embed-process",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/enrichment-process",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

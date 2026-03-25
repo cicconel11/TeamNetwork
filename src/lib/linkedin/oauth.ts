@@ -10,12 +10,6 @@ import {
   encryptToken as sharedEncrypt,
   decryptToken as sharedDecrypt,
 } from "@/lib/crypto/token-encryption";
-import {
-  fetchLinkedInEnrichment,
-  mapEnrichmentToFields,
-  isProxycurlConfigured,
-  type ProxycurlEnrichmentResult,
-} from "@/lib/linkedin/proxycurl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -548,80 +542,6 @@ export async function syncLinkedInProfile(
   return { success: true, profile };
 }
 
-// ---------------------------------------------------------------------------
-// Proxycurl enrichment
-// ---------------------------------------------------------------------------
-
-/**
- * Runs Proxycurl enrichment for a user and writes the results to
- * members/alumni records via the sync_user_linkedin_enrichment RPC.
- *
- * This is best-effort: it never throws. If Proxycurl is not configured or
- * the enrichment fails, it logs and returns gracefully.
- *
- * @param linkedinUrl The user's LinkedIn profile URL (e.g. https://linkedin.com/in/user)
- */
-export async function runProxycurlEnrichment(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  linkedinUrl: string | null | undefined,
-): Promise<{ enriched: boolean; error?: string }> {
-  if (!linkedinUrl) {
-    return { enriched: false };
-  }
-
-  if (!isProxycurlConfigured()) {
-    return { enriched: false };
-  }
-
-  try {
-    const enrichment = await fetchLinkedInEnrichment(linkedinUrl);
-    if (!enrichment) {
-      return { enriched: false, error: "Proxycurl returned no data" };
-    }
-
-    const fields = mapEnrichmentToFields(enrichment);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any).rpc("sync_user_linkedin_enrichment", {
-      p_user_id: userId,
-      p_job_title: fields.job_title,
-      p_current_company: fields.current_company,
-      p_current_city: fields.current_city,
-      p_school: fields.school,
-      p_major: fields.major,
-      p_position_title: fields.position_title,
-      p_enrichment_json: enrichment as unknown,
-    });
-
-    if (error) {
-      console.error("[linkedin-enrichment] RPC error:", error);
-      return { enriched: false, error: error.message };
-    }
-
-    return { enriched: true };
-  } catch (err) {
-    console.error("[linkedin-enrichment] Unexpected error:", err);
-    return { enriched: false, error: err instanceof Error ? err.message : "Unknown error" };
-  }
-}
-
-/**
- * Looks up the user's LinkedIn URL from their connection record.
- */
-export async function getLinkedInUrlForUser(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-): Promise<string | null> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
-    .from("user_linkedin_connections")
-    .select("linkedin_profile_url")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  return data?.linkedin_profile_url || null;
-}
 
 /**
  * Creates a user-friendly error message from LinkedIn OAuth errors.

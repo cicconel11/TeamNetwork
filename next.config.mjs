@@ -123,9 +123,9 @@ function validateBuildEnv() {
     console.warn(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`);
   }
 
-  // Optional: Proxycurl enrichment (enriches member profiles from LinkedIn)
-  if (!process.env.PROXYCURL_API_KEY) {
-    console.log("ℹ️  PROXYCURL_API_KEY not set — LinkedIn profile enrichment disabled");
+  // Optional: Bright Data enrichment (enriches member profiles from LinkedIn)
+  if (!process.env.BRIGHT_DATA_API_KEY) {
+    console.log("ℹ️  BRIGHT_DATA_API_KEY not set — LinkedIn profile enrichment disabled");
   }
 
   // Optional: warn if z.ai (AI assistant) API key is missing

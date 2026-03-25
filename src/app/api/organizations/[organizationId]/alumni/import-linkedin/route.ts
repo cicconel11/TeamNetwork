@@ -208,6 +208,36 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
   }
 
+  // Queue enrichment for all created/updated alumni (all have linkedin_url)
+  const alumniIdsForEnrichment: string[] = [];
+  // Updated records that got a new linkedin_url
+  for (const item of importPlan.toUpdate) {
+    alumniIdsForEnrichment.push(item.alumniId);
+  }
+
+  if (alumniIdsForEnrichment.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("alumni")
+      .update({ enrichment_status: "pending" })
+      .in("id", alumniIdsForEnrichment)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+  }
+
+  // For newly created alumni, the RPC doesn't return IDs, so update by
+  // matching on organization + enrichment_status IS NULL + linkedin_url IS NOT NULL
+  if (created > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("alumni")
+      .update({ enrichment_status: "pending" })
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .is("enrichment_status", null)
+      .not("linkedin_url", "is", null);
+  }
+
   const result: ImportResult = {
     updated: importPlan.toUpdate.length - updateErrors + concurrentUpdates,
     created,

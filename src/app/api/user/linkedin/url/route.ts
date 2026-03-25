@@ -5,7 +5,7 @@ import {
   parseLinkedInUrlPatchBody,
   saveLinkedInUrlForUser,
 } from "@/lib/linkedin/settings";
-import { runProxycurlEnrichment } from "@/lib/linkedin/oauth";
+import { runEnrichment } from "@/lib/linkedin/enrichment";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * PATCH /api/user/linkedin/url
  *
  * Saves a LinkedIn profile URL to the user's member and alumni records
- * across all organizations. Triggers Proxycurl enrichment if a URL is provided.
+ * across all organizations. Triggers Bright Data enrichment if a URL is provided.
  */
 export async function PATCH(request: Request) {
   try {
@@ -52,7 +52,7 @@ export async function PATCH(request: Request) {
 
     // Best-effort enrichment when a URL is saved
     if (parsedBody.linkedinUrl) {
-      await runProxycurlEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
+      await runEnrichment(serviceClient, user.id, parsedBody.linkedinUrl);
     }
 
     return NextResponse.json({ success: true });

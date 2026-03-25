@@ -121,7 +121,7 @@ Centralized Zod schemas in `src/lib/schemas/` — see `index.ts` for all availab
 Required variables validated at build time in `next.config.mjs` — see that file for the complete list. Key optional vars:
 - `RESEND_API_KEY` — Real email delivery (falls back to stub logging)
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY` — Google Calendar
-- `PROXYCURL_API_KEY` — LinkedIn enrichment (~$0.01/lookup)
+- `BRIGHT_DATA_API_KEY` — LinkedIn enrichment via Bright Data (~$1.50/1k lookups)
 - `SKIP_STRIPE_VALIDATION=true` — Skip Stripe price ID validation in dev
 
 Stored in `.env.local` (never commit).
