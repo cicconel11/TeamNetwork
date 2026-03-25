@@ -6,6 +6,11 @@ import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
 import { useAIPanel } from "./AIPanelContext";
 import { routeToSurface } from "./route-surface";
+import {
+  clearPersistedActiveThreadId,
+  readPersistedActiveThreadId,
+  writePersistedActiveThreadId,
+} from "./active-thread-storage";
 import { MessageList } from "./MessageList";
 import { MessageInput } from "./MessageInput";
 import { ThreadList } from "./ThreadList";
@@ -23,10 +28,112 @@ interface AIPanelProps {
   orgId: string;
 }
 
+function getFeatureSegment(pathname: string): string {
+  return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
+}
+
+function getAssistantScopeLabel(pathname: string, surface: ReturnType<typeof routeToSurface>): string {
+  const segment = getFeatureSegment(pathname);
+  switch (segment) {
+    case "announcements":
+      return "Announcements";
+    case "jobs":
+      return "Jobs";
+    case "forms":
+      return "Forms";
+    case "messages":
+    case "chat":
+      return "Messages";
+    default:
+      switch (surface) {
+        case "members":
+          return "People";
+        case "events":
+          return "Events";
+        case "analytics":
+          return "Analytics";
+        default:
+          return "General";
+      }
+  }
+}
+
+function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToSurface>): string[] {
+  const segment = getFeatureSegment(pathname);
+  switch (segment) {
+    case "announcements":
+      return [
+        "Show the latest announcements",
+        "Open the new announcement page",
+        "Summarize our recent announcements",
+      ];
+    case "jobs":
+      return [
+        "Open the jobs page",
+        "Take me to create a job posting",
+        "Where do I manage jobs?",
+      ];
+    case "forms":
+      return [
+        "Open the forms page",
+        "Take me to create a form",
+        "Where do I manage form submissions?",
+      ];
+    default:
+      switch (surface) {
+        case "members":
+          return [
+            "How many active members do we have?",
+            "Show recent members",
+            "Open the members page",
+          ];
+        case "events":
+          return [
+            "What events are coming up?",
+            "Open the new event page",
+            "Show recent events",
+          ];
+        case "analytics":
+          return [
+            "Show organization stats",
+            "Open donations",
+            "Take me to navigation settings",
+          ];
+        default:
+          return [
+            "Show recent announcements",
+            "Open members",
+            "Take me to navigation settings",
+          ];
+      }
+  }
+}
+
+function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeToSurface>): string {
+  const segment = getFeatureSegment(pathname);
+  if (segment === "announcements") {
+    return "Ask about announcements, or ask me to open the right page...";
+  }
+
+  switch (surface) {
+    case "members":
+      return "Ask about people, connections, or where to go in the app...";
+    case "events":
+      return "Ask about events, or ask me to open the right page...";
+    case "analytics":
+      return "Ask about stats, donations, or where to go in the app...";
+    default:
+      return "Ask about your organization, announcements, or where to go...";
+  }
+}
+
 export function AIPanel({ orgId }: AIPanelProps) {
   const { isOpen, closePanel } = useAIPanel();
   const pathname = usePathname();
   const surface = routeToSurface(pathname);
+  const scopeLabel = getAssistantScopeLabel(pathname, surface);
+  const starterPrompts = getStarterPrompts(pathname, surface);
+  const inputPlaceholder = getInputPlaceholder(pathname, surface);
   const [view, setView] = useState<"chat" | "threads">("chat");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [threads, setThreads] = useState<AIPanelThread[]>([]);
@@ -34,6 +141,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [messages, setMessages] = useState<AIPanelMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [pendingAssistantContent, setPendingAssistantContent] = useState<string | null>(null);
+  const panelScopeKey = `${orgId}:${surface}`;
   const {
     isStreaming,
     error,
@@ -68,6 +176,9 @@ export function AIPanel({ orgId }: AIPanelProps) {
       try {
         const response = await fetch(`/api/ai/${orgId}/threads/${threadId}/messages`);
         if (response.status === 404) {
+          if (typeof window !== "undefined") {
+            clearPersistedActiveThreadId(window.localStorage, orgId, surface);
+          }
           setActiveThreadId(null);
           setMessages([]);
           setPendingAssistantContent(null);
@@ -85,7 +196,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setMessagesLoading(false);
       }
     },
-    [loadThreads, orgId]
+    [loadThreads, orgId, surface]
   );
 
   useEffect(() => {
@@ -93,18 +204,43 @@ export function AIPanel({ orgId }: AIPanelProps) {
     void loadThreads();
   }, [isOpen, loadThreads]);
 
-  // Reset thread when surface changes (e.g. navigating from /members to /events)
-  // to prevent cross-surface thread continuation.
-  const prevSurfaceRef = useRef(surface);
+  const prevPanelScopeKeyRef = useRef(panelScopeKey);
   useEffect(() => {
-    if (prevSurfaceRef.current !== surface) {
-      prevSurfaceRef.current = surface;
-      setActiveThreadId(null);
-      setMessages([]);
-      setPendingAssistantContent(null);
-      void loadThreads();
+    if (prevPanelScopeKeyRef.current === panelScopeKey) {
+      return;
     }
-  }, [surface, loadThreads]);
+
+    prevPanelScopeKeyRef.current = panelScopeKey;
+    setActiveThreadId(null);
+    setMessages([]);
+    setPendingAssistantContent(null);
+    void loadThreads();
+  }, [loadThreads, panelScopeKey]);
+
+  useEffect(() => {
+    if (!isOpen || typeof window === "undefined") return;
+
+    const persistedThreadId = readPersistedActiveThreadId(
+      window.localStorage,
+      orgId,
+      surface
+    );
+
+    if (persistedThreadId) {
+      setActiveThreadId((current) => current ?? persistedThreadId);
+    }
+  }, [isOpen, orgId, surface]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (activeThreadId) {
+      writePersistedActiveThreadId(window.localStorage, orgId, surface, activeThreadId);
+      return;
+    }
+
+    clearPersistedActiveThreadId(window.localStorage, orgId, surface);
+  }, [activeThreadId, orgId, surface]);
 
   // Skip the activeThreadId effect's redundant load after handleSend already
   // refreshed messages silently.
@@ -151,6 +287,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
 
       const result = await sendMessage(content, {
         surface,
+        currentPath: pathname,
         threadId: activeThreadId ?? undefined,
         idempotencyKey,
       });
@@ -186,7 +323,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setPendingAssistantContent(null);
       }
     },
-    [activeThreadId, loadMessages, loadThreads, sendMessage, surface]
+    [activeThreadId, loadMessages, loadThreads, pathname, sendMessage, surface]
   );
 
   const handleDeleteThread = useCallback(
@@ -226,6 +363,9 @@ export function AIPanel({ orgId }: AIPanelProps) {
             <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
               Beta
             </span>
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {scopeLabel}
+            </span>
           </div>
           <div className="flex items-center gap-1">
             <button
@@ -254,11 +394,14 @@ export function AIPanel({ orgId }: AIPanelProps) {
               streamingContent={currentContent}
               isStreaming={isStreaming}
               previewAssistantContent={pendingAssistantContent ?? undefined}
+              suggestedPrompts={starterPrompts}
+              onSelectPrompt={handleSend}
             />
             <MessageInput
               isStreaming={isStreaming}
               error={error}
               toolStatusLabel={toolStatusLabel}
+              placeholder={inputPlaceholder}
               onSend={handleSend}
               onCancel={cancel}
               onClearError={clearError}
