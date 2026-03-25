@@ -81,7 +81,6 @@ test("mapBrightDataToFields extracts current job and school", () => {
   assert.equal(result.position_title, "Senior Engineer");
   assert.equal(result.headline, "Senior Engineer at Acme");
   assert.equal(result.summary, "Building things that matter");
-  assert.equal(result.industry, null);
   assert.equal(result.work_history.length, 2);
   assert.equal(result.education_history.length, 1);
 });

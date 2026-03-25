@@ -69,7 +69,6 @@ export interface BrightDataProfileResult {
 export interface EnrichmentFields {
   job_title: string | null;
   current_company: string | null;
-  industry: string | null;
   current_city: string | null;
   school: string | null;
   major: string | null;
@@ -311,7 +310,17 @@ export async function getSnapshotResults(
 // ---------------------------------------------------------------------------
 
 function normalizeProfileResult(raw: Record<string, unknown>): BrightDataProfileResult {
-  const currentCompany = raw.current_company as BrightDataProfileResult["current_company"];
+  // Validate current_company is an object (not a string or other type)
+  const rawCompany = raw.current_company;
+  const currentCompany: BrightDataProfileResult["current_company"] =
+    rawCompany && typeof rawCompany === "object" && !Array.isArray(rawCompany)
+      ? {
+          name: typeof (rawCompany as Record<string, unknown>).name === "string" ? (rawCompany as Record<string, unknown>).name as string : null,
+          title: typeof (rawCompany as Record<string, unknown>).title === "string" ? (rawCompany as Record<string, unknown>).title as string : null,
+          link: typeof (rawCompany as Record<string, unknown>).link === "string" ? (rawCompany as Record<string, unknown>).link as string : null,
+          company_id: typeof (rawCompany as Record<string, unknown>).company_id === "string" ? (rawCompany as Record<string, unknown>).company_id as string : null,
+        }
+      : null;
 
   return {
     id: (raw.id as string) || null,
@@ -322,7 +331,7 @@ function normalizeProfileResult(raw: Record<string, unknown>): BrightDataProfile
     country_code: (raw.country_code as string) || null,
     location: (raw.location as string) || null,
     current_company_name: (raw.current_company_name as string) || null,
-    current_company: currentCompany || null,
+    current_company: currentCompany,
     avatar: (raw.avatar as string) || null,
     url: (raw.url as string) || null,
     input_url: (raw.input_url as string) || null,
@@ -370,7 +379,6 @@ export function mapBrightDataToFields(
   return {
     job_title: currentJob?.title || profile.position || null,
     current_company: companyName,
-    industry: null, // Not reliably available from Bright Data
     current_city: currentCity,
     school: latestEdu?.title || null,
     major: latestEdu?.field || null,

@@ -4,7 +4,6 @@
 -- New enrichment data columns
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS headline text;
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS summary text;
-ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS skills text[];
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS work_history jsonb;
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS education_history jsonb;
 
@@ -12,11 +11,17 @@ ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS education_history jsonb;
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS enrichment_status text;
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS enriched_at timestamptz;
 ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS enrichment_error text;
+ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS enrichment_retry_count integer DEFAULT 0;
+ALTER TABLE public.alumni ADD COLUMN IF NOT EXISTS enrichment_snapshot_id text;
+
+-- Constrain enrichment_status to valid values
+ALTER TABLE public.alumni ADD CONSTRAINT chk_alumni_enrichment_status
+  CHECK (enrichment_status IS NULL OR enrichment_status IN ('pending', 'enriched', 'failed'));
 
 -- Index for cron job to find pending enrichments efficiently
 CREATE INDEX IF NOT EXISTS idx_alumni_enrichment_pending
   ON public.alumni (enrichment_status)
-  WHERE enrichment_status = 'pending' AND deleted_at IS NULL;
+  WHERE enrichment_status = 'pending' AND deleted_at IS NULL AND linkedin_url IS NOT NULL;
 
 -- ---------------------------------------------------------------------------
 -- RPC: enrich_alumni_by_id
@@ -34,10 +39,8 @@ CREATE OR REPLACE FUNCTION public.enrich_alumni_by_id(
   p_position_title text DEFAULT NULL,
   p_headline text DEFAULT NULL,
   p_summary text DEFAULT NULL,
-  p_skills text[] DEFAULT NULL,
   p_work_history jsonb DEFAULT NULL,
-  p_education_history jsonb DEFAULT NULL,
-  p_enrichment_json jsonb DEFAULT NULL
+  p_education_history jsonb DEFAULT NULL
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -57,12 +60,12 @@ BEGIN
     school = COALESCE(school, p_school),
     headline = COALESCE(headline, p_headline),
     summary = COALESCE(summary, p_summary),
-    skills = COALESCE(skills, p_skills),
     work_history = COALESCE(work_history, p_work_history),
     education_history = COALESCE(education_history, p_education_history),
     enrichment_status = 'enriched',
     enriched_at = now(),
     enrichment_error = NULL,
+    enrichment_retry_count = 0,
     updated_at = now()
   WHERE id = p_alumni_id
     AND organization_id = p_organization_id
@@ -73,11 +76,11 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.enrich_alumni_by_id(uuid, uuid, text, text, text, text, text, text, text, text, text[], jsonb, jsonb, jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.enrich_alumni_by_id(uuid, uuid, text, text, text, text, text, text, text, text, jsonb, jsonb) TO service_role;
 
 -- ---------------------------------------------------------------------------
 -- Update sync_user_linkedin_enrichment RPC
--- Add new fields (headline, summary, skills, work_history, education_history)
+-- Add new fields (headline, summary, work_history, education_history)
 -- and p_overwrite param for manual sync force-refresh.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.sync_user_linkedin_enrichment(
@@ -142,6 +145,7 @@ BEGIN
       enrichment_status = 'enriched',
       enriched_at = now(),
       enrichment_error = NULL,
+      enrichment_retry_count = 0,
       updated_at = now()
     WHERE user_id = p_user_id
       AND deleted_at IS NULL;
@@ -161,9 +165,13 @@ BEGIN
       enrichment_status = 'enriched',
       enriched_at = now(),
       enrichment_error = NULL,
+      enrichment_retry_count = 0,
       updated_at = now()
     WHERE user_id = p_user_id
-      AND deleted_at IS NULL;
+      AND deleted_at IS NULL
+      AND (job_title IS NULL OR position_title IS NULL OR current_company IS NULL
+           OR current_city IS NULL OR major IS NULL OR headline IS NULL
+           OR summary IS NULL OR work_history IS NULL OR education_history IS NULL);
   END IF;
   GET DIAGNOSTICS v_alumni_updated = ROW_COUNT;
 
@@ -183,3 +191,35 @@ $$;
 -- Drop old signature and grant new one
 DROP FUNCTION IF EXISTS public.sync_user_linkedin_enrichment(uuid, text, text, text, text, text, text, jsonb);
 GRANT EXECUTE ON FUNCTION public.sync_user_linkedin_enrichment(uuid, text, text, text, text, text, text, text, text, jsonb, jsonb, jsonb, boolean) TO service_role;
+
+-- ---------------------------------------------------------------------------
+-- RPC: increment_enrichment_retry
+-- Batch increment retry count for failed enrichment attempts.
+-- Marks as 'failed' if max retries reached.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.increment_enrichment_retry(
+  p_alumni_ids uuid[],
+  p_error text DEFAULT NULL,
+  p_max_retries integer DEFAULT 3
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+  UPDATE public.alumni
+  SET
+    enrichment_retry_count = enrichment_retry_count + 1,
+    enrichment_error = p_error,
+    enrichment_snapshot_id = NULL,
+    enrichment_status = CASE
+      WHEN enrichment_retry_count + 1 >= p_max_retries THEN 'failed'
+      ELSE 'pending'
+    END
+  WHERE id = ANY(p_alumni_ids)
+    AND deleted_at IS NULL;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.increment_enrichment_retry(uuid[], text, integer) TO service_role;

@@ -226,8 +226,11 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   // For newly created alumni, the RPC doesn't return IDs, so update by
-  // matching on organization + enrichment_status IS NULL + linkedin_url IS NOT NULL
+  // matching on organization + recent creation + enrichment_status IS NULL.
+  // Scope to records created in the last 5 minutes to avoid queueing the
+  // entire org's alumni backlog.
   if (created > 0) {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceSupabase as any)
       .from("alumni")
@@ -235,7 +238,8 @@ export async function POST(req: Request, { params }: RouteParams) {
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .is("enrichment_status", null)
-      .not("linkedin_url", "is", null);
+      .not("linkedin_url", "is", null)
+      .gte("created_at", fiveMinAgo);
   }
 
   const result: ImportResult = {

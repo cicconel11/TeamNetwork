@@ -12,9 +12,6 @@ import {
   type BrightDataProfileResult,
 } from "@/lib/linkedin/bright-data";
 
-// Re-export for convenience at call sites
-export { isBrightDataConfigured, mapBrightDataToFields, type BrightDataProfileResult };
-export { type EnrichmentFields } from "@/lib/linkedin/bright-data";
 
 // ---------------------------------------------------------------------------
 // Individual enrichment (user-initiated: OAuth connect, manual sync, URL save)
