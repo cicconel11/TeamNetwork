@@ -190,14 +190,31 @@ export async function GET(request: Request) {
               }
             }
 
-            // Clear snapshot_id for all alumni in this batch (processed)
-            const processedIds = alumni.map((a) => a.id);
+            // Clear snapshot_id for ALL alumni in this batch (not just enriched)
+            // so that unmatched/failed records don't get stuck on the old snapshot
+            const allBatchIds = alumni.map((a) => a.id);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await (supabase as any)
               .from("alumni")
               .update({ enrichment_snapshot_id: null })
-              .in("id", processedIds)
-              .eq("enrichment_status", "enriched");
+              .in("id", allBatchIds);
+
+            // Increment retry for any alumni still pending (unmatched or RPC-failed)
+            const stillPendingIds = alumni
+              .filter((a) => !results.some((r) => {
+                const rUrl = safeNormalize(r.input_url || r.url || "");
+                const aUrl = safeNormalize(a.linkedin_url);
+                return rUrl && aUrl && rUrl === aUrl;
+              }))
+              .map((a) => a.id);
+            if (stillPendingIds.length > 0) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              await (supabase as any).rpc("increment_enrichment_retry", {
+                p_alumni_ids: stillPendingIds,
+                p_error: "No matching result from Bright Data",
+                p_max_retries: MAX_RETRIES,
+              });
+            }
           }
         } else if (progress.status === "failed") {
           // Batch increment retry count

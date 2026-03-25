@@ -57,6 +57,7 @@ interface RouteParams {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const importStartedAt = new Date().toISOString();
   const { organizationId: rawOrgId } = await params;
 
   const gate = await validateAlumniImportRequest(req, rawOrgId, {
@@ -208,9 +209,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
   }
 
-  // Queue enrichment for all created/updated alumni (all have linkedin_url)
+  // Queue enrichment for all created/updated alumni (all have linkedin_url).
+  // Reset retry state so previously failed records get a fresh attempt.
   const alumniIdsForEnrichment: string[] = [];
-  // Updated records that got a new linkedin_url
   for (const item of importPlan.toUpdate) {
     alumniIdsForEnrichment.push(item.alumniId);
   }
@@ -219,27 +220,34 @@ export async function POST(req: Request, { params }: RouteParams) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceSupabase as any)
       .from("alumni")
-      .update({ enrichment_status: "pending" })
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
       .in("id", alumniIdsForEnrichment)
       .eq("organization_id", organizationId)
       .is("deleted_at", null);
   }
 
   // For newly created alumni, the RPC doesn't return IDs, so update by
-  // matching on organization + recent creation + enrichment_status IS NULL.
-  // Scope to records created in the last 5 minutes to avoid queueing the
-  // entire org's alumni backlog.
+  // matching on organization + creation after this request started.
   if (created > 0) {
-    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceSupabase as any)
       .from("alumni")
-      .update({ enrichment_status: "pending" })
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
       .eq("organization_id", organizationId)
       .is("deleted_at", null)
       .is("enrichment_status", null)
       .not("linkedin_url", "is", null)
-      .gte("created_at", fiveMinAgo);
+      .gte("created_at", importStartedAt);
   }
 
   const result: ImportResult = {

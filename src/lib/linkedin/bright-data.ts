@@ -147,9 +147,28 @@ export async function fetchLinkedInEnrichment(
       return null;
     }
 
-    // 202 means timeout — Bright Data switched to async mode
+    // 202 means timeout — Bright Data switched to async mode.
+    // Poll briefly since this is a user-initiated action (OAuth, manual sync).
     if (res.status === 202) {
-      console.warn("[bright-data] Sync request timed out (202), skipping for now");
+      const asyncData = await res.json().catch(() => null);
+      const snapshotId = asyncData?.snapshot_id;
+      if (!snapshotId || !/^[a-zA-Z0-9_-]+$/.test(snapshotId)) {
+        console.warn("[bright-data] Sync request timed out (202), no valid snapshot_id");
+        return null;
+      }
+
+      // Poll up to 10s with 2s intervals
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        const progress = await getSnapshotProgress(snapshotId);
+        if (!progress) break;
+        if (progress.status === "ready") {
+          const results = await getSnapshotResults(snapshotId);
+          return results?.[0] ?? null;
+        }
+        if (progress.status === "failed") break;
+      }
+      console.warn("[bright-data] Async fallback timed out for snapshot:", snapshotId);
       return null;
     }
 

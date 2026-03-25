@@ -275,14 +275,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       lastName: r.out_last_name,
     }));
 
-  // Queue enrichment for created/updated alumni that have a linkedin_url
+  // Queue enrichment for created/updated alumni that have a linkedin_url.
+  // Use out_id directly from RPC results (works even for rows without email).
   const alumniIdsWithLinkedIn = new Set<string>();
-  for (const row of importPlan.toCreate) {
-    if (row.linkedin_url) {
-      const match = rpcCreatedRows.find(
-        (r) => r.out_id && r.out_email === row.email && r.out_status === IMPORT_STATUS.CREATED,
+  for (const row of rpcCreatedRows) {
+    if (row.out_id && row.out_status === IMPORT_STATUS.CREATED) {
+      // Check if the input row had a linkedin_url
+      const inputRow = importPlan.toCreate.find(
+        (r) => r.first_name === row.out_first_name && r.last_name === row.out_last_name,
       );
-      if (match?.out_id) alumniIdsWithLinkedIn.add(match.out_id);
+      if (inputRow?.linkedin_url) alumniIdsWithLinkedIn.add(row.out_id);
     }
   }
   for (const item of importPlan.toUpdate) {
@@ -290,10 +292,16 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   if (alumniIdsWithLinkedIn.size > 0) {
+    // Reset retry state so previously failed records get a fresh attempt
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (serviceSupabase as any)
       .from("alumni")
-      .update({ enrichment_status: "pending" })
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
       .in("id", Array.from(alumniIdsWithLinkedIn))
       .eq("organization_id", organizationId)
       .is("deleted_at", null);

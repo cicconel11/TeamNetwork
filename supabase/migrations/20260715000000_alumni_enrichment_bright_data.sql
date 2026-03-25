@@ -170,7 +170,7 @@ BEGIN
     WHERE user_id = p_user_id
       AND deleted_at IS NULL
       AND (job_title IS NULL OR position_title IS NULL OR current_company IS NULL
-           OR current_city IS NULL OR major IS NULL OR headline IS NULL
+           OR current_city IS NULL OR major IS NULL OR school IS NULL OR headline IS NULL
            OR summary IS NULL OR work_history IS NULL OR education_history IS NULL);
   END IF;
   GET DIAGNOSTICS v_alumni_updated = ROW_COUNT;
