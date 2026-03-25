@@ -88,7 +88,7 @@ const CONNECTION_PASS2_TEMPLATE = [
   "- Do not add a concluding summary sentence.",
   "- If state=ambiguous, ask the user which returned option they mean.",
   "- If state=not_found, say you couldn't find that person in the organization's member or alumni data and ask for a narrower identifier.",
-  "- If state=no_suggestions, say you found the person but do not have supported connection recommendations yet.",
+  "- If state=no_suggestions, say you found the person but there is not enough strong professional overlap yet to recommend a connection.",
 ].join("\n");
 
 function getPass1Tools(

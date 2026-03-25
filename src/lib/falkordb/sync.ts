@@ -104,6 +104,7 @@ function compactGraphProperties(person: ProjectedPerson) {
   if (person.major) properties.major = person.major;
   if (person.currentCompany) properties.currentCompany = person.currentCompany;
   if (person.industry) properties.industry = person.industry;
+  if (person.roleFamily) properties.roleFamily = person.roleFamily;
   if (typeof person.graduationYear === "number") {
     properties.graduationYear = person.graduationYear;
   }

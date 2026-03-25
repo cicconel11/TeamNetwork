@@ -2,13 +2,22 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createSupabaseStub } from "./utils/supabaseStub.ts";
-import { buildProjectedPeople, buildSourcePerson } from "../src/lib/falkordb/people.ts";
 import {
+  buildProjectedPeople,
+  buildSourcePerson,
+  type ProjectedPerson,
+} from "../src/lib/falkordb/people.ts";
+import {
+  buildCandidatePool,
   getSuggestionObservabilityByOrg,
+  scoreProjectedCandidates,
   suggestConnections,
 } from "../src/lib/falkordb/suggestions.ts";
 import { getGraphHealthSurface, processGraphSyncQueue } from "../src/lib/falkordb/sync.ts";
-import { resetFalkorTelemetryForTests } from "../src/lib/falkordb/telemetry.ts";
+import {
+  recordSuggestedCandidates,
+  resetFalkorTelemetryForTests,
+} from "../src/lib/falkordb/telemetry.ts";
 
 const ORG_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -99,6 +108,27 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       deleted_at: null,
     },
   ]);
+}
+
+function makeProjectedPerson(overrides: Partial<ProjectedPerson> & Pick<ProjectedPerson, "personKey" | "personId" | "name">): ProjectedPerson {
+  return {
+    orgId: ORG_ID,
+    personKey: overrides.personKey,
+    personType: overrides.personType ?? "alumni",
+    personId: overrides.personId,
+    memberId: overrides.memberId ?? null,
+    alumniId: overrides.alumniId ?? overrides.personId,
+    userId: overrides.userId ?? null,
+    name: overrides.name,
+    email: overrides.email ?? null,
+    role: overrides.role ?? null,
+    major: overrides.major ?? null,
+    currentCompany: overrides.currentCompany ?? null,
+    industry: overrides.industry ?? null,
+    roleFamily: overrides.roleFamily ?? null,
+    graduationYear: overrides.graduationYear ?? null,
+    currentCity: overrides.currentCity ?? null,
+  };
 }
 
 function createInMemoryGraphClient() {
@@ -338,6 +368,7 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
     major: "Computer Science",
     currentCompany: "Acme",
     industry: "Technology",
+    roleFamily: "Engineering",
     graduationYear: 2023,
     currentCity: "Austin",
   });
@@ -469,6 +500,7 @@ test("buildProjectedPeople parses member company-role strings into canonical car
     major: null,
     currentCompany: "Microsoft",
     industry: "Technology",
+    roleFamily: "Engineering",
     graduationYear: 2028,
     currentCity: null,
   });
@@ -527,6 +559,7 @@ test("buildProjectedPeople prefers richer alumni company and industry over parse
     major: "Economics",
     currentCompany: "Goldman Sachs",
     industry: "Finance",
+    roleFamily: "Finance",
     graduationYear: 2025,
     currentCity: "New York",
   });
@@ -623,7 +656,7 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
     [
       {
         name: "Ava Attribute",
-        score: 95,
+        score: 40,
         reasonCodes: [
           "shared_industry",
           "shared_company",
@@ -633,12 +666,12 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
       },
       {
         name: "Sam Second",
-        score: 55,
+        score: 22,
         reasonCodes: ["shared_industry", "shared_city"],
       },
       {
         name: "Dina Direct",
-        score: 40,
+        score: 18,
         reasonCodes: ["shared_company", "graduation_proximity"],
       },
     ]
@@ -1133,7 +1166,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
       person_id: "candidate-alumni",
       name: "Casey Candidate",
       subtitle: "Engineer • Acme",
-      score: 40,
+      score: 18,
       preview: {
         role: "Engineer",
         current_company: "Acme",
@@ -1143,13 +1176,13 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
         {
           code: "shared_company",
           label: "shared company",
-          weight: 30,
+          weight: 15,
           value: "Acme",
         },
         {
           code: "graduation_proximity",
           label: "graduation proximity",
-          weight: 10,
+          weight: 3,
           value: 2024,
         },
       ],
@@ -1157,7 +1190,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
   ]);
 });
 
-test("suggestConnections keeps sparse member sources ranked by city and graduation proximity", async () => {
+test("suggestConnections returns no_suggestions for weak-only sparse member matches", async () => {
   const stub = createSupabaseStub();
 
   stub.seed("members", [
@@ -1241,13 +1274,183 @@ test("suggestConnections keeps sparse member sources ranked by city and graduati
     },
   });
 
-  assert.equal(result.state, "resolved");
+  assert.equal(result.state, "no_suggestions");
   assert.equal(result.source_person?.name, "Louis Ciccone");
-  assert.equal(result.suggestions.length, 1);
-  assert.equal(result.suggestions[0].name, "Dana Coach");
+  assert.equal(result.suggestions.length, 0);
+});
+
+test("scoreProjectedCandidates prefers shared role family over weak support only", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    roleFamily: "Engineering",
+    graduationYear: 2026,
+    currentCity: "Philadelphia",
+  });
+  const roleFamilyMatch = makeProjectedPerson({
+    personKey: "user:role-family",
+    personId: "role-family",
+    name: "Engineer Match",
+    roleFamily: "Engineering",
+  });
+  const weakOnlyMatch = makeProjectedPerson({
+    personKey: "user:weak-only",
+    personId: "weak-only",
+    name: "Weak Match",
+    currentCity: "Philadelphia",
+    graduationYear: 2027,
+  });
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [source, roleFamilyMatch, weakOnlyMatch],
+    candidates: [roleFamilyMatch, weakOnlyMatch],
+    limit: 3,
+  });
+
+  assert.deepEqual(suggestions.map((row) => row.name), ["Engineer Match"]);
   assert.deepEqual(
-    result.suggestions[0].reasons.map((reason) => reason.code),
-    ["shared_city", "graduation_proximity"]
+    suggestions[0].reasons.map((reason) => reason.code),
+    ["shared_role_family"]
+  );
+});
+
+test("buildCandidatePool admits adjacent role families without rendering adjacency as a reason", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    roleFamily: "Engineering",
+    currentCity: "Philadelphia",
+  });
+  const adjacentCandidate = makeProjectedPerson({
+    personKey: "user:adjacent",
+    personId: "adjacent",
+    name: "Adjacent Candidate",
+    roleFamily: "Data",
+    currentCity: "Philadelphia",
+  });
+
+  const pool = buildCandidatePool({
+    source,
+    candidates: [adjacentCandidate],
+    limit: 3,
+  });
+
+  assert.deepEqual(pool[0]?.qualificationCodes, ["adjacent_role_family", "shared_city"]);
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [source, adjacentCandidate],
+    candidates: [adjacentCandidate],
+    limit: 3,
+  });
+
+  assert.equal(suggestions.length, 0);
+});
+
+test("scoreProjectedCandidates boosts rarer role-family matches ahead of common ones", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    roleFamily: "Engineering",
+  });
+  const rareEngineeringMatch = makeProjectedPerson({
+    personKey: "user:rare",
+    personId: "rare",
+    name: "Rare Engineer",
+    roleFamily: "Engineering",
+  });
+  const commonFinanceMatch = makeProjectedPerson({
+    personKey: "user:finance-1",
+    personId: "finance-1",
+    name: "Finance One",
+    roleFamily: "Finance",
+  });
+  const commonFinanceTwo = makeProjectedPerson({
+    personKey: "user:finance-2",
+    personId: "finance-2",
+    name: "Finance Two",
+    roleFamily: "Finance",
+  });
+  const commonFinanceThree = makeProjectedPerson({
+    personKey: "user:finance-3",
+    personId: "finance-3",
+    name: "Finance Three",
+    roleFamily: "Finance",
+  });
+  const fillerPeople = Array.from({ length: 5 }, (_, index) =>
+    makeProjectedPerson({
+      personKey: `user:filler-${index + 1}`,
+      personId: `filler-${index + 1}`,
+      name: `Filler ${index + 1}`,
+    })
+  );
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [
+      source,
+      rareEngineeringMatch,
+      commonFinanceMatch,
+      commonFinanceTwo,
+      commonFinanceThree,
+      ...fillerPeople,
+    ],
+    candidates: [rareEngineeringMatch, commonFinanceMatch],
+    limit: 3,
+  });
+
+  assert.equal(suggestions[0].name, "Rare Engineer");
+  assert.equal(
+    suggestions[0].reasons.find((reason) => reason.code === "shared_role_family")?.weight,
+    25
+  );
+});
+
+test("scoreProjectedCandidates applies exposure penalty without changing returned reasons", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    industry: "Technology",
+    roleFamily: "Engineering",
+  });
+  const overexposed = makeProjectedPerson({
+    personKey: "user:overexposed",
+    personId: "overexposed",
+    name: "Overexposed Candidate",
+    industry: "Technology",
+    roleFamily: "Engineering",
+  });
+  const fresh = makeProjectedPerson({
+    personKey: "user:fresh",
+    personId: "fresh",
+    name: "Fresh Candidate",
+    industry: "Technology",
+    roleFamily: "Engineering",
+  });
+
+  for (let index = 0; index < 10; index += 1) {
+    recordSuggestedCandidates({
+      orgId: ORG_ID,
+      personIds: ["overexposed", `x${index * 2 + 1}`, `x${index * 2 + 2}`],
+    });
+  }
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [source, overexposed, fresh],
+    candidates: [overexposed, fresh],
+    limit: 3,
+  });
+
+  assert.equal(suggestions[0].name, "Fresh Candidate");
+  assert.deepEqual(
+    suggestions.find((row) => row.name === "Overexposed Candidate")?.reasons.map((reason) => reason.code),
+    ["shared_industry", "shared_role_family"]
   );
 });
 
