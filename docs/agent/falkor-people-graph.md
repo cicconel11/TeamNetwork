@@ -25,6 +25,7 @@ Members and alumni from Supabase are merged into `ProjectedPerson` objects. The 
 Connection reads also normalize career signals before scoring:
 - alumni `industry` values are canonicalized into shared buckets such as `Technology`, `Finance`, and `Healthcare`
 - member `current_company` strings like `Microsoft (SWE intern)` or `Penn Medicine — clinical research assistant` are parsed into employer names and, when recognized, mapped to a canonical industry
+- alumni titles and member role fragments are normalized into a small shared `roleFamily` taxonomy used for candidate generation and ranking
 - alumni still win when linked alumni data is richer than member data
 
 ### Step 2 — Infrastructure (`client.ts`)
@@ -45,22 +46,30 @@ Queue items are processed per `source_table`. For people: re-read all active sou
 
 ### Step 6 — Scoring (`scoring.ts`)
 
-Four weighted reason codes; Falkor and SQL paths use identical scoring:
+Five normalized reason codes exist, but only four are required to qualify a candidate for final rendering. Falkor and SQL paths use identical scoring:
 
 | Reason | Weight |
 |--------|--------|
-| `shared_industry` | 40 |
-| `shared_company` | 30 |
-| `shared_city` | 15 |
-| `graduation_proximity` | 10 |
-`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. `shared_company` is suppressed when the normalized company value is the platform name (`TeamNetwork`) or the current organization's name, so generic org-internal company strings do not flatten rankings across the whole org. Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
+| `shared_industry` | 24 × rarity |
+| `shared_company` | 20 × rarity |
+| `shared_role_family` | 20 × rarity |
+| `shared_city` | 4 |
+| `graduation_proximity` | 3 |
+
+Candidate generation and reranking are split:
+- candidate generation starts from professional signals (`shared_industry`, `shared_company`, `shared_role_family`, or adjacent `roleFamily`) and only uses city/year to expand the pool when the professional pool is small
+- final rendered suggestions must include at least one professional-strength exact match, so city + graduation proximity alone now degrade to `no_suggestions`
+- rarity is computed from the org-local projected people set using bounded multipliers, so common industries/companies/role families count less than rarer ones
+- an in-memory rolling exposure penalty dampens candidates who keep appearing in recent top-3 lists
+
+`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. `shared_company` is suppressed when the normalized company value is the platform name (`TeamNetwork`) or the current organization's name, so generic org-internal company strings do not flatten rankings across the whole org. Deterministic tie-breaking stays: score → reason count → name → `person_id`.
 
 ### Step 7 — Read path (`suggestions.ts`)
 
-`suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), then branches:
+`suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), builds org-local rarity/exposure context, then branches:
 
-- **Falkor mode:** query all candidate `Person` nodes in the org and score in app code.
-- **SQL fallback:** load the full org projection from Supabase and score identically.
+- **Falkor mode:** query all candidate `Person` nodes in the org, dedupe to canonical people, build the gated candidate pool, then rerank in app code.
+- **SQL fallback:** load the full org projection from Supabase and run the same gated candidate generation + reranking path.
 
 If Falkor throws, the implementation silently falls back to SQL.
 

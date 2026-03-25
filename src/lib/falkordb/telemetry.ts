@@ -42,6 +42,7 @@ export interface SuggestionObservabilitySnapshot {
   lastFallbackReason: GraphFallbackReason | null;
   lastFreshnessState: "fresh" | "stale" | "degraded" | "unknown" | null;
   lastRequestedAt: string | null;
+  recentTopCandidateCounts: Array<{ personId: string; appearances: number }>;
 }
 
 const MAX_RECENT_ERRORS = 10;
@@ -59,6 +60,8 @@ const graphFailuresByOrg = new Map<
 >();
 
 const suggestionTelemetryByOrg = new Map<string, SuggestionObservabilitySnapshot>();
+const suggestionExposureByOrg = new Map<string, string[][]>();
+const MAX_RECENT_TOP_CANDIDATE_WINDOWS = 50;
 
 let lastDrainSnapshot: GraphDrainTelemetrySnapshot = {
   state: "empty",
@@ -109,7 +112,28 @@ function emptySuggestionSnapshot(orgId: string): SuggestionObservabilitySnapshot
     lastFallbackReason: null,
     lastFreshnessState: null,
     lastRequestedAt: null,
+    recentTopCandidateCounts: [],
   };
+}
+
+function buildRecentTopCandidateCounts(orgId: string) {
+  const windows = suggestionExposureByOrg.get(orgId) ?? [];
+  const counts = new Map<string, number>();
+
+  for (const window of windows) {
+    for (const personId of window) {
+      counts.set(personId, (counts.get(personId) ?? 0) + 1);
+    }
+  }
+
+  return [...counts.entries()]
+    .map(([personId, appearances]) => ({ personId, appearances }))
+    .sort((left, right) => {
+      if (right.appearances !== left.appearances) {
+        return right.appearances - left.appearances;
+      }
+      return left.personId.localeCompare(right.personId);
+    });
 }
 
 export function recordGraphDrainResult(input: {
@@ -219,17 +243,50 @@ export function recordSuggestionExecution(input: {
     state.unknownReadCount += 1;
   }
 
+  state.recentTopCandidateCounts = buildRecentTopCandidateCounts(input.orgId);
   suggestionTelemetryByOrg.set(input.orgId, state);
+}
+
+export function recordSuggestedCandidates(input: {
+  orgId: string;
+  personIds: string[];
+}) {
+  const uniquePersonIds = [...new Set(input.personIds.filter(Boolean))];
+  if (uniquePersonIds.length === 0) {
+    return;
+  }
+
+  const existing = suggestionExposureByOrg.get(input.orgId) ?? [];
+  const next = [...existing, uniquePersonIds].slice(-MAX_RECENT_TOP_CANDIDATE_WINDOWS);
+  suggestionExposureByOrg.set(input.orgId, next);
+
+  const snapshot = suggestionTelemetryByOrg.get(input.orgId);
+  if (snapshot) {
+    snapshot.recentTopCandidateCounts = buildRecentTopCandidateCounts(input.orgId);
+  }
+}
+
+export function getSuggestedCandidateExposureCounts(orgId: string) {
+  return new Map(
+    buildRecentTopCandidateCounts(orgId).map((entry) => [entry.personId, entry.appearances])
+  );
 }
 
 export function getSuggestionObservabilitySnapshot(orgId: string): SuggestionObservabilitySnapshot {
   const state = suggestionTelemetryByOrg.get(orgId);
-  return state ? { ...state, fallbackReasonCounts: { ...state.fallbackReasonCounts } } : emptySuggestionSnapshot(orgId);
+  return state
+    ? {
+        ...state,
+        fallbackReasonCounts: { ...state.fallbackReasonCounts },
+        recentTopCandidateCounts: [...state.recentTopCandidateCounts],
+      }
+    : emptySuggestionSnapshot(orgId);
 }
 
 export function resetFalkorTelemetryForTests() {
   graphFailuresByOrg.clear();
   suggestionTelemetryByOrg.clear();
+  suggestionExposureByOrg.clear();
   lastDrainSnapshot = {
     state: "empty",
     reason: null,

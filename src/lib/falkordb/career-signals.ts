@@ -12,6 +12,21 @@ const CANONICAL_INDUSTRIES = new Set([
   "Education",
 ]);
 
+const CANONICAL_ROLE_FAMILIES = new Set([
+  "Engineering",
+  "Product",
+  "Data",
+  "Finance",
+  "Consulting",
+  "Healthcare",
+  "Law",
+  "Media",
+  "Operations",
+  "Research",
+  "Sports",
+  "Education",
+]);
+
 const RAW_INDUSTRY_TO_CANONICAL = new Map<string, string>([
   ["banking", "Finance"],
   ["private equity", "Finance"],
@@ -51,6 +66,95 @@ const EMPLOYER_TO_CANONICAL_INDUSTRY = new Map<string, string>([
   ["wharton undergraduate sports business group", "Sports"],
   ["penn sprint football", "Sports"],
   ["penn admissions", "Education"],
+]);
+
+const EMPLOYER_TO_ROLE_FAMILY = new Map<string, string>([
+  ["citadel", "Finance"],
+  ["jpmorgan chase", "Finance"],
+  ["goldman sachs", "Finance"],
+  ["blackstone", "Finance"],
+  ["bain and company", "Consulting"],
+  ["mckinsey and company", "Consulting"],
+  ["deloitte", "Consulting"],
+  ["penn admissions", "Education"],
+  ["penn medicine", "Healthcare"],
+  ["mount sinai health system", "Healthcare"],
+  ["pfizer", "Healthcare"],
+  ["moderna", "Healthcare"],
+  ["penn daily pennsylvanian", "Media"],
+  ["the new york times", "Media"],
+  ["netflix", "Media"],
+]);
+
+const INDUSTRY_TO_ROLE_FAMILY = new Map<string, string>([
+  ["Finance", "Finance"],
+  ["Consulting", "Consulting"],
+  ["Healthcare", "Healthcare"],
+  ["Law", "Law"],
+  ["Media", "Media"],
+  ["Sports", "Sports"],
+  ["Education", "Education"],
+]);
+
+const ROLE_FAMILY_KEYWORDS: Array<{ family: string; keywords: string[] }> = [
+  {
+    family: "Engineering",
+    keywords: ["engineer", "swe", "sde", "developer", "backend", "frontend", "full stack"],
+  },
+  {
+    family: "Product",
+    keywords: ["product manager", "pm"],
+  },
+  {
+    family: "Data",
+    keywords: ["data scientist", "data analyst", "machine learning", " ml ", "analytics"],
+  },
+  {
+    family: "Finance",
+    keywords: ["analyst", "investment", "banking", "private equity", "trader"],
+  },
+  {
+    family: "Consulting",
+    keywords: ["consultant", "consulting"],
+  },
+  {
+    family: "Healthcare",
+    keywords: ["nurse", "clinical", "medical", "physician", "pharma"],
+  },
+  {
+    family: "Law",
+    keywords: ["lawyer", "attorney", "counsel", "legal"],
+  },
+  {
+    family: "Media",
+    keywords: ["writer", "journalist", "editor", "communications", "content"],
+  },
+  {
+    family: "Operations",
+    keywords: ["operations", " ops ", "coordinator", "program manager"],
+  },
+  {
+    family: "Research",
+    keywords: ["research", "scientist", "research assistant"],
+  },
+  {
+    family: "Sports",
+    keywords: ["athlete", "football", "cornerback", "coach", "sports"],
+  },
+  {
+    family: "Education",
+    keywords: ["teacher", "tutor", "admissions", "educator"],
+  },
+];
+
+const ROLE_FAMILY_ADJACENCY = new Map<string, Set<string>>([
+  ["Engineering", new Set(["Data", "Product"])],
+  ["Data", new Set(["Engineering", "Product"])],
+  ["Product", new Set(["Engineering", "Data", "Operations"])],
+  ["Finance", new Set(["Consulting"])],
+  ["Consulting", new Set(["Finance", "Operations"])],
+  ["Healthcare", new Set(["Research"])],
+  ["Research", new Set(["Healthcare", "Data"])],
 ]);
 
 function trimOptionalText(value: string | null | undefined): string | null {
@@ -103,22 +207,106 @@ function parseEmployerText(value: string): string {
   return trimmed;
 }
 
+function parseRoleFragment(value: string): string | null {
+  const trimmed = value.trim();
+
+  const parentheticalMatch = trimmed.match(/\(([^)]+)\)\s*$/);
+  if (parentheticalMatch?.[1]) {
+    return trimOptionalText(parentheticalMatch[1]);
+  }
+
+  const separatorMatch = trimmed.match(/^.+?\s(?:—|-)\s(.+)$/);
+  if (separatorMatch?.[1]) {
+    return trimOptionalText(separatorMatch[1]);
+  }
+
+  return null;
+}
+
+function matchRoleFamilyFromText(value: string | null | undefined): string | null {
+  const normalized = normalizeCareerText(value);
+  if (!normalized) {
+    return null;
+  }
+
+  const padded = ` ${normalized} `;
+  for (const entry of ROLE_FAMILY_KEYWORDS) {
+    if (
+      entry.keywords.some((keyword) => {
+        const normalizedKeyword = normalizeCareerText(keyword);
+        return normalizedKeyword ? padded.includes(` ${normalizedKeyword} `) : false;
+      })
+    ) {
+      return entry.family;
+    }
+  }
+
+  return null;
+}
+
+export function canonicalizeRoleFamily(
+  value: string | null | undefined,
+  employer?: string | null | undefined,
+  canonicalIndustry?: string | null | undefined
+): string | null {
+  const trimmed = trimOptionalText(value);
+  if (trimmed && CANONICAL_ROLE_FAMILIES.has(trimmed)) {
+    return trimmed;
+  }
+
+  const directMatch = matchRoleFamilyFromText(trimmed);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const normalizedEmployer = normalizeCareerText(employer);
+  if (normalizedEmployer) {
+    const employerMatch = EMPLOYER_TO_ROLE_FAMILY.get(normalizedEmployer);
+    if (employerMatch) {
+      return employerMatch;
+    }
+  }
+
+  const industryMatch = canonicalIndustry
+    ? INDUSTRY_TO_ROLE_FAMILY.get(canonicalIndustry)
+    : null;
+
+  return industryMatch ?? null;
+}
+
+export function areAdjacentRoleFamilies(
+  left: string | null | undefined,
+  right: string | null | undefined
+): boolean {
+  if (!left || !right || left === right) {
+    return false;
+  }
+
+  return ROLE_FAMILY_ADJACENCY.get(left)?.has(right) === true;
+}
+
 export function parseMemberCareerString(value: string | null | undefined): {
   employer: string | null;
+  roleFragment: string | null;
   canonicalIndustry: string | null;
+  roleFamily: string | null;
 } {
   const trimmed = trimOptionalText(value);
   if (!trimmed) {
-    return { employer: null, canonicalIndustry: null };
+    return { employer: null, roleFragment: null, canonicalIndustry: null, roleFamily: null };
   }
 
   const employer = trimOptionalText(parseEmployerText(trimmed));
+  const roleFragment = parseRoleFragment(trimmed);
   const normalizedEmployer = normalizeCareerText(employer);
+  const canonicalIndustry = normalizedEmployer
+    ? EMPLOYER_TO_CANONICAL_INDUSTRY.get(normalizedEmployer) ?? null
+    : null;
 
   return {
     employer,
-    canonicalIndustry: normalizedEmployer
-      ? EMPLOYER_TO_CANONICAL_INDUSTRY.get(normalizedEmployer) ?? null
-      : null,
+    roleFragment,
+    canonicalIndustry,
+    roleFamily: canonicalizeRoleFamily(roleFragment, employer, canonicalIndustry),
   };
 }

@@ -1,5 +1,6 @@
 import {
   canonicalizeIndustry,
+  canonicalizeRoleFamily,
   parseMemberCareerString,
 } from "@/lib/falkordb/career-signals";
 
@@ -59,6 +60,7 @@ export interface ProjectedPerson {
   major: string | null;
   currentCompany: string | null;
   industry: string | null;
+  roleFamily: string | null;
   graduationYear: number | null;
   currentCity: string | null;
 }
@@ -260,6 +262,16 @@ export function buildProjectedPeople(input: {
       industry: pickFirstText([
         ...group.alumni.map((alumni) => canonicalizeIndustry(alumni.industry)),
         ...projectedMemberCareers.map((career) => career.canonicalIndustry),
+      ]),
+      roleFamily: pickFirstText([
+        ...group.alumni.map((alumni) =>
+          canonicalizeRoleFamily(
+            pickFirstText([alumni.position_title, alumni.job_title]),
+            alumni.current_company,
+            canonicalizeIndustry(alumni.industry)
+          )
+        ),
+        ...projectedMemberCareers.map((career) => career.roleFamily),
       ]),
       graduationYear: pickFirstNumber([
         ...group.alumni.map((alumni) => alumni.graduation_year),

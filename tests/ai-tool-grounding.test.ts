@@ -2,6 +2,24 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { verifyToolBackedResponse } from "../src/lib/ai/tool-grounding.ts";
 
+const FRESH_FRESHNESS = { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" } as const;
+
+function makeSuggestConnectionsToolResult(suggestions: Array<{
+  name: string;
+  reasons: Array<{ code: string; label: string; weight: number }>;
+}>) {
+  return {
+    name: "suggest_connections" as const,
+    data: {
+      state: "resolved",
+      mode: "sql_fallback",
+      source_person: { name: "Alex Source" },
+      freshness: FRESH_FRESHNESS,
+      suggestions,
+    },
+  };
+}
+
 test("verifyToolBackedResponse accepts grounded org stats summaries", () => {
   const result = verifyToolBackedResponse({
     content:
@@ -76,23 +94,9 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
       "Why: direct mentorship and shared city",
     ].join("\n"),
     toolResults: [
-      {
-        name: "suggest_connections",
-        data: {
-          state: "resolved",
-          mode: "sql_fallback",
-          source_person: {
-            name: "Alex Source",
-          },
-          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          suggestions: [
-            {
-              name: "Dina Direct",
-              reasons: [{ code: "shared_city", label: "shared city", weight: 15 }],
-            },
-          ],
-        },
-      },
+      makeSuggestConnectionsToolResult([
+        { name: "Dina Direct", reasons: [{ code: "shared_city", label: "shared city", weight: 15 }] },
+      ]),
     ],
   });
 
@@ -105,30 +109,19 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
     content: [
       "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
-      "Why: shared industry, shared company, graduation proximity",
+      "Why: shared industry, shared company, shared role family",
     ].join("\n"),
     toolResults: [
-      {
-        name: "suggest_connections",
-        data: {
-          state: "resolved",
-          mode: "sql_fallback",
-          source_person: {
-            name: "Alex Source",
-          },
-          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          suggestions: [
-            {
-              name: "Dina Direct",
-              reasons: [
-                { code: "shared_industry", label: "shared industry", weight: 40 },
-                { code: "shared_company", label: "shared company", weight: 30 },
-                { code: "graduation_proximity", label: "graduation proximity", weight: 10 },
-              ],
-            },
+      makeSuggestConnectionsToolResult([
+        {
+          name: "Dina Direct",
+          reasons: [
+            { code: "shared_industry", label: "shared industry", weight: 40 },
+            { code: "shared_company", label: "shared company", weight: 30 },
+            { code: "shared_role_family", label: "shared role family", weight: 20 },
           ],
         },
-      },
+      ]),
     ],
   });
 
@@ -146,27 +139,10 @@ test("verifyToolBackedResponse rejects out-of-order suggest_connections output",
       "Why: shared industry",
     ].join("\n"),
     toolResults: [
-      {
-        name: "suggest_connections",
-        data: {
-          state: "resolved",
-          mode: "sql_fallback",
-          source_person: {
-            name: "Alex Source",
-          },
-          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          suggestions: [
-            {
-              name: "Dina Direct",
-              reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }],
-            },
-            {
-              name: "Sam Second",
-              reasons: [{ code: "shared_city", label: "shared city", weight: 15 }],
-            },
-          ],
-        },
-      },
+      makeSuggestConnectionsToolResult([
+        { name: "Dina Direct", reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }] },
+        { name: "Sam Second", reasons: [{ code: "shared_city", label: "shared city", weight: 15 }] },
+      ]),
     ],
   });
 
@@ -182,23 +158,9 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
       "Why: shared industry and both in the finance sector",
     ].join("\n"),
     toolResults: [
-      {
-        name: "suggest_connections",
-        data: {
-          state: "resolved",
-          mode: "sql_fallback",
-          source_person: {
-            name: "Alex Source",
-          },
-          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          suggestions: [
-            {
-              name: "Dina Direct",
-              reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }],
-            },
-          ],
-        },
-      },
+      makeSuggestConnectionsToolResult([
+        { name: "Dina Direct", reasons: [{ code: "shared_industry", label: "shared industry", weight: 40 }] },
+      ]),
     ],
   });
 
@@ -213,26 +175,30 @@ test("verifyToolBackedResponse rejects old shared graduation year phrasing", () 
       "Why: shared graduation year",
     ].join("\n"),
     toolResults: [
-      {
-        name: "suggest_connections",
-        data: {
-          state: "resolved",
-          mode: "sql_fallback",
-          source_person: {
-            name: "Alex Source",
-          },
-          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
-          suggestions: [
-            {
-              name: "Dina Direct",
-              reasons: [{ code: "graduation_proximity", label: "graduation proximity", weight: 10 }],
-            },
-          ],
-        },
-      },
+      makeSuggestConnectionsToolResult([
+        { name: "Dina Direct", reasons: [{ code: "graduation_proximity", label: "graduation proximity", weight: 10 }] },
+      ]),
     ],
   });
 
   assert.equal(result.grounded, false);
   assert.match(result.failures.join("\n"), /shared_graduation_year|graduation/i);
+});
+
+test("verifyToolBackedResponse rejects unsupported adjacency wording", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Top connections for Alex Source",
+      "1. Dina Direct - VP Product • Acme",
+      "Why: adjacent role family, shared industry",
+    ].join("\n"),
+    toolResults: [
+      makeSuggestConnectionsToolResult([
+        { name: "Dina Direct", reasons: [{ code: "shared_industry", label: "shared industry", weight: 24 }] },
+      ]),
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /adjacent_role_family/i);
 });

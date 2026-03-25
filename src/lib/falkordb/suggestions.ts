@@ -9,6 +9,11 @@ import {
   type ProjectedPerson,
 } from "@/lib/falkordb/people";
 import {
+  buildConnectionRarityStats,
+  getCandidateQualificationCodes,
+  hasProfessionalStrengthQualification,
+  hasProfessionalStrengthReason,
+  inspectCandidateSignals,
   buildDisplayReadyConnectionPerson,
   buildDisplayReadySuggestedConnection,
   buildSuggestionForCandidate,
@@ -16,6 +21,7 @@ import {
   GRAPH_STALE_AFTER_SECONDS,
   normalizeConnectionText,
   sortSuggestedConnections,
+  type CandidateQualificationCode,
   type ConnectionScoringContext,
   type SuggestConnectionsFreshness,
   type SuggestConnectionsResult,
@@ -27,7 +33,9 @@ import {
   type FalkorQueryClient,
 } from "@/lib/falkordb/client";
 import {
+  getSuggestedCandidateExposureCounts,
   getSuggestionObservabilitySnapshot,
+  recordSuggestedCandidates,
   recordSuggestionExecution,
   type GraphFallbackReason,
 } from "@/lib/falkordb/telemetry";
@@ -53,6 +61,7 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   major: string | null;
   currentCompany: string | null;
   industry: string | null;
+  roleFamily: string | null;
   graduationYear: number | null;
   currentCity: string | null;
 }
@@ -330,21 +339,109 @@ async function loadOrganizationName(
   }
 }
 
-function scoreProjectedCandidates(input: {
+function buildExposurePenaltyByPersonId(orgId: string) {
+  const counts = getSuggestedCandidateExposureCounts(orgId);
+  const penalties = new Map<string, number>();
+
+  for (const [personId, appearances] of counts.entries()) {
+    let penalty = 0;
+    if (appearances >= 10) {
+      penalty = 15;
+    } else if (appearances >= 6) {
+      penalty = 10;
+    } else if (appearances >= 3) {
+      penalty = 5;
+    }
+
+    if (penalty > 0) {
+      penalties.set(personId, penalty);
+    }
+  }
+
+  return penalties;
+}
+
+export interface CandidatePoolEntry {
+  candidate: ProjectedPerson;
+  qualificationCodes: CandidateQualificationCode[];
+}
+
+export function buildCandidatePool(input: {
   source: ProjectedPerson;
   candidates: Iterable<ProjectedPerson>;
   limit: number;
   scoringContext?: ConnectionScoringContext;
 }) {
-  const suggestions = [];
+  const professionalEntries: CandidatePoolEntry[] = [];
+  const weakSupportEntries: CandidatePoolEntry[] = [];
 
   for (const candidate of input.candidates) {
-    const suggestion = buildSuggestionForCandidate({
+    if (candidate.personKey === input.source.personKey) {
+      continue;
+    }
+
+    const signals = inspectCandidateSignals({
       source: input.source,
       candidate,
       scoringContext: input.scoringContext,
     });
-    if (suggestion) {
+    const qualificationCodes = getCandidateQualificationCodes(signals);
+    if (qualificationCodes.length === 0) {
+      continue;
+    }
+
+    const entry = { candidate, qualificationCodes };
+    if (
+      hasProfessionalStrengthQualification(qualificationCodes) ||
+      qualificationCodes.includes("adjacent_role_family")
+    ) {
+      professionalEntries.push(entry);
+    } else {
+      weakSupportEntries.push(entry);
+    }
+  }
+
+  if (professionalEntries.length >= input.limit * 5) {
+    return professionalEntries;
+  }
+
+  return [
+    ...professionalEntries,
+    ...weakSupportEntries.slice(0, Math.max(0, input.limit * 5 - professionalEntries.length)),
+  ];
+}
+
+export function scoreProjectedCandidates(input: {
+  source: ProjectedPerson;
+  allPeople: Iterable<ProjectedPerson>;
+  candidates: Iterable<ProjectedPerson>;
+  limit: number;
+  scoringContext?: ConnectionScoringContext;
+}) {
+  const rarityStats = buildConnectionRarityStats({
+    people: input.allPeople,
+    scoringContext: input.scoringContext,
+  });
+  const exposurePenaltyByPersonId = buildExposurePenaltyByPersonId(input.source.orgId);
+  const suggestions = [];
+  const candidatePool = buildCandidatePool({
+    source: input.source,
+    candidates: input.candidates,
+    limit: input.limit,
+    scoringContext: input.scoringContext,
+  });
+
+  for (const { candidate } of candidatePool) {
+    const suggestion = buildSuggestionForCandidate({
+      source: input.source,
+      candidate,
+      scoringContext: {
+        ...input.scoringContext,
+        rarityStats,
+        exposurePenaltyByPersonId,
+      },
+    });
+    if (suggestion && hasProfessionalStrengthReason(suggestion)) {
       suggestions.push(suggestion);
     }
   }
@@ -421,6 +518,7 @@ function graphRowToProjectedPerson(
     major: row.major ?? null,
     currentCompany: row.currentCompany ?? null,
     industry: row.industry ?? null,
+    roleFamily: row.roleFamily ?? null,
     graduationYear: row.graduationYear ?? null,
     currentCity: row.currentCity ?? null,
   };
@@ -519,6 +617,7 @@ function resolveUnavailableFallbackReason(graphClient: FalkorQueryClient): Graph
 async function fetchGraphSuggestions(input: {
   orgId: string;
   source: ProjectedPerson;
+  allPeople: Iterable<ProjectedPerson>;
   limit: number;
   graphClient: FalkorQueryClient;
   scoringContext?: ConnectionScoringContext;
@@ -542,27 +641,26 @@ async function fetchGraphSuggestions(input: {
         candidate.major AS major,
         candidate.currentCompany AS currentCompany,
         candidate.industry AS industry,
+        candidate.roleFamily AS roleFamily,
         candidate.graduationYear AS graduationYear,
         candidate.currentCity AS currentCity
     `,
     { sourceKey: input.source.personKey }
   );
 
-  const suggestions = dedupeGraphCandidates(
+  const candidates = dedupeGraphCandidates(
     candidateRows
       .map((row) => graphRowToProjectedPerson(row, input.orgId))
       .filter((candidate): candidate is ProjectedPerson => candidate !== null)
-  )
-    .map((candidate) =>
-      buildSuggestionForCandidate({
-        source: input.source,
-        candidate,
-        scoringContext: input.scoringContext,
-      })
-    )
-    .filter((suggestion): suggestion is NonNullable<typeof suggestion> => suggestion !== null);
+  );
 
-  return sortSuggestedConnections(suggestions).slice(0, input.limit);
+  return scoreProjectedCandidates({
+    source: input.source,
+    allPeople: input.allPeople,
+    candidates,
+    limit: input.limit,
+    scoringContext: input.scoringContext,
+  });
 }
 
 export async function suggestConnections(input: {
@@ -623,20 +721,18 @@ export async function suggestConnections(input: {
     throw new SuggestConnectionsLookupError("Person not found");
   }
 
+  const projectedPeople = projectedPeopleForLookup
+    ? projectedPeopleForLookup
+    : await loadProjectedPeople(serviceSupabase, orgId);
+  const projectedSource = projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource;
+
   async function computeSqlFallback(
     fallbackReason: GraphFallbackReason,
     freshness: SuggestConnectionsFreshness
   ): Promise<SuggestConnectionsResult> {
-    const source = resolvedSource;
-    if (!source) {
-      throw new SuggestConnectionsLookupError("Person not found");
-    }
-
-    const projectedPeople = projectedPeopleForLookup
-      ? projectedPeopleForLookup
-      : await loadProjectedPeople(serviceSupabase, orgId);
     const results = scoreProjectedCandidates({
-      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
+      source: projectedSource,
+      allPeople: projectedPeople.values(),
       candidates: projectedPeople.values(),
       limit,
       scoringContext,
@@ -645,13 +741,19 @@ export async function suggestConnections(input: {
       mode: "sql_fallback",
       fallbackReason,
       freshness,
-      source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
+      source: projectedSource,
       results,
       displayLimit,
     });
   }
 
   function finalizeResult(result: SuggestConnectionsResult) {
+    if (result.state === "resolved") {
+      recordSuggestedCandidates({
+        orgId,
+        personIds: result.suggestions.slice(0, 3).map((suggestion) => suggestion.person_id),
+      });
+    }
     recordSuggestionExecution({
       orgId,
       mode: result.mode,
@@ -676,7 +778,8 @@ export async function suggestConnections(input: {
   try {
     const graphResults = await fetchGraphSuggestions({
       orgId,
-      source: resolvedSource,
+      source: projectedSource,
+      allPeople: projectedPeople.values(),
       limit,
       graphClient,
       scoringContext,
@@ -687,7 +790,7 @@ export async function suggestConnections(input: {
       fallback_reason: null,
       freshness,
       state: graphResults.length > 0 ? "resolved" : "no_suggestions",
-      source_person: buildDisplayReadyConnectionPerson(resolvedSource),
+      source_person: buildDisplayReadyConnectionPerson(projectedSource),
       suggestions: graphResults
         .slice(0, displayLimit)
         .map((suggestion) => buildDisplayReadySuggestedConnection(suggestion)),

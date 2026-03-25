@@ -439,6 +439,20 @@ test("direct-name connection prompts pass a fixed-template contract into pass 2"
   });
 });
 
+test("direct-name connection prompts include the no_suggestions fallback copy in pass 2", async () => {
+  await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(composeResponseCalls.length, 2);
+  assert.match(
+    composeResponseCalls[1].systemPrompt,
+    /not enough strong professional overlap yet to recommend a connection/i
+  );
+});
+
 test("direct-name connection prompts log suggest_connections in audit metadata", async () => {
   await (
     await POST(makeRequest("Give me connection for Louis Ciccone") as any, {

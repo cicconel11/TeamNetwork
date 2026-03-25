@@ -14,6 +14,45 @@ const ORG_ID = "org-uuid-1";
 const USER_ID = "org-admin-user";
 const SOURCE_ALUMNI_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 
+function makeMemberRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "member-1",
+    organization_id: ORG_ID,
+    user_id: "user-1",
+    status: "active",
+    deleted_at: null,
+    first_name: "Louis",
+    last_name: "Ciccone",
+    email: "louis@example.com",
+    role: "Captain",
+    current_company: null as string | null,
+    graduation_year: null as number | null,
+    created_at: "2026-03-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeAlumniRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "alumni-1",
+    organization_id: ORG_ID,
+    user_id: "user-1",
+    deleted_at: null,
+    first_name: "Louis",
+    last_name: "Ciccone",
+    email: "louis@example.com",
+    major: null as string | null,
+    current_company: null as string | null,
+    industry: null as string | null,
+    current_city: null as string | null,
+    graduation_year: null as number | null,
+    position_title: null as string | null,
+    job_title: null as string | null,
+    created_at: "2026-03-03T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function createToolSupabaseStub(overrides: Record<string, any> = {}) {
   const queries: Array<{
     table: string;
@@ -403,7 +442,7 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   assert.equal(payload.source_person.name, "Alex Source");
   assert.equal(payload.suggestions.length, 1);
   assert.equal(payload.suggestions[0].name, "Dina Direct");
-  assert.equal(payload.suggestions[0].score, 40);
+  assert.equal(payload.suggestions[0].score, 18);
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
     ["shared_company", "graduation_proximity"]
@@ -429,34 +468,13 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
     members: {
       select: {
         data: [
-          {
-            id: "member-1",
-            organization_id: ORG_ID,
-            user_id: "user-1",
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            role: "Captain",
-            current_company: "TeamNetwork",
-            graduation_year: 2024,
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            id: "member-2",
-            organization_id: ORG_ID,
-            user_id: "user-2",
-            status: "active",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
-            role: "Coach",
-            current_company: "TeamNetwork",
-            graduation_year: 2025,
+          makeMemberRow({ current_company: "TeamNetwork", graduation_year: 2024 }),
+          makeMemberRow({
+            id: "member-2", user_id: "user-2",
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
+            role: "Coach", current_company: "TeamNetwork", graduation_year: 2025,
             created_at: "2026-03-02T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
@@ -464,40 +482,18 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
     alumni: {
       select: {
         data: [
-          {
-            id: "alumni-1",
-            organization_id: ORG_ID,
-            user_id: "user-1",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            major: null,
-            current_company: "TeamNetwork",
-            industry: "Sports",
-            current_city: "Philadelphia",
-            graduation_year: 2024,
-            position_title: null,
-            job_title: null,
-            created_at: "2026-03-03T00:00:00.000Z",
-          },
-          {
-            id: "alumni-2",
-            organization_id: ORG_ID,
-            user_id: "user-2",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
-            major: null,
-            current_company: "Test Organization",
-            industry: "Sports",
-            current_city: "Philadelphia",
-            graduation_year: 2025,
+          makeAlumniRow({
+            current_company: "TeamNetwork", industry: "Sports",
+            current_city: "Philadelphia", graduation_year: 2024,
+          }),
+          makeAlumniRow({
+            id: "alumni-2", user_id: "user-2",
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
+            current_company: "Test Organization", industry: "Sports",
+            current_city: "Philadelphia", graduation_year: 2025,
             position_title: "Advisor",
-            job_title: null,
             created_at: "2026-03-04T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
@@ -516,7 +512,7 @@ test("suggest_connections suppresses TeamNetwork and org-name company matches", 
   assert.equal(payload.state, "resolved");
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_industry", "shared_city", "graduation_proximity"]
+    ["shared_industry", "shared_role_family", "shared_city", "graduation_proximity"]
   );
 });
 
@@ -525,43 +521,19 @@ test("suggest_connections resolves a person_query directly", async () => {
     members: {
       select: {
         data: [
-          {
-            id: "member-1",
-            organization_id: ORG_ID,
-            user_id: "user-1",
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            role: "Captain",
-            current_company: "Acme",
-            graduation_year: 2024,
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            id: "member-2",
-            organization_id: ORG_ID,
-            user_id: "user-2",
-            status: "active",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
-            role: "Coach",
-            current_company: "Acme",
-            graduation_year: 2024,
+          makeMemberRow({ current_company: "Acme", graduation_year: 2024 }),
+          makeMemberRow({
+            id: "member-2", user_id: "user-2",
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
+            role: "Coach", current_company: "Acme", graduation_year: 2024,
             created_at: "2026-03-02T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
     },
     alumni: {
-      select: {
-        data: [],
-        error: null,
-      },
+      select: { data: [], error: null },
     },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
@@ -586,43 +558,19 @@ test("suggest_connections returns ambiguous state for matching person_query", as
     members: {
       select: {
         data: [
-          {
-            id: "member-1",
-            organization_id: ORG_ID,
-            user_id: null,
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis.one@example.com",
-            role: "Captain",
-            current_company: null,
-            graduation_year: 2024,
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            id: "member-2",
-            organization_id: ORG_ID,
-            user_id: null,
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis.two@example.com",
-            role: "Manager",
-            current_company: null,
+          makeMemberRow({ user_id: null, email: "louis.one@example.com", graduation_year: 2024 }),
+          makeMemberRow({
+            id: "member-2", user_id: null,
+            email: "louis.two@example.com", role: "Manager",
             graduation_year: 2025,
             created_at: "2026-03-02T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
     },
     alumni: {
-      select: {
-        data: [],
-        error: null,
-      },
+      select: { data: [], error: null },
     },
   });
   ctx = { orgId: ORG_ID, userId: USER_ID, serviceSupabase: stub as any };
@@ -672,34 +620,13 @@ test("suggest_connections returns no_suggestions when the source has no supporte
     members: {
       select: {
         data: [
-          {
-            id: "member-1",
-            organization_id: ORG_ID,
-            user_id: "user-1",
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            role: "Captain",
-            current_company: null,
-            graduation_year: null,
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
-            id: "member-2",
-            organization_id: ORG_ID,
-            user_id: "user-2",
-            status: "active",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
+          makeMemberRow(),
+          makeMemberRow({
+            id: "member-2", user_id: "user-2",
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
             role: "Coach",
-            current_company: null,
-            graduation_year: null,
             created_at: "2026-03-02T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
@@ -725,56 +652,24 @@ test("suggest_connections returns no_suggestions when the source has no supporte
   assert.equal(payload.suggestions.length, 0);
 });
 
-test("suggest_connections keeps sparse member-sourced queries actionable with fallback signals", async () => {
+test("suggest_connections returns no_suggestions for weak-only sparse member-sourced queries", async () => {
+  const sourceRow = makeMemberRow({
+    id: "11111111-1111-4111-8111-111111111111",
+    user_id: "user-source", graduation_year: 2024,
+  });
   stub = createToolSupabaseStub({
     members: {
-      maybeSingle: {
-        data: {
-          id: "11111111-1111-4111-8111-111111111111",
-          organization_id: ORG_ID,
-          user_id: "user-source",
-          status: "active",
-          deleted_at: null,
-          first_name: "Louis",
-          last_name: "Ciccone",
-          email: "louis@example.com",
-          role: "Captain",
-          current_company: null,
-          graduation_year: 2024,
-          created_at: "2026-03-01T00:00:00.000Z",
-        },
-        error: null,
-      },
+      maybeSingle: { data: sourceRow, error: null },
       select: {
         data: [
-          {
-            id: "11111111-1111-4111-8111-111111111111",
-            organization_id: ORG_ID,
-            user_id: "user-source",
-            status: "active",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            role: "Captain",
-            current_company: null,
-            graduation_year: 2024,
-            created_at: "2026-03-01T00:00:00.000Z",
-          },
-          {
+          sourceRow,
+          makeMemberRow({
             id: "22222222-2222-4222-8222-222222222222",
-            organization_id: ORG_ID,
             user_id: "user-match",
-            status: "active",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
-            role: "Coach",
-            current_company: null,
-            graduation_year: 2026,
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
+            role: "Coach", graduation_year: 2026,
             created_at: "2026-03-02T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
@@ -782,40 +677,19 @@ test("suggest_connections keeps sparse member-sourced queries actionable with fa
     alumni: {
       select: {
         data: [
-          {
+          makeAlumniRow({
             id: "33333333-3333-4333-8333-333333333333",
-            organization_id: ORG_ID,
             user_id: "user-source",
-            deleted_at: null,
-            first_name: "Louis",
-            last_name: "Ciccone",
-            email: "louis@example.com",
-            major: null,
-            current_company: null,
-            industry: null,
-            current_city: "Philadelphia",
-            graduation_year: 2024,
-            position_title: null,
-            job_title: null,
-            created_at: "2026-03-03T00:00:00.000Z",
-          },
-          {
+            current_city: "Philadelphia", graduation_year: 2024,
+          }),
+          makeAlumniRow({
             id: "44444444-4444-4444-8444-444444444444",
-            organization_id: ORG_ID,
             user_id: "user-match",
-            deleted_at: null,
-            first_name: "Dana",
-            last_name: "Coach",
-            email: "dana@example.com",
-            major: null,
-            current_company: null,
-            industry: null,
-            current_city: "Philadelphia",
-            graduation_year: 2026,
+            first_name: "Dana", last_name: "Coach", email: "dana@example.com",
+            current_city: "Philadelphia", graduation_year: 2026,
             position_title: "Advisor",
-            job_title: null,
             created_at: "2026-03-04T00:00:00.000Z",
-          },
+          }),
         ],
         error: null,
       },
@@ -834,14 +708,9 @@ test("suggest_connections keeps sparse member-sourced queries actionable with fa
   );
 
   const payload = result.data as any;
-  assert.equal(payload.state, "resolved");
+  assert.equal(payload.state, "no_suggestions");
   assert.equal(payload.source_person.name, "Louis Ciccone");
-  assert.equal(payload.suggestions.length, 1);
-  assert.equal(payload.suggestions[0].name, "Dana Coach");
-  assert.deepEqual(
-    payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_city", "graduation_proximity"]
-  );
+  assert.equal(payload.suggestions.length, 0);
 });
 
 test("suggest_connections derives employer and industry from member company-role strings", async () => {
@@ -923,7 +792,7 @@ test("suggest_connections derives employer and industry from member company-role
   assert.equal(payload.suggestions[0].name, "Sarah Chen");
   assert.deepEqual(
     payload.suggestions[0].reasons.map((reason: any) => reason.code),
-    ["shared_industry"]
+    ["shared_industry", "shared_role_family"]
   );
 });
 
