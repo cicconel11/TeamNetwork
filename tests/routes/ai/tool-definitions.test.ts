@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 4 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 4);
+test("AI_TOOLS exports 6 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 6);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -20,12 +20,14 @@ test("every tool has type function and additionalProperties false", () => {
   }
 });
 
-test("TOOL_NAMES contains all 4 names", () => {
+test("TOOL_NAMES contains all 6 names", () => {
   const expected: ToolName[] = [
     "list_members",
     "list_events",
+    "list_announcements",
     "get_org_stats",
     "suggest_connections",
+    "find_navigation_targets",
   ];
   assert.deepEqual([...TOOL_NAMES].sort(), [...expected].sort());
 });
@@ -60,6 +62,14 @@ test("list_events has limit and upcoming parameters", () => {
   assert.equal(props.upcoming.type, "boolean");
 });
 
+test("list_announcements has a limit parameter", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "list_announcements")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+  assert.ok(props.limit);
+  assert.equal(props.limit.maximum, 25);
+});
+
 test("get_org_stats has no required parameters", () => {
   const tool = AI_TOOLS.find((t) => t.function.name === "get_org_stats")!;
   const params = tool.function.parameters as ToolParameters;
@@ -76,4 +86,15 @@ test("suggest_connections supports person_query or person_type plus person_id", 
   assert.ok(props.person_query);
   assert.equal(props.limit.maximum, 25);
   assert.equal(params.required, undefined);
+});
+
+test("find_navigation_targets requires a query string", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "find_navigation_targets")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.query);
+  assert.equal(props.query.type, "string");
+  assert.equal(props.limit.maximum, 10);
+  assert.deepEqual(params.required, ["query"]);
 });

@@ -160,6 +160,26 @@ describe("AI prompt context builder", () => {
     assert.ok(!prompt.includes("Description:"));
   });
 
+  it("keeps client-reported page path out of the system prompt while exposing it in untrusted context", async () => {
+    const { buildPromptContext } = await import("../src/lib/ai/context-builder.ts");
+    const result = await buildPromptContext({
+      orgId: "o1",
+      userId: "u1",
+      role: "admin",
+      currentPath: "/acme/announcements",
+      availableTools: ["list_announcements", "find_navigation_targets"],
+      serviceSupabase: createMockServiceSupabase({
+        org: { name: "Acme Org", slug: "acme" },
+      }) as any,
+    });
+
+    assert.doesNotMatch(result.systemPrompt, /Current page path: \/acme\/announcements/);
+    assert.match(result.systemPrompt, /Read recent announcements and updates/);
+    assert.match(result.systemPrompt, /Find the right in-app page/i);
+    assert.match(result.orgContextMessage ?? "", /## Client-Reported Page Context/);
+    assert.match(result.orgContextMessage ?? "", /Current page path: \/acme\/announcements/);
+  });
+
   it("builds a separate untrusted organization context message", async () => {
     const { buildUntrustedOrgContextMessage } = await import("../src/lib/ai/context-builder.ts");
     const contextMessage = await buildUntrustedOrgContextMessage({
