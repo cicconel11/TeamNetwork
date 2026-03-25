@@ -455,6 +455,8 @@ test("suggest_connections returns ranked SQL fallback suggestions", async () => 
   const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
   assert.equal(telemetry.sqlFallbackCount, 1);
   assert.equal(telemetry.fallbackReasonCounts.disabled, 1);
+  assert.equal(telemetry.strongResultCount, 1);
+  assert.equal(telemetry.lastResultStrength, "strong");
 });
 
 test("suggest_connections suppresses TeamNetwork and org-name company matches", async () => {
@@ -763,7 +765,7 @@ test("suggest_connections returns no_suggestions when the source has no supporte
   assert.equal(payload.suggestions.length, 0);
 });
 
-test("suggest_connections returns no_suggestions for weak-only sparse member-sourced queries", async () => {
+test("suggest_connections returns weak fallback matches for sparse member-sourced queries", async () => {
   const sourceRow = makeMemberRow({
     id: "11111111-1111-4111-8111-111111111111",
     user_id: "user-source", graduation_year: 2024,
@@ -819,9 +821,18 @@ test("suggest_connections returns no_suggestions for weak-only sparse member-sou
   );
 
   const payload = result.data as any;
-  assert.equal(payload.state, "no_suggestions");
+  assert.equal(payload.state, "resolved");
   assert.equal(payload.source_person.name, "Louis Ciccone");
-  assert.equal(payload.suggestions.length, 0);
+  assert.equal(payload.suggestions.length, 1);
+  assert.equal(payload.suggestions[0].name, "Dana Coach");
+  assert.deepEqual(
+    payload.suggestions[0].reasons.map((reason: any) => reason.code),
+    ["shared_city", "graduation_proximity"]
+  );
+
+  const telemetry = getSuggestionObservabilityByOrg(ORG_ID);
+  assert.equal(telemetry.weakFallbackCount, 1);
+  assert.equal(telemetry.lastResultStrength, "weak_fallback");
 });
 
 test("suggest_connections derives employer and industry from member company-role strings", async () => {
