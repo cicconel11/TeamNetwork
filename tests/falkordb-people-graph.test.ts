@@ -99,17 +99,6 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
       deleted_at: null,
     },
   ]);
-
-  stub.registerRpc("get_mentorship_distances", () => [
-    {
-      user_id: "00000000-0000-0000-0000-000000000002",
-      distance: 1,
-    },
-    {
-      user_id: "00000000-0000-0000-0000-000000000003",
-      distance: 2,
-    },
-  ]);
 }
 
 function createInMemoryGraphClient() {
@@ -445,6 +434,104 @@ test("buildSourcePerson matches buildProjectedPeople for alumni-only", () => {
   assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:alumni:alumni-solo`));
 });
 
+test("buildProjectedPeople parses member company-role strings into canonical career signals", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "member-parse",
+        organization_id: ORG_ID,
+        user_id: null,
+        deleted_at: null,
+        status: "active",
+        first_name: "Tyler",
+        last_name: "Morrison",
+        email: "tyler@example.com",
+        role: "Student",
+        current_company: "Microsoft (SWE intern)",
+        graduation_year: 2028,
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+    ],
+    alumni: [],
+  });
+
+  assert.deepEqual(projected.get(`${ORG_ID}:member:member-parse`), {
+    orgId: ORG_ID,
+    personKey: "member:member-parse",
+    personType: "member",
+    personId: "member-parse",
+    memberId: "member-parse",
+    alumniId: null,
+    userId: null,
+    name: "Tyler Morrison",
+    email: "tyler@example.com",
+    role: "Student",
+    major: null,
+    currentCompany: "Microsoft",
+    industry: "Technology",
+    graduationYear: 2028,
+    currentCity: null,
+  });
+});
+
+test("buildProjectedPeople prefers richer alumni company and industry over parsed member signals", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "member-linked",
+        organization_id: ORG_ID,
+        user_id: "shared-user",
+        deleted_at: null,
+        status: "active",
+        first_name: "Zara",
+        last_name: "Hassan",
+        email: "zara@example.com",
+        role: "Student",
+        current_company: "Citadel (summer analyst)",
+        graduation_year: 2027,
+        created_at: "2026-03-01T00:00:00.000Z",
+      },
+    ],
+    alumni: [
+      {
+        id: "alumni-linked",
+        organization_id: ORG_ID,
+        user_id: "shared-user",
+        deleted_at: null,
+        first_name: "Zara",
+        last_name: "Hassan",
+        email: "zara@example.com",
+        major: "Economics",
+        current_company: "Goldman Sachs",
+        industry: "Banking",
+        current_city: "New York",
+        graduation_year: 2025,
+        position_title: "Analyst",
+        job_title: null,
+        created_at: "2026-03-02T00:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.deepEqual(projected.get(`${ORG_ID}:user:shared-user`), {
+    orgId: ORG_ID,
+    personKey: "user:shared-user",
+    personType: "member",
+    personId: "member-linked",
+    memberId: "member-linked",
+    alumniId: "alumni-linked",
+    userId: "shared-user",
+    name: "Zara Hassan",
+    email: "zara@example.com",
+    role: "Analyst",
+    major: "Economics",
+    currentCompany: "Goldman Sachs",
+    industry: "Finance",
+    graduationYear: 2025,
+    currentCity: "New York",
+  });
+});
+
 test("buildSourcePerson returns null for empty input", () => {
   const result = buildSourcePerson({ memberRows: [], alumniRows: [] });
   assert.equal(result, null);
@@ -546,13 +633,13 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
       },
       {
         name: "Sam Second",
-        score: 57,
-        reasonCodes: ["shared_industry", "shared_city", "second_degree_mentorship"],
+        score: 55,
+        reasonCodes: ["shared_industry", "shared_city"],
       },
       {
         name: "Dina Direct",
-        score: 45,
-        reasonCodes: ["shared_company", "graduation_proximity", "direct_mentorship"],
+        score: 40,
+        reasonCodes: ["shared_company", "graduation_proximity"],
       },
     ]
   );
@@ -719,22 +806,6 @@ test("suggestConnections suppresses generic company matches and keeps sources di
     },
   ]);
 
-  stub.registerRpc("get_mentorship_distances", ({ p_user_id }) => {
-    switch (p_user_id) {
-      case "user-louis":
-        return [
-          { user_id: "user-dylan", distance: 1 },
-          { user_id: "user-aarav", distance: 2 },
-        ];
-      case "user-matt":
-        return [{ user_id: "user-aarav", distance: 1 }];
-      case "user-matthew":
-        return [{ user_id: "user-alex", distance: 1 }];
-      default:
-        return [];
-    }
-  });
-
   const graphClient = {
     isAvailable: () => false,
     query: async () => [],
@@ -842,22 +913,9 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
     },
   ];
 
-  const distanceRows = [
-    { personKey: "user:00000000-0000-0000-0000-000000000002", distance: 1 },
-    { personKey: "user:00000000-0000-0000-0000-000000000003", distance: 2 },
-  ];
-
   const graphClient = {
     isAvailable: () => true,
-    query: async (_orgId: string, cypher: string) => {
-      if (cypher.includes("RETURN source.personKey AS personKey")) {
-        return [{ personKey: "user:00000000-0000-0000-0000-000000000001" }];
-      }
-      if (cypher.includes(" AS distance")) {
-        return distanceRows;
-      }
-      return candidateRows;
-    },
+    query: async () => candidateRows,
   };
 
   const graphResult = await suggestConnections({
@@ -888,7 +946,7 @@ test("suggestConnections graph mode matches SQL fallback ordering and reasons", 
   assert.deepEqual(graphResult.suggestions, fallbackResult.suggestions);
 });
 
-test("suggestConnections graph mode matches SQL fallback for mixed-direction second-degree mentorship", async () => {
+test("suggestConnections graph mode matches SQL fallback for sparse profile scoring", async () => {
   const stub = createSupabaseStub();
 
   stub.seed("alumni", [
@@ -902,7 +960,7 @@ test("suggestConnections graph mode matches SQL fallback for mixed-direction sec
       major: null,
       current_company: null,
       industry: null,
-      current_city: null,
+      current_city: "Austin",
       graduation_year: null,
       position_title: null,
       job_title: null,
@@ -919,7 +977,7 @@ test("suggestConnections graph mode matches SQL fallback for mixed-direction sec
       major: null,
       current_company: null,
       industry: null,
-      current_city: null,
+      current_city: "Austin",
       graduation_year: null,
       position_title: "Founder",
       job_title: null,
@@ -928,26 +986,9 @@ test("suggestConnections graph mode matches SQL fallback for mixed-direction sec
     },
   ]);
 
-  stub.registerRpc("get_mentorship_distances", () => [
-    {
-      user_id: "candidate-user",
-      distance: 2,
-    },
-  ]);
-
   const graphClient = {
     isAvailable: () => true,
-    query: async (_orgId: string, cypher: string) => {
-      if (cypher.includes("RETURN source.personKey AS personKey")) {
-        return [{ personKey: "user:source-user" }];
-      }
-      if (cypher.includes("<-[:MENTORS]-(:Person)-[:MENTORS]->")) {
-        return [{ personKey: "user:candidate-user", distance: 2 }];
-      }
-      if (cypher.includes(" AS distance")) {
-        return [];
-      }
-      return [
+    query: async () => [
         {
           personKey: "user:candidate-user",
           personType: "alumni",
@@ -959,10 +1000,9 @@ test("suggestConnections graph mode matches SQL fallback for mixed-direction sec
           currentCompany: null,
           industry: null,
           graduationYear: null,
-          currentCity: null,
+          currentCity: "Austin",
         },
-      ];
-    },
+      ],
   };
 
   const graphResult = await suggestConnections({
@@ -1117,7 +1157,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
   ]);
 });
 
-test("suggestConnections keeps sparse member sources ranked by city, graduation proximity, and mentorship", async () => {
+test("suggestConnections keeps sparse member sources ranked by city and graduation proximity", async () => {
   const stub = createSupabaseStub();
 
   stub.seed("members", [
@@ -1188,13 +1228,6 @@ test("suggestConnections keeps sparse member sources ranked by city, graduation 
     },
   ]);
 
-  stub.registerRpc("get_mentorship_distances", () => [
-    {
-      user_id: "match-user",
-      distance: 1,
-    },
-  ]);
-
   const result = await suggestConnections({
     orgId: ORG_ID,
     serviceSupabase: stub as any,
@@ -1214,7 +1247,7 @@ test("suggestConnections keeps sparse member sources ranked by city, graduation 
   assert.equal(result.suggestions[0].name, "Dana Coach");
   assert.deepEqual(
     result.suggestions[0].reasons.map((reason) => reason.code),
-    ["shared_city", "graduation_proximity", "direct_mentorship"]
+    ["shared_city", "graduation_proximity"]
   );
 });
 
@@ -1472,7 +1505,7 @@ test("buildProjectedPeople deterministic attribute precedence: alumni fields tak
   assert.equal(person?.graduationYear, 2019, "alumni graduation_year must take precedence");
   // Alumni-only fields preserved
   assert.equal(person?.major, "Economics");
-  assert.equal(person?.industry, "Banking");
+  assert.equal(person?.industry, "Finance");
   assert.equal(person?.currentCity, "Seattle");
   // personType is "member" when a member row is present
   assert.equal(person?.personType, "member");

@@ -40,11 +40,6 @@ export interface SuggestConnectionsArgs {
   limit?: number;
 }
 
-interface MentorshipDistanceRow {
-  user_id: string;
-  distance: number;
-}
-
 interface GraphSuggestionRow extends Record<string, unknown> {
   personKey: string;
   personType: "member" | "alumni";
@@ -60,7 +55,6 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   industry: string | null;
   graduationYear: number | null;
   currentCity: string | null;
-  mentorshipDistance: number | null;
 }
 
 const CHAT_CONNECTION_SUGGESTION_LIMIT = 3;
@@ -261,34 +255,6 @@ function resolveSourceFromQuery(
   return { state: "resolved", source: matches[0] };
 }
 
-async function fetchMentorshipDistances(
-  serviceSupabase: SupabaseClient,
-  orgId: string,
-  source: ProjectedPerson
-) {
-  if (!source.userId) {
-    return new Map<string, number>();
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (serviceSupabase as any).rpc("get_mentorship_distances", {
-    p_org_id: orgId,
-    p_user_id: source.userId,
-  });
-
-  if (error) {
-    throw new Error("Failed to load mentorship distances");
-  }
-
-  const distances = new Map<string, number>();
-  for (const row of (data ?? []) as MentorshipDistanceRow[]) {
-    if (row.user_id && typeof row.distance === "number") {
-      distances.set(row.user_id, row.distance);
-    }
-  }
-  return distances;
-}
-
 async function fetchGraphFreshness(
   serviceSupabase: SupabaseClient,
   orgId: string
@@ -367,19 +333,15 @@ async function loadOrganizationName(
 function scoreProjectedCandidates(input: {
   source: ProjectedPerson;
   candidates: Iterable<ProjectedPerson>;
-  mentorshipDistances: Map<string, number>;
   limit: number;
   scoringContext?: ConnectionScoringContext;
 }) {
   const suggestions = [];
 
   for (const candidate of input.candidates) {
-    const mentorshipDistance =
-      candidate.userId ? input.mentorshipDistances.get(candidate.userId) ?? null : null;
     const suggestion = buildSuggestionForCandidate({
       source: input.source,
       candidate,
-      mentorshipDistance,
       scoringContext: input.scoringContext,
     });
     if (suggestion) {
@@ -509,23 +471,14 @@ function preferredCandidate(left: ProjectedPerson, right: ProjectedPerson) {
   return right.personId.localeCompare(left.personId) < 0 ? right : left;
 }
 
-function mergeMentorshipDistance(left: number | null, right: number | null) {
-  if (left === null) return right;
-  if (right === null) return left;
-  return Math.min(left, right);
-}
-
-function dedupeGraphCandidates(
-  entries: Array<{ candidate: ProjectedPerson; mentorshipDistance: number | null }>
-) {
+function dedupeGraphCandidates(entries: ProjectedPerson[]) {
   const groups: Array<{
     candidate: ProjectedPerson;
-    mentorshipDistance: number | null;
     tokens: Set<string>;
   }> = [];
 
-  for (const entry of entries) {
-    const entryTokens = candidateIdentityTokens(entry.candidate);
+  for (const candidate of entries) {
+    const entryTokens = candidateIdentityTokens(candidate);
     const matchingIndexes = groups
       .map((group, index) => ({ group, index }))
       .filter(({ group }) => [...entryTokens].some((token) => group.tokens.has(token)))
@@ -533,8 +486,7 @@ function dedupeGraphCandidates(
 
     if (matchingIndexes.length === 0) {
       groups.push({
-        candidate: entry.candidate,
-        mentorshipDistance: entry.mentorshipDistance,
+        candidate,
         tokens: entryTokens,
       });
       continue;
@@ -542,11 +494,7 @@ function dedupeGraphCandidates(
 
     const baseIndex = matchingIndexes[0];
     const baseGroup = groups[baseIndex];
-    baseGroup.candidate = preferredCandidate(baseGroup.candidate, entry.candidate);
-    baseGroup.mentorshipDistance = mergeMentorshipDistance(
-      baseGroup.mentorshipDistance,
-      entry.mentorshipDistance
-    );
+    baseGroup.candidate = preferredCandidate(baseGroup.candidate, candidate);
     for (const token of entryTokens) {
       baseGroup.tokens.add(token);
     }
@@ -554,10 +502,6 @@ function dedupeGraphCandidates(
     for (const index of matchingIndexes.slice(1).reverse()) {
       const group = groups[index];
       baseGroup.candidate = preferredCandidate(baseGroup.candidate, group.candidate);
-      baseGroup.mentorshipDistance = mergeMentorshipDistance(
-        baseGroup.mentorshipDistance,
-        group.mentorshipDistance
-      );
       for (const token of group.tokens) {
         baseGroup.tokens.add(token);
       }
@@ -565,24 +509,12 @@ function dedupeGraphCandidates(
     }
   }
 
-  return groups.map(({ candidate, mentorshipDistance }) => ({
-    candidate,
-    mentorshipDistance,
-  }));
+  return groups.map(({ candidate }) => candidate);
 }
 
 function resolveUnavailableFallbackReason(graphClient: FalkorQueryClient): GraphFallbackReason {
   return graphClient.getUnavailableReason?.() ?? "unavailable";
 }
-
-const MENTORSHIP_DISTANCE_PATTERNS: ReadonlyArray<{ matchClause: string; distance: number }> = [
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(candidate:Person)", distance: 1 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(candidate:Person)", distance: 1 },
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)-[:MENTORS]->(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)<-[:MENTORS]-(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})<-[:MENTORS]-(:Person)-[:MENTORS]->(candidate:Person)", distance: 2 },
-  { matchClause: "(source:Person {personKey: $sourceKey})-[:MENTORS]->(:Person)<-[:MENTORS]-(candidate:Person)", distance: 2 },
-];
 
 async function fetchGraphSuggestions(input: {
   orgId: string;
@@ -591,79 +523,40 @@ async function fetchGraphSuggestions(input: {
   graphClient: FalkorQueryClient;
   scoringContext?: ConnectionScoringContext;
 }) {
-  // FalkorDB has partial shortestPath support, and the SQL fallback treats
-  // mentorship edges as undirected up to depth 2. Query the direct and
-  // second-degree shapes explicitly so Falkor mode preserves the same
-  // semantics without relying on unsupported Cypher forms.
-  const [candidateRows, distanceRows] = await Promise.all([
-    input.graphClient.query<GraphSuggestionRow>(
-      input.orgId,
-      `
-        MATCH (source:Person {personKey: $sourceKey})
-        MATCH (candidate:Person)
-        WHERE candidate.personKey <> source.personKey
-        RETURN
-          candidate.personKey AS personKey,
-          candidate.personType AS personType,
-          candidate.personId AS personId,
-          candidate.memberId AS memberId,
-          candidate.alumniId AS alumniId,
-          candidate.name AS name,
-          candidate.email AS email,
-          candidate.userId AS userId,
-          candidate.role AS role,
-          candidate.major AS major,
-          candidate.currentCompany AS currentCompany,
-          candidate.industry AS industry,
-          candidate.graduationYear AS graduationYear,
-          candidate.currentCity AS currentCity
-      `,
-      { sourceKey: input.source.personKey }
-    ),
-    (async () => {
-      const distanceQueryResults = await Promise.all(
-        MENTORSHIP_DISTANCE_PATTERNS.map(({ matchClause, distance }) =>
-          input.graphClient.query<{ personKey: string; distance: number }>(
-            input.orgId,
-            `
-              MATCH ${matchClause}
-              WHERE candidate.personKey <> $sourceKey
-              RETURN candidate.personKey AS personKey, ${distance} AS distance
-            `,
-            { sourceKey: input.source.personKey }
-          )
-        )
-      );
-      return distanceQueryResults.flat();
-    })(),
-  ]);
+  const candidateRows = await input.graphClient.query<GraphSuggestionRow>(
+    input.orgId,
+    `
+      MATCH (source:Person {personKey: $sourceKey})
+      MATCH (candidate:Person)
+      WHERE candidate.personKey <> source.personKey
+      RETURN
+        candidate.personKey AS personKey,
+        candidate.personType AS personType,
+        candidate.personId AS personId,
+        candidate.memberId AS memberId,
+        candidate.alumniId AS alumniId,
+        candidate.name AS name,
+        candidate.email AS email,
+        candidate.userId AS userId,
+        candidate.role AS role,
+        candidate.major AS major,
+        candidate.currentCompany AS currentCompany,
+        candidate.industry AS industry,
+        candidate.graduationYear AS graduationYear,
+        candidate.currentCity AS currentCity
+    `,
+    { sourceKey: input.source.personKey }
+  );
 
-  const distanceMap = new Map<string, number>();
-  for (const row of distanceRows) {
-    if (row.personKey && typeof row.distance === "number") {
-      const existing = distanceMap.get(row.personKey);
-      if (existing === undefined || row.distance < existing) {
-        distanceMap.set(row.personKey, row.distance);
-      }
-    }
-  }
-
-  const candidatesWithDistance = candidateRows
-    .map((row) => ({
-      candidate: graphRowToProjectedPerson(row, input.orgId),
-      mentorshipDistance: distanceMap.get(row.personKey) ?? null,
-    }))
-    .filter(
-      (entry): entry is { candidate: ProjectedPerson; mentorshipDistance: number | null } =>
-        entry.candidate !== null
-    );
-
-  const suggestions = dedupeGraphCandidates(candidatesWithDistance)
-    .map(({ candidate, mentorshipDistance }) =>
+  const suggestions = dedupeGraphCandidates(
+    candidateRows
+      .map((row) => graphRowToProjectedPerson(row, input.orgId))
+      .filter((candidate): candidate is ProjectedPerson => candidate !== null)
+  )
+    .map((candidate) =>
       buildSuggestionForCandidate({
         source: input.source,
         candidate,
-        mentorshipDistance,
         scoringContext: input.scoringContext,
       })
     )
@@ -739,16 +632,12 @@ export async function suggestConnections(input: {
       throw new SuggestConnectionsLookupError("Person not found");
     }
 
-    const [projectedPeople, mentorshipDistances] = await Promise.all([
-      projectedPeopleForLookup
-        ? Promise.resolve(projectedPeopleForLookup)
-        : loadProjectedPeople(serviceSupabase, orgId),
-      fetchMentorshipDistances(serviceSupabase, orgId, source),
-    ]);
+    const projectedPeople = projectedPeopleForLookup
+      ? projectedPeopleForLookup
+      : await loadProjectedPeople(serviceSupabase, orgId);
     const results = scoreProjectedCandidates({
       source: projectedPeople.get(`${orgId}:${source.personKey}`) ?? source,
       candidates: projectedPeople.values(),
-      mentorshipDistances,
       limit,
       scoringContext,
     });

@@ -22,13 +22,18 @@ Relevant code:
 
 Members and alumni from Supabase are merged into `ProjectedPerson` objects. The identity model is the foundation: if a member and alumni share a `user_id`, they merge under `user:<userId>`. Unlinked rows stay separate as `member:<id>` or `alumni:<id>`. Both write and read paths use `buildProjectedPeople()`.
 
+Connection reads also normalize career signals before scoring:
+- alumni `industry` values are canonicalized into shared buckets such as `Technology`, `Finance`, and `Healthcare`
+- member `current_company` strings like `Microsoft (SWE intern)` or `Penn Medicine — clinical research assistant` are parsed into employer names and, when recognized, mapped to a canonical industry
+- alumni still win when linked alumni data is richer than member data
+
 ### Step 2 — Infrastructure (`client.ts`)
 
 `FalkorClientImpl` manages the connection. Config resolves from env vars in priority order: `FALKOR_URL` (remote) → `FALKOR_HOST` (remote discrete) → `FALKOR_EMBEDDED` (local dev with falkordblite). Each org gets its own graph named `teamnetwork_people_<orgId>`. The `FalkorQueryClient` interface is the DI seam — tests inject stubs here.
 
 ### Step 3 — Database foundation (migration SQL)
 
-Triggers on `members`, `alumni`, and `mentorship_pairs` fire on INSERT/UPDATE, compare relevant fields, and enqueue changed rows to `graph_sync_queue` with old-key context in the payload. Four service-role RPCs: `dequeue_graph_sync_queue` (SKIP LOCKED for concurrency), `increment_graph_sync_attempts`, `purge_graph_sync_queue`, `backfill_graph_sync_queue`. Plus `get_mentorship_distances` — a recursive CTE that walks mentorship edges up to depth 2 for the SQL fallback.
+Triggers on `members`, `alumni`, and `mentorship_pairs` fire on INSERT/UPDATE, compare relevant fields, and enqueue changed rows to `graph_sync_queue` with old-key context in the payload. Four service-role RPCs: `dequeue_graph_sync_queue` (SKIP LOCKED for concurrency), `increment_graph_sync_attempts`, `purge_graph_sync_queue`, and `backfill_graph_sync_queue`.
 
 ### Step 4 — Write path (`sync.ts`)
 
@@ -40,7 +45,7 @@ Queue items are processed per `source_table`. For people: re-read all active sou
 
 ### Step 6 — Scoring (`scoring.ts`)
 
-Six weighted reason codes; Falkor and SQL paths use identical scoring:
+Four weighted reason codes; Falkor and SQL paths use identical scoring:
 
 | Reason | Weight |
 |--------|--------|
@@ -48,17 +53,14 @@ Six weighted reason codes; Falkor and SQL paths use identical scoring:
 | `shared_company` | 30 |
 | `shared_city` | 15 |
 | `graduation_proximity` | 10 |
-| `direct_mentorship` | 5 |
-| `second_degree_mentorship` | 2 |
-
 `graduation_proximity` matches when the source and candidate graduated within 3 years of each other. `shared_company` is suppressed when the normalized company value is the platform name (`TeamNetwork`) or the current organization's name, so generic org-internal company strings do not flatten rankings across the whole org. Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
 
 ### Step 7 — Read path (`suggestions.ts`)
 
 `suggestConnections()` is the main entry. It resolves the source person with cross-table complement (loads both member and alumni rows for the same user), then branches:
 
-- **Falkor mode:** parallel Cypher queries — all candidates plus six directed mentorship distance queries (outgoing d=1, incoming d=1, four mixed-direction d=2 patterns). Scores in app code.
-- **SQL fallback:** loads full org projection and mentorship distances via the recursive CTE RPC. Scores identically.
+- **Falkor mode:** query all candidate `Person` nodes in the org and score in app code.
+- **SQL fallback:** load the full org projection from Supabase and score identically.
 
 If Falkor throws, the implementation silently falls back to SQL.
 
@@ -86,7 +88,7 @@ Tests verify graph/SQL parity, projection deduplication, merged source attribute
 - `tests/falkordb-people-graph.test.ts`
 - New or touched scripts/tests: `scripts/test-falkor-local.ts`, `tests/create-org-checkout-integration.test.ts`
 
-The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity. Ranking is advice-oriented in app code: shared company and shared industry dominate, while city, graduation proximity, and mentorship act as supporting signals. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
+The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity. Ranking is career-signal-oriented in app code: shared industry and shared company dominate, with city and graduation proximity as supporting signals. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
 
 ## Graph Model
 
