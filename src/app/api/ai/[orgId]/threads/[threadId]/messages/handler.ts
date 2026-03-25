@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
+import { normalizeAssistantMessageForDisplay } from "@/lib/ai/assistant-message-display";
 import { resolveOwnThread } from "@/lib/ai/thread-resolver";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
@@ -66,6 +67,12 @@ export function createAiThreadMessagesGetHandler(
     return NextResponse.json({ error: "Failed to list messages" }, { status: 500 });
   }
 
-    return NextResponse.json({ messages });
+    return NextResponse.json({
+      messages: (messages ?? []).map(
+        (
+          message: Parameters<typeof normalizeAssistantMessageForDisplay>[0]
+        ) => normalizeAssistantMessageForDisplay(message)
+      ),
+    });
   };
 }

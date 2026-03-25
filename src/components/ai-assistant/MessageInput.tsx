@@ -7,6 +7,7 @@ interface MessageInputProps {
   isStreaming: boolean;
   error: string | null;
   toolStatusLabel?: string | null;
+  placeholder?: string;
   onSend: (message: string) => Promise<void>;
   onCancel: () => void;
   onClearError: () => void;
@@ -16,6 +17,7 @@ export function MessageInput({
   isStreaming,
   error,
   toolStatusLabel,
+  placeholder,
   onSend,
   onCancel,
   onClearError,
@@ -89,7 +91,7 @@ export function MessageInput({
             resizeTextarea();
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about your organization..."
+          placeholder={placeholder ?? "Ask about your organization..."}
           disabled={isStreaming}
           rows={1}
           className="max-h-32 flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"

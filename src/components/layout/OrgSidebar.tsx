@@ -9,6 +9,7 @@ import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavGroupId, GridIcon, LogOutIcon, getConfigKey } from "@/lib/navigation/nav-items";
 import { bucketItemsByGroup, buildSectionOrder, buildGlobalIndexMap, getActiveGroup, type VisibleNavItem } from "@/lib/navigation/sidebar-groups";
+import { getVisibleOrgNavItems } from "@/lib/navigation/visible-items";
 import { NavGroupSection, NavItemLink } from "@/components/layout/NavGroupSection";
 import { useUIProfile } from "@/lib/analytics/use-ui-profile";
 import { Avatar } from "@/components/ui/Avatar";
@@ -53,16 +54,11 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
     return {};
   }, [organization.nav_config]);
 
-  const visibleNav: VisibleNavItem[] = useMemo(() => ORG_NAV_ITEMS
-    .filter((item) => {
-      if (role && !item.roles.includes(role)) return false;
-      if (item.requiresAlumni && !hasAlumniAccess) return false;
-      if (item.requiresParents && !hasParentsAccess) return false;
-      const configKey = getConfigKey(item.href);
-      const config = navConfig[configKey];
-      if (config?.hidden) return false;
-      if (role && Array.isArray(config?.hiddenForRoles) && config.hiddenForRoles.includes(role)) return false;
-      return true;
+  const visibleNav: VisibleNavItem[] = useMemo(() => getVisibleOrgNavItems({
+      role,
+      hasAlumniAccess,
+      hasParentsAccess,
+      navConfig,
     })
     .map((item) => {
       const configKey = getConfigKey(item.href);
