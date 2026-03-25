@@ -38,6 +38,7 @@ import {
   recordSuggestedCandidates,
   recordSuggestionExecution,
   type GraphFallbackReason,
+  type SuggestionResultStrength,
 } from "@/lib/falkordb/telemetry";
 import { MAX_GRAPH_SYNC_ATTEMPTS, readOptionalString } from "@/lib/falkordb/utils";
 import {
@@ -453,7 +454,8 @@ export function scoreProjectedCandidates(input: {
     scoringContext: input.scoringContext,
   });
   const exposurePenaltyByPersonId = buildExposurePenaltyByPersonId(input.source.orgId);
-  const suggestions = [];
+  const strongSuggestions = [];
+  const weakSuggestions = [];
   const candidatePool = buildCandidatePool({
     source: input.source,
     candidates: input.candidates,
@@ -471,12 +473,35 @@ export function scoreProjectedCandidates(input: {
         exposurePenaltyByPersonId,
       },
     });
-    if (suggestion && hasProfessionalStrengthReason(suggestion)) {
-      suggestions.push(suggestion);
+    if (!suggestion) {
+      continue;
+    }
+
+    if (hasProfessionalStrengthReason(suggestion)) {
+      strongSuggestions.push(suggestion);
+    } else {
+      weakSuggestions.push(suggestion);
     }
   }
 
-  return sortSuggestedConnections(suggestions).slice(0, input.limit);
+  const results = strongSuggestions.length > 0 ? strongSuggestions : weakSuggestions;
+  return sortSuggestedConnections(results).slice(0, input.limit);
+}
+
+function classifySuggestionResultStrength(
+  suggestions: SuggestConnectionsResult["suggestions"]
+): SuggestionResultStrength {
+  if (suggestions.length === 0) {
+    return "none";
+  }
+
+  return suggestions.some((suggestion) =>
+    suggestion.reasons.some((reason) =>
+      ["shared_industry", "shared_company", "shared_role_family"].includes(reason.code)
+    )
+  )
+    ? "strong"
+    : "weak_fallback";
 }
 
 function buildLookupOnlyResult(input: {
@@ -789,6 +814,7 @@ export async function suggestConnections(input: {
       mode: result.mode,
       fallbackReason: result.fallback_reason,
       freshnessState: result.freshness.state,
+      resultStrength: classifySuggestionResultStrength(result.suggestions),
     });
     return result;
   }

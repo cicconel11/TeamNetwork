@@ -453,6 +453,66 @@ test("direct-name connection prompts include the no_suggestions fallback copy in
   );
 });
 
+test("direct-name connection prompts keep the resolved contract for weak fallback matches", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "suggest_connections",
+            argsJson: '{"person_query":"Louis Ciccone"}',
+          };
+          return;
+        }
+
+        assert.equal(options.toolResults[0].data.state, "resolved");
+        assert.deepEqual(
+          options.toolResults[0].data.suggestions[0].reasons.map((reason: any) => reason.code),
+          ["shared_city", "graduation_proximity"]
+        );
+        yield {
+          type: "chunk",
+          content:
+            "Top connections for Louis Ciccone\n1. Dana Coach - Advisor\nWhy: shared city, graduation proximity",
+        };
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "resolved",
+          mode: "sql_fallback",
+          fallback_reason: "disabled",
+          freshness: { state: "unknown", as_of: "2026-03-24T00:00:00.000Z" },
+          source_person: { name: "Louis Ciccone", subtitle: "Captain" },
+          suggestions: [
+            {
+              name: "Dana Coach",
+              subtitle: "Advisor",
+              reasons: [
+                { code: "shared_city", label: "shared city", weight: 4 },
+                { code: "graduation_proximity", label: "graduation proximity", weight: 3 },
+              ],
+            },
+          ],
+        });
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.match(body, /Top connections for Louis Ciccone/);
+  assert.match(body, /shared city, graduation proximity/i);
+  assert.doesNotMatch(body, /not enough strong professional overlap/i);
+});
+
 test("direct-name connection prompts log suggest_connections in audit metadata", async () => {
   await (
     await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
