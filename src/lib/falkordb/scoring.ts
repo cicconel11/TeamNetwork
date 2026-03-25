@@ -137,10 +137,6 @@ function chooseSharedTextValue(a: string | null | undefined, b: string | null | 
   return a?.trim() || b?.trim() || null;
 }
 
-export function normalizeConnectionText(value: string | null | undefined): string | null {
-  return normalizeCareerText(value);
-}
-
 function buildGenericCompanySet(values: Iterable<string | null | undefined>) {
   const normalized = new Set<string>();
 
@@ -190,16 +186,14 @@ function hasGraduationProximity(source: ProjectedPerson, candidate: ProjectedPer
 }
 
 function buildPreview(person: ProjectedPerson): SuggestedConnection["preview"] {
-  const preview: SuggestedConnection["preview"] = {};
-
-  if (person.role) preview.role = person.role;
-  if (person.major) preview.major = person.major;
-  if (person.currentCompany) preview.current_company = person.currentCompany;
-  if (person.industry) preview.industry = person.industry;
-  if (typeof person.graduationYear === "number") preview.graduation_year = person.graduationYear;
-  if (person.currentCity) preview.current_city = person.currentCity;
-
-  return preview;
+  return {
+    ...(person.role ? { role: person.role } : {}),
+    ...(person.major ? { major: person.major } : {}),
+    ...(person.currentCompany ? { current_company: person.currentCompany } : {}),
+    ...(person.industry ? { industry: person.industry } : {}),
+    ...(typeof person.graduationYear === "number" ? { graduation_year: person.graduationYear } : {}),
+    ...(person.currentCity ? { current_city: person.currentCity } : {}),
+  };
 }
 
 export function formatConnectionReasonLabel(code: ConnectionReasonCode): string {
@@ -250,6 +244,8 @@ export function buildDisplayReadyConnectionPerson(person: ProjectedPerson): Disp
     }),
   };
 }
+
+export const normalizeConnectionText = normalizeCareerText;
 
 export function buildDisplayReadySuggestedConnection(
   suggestion: SuggestedConnection

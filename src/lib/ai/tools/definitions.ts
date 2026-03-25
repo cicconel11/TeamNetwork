@@ -9,12 +9,21 @@ export interface ListEventsArgs {
   upcoming?: boolean;
 }
 
+export interface ListAnnouncementsArgs {
+  limit?: number;
+}
+
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
   person_type?: "member" | "alumni";
   person_id?: string;
   person_query?: string;
+  limit?: number;
+}
+
+export interface FindNavigationTargetsArgs {
+  query: string;
   limit?: number;
 }
 
@@ -58,6 +67,26 @@ const TOOL_BY_NAME = {
             type: "boolean" as const,
             description:
               "If true, only future events. If false, only past events. Default true.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_announcements: {
+    type: "function" as const,
+    function: {
+      name: "list_announcements" as const,
+      description:
+        "List recent organization announcements. Returns title, publish date, audience, pinned status, and a short body preview. Use for questions about recent news, updates, reminders, or announcements.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max announcements to return (default 10)",
           },
         },
         additionalProperties: false as const,
@@ -111,13 +140,41 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  find_navigation_targets: {
+    type: "function" as const,
+    function: {
+      name: "find_navigation_targets" as const,
+      description:
+        "Find the best in-app pages for opening, managing, or creating organization resources. Use for requests like open announcements, take me to members, where do I edit navigation, or where can I create an event.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          query: {
+            type: "string" as const,
+            description:
+              "The page, feature, or action the user wants, such as announcements, create event, member settings, or donations.",
+          },
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 10,
+            description: "Max navigation targets to return (default 5)",
+          },
+        },
+        required: ["query"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
 } as const;
 
 export const AI_TOOLS = [
   TOOL_BY_NAME.list_members,
   TOOL_BY_NAME.list_events,
+  TOOL_BY_NAME.list_announcements,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
+  TOOL_BY_NAME.find_navigation_targets,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 
 // Derived from AI_TOOLS — no manual union to maintain

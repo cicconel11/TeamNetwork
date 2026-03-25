@@ -217,6 +217,53 @@ function verifyListEvents(content: string, data: unknown): string[] {
   return failures;
 }
 
+function verifyListAnnouncements(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_announcements returned non-array data"];
+  }
+
+  const titles = new Set(
+    data
+      .map((row) =>
+        row && typeof row === "object" && typeof (row as { title?: unknown }).title === "string"
+          ? normalizeIdentifier((row as { title: string }).title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+  const dates = new Set(
+    data.flatMap((row) =>
+      row &&
+      typeof row === "object" &&
+      typeof (row as { published_at?: unknown }).published_at === "string"
+        ? formatKnownEventDates((row as { published_at: string }).published_at)
+        : []
+    )
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`announcement title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`announcement title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  for (const date of extractMentionedDates(content)) {
+    if (!dates.has(date)) {
+      failures.push(`announcement date ${date} was not present in tool rows`);
+    }
+  }
+
+  return failures;
+}
+
 interface SuggestConnectionGroundingReason {
   code?: unknown;
   label?: unknown;
@@ -432,6 +479,9 @@ export function verifyToolBackedResponse(input: {
         break;
       case "list_events":
         failures.push(...verifyListEvents(input.content, result.data));
+        break;
+      case "list_announcements":
+        failures.push(...verifyListAnnouncements(input.content, result.data));
         break;
       case "suggest_connections":
         failures.push(...verifySuggestConnections(input.content, result.data));
