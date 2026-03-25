@@ -294,7 +294,7 @@ After ranking, both Falkor and SQL fallback normalize into the same chat-ready e
 - `disambiguation_options`: present only for ambiguous `person_query` matches
 - `mode`, `freshness`, and `fallback_reason`
 
-This is the integration boundary between the people graph and the AI route. Pass 2 receives this payload directly and renders a fixed connection template. Grounding verifies the rendered answer against this normalized payload instead of against raw graph rows.
+This is the integration boundary between the people graph and the AI route. Single-tool connection turns are rendered directly from this payload in the route, while mixed tool turns can still hand it to pass 2 with a fixed connection template. Grounding verifies the rendered answer against this normalized payload instead of against raw graph rows.
 
 ## How To Test It
 
