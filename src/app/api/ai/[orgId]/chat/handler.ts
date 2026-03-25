@@ -91,6 +91,132 @@ const CONNECTION_PASS2_TEMPLATE = [
   "- If state=no_suggestions, say you found the person but there is not enough strong professional overlap yet to recommend a connection.",
 ].join("\n");
 
+interface SuggestConnectionDisplayReason {
+  label?: unknown;
+}
+
+interface SuggestConnectionDisplayRow {
+  name?: unknown;
+  subtitle?: unknown;
+  reasons?: unknown;
+}
+
+interface SuggestConnectionDisplayPayload {
+  state?: unknown;
+  source_person?: { name?: unknown } | null;
+  suggestions?: unknown;
+  disambiguation_options?: unknown;
+}
+
+function getNonEmptyString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function formatDisplayRow(row: { name?: unknown; subtitle?: unknown }): string | null {
+  const name = getNonEmptyString(row.name);
+  if (!name) {
+    return null;
+  }
+
+  const subtitle = getNonEmptyString(row.subtitle);
+  return subtitle ? `${name} - ${subtitle}` : name;
+}
+
+function formatSuggestConnectionsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as SuggestConnectionDisplayPayload;
+  const state = getNonEmptyString(payload.state);
+
+  if (!state) {
+    return null;
+  }
+
+  if (state === "not_found") {
+    return "I couldn't find that person in the organization's member or alumni data. Please share a narrower identifier like a full name or email.";
+  }
+
+  if (state === "ambiguous") {
+    const options = Array.isArray(payload.disambiguation_options)
+      ? payload.disambiguation_options
+          .map((option) =>
+            option && typeof option === "object"
+              ? formatDisplayRow(option as { name?: unknown; subtitle?: unknown })
+              : null
+          )
+          .filter((option): option is string => Boolean(option))
+      : [];
+
+    if (options.length === 0) {
+      return null;
+    }
+
+    return `I found multiple matches. Which one did you mean?\n${options
+      .map((option) => `- ${option}`)
+      .join("\n")}`;
+  }
+
+  const sourceName = getNonEmptyString(payload.source_person?.name);
+  if (!sourceName) {
+    return null;
+  }
+
+  if (state === "no_suggestions") {
+    return `I found ${sourceName}, but there isn't enough strong professional overlap yet to recommend specific connections within the organization.`;
+  }
+
+  if (state !== "resolved" || !Array.isArray(payload.suggestions)) {
+    return null;
+  }
+
+  const suggestions = payload.suggestions
+    .map((suggestion) => {
+      if (!suggestion || typeof suggestion !== "object") {
+        return null;
+      }
+
+      const displayLine = formatDisplayRow(suggestion as { name?: unknown; subtitle?: unknown });
+      if (!displayLine) {
+        return null;
+      }
+
+      const reasons = Array.isArray((suggestion as SuggestConnectionDisplayRow).reasons)
+        ? ((suggestion as SuggestConnectionDisplayRow).reasons as SuggestConnectionDisplayReason[])
+            .map((reason) => getNonEmptyString(reason?.label))
+            .filter((label): label is string => Boolean(label))
+        : [];
+
+      if (reasons.length === 0) {
+        return null;
+      }
+
+      return { displayLine, reasons };
+    })
+    .filter(
+      (
+        suggestion
+      ): suggestion is {
+        displayLine: string;
+        reasons: string[];
+      } => Boolean(suggestion)
+    )
+    .slice(0, 3);
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  const lines = [`Top connections for ${sourceName}`];
+  for (const [index, suggestion] of suggestions.entries()) {
+    lines.push(`${index + 1}. ${suggestion.displayLine}`);
+    lines.push(`Why: ${suggestion.reasons.join(", ")}`);
+  }
+
+  return lines.join("\n");
+}
+
 function getPass1Tools(
   message: string,
   effectiveSurface: CacheSurface,
@@ -797,46 +923,59 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       }
 
       if (toolCallMade && toolResults.length > 0) {
-        const pass2SystemPrompt = successfulToolResults.some(
-          (result) => result.name === "suggest_connections"
-        )
-          ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}`
-          : systemPrompt;
+        const deterministicSuggestConnectionsContent =
+          toolResults.length === 1 &&
+          successfulToolResults.length === 1 &&
+          toolResults[0].name === "suggest_connections" &&
+          successfulToolResults[0].name === "suggest_connections"
+            ? formatSuggestConnectionsResponse(successfulToolResults[0].data)
+            : null;
 
-        const pass2Outcome = await runModelStage(
-          "pass2_model",
-          PASS2_MODEL_TIMEOUT_MS,
-          {
-            client,
-            systemPrompt: pass2SystemPrompt,
-            messages: contextMessages,
-            toolResults,
-            onUsage: recordUsage,
-          },
-          (event) => {
-            if (event.type === "chunk") {
-              pass2BufferedContent += event.content;
+        if (deterministicSuggestConnectionsContent) {
+          pass2BufferedContent = deterministicSuggestConnectionsContent;
+        } else {
+          const pass2SystemPrompt = successfulToolResults.some(
+            (result) => result.name === "suggest_connections"
+          )
+            ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}`
+            : systemPrompt;
+
+          const pass2Outcome = await runModelStage(
+            "pass2_model",
+            PASS2_MODEL_TIMEOUT_MS,
+            {
+              client,
+              systemPrompt: pass2SystemPrompt,
+              messages: contextMessages,
+              toolResults,
+              onUsage: recordUsage,
+            },
+            (event) => {
+              if (event.type === "chunk") {
+                pass2BufferedContent += event.content;
+                return "continue";
+              }
+
+              if (event.type === "error") {
+                auditErrorMessage = event.message;
+                enqueue(event);
+                return "stop";
+              }
+
               return "continue";
             }
+          );
 
-            if (event.type === "error") {
-              auditErrorMessage = event.message;
-              enqueue(event);
-              return "stop";
-            }
-
-            return "continue";
+          if (pass2Outcome !== "completed") {
+            return;
           }
-        );
-
-        if (pass2Outcome !== "completed") {
-          return;
         }
 
         const groundedToolSummary =
           executionPolicy.groundingPolicy === "verify_tool_summary" &&
           toolCallSucceeded &&
-          successfulToolResults.length > 0;
+          successfulToolResults.length > 0 &&
+          pass2BufferedContent.length > 0;
 
         if (groundedToolSummary) {
           const groundingResult = verifyToolBackedResponseFn({

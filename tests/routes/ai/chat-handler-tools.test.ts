@@ -410,47 +410,49 @@ test("direct-name connection prompts only attach suggest_connections on pass 1",
   });
 });
 
-test("direct-name connection prompts pass a fixed-template contract into pass 2", async () => {
-  await (
+test("direct-name connection prompts render resolved suggestions without pass 2", async () => {
+  const body = await (
     await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
       params: Promise.resolve({ orgId: ORG_ID }),
     })
   ).text();
 
-  assert.equal(composeResponseCalls.length, 2);
-  assert.match(composeResponseCalls[1].systemPrompt, /CONNECTION ANSWER CONTRACT/);
-  assert.match(composeResponseCalls[1].systemPrompt, /Top connections for \[source person name\]/);
-  assert.deepEqual(composeResponseCalls[1].toolResults[0].data, {
-    state: "resolved",
-    mode: "sql_fallback",
-    fallback_reason: "disabled",
-    freshness: { state: "unknown", as_of: "2026-03-24T00:00:00.000Z" },
-    source_person: { name: "Louis Ciccone", subtitle: "Captain • Acme" },
-    suggestions: [
-      {
-        name: "Dina Direct",
-        subtitle: "VP Product • Acme",
-        reasons: [
-          { code: "shared_company", label: "shared company", weight: 30 },
-          { code: "shared_industry", label: "shared industry", weight: 40 },
-        ],
-      },
-    ],
-  });
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Top connections for Louis Ciccone/);
+  assert.match(body, /1\. Dina Direct - VP Product • Acme/);
+  assert.match(body, /Why: shared company, shared industry/);
+  assert.match(body, /"type":"done"/);
 });
 
-test("direct-name connection prompts include the no_suggestions fallback copy in pass 2", async () => {
-  await (
+test("direct-name connection prompts keep deterministic no_suggestions copy", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "no_suggestions",
+          mode: "sql_fallback",
+          fallback_reason: "disabled",
+          freshness: { state: "unknown", as_of: "2026-03-24T00:00:00.000Z" },
+          source_person: { name: "Louis Ciccone", subtitle: "Captain • Acme" },
+          suggestions: [],
+        });
+      },
+    })
+  );
+
+  const body = await (
     await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
       params: Promise.resolve({ orgId: ORG_ID }),
     })
   ).text();
 
-  assert.equal(composeResponseCalls.length, 2);
+  assert.equal(composeResponseCalls.length, 1);
   assert.match(
-    composeResponseCalls[1].systemPrompt,
-    /not enough strong professional overlap yet to recommend a connection/i
+    body,
+    /there isn't enough strong professional overlap yet to recommend specific connections within the organization/i
   );
+  assert.match(body, /"type":"done"/);
 });
 
 test("direct-name connection prompts keep the resolved contract for weak fallback matches", async () => {
@@ -467,17 +469,7 @@ test("direct-name connection prompts keep the resolved contract for weak fallbac
           };
           return;
         }
-
-        assert.equal(options.toolResults[0].data.state, "resolved");
-        assert.deepEqual(
-          options.toolResults[0].data.suggestions[0].reasons.map((reason: any) => reason.code),
-          ["shared_city", "graduation_proximity"]
-        );
-        yield {
-          type: "chunk",
-          content:
-            "Top connections for Louis Ciccone\n1. Dana Coach - Advisor\nWhy: shared city, graduation proximity",
-        };
+        throw new Error("suggest_connections should not require a second model pass");
       },
       executeToolCall: async (ctx: any, call: any) => {
         executeToolCallCalls.push({ ctx, call });
@@ -508,9 +500,43 @@ test("direct-name connection prompts keep the resolved contract for weak fallbac
     })
   ).text();
 
+  assert.equal(composeResponseCalls.length, 1);
   assert.match(body, /Top connections for Louis Ciccone/);
   assert.match(body, /shared city, graduation proximity/i);
   assert.doesNotMatch(body, /not enough strong professional overlap/i);
+});
+
+test("direct-name connection prompts still resolve when pass 2 would have timed out", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "suggest_connections",
+            argsJson: '{"person_query":"Louis Ciccone"}',
+          };
+          return;
+        }
+
+        throw new StageTimeoutError("pass2_model", 15_000);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Give me connection for Louis Ciccone") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Top connections for Louis Ciccone/);
+  assert.match(body, /Dina Direct/);
+  assert.doesNotMatch(body, /The response timed out\. Please try again/);
+  assert.match(body, /"type":"done"/);
 });
 
 test("direct-name connection prompts log suggest_connections in audit metadata", async () => {
