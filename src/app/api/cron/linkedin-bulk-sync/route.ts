@@ -55,6 +55,9 @@ export async function GET(request: Request) {
   let skipped = 0;
   let processed = 0;
 
+  // Track processed user IDs across orgs to avoid enriching the same user twice
+  const processedUserIds = new Set<string>();
+
   for (const org of orgs) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: members, error: memberError } = await (supabase as any)
@@ -73,10 +76,11 @@ export async function GET(request: Request) {
 
     if (!members || members.length === 0) continue;
 
-    // Filter to only members with a LinkedIn URL
+    // Filter to only members with a LinkedIn URL who haven't been processed yet
     const eligible = members.filter((m: Record<string, unknown>) => {
       const memberData = m.members as Record<string, string | null> | null;
-      return memberData?.linkedin_url;
+      const userId = m.user_id as string;
+      return memberData?.linkedin_url && !processedUserIds.has(userId);
     });
 
     for (let i = 0; i < eligible.length; i += MAX_CONCURRENCY) {
@@ -89,6 +93,7 @@ export async function GET(request: Request) {
           const linkedinUrl = memberData.linkedin_url!;
 
           try {
+            processedUserIds.add(userId);
             const profile = await fetchBrightDataProfile(linkedinUrl);
 
             if (!profile) {

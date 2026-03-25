@@ -44,17 +44,28 @@ export async function GET() {
       resyncRemaining = Math.max(0, MAX_SYNCS_PER_MONTH - (connectionRow.resync_count ?? 0));
     }
 
-    // Check if user's org has resync enabled
+    // Check if ANY of the user's orgs has resync enabled (filter for enabled ones)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: orgRole } = await (serviceClient as any)
+    const { data: enabledOrg } = await (serviceClient as any)
       .from("user_organization_roles")
-      .select("organization_id, organizations!inner(linkedin_resync_enabled)")
+      .select("organization_id")
       .eq("user_id", user.id)
       .is("revoked_at", null)
       .limit(1)
       .maybeSingle();
 
-    const resyncEnabled = orgRole?.organizations?.linkedin_resync_enabled ?? false;
+    // Check via a separate query to avoid PostgREST join issues
+    let resyncEnabled = false;
+    if (enabledOrg) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: orgData } = await (serviceClient as any)
+        .from("organizations")
+        .select("linkedin_resync_enabled")
+        .eq("id", enabledOrg.organization_id)
+        .eq("linkedin_resync_enabled", true)
+        .maybeSingle();
+      resyncEnabled = !!orgData;
+    }
 
     return NextResponse.json({
       linkedin_url: status.linkedin_url,

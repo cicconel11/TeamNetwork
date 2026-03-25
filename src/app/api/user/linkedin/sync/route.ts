@@ -16,8 +16,10 @@ export const dynamic = "force-dynamic";
  * and updates the connection record. Triggers enrichment via Bright Data
  * if a LinkedIn URL is available.
  *
- * Enforces a per-user monthly rate limit (2/month) via the
- * claim_linkedin_resync RPC when the org has the feature enabled.
+ * Enforces:
+ * - Org must have linkedin_resync_enabled = true
+ * - Per-user monthly rate limit (2/month) via claim_linkedin_resync RPC
+ * - Fail-closed: if rate limit check errors, sync is denied
  */
 export async function POST() {
   try {
@@ -33,7 +35,25 @@ export async function POST() {
 
     const serviceClient = createServiceClient();
 
-    // Check rate limit via claim_linkedin_resync RPC
+    // Check org toggle — user must belong to an org with resync enabled
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: orgRole } = await (serviceClient as any)
+      .from("user_organization_roles")
+      .select("organization_id, organizations!inner(linkedin_resync_enabled)")
+      .eq("user_id", user.id)
+      .is("revoked_at", null)
+      .eq("organizations.linkedin_resync_enabled", true)
+      .limit(1)
+      .maybeSingle();
+
+    if (!orgRole) {
+      return NextResponse.json(
+        { error: "LinkedIn re-sync is not enabled for your organization." },
+        { status: 403 },
+      );
+    }
+
+    // Check rate limit — fail closed on error
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: claimResult, error: claimError } = await (serviceClient as any).rpc(
       "claim_linkedin_resync",
@@ -42,15 +62,19 @@ export async function POST() {
 
     if (claimError) {
       console.error("[linkedin-sync] Rate limit check error:", claimError);
-      // Proceed anyway — don't block sync on rate limit infrastructure failure
+      return NextResponse.json(
+        { error: "Unable to verify sync eligibility. Please try again later." },
+        { status: 503 },
+      );
     }
 
     const claim = claimResult as { allowed: boolean; remaining?: number; reason?: string } | null;
 
-    if (claim && !claim.allowed) {
+    if (!claim || !claim.allowed) {
+      const reason = claim?.reason;
       return NextResponse.json(
         {
-          error: claim.reason === "rate_limited"
+          error: reason === "rate_limited"
             ? "You've reached your sync limit for this month (2 per month). Resets next month."
             : "LinkedIn connection not found. Please connect LinkedIn first.",
           remaining_syncs: 0,
@@ -78,11 +102,9 @@ export async function POST() {
       enriched = enrichResult.enriched;
     }
 
-    const remaining = claim?.remaining ?? null;
-
     return NextResponse.json({
       message: enriched ? "LinkedIn profile synced and enriched" : "LinkedIn profile synced",
-      remaining_syncs: remaining,
+      remaining_syncs: claim.remaining ?? null,
     });
   } catch (error) {
     console.error("[linkedin-sync] Error syncing profile:", error);

@@ -75,7 +75,7 @@ export async function fetchBrightDataProfile(
   }
 
   if (!linkedinUrl || !isLinkedInProfileUrl(linkedinUrl)) {
-    console.warn("[bright-data] Invalid LinkedIn URL, skipping:", linkedinUrl);
+    console.warn("[bright-data] Invalid LinkedIn URL, skipping");
     return null;
   }
 
@@ -128,10 +128,7 @@ export function mapBrightDataToFields(
   const experiences = Array.isArray(profile.experience) ? profile.experience : [];
   const education = Array.isArray(profile.education) ? profile.education : [];
 
-  // Find current job (no end date, most recent)
   const currentJob = experiences.find((e) => !e.end_date) ?? experiences[0] ?? null;
-
-  // Most recent education
   const latestEdu = education[0] ?? null;
 
   return {
@@ -143,141 +140,4 @@ export function mapBrightDataToFields(
     major: latestEdu?.field_of_study || null,
     position_title: currentJob?.title || null,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Bulk async API (trigger + poll + download)
-// ---------------------------------------------------------------------------
-
-const BRIGHT_DATA_DATASET_ID = "gd_l1viktl72bvl7bjuj0";
-const BRIGHT_DATA_TRIGGER_URL = `https://api.brightdata.com/datasets/v3/trigger?dataset_id=${BRIGHT_DATA_DATASET_ID}&format=json&uncompressed_webhook=true`;
-const BRIGHT_DATA_PROGRESS_URL = "https://api.brightdata.com/datasets/v3/progress";
-const BRIGHT_DATA_SNAPSHOT_URL = "https://api.brightdata.com/datasets/v3/snapshot";
-
-export interface BrightDataTriggerResult {
-  snapshot_id: string;
-}
-
-/**
- * Triggers an async bulk enrichment job for multiple LinkedIn URLs.
- * Returns a snapshot_id that can be polled for results.
- */
-export async function triggerBulkEnrichment(
-  linkedinUrls: string[],
-): Promise<BrightDataTriggerResult | null> {
-  const apiKey = getBrightDataApiKey();
-  if (!apiKey) {
-    console.log("[bright-data] Skipping bulk enrichment — BRIGHT_DATA_API_KEY not configured");
-    return null;
-  }
-
-  const validUrls = linkedinUrls.filter((url) => url && isLinkedInProfileUrl(url));
-  if (validUrls.length === 0) {
-    console.warn("[bright-data] No valid LinkedIn URLs for bulk enrichment");
-    return null;
-  }
-
-  try {
-    const res = await fetch(BRIGHT_DATA_TRIGGER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(validUrls.map((url) => ({ url }))),
-    });
-
-    if (res.status === 429) {
-      console.warn("[bright-data] Rate limited on bulk trigger");
-      return null;
-    }
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error("[bright-data] Bulk trigger error:", res.status, body.substring(0, 200));
-      return null;
-    }
-
-    const data = await res.json();
-    if (!data?.snapshot_id) {
-      console.error("[bright-data] No snapshot_id in trigger response");
-      return null;
-    }
-
-    return { snapshot_id: data.snapshot_id };
-  } catch (err) {
-    console.error("[bright-data] Bulk trigger network error:", err);
-    return null;
-  }
-}
-
-export type BrightDataSnapshotStatus = "collecting" | "digesting" | "ready" | "failed";
-
-/**
- * Checks the progress of an async enrichment job.
- */
-export async function getSnapshotProgress(
-  snapshotId: string,
-): Promise<{ status: BrightDataSnapshotStatus } | null> {
-  const apiKey = getBrightDataApiKey();
-  if (!apiKey) return null;
-
-  if (!/^[a-zA-Z0-9_-]+$/.test(snapshotId)) {
-    console.error("[bright-data] Invalid snapshot_id format");
-    return null;
-  }
-
-  try {
-    const res = await fetch(`${BRIGHT_DATA_PROGRESS_URL}/${snapshotId}`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (!res.ok) {
-      console.error("[bright-data] Progress check error:", res.status);
-      return null;
-    }
-
-    const data = await res.json();
-    return { status: data.status as BrightDataSnapshotStatus };
-  } catch (err) {
-    console.error("[bright-data] Progress check network error:", err);
-    return null;
-  }
-}
-
-/**
- * Downloads the results of a completed async enrichment job.
- */
-export async function getSnapshotResults(
-  snapshotId: string,
-): Promise<BrightDataProfileResult[] | null> {
-  const apiKey = getBrightDataApiKey();
-  if (!apiKey) return null;
-
-  if (!/^[a-zA-Z0-9_-]+$/.test(snapshotId)) {
-    console.error("[bright-data] Invalid snapshot_id format");
-    return null;
-  }
-
-  try {
-    const res = await fetch(`${BRIGHT_DATA_SNAPSHOT_URL}/${snapshotId}?format=json`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-
-    if (res.status === 202) return null; // still building
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      console.error("[bright-data] Snapshot download error:", res.status, body.substring(0, 200));
-      return null;
-    }
-
-    const data = await res.json();
-    if (!Array.isArray(data)) return null;
-
-    return data.map(normalizeBrightDataResponse);
-  } catch (err) {
-    console.error("[bright-data] Snapshot download network error:", err);
-    return null;
-  }
 }
