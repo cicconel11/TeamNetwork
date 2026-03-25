@@ -535,25 +535,24 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
     })),
     [
       {
-        name: "Dina Direct",
-        score: 128,
-        reasonCodes: ["direct_mentorship", "shared_company", "shared_graduation_year"],
-      },
-      {
-        name: "Sam Second",
-        score: 77,
-        reasonCodes: ["second_degree_mentorship", "shared_industry", "shared_major", "shared_city"],
-      },
-      {
         name: "Ava Attribute",
-        score: 55,
+        score: 95,
         reasonCodes: [
           "shared_company",
           "shared_industry",
-          "shared_major",
-          "shared_graduation_year",
           "shared_city",
+          "graduation_proximity",
         ],
+      },
+      {
+        name: "Dina Direct",
+        score: 55,
+        reasonCodes: ["shared_company", "graduation_proximity", "direct_mentorship"],
+      },
+      {
+        name: "Sam Second",
+        score: 47,
+        reasonCodes: ["shared_industry", "shared_city", "second_degree_mentorship"],
       },
     ]
   );
@@ -869,7 +868,7 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
       person_id: "candidate-alumni",
       name: "Casey Candidate",
       subtitle: "Engineer • Acme",
-      score: 28,
+      score: 50,
       preview: {
         role: "Engineer",
         current_company: "Acme",
@@ -879,18 +878,119 @@ test("suggestConnections graph mode preserves merged source attributes with dupl
         {
           code: "shared_company",
           label: "shared company",
-          weight: 20,
+          weight: 40,
           value: "Acme",
         },
         {
-          code: "shared_graduation_year",
-          label: "shared graduation year",
-          weight: 8,
+          code: "graduation_proximity",
+          label: "graduation proximity",
+          weight: 10,
           value: 2024,
         },
       ],
     },
   ]);
+});
+
+test("suggestConnections keeps sparse member sources ranked by city, graduation proximity, and mentorship", async () => {
+  const stub = createSupabaseStub();
+
+  stub.seed("members", [
+    {
+      id: "member-source",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "louis@example.com",
+      role: "Captain",
+      current_company: null,
+      graduation_year: 2024,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      id: "member-match",
+      organization_id: ORG_ID,
+      user_id: "match-user",
+      deleted_at: null,
+      status: "active",
+      first_name: "Dana",
+      last_name: "Coach",
+      email: "dana@example.com",
+      role: "Coach",
+      current_company: null,
+      graduation_year: 2026,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+  ]);
+
+  stub.seed("alumni", [
+    {
+      id: "alumni-source",
+      organization_id: ORG_ID,
+      user_id: "source-user",
+      first_name: "Louis",
+      last_name: "Ciccone",
+      email: "louis@example.com",
+      major: null,
+      current_company: null,
+      industry: null,
+      current_city: "Philadelphia",
+      graduation_year: 2024,
+      position_title: null,
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-03T00:00:00.000Z",
+    },
+    {
+      id: "alumni-match",
+      organization_id: ORG_ID,
+      user_id: "match-user",
+      first_name: "Dana",
+      last_name: "Coach",
+      email: "dana@example.com",
+      major: null,
+      current_company: null,
+      industry: null,
+      current_city: "Philadelphia",
+      graduation_year: 2026,
+      position_title: "Advisor",
+      job_title: null,
+      deleted_at: null,
+      created_at: "2026-03-04T00:00:00.000Z",
+    },
+  ]);
+
+  stub.registerRpc("get_mentorship_distances", () => [
+    {
+      user_id: "match-user",
+      distance: 1,
+    },
+  ]);
+
+  const result = await suggestConnections({
+    orgId: ORG_ID,
+    serviceSupabase: stub as any,
+    args: {
+      person_type: "member",
+      person_id: "member-source",
+    },
+    graphClient: {
+      isAvailable: () => false,
+      query: async () => [],
+    },
+  });
+
+  assert.equal(result.state, "resolved");
+  assert.equal(result.source_person?.name, "Louis Ciccone");
+  assert.equal(result.suggestions.length, 1);
+  assert.equal(result.suggestions[0].name, "Dana Coach");
+  assert.deepEqual(
+    result.suggestions[0].reasons.map((reason) => reason.code),
+    ["shared_city", "graduation_proximity", "direct_mentorship"]
+  );
 });
 
 test("processGraphSyncQueue merges shared-user people and syncs mentorship edges", async () => {
@@ -2070,9 +2170,9 @@ test("suggestConnections stays recommendation-safe after graph transitions and r
   assert.deepEqual(
     graphResult.suggestions.map((row) => row.person_id),
     [
+      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2",
       "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3",
-      "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
     ]
   );
   assert.deepEqual(graphResult.suggestions, sqlFallback.suggestions);
