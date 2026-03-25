@@ -2,13 +2,12 @@ import type { ProjectedPerson } from "@/lib/falkordb/people";
 import type { GraphFallbackReason } from "@/lib/falkordb/telemetry";
 
 export type ConnectionReasonCode =
-  | "direct_mentorship"
-  | "second_degree_mentorship"
   | "shared_company"
   | "shared_industry"
-  | "shared_major"
-  | "shared_graduation_year"
-  | "shared_city";
+  | "shared_city"
+  | "graduation_proximity"
+  | "direct_mentorship"
+  | "second_degree_mentorship";
 
 export interface ConnectionReason {
   code: ConnectionReasonCode;
@@ -77,27 +76,29 @@ export const MAX_SUGGESTIONS_LIMIT = 25;
 export const GRAPH_STALE_AFTER_SECONDS = 120;
 
 export const CONNECTION_REASON_WEIGHTS: Record<ConnectionReasonCode, number> = {
-  direct_mentorship: 100,
-  second_degree_mentorship: 50,
-  shared_company: 20,
-  shared_industry: 12,
-  shared_major: 10,
-  shared_graduation_year: 8,
-  shared_city: 5,
+  shared_company: 40,
+  shared_industry: 30,
+  shared_city: 15,
+  graduation_proximity: 10,
+  direct_mentorship: 5,
+  second_degree_mentorship: 2,
 };
 
 const CONNECTION_REASON_ORDER: ConnectionReasonCode[] = [
-  "direct_mentorship",
-  "second_degree_mentorship",
   "shared_company",
   "shared_industry",
-  "shared_major",
-  "shared_graduation_year",
   "shared_city",
+  "graduation_proximity",
+  "direct_mentorship",
+  "second_degree_mentorship",
 ];
 
 function normalizeText(value: string | null | undefined): string | null {
-  const normalized = value?.trim().toLowerCase() ?? "";
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -126,20 +127,18 @@ function buildPreview(person: ProjectedPerson): SuggestedConnection["preview"] {
 
 export function formatConnectionReasonLabel(code: ConnectionReasonCode): string {
   switch (code) {
-    case "direct_mentorship":
-      return "direct mentorship";
-    case "second_degree_mentorship":
-      return "second-degree mentorship";
     case "shared_company":
       return "shared company";
     case "shared_industry":
       return "shared industry";
-    case "shared_major":
-      return "shared major";
-    case "shared_graduation_year":
-      return "shared graduation year";
     case "shared_city":
       return "shared city";
+    case "graduation_proximity":
+      return "graduation proximity";
+    case "direct_mentorship":
+      return "direct mentorship";
+    case "second_degree_mentorship":
+      return "second-degree mentorship";
   }
 }
 
@@ -150,8 +149,9 @@ export function buildConnectionSubtitle(input: {
   major?: string | null;
   currentCity?: string | null;
 }): string | null {
+  const normalizedRole = input.role?.trim().toLowerCase() ?? null;
   const parts = [
-    input.role?.trim(),
+    normalizedRole === "admin" ? null : input.role?.trim(),
     input.currentCompany?.trim(),
     input.industry?.trim(),
     input.major?.trim(),
@@ -246,32 +246,24 @@ export function buildSuggestionForCandidate(input: {
     });
   }
 
-  const sharedMajor = chooseSharedTextValue(source.major, candidate.major);
-  if (sharedMajor) {
-    reasons.push({
-      code: "shared_major",
-      weight: CONNECTION_REASON_WEIGHTS.shared_major,
-      value: sharedMajor,
-    });
-  }
-
-  if (
-    typeof source.graduationYear === "number" &&
-    source.graduationYear === candidate.graduationYear
-  ) {
-    reasons.push({
-      code: "shared_graduation_year",
-      weight: CONNECTION_REASON_WEIGHTS.shared_graduation_year,
-      value: source.graduationYear,
-    });
-  }
-
   const sharedCity = chooseSharedTextValue(source.currentCity, candidate.currentCity);
   if (sharedCity) {
     reasons.push({
       code: "shared_city",
       weight: CONNECTION_REASON_WEIGHTS.shared_city,
       value: sharedCity,
+    });
+  }
+
+  if (
+    typeof source.graduationYear === "number" &&
+    typeof candidate.graduationYear === "number" &&
+    Math.abs(source.graduationYear - candidate.graduationYear) <= 3
+  ) {
+    reasons.push({
+      code: "graduation_proximity",
+      weight: CONNECTION_REASON_WEIGHTS.graduation_proximity,
+      value: candidate.graduationYear,
     });
   }
 

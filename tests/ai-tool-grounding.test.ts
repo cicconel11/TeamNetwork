@@ -71,7 +71,7 @@ test("verifyToolBackedResponse flags event dates absent from tool rows", () => {
 test("verifyToolBackedResponse flags unsupported suggest_connections reasons", () => {
   const result = verifyToolBackedResponse({
     content: [
-      "Who Alex Source should connect with",
+      "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
       "Why: direct mentorship and shared city",
     ].join("\n"),
@@ -88,7 +88,7 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
             },
           ],
         },
@@ -103,9 +103,9 @@ test("verifyToolBackedResponse flags unsupported suggest_connections reasons", (
 test("verifyToolBackedResponse accepts fixed-template suggest_connections output", () => {
   const result = verifyToolBackedResponse({
     content: [
-      "Who Alex Source should connect with",
+      "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
-      "Why: direct mentorship, shared company, shared graduation year",
+      "Why: direct mentorship, shared company, graduation proximity",
     ].join("\n"),
     toolResults: [
       {
@@ -121,9 +121,9 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
             {
               name: "Dina Direct",
               reasons: [
-                { code: "direct_mentorship", label: "direct mentorship", weight: 100 },
-                { code: "shared_company", label: "shared company", weight: 20 },
-                { code: "shared_graduation_year", label: "shared graduation year", weight: 8 },
+                { code: "direct_mentorship", label: "direct mentorship", weight: 5 },
+                { code: "shared_company", label: "shared company", weight: 40 },
+                { code: "graduation_proximity", label: "graduation proximity", weight: 10 },
               ],
             },
           ],
@@ -139,7 +139,7 @@ test("verifyToolBackedResponse accepts fixed-template suggest_connections output
 test("verifyToolBackedResponse rejects out-of-order suggest_connections output", () => {
   const result = verifyToolBackedResponse({
     content: [
-      "Who Alex Source should connect with",
+      "Top connections for Alex Source",
       "1. Sam Second - Founder",
       "Why: second-degree mentorship",
       "2. Dina Direct - VP Product • Acme",
@@ -158,11 +158,11 @@ test("verifyToolBackedResponse rejects out-of-order suggest_connections output",
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
             },
             {
               name: "Sam Second",
-              reasons: [{ code: "second_degree_mentorship", label: "second-degree mentorship", weight: 50 }],
+              reasons: [{ code: "second_degree_mentorship", label: "second-degree mentorship", weight: 2 }],
             },
           ],
         },
@@ -177,7 +177,7 @@ test("verifyToolBackedResponse rejects out-of-order suggest_connections output",
 test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as shared_city", () => {
   const result = verifyToolBackedResponse({
     content: [
-      "Who Alex Source should connect with",
+      "Top connections for Alex Source",
       "1. Dina Direct - VP Product • Acme",
       "Why: direct mentorship and both in the finance sector",
     ].join("\n"),
@@ -194,7 +194,7 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
           suggestions: [
             {
               name: "Dina Direct",
-              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 100 }],
+              reasons: [{ code: "direct_mentorship", label: "direct mentorship", weight: 5 }],
             },
           ],
         },
@@ -203,4 +203,36 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
   });
 
   assert.equal(result.grounded, true);
+});
+
+test("verifyToolBackedResponse rejects old shared graduation year phrasing", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Top connections for Alex Source",
+      "1. Dina Direct - VP Product • Acme",
+      "Why: shared graduation year",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "suggest_connections",
+        data: {
+          state: "resolved",
+          mode: "sql_fallback",
+          source_person: {
+            name: "Alex Source",
+          },
+          freshness: { state: "fresh", as_of: "2026-03-24T00:00:00.000Z" },
+          suggestions: [
+            {
+              name: "Dina Direct",
+              reasons: [{ code: "graduation_proximity", label: "graduation proximity", weight: 10 }],
+            },
+          ],
+        },
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /shared_graduation_year|graduation/i);
 });

@@ -40,19 +40,18 @@ Queue items are processed per `source_table`. For people: re-read all active sou
 
 ### Step 6 — Scoring (`scoring.ts`)
 
-Seven weighted reason codes; Falkor and SQL paths use identical scoring:
+Six weighted reason codes; Falkor and SQL paths use identical scoring:
 
 | Reason | Weight |
 |--------|--------|
-| `direct_mentorship` | 100 |
-| `second_degree_mentorship` | 50 |
-| `shared_company` | 20 |
-| `shared_industry` | 12 |
-| `shared_major` | 10 |
-| `shared_graduation_year` | 8 |
-| `shared_city` | 5 |
+| `shared_company` | 40 |
+| `shared_industry` | 30 |
+| `shared_city` | 15 |
+| `graduation_proximity` | 10 |
+| `direct_mentorship` | 5 |
+| `second_degree_mentorship` | 2 |
 
-Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
+`graduation_proximity` matches when the source and candidate graduated within 3 years of each other. Score = sum of matching weights. Deterministic tie-breaking: score → reason count → name → `person_id`.
 
 ### Step 7 — Read path (`suggestions.ts`)
 
@@ -87,7 +86,7 @@ Tests verify graph/SQL parity, projection deduplication, merged source attribute
 - `tests/falkordb-people-graph.test.ts`
 - New or touched scripts/tests: `scripts/test-falkor-local.ts`, `tests/create-org-checkout-integration.test.ts`
 
-The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity — scoring is attribute-based (shared company, industry, etc.) plus mentorship proximity. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
+The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity. Ranking is advice-oriented in app code: shared company and shared industry dominate, while city, graduation proximity, and mentorship act as supporting signals. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
 
 ## Graph Model
 
@@ -253,7 +252,7 @@ Before querying Falkor, the app resolves the source person on the server:
 - if the source has a `user_id`, it loads all matching complement rows from the other table
 - it then builds a single merged source person
 
-This matters because scoring reasons like shared company or shared graduation year depend on the merged source attributes, not just the row the admin clicked on. It also means the AI route no longer depends on the model discovering a separate `list_members -> suggest_connections` tool chain for direct-name prompts.
+This matters because scoring reasons like shared company or graduation proximity depend on the merged source attributes, not just the row the admin clicked on. It also means the AI route no longer depends on the model discovering a separate `list_members -> suggest_connections` tool chain for direct-name prompts.
 
 ### Freshness
 
