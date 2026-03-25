@@ -228,42 +228,33 @@ export function recordSuggestionExecution(input: {
   freshnessState: "fresh" | "stale" | "degraded" | "unknown";
   resultStrength: SuggestionResultStrength;
 }) {
-  const state = suggestionTelemetryByOrg.get(input.orgId) ?? emptySuggestionSnapshot(input.orgId);
-  state.totalRequests += 1;
-  state.lastMode = input.mode;
-  state.lastFallbackReason = input.fallbackReason;
-  state.lastFreshnessState = input.freshnessState;
-  state.lastResultStrength = input.resultStrength;
-  state.lastRequestedAt = nowIso();
+  const prev = suggestionTelemetryByOrg.get(input.orgId) ?? emptySuggestionSnapshot(input.orgId);
 
-  if (input.mode === "falkor") {
-    state.falkorCount += 1;
-  } else {
-    state.sqlFallbackCount += 1;
-  }
+  const fallbackReasonCounts = input.fallbackReason
+    ? { ...prev.fallbackReasonCounts, [input.fallbackReason]: prev.fallbackReasonCounts[input.fallbackReason] + 1 }
+    : { ...prev.fallbackReasonCounts };
 
-  if (input.fallbackReason) {
-    state.fallbackReasonCounts[input.fallbackReason] += 1;
-  }
+  const next: SuggestionObservabilitySnapshot = {
+    ...prev,
+    totalRequests: prev.totalRequests + 1,
+    lastMode: input.mode,
+    lastFallbackReason: input.fallbackReason,
+    lastFreshnessState: input.freshnessState,
+    lastResultStrength: input.resultStrength,
+    lastRequestedAt: nowIso(),
+    falkorCount: prev.falkorCount + (input.mode === "falkor" ? 1 : 0),
+    sqlFallbackCount: prev.sqlFallbackCount + (input.mode === "sql_fallback" ? 1 : 0),
+    strongResultCount: prev.strongResultCount + (input.resultStrength === "strong" ? 1 : 0),
+    weakFallbackCount: prev.weakFallbackCount + (input.resultStrength === "weak_fallback" ? 1 : 0),
+    emptyResultCount: prev.emptyResultCount + (input.resultStrength === "none" ? 1 : 0),
+    fallbackReasonCounts,
+    staleReadCount: prev.staleReadCount + (input.freshnessState === "stale" ? 1 : 0),
+    degradedReadCount: prev.degradedReadCount + (input.freshnessState === "degraded" ? 1 : 0),
+    unknownReadCount: prev.unknownReadCount + (input.freshnessState === "unknown" ? 1 : 0),
+    recentTopCandidateCounts: buildRecentTopCandidateCounts(input.orgId),
+  };
 
-  if (input.resultStrength === "strong") {
-    state.strongResultCount += 1;
-  } else if (input.resultStrength === "weak_fallback") {
-    state.weakFallbackCount += 1;
-  } else {
-    state.emptyResultCount += 1;
-  }
-
-  if (input.freshnessState === "stale") {
-    state.staleReadCount += 1;
-  } else if (input.freshnessState === "degraded") {
-    state.degradedReadCount += 1;
-  } else if (input.freshnessState === "unknown") {
-    state.unknownReadCount += 1;
-  }
-
-  state.recentTopCandidateCounts = buildRecentTopCandidateCounts(input.orgId);
-  suggestionTelemetryByOrg.set(input.orgId, state);
+  suggestionTelemetryByOrg.set(input.orgId, next);
 }
 
 export function recordSuggestedCandidates(input: {
@@ -281,7 +272,10 @@ export function recordSuggestedCandidates(input: {
 
   const snapshot = suggestionTelemetryByOrg.get(input.orgId);
   if (snapshot) {
-    snapshot.recentTopCandidateCounts = buildRecentTopCandidateCounts(input.orgId);
+    suggestionTelemetryByOrg.set(input.orgId, {
+      ...snapshot,
+      recentTopCandidateCounts: buildRecentTopCandidateCounts(input.orgId),
+    });
   }
 }
 

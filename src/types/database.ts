@@ -105,6 +105,7 @@ export type Database = {
           rag_chunk_count: number | null
           rag_error: string | null
           rag_top_similarity: number | null
+          stage_timings: Json | null
           thread_id: string | null
           tool_calls: Json | null
           user_id: string
@@ -130,6 +131,7 @@ export type Database = {
           rag_chunk_count?: number | null
           rag_error?: string | null
           rag_top_similarity?: number | null
+          stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id: string
@@ -155,6 +157,7 @@ export type Database = {
           rag_chunk_count?: number | null
           rag_error?: string | null
           rag_top_similarity?: number | null
+          stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id?: string

@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheStatus } from "./sse";
 import type { CacheSurface } from "./semantic-cache-utils";
+import type { AiAuditStageTimings } from "./chat-telemetry";
 
-interface AuditEntry {
+export interface AuditEntry {
   threadId: string | null;
   messageId: string | null;
   userId: string;
@@ -23,6 +24,7 @@ interface AuditEntry {
   ragChunkCount?: number; // number of RAG chunks injected into context
   ragTopSimilarity?: number; // highest cosine similarity score
   ragError?: string; // error message if RAG retrieval failed
+  stageTimings?: AiAuditStageTimings;
 }
 
 interface AuditInsertClient {
@@ -41,13 +43,20 @@ function redactSensitive(value: string): string {
     .replace(/Bearer [a-zA-Z0-9._-]+/g, "Bearer [REDACTED]");  // Auth headers
 }
 
+function redactJsonValue<T>(value: T): T {
+  return JSON.parse(redactSensitive(JSON.stringify(value))) as T;
+}
+
 export async function logAiRequest(
   serviceSupabase: SupabaseClient,
   entry: AuditEntry
 ): Promise<void> {
   try {
     const toolCallsJson = entry.toolCalls
-      ? JSON.parse(redactSensitive(JSON.stringify(entry.toolCalls)))
+      ? redactJsonValue(entry.toolCalls)
+      : null;
+    const stageTimingsJson = entry.stageTimings
+      ? redactJsonValue(entry.stageTimings)
       : null;
 
     const row = {
@@ -71,6 +80,7 @@ export async function logAiRequest(
       rag_chunk_count: entry.ragChunkCount ?? null,
       rag_top_similarity: entry.ragTopSimilarity ?? null,
       rag_error: entry.ragError ? entry.ragError.slice(0, 500) : null,
+      stage_timings: stageTimingsJson,
     };
 
     const { error } = await (serviceSupabase as unknown as AuditInsertClient)

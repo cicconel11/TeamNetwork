@@ -7,15 +7,19 @@ import {
   TOOL_EXECUTION_TIMEOUT_MS,
   withStageTimeout,
 } from "@/lib/ai/timeout";
-import {
-  suggestConnections,
-  SuggestConnectionsLookupError,
-} from "@/lib/falkordb/suggestions";
+import type { AiToolAuthMode } from "@/lib/ai/chat-telemetry";
+import { searchNavigationTargets } from "@/lib/ai/navigation-targets";
+import type { NavConfig } from "@/lib/navigation/nav-items";
+
+export type ToolExecutionAuthorization =
+  | { kind: "preverified_admin"; source: "ai_org_context" }
+  | { kind: "verify_membership" };
 
 export interface ToolExecutionContext {
   orgId: string;
   userId: string;
   serviceSupabase: SupabaseClient;
+  authorization: ToolExecutionAuthorization;
 }
 
 export type ToolExecutionResult =
@@ -42,6 +46,12 @@ const listEventsSchema = z
   })
   .strict();
 
+const listAnnouncementsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(25).optional(),
+  })
+  .strict();
+
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
   .object({
@@ -59,12 +69,20 @@ const suggestConnectionsSchema = z
     }
   )
   .strict();
+const findNavigationTargetsSchema = z
+  .object({
+    query: z.string().trim().min(1),
+    limit: z.number().int().min(1).max(10).optional(),
+  })
+  .strict();
 
 const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_members: listMembersSchema,
   list_events: listEventsSchema,
+  list_announcements: listAnnouncementsSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
+  find_navigation_targets: findNavigationTargetsSchema,
 };
 
 function validateArgs(
@@ -287,6 +305,43 @@ async function listEvents(
   });
 }
 
+async function listAnnouncements(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listAnnouncementsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  return safeToolQuery(async () => {
+    const { data, error } = await sb
+      .from("announcements")
+      .select("id, title, body, audience, is_pinned, published_at, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("is_pinned", { ascending: false })
+      .order("published_at", { ascending: false })
+      .limit(limit);
+
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((announcement) => ({
+        id: announcement.id,
+        title: announcement.title,
+        audience: announcement.audience,
+        is_pinned: Boolean(announcement.is_pinned),
+        published_at: announcement.published_at ?? announcement.created_at ?? null,
+        body_preview:
+          typeof announcement.body === "string" && announcement.body.trim().length > 0
+            ? announcement.body.trim().slice(0, 240)
+            : null,
+      })),
+      error: null,
+    };
+  });
+}
+
 async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> {
   const [members, alumni, parents, upcomingEvents, donations] = await Promise.all([
     safeToolCount(() =>
@@ -344,11 +399,67 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> 
   };
 }
 
+async function findNavigationTargets(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof findNavigationTargetsSchema>
+): Promise<ToolExecutionResult> {
+  return safeToolQuery(async () => {
+    const { data: org, error } = await sb
+      .from("organizations")
+      .select("slug, nav_config")
+      .eq("id", orgId)
+      .maybeSingle();
+
+    if (error || !org?.slug) {
+      return { data: null, error: error ?? new Error("Organization not found") };
+    }
+
+    const { data: subscriptionRows, error: subscriptionError } = await sb.rpc(
+      "get_subscription_status",
+      { p_org_id: orgId }
+    );
+
+    if (subscriptionError) {
+      return { data: null, error: subscriptionError };
+    }
+
+    const subscription = Array.isArray(subscriptionRows) ? subscriptionRows[0] : null;
+    const hasAlumniAccess =
+      subscription?.status === "enterprise_managed" ||
+      (subscription?.alumni_bucket != null && subscription.alumni_bucket !== "none");
+    const hasParentsAccess =
+      subscription?.status === "enterprise_managed" ||
+      (subscription?.parents_bucket != null && subscription.parents_bucket !== "none");
+
+    return {
+      data: searchNavigationTargets({
+        query: args.query,
+        orgSlug: org.slug,
+        navConfig:
+          org.nav_config && typeof org.nav_config === "object" && !Array.isArray(org.nav_config)
+            ? (org.nav_config as NavConfig)
+            : null,
+        role: "admin",
+        hasAlumniAccess,
+        hasParentsAccess,
+        limit: args.limit,
+      }),
+      error: null,
+    };
+  });
+}
+
 async function runSuggestConnections(
   sb: SB,
   orgId: string,
   args: z.infer<typeof suggestConnectionsSchema>
 ): Promise<ToolExecutionResult> {
+  const {
+    suggestConnections,
+    SuggestConnectionsLookupError,
+  } = await import("@/lib/falkordb/suggestions");
+
   try {
     const data = await suggestConnections({
       orgId,
@@ -406,6 +517,14 @@ async function verifyExecutorAccess(
   }
 }
 
+export function getToolAuthorizationMode(
+  authorization: ToolExecutionAuthorization
+): AiToolAuthMode {
+  return authorization.kind === "preverified_admin"
+    ? "reused_verified_admin"
+    : "db_lookup";
+}
+
 export async function executeToolCall(
   ctx: ToolExecutionContext,
   call: { name: string; args: unknown }
@@ -419,9 +538,11 @@ export async function executeToolCall(
   if (!validation.valid) return toolError(validation.error);
   const args = validation.args;
 
-  const access = await verifyExecutorAccess(ctx);
-  if (access.kind !== "allowed") {
-    return access;
+  if (ctx.authorization.kind === "verify_membership") {
+    const access = await verifyExecutorAccess(ctx);
+    if (access.kind !== "allowed") {
+      return access;
+    }
   }
 
   const sb = ctx.serviceSupabase;
@@ -433,6 +554,12 @@ export async function executeToolCall(
           return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>);
         case "list_events":
           return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>);
+        case "list_announcements":
+          return listAnnouncements(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof listAnnouncementsSchema>
+          );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId);
         case "suggest_connections":
@@ -440,6 +567,12 @@ export async function executeToolCall(
             sb,
             ctx.orgId,
             args as z.infer<typeof suggestConnectionsSchema>
+          );
+        case "find_navigation_targets":
+          return findNavigationTargets(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof findNavigationTargetsSchema>
           );
       }
     });

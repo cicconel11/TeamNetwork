@@ -11,7 +11,6 @@ export type AiOrgContext =
       ok: true;
       orgId: string;
       userId: string;
-      userEmail: string;
       role: "admin";
       supabase: any; // auth-bound client (for threads/messages via RLS)
       serviceSupabase: any; // service-role client (for tools/audit)
@@ -80,7 +79,6 @@ export async function getAiOrgContext(
     ok: true,
     orgId,
     userId: user.id,
-    userEmail: user.email ?? "",
     role: "admin",
     supabase: deps.supabase ?? null, // routes pass their auth-bound client
     serviceSupabase,
