@@ -123,7 +123,8 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
   │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
-  │       ├─ Pass 2 runs with a 15s timeout budget when tool results exist and receives an extra fixed-template contract for `suggest_connections`
+  │       ├─ Single-tool `suggest_connections` results are rendered deterministically in-route, then grounded against the normalized payload
+  │       ├─ Pass 2 runs with a 15s timeout budget for the remaining tool-backed turns and still receives an extra fixed-template contract for `suggest_connections` when mixed tool results require model synthesis
   │       ├─ Pass-2 text is buffered server-side, never streamed immediately
   │       └─ `tool_status` SSE events still stream live during tool execution
   ├─ 13. Finalize — update assistant message to complete/error
