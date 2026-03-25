@@ -112,7 +112,7 @@ function seedSuggestionFixture(stub: ReturnType<typeof createSupabaseStub>) {
 
 function makeProjectedPerson(overrides: Partial<ProjectedPerson> & Pick<ProjectedPerson, "personKey" | "personId" | "name">): ProjectedPerson {
   return {
-    orgId: ORG_ID,
+    orgId: overrides.orgId ?? ORG_ID,
     personKey: overrides.personKey,
     personType: overrides.personType ?? "alumni",
     personId: overrides.personId,
@@ -676,6 +676,67 @@ test("suggestConnections returns deterministic SQL fallback ranking", async () =
       },
     ]
   );
+});
+
+test("suggestConnections resolves Matt-family aliases and shorthand before ranking", async () => {
+  const stub = createSupabaseStub();
+
+  stub.seed("members", [
+    {
+      id: "member-matt",
+      organization_id: ORG_ID,
+      user_id: "user-matt",
+      deleted_at: null,
+      status: "active",
+      first_name: "Matt",
+      last_name: "Leonard",
+      email: "matt@example.com",
+      role: "Captain",
+      current_company: "Acme",
+      graduation_year: 2024,
+      created_at: "2026-03-01T00:00:00.000Z",
+    },
+    {
+      id: "member-dana",
+      organization_id: ORG_ID,
+      user_id: "user-dana",
+      deleted_at: null,
+      status: "active",
+      first_name: "Dana",
+      last_name: "Coach",
+      email: "dana@example.com",
+      role: "Coach",
+      current_company: "Acme",
+      graduation_year: 2024,
+      created_at: "2026-03-02T00:00:00.000Z",
+    },
+  ]);
+
+  const graphClient = {
+    isAvailable: () => false,
+    query: async () => [],
+  };
+
+  const [matthew, shorthand] = await Promise.all([
+    suggestConnections({
+      orgId: ORG_ID,
+      serviceSupabase: stub as any,
+      args: { person_query: "Matthew Leonard" },
+      graphClient,
+    }),
+    suggestConnections({
+      orgId: ORG_ID,
+      serviceSupabase: stub as any,
+      args: { person_query: "mat leo" },
+      graphClient,
+    }),
+  ]);
+
+  assert.equal(matthew.state, "resolved");
+  assert.equal(matthew.source_person?.name, "Matt Leonard");
+  assert.equal(shorthand.state, "resolved");
+  assert.equal(shorthand.source_person?.name, "Matt Leonard");
+  assert.equal(matthew.suggestions[0]?.name, "Dana Coach");
 });
 
 test("suggestConnections suppresses generic company matches and keeps sources differentiated", async () => {
@@ -1420,7 +1481,9 @@ test("scoreProjectedCandidates boosts rarer role-family matches ahead of common 
 });
 
 test("scoreProjectedCandidates applies exposure penalty without changing returned reasons", () => {
+  const telemetryOrgId = "22222222-2222-2222-2222-222222222222";
   const source = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:source",
     personId: "source",
     name: "Source Person",
@@ -1428,6 +1491,7 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
     roleFamily: "Engineering",
   });
   const overexposed = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:overexposed",
     personId: "overexposed",
     name: "Overexposed Candidate",
@@ -1435,6 +1499,7 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
     roleFamily: "Engineering",
   });
   const fresh = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:fresh",
     personId: "fresh",
     name: "Fresh Candidate",
@@ -1444,7 +1509,7 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
 
   for (let index = 0; index < 10; index += 1) {
     recordSuggestedCandidates({
-      orgId: ORG_ID,
+      orgId: telemetryOrgId,
       personIds: ["overexposed", `x${index * 2 + 1}`, `x${index * 2 + 2}`],
     });
   }
@@ -1464,25 +1529,30 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
 });
 
 test("scoreProjectedCandidates clamps scores at zero when exposure exceeds reason weight", () => {
+  const telemetryOrgId = "33333333-3333-3333-3333-333333333333";
   const source = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:source",
     personId: "source",
     name: "Source Person",
     roleFamily: "Engineering",
   });
   const overexposed = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:overexposed",
     personId: "overexposed",
     name: "Overexposed Candidate",
     roleFamily: "Engineering",
   });
   const fillerOne = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:filler-1",
     personId: "filler-1",
     name: "Filler One",
     roleFamily: "Engineering",
   });
   const fillerTwo = makeProjectedPerson({
+    orgId: telemetryOrgId,
     personKey: "user:filler-2",
     personId: "filler-2",
     name: "Filler Two",
@@ -1491,7 +1561,7 @@ test("scoreProjectedCandidates clamps scores at zero when exposure exceeds reaso
 
   for (let index = 0; index < 10; index += 1) {
     recordSuggestedCandidates({
-      orgId: ORG_ID,
+      orgId: telemetryOrgId,
       personIds: ["overexposed", `role-${index * 2 + 1}`, `role-${index * 2 + 2}`],
     });
   }
