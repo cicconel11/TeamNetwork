@@ -391,10 +391,7 @@ export function buildCandidatePool(input: {
     }
 
     const entry = { candidate, qualificationCodes };
-    if (
-      hasProfessionalStrengthQualification(qualificationCodes) ||
-      qualificationCodes.includes("adjacent_role_family")
-    ) {
+    if (hasProfessionalStrengthQualification(qualificationCodes)) {
       professionalEntries.push(entry);
     } else {
       weakSupportEntries.push(entry);

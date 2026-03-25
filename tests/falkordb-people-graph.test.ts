@@ -1316,7 +1316,7 @@ test("scoreProjectedCandidates prefers shared role family over weak support only
   );
 });
 
-test("buildCandidatePool admits adjacent role families without rendering adjacency as a reason", () => {
+test("buildCandidatePool keeps adjacent role families out of the professional overflow bucket", () => {
   const source = makeProjectedPerson({
     personKey: "user:source",
     personId: "source",
@@ -1331,23 +1331,32 @@ test("buildCandidatePool admits adjacent role families without rendering adjacen
     roleFamily: "Data",
     currentCity: "Philadelphia",
   });
+  const professionalCandidates = Array.from({ length: 5 }, (_, index) =>
+    makeProjectedPerson({
+      personKey: `user:professional-${index + 1}`,
+      personId: `professional-${index + 1}`,
+      name: `Professional ${index + 1}`,
+      roleFamily: "Engineering",
+    })
+  );
 
   const pool = buildCandidatePool({
     source,
-    candidates: [adjacentCandidate],
-    limit: 3,
+    candidates: [...professionalCandidates, adjacentCandidate],
+    limit: 1,
   });
 
-  assert.deepEqual(pool[0]?.qualificationCodes, ["adjacent_role_family", "shared_city"]);
+  assert.equal(pool.length, 5);
+  assert.equal(pool.some((entry) => entry.candidate.personId === "adjacent"), false);
 
   const suggestions = scoreProjectedCandidates({
     source,
-    allPeople: [source, adjacentCandidate],
-    candidates: [adjacentCandidate],
+    allPeople: [source, ...professionalCandidates, adjacentCandidate],
+    candidates: [...professionalCandidates, adjacentCandidate],
     limit: 3,
   });
 
-  assert.equal(suggestions.length, 0);
+  assert.equal(suggestions.some((entry) => entry.name === "Adjacent Candidate"), false);
 });
 
 test("scoreProjectedCandidates boosts rarer role-family matches ahead of common ones", () => {
@@ -1451,6 +1460,53 @@ test("scoreProjectedCandidates applies exposure penalty without changing returne
   assert.deepEqual(
     suggestions.find((row) => row.name === "Overexposed Candidate")?.reasons.map((reason) => reason.code),
     ["shared_industry", "shared_role_family"]
+  );
+});
+
+test("scoreProjectedCandidates clamps scores at zero when exposure exceeds reason weight", () => {
+  const source = makeProjectedPerson({
+    personKey: "user:source",
+    personId: "source",
+    name: "Source Person",
+    roleFamily: "Engineering",
+  });
+  const overexposed = makeProjectedPerson({
+    personKey: "user:overexposed",
+    personId: "overexposed",
+    name: "Overexposed Candidate",
+    roleFamily: "Engineering",
+  });
+  const fillerOne = makeProjectedPerson({
+    personKey: "user:filler-1",
+    personId: "filler-1",
+    name: "Filler One",
+    roleFamily: "Engineering",
+  });
+  const fillerTwo = makeProjectedPerson({
+    personKey: "user:filler-2",
+    personId: "filler-2",
+    name: "Filler Two",
+    roleFamily: "Engineering",
+  });
+
+  for (let index = 0; index < 10; index += 1) {
+    recordSuggestedCandidates({
+      orgId: ORG_ID,
+      personIds: ["overexposed", `role-${index * 2 + 1}`, `role-${index * 2 + 2}`],
+    });
+  }
+
+  const suggestions = scoreProjectedCandidates({
+    source,
+    allPeople: [source, overexposed, fillerOne, fillerTwo],
+    candidates: [overexposed],
+    limit: 3,
+  });
+
+  assert.equal(suggestions[0]?.score, 0);
+  assert.deepEqual(
+    suggestions[0]?.reasons.map((reason) => reason.code),
+    ["shared_role_family"]
   );
 });
 

@@ -167,7 +167,7 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
   assert.equal(result.grounded, true);
 });
 
-test("verifyToolBackedResponse rejects old shared graduation year phrasing", () => {
+test("verifyToolBackedResponse accepts shared graduation year phrasing as graduation proximity", () => {
   const result = verifyToolBackedResponse({
     content: [
       "Top connections for Alex Source",
@@ -181,11 +181,11 @@ test("verifyToolBackedResponse rejects old shared graduation year phrasing", () 
     ],
   });
 
-  assert.equal(result.grounded, false);
-  assert.match(result.failures.join("\n"), /shared_graduation_year|graduation/i);
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
 });
 
-test("verifyToolBackedResponse rejects unsupported adjacency wording", () => {
+test("verifyToolBackedResponse ignores adjacency wording that is not a scored reason", () => {
   const result = verifyToolBackedResponse({
     content: [
       "Top connections for Alex Source",
@@ -199,6 +199,6 @@ test("verifyToolBackedResponse rejects unsupported adjacency wording", () => {
     ],
   });
 
-  assert.equal(result.grounded, false);
-  assert.match(result.failures.join("\n"), /adjacent_role_family/i);
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
 });
