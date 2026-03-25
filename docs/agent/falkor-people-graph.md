@@ -99,6 +99,13 @@ Tests verify graph/SQL parity, projection deduplication, merged source attribute
 
 The graph stores only `Person` nodes and `MENTORS` edges today. There are no event or interaction edges, no group-membership edges, and no weighted graph affinity. Ranking is career-signal-oriented in app code: shared industry and shared company dominate, with city and graduation proximity as supporting signals. Expanding the graph model (e.g. shared event attendance, chat interactions, discussion co-participation) is a natural next step if richer recommendations are needed.
 
+### Revisit notes from the March 25, 2026 latency pass
+
+- The AI chat latency work intentionally made narrow structured org questions feel fast by skipping RAG for tool-only turns. Local verification showed member, parent, and event queries succeeding quickly on that path.
+- `suggest_connections` was not a good latency baseline during that pass. The graph data was still sparse for high-confidence connection recommendations, and local testing also exposed an import regression: `src/lib/falkordb/suggestions.ts` still imports `normalizeConnectionText`, but `src/lib/falkordb/scoring.ts` no longer exports it.
+- When revisiting Falkor work, first restore that import/export compatibility and rerun direct-name connection prompts before drawing conclusions about graph quality.
+- After the import issue is fixed, evaluate connection quality with richer org data. If recommendations are still weak, prefer improving graph population and signal coverage before tuning ranking weights.
+
 ## Graph Model
 
 Node/edge shape matches **Current state** above. This section lists persisted properties and edge semantics.
@@ -444,6 +451,16 @@ Check:
 - remote or embedded config is actually present
 - Falkor process is reachable
 - the org graph has been backfilled and synced
+
+If quick member/event/parent queries in the AI panel are healthy but connection prompts still error, that usually means the chat routing and tool-only execution-policy path are fine and the issue is isolated to the Falkor/suggestions stack instead.
+
+### `suggest_connections` errors immediately in local chat
+
+Check:
+
+- `src/lib/falkordb/suggestions.ts` and `src/lib/falkordb/scoring.ts` still agree on exported helper names, especially `normalizeConnectionText`
+- the local branch does not have unresolved Falkor refactors that leave the tool importable but partially broken
+- after fixing the import issue, rerun direct-name prompts such as "Who should Matt connect with?" before debugging graph freshness or ranking
 
 ### Queue rows keep retrying
 

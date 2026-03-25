@@ -712,7 +712,7 @@ const COMPONENTS = [
       'Keyword-based intent classifier (resolveSurfaceRouting)',
       'Scores messages across members, analytics, events keyword lists',
       'Detects ambiguous queries when surfaces score equally',
-      'skipRetrieval: true for exact casual messages (greetings, thanks) via regex',
+      'Exact casual-message detection now feeds intentType; retrieval decisions move to TurnExecutionPolicy',
       'Returns rerouted flag when inferred surface differs from requested',
       'Maps surface → intent: members_query, analytics_query, events_query, general_query, ambiguous_query',
       'Routing based on classified intent — effectiveSurface drives context selection',

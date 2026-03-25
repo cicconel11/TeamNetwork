@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, and markdown rendering. All state is local (no global store). The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
+The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, and persisted open/close preference. All state is local (no global store). The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
 
 ## File Map
 
@@ -14,8 +14,8 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
 | `src/components/ai-assistant/AIPanelContext.tsx` | React context provider for panel open/close state | `AIPanelProvider` (L22), `useAIPanel` (L59) |
 | `src/components/ai-assistant/AIPanel.tsx` | Main panel component — chat view + thread list view | `AIPanel` (L24) |
 | `src/components/ai-assistant/AIEdgeTab.tsx` | Floating edge tab to toggle the panel (admin-only) | `AIEdgeTab` (L10) |
-| `src/components/ai-assistant/MessageList.tsx` | Renders message bubbles, streaming indicator, empty state | `MessageList` (L16) |
-| `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, error display | `MessageInput` (L14) |
+| `src/components/ai-assistant/MessageList.tsx` | Renders message bubbles, streaming indicator, empty state, starter prompts | `MessageList` (L16) |
+| `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, error display, route-aware placeholder text | `MessageInput` (L14) |
 | `src/components/ai-assistant/ThreadList.tsx` | Thread listing with select, new, and delete actions | `ThreadList` (L16) |
 | `src/components/ai-assistant/AssistantMessageContent.tsx` | Markdown renderer (react-markdown + remark-gfm) | `AssistantMessageContent` (L11) |
 
@@ -40,10 +40,10 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
   └── AIPanelProvider (autoOpen={isAdmin})
         ├── AIEdgeTab (isAdmin)     ← floating toggle button (right edge, z-44)
         └── AIPanel (orgId)         ← slide-out panel (right edge, z-45)
-              ├── Header: title, view toggle (chat/threads), close button
+              ├── Header: title, scope badge, view toggle (chat/threads), close button
               ├── [view === "chat"]
               │     ├── MessageList
-              │     │     ├── Empty state (Sparkles icon + prompt)
+              │     │     ├── Empty state (Sparkles icon + prompt + starter prompt chips)
               │     │     ├── Message bubbles (user: indigo, assistant: muted)
               │     │     │     └── AssistantMessageContent (ReactMarkdown)
               │     │     ├── Preview assistant content (post-stream, pre-refresh)
@@ -80,13 +80,14 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 | `error` | `string \| null` | Current error message |
 | `currentContent` | `string` | Accumulated content from SSE chunks |
 | `threadId` | `string \| null` | Thread ID from the current/last stream |
+| `toolStatusLabel` | `string \| null` | Human-readable live tool progress label |
 
 ### Panel Open/Close
 
 1. `AIPanelProvider` wraps the org layout, receives `autoOpen` prop (set to `isAdmin`)
 2. On mount, checks `isDesktop` via `matchMedia("(min-width: 1024px)")`
-3. `resolveInitialAIPanelOpen({ isAdmin, isDesktop })` → opens panel only for admins on desktop
-4. `localStorage` key is cleared on mount (preference not persisted)
+3. `resolveInitialAIPanelOpen({ isAdmin, isDesktop, storedPreference })` → opens panel only for admins on desktop unless an explicit persisted preference exists
+4. `localStorage` stores `"open"` / `"closed"` so the panel preference persists across navigations
 5. `isMounted` ref prevents hydration mismatch by returning `isOpen: false` during SSR
 
 ### Optimistic Updates
