@@ -38,6 +38,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     isStreaming,
     error,
     currentContent,
+    toolStatusLabel,
     sendMessage,
     cancel,
     clearError,
@@ -257,6 +258,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
             <MessageInput
               isStreaming={isStreaming}
               error={error}
+              toolStatusLabel={toolStatusLabel}
               onSend={handleSend}
               onCancel={cancel}
               onClearError={clearError}

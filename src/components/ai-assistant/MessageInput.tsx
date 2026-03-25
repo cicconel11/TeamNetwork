@@ -6,6 +6,7 @@ import { Send, Square, AlertCircle, X } from "lucide-react";
 interface MessageInputProps {
   isStreaming: boolean;
   error: string | null;
+  toolStatusLabel?: string | null;
   onSend: (message: string) => Promise<void>;
   onCancel: () => void;
   onClearError: () => void;
@@ -14,6 +15,7 @@ interface MessageInputProps {
 export function MessageInput({
   isStreaming,
   error,
+  toolStatusLabel,
   onSend,
   onCancel,
   onClearError,
@@ -67,7 +69,7 @@ export function MessageInput({
         <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <span className="h-2 w-2 animate-pulse rounded-full bg-indigo-500" />
-            Thinking...
+            {toolStatusLabel ?? "Thinking..."}
           </span>
           <button
             onClick={onCancel}
