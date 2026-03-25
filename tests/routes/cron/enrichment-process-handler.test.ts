@@ -168,11 +168,16 @@ test("enrichment-process enriches pending alumni with the current Bright Data he
     createServiceClient: () => supabase as ReturnType<typeof createSupabaseStub>,
     isBrightDataConfigured: () => true,
     fetchBrightDataProfile: async () => ({
-      name: "Jane Doe",
-      city: "Austin",
-      current_company_name: "Acme",
-      experience: [{ title: "Product Manager", company: "Acme", location: "Austin", end_date: null }],
-      education: [{ school: "Penn", field_of_study: "Economics" }],
+      ok: true as const,
+      profile: {
+        name: "Jane Doe",
+        city: "Austin",
+        position: null,
+        current_company: null,
+        current_company_name: "Acme",
+        experience: [{ title: "Product Manager", company: "Acme", location: "Austin", end_date: null }],
+        education: [{ school: "Penn", field_of_study: "Economics" }],
+      },
     }),
     mapBrightDataToFields: () => ({
       job_title: "Product Manager",
