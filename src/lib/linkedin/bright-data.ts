@@ -76,7 +76,8 @@ export function isBrightDataConfigured(): boolean {
 // Fetch profile by LinkedIn URL
 // ---------------------------------------------------------------------------
 
-const BRIGHT_DATA_PROFILES_URL = "https://api.brightdata.com/linkedin/profiles/collect";
+const BRIGHT_DATA_DATASET_ID = "gd_l1viktl72bvl7bjuj0";
+const BRIGHT_DATA_PROFILES_URL = `https://api.brightdata.com/datasets/v3/scrape?dataset_id=${BRIGHT_DATA_DATASET_ID}&format=json`;
 
 /**
  * Fetches a LinkedIn profile via Bright Data's Profiles API.
@@ -116,8 +117,19 @@ export async function fetchBrightDataProfile(
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ url: linkedinUrl }),
+      body: JSON.stringify([{ url: linkedinUrl }]),
     });
+
+    // 202 = sync timed out, Bright Data switched to async. Profile is still being collected.
+    if (res.status === 202) {
+      console.warn("[bright-data] Sync request timed out (202), profile still being collected");
+      return {
+        ok: false,
+        kind: "upstream_error",
+        error: "Profile is being collected. Try again in a few minutes.",
+        upstreamStatus: 202,
+      };
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -150,7 +162,9 @@ export async function fetchBrightDataProfile(
     }
 
     const data = await res.json().catch(() => null);
-    const profile = normalizeBrightDataProfile(data);
+    // Sync endpoint returns an array; take the first result
+    const raw = Array.isArray(data) ? data[0] : data;
+    const profile = normalizeBrightDataProfile(raw);
     if (!profile) {
       console.error("[bright-data] Malformed payload:", data);
       return {
