@@ -57,6 +57,7 @@ interface RouteParams {
 }
 
 export async function POST(req: Request, { params }: RouteParams) {
+  const importStartedAt = new Date().toISOString();
   const { organizationId: rawOrgId } = await params;
 
   const gate = await validateAlumniImportRequest(req, rawOrgId, {
@@ -206,6 +207,45 @@ export async function POST(req: Request, { params }: RouteParams) {
         }
       }
     }
+  }
+
+  // Queue enrichment for all created/updated alumni (all have linkedin_url)
+  const alumniIdsForEnrichment: string[] = [];
+  for (const item of importPlan.toUpdate) {
+    alumniIdsForEnrichment.push(item.alumniId);
+  }
+
+  if (alumniIdsForEnrichment.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("alumni")
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
+      .in("id", alumniIdsForEnrichment)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+  }
+
+  // For newly created alumni, scope to records created during this request
+  if (created > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("alumni")
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .is("enrichment_status", null)
+      .not("linkedin_url", "is", null)
+      .gte("created_at", importStartedAt);
   }
 
   const result: ImportResult = {

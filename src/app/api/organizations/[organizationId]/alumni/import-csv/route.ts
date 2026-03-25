@@ -275,6 +275,35 @@ export async function POST(req: Request, { params }: RouteParams) {
       lastName: r.out_last_name,
     }));
 
+  // Queue enrichment for created/updated alumni that have a linkedin_url
+  const alumniIdsForEnrichment = new Set<string>();
+  for (const row of rpcCreatedRows) {
+    if (row.out_id && row.out_status === IMPORT_STATUS.CREATED) {
+      const inputRow = importPlan.toCreate.find(
+        (r) => r.first_name === row.out_first_name && r.last_name === row.out_last_name,
+      );
+      if (inputRow?.linkedin_url) alumniIdsForEnrichment.add(row.out_id);
+    }
+  }
+  for (const item of importPlan.toUpdate) {
+    if (item.data.linkedin_url) alumniIdsForEnrichment.add(item.alumniId);
+  }
+
+  if (alumniIdsForEnrichment.size > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (serviceSupabase as any)
+      .from("alumni")
+      .update({
+        enrichment_status: "pending",
+        enrichment_snapshot_id: null,
+        enrichment_retry_count: 0,
+        enrichment_error: null,
+      })
+      .in("id", Array.from(alumniIdsForEnrichment))
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null);
+  }
+
   const result: ImportResult = {
     updated: importPlan.toUpdate.length - updateErrors + concurrentUpdates,
     created,

@@ -42,6 +42,10 @@
       "schedule": "* * * * *"
     },
     {
+      "path": "/api/cron/enrichment-process",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/linkedin-bulk-sync",
       "schedule": "0 2 1 1,4,7,10 *"
     }
