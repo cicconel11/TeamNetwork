@@ -50,8 +50,6 @@ interface GraphSuggestionRow extends Record<string, unknown> {
   mentorshipDistance: number | null;
 }
 
-type GraphSuggestionRowWithoutDistance = Omit<GraphSuggestionRow, "mentorshipDistance">;
-
 export class SuggestConnectionsLookupError extends Error {
   constructor(message: string) {
     super(message);
@@ -472,7 +470,7 @@ export async function suggestConnections(input: {
       fetchMentorshipDistances(serviceSupabase, orgId, resolvedSource),
     ]);
     const results = scoreProjectedCandidates({
-      source: projectedPeople.get(resolvedSource.personKey) ?? resolvedSource,
+      source: projectedPeople.get(`${orgId}:${resolvedSource.personKey}`) ?? resolvedSource,
       candidates: projectedPeople.values(),
       mentorshipDistances,
       limit,

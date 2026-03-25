@@ -175,7 +175,7 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
   });
 
   assert.equal(projected.size, 3);
-  assert.deepEqual(projected.get("user:shared-user"), {
+  assert.deepEqual(projected.get(`${ORG_ID}:user:shared-user`), {
     orgId: ORG_ID,
     personKey: "user:shared-user",
     personType: "member",
@@ -191,8 +191,8 @@ test("buildProjectedPeople dedupes by user_id and preserves null-user rows", () 
     graduationYear: 2023,
     currentCity: "Austin",
   });
-  assert.ok(projected.has("member:member-2"));
-  assert.ok(projected.has("alumni:alumni-2"));
+  assert.ok(projected.has(`${ORG_ID}:member:member-2`));
+  assert.ok(projected.has(`${ORG_ID}:alumni:alumni-2`));
 });
 
 test("buildSourcePerson matches buildProjectedPeople for merged member+alumni", () => {
@@ -234,7 +234,7 @@ test("buildSourcePerson matches buildProjectedPeople for merged member+alumni", 
     alumni: [alumniRow],
   });
 
-  assert.deepEqual(fromBuild, fromProjection.get("user:shared-user"));
+  assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:user:shared-user`));
 });
 
 test("buildSourcePerson matches buildProjectedPeople for member-only", () => {
@@ -256,7 +256,7 @@ test("buildSourcePerson matches buildProjectedPeople for member-only", () => {
   const fromBuild = buildSourcePerson({ memberRows: [memberRow], alumniRows: [] });
   const fromProjection = buildProjectedPeople({ members: [memberRow], alumni: [] });
 
-  assert.deepEqual(fromBuild, fromProjection.get("member:member-solo"));
+  assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:member:member-solo`));
 });
 
 test("buildSourcePerson matches buildProjectedPeople for alumni-only", () => {
@@ -281,7 +281,7 @@ test("buildSourcePerson matches buildProjectedPeople for alumni-only", () => {
   const fromBuild = buildSourcePerson({ memberRows: [], alumniRows: [alumniRow] });
   const fromProjection = buildProjectedPeople({ members: [], alumni: [alumniRow] });
 
-  assert.deepEqual(fromBuild, fromProjection.get("alumni:alumni-solo"));
+  assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:alumni:alumni-solo`));
 });
 
 test("buildSourcePerson returns null for empty input", () => {
@@ -341,7 +341,7 @@ test("buildSourcePerson matches buildProjectedPeople for duplicate complement ro
   const fromBuild = buildSourcePerson({ memberRows, alumniRows: [alumniRow] });
   const fromProjection = buildProjectedPeople({ members: memberRows, alumni: [alumniRow] });
 
-  assert.deepEqual(fromBuild, fromProjection.get("user:shared-user"));
+  assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:user:shared-user`));
 });
 
 test("suggestConnections returns deterministic SQL fallback ranking", async () => {
@@ -855,4 +855,289 @@ test("processGraphSyncQueue merges shared-user people and syncs mentorship edges
   assert.equal(mentorshipEdgeCall?.params?.mentorKey, "user:00000000-0000-0000-0000-000000000010");
   assert.equal(mentorshipEdgeCall?.params?.menteeKey, "user:00000000-0000-0000-0000-000000000011");
   assert.equal(rpcCalls.some((call) => call.name === "increment_graph_sync_attempts"), false);
+});
+
+// ---------------------------------------------------------------------------
+// VAL-IDENTITY-001: Shared user_id projects to exactly one canonical identity
+// ---------------------------------------------------------------------------
+
+test("buildProjectedPeople emits exactly one org-scoped canonical user:* identity for linked member and alumni", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "m-linked",
+        organization_id: ORG_ID,
+        user_id: "uid-linked",
+        deleted_at: null,
+        status: "active",
+        first_name: "Jordan",
+        last_name: "Linked",
+        email: "jordan@example.com",
+        role: "Secretary",
+        current_company: "MemberCo",
+        graduation_year: 2024,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    alumni: [
+      {
+        id: "a-linked",
+        organization_id: ORG_ID,
+        user_id: "uid-linked",
+        deleted_at: null,
+        first_name: "Jordan",
+        last_name: "Linked",
+        email: "jordan@example.com",
+        major: "Business",
+        current_company: "AlumniCo",
+        industry: "Finance",
+        current_city: "Denver",
+        graduation_year: 2021,
+        position_title: "Partner",
+        job_title: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  });
+
+  // Exactly ONE canonical identity (no standalone member: or alumni: keys)
+  assert.equal(projected.size, 1);
+
+  // The Map key must include the orgId for strict org scoping
+  const canonicalKey = `${ORG_ID}:user:uid-linked`;
+  assert.ok(projected.has(canonicalKey), `expected Map key '${canonicalKey}' to exist`);
+
+  // No standalone keys for the linked rows
+  assert.ok(!projected.has(`${ORG_ID}:member:m-linked`), "linked member must not get a standalone key");
+  assert.ok(!projected.has(`${ORG_ID}:alumni:a-linked`), "linked alumni must not get a standalone key");
+
+  const person = projected.get(canonicalKey);
+  assert.ok(person, "canonical person must be defined");
+  assert.equal(person?.userId, "uid-linked");
+  assert.equal(person?.memberId, "m-linked");
+  assert.equal(person?.alumniId, "a-linked");
+  assert.equal(person?.personKey, "user:uid-linked");
+  assert.equal(person?.orgId, ORG_ID);
+});
+
+test("buildProjectedPeople deterministic attribute precedence: alumni fields take priority over member for role/company/graduationYear", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "m-prec",
+        organization_id: ORG_ID,
+        user_id: "uid-prec",
+        deleted_at: null,
+        status: "active",
+        first_name: "Robin",
+        last_name: "Precedence",
+        email: "robin@example.com",
+        role: "Treasurer",
+        current_company: "MemberCorp",
+        graduation_year: 2026,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    alumni: [
+      {
+        id: "a-prec",
+        organization_id: ORG_ID,
+        user_id: "uid-prec",
+        deleted_at: null,
+        first_name: "Robin",
+        last_name: "Precedence",
+        email: "robin@example.com",
+        major: "Economics",
+        current_company: "AlumniCorp",
+        industry: "Banking",
+        current_city: "Seattle",
+        graduation_year: 2019,
+        position_title: "Director",
+        job_title: null,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+  });
+
+  const person = projected.get(`${ORG_ID}:user:uid-prec`);
+  assert.ok(person, "merged person must exist");
+
+  // Alumni position_title beats member role
+  assert.equal(person?.role, "Director", "alumni position_title must take precedence over member role");
+  // Alumni current_company beats member current_company
+  assert.equal(person?.currentCompany, "AlumniCorp", "alumni current_company must take precedence");
+  // Alumni graduation_year beats member graduation_year
+  assert.equal(person?.graduationYear, 2019, "alumni graduation_year must take precedence");
+  // Alumni-only fields preserved
+  assert.equal(person?.major, "Economics");
+  assert.equal(person?.industry, "Banking");
+  assert.equal(person?.currentCity, "Seattle");
+  // personType is "member" when a member row is present
+  assert.equal(person?.personType, "member");
+});
+
+test("buildSourcePerson returns person with org-scoped personKey matching buildProjectedPeople for linked rows", () => {
+  const memberRow = {
+    id: "m-parity",
+    organization_id: ORG_ID,
+    user_id: "uid-parity",
+    deleted_at: null,
+    status: "active",
+    first_name: "Casey",
+    last_name: "Parity",
+    email: "casey@example.com",
+    role: "VP",
+    current_company: "Acme",
+    graduation_year: 2023,
+    created_at: "2026-02-01T00:00:00.000Z",
+  };
+  const alumniRow = {
+    id: "a-parity",
+    organization_id: ORG_ID,
+    user_id: "uid-parity",
+    deleted_at: null,
+    first_name: "Casey",
+    last_name: "Parity",
+    email: "casey@example.com",
+    major: "CS",
+    current_company: "Acme",
+    industry: "Tech",
+    current_city: "NYC",
+    graduation_year: 2020,
+    position_title: "CTO",
+    job_title: null,
+    created_at: "2026-01-01T00:00:00.000Z",
+  };
+
+  const fromBuild = buildSourcePerson({ memberRows: [memberRow], alumniRows: [alumniRow] });
+  const fromProjection = buildProjectedPeople({ members: [memberRow], alumni: [alumniRow] });
+
+  // buildSourcePerson must return the same object as buildProjectedPeople's value for the canonical key
+  assert.deepEqual(fromBuild, fromProjection.get(`${ORG_ID}:user:uid-parity`));
+});
+
+// ---------------------------------------------------------------------------
+// VAL-IDENTITY-004: Strict org isolation — same user_id never merges across orgs
+// ---------------------------------------------------------------------------
+
+const ORG_A = "aaaaaaaa-aaaa-aaaa-aaaa-000000000001";
+const ORG_B = "bbbbbbbb-bbbb-bbbb-bbbb-000000000002";
+
+test("buildProjectedPeople strict org isolation: same user_id across two orgs produces two separate canonical identities", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "m-orga",
+        organization_id: ORG_A,
+        user_id: "shared-uid",
+        deleted_at: null,
+        status: "active",
+        first_name: "Alex",
+        last_name: "OrgA",
+        email: "alex@orga.com",
+        role: "Admin",
+        current_company: "OrgACo",
+        graduation_year: 2022,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+      {
+        id: "m-orgb",
+        organization_id: ORG_B,
+        user_id: "shared-uid",
+        deleted_at: null,
+        status: "active",
+        first_name: "Alex",
+        last_name: "OrgB",
+        email: "alex@orgb.com",
+        role: "Member",
+        current_company: "OrgBCo",
+        graduation_year: 2022,
+        created_at: "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    alumni: [],
+  });
+
+  // Must produce two separate entries — one per org — not a single merged identity
+  assert.equal(projected.size, 2, "same user_id in two orgs must produce 2 separate entries, not 1 merged");
+
+  const orgAKey = `${ORG_A}:user:shared-uid`;
+  const orgBKey = `${ORG_B}:user:shared-uid`;
+
+  assert.ok(projected.has(orgAKey), `ORG_A entry with key '${orgAKey}' must exist`);
+  assert.ok(projected.has(orgBKey), `ORG_B entry with key '${orgBKey}' must exist`);
+
+  // Each org's canonical person must carry the correct orgId and memberId
+  const personA = projected.get(orgAKey);
+  const personB = projected.get(orgBKey);
+
+  assert.equal(personA?.orgId, ORG_A, "ORG_A person must have orgId=ORG_A");
+  assert.equal(personB?.orgId, ORG_B, "ORG_B person must have orgId=ORG_B");
+  assert.equal(personA?.memberId, "m-orga");
+  assert.equal(personB?.memberId, "m-orgb");
+
+  // The personKey field stored in the node stays as user:shared-uid (no org prefix in Falkor node attribute)
+  assert.equal(personA?.personKey, "user:shared-uid");
+  assert.equal(personB?.personKey, "user:shared-uid");
+});
+
+test("buildProjectedPeople org isolation: member and alumni from different orgs sharing user_id stay separate", () => {
+  const projected = buildProjectedPeople({
+    members: [
+      {
+        id: "m-a",
+        organization_id: ORG_A,
+        user_id: "cross-uid",
+        deleted_at: null,
+        status: "active",
+        first_name: "Pat",
+        last_name: "Cross",
+        email: "pat@a.com",
+        role: null,
+        current_company: null,
+        graduation_year: null,
+        created_at: null,
+      },
+    ],
+    alumni: [
+      {
+        id: "al-b",
+        organization_id: ORG_B,
+        user_id: "cross-uid",
+        deleted_at: null,
+        first_name: "Pat",
+        last_name: "Cross",
+        email: "pat@b.com",
+        major: null,
+        current_company: null,
+        industry: null,
+        current_city: null,
+        graduation_year: null,
+        position_title: null,
+        job_title: null,
+        created_at: null,
+      },
+    ],
+  });
+
+  // Member from ORG_A and alumni from ORG_B must NOT merge even though they share user_id
+  assert.equal(projected.size, 2, "cross-org member+alumni with shared user_id must remain separate");
+
+  const orgAKey = `${ORG_A}:user:cross-uid`;
+  const orgBKey = `${ORG_B}:user:cross-uid`;
+
+  assert.ok(projected.has(orgAKey), "ORG_A member entry must exist");
+  assert.ok(projected.has(orgBKey), "ORG_B alumni entry must exist");
+
+  // ORG_A entry is member-only (no alumniId from ORG_B)
+  const personA = projected.get(orgAKey);
+  assert.equal(personA?.orgId, ORG_A);
+  assert.equal(personA?.memberId, "m-a");
+  assert.equal(personA?.alumniId, null, "ORG_A person must not have alumniId from a different org");
+
+  // ORG_B entry is alumni-only (no memberId from ORG_A)
+  const personB = projected.get(orgBKey);
+  assert.equal(personB?.orgId, ORG_B);
+  assert.equal(personB?.alumniId, "al-b");
+  assert.equal(personB?.memberId, null, "ORG_B person must not have memberId from a different org");
 });

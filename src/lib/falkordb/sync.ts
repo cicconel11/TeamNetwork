@@ -356,7 +356,7 @@ async function reconcilePersonByKey(
     throw new Error(`Unknown person key: ${personKey}`);
   }
 
-  const projected = buildProjectedPeople({ members, alumni }).get(personKey);
+  const projected = buildProjectedPeople({ members, alumni }).get(`${orgId}:${personKey}`);
 
   if (!projected) {
     await deletePersonNode(graphClient, orgId, personKey);

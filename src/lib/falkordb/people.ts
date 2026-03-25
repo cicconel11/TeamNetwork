@@ -164,7 +164,8 @@ export function buildProjectedPeople(input: {
 
   for (const member of input.members.filter(isActiveMemberRow).sort(stableRowSort)) {
     const personKey = buildPersonKey("members", member.id, member.user_id);
-    const group = groups.get(personKey) ?? {
+    const groupKey = `${member.organization_id}:${personKey}`;
+    const group = groups.get(groupKey) ?? {
       orgId: member.organization_id,
       personKey,
       userId: member.user_id,
@@ -172,12 +173,13 @@ export function buildProjectedPeople(input: {
       alumni: [],
     };
     group.members.push(member);
-    groups.set(personKey, group);
+    groups.set(groupKey, group);
   }
 
   for (const alumni of input.alumni.filter(isActiveAlumniRow).sort(stableRowSort)) {
     const personKey = buildPersonKey("alumni", alumni.id, alumni.user_id);
-    const group = groups.get(personKey) ?? {
+    const groupKey = `${alumni.organization_id}:${personKey}`;
+    const group = groups.get(groupKey) ?? {
       orgId: alumni.organization_id,
       personKey,
       userId: alumni.user_id,
@@ -185,12 +187,12 @@ export function buildProjectedPeople(input: {
       alumni: [],
     };
     group.alumni.push(alumni);
-    groups.set(personKey, group);
+    groups.set(groupKey, group);
   }
 
   const projected = new Map<string, ProjectedPerson>();
 
-  for (const group of groups.values()) {
+  for (const [groupKey, group] of groups.entries()) {
     const primaryMember = group.members[0] ?? null;
     const primaryAlumni = group.alumni[0] ?? null;
     const personType = primaryMember ? "member" : "alumni";
@@ -221,7 +223,7 @@ export function buildProjectedPeople(input: {
       ) ??
       `Person ${group.personKey}`;
 
-    projected.set(group.personKey, {
+    projected.set(groupKey, {
       orgId: group.orgId,
       personKey: group.personKey,
       personType,
