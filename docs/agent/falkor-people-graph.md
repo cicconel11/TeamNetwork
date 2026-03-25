@@ -4,7 +4,7 @@
 
 The Falkor people graph powers the AI tool `suggest_connections`, which recommends member and alumni outreach targets for an organization. The graph is org-scoped, built from `members`, `alumni`, and `mentorship_pairs`. Falkor and SQL fallback share the same scoring (see **Step 6** and **Step 7**).
 
-For the **mental model** of how Falkor relates to mentorship distance vs attribute scoring, **`person_query` resolution**, **deduping**, **AI chat pass 1 / pass 2**, and a **sequence diagram** for a typical prompt, see [Falkor connection suggestions — architecture](falkor-connection-suggestions.md).
+Flow diagram (chat → `suggest_connections` → Falkor or SQL → pass 2): [falkor-connection-suggestions.md](falkor-connection-suggestions.md).
 
 Relevant code:
 
@@ -63,7 +63,7 @@ Score = sum of matching weights. Deterministic tie-breaking: score → reason co
 
 If Falkor throws, the implementation silently falls back to SQL.
 
-Chat-specific tool gating and the pass 2 answer contract are documented in [Falkor connection suggestions — architecture](falkor-connection-suggestions.md).
+Same flow as diagram in [falkor-connection-suggestions.md](falkor-connection-suggestions.md).
 
 ### Step 8 — Testing
 
