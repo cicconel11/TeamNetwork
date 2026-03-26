@@ -37,6 +37,7 @@
   "exclude": [
     "node_modules",
     "playwright.config.ts",
-    "tests"
+    "tests",
+    "scripts/test-career-parsing.ts"
   ]
 }
