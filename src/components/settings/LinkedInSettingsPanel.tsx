@@ -221,12 +221,27 @@ export function LinkedInSettingsPanel({
               <p className="text-xs text-muted-foreground">
                 Refresh your headline, company, and school from the public LinkedIn URL above.
               </p>
-              <p className="text-xs text-muted-foreground/70">
-                <span className="font-medium text-muted-foreground">Tip:</span> Your LinkedIn experience, education, and about sections must be set to public for
-                the sync to capture them. Go to LinkedIn &gt; Settings &gt; Visibility &gt; Edit your public
-                profile and ensure all sections are toggled on. If you recently changed these settings,
-                allow 24–48 hours for changes to take effect.
-              </p>
+              <div className="text-xs text-muted-foreground/70 space-y-1">
+                <p>
+                  <span className="font-medium text-muted-foreground">Tip:</span> Your LinkedIn profile sections must be public for sync to capture them.
+                </p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1">
+                  <li>
+                    Open your{" "}
+                    <a
+                      href="https://www.linkedin.com/public-profile/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      LinkedIn Public Profile Settings
+                    </a>
+                  </li>
+                  <li>Toggle on <span className="font-medium text-muted-foreground">Experience</span>, <span className="font-medium text-muted-foreground">Education</span>, and <span className="font-medium text-muted-foreground">Headline</span></li>
+                  <li>If you just changed these settings, wait 24–48 hours for LinkedIn to update</li>
+                  <li>Come back and hit <span className="font-medium text-muted-foreground">Sync LinkedIn Data</span></li>
+                </ol>
+              </div>
             </div>
           )}
         </div>
@@ -389,9 +404,25 @@ export function LinkedInSettingsPanel({
 
           {connection?.enrichment && !connection.enrichment.jobTitle && !connection.enrichment.school && connection.lastSyncAt && (
             <InlineBanner variant="info">
-              We couldn&apos;t find your job title or education details. Make sure your LinkedIn experience
-              and education sections are set to public under LinkedIn Settings &gt; Visibility &gt; Edit
-              your public profile. If you recently updated these settings, wait 24–48 hours and sync again.
+              <div className="space-y-1">
+                <p>We couldn&apos;t find your job title or education details. To fix this:</p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1 text-sm">
+                  <li>
+                    Open your{" "}
+                    <a
+                      href="https://www.linkedin.com/public-profile/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      LinkedIn Public Profile Settings
+                    </a>
+                  </li>
+                  <li>Toggle on <span className="font-medium">Experience</span>, <span className="font-medium">Education</span>, and <span className="font-medium">Headline</span></li>
+                  <li>If you just changed these settings, wait 24–48 hours for LinkedIn to update</li>
+                  <li>Come back and hit <span className="font-medium">Sync LinkedIn Data</span></li>
+                </ol>
+              </div>
             </InlineBanner>
           )}
 
