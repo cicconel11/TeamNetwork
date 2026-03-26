@@ -10,6 +10,8 @@ module.exports = [
       "**/.next/**",
       "**/node_modules/**",
       "**/.worktrees/**",
+      "**/.claude/**",
+      "scripts/**",
       "apps/**",
       "packages/**",
       "playwright-report/**",
