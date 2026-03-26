@@ -454,7 +454,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
       guard += 1;
       const p = new URLSearchParams({ orgId, limit: "100" });
       if (cursor) p.set("cursor", cursor);
-      const res = await fetch(`/api/media?${p.toString()}`);
+      const res = await fetch(`/api/media/reorder-dataset?${p.toString()}`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Failed to load gallery");
@@ -492,17 +492,15 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
 
   const exitPhotosReorder = useCallback(() => {
     setPhotosReorderMode(false);
-    setLoading(true);
+    setError(null);
     fetchMedia()
       .then((result) => {
         setItems(result.data || []);
         setNextCursor(result.nextCursor || null);
         setHasMore(result.hasMore || false);
-        setLoading(false);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to refresh");
-        setLoading(false);
       });
   }, [fetchMedia]);
 

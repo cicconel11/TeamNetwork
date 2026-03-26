@@ -34,11 +34,44 @@ export function MediaDetailModal({
   const [saving, setSaving] = useState(false);
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(true);
 
   const isUploader = item.uploaded_by === currentUserId;
   const canEdit = isAdmin || isUploader;
-  const displayUrl = item.url || item.external_url;
-  const uploaderName = item.users?.name || "Unknown";
+  const merged = detailItem ?? item;
+  /** Full-resolution / stream URL — list payloads omit storage `url`; detail fetch supplies it. */
+  const displayUrl = merged.url || merged.external_url;
+  const uploaderName = merged.users?.name || "Unknown";
+
+  useEffect(() => {
+    setDetailItem(null);
+    setDetailLoading(true);
+    setConfirmDelete(false);
+    setShowRejectForm(false);
+    setRejectionReason("");
+    setEditDescription(item.description || "");
+    setEditTags(item.tags.join(", "));
+    let cancelled = false;
+    fetch(`/api/media/${item.id}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: MediaItem | null) => {
+        if (!cancelled && data) setDetailItem(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id]); // eslint-disable-line react-hooks/exhaustive-deps -- refetch detail only when media id changes
+
+  useEffect(() => {
+    if (isEditing) return;
+    setEditDescription(merged.description || "");
+    setEditTags(merged.tags.join(", "));
+  }, [merged.description, merged.tags, merged.id, isEditing]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -104,7 +137,20 @@ export function MediaDetailModal({
         <div className="md:grid md:grid-cols-[2fr_1fr] max-h-[90vh]">
           {/* Media panel */}
           <div className="relative bg-black/5 dark:bg-black/20 flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-            {item.media_type === "video" && displayUrl ? (
+            {detailLoading && !displayUrl && (item.thumbnail_url || item.external_url) ? (
+              <div className="relative w-full min-h-[300px] md:min-h-[500px]">
+                <Image
+                  src={(item.thumbnail_url || item.external_url) as string}
+                  alt={item.title}
+                  fill
+                  className="object-contain opacity-60"
+                  sizes="(max-width: 768px) 100vw, 66vw"
+                />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm text-muted-foreground">Loading full media…</span>
+                </div>
+              </div>
+            ) : merged.media_type === "video" && displayUrl ? (
               <video
                 src={displayUrl}
                 controls
@@ -114,7 +160,7 @@ export function MediaDetailModal({
             ) : displayUrl ? (
               <Image
                 src={displayUrl}
-                alt={item.title}
+                alt={merged.title}
                 fill
                 className="object-contain"
                 sizes="(max-width: 768px) 100vw, 66vw"
@@ -158,10 +204,10 @@ export function MediaDetailModal({
               </>
             ) : (
               <>
-                {item.status !== "approved" && (
+                {merged.status !== "approved" && (
                   <div>
-                    <Badge variant={item.status === "pending" ? "warning" : "muted"}>
-                      {item.status}
+                    <Badge variant={merged.status === "pending" ? "warning" : "muted"}>
+                      {merged.status}
                     </Badge>
                   </div>
                 )}
@@ -174,22 +220,22 @@ export function MediaDetailModal({
                   <div>
                     <span className="text-muted-foreground">Date</span>
                     <p className="text-foreground">
-                      {item.taken_at
-                        ? new Date(item.taken_at).toLocaleDateString()
-                        : new Date(item.created_at).toLocaleDateString()}
+                      {merged.taken_at
+                        ? new Date(merged.taken_at).toLocaleDateString()
+                        : new Date(merged.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  {item.description && (
+                  {merged.description && (
                     <div>
                       <span className="text-muted-foreground">Description</span>
-                      <p className="text-foreground whitespace-pre-wrap">{item.description}</p>
+                      <p className="text-foreground whitespace-pre-wrap">{merged.description}</p>
                     </div>
                   )}
-                  {item.tags.length > 0 && (
+                  {merged.tags.length > 0 && (
                     <div>
                       <span className="text-muted-foreground">Tags</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
-                        {item.tags.map((tag) => (
+                        {merged.tags.map((tag) => (
                           <Badge key={tag} variant="muted">{tag}</Badge>
                         ))}
                       </div>
@@ -203,13 +249,13 @@ export function MediaDetailModal({
                     <AddToAlbumPanel
                       mediaId={item.id}
                       orgId={orgId}
-                      canManage={isAdmin || item.uploaded_by === currentUserId}
+                      canManage={isAdmin || merged.uploaded_by === currentUserId}
                     />
                   </div>
                 )}
 
                 {/* Moderation actions for admins */}
-                {isAdmin && item.status === "pending" && onModerate && (
+                {isAdmin && merged.status === "pending" && onModerate && (
                   <div className="p-3 rounded-lg bg-warning/10 border border-warning/20 space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-foreground mr-auto">Pending review</span>
