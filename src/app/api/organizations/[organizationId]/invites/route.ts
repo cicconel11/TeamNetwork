@@ -7,7 +7,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 
 const createInviteSchema = z.object({
-  role: z.enum(["admin", "active_member", "alumni"]),
+  role: z.enum(["admin", "active_member", "alumni", "parent"]),
   uses: z.number().int().positive().optional().nullable(),
   expiresAt: z.string().datetime().optional().nullable(),
 });

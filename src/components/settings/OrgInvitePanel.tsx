@@ -29,6 +29,7 @@ interface ParentInvite {
 }
 
 interface InviteItem {
+  source: "organization_invite" | "legacy_parent_invite";
   kind: "org" | "parent";
   id: string;
   code: string;
@@ -112,51 +113,6 @@ export function OrgInvitePanel({
   }, [orgId, supabase]);
 
   const handleCreateInvite = async () => {
-    if (newRole === "parent") {
-      setIsCreating(true);
-      setError(null);
-
-      try {
-        const res = await fetch(`/api/organizations/${orgId}/parents/invite`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ expires_at: newExpires ? new Date(newExpires).toISOString() : null }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || "Unable to create parent invite");
-        }
-
-        const invite = data.invite as ParentInvite | undefined;
-        if (invite) {
-          const normalizedInvite: ParentInvite = {
-            id: invite.id,
-            email: invite.email ?? null,
-            code: invite.code,
-            status: invite.status,
-            expires_at: invite.expires_at ?? null,
-            created_at: invite.created_at ?? new Date().toISOString(),
-          };
-          setParentInvites((prev) => [
-            normalizedInvite,
-            ...prev.filter((item) => item.id !== normalizedInvite.id),
-          ]);
-        }
-
-        onShowFormChange(false);
-        setNewRole("active_member");
-        setNewUses("");
-        setNewExpires("");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unable to create parent invite");
-      } finally {
-        setIsCreating(false);
-      }
-
-      return;
-    }
-
     setIsCreating(true);
     setError(null);
     const creatingRole = newRole;
@@ -223,23 +179,37 @@ export function OrgInvitePanel({
     );
   };
 
-  const handleDeleteParentInvite = async (inviteId: string) => {
+  const handleDeleteParentInvite = async (invite: InviteItem) => {
     if (!confirm("Delete this parent invite link? Anyone who already joined will keep access.")) {
       return;
     }
 
-    setDeletingParentInviteId(inviteId);
+    setDeletingParentInviteId(invite.id);
     setError(null);
 
     try {
-      const res = await fetch(`/api/organizations/${orgId}/parents/invite/${inviteId}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to delete parent invite");
+      if (invite.source === "organization_invite") {
+        const { error: deleteError } = await supabase
+          .from("organization_invites")
+          .delete()
+          .eq("id", invite.id);
+
+        if (deleteError) {
+          throw new Error(deleteError.message || "Failed to delete parent invite");
+        }
+
+        setOrgInvites((prev) => prev.filter((item) => item.id !== invite.id));
+      } else {
+        const res = await fetch(`/api/organizations/${orgId}/parents/invite/${invite.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to delete parent invite");
+        }
+
+        setParentInvites((prev) => prev.filter((item) => item.id !== invite.id));
       }
 
-      setParentInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
-      setShowQR((prev) => (prev === `parent-${inviteId}` ? null : prev));
+      setShowQR((prev) => (prev === `${invite.kind}-${invite.id}` ? null : prev));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete parent invite");
     } finally {
@@ -269,7 +239,8 @@ export function OrgInvitePanel({
 
   const allInvites: InviteItem[] = useMemo(() => [
     ...orgInvites.map((invite) => ({
-      kind: "org" as const,
+      source: "organization_invite" as const,
+      kind: invite.role === "parent" ? "parent" as const : "org" as const,
       id: invite.id,
       code: invite.code,
       created_at: invite.created_at,
@@ -280,6 +251,7 @@ export function OrgInvitePanel({
       revoked_at: invite.revoked_at,
     })),
     ...parentInvites.map((invite) => ({
+      source: "legacy_parent_invite" as const,
       kind: "parent" as const,
       id: invite.id,
       code: invite.code,
@@ -315,16 +287,14 @@ export function OrgInvitePanel({
                 { value: "parent", label: "Parent" },
               ]}
             />
-            {newRole !== "parent" && (
-              <Input
-                label="Max Uses"
-                type="number"
-                value={newUses}
-                onChange={(e) => setNewUses(e.target.value)}
-                placeholder="Unlimited"
-                min={1}
-              />
-            )}
+            <Input
+              label="Max Uses"
+              type="number"
+              value={newUses}
+              onChange={(e) => setNewUses(e.target.value)}
+              placeholder="Unlimited"
+              min={1}
+            />
             <Input
               label="Expires On"
               type="date"
@@ -353,12 +323,16 @@ export function OrgInvitePanel({
         <div className="space-y-4">
           {allInvites.map((invite) => {
             const inviteKey = `${invite.kind}-${invite.id}`;
+            const isLegacyParentInvite = invite.source === "legacy_parent_invite";
             const role = invite.kind === "parent" ? "parent" : invite.role ?? "active_member";
             const isExpiredInvite = isExpired(invite.expires_at);
-            const expired = invite.kind === "org" ? isExpiredInvite : invite.status === "pending" && isExpiredInvite;
-            const revoked = invite.kind === "org" ? isRevoked(invite.revoked_at ?? null) : invite.status === "revoked";
-            const exhausted = invite.kind === "org" && invite.uses_remaining != null && invite.uses_remaining <= 0;
-            const accepted = invite.kind === "parent" && invite.status === "accepted";
+            const expired = isLegacyParentInvite ? invite.status === "pending" && isExpiredInvite : isExpiredInvite;
+            const revoked = isLegacyParentInvite ? invite.status === "revoked" : isRevoked(invite.revoked_at ?? null);
+            const exhausted =
+              invite.source === "organization_invite" &&
+              invite.uses_remaining != null &&
+              invite.uses_remaining <= 0;
+            const accepted = isLegacyParentInvite && invite.status === "accepted";
             const isDeletingParentInvite = invite.kind === "parent" && deletingParentInviteId === invite.id;
             const invalid = expired || exhausted || revoked;
             const inviteLink = getInviteLink(invite);
@@ -413,20 +387,20 @@ export function OrgInvitePanel({
                         </svg>
                       </Button>
                       <div className="text-sm text-muted-foreground text-right hidden sm:block">
-                        {invite.kind === "org" ? (
+                        {invite.source === "organization_invite" ? (
                           <div>
                             {invite.uses_remaining !== null
                               ? `${invite.uses_remaining} uses left`
                               : "Unlimited uses"}
                           </div>
                         ) : (
-                          <div>Parent invite</div>
+                          <div>Legacy parent invite</div>
                         )}
                         {invite.expires_at && (
                           <div>Expires {formatShortDate(invite.expires_at)}</div>
                         )}
                       </div>
-                      {invite.kind === "org" && !revoked && !expired && !exhausted && (
+                      {invite.source === "organization_invite" && !revoked && !expired && !exhausted && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -441,7 +415,7 @@ export function OrgInvitePanel({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteParentInvite(invite.id)}
+                          onClick={() => handleDeleteParentInvite(invite)}
                           isLoading={isDeletingParentInvite}
                           className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >

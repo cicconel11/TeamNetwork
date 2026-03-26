@@ -3,7 +3,7 @@ import assert from "node:assert";
 import { z } from "zod";
 
 const createInviteSchema = z.object({
-  role: z.enum(["admin", "active_member", "alumni"]),
+  role: z.enum(["admin", "active_member", "alumni", "parent"]),
   uses: z.number().int().positive().optional().nullable(),
   expiresAt: z.string().datetime().optional().nullable(),
 });
@@ -57,6 +57,16 @@ test("createInviteSchema accepts alumni invite payload", () => {
   const result = createInviteSchema.safeParse({
     role: "alumni",
     uses: 5,
+    expiresAt: "2026-03-27T00:00:00.000Z",
+  });
+
+  assert.strictEqual(result.success, true);
+});
+
+test("createInviteSchema accepts parent invite payload with unlimited uses", () => {
+  const result = createInviteSchema.safeParse({
+    role: "parent",
+    uses: null,
     expiresAt: "2026-03-27T00:00:00.000Z",
   });
 
@@ -158,5 +168,30 @@ test("route returns invite payload on success", () => {
     id: "invite-1",
     code: "ABC12345",
     role: "alumni",
+  });
+});
+
+test("route returns reusable parent invite payload on success", () => {
+  const result = simulateCreateInvite({
+    userId: "user-1",
+    role: "admin",
+    body: { role: "parent", uses: null },
+    rpcResult: {
+      data: {
+        id: "invite-parent-1",
+        code: "PARENT01",
+        role: "parent",
+        uses_remaining: null,
+      },
+      error: null,
+    },
+  });
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(result.body.invite, {
+    id: "invite-parent-1",
+    code: "PARENT01",
+    role: "parent",
+    uses_remaining: null,
   });
 });
