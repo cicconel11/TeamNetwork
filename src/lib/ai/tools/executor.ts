@@ -15,10 +15,15 @@ import {
   assistantPreparedJobSchema,
   type AssistantPreparedJob,
 } from "@/lib/schemas/jobs";
+import {
+  assistantDiscussionDraftSchema,
+  assistantPreparedDiscussionSchema,
+} from "@/lib/schemas/discussion";
 import { fetchJobSourceDraft, JobSourceIntakeError } from "@/lib/jobs/source-intake";
 import {
   buildPendingActionSummary,
   createPendingAction,
+  type CreateDiscussionThreadPendingPayload,
   type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
 
@@ -93,6 +98,14 @@ const prepareJobPostingSchema = z
   })
   .strict();
 
+const prepareDiscussionThreadSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    body: z.string().trim().min(1).optional(),
+    mediaIds: z.array(z.string().uuid()).optional(),
+  })
+  .strict();
+
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
   .object({
@@ -124,6 +137,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_discussions: listDiscussionsSchema,
   list_job_postings: listJobPostingsSchema,
   prepare_job_posting: prepareJobPostingSchema,
+  prepare_discussion_thread: prepareDiscussionThreadSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
@@ -486,27 +500,29 @@ function sanitizeDraftValue(value: unknown): string | undefined {
 function normalizeAssistantDraft(
   args: z.infer<typeof prepareJobPostingSchema>
 ): z.infer<typeof prepareJobPostingSchema> {
-  return {
-    ...args,
-    ...(sanitizeDraftValue(args.title) ? { title: sanitizeDraftValue(args.title) } : {}),
-    ...(sanitizeDraftValue(args.company) ? { company: sanitizeDraftValue(args.company) } : {}),
-    ...(sanitizeDraftValue(args.location) ? { location: sanitizeDraftValue(args.location) } : {}),
-    ...(sanitizeDraftValue(args.description) ? { description: sanitizeDraftValue(args.description) } : {}),
-    ...(sanitizeDraftValue(args.application_url) ? { application_url: sanitizeDraftValue(args.application_url) } : {}),
-    ...(sanitizeDraftValue(args.contact_email) ? { contact_email: sanitizeDraftValue(args.contact_email) } : {}),
-    ...(sanitizeDraftValue(args.industry) ? { industry: sanitizeDraftValue(args.industry) } : {}),
-  };
+  const stringFields = [
+    "title", "company", "location", "description",
+    "application_url", "contact_email", "industry",
+  ] as const;
+
+  const overrides: Record<string, string> = {};
+  for (const field of stringFields) {
+    const sanitized = sanitizeDraftValue(args[field]);
+    if (sanitized) {
+      overrides[field] = sanitized;
+    }
+  }
+
+  return { ...args, ...overrides };
 }
 
 function mergeDrafts<T extends Record<string, unknown>>(primary: T, secondary: Partial<T>): T {
   const merged = { ...secondary, ...primary };
-  for (const key of Object.keys(merged)) {
-    const value = merged[key];
-    if (typeof value === "string" && value.trim().length === 0) {
-      delete merged[key];
-    }
-  }
-  return merged as T;
+  return Object.fromEntries(
+    Object.entries(merged).filter(
+      ([, value]) => !(typeof value === "string" && value.trim().length === 0)
+    )
+  ) as T;
 }
 
 async function prepareJobPosting(
@@ -616,6 +632,89 @@ async function prepareJobPosting(
   };
 }
 
+async function prepareDiscussionThread(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareDiscussionThreadSchema>
+): Promise<ToolExecutionResult> {
+  if (!ctx.threadId) {
+    return toolError("Discussion preparation requires a thread context");
+  }
+
+  const parsedDraft = assistantDiscussionDraftSchema.safeParse(args);
+  if (!parsedDraft.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: args,
+      },
+    };
+  }
+
+  const missingFields: string[] = [];
+  if (!parsedDraft.data.title) missingFields.push("title");
+  if (!parsedDraft.data.body) missingFields.push("body");
+
+  if (missingFields.length > 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: missingFields,
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const prepared = assistantPreparedDiscussionSchema.safeParse(parsedDraft.data);
+  if (!prepared.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const { data: org } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  const pendingPayload: CreateDiscussionThreadPendingPayload = {
+    ...prepared.data,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "create_discussion_thread",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
 async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> {
   const [members, alumni, parents, upcomingEvents, donations] = await Promise.all([
     safeToolCount(() =>
@@ -679,20 +778,21 @@ async function findNavigationTargets(
   args: z.infer<typeof findNavigationTargetsSchema>
 ): Promise<ToolExecutionResult> {
   return safeToolQuery(async () => {
-    const { data: org, error } = await sb
-      .from("organizations")
-      .select("slug, nav_config")
-      .eq("id", orgId)
-      .maybeSingle();
+    const [orgResult, subscriptionResult] = await Promise.all([
+      sb
+        .from("organizations")
+        .select("slug, nav_config")
+        .eq("id", orgId)
+        .maybeSingle(),
+      sb.rpc("get_subscription_status", { p_org_id: orgId }),
+    ]);
 
+    const { data: org, error } = orgResult;
     if (error || !org?.slug) {
       return { data: null, error: error ?? new Error("Organization not found") };
     }
 
-    const { data: subscriptionRows, error: subscriptionError } = await sb.rpc(
-      "get_subscription_status",
-      { p_org_id: orgId }
-    );
+    const { data: subscriptionRows, error: subscriptionError } = subscriptionResult;
 
     const subscription = subscriptionError
       ? null
@@ -851,6 +951,12 @@ export async function executeToolCall(
             sb,
             ctx,
             args as z.infer<typeof prepareJobPostingSchema>
+          );
+        case "prepare_discussion_thread":
+          return prepareDiscussionThread(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareDiscussionThreadSchema>
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId);

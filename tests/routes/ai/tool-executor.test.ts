@@ -98,6 +98,11 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
     queries.push(entry);
 
     const builder: Record<string, any> = {
+      insert(row: any) {
+        void row;
+        entry.method = "insert";
+        return builder;
+      },
       select(columns: string, opts?: any) {
         entry.method = opts?.head ? "count" : "select";
         entry.columns = columns;
@@ -416,6 +421,96 @@ test("list_announcements returns recent announcements", async () => {
   );
   assert.deepEqual(announcementQuery.orderBy, { column: "published_at", ascending: false });
   assert.equal(announcementQuery.limitValue, 10);
+});
+
+test("prepare_discussion_thread returns missing_fields for incomplete drafts", async () => {
+  const discussionCtx = { ...ctx, threadId: "thread-123" };
+
+  const result = expectOk(
+    await executeToolCall(discussionCtx, {
+      name: "prepare_discussion_thread",
+      args: { title: "Spring Fundraising Volunteers" },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "missing_fields",
+    missing_fields: ["body"],
+    draft: {
+      title: "Spring Fundraising Volunteers",
+      mediaIds: [],
+    },
+  });
+});
+
+test("prepare_discussion_thread creates a pending confirmation action when complete", async () => {
+  const discussionStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-123",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-123",
+          action_type: "create_discussion_thread",
+          payload: {
+            title: "Spring Fundraising Volunteers",
+            body: "Let's organize volunteer assignments for the spring fundraiser.",
+            mediaIds: ["11111111-1111-4111-8111-111111111111"],
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+
+  const discussionCtx = { ...makeCtx(discussionStub as any), threadId: "thread-123" };
+
+  const result = expectOk(
+    await executeToolCall(discussionCtx, {
+      name: "prepare_discussion_thread",
+      args: {
+        title: "Spring Fundraising Volunteers",
+        body: "Let's organize volunteer assignments for the spring fundraiser.",
+        mediaIds: ["11111111-1111-4111-8111-111111111111"],
+      },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "needs_confirmation",
+    draft: {
+      title: "Spring Fundraising Volunteers",
+      body: "Let's organize volunteer assignments for the spring fundraiser.",
+      mediaIds: ["11111111-1111-4111-8111-111111111111"],
+    },
+    pending_action: {
+      id: "pending-123",
+      action_type: "create_discussion_thread",
+      payload: {
+        title: "Spring Fundraising Volunteers",
+        body: "Let's organize volunteer assignments for the spring fundraiser.",
+        mediaIds: ["11111111-1111-4111-8111-111111111111"],
+        orgSlug: "upenn-sprint-football",
+      },
+      expires_at: "2099-01-01T00:00:00.000Z",
+      summary: {
+        title: "Review discussion thread",
+        description: "Confirm the drafted thread before it is posted to discussions.",
+      },
+    },
+  });
 });
 
 test("find_navigation_targets returns org-scoped page matches", async () => {

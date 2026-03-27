@@ -103,6 +103,91 @@ test("confirm executes create_job_posting and appends assistant message", async 
   assert.match(String(insertedMessages[0].content), /upenn-sprint-football\/jobs\/job-123/);
 });
 
+test("confirm executes create_discussion_thread and appends assistant message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_discussion_thread",
+        payload: {
+          title: "Spring Fundraising Volunteers",
+          body: "Let's organize volunteer assignments for the spring fundraiser.",
+          mediaIds: ["11111111-1111-4111-8111-111111111111"],
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+    },
+    createDiscussionThread: async () =>
+      ({
+        ok: true,
+        status: 201,
+        thread: {
+          id: "thread-123",
+          title: "Spring Fundraising Volunteers",
+        },
+        threadUrl: "/upenn-sprint-football/messages/threads/thread-123",
+      }) as any,
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "discussion_thread");
+  assert.equal(updatedStatuses[1].resultEntityId, "thread-123");
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.match(String(insertedMessages[0].content), /Created discussion thread/);
+  assert.match(
+    String(insertedMessages[0].content),
+    /upenn-sprint-football\/messages\/threads\/thread-123/
+  );
+});
+
 test("cancel marks the pending action cancelled", async () => {
   const updatedStatuses: any[] = [];
 

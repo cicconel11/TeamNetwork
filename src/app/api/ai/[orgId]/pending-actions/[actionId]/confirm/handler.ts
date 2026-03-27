@@ -3,11 +3,14 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import {
   getPendingAction,
+  isAuthorizedAction,
   isPendingActionExpired,
   updatePendingActionStatus,
-  type PendingActionRecord,
+  type CreateDiscussionThreadPendingPayload,
+  type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
 import { createJobPosting } from "@/lib/jobs/create-job";
+import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export interface AiPendingActionConfirmRouteDeps {
@@ -16,10 +19,7 @@ export interface AiPendingActionConfirmRouteDeps {
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
   createJobPosting?: typeof createJobPosting;
-}
-
-function isAuthorizedAction(ctx: { orgId: string; userId: string }, action: PendingActionRecord) {
-  return action.organization_id === ctx.orgId && action.user_id === ctx.userId;
+  createDiscussionThread?: typeof createDiscussionThread;
 }
 
 export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirmRouteDeps = {}) {
@@ -28,6 +28,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const getPendingActionFn = deps.getPendingAction ?? getPendingAction;
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
+  const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
 
   return async function POST(
     request: NextRequest,
@@ -68,12 +69,13 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
     switch (action.action_type) {
       case "create_job_posting": {
+        const payload = action.payload as CreateJobPostingPendingPayload;
         const result = await createJobPostingFn({
           supabase: ctx.serviceSupabase,
           serviceSupabase: ctx.serviceSupabase,
           orgId: ctx.orgId,
           userId: ctx.userId,
-          input: action.payload,
+          input: payload,
         });
 
         if (!result.ok) {
@@ -92,8 +94,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
         });
 
         const orgSlug =
-          typeof action.payload.orgSlug === "string" && action.payload.orgSlug.length > 0
-            ? action.payload.orgSlug
+          typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+            ? payload.orgSlug
             : null;
         const jobUrl = orgSlug ? `/${orgSlug}/jobs/${result.job.id}` : null;
         const content = jobUrl
@@ -108,6 +110,55 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
         });
 
         return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
+      }
+      case "create_discussion_thread": {
+        const payload = action.payload as CreateDiscussionThreadPendingPayload;
+        const result = await createDiscussionThreadFn({
+          supabase: ctx.serviceSupabase,
+          serviceSupabase: ctx.serviceSupabase,
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          input: payload,
+          orgSlug:
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null,
+        });
+
+        if (!result.ok) {
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, { status: "pending" });
+          return NextResponse.json(
+            result.details ? { error: result.error, details: result.details } : { error: result.error },
+            { status: result.status }
+          );
+        }
+
+        await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          status: "executed",
+          executedAt: new Date().toISOString(),
+          resultEntityType: "discussion_thread",
+          resultEntityId: result.thread.id,
+        });
+
+        const orgSlug =
+          typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+            ? payload.orgSlug
+            : null;
+        const threadUrl = orgSlug
+          ? `/${orgSlug}/messages/threads/${result.thread.id}`
+          : result.threadUrl;
+        const content = threadUrl
+          ? `Created discussion thread: [${result.thread.title}](${threadUrl})`
+          : `Created discussion thread: ${result.thread.title}`;
+
+        await ctx.serviceSupabase.from("ai_messages").insert({
+          thread_id: action.thread_id,
+          role: "assistant",
+          content,
+          status: "complete",
+        });
+
+        return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
       }
       default:
         return NextResponse.json({ error: "Unsupported pending action" }, { status: 400 });

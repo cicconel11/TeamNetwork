@@ -57,11 +57,13 @@ import {
   PASS2_MODEL_TIMEOUT_MS,
 } from "@/lib/ai/timeout";
 import {
-  type AiAuditStageName,
-  type AiAuditStageStatus,
-  type AiAuditStageSummary,
-  type AiAuditStageTimings,
-  type AiAuditToolCallSummary,
+  createStageTimings,
+  setStageStatus,
+  runTimedStage,
+  skipStage,
+  skipRemainingStages,
+  addToolCallTiming,
+  finalizeStageTimings,
 } from "@/lib/ai/chat-telemetry";
 
 export interface ChatRouteDeps {
@@ -101,6 +103,8 @@ const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make)(?!\w))/i;
+const CREATE_DISCUSSION_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
 
 const CONNECTION_PASS2_TEMPLATE = [
   "CONNECTION ANSWER CONTRACT:",
@@ -446,6 +450,10 @@ function getPass1Tools(
     return [AI_TOOL_MAP.prepare_job_posting];
   }
 
+  if (effectiveSurface === "general" && intentType === "action_request" && CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_discussion_thread];
+  }
+
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
@@ -516,122 +524,49 @@ function formatPrepareJobPostingResponse(data: unknown): string | null {
   return null;
 }
 
-function createDefaultStageSummary(): AiAuditStageSummary {
-  return { status: "not_run", duration_ms: 0 };
-}
-
-function createStageTimings(): AiAuditStageTimings {
-  return {
-    schema_version: 1,
-    request: {
-      outcome: "pending",
-      total_duration_ms: 0,
-    },
-    retrieval: {
-      decision: "not_available",
-      reason: "general_knowledge_query",
-    },
-    stages: {
-      auth_org_context: createDefaultStageSummary(),
-      request_validation_policy: createDefaultStageSummary(),
-      thread_resolution: createDefaultStageSummary(),
-      abandoned_stream_cleanup: createDefaultStageSummary(),
-      idempotency_lookup: createDefaultStageSummary(),
-      init_chat_rpc: createDefaultStageSummary(),
-      cache_lookup: createDefaultStageSummary(),
-      rag_retrieval: createDefaultStageSummary(),
-      assistant_placeholder_write: createDefaultStageSummary(),
-      context_build: createDefaultStageSummary(),
-      history_load: createDefaultStageSummary(),
-      pass1_model: createDefaultStageSummary(),
-      tools: {
-        ...createDefaultStageSummary(),
-        calls: [],
-      },
-      pass2: createDefaultStageSummary(),
-      grounding: createDefaultStageSummary(),
-      assistant_finalize_write: createDefaultStageSummary(),
-      cache_write: createDefaultStageSummary(),
-    },
-  };
-}
-
-function setStageStatus(
-  stageTimings: AiAuditStageTimings,
-  stage: AiAuditStageName,
-  status: AiAuditStageStatus,
-  durationMs: number
-) {
-  if (stage === "tools") {
-    stageTimings.stages.tools.status = status;
-    stageTimings.stages.tools.duration_ms = durationMs;
-    return;
+function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
   }
 
-  stageTimings.stages[stage] = {
-    status,
-    duration_ms: durationMs,
-  };
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (missingFields.length === 0) {
+      return "I still need a discussion title and body before I can prepare this thread.";
+    }
+
+    return `I can draft this discussion, but I still need: ${missingFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the discussion thread. Review the details below and confirm when you're ready to post it.";
+  }
+
+  return null;
 }
 
-async function runTimedStage<T>(
-  stageTimings: AiAuditStageTimings,
-  stage: AiAuditStageName,
-  fn: () => Promise<T>
-): Promise<T> {
-  const startedAt = Date.now();
-  try {
-    const result = await fn();
-    setStageStatus(stageTimings, stage, "completed", Date.now() - startedAt);
-    return result;
-  } catch (error) {
-    setStageStatus(stageTimings, stage, "failed", Date.now() - startedAt);
-    throw error;
+function formatDeterministicToolResponse(name: string, data: unknown): string | null {
+  switch (name) {
+    case "suggest_connections":
+      return formatSuggestConnectionsResponse(data);
+    case "list_announcements":
+      return formatAnnouncementsResponse(data);
+    case "prepare_job_posting":
+      return formatPrepareJobPostingResponse(data);
+    case "prepare_discussion_thread":
+      return formatPrepareDiscussionThreadResponse(data);
+    case "find_navigation_targets":
+      return formatNavigationTargetsResponse(data);
+    default:
+      return null;
   }
 }
 
-function skipStage(stageTimings: AiAuditStageTimings, stage: AiAuditStageName) {
-  setStageStatus(stageTimings, stage, "skipped", 0);
-}
 
-const TOOL_STAGE_STATUS_PRECEDENCE: Record<AiAuditStageStatus, number> = {
-  not_run: 0,
-  skipped: 1,
-  completed: 2,
-  failed: 3,
-  timed_out: 4,
-  aborted: 5,
-};
-
-function addToolCallTiming(
-  stageTimings: AiAuditStageTimings,
-  call: AiAuditToolCallSummary
-) {
-  stageTimings.stages.tools.calls.push(call);
-  stageTimings.stages.tools.duration_ms += call.duration_ms;
-
-  const currentStatus = stageTimings.stages.tools.status;
-  if (
-    TOOL_STAGE_STATUS_PRECEDENCE[call.status] >=
-    TOOL_STAGE_STATUS_PRECEDENCE[currentStatus]
-  ) {
-    stageTimings.stages.tools.status = call.status;
-  }
-}
-
-function finalizeStageTimings(
-  stageTimings: AiAuditStageTimings,
-  outcome: string,
-  totalDurationMs: number
-): AiAuditStageTimings {
-  return {
-    ...stageTimings,
-    request: {
-      outcome,
-      total_duration_ms: totalDurationMs,
-    },
-  };
-}
 
 const MESSAGE_SAFETY_FALLBACK =
   "I can’t help with instructions about hidden prompts, internal tools, or overriding safety rules. Ask a question about your organization’s data instead.";
@@ -850,17 +785,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           decision: "skip",
           reason: "cache_hit",
         };
-        skipStage(stageTimings, "cache_lookup");
-        skipStage(stageTimings, "rag_retrieval");
-        skipStage(stageTimings, "assistant_placeholder_write");
-        skipStage(stageTimings, "context_build");
-        skipStage(stageTimings, "history_load");
-        skipStage(stageTimings, "pass1_model");
-        skipStage(stageTimings, "tools");
-        skipStage(stageTimings, "pass2");
-        skipStage(stageTimings, "grounding");
-        skipStage(stageTimings, "assistant_finalize_write");
-        skipStage(stageTimings, "cache_write");
+        skipRemainingStages(stageTimings, "cache_lookup");
 
         const { data: assistantReplay } = await ctx.supabase
           .from("ai_messages")
@@ -953,17 +878,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         decision: "skip",
         reason: "message_safety_blocked",
       };
-      skipStage(stageTimings, "cache_lookup");
-      skipStage(stageTimings, "rag_retrieval");
-      skipStage(stageTimings, "assistant_placeholder_write");
-      skipStage(stageTimings, "context_build");
-      skipStage(stageTimings, "history_load");
-      skipStage(stageTimings, "pass1_model");
-      skipStage(stageTimings, "tools");
-      skipStage(stageTimings, "pass2");
-      skipStage(stageTimings, "grounding");
-      skipStage(stageTimings, "assistant_finalize_write");
-      skipStage(stageTimings, "cache_write");
+      skipRemainingStages(stageTimings, "cache_lookup");
 
       const { data: safetyAssistantMsg, error: safetyAssistantError } =
         await insertAssistantMessage({
@@ -1049,16 +964,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           decision: "skip",
           reason: "cache_hit",
         };
-        skipStage(stageTimings, "rag_retrieval");
-        skipStage(stageTimings, "assistant_placeholder_write");
-        skipStage(stageTimings, "context_build");
-        skipStage(stageTimings, "history_load");
-        skipStage(stageTimings, "pass1_model");
-        skipStage(stageTimings, "tools");
-        skipStage(stageTimings, "pass2");
-        skipStage(stageTimings, "grounding");
-        skipStage(stageTimings, "assistant_finalize_write");
-        skipStage(stageTimings, "cache_write");
+        skipRemainingStages(stageTimings, "rag_retrieval");
 
         const { data: cachedAssistantMsg, error: cachedAssistantError } =
           await insertAssistantMessage({
@@ -1554,15 +1460,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
             toolResults[0].name === successfulToolResults[0].name
-              ? successfulToolResults[0].name === "suggest_connections"
-                ? formatSuggestConnectionsResponse(successfulToolResults[0].data)
-                : successfulToolResults[0].name === "list_announcements"
-                  ? formatAnnouncementsResponse(successfulToolResults[0].data)
-                  : successfulToolResults[0].name === "prepare_job_posting"
-                    ? formatPrepareJobPostingResponse(successfulToolResults[0].data)
-                  : successfulToolResults[0].name === "find_navigation_targets"
-                    ? formatNavigationTargetsResponse(successfulToolResults[0].data)
-                    : null
+              ? formatDeterministicToolResponse(
+                  successfulToolResults[0].name,
+                  successfulToolResults[0].data
+                )
               : null;
 
           if (deterministicToolContent) {

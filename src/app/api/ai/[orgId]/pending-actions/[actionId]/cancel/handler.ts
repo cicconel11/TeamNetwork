@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import {
   getPendingAction,
+  isAuthorizedAction,
   isPendingActionExpired,
   updatePendingActionStatus,
-  type PendingActionRecord,
 } from "@/lib/ai/pending-actions";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
@@ -14,10 +14,6 @@ export interface AiPendingActionCancelRouteDeps {
   getAiOrgContext?: typeof getAiOrgContext;
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
-}
-
-function isAuthorizedAction(ctx: { orgId: string; userId: string }, action: PendingActionRecord) {
-  return action.organization_id === ctx.orgId && action.user_id === ctx.userId;
 }
 
 export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRouteDeps = {}) {

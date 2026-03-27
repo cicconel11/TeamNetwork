@@ -22,17 +22,9 @@ export interface ListJobPostingsArgs {
   limit?: number;
 }
 
-export interface PrepareJobPostingArgs {
+export interface PrepareDiscussionThreadArgs {
   title?: string;
-  company?: string;
-  location?: string;
-  location_type?: "remote" | "hybrid" | "onsite";
-  description?: string;
-  application_url?: string;
-  contact_email?: string;
-  industry?: string;
-  experience_level?: "entry" | "mid" | "senior" | "lead" | "executive";
-  expires_at?: string | null;
+  body?: string;
   mediaIds?: string[];
 }
 
@@ -203,6 +195,26 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_discussion_thread: {
+    type: "function" as const,
+    function: {
+      name: "prepare_discussion_thread" as const,
+      description:
+        "Prepare a new discussion thread draft for the assistant. Use this when the user wants you to create or post a discussion thread. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the draft is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string" as const },
+          body: { type: "string" as const },
+          mediaIds: {
+            type: "array" as const,
+            items: { type: "string" as const },
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_org_stats: {
     type: "function" as const,
     function: {
@@ -285,6 +297,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_discussions,
   TOOL_BY_NAME.list_job_postings,
   TOOL_BY_NAME.prepare_job_posting,
+  TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,

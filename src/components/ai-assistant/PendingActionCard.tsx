@@ -15,6 +15,11 @@ function getValue(payload: Record<string, unknown>, key: string): string | null 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function getArrayLength(payload: Record<string, unknown>, key: string): number {
+  const value = payload[key];
+  return Array.isArray(value) ? value.length : 0;
+}
+
 export function PendingActionCard({
   action,
   busy = false,
@@ -31,6 +36,8 @@ export function PendingActionCard({
   const applicationUrl = getValue(payload, "application_url");
   const contactEmail = getValue(payload, "contact_email");
   const description = getValue(payload, "description");
+  const body = getValue(payload, "body");
+  const mediaCount = getArrayLength(payload, "mediaIds");
 
   return (
     <div className="border-t border-border bg-muted/40 p-4">
@@ -41,19 +48,36 @@ export function PendingActionCard({
         </div>
 
         <div className="mt-4 space-y-2 text-sm">
-          {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
-          {company ? <p><span className="font-medium">Company:</span> {company}</p> : null}
-          {location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
-          {industry ? <p><span className="font-medium">Industry:</span> {industry}</p> : null}
-          {experienceLevel ? <p><span className="font-medium">Experience:</span> {experienceLevel}</p> : null}
-          {applicationUrl ? <p><span className="font-medium">Apply URL:</span> {applicationUrl}</p> : null}
-          {contactEmail ? <p><span className="font-medium">Contact:</span> {contactEmail}</p> : null}
-          {description ? (
-            <div>
-              <p className="font-medium text-foreground">Description</p>
-              <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{description}</p>
-            </div>
-          ) : null}
+          {action.actionType === "create_discussion_thread" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {body ? (
+                <div>
+                  <p className="font-medium text-foreground">Body</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+                </div>
+              ) : null}
+              {mediaCount > 0 ? (
+                <p><span className="font-medium">Attachments:</span> {mediaCount}</p>
+              ) : null}
+            </>
+          ) : (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {company ? <p><span className="font-medium">Company:</span> {company}</p> : null}
+              {location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
+              {industry ? <p><span className="font-medium">Industry:</span> {industry}</p> : null}
+              {experienceLevel ? <p><span className="font-medium">Experience:</span> {experienceLevel}</p> : null}
+              {applicationUrl ? <p><span className="font-medium">Apply URL:</span> {applicationUrl}</p> : null}
+              {contactEmail ? <p><span className="font-medium">Contact:</span> {contactEmail}</p> : null}
+              {description ? (
+                <div>
+                  <p className="font-medium text-foreground">Description</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{description}</p>
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
 
         {error ? <p className="mt-3 text-xs text-red-600">{error}</p> : null}

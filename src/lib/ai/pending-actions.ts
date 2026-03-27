@@ -1,8 +1,9 @@
 import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
+import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
-export type PendingActionType = "create_job_posting";
+export type PendingActionType = "create_job_posting" | "create_discussion_thread";
 export type PendingActionStatus =
   | "pending"
   | "confirmed"
@@ -14,15 +15,24 @@ export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
   orgSlug?: string | null;
 }
 
-export type PendingActionPayload = CreateJobPostingPendingPayload;
+export interface CreateDiscussionThreadPendingPayload extends AssistantPreparedDiscussion {
+  orgSlug?: string | null;
+}
 
-export interface PendingActionRecord {
+export interface PendingActionPayloadByType {
+  create_job_posting: CreateJobPostingPendingPayload;
+  create_discussion_thread: CreateDiscussionThreadPendingPayload;
+}
+
+export type PendingActionPayload = PendingActionPayloadByType[PendingActionType];
+
+export interface PendingActionRecord<TActionType extends PendingActionType = PendingActionType> {
   id: string;
   organization_id: string;
   user_id: string;
   thread_id: string;
-  action_type: PendingActionType;
-  payload: PendingActionPayload;
+  action_type: TActionType;
+  payload: PendingActionPayloadByType[TActionType];
   status: PendingActionStatus;
   expires_at: string;
   created_at: string;
@@ -138,12 +148,24 @@ export function isPendingActionExpired(record: PendingActionRecord): boolean {
   return new Date(record.expires_at).getTime() <= Date.now();
 }
 
+export function isAuthorizedAction(
+  ctx: { orgId: string; userId: string },
+  action: PendingActionRecord
+): boolean {
+  return action.organization_id === ctx.orgId && action.user_id === ctx.userId;
+}
+
 export function buildPendingActionSummary(record: PendingActionRecord): PendingActionSummary {
   switch (record.action_type) {
     case "create_job_posting":
       return {
         title: "Review job posting",
         description: "Confirm the drafted job before it is added to the jobs board.",
+      };
+    case "create_discussion_thread":
+      return {
+        title: "Review discussion thread",
+        description: "Confirm the drafted thread before it is posted to discussions.",
       };
     default:
       return {
