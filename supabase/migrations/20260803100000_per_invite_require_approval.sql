@@ -3,7 +3,10 @@
 ALTER TABLE public.organization_invites
   ADD COLUMN IF NOT EXISTS require_approval boolean DEFAULT NULL;
 
--- Update create_org_invite to accept the new parameter
+-- Drop old 4-param overload to prevent PostgreSQL function ambiguity
+DROP FUNCTION IF EXISTS public.create_org_invite(uuid, text, int, timestamptz);
+
+-- Recreate with 5 params (the only version)
 CREATE OR REPLACE FUNCTION public.create_org_invite(
   p_organization_id uuid,
   p_role            text DEFAULT 'active_member',

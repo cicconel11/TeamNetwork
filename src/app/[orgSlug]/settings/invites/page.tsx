@@ -169,19 +169,19 @@ export default function InvitesPage() {
             {approvalError}
           </div>
         )}
-        {pendingCount > 0 && (
-          <div className="mt-4 flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20">
-            <span className="text-sm text-amber-700 dark:text-amber-400">
-              {pendingCount} pending approval{pendingCount !== 1 ? "s" : ""}
-            </span>
-            <Link
-              href={`/${orgSlug}/settings/approvals`}
-              className="text-sm font-medium text-amber-700 dark:text-amber-400 hover:underline"
-            >
-              Review pending members
-            </Link>
-          </div>
-        )}
+        <div className={`mt-4 flex items-center justify-between p-3 rounded-lg ${pendingCount > 0 ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/50"}`}>
+          <span className={`text-sm ${pendingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+            {pendingCount > 0
+              ? `${pendingCount} pending approval${pendingCount !== 1 ? "s" : ""}`
+              : "No pending approvals"}
+          </span>
+          <Link
+            href={`/${orgSlug}/settings/approvals`}
+            className={`text-sm font-medium hover:underline ${pendingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
+          >
+            {pendingCount > 0 ? "Review pending members" : "View approvals"}
+          </Link>
+        </div>
       </Card>
 
       <OrgInvitePanel
