@@ -15,7 +15,7 @@ function normalizeIdentifier(value: string): string {
 }
 
 function stripMarkdown(value: string): string {
-  return value.replace(/[*_`~>#]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
+  return value.replace(/[*_`~>#"]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
 }
 
 function parseStatClaim(content: string, label: string): number | null {
@@ -211,6 +211,130 @@ function verifyListEvents(content: string, data: unknown): string[] {
   for (const date of extractMentionedDates(content)) {
     if (!dates.has(date)) {
       failures.push(`event date ${date} was not present in tool rows`);
+    }
+  }
+
+  return failures;
+}
+
+function verifyListDiscussions(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_discussions returned non-array data"];
+  }
+
+  type DiscussionRow = { title?: unknown; reply_count?: unknown };
+  const rows = data as DiscussionRow[];
+
+  const titles = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.title === "string"
+          ? normalizeIdentifier(row.title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const replyCountByTitle = new Map(
+    rows
+      .filter(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          typeof row.title === "string" &&
+          typeof row.reply_count === "number"
+      )
+      .map((row) => [normalizeIdentifier(row.title as string), row.reply_count as number])
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`discussion title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`discussion title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  // Verify reply counts: e.g. `"Active Discussion" has 99 replies`
+  for (const line of content.split("\n")) {
+    const replyMatch = line.match(/"([^"\n]+)"\s+has\s+(\d+)\s+replies?/i);
+    if (!replyMatch) continue;
+    const titleKey = normalizeIdentifier(replyMatch[1] ?? "");
+    const claimed = Number(replyMatch[2]);
+    const expected = replyCountByTitle.get(titleKey);
+    if (expected !== undefined && claimed !== expected) {
+      failures.push(`reply count claim ${claimed} did not match ${expected}`);
+    }
+  }
+
+  return failures;
+}
+
+function verifyListJobPostings(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_job_postings returned non-array data"];
+  }
+
+  type JobRow = { title?: unknown; company?: unknown };
+  const rows = data as JobRow[];
+
+  const titles = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.title === "string"
+          ? normalizeIdentifier(row.title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const companies = new Set(
+    rows
+      .map((row) =>
+        row && typeof row === "object" && typeof row.company === "string"
+          ? normalizeIdentifier(row.company)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const failures: string[] = [];
+
+  // Check count claims: "There are N job openings"
+  const countMatch = content.match(/\b(\d+)\s+job\s+(?:openings?|postings?|listings?)\b/i);
+  if (countMatch) {
+    const claimed = Number(countMatch[1]);
+    if (claimed !== data.length) {
+      failures.push(`job posting count claim ${claimed} did not match ${data.length}`);
+    }
+  }
+
+  for (const quoted of extractQuotedTitles(content)) {
+    const normalized = normalizeIdentifier(quoted);
+    // A quoted string must appear either as a title or company
+    if (!titles.has(normalized) && !companies.has(normalized)) {
+      failures.push(`job posting title ${quoted} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    // List entries like "Software Engineer at Acme Corp" — check each part around " at "
+    const parts = candidate.split(/\s+at\s+/i).map((p) => p.trim()).filter(Boolean);
+    const allPartsKnown = parts.every(
+      (part) => titles.has(normalizeIdentifier(part)) || companies.has(normalizeIdentifier(part))
+    );
+    if (!allPartsKnown) {
+      // Only flag the first part (the title) if it's unknown
+      const titlePart = parts[0] ?? candidate;
+      if (!titles.has(normalizeIdentifier(titlePart)) && !companies.has(normalizeIdentifier(titlePart))) {
+        failures.push(`job posting title ${titlePart} was not present in tool rows`);
+      }
     }
   }
 
@@ -483,8 +607,17 @@ export function verifyToolBackedResponse(input: {
       case "list_announcements":
         failures.push(...verifyListAnnouncements(input.content, result.data));
         break;
+      case "list_discussions":
+        failures.push(...verifyListDiscussions(input.content, result.data));
+        break;
+      case "list_job_postings":
+        failures.push(...verifyListJobPostings(input.content, result.data));
+        break;
       case "suggest_connections":
         failures.push(...verifySuggestConnections(input.content, result.data));
+        break;
+      default:
+        // No grounding check for this tool
         break;
     }
   }

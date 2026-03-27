@@ -225,3 +225,43 @@ describe("resolveSurfaceRouting — intent type priority", () => {
     assert.equal(result.intent, "members_query");
   });
 });
+
+describe("resolveSurfaceRouting — content-type keyword routing", () => {
+  it("routes announcement query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("show me recent announcements", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+    assert.equal(result.inferredSurface, "general");
+  });
+
+  it("routes discussion query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("what discussions are happening?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes job query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("any job openings?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("lets members surface win when members keyword scores", () => {
+    const result = resolveSurfaceRouting("compare members and discussions", "general");
+    assert.equal(result.effectiveSurface, "members");
+    assert.equal(result.intent, "members_query");
+  });
+
+  it("reroutes content keyword query from non-general surface", () => {
+    const result = resolveSurfaceRouting("what are the latest threads?", "members");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.rerouted, true);
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes hiring query to general with high confidence", () => {
+    const result = resolveSurfaceRouting("who is hiring?", "general");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+});

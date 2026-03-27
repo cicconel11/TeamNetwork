@@ -11,6 +11,15 @@ export interface ListEventsArgs {
 
 export interface ListAnnouncementsArgs {
   limit?: number;
+  pinned_only?: boolean;
+}
+
+export interface ListDiscussionsArgs {
+  limit?: number;
+}
+
+export interface ListJobPostingsArgs {
+  limit?: number;
 }
 
 export type GetOrgStatsArgs = Record<string, never>;
@@ -87,6 +96,50 @@ const TOOL_BY_NAME = {
             minimum: 1,
             maximum: 25,
             description: "Max announcements to return (default 10)",
+          },
+          pinned_only: {
+            type: "boolean" as const,
+            description: "If true, only return pinned announcements. Default false.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_discussions: {
+    type: "function" as const,
+    function: {
+      name: "list_discussions" as const,
+      description:
+        "List recent organization discussion threads. Returns title, author, post date, comment count, and a short body preview. Use for questions about community discussions, forum posts, or conversation threads.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max discussions to return (default 10)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_job_postings: {
+    type: "function" as const,
+    function: {
+      name: "list_job_postings" as const,
+      description:
+        "List active organization job postings. Returns title, company, location, type, and a short description preview. Use for questions about job opportunities, career openings, or hiring within the network.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max job postings to return (default 10)",
           },
         },
         additionalProperties: false as const,
@@ -172,6 +225,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_members,
   TOOL_BY_NAME.list_events,
   TOOL_BY_NAME.list_announcements,
+  TOOL_BY_NAME.list_discussions,
+  TOOL_BY_NAME.list_job_postings,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,
