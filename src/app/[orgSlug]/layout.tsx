@@ -66,6 +66,19 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     );
   }
 
+  if (orgContext.status === "pending" && !isDevAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="max-w-lg text-center space-y-4">
+          <h1 className="text-2xl font-bold text-foreground">Pending admin approval</h1>
+          <p className="text-muted-foreground">
+            Your request to join this organization is awaiting admin approval. You&apos;ll gain access once an admin approves your membership.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!orgContext.role && !isDevAdmin) {
     return (
       <JoinOrgGate

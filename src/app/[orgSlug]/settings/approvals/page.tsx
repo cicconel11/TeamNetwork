@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
 import { Button, Card, Badge, Select, Input } from "@/components/ui";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { QRCodeDisplay } from "@/components/invites";
 import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
 import { formatShortDate } from "@/lib/utils/dates";
@@ -54,6 +55,8 @@ export default function ApprovalsPage() {
   const [pendingAlumni, setPendingAlumni] = useState<PendingMember[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [isSavingToggle, setIsSavingToggle] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
@@ -72,16 +75,19 @@ export default function ApprovalsPage() {
       const supabase = createClient();
 
       // Get org
-      const { data: orgs, error: orgError } = await supabase
+      // Cast needed: require_invite_approval exists in DB but not yet in generated types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: orgs, error: orgError } = await (supabase as any)
         .from("organizations")
-        .select("id")
+        .select("id, require_invite_approval")
         .eq("slug", orgSlug)
         .limit(1);
 
-      const org = orgs?.[0];
+      const org = orgs?.[0] as { id: string; require_invite_approval?: boolean } | undefined;
 
       if (org && !orgError) {
         setOrgId(org.id);
+        setRequireApproval(org.require_invite_approval ?? false);
 
         // Get pending memberships
         const { data: memberships } = await supabase
@@ -135,7 +141,8 @@ export default function ApprovalsPage() {
       .from("user_organization_roles")
       .update({ status: "active" })
       .eq("organization_id", orgId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("status", "pending");
 
     if (updateError) {
       setError(updateError.message);
@@ -157,7 +164,8 @@ export default function ApprovalsPage() {
       .from("user_organization_roles")
       .delete()
       .eq("organization_id", orgId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("status", "pending");
 
     if (deleteError) {
       setError(deleteError.message);
@@ -234,6 +242,32 @@ export default function ApprovalsPage() {
     copyTimerRef.current = setTimeout(() => setCopied(null), 2000);
   };
 
+  const handleToggleApproval = async (checked: boolean) => {
+    if (!orgId) return;
+    setIsSavingToggle(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_invite_approval: checked }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to update approval setting");
+        return;
+      }
+
+      setRequireApproval(checked);
+    } catch {
+      setError("Failed to update approval setting");
+    } finally {
+      setIsSavingToggle(false);
+    }
+  };
+
   const getInviteLink = (invite: Invite) => {
     const base = typeof window !== "undefined" ? window.location.origin : "";
     if (invite.token) {
@@ -268,6 +302,29 @@ export default function ApprovalsPage() {
           {error}
         </div>
       )}
+
+      {/* Approval Toggle */}
+      <Card className="p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-foreground">Require Approval for New Members</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              When enabled, users who join via invite must be approved before gaining access.
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={requireApproval}
+            onChange={handleToggleApproval}
+            disabled={isSavingToggle}
+            label="Require invite approval"
+          />
+        </div>
+        {!requireApproval && totalPending > 0 && (
+          <div className="mt-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm">
+            Approval is off, but {totalPending} request{totalPending !== 1 ? "s" : ""} still require{totalPending === 1 ? "s" : ""} manual review.
+          </div>
+        )}
+      </Card>
 
       {/* Invite Link Section */}
       <Card className="p-6 mb-8">
