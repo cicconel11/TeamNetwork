@@ -85,6 +85,8 @@ const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
     "list_members",
     "list_events",
     "list_announcements",
+    "list_discussions",
+    "list_job_postings",
     "get_org_stats",
     "suggest_connections",
   ],

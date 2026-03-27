@@ -116,6 +116,20 @@ const LIVE_CONTEXT_MARKERS = [
   "faq",
   "policy",
   "policies",
+  "discussion",
+  "discussions",
+  "forum",
+  "thread",
+  "threads",
+  "job",
+  "jobs",
+  "posting",
+  "postings",
+  "hiring",
+  "career",
+  "careers",
+  "position",
+  "positions",
 ];
 
 const WRITE_OR_TOOL_MARKERS = [
