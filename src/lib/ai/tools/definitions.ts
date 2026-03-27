@@ -18,6 +18,21 @@ export interface SuggestConnectionsArgs {
   limit?: number;
 }
 
+export interface ListAnnouncementsArgs {
+  limit?: number;
+  pinned_only?: boolean;
+}
+
+export interface ListDiscussionsArgs {
+  limit?: number;
+  pinned_only?: boolean;
+}
+
+export interface ListJobPostingsArgs {
+  limit?: number;
+  active_only?: boolean;
+}
+
 const TOOL_BY_NAME = {
   list_members: {
     type: "function" as const,
@@ -111,6 +126,78 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_announcements: {
+    type: "function" as const,
+    function: {
+      name: "list_announcements" as const,
+      description:
+        "List organization announcements. Returns title, body preview, audience, pinned status, and publish date. Use when the user asks about announcements, news, or updates — especially when they want details beyond what is shown in the context above.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          pinned_only: {
+            type: "boolean" as const,
+            description: "If true, only pinned announcements",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_discussions: {
+    type: "function" as const,
+    function: {
+      name: "list_discussions" as const,
+      description:
+        "List organization discussion threads. Returns title, body preview, reply count, pinned/locked status, and last activity date. Use when the user asks about discussions, threads, or community conversations.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          pinned_only: {
+            type: "boolean" as const,
+            description: "If true, only pinned discussions",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_job_postings: {
+    type: "function" as const,
+    function: {
+      name: "list_job_postings" as const,
+      description:
+        "List organization job postings. Returns title, company, location, experience level, industry, and active status. Use when the user asks about jobs, openings, careers, or hiring. By default shows only active postings.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          active_only: {
+            type: "boolean" as const,
+            description: "If true (default), only active non-expired postings",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
 } as const;
 
 export const AI_TOOLS = [
@@ -118,6 +205,9 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_events,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
+  TOOL_BY_NAME.list_announcements,
+  TOOL_BY_NAME.list_discussions,
+  TOOL_BY_NAME.list_job_postings,
 ] as const satisfies readonly OpenAI.Chat.ChatCompletionTool[];
 
 // Derived from AI_TOOLS — no manual union to maintain

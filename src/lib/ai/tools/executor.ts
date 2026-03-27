@@ -60,11 +60,29 @@ const suggestConnectionsSchema = z
   )
   .strict();
 
+const listAnnouncementsSchema = z.object({
+  limit: z.number().int().min(1).max(25).optional(),
+  pinned_only: z.boolean().optional(),
+}).strict();
+
+const listDiscussionsSchema = z.object({
+  limit: z.number().int().min(1).max(25).optional(),
+  pinned_only: z.boolean().optional(),
+}).strict();
+
+const listJobPostingsSchema = z.object({
+  limit: z.number().int().min(1).max(25).optional(),
+  active_only: z.boolean().optional(),
+}).strict();
+
 const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_members: listMembersSchema,
   list_events: listEventsSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
+  list_announcements: listAnnouncementsSchema,
+  list_discussions: listDiscussionsSchema,
+  list_job_postings: listJobPostingsSchema,
 };
 
 function validateArgs(
@@ -374,6 +392,121 @@ async function runSuggestConnections(
   }
 }
 
+const MAX_BODY_PREVIEW_CHARS = 500;
+
+function truncateBody(body: string | null): string {
+  if (!body) return "";
+  return body.length > MAX_BODY_PREVIEW_CHARS
+    ? body.slice(0, MAX_BODY_PREVIEW_CHARS) + "..."
+    : body;
+}
+
+async function listAnnouncements(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listAnnouncementsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  return safeToolQuery(async () => {
+    let query = sb
+      .from("announcements")
+      .select("id, title, body, audience, is_pinned, published_at, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("is_pinned", { ascending: false })
+      .order("published_at", { ascending: false })
+      .limit(limit);
+
+    if (args.pinned_only) {
+      query = query.eq("is_pinned", true);
+    }
+
+    const { data, error } = await query;
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((row: Record<string, unknown>) => ({
+        ...row,
+        body: truncateBody(row.body as string | null),
+      })),
+      error,
+    };
+  });
+}
+
+async function listDiscussions(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listDiscussionsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  return safeToolQuery(async () => {
+    let query = sb
+      .from("discussion_threads")
+      .select("id, title, body, reply_count, is_pinned, is_locked, last_activity_at, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("last_activity_at", { ascending: false })
+      .limit(limit);
+
+    if (args.pinned_only) {
+      query = query.eq("is_pinned", true);
+    }
+
+    const { data, error } = await query;
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((row: Record<string, unknown>) => ({
+        ...row,
+        body: truncateBody(row.body as string | null),
+      })),
+      error,
+    };
+  });
+}
+
+async function listJobPostings(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listJobPostingsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  const activeOnly = args.active_only ?? true;
+  const now = new Date().toISOString();
+
+  return safeToolQuery(async () => {
+    let query = sb
+      .from("job_postings")
+      .select("id, title, company, location, location_type, experience_level, industry, description, application_url, expires_at, is_active, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (activeOnly) {
+      query = query.eq("is_active", true).or(`expires_at.is.null,expires_at.gt.${now}`);
+    }
+
+    const { data, error } = await query;
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((row: Record<string, unknown>) => ({
+        ...row,
+        description: truncateBody(row.description as string | null),
+      })),
+      error,
+    };
+  });
+}
+
 async function verifyExecutorAccess(
   ctx: ToolExecutionContext
 ): Promise<{ kind: "allowed" } | Extract<ToolExecutionResult, { kind: "forbidden" | "auth_error" }>> {
@@ -441,6 +574,12 @@ export async function executeToolCall(
             ctx.orgId,
             args as z.infer<typeof suggestConnectionsSchema>
           );
+        case "list_announcements":
+          return listAnnouncements(sb, ctx.orgId, args as z.infer<typeof listAnnouncementsSchema>);
+        case "list_discussions":
+          return listDiscussions(sb, ctx.orgId, args as z.infer<typeof listDiscussionsSchema>);
+        case "list_job_postings":
+          return listJobPostings(sb, ctx.orgId, args as z.infer<typeof listJobPostingsSchema>);
       }
     });
   } catch (err) {
