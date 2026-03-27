@@ -248,6 +248,7 @@ beforeEach(() => {
         data: [
           {
             id: "a1",
+            organization_id: ORG_ID,
             title: "Welcome back",
             body: "Practice starts Monday in the main gym.",
             audience: "all",

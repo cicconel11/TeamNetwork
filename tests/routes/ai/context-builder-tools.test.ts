@@ -43,7 +43,7 @@ test("system prompt includes AVAILABLE TOOLS section", async () => {
     serviceSupabase: createStubSupabase(),
   });
   assert.match(prompt, /AVAILABLE TOOLS/);
-  assert.match(prompt, /read-only tools/);
+  assert.match(prompt, /Use the attached tools when the user asks for live organization data/);
   assert.match(prompt, /untrusted data/i);
 });
 

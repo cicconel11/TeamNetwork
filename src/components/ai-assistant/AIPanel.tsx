@@ -20,6 +20,7 @@ import {
   removePanelMessage,
   resolveRetryRequestIdentity,
   type AIPanelMessage,
+  type PendingActionState,
   type AIPanelThread,
   type RetryRequestIdentity,
 } from "./panel-state";
@@ -41,6 +42,8 @@ function getAssistantScopeLabel(pathname: string, surface: ReturnType<typeof rou
       return "Jobs";
     case "forms":
       return "Forms";
+    case "discussions":
+      return "Discussions";
     case "messages":
     case "chat":
       return "Messages";
@@ -79,6 +82,12 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
         "Take me to create a form",
         "Where do I manage form submissions?",
       ];
+    case "discussions":
+      return [
+        "What discussions are happening?",
+        "Show pinned discussions",
+        "Open the discussions page",
+      ];
     default:
       switch (surface) {
         case "members":
@@ -102,8 +111,8 @@ function getStarterPrompts(pathname: string, surface: ReturnType<typeof routeToS
         default:
           return [
             "Show recent announcements",
-            "Open members",
-            "Take me to navigation settings",
+            "What discussions are happening?",
+            "What jobs are we advertising?",
           ];
       }
   }
@@ -114,6 +123,9 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
   if (segment === "announcements") {
     return "Ask about announcements, or ask me to open the right page...";
   }
+  if (segment === "discussions") {
+    return "Ask about discussions, threads, or where to go in the app...";
+  }
 
   switch (surface) {
     case "members":
@@ -123,7 +135,7 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
     case "analytics":
       return "Ask about stats, donations, or where to go in the app...";
     default:
-      return "Ask about your organization, announcements, or where to go...";
+      return "Ask about announcements, discussions, jobs, or where to go...";
   }
 }
 
@@ -141,12 +153,16 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [messages, setMessages] = useState<AIPanelMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [pendingAssistantContent, setPendingAssistantContent] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null);
+  const [pendingActionBusy, setPendingActionBusy] = useState(false);
+  const [pendingActionError, setPendingActionError] = useState<string | null>(null);
   const panelScopeKey = `${orgId}:${surface}`;
   const {
     isStreaming,
     error,
     currentContent,
     toolStatusLabel,
+    pendingAction: streamPendingAction,
     sendMessage,
     cancel,
     clearError,
@@ -182,6 +198,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
           setActiveThreadId(null);
           setMessages([]);
           setPendingAssistantContent(null);
+          setPendingAction(null);
           void loadThreads();
           return false;
         }
@@ -214,6 +231,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     setActiveThreadId(null);
     setMessages([]);
     setPendingAssistantContent(null);
+    setPendingAction(null);
     void loadThreads();
   }, [loadThreads, panelScopeKey]);
 
@@ -247,11 +265,19 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const skipEffectLoadRef = useRef(false);
 
   useEffect(() => {
+    if (streamPendingAction) {
+      setPendingAction(streamPendingAction);
+      setPendingActionError(null);
+    }
+  }, [streamPendingAction]);
+
+  useEffect(() => {
     if (!isOpen) return;
     if (!activeThreadId) {
       setMessages([]);
       setMessagesLoading(false);
       setPendingAssistantContent(null);
+      setPendingAction(null);
       return;
     }
     if (skipEffectLoadRef.current) {
@@ -267,6 +293,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const handleSend = useCallback(
     async (content: string) => {
       setPendingAssistantContent(null);
+      setPendingAction(null);
+      setPendingActionError(null);
 
       // Reuse keys only for retries of the same content within the same thread.
       const requestIdentity = resolveRetryRequestIdentity(
@@ -325,6 +353,56 @@ export function AIPanel({ orgId }: AIPanelProps) {
     },
     [activeThreadId, loadMessages, loadThreads, pathname, sendMessage, surface]
   );
+
+  const handleConfirmPendingAction = useCallback(async () => {
+    if (!pendingAction) return;
+
+    setPendingActionBusy(true);
+    setPendingActionError(null);
+    try {
+      const response = await fetch(
+        `/api/ai/${orgId}/pending-actions/${pendingAction.actionId}/confirm`,
+        { method: "POST" }
+      );
+      const data = await response.json().catch(() => ({ error: "Request failed" }));
+      if (!response.ok) {
+        setPendingActionError(data.error || "Failed to confirm pending action");
+        return;
+      }
+
+      setPendingAction(null);
+      if (activeThreadId) {
+        await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
+      }
+    } finally {
+      setPendingActionBusy(false);
+    }
+  }, [activeThreadId, loadMessages, loadThreads, orgId, pendingAction]);
+
+  const handleCancelPendingAction = useCallback(async () => {
+    if (!pendingAction) return;
+
+    setPendingActionBusy(true);
+    setPendingActionError(null);
+    try {
+      const response = await fetch(
+        `/api/ai/${orgId}/pending-actions/${pendingAction.actionId}/cancel`,
+        { method: "POST" }
+      );
+      const data = await response.json().catch(() => ({ error: "Request failed" }));
+      if (!response.ok) {
+        setPendingActionError(data.error || "Failed to cancel pending action");
+        return;
+      }
+
+      setPendingAction(null);
+      if (activeThreadId) {
+        await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
+      }
+    } finally {
+      setPendingActionBusy(false);
+    }
+  }, [activeThreadId, loadMessages, loadThreads, orgId, pendingAction]);
 
   const handleDeleteThread = useCallback(
     async (threadId: string) => {
@@ -396,6 +474,11 @@ export function AIPanel({ orgId }: AIPanelProps) {
               previewAssistantContent={pendingAssistantContent ?? undefined}
               suggestedPrompts={starterPrompts}
               onSelectPrompt={handleSend}
+              pendingAction={pendingAction}
+              pendingActionBusy={pendingActionBusy}
+              pendingActionError={pendingActionError}
+              onConfirmPendingAction={handleConfirmPendingAction}
+              onCancelPendingAction={handleCancelPendingAction}
             />
             <MessageInput
               isStreaming={isStreaming}
@@ -414,6 +497,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
             activeThreadId={activeThreadId}
             onSelectThread={(id) => {
               setPendingAssistantContent(null);
+              setPendingAction(null);
               setActiveThreadId(id);
               setView("chat");
             }}
@@ -421,6 +505,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
               setActiveThreadId(null);
               setMessages([]);
               setPendingAssistantContent(null);
+              setPendingAction(null);
               setView("chat");
             }}
             onDeleteThread={handleDeleteThread}

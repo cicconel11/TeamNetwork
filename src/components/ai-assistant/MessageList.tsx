@@ -2,8 +2,9 @@
 
 import { useEffect, useRef } from "react";
 import { Bot, User, Sparkles } from "lucide-react";
-import type { AIPanelMessage } from "./panel-state";
+import type { AIPanelMessage, PendingActionState } from "./panel-state";
 import { AssistantMessageContent } from "./AssistantMessageContent";
+import { PendingActionCard } from "./PendingActionCard";
 
 interface MessageListProps {
   messages: AIPanelMessage[];
@@ -13,6 +14,11 @@ interface MessageListProps {
   previewAssistantContent?: string;
   suggestedPrompts?: string[];
   onSelectPrompt?: (message: string) => Promise<void> | void;
+  pendingAction?: PendingActionState | null;
+  pendingActionBusy?: boolean;
+  pendingActionError?: string | null;
+  onConfirmPendingAction?: () => Promise<void> | void;
+  onCancelPendingAction?: () => Promise<void> | void;
 }
 
 export function MessageList({
@@ -23,6 +29,11 @@ export function MessageList({
   previewAssistantContent,
   suggestedPrompts,
   onSelectPrompt,
+  pendingAction,
+  pendingActionBusy,
+  pendingActionError,
+  onConfirmPendingAction,
+  onCancelPendingAction,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastAssistantMessage = [...messages]
@@ -54,7 +65,7 @@ export function MessageList({
           <div>
             <p className="text-sm font-medium text-foreground">How can I help?</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Ask about members, events, analytics, or anything about your organization.
+              Ask about members, events, discussions, jobs, analytics, or anything about your organization.
             </p>
           </div>
           {suggestedPrompts && suggestedPrompts.length > 0 ? (
@@ -133,6 +144,15 @@ export function MessageList({
           </div>
         </div>
       )}
+      {pendingAction ? (
+        <PendingActionCard
+          action={pendingAction}
+          busy={pendingActionBusy}
+          error={pendingActionError}
+          onConfirm={() => void onConfirmPendingAction?.()}
+          onCancel={() => void onCancelPendingAction?.()}
+        />
+      ) : null}
       <div ref={bottomRef} />
     </div>
   );

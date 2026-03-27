@@ -109,6 +109,33 @@ test("consumeSSEStream forwards tool_status events and still returns final conte
   });
 });
 
+test("consumeSSEStream forwards pending_action events before completion", async () => {
+  const pendingActions: Array<{ actionId: string; actionType: string }> = [];
+
+  await consumeSSEStream(
+    makeSSEEventStream([
+      {
+        type: "pending_action",
+        actionId: "action-123",
+        actionType: "create_job_posting",
+        summary: { title: "Review job posting", description: "Confirm it" },
+        payload: { title: "Senior Product Designer" },
+        expiresAt: "2026-07-27T00:15:00.000Z",
+      },
+      { type: "done", threadId: "thread-123" },
+    ]),
+    {
+      onPendingAction: (event) => {
+        pendingActions.push({ actionId: event.actionId, actionType: event.actionType });
+      },
+    }
+  );
+
+  assert.deepEqual(pendingActions, [
+    { actionId: "action-123", actionType: "create_job_posting" },
+  ]);
+});
+
 test("MessageInput renders tool status label when provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(MessageInput, {
@@ -145,7 +172,7 @@ test("useAIStream resets tool status during key lifecycle transitions", () => {
   );
   assert.match(
     source,
-    /setState\(\{\s*isStreaming: true,\s*error: null,\s*currentContent: \"\",\s*threadId: opts\.threadId \?\? null,\s*toolStatusLabel: null,\s*\}\);/s,
+    /setState\(\{\s*isStreaming: true,\s*error: null,\s*currentContent: \"\",\s*threadId: opts\.threadId \?\? null,\s*toolStatusLabel: null,\s*pendingAction: null,\s*\}\);/s,
     "new requests should start with a cleared tool status"
   );
   assert.match(
