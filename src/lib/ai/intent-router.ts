@@ -71,6 +71,14 @@ const ACTION_KEYWORDS: readonly string[] = [
   "enable", "disable", "reset", "upload", "post", "publish",
 ];
 
+// Content-type keywords that confirm general surface with high confidence
+const GENERAL_CONTENT_KEYWORDS: readonly string[] = [
+  "announcement", "announcements", "news",
+  "discussion", "discussions", "thread", "threads", "forum",
+  "job", "jobs", "posting", "postings", "opening", "openings",
+  "career", "careers", "hiring", "position", "positions",
+];
+
 // Phrases that signal the user wants to navigate somewhere
 const NAVIGATION_PATTERNS = [
   /(?<!\w)go\s+to(?!\w)/i,
@@ -153,13 +161,18 @@ export function resolveSurfaceRouting(
     .sort((a, b) => b[1] - a[1]) as Array<[Exclude<AiSurface, "general">, number]>;
 
   if (ranked.length === 0) {
+    const hasContentKeyword = GENERAL_CONTENT_KEYWORDS.some((keyword) => {
+      const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(?<!\\w)${escaped}(?!\\w)`, "i").test(normalized);
+    });
+
     return {
       intent: SURFACE_TO_INTENT.general,
       intentType,
-      effectiveSurface: requestedSurface,
-      inferredSurface: null,
-      confidence: "low",
-      rerouted: false,
+      effectiveSurface: hasContentKeyword ? "general" : requestedSurface,
+      inferredSurface: hasContentKeyword ? "general" : null,
+      confidence: hasContentKeyword ? "high" : "low",
+      rerouted: hasContentKeyword && requestedSurface !== "general",
       skipRetrieval,
     };
   }
