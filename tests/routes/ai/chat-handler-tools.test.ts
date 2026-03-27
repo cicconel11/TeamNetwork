@@ -389,6 +389,8 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "list_members",
     "list_events",
     "list_announcements",
+    "list_discussions",
+    "list_job_postings",
     "get_org_stats",
     "suggest_connections",
   ]);

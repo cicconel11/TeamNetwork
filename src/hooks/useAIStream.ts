@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from "react";
 import type { SSEEvent } from "@/lib/ai/sse";
 import { deriveToolStatusLabel } from "@/components/ai-assistant/tool-status";
+import type { PendingActionState } from "@/components/ai-assistant/panel-state";
 
 interface UseAIStreamOptions {
   orgId: string;
@@ -14,6 +15,7 @@ interface AIStreamState {
   currentContent: string;
   threadId: string | null;
   toolStatusLabel: string | null;
+  pendingAction: PendingActionState | null;
 }
 
 export interface AIStreamResult {
@@ -39,6 +41,7 @@ interface StreamCallbacks {
   onDone?: (event: Extract<SSEEvent, { type: "done" }>) => void;
   onError?: (message: string) => void;
   onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
+  onPendingAction?: (event: Extract<SSEEvent, { type: "pending_action" }>) => void;
 }
 
 interface AIErrorBody {
@@ -117,6 +120,11 @@ export async function consumeSSEStream(
 
         if (event.type === "tool_status") {
           callbacks.onToolStatus?.(event);
+          continue;
+        }
+
+        if (event.type === "pending_action") {
+          callbacks.onPendingAction?.(event);
         }
       } catch {
         // Ignore malformed events and keep streaming.
@@ -134,6 +142,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     currentContent: "",
     threadId: null,
     toolStatusLabel: null,
+    pendingAction: null,
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -162,6 +171,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       currentContent: "",
       threadId: opts.threadId ?? null,
       toolStatusLabel: null,
+      pendingAction: null,
     });
     let responseThreadId = opts.threadId ?? null;
 
@@ -223,6 +233,18 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           setState((prev) => ({
             ...prev,
             toolStatusLabel: deriveToolStatusLabel(prev.toolStatusLabel, event),
+          }));
+        },
+        onPendingAction: (event) => {
+          setState((prev) => ({
+            ...prev,
+            pendingAction: {
+              actionId: event.actionId,
+              actionType: event.actionType,
+              summary: event.summary,
+              payload: event.payload,
+              expiresAt: event.expiresAt,
+            },
           }));
         },
       });

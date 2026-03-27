@@ -99,6 +99,8 @@ const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
+const CREATE_JOB_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:create|add|post|publish|make)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make)(?!\w))/i;
 
 const CONNECTION_PASS2_TEMPLATE = [
   "CONNECTION ANSWER CONTRACT:",
@@ -160,6 +162,23 @@ interface NavigationDisplayPayload {
   state?: unknown;
   query?: unknown;
   matches?: unknown;
+}
+
+interface PendingActionToolPayload {
+  pending_action?: {
+    id?: unknown;
+    action_type?: unknown;
+    payload?: unknown;
+    expires_at?: unknown;
+    summary?: {
+      title?: unknown;
+      description?: unknown;
+    } | null;
+  } | null;
+  state?: unknown;
+  missing_fields?: unknown;
+  draft?: unknown;
+  message?: unknown;
 }
 
 function getNonEmptyString(value: unknown): string | null {
@@ -423,7 +442,78 @@ function getPass1Tools(
     return [AI_TOOL_MAP.suggest_connections];
   }
 
+  if (effectiveSurface === "general" && intentType === "action_request" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_job_posting];
+  }
+
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
+}
+
+function getPendingActionFromToolData(data: unknown) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state !== "needs_confirmation" || !payload.pending_action) {
+    return null;
+  }
+
+  const pending = payload.pending_action;
+  if (
+    typeof pending.id !== "string" ||
+    typeof pending.action_type !== "string" ||
+    typeof pending.expires_at !== "string" ||
+    !pending.summary ||
+    typeof pending.summary.title !== "string" ||
+    typeof pending.summary.description !== "string" ||
+    !pending.payload ||
+    typeof pending.payload !== "object"
+  ) {
+    return null;
+  }
+
+  return {
+    actionId: pending.id,
+    actionType: pending.action_type,
+    expiresAt: pending.expires_at,
+    summary: {
+      title: pending.summary.title,
+      description: pending.summary.description,
+    },
+    payload: pending.payload as Record<string, unknown>,
+  };
+}
+
+function formatPrepareJobPostingResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "invalid_source_url") {
+    return typeof payload.message === "string" && payload.message.length > 0
+      ? `I couldn't read that job posting URL safely. ${payload.message}`
+      : "I couldn't read that job posting URL safely. Please provide the job details directly.";
+  }
+
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (missingFields.length === 0) {
+      return "I still need a few more job details before I can prepare this posting.";
+    }
+
+    return `I can draft this job, but I still need: ${missingFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the job posting. Review the details below and confirm when you're ready to create it.";
+  }
+
+  return null;
 }
 
 function createDefaultStageSummary(): AiAuditStageSummary {
@@ -1348,6 +1438,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 userId: ctx.userId,
                 serviceSupabase: ctx.serviceSupabase,
                 authorization: toolAuthorization,
+                threadId,
               },
               { name: toolEvent.name, args: parsedArgs }
             );
@@ -1368,6 +1459,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   args: parsedArgs,
                   data: result.data,
                 });
+                const pendingAction = getPendingActionFromToolData(result.data);
+                if (pendingAction) {
+                  enqueue({
+                    type: "pending_action",
+                    actionId: pendingAction.actionId,
+                    actionType: pendingAction.actionType,
+                    summary: pendingAction.summary,
+                    payload: pendingAction.payload,
+                    expiresAt: pendingAction.expiresAt,
+                  });
+                }
                 successfulToolResults.push({
                   name: toolEvent.name as ToolName,
                   data: result.data,
@@ -1456,6 +1558,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 ? formatSuggestConnectionsResponse(successfulToolResults[0].data)
                 : successfulToolResults[0].name === "list_announcements"
                   ? formatAnnouncementsResponse(successfulToolResults[0].data)
+                  : successfulToolResults[0].name === "prepare_job_posting"
+                    ? formatPrepareJobPostingResponse(successfulToolResults[0].data)
                   : successfulToolResults[0].name === "find_navigation_targets"
                     ? formatNavigationTargetsResponse(successfulToolResults[0].data)
                     : null

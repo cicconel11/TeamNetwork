@@ -22,6 +22,20 @@ export interface ListJobPostingsArgs {
   limit?: number;
 }
 
+export interface PrepareJobPostingArgs {
+  title?: string;
+  company?: string;
+  location?: string;
+  location_type?: "remote" | "hybrid" | "onsite";
+  description?: string;
+  application_url?: string;
+  contact_email?: string;
+  industry?: string;
+  experience_level?: "entry" | "mid" | "senior" | "lead" | "executive";
+  expires_at?: string | null;
+  mediaIds?: string[];
+}
+
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
@@ -146,6 +160,49 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_job_posting: {
+    type: "function" as const,
+    function: {
+      name: "prepare_job_posting" as const,
+      description:
+        "Prepare a new job posting draft for the assistant. Use this when the user wants you to create or post a job. It validates the draft, identifies missing required fields, optionally enriches the draft from a provided application URL, and creates a pending confirmation action when the draft is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string" as const },
+          company: { type: "string" as const },
+          location: { type: "string" as const },
+          location_type: {
+            type: "string" as const,
+            enum: ["remote", "hybrid", "onsite"],
+          },
+          description: { type: "string" as const },
+          application_url: {
+            type: "string" as const,
+            description: "HTTPS application URL for the job posting.",
+          },
+          contact_email: {
+            type: "string" as const,
+            description: "Contact email if no application URL is available.",
+          },
+          industry: { type: "string" as const },
+          experience_level: {
+            type: "string" as const,
+            enum: ["entry", "mid", "senior", "lead", "executive"],
+          },
+          expires_at: {
+            type: "string" as const,
+            description: "Optional ISO timestamp for when the job should expire.",
+          },
+          mediaIds: {
+            type: "array" as const,
+            items: { type: "string" as const },
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_org_stats: {
     type: "function" as const,
     function: {
@@ -227,6 +284,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_announcements,
   TOOL_BY_NAME.list_discussions,
   TOOL_BY_NAME.list_job_postings,
+  TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,

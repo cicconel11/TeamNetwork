@@ -10,6 +10,17 @@ import {
 import type { AiToolAuthMode } from "@/lib/ai/chat-telemetry";
 import { searchNavigationTargets } from "@/lib/ai/navigation-targets";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import {
+  assistantJobDraftSchema,
+  assistantPreparedJobSchema,
+  type AssistantPreparedJob,
+} from "@/lib/schemas/jobs";
+import { fetchJobSourceDraft, JobSourceIntakeError } from "@/lib/jobs/source-intake";
+import {
+  buildPendingActionSummary,
+  createPendingAction,
+  type CreateJobPostingPendingPayload,
+} from "@/lib/ai/pending-actions";
 
 export type ToolExecutionAuthorization =
   | { kind: "preverified_admin"; source: "ai_org_context" }
@@ -20,6 +31,7 @@ export interface ToolExecutionContext {
   userId: string;
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;
+  threadId?: string;
 }
 
 export type ToolExecutionResult =
@@ -65,6 +77,22 @@ const listJobPostingsSchema = z
   })
   .strict();
 
+const prepareJobPostingSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    company: z.string().trim().min(1).optional(),
+    location: z.string().trim().min(1).optional(),
+    location_type: z.enum(["remote", "hybrid", "onsite"]).optional(),
+    description: z.string().trim().min(1).optional(),
+    application_url: z.string().trim().min(1).optional(),
+    contact_email: z.string().trim().min(1).optional(),
+    industry: z.string().trim().min(1).optional(),
+    experience_level: z.enum(["entry", "mid", "senior", "lead", "executive"]).optional(),
+    expires_at: z.string().datetime().optional().nullable(),
+    mediaIds: z.array(z.string().uuid()).optional(),
+  })
+  .strict();
+
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
   .object({
@@ -95,6 +123,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_announcements: listAnnouncementsSchema,
   list_discussions: listDiscussionsSchema,
   list_job_postings: listJobPostingsSchema,
+  prepare_job_posting: prepareJobPostingSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
@@ -437,6 +466,156 @@ async function listJobPostings(
   });
 }
 
+const REQUIRED_PREPARED_JOB_FIELDS: Array<keyof AssistantPreparedJob> = [
+  "title",
+  "company",
+  "location",
+  "industry",
+  "experience_level",
+  "description",
+];
+
+function sanitizeDraftValue(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function normalizeAssistantDraft(
+  args: z.infer<typeof prepareJobPostingSchema>
+): z.infer<typeof prepareJobPostingSchema> {
+  return {
+    ...args,
+    ...(sanitizeDraftValue(args.title) ? { title: sanitizeDraftValue(args.title) } : {}),
+    ...(sanitizeDraftValue(args.company) ? { company: sanitizeDraftValue(args.company) } : {}),
+    ...(sanitizeDraftValue(args.location) ? { location: sanitizeDraftValue(args.location) } : {}),
+    ...(sanitizeDraftValue(args.description) ? { description: sanitizeDraftValue(args.description) } : {}),
+    ...(sanitizeDraftValue(args.application_url) ? { application_url: sanitizeDraftValue(args.application_url) } : {}),
+    ...(sanitizeDraftValue(args.contact_email) ? { contact_email: sanitizeDraftValue(args.contact_email) } : {}),
+    ...(sanitizeDraftValue(args.industry) ? { industry: sanitizeDraftValue(args.industry) } : {}),
+  };
+}
+
+function mergeDrafts<T extends Record<string, unknown>>(primary: T, secondary: Partial<T>): T {
+  const merged = { ...secondary, ...primary };
+  for (const key of Object.keys(merged)) {
+    const value = merged[key];
+    if (typeof value === "string" && value.trim().length === 0) {
+      delete merged[key];
+    }
+  }
+  return merged as T;
+}
+
+async function prepareJobPosting(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareJobPostingSchema>
+): Promise<ToolExecutionResult> {
+  if (!ctx.threadId) {
+    return toolError("Job preparation requires a thread context");
+  }
+
+  const parsedDraft = assistantJobDraftSchema.safeParse(normalizeAssistantDraft(args));
+  if (!parsedDraft.success) {
+    return toolError("Invalid job draft");
+  }
+
+  let sourceDraft: Partial<z.infer<typeof prepareJobPostingSchema>> = {};
+  if (parsedDraft.data.application_url) {
+    try {
+      sourceDraft = await fetchJobSourceDraft(parsedDraft.data.application_url);
+    } catch (error) {
+      if (error instanceof JobSourceIntakeError) {
+        return {
+          kind: "ok",
+          data: {
+            state: "invalid_source_url",
+            message: error.message,
+          },
+        };
+      }
+      return toolError("Unable to read the job posting URL");
+    }
+  }
+
+  const mergedDraft = mergeDrafts(parsedDraft.data, sourceDraft);
+  const missingFields = REQUIRED_PREPARED_JOB_FIELDS.filter((field) => {
+    const value = mergedDraft[field];
+    return typeof value !== "string" || value.trim().length === 0;
+  });
+
+  const hasApplicationUrl =
+    typeof mergedDraft.application_url === "string" && mergedDraft.application_url.trim().length > 0;
+  const hasContactEmail =
+    typeof mergedDraft.contact_email === "string" && mergedDraft.contact_email.trim().length > 0;
+  if (!hasApplicationUrl && !hasContactEmail) {
+    missingFields.push("application_url");
+  }
+
+  if (missingFields.length > 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: Array.from(new Set(missingFields)),
+        draft: mergedDraft,
+        sourced_fields: Object.keys(sourceDraft),
+      },
+    };
+  }
+
+  const prepared = assistantPreparedJobSchema.safeParse(mergedDraft);
+  if (!prepared.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: mergedDraft,
+        sourced_fields: Object.keys(sourceDraft),
+      },
+    };
+  }
+
+  const { data: org } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  const pendingPayload: CreateJobPostingPendingPayload = {
+    ...prepared.data,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "create_job_posting",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+      sourced_fields: Object.keys(sourceDraft),
+    },
+  };
+}
+
 async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> {
   const [members, alumni, parents, upcomingEvents, donations] = await Promise.all([
     safeToolCount(() =>
@@ -515,11 +694,11 @@ async function findNavigationTargets(
       { p_org_id: orgId }
     );
 
-    if (subscriptionError) {
-      return { data: null, error: subscriptionError };
-    }
-
-    const subscription = Array.isArray(subscriptionRows) ? subscriptionRows[0] : null;
+    const subscription = subscriptionError
+      ? null
+      : Array.isArray(subscriptionRows)
+        ? subscriptionRows[0]
+        : null;
     const hasAlumniAccess =
       subscription?.status === "enterprise_managed" ||
       (subscription?.alumni_bucket != null && subscription.alumni_bucket !== "none");
@@ -666,6 +845,12 @@ export async function executeToolCall(
             sb,
             ctx.orgId,
             args as z.infer<typeof listJobPostingsSchema>
+          );
+        case "prepare_job_posting":
+          return prepareJobPosting(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareJobPostingSchema>
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId);
