@@ -145,15 +145,15 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return respond({ error: "Unauthorized" }, 401);
     }
 
-    // Require admin role in the organization
+    // Require admin role with active status in the organization
     const { data: role } = await supabase
       .from("user_organization_roles")
-      .select("role")
+      .select("role, status")
       .eq("user_id", user.id)
       .eq("organization_id", organizationId)
       .maybeSingle();
 
-    if (role?.role !== "admin") {
+    if (role?.role !== "admin" || role?.status !== "active") {
       return respond({ error: "Forbidden" }, 403);
     }
 

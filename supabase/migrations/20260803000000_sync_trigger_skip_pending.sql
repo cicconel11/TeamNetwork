@@ -1,6 +1,9 @@
 -- Update handle_org_member_sync to skip member directory sync for pending users.
+-- This must come AFTER 20260714000000_member_identity_hardening.sql which is
+-- the latest migration that redefines this function.
+--
 -- Pending users should not appear in member directories until approved.
--- The normal approval path (pending -> active UPDATE) is NOT caught,
+-- The normal approval path (pending -> active UPDATE) is NOT caught by the guard,
 -- so it correctly syncs to members when an admin approves.
 CREATE OR REPLACE FUNCTION public.handle_org_member_sync()
 RETURNS trigger
@@ -49,6 +52,8 @@ BEGIN
 
   -- Pending users should not appear in member directories until approved.
   -- Covers both: new INSERT with pending, AND revoked->pending UPDATE path.
+  -- The normal approval UPDATE (pending -> active) is NOT caught here,
+  -- so it correctly syncs to members/alumni/parents when an admin approves.
   IF NEW.status = 'pending' AND (
     TG_OP = 'INSERT'
     OR (TG_OP = 'UPDATE' AND OLD.status = 'revoked')
