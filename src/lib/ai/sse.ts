@@ -10,6 +10,17 @@ export type CacheStatus =
 export type SSEEvent =
   | { type: "chunk"; content: string }
   | {
+      type: "pending_action";
+      actionId: string;
+      actionType: string;
+      summary: {
+        title: string;
+        description: string;
+      };
+      payload: Record<string, unknown>;
+      expiresAt: string;
+    }
+  | {
       type: "done";
       threadId: string;
       replayed?: boolean;

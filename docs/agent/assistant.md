@@ -2,7 +2,7 @@
 
 ## Summary
 
-The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`. The read tool set now covers active members, events, recent announcements, discussion threads, job postings, top-level org stats, connection suggestions, and in-app navigation targets (8 tools; Tier 1 complete). Direct-name connection prompts still route to the `members` surface and render single-tool answers deterministically, while navigation/action requests now short-circuit to `find_navigation_targets` so the assistant can return direct in-app links such as create/edit pages without a second model pass. Prompt construction now receives the attached tool list plus a client-reported current page path as untrusted context so the model gets route hints without promoting client input into the trusted system prompt. For setup and sync details, see `docs/agent/falkor-people-graph.md`.
+The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`. The currently shipped tool catalog includes 8 live read tools covering active members, events, recent announcements, discussions, job postings, top-level org stats, connection suggestions, and in-app navigation targets, plus a write-preparation tool for assistant-created job postings. Job creation is confirmation-gated: the assistant can prepare a stricter job draft, emit a structured `pending_action` review event, and only create the job after explicit admin confirmation through a dedicated route. Direct-name connection prompts still route to the `members` surface and render single-tool answers deterministically, while navigation/action requests now short-circuit to `find_navigation_targets` so the assistant can return direct in-app links such as create/edit pages without a second model pass. Prompt construction now receives the attached tool list plus a client-reported current page path as untrusted context so the model gets route hints without promoting client input into the trusted system prompt. For setup and sync details, see `docs/agent/falkor-people-graph.md`.
 
 ## Tech Stack
 
@@ -28,7 +28,7 @@ The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-
 
 ## Database Tables
 
-Four migrations create all AI-related schema:
+Five migrations create all AI-related schema:
 
 | Migration | Tables / Objects |
 |---|---|
@@ -36,6 +36,7 @@ Four migrations create all AI-related schema:
 | `20260321100001_ai_semantic_cache.sql` | `ai_semantic_cache` + indexes + `purge_expired_ai_semantic_cache()` RPC + `vector` extension |
 | `20260321110000_fix_ai_messages_rls_integrity.sql` | Composite FK on `ai_messages`, restored thread-ownership RLS invariant |
 | `20260322000000_ai_threads_updated_at_trigger.sql` | `ai_threads_updated_at` trigger (reuses existing `update_updated_at_column()`) |
+| `20260727000000_ai_pending_actions.sql` | `ai_pending_actions` + RLS + indexes for confirmation-gated assistant writes |
 
 ### Table Summary
 
@@ -45,6 +46,7 @@ Four migrations create all AI-related schema:
 | `ai_messages` | Individual chat turns within a thread | Via thread ownership (EXISTS subquery) |
 | `ai_audit_log` | Every AI request logged with latency, tokens, cache status | Service-role only (no user policies) |
 | `ai_semantic_cache` | Cached LLM responses keyed by prompt hash | Service-role only (no user policies) |
+| `ai_pending_actions` | Server-owned pending confirmations for assistant write actions | User + org scoped; admins can only access their own actions |
 
 ## Environment Variables
 
@@ -60,6 +62,8 @@ Four migrations create all AI-related schema:
 | Method | Route | Purpose |
 |---|---|---|
 | POST | `/api/ai/[orgId]/chat` | Send message, receive SSE stream |
+| POST | `/api/ai/[orgId]/pending-actions/[actionId]/confirm` | Confirm a structured assistant action and execute the server-owned write |
+| POST | `/api/ai/[orgId]/pending-actions/[actionId]/cancel` | Cancel a structured assistant action before execution |
 | GET | `/api/ai/[orgId]/threads` | List threads (cursor-paginated) |
 | DELETE | `/api/ai/[orgId]/threads/[threadId]` | Soft-delete a thread |
 | GET | `/api/ai/[orgId]/threads/[threadId]/messages` | List messages in a thread |
@@ -86,16 +90,19 @@ The panel is 384px wide (`sm:w-96`). The system prompt includes a `NARROW_PANEL_
 ### 4. Surface picker is still implicit
 The panel now derives `surface` from the current route instead of hardcoding `"general"`, but there is still no explicit user-facing surface switcher.
 
-### 5. No write-action parity yet
-The assistant can now deep-link users to the right create/manage pages, but it still does not execute first-class writes like creating events or publishing announcements directly.
+### 5. Write-action parity is partial
+The assistant now supports one confirmation-gated write path for jobs: it can prepare a job draft, emit a structured `pending_action`, and create the job only after explicit admin confirmation. Broader write parity for events, announcements, role changes, and other mutations is still not implemented.
 
-### 6. No UI component tests
+### 6. Discussion and job reads are live, but job writes are the only shipped mutation
+`list_discussions` and `list_job_postings` are both live tools now, so those prompts can emit `tool_status` events and return deterministic tool-backed answers. The only shipped assistant mutation is the confirmation-gated `prepare_job_posting` flow.
+
+### 7. No UI component tests
 The backend has ~126 test cases across 17+ test files. The UI components (`AIPanel`, `MessageList`, `ThreadList`, `MessageInput`, `AssistantMessageContent`, `AIEdgeTab`) have 0 component/integration tests. Only pure utility functions (`panel-state.ts`, `panel-preferences.ts`, `thread-date.ts`) are tested.
 
-### 7. Vector similarity cache (deferred to v2)
+### 8. Vector similarity cache (deferred to v2)
 The `20260321100001` migration creates the `vector` extension, but all cache lookups use exact SHA-256 hash matching. Embedding-based semantic similarity is deferred to a future version.
 
-### 8. Migration filename mismatch (fixed)
+### 9. Migration filename mismatch (fixed)
 The contract test and semantic cache codemap previously referenced `20260321100000` instead of the actual filename `20260321100001`. Fixed in this PR.
 
 ## v2 Roadmap — Research-Backed Enhancements

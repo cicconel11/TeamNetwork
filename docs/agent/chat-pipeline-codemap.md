@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The read-tool set now includes recent announcements plus `find_navigation_targets` for page/deep-link lookup, while navigation/action requests short-circuit to that tool instead of routing through the broader read-tool set. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` to validate a stricter draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -18,6 +18,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/response-composer.ts` | Async generator streaming LLM response as SSE chunk/error events | `composeResponse` (L22), `UsageAccumulator` type (L5) |
 | `src/lib/ai/timeout.ts` | Turn-stage timeout constants and abort helpers | `PASS1_MODEL_TIMEOUT_MS`, `PASS2_MODEL_TIMEOUT_MS`, `TOOL_EXECUTION_TIMEOUT_MS`, `createStageAbortSignal`, `withStageTimeout` |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
+| `src/lib/ai/pending-actions.ts` | Pending-action persistence, validation, and status transitions for assistant writes | `createPendingAction`, `getPendingActionForUser`, `markPendingActionCancelled`, `markPendingActionExecuted` |
 | `src/lib/ai/audit.ts` | Audit logging with cache/context metadata plus `stage_timings`, secret redaction | `logAiRequest` (L37) |
 | `src/lib/ai/chat-telemetry.ts` | Shared retrieval/stage timing contracts for AI audit payloads | `AiAuditStageTimings`, `AiAuditStageName` |
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
@@ -30,6 +31,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | POST handler — orchestrates the full pipeline | `POST` (L491), `createChatPostHandler` (L36), `ChatRouteDeps` type (L25) |
+| `src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/route.ts` | POST handler — confirms and executes a pending assistant action | `POST` |
+| `src/app/api/ai/[orgId]/pending-actions/[actionId]/cancel/route.ts` | POST handler — cancels a pending assistant action | `POST` |
 
 ### Schema
 
@@ -39,6 +42,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `supabase/migrations/20260321100001_ai_semantic_cache.sql` | DDL: `ai_semantic_cache`, purge RPC, audit columns |
 | `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
 | `supabase/migrations/20260719000000_ai_audit_stage_timings.sql` | Adds `stage_timings` JSONB to `ai_audit_log` |
+| `supabase/migrations/20260727000000_ai_pending_actions.sql` | Adds `ai_pending_actions` for confirmation-gated assistant writes |
 
 ## Dependency Graph
 
@@ -116,7 +120,7 @@ Client POST /api/ai/{orgId}/chat
   │            └─ user-role history re-assessed and sanitized before model replay
   ├─ 11. Resolve pass-1 tools from execution policy
   │       ├─ `none` for casual / static_general / out_of_scope
-  │       └─ surface-gated read tools for follow_up / live_lookup
+  │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_job_posting` for job-creation requests
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
   │       ├─ Pass 1 runs with a 15s timeout budget
   │       ├─ Each requested tool runs with a 5s timeout budget
@@ -125,8 +129,11 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
   │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
   │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
+  │       ├─ Job creation prompts can expose only `prepare_job_posting`
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
   │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
+  │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
+  │       ├─ `needs_confirmation` emits a `pending_action` SSE payload instead of writing immediately
   │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
   │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the Falkor/suggestions stack separately
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
@@ -192,7 +199,7 @@ Queries are gated by the `surface` parameter. Each surface only loads the data s
 
 | Surface | Data Sources Loaded |
 |---|---|
-| `general` (default) | All 8 sources |
+| `general` (default) | All 6 prompt-context sources |
 | `members` | org, userName, memberCount, alumniCount, parentCount |
 | `analytics` | org, userName, memberCount, alumniCount, parentCount, donationStats |
 | `events` | org, userName, upcomingEvents |
@@ -256,30 +263,55 @@ type ToolExecutionResult =
 
 ## Tool Catalog
 
+### `list_members`
+
+- **Inputs:** optional `limit` (default 20, max 50)
+- **Outputs:** active member rows with `id`, `user_id`, `status`, `role`, `created_at`, `name`, `email`
+- **Name handling:** prefers `members.first_name` + `last_name`; falls back to linked `users.name` for placeholder rows; otherwise returns an empty name so the UI/prompt can treat the record as an email-only account
+
+### `list_events`
+
+- **Inputs:** optional `limit` (default 10, max 25), optional `upcoming` (boolean, default `true`)
+- **Outputs:** event rows with `id`, `title`, `start_date`, `end_date`, `location`, `description`
+- **Behavior:** `upcoming: true` filters to `start_date >= now`, `false` filters to past events and reverses ordering
+
 ### `list_announcements`
 
-- **Inputs:** optional `limit` (default 10, max 25), optional `pinned_only` (boolean)
+- **Inputs:** optional `limit` (default 10, max 25)
 - **Outputs:** recent announcement rows with `title`, `published_at`, `audience`, `is_pinned`, and `body_preview`
 - **Deterministic path:** single-tool announcement turns are rendered in-route as a compact `Recent announcements` list instead of paying for a second model pass
 
 ### `list_discussions`
 
-- **Inputs:** optional `limit` (default 10, max 25), optional `pinned_only` (boolean)
-- **Outputs:** discussion thread rows with `id`, `title`, `body` (truncated 500 chars), `reply_count`, `is_pinned`, `is_locked`, `last_activity_at`, `created_at`; ordered by `last_activity_at DESC`
-- **Surface:** `general` only
+- **Inputs:** optional `limit` (default 10, max 25)
+- **Outputs:** recent discussion-thread rows with `id`, `title`, `author_name`, `created_at`, `reply_count`, and `body_preview`
+- **Behavior:** used for community-conversation prompts and recent forum/discussion summaries
 
 ### `list_job_postings`
 
-- **Inputs:** optional `limit` (default 10, max 25), optional `active_only` (boolean, default true)
-- **Outputs:** job posting rows with `id`, `title`, `company`, `location`, `location_type`, `experience_level`, `industry`, `description` (truncated 500 chars), `application_url`, `expires_at`, `is_active`, `created_at`; ordered by `created_at DESC`
-- **Active filter:** `is_active = true AND (expires_at IS NULL OR expires_at > now())`
-- **Surface:** `general` only
+- **Inputs:** optional `limit` (default 10, max 25)
+- **Outputs:** active job-posting rows with `id`, `title`, `company`, `location`, `location_type`, `experience_level`, `application_url`, and `description_preview`
+- **Behavior:** used for hiring/job-board prompts and org career-opportunity summaries
+
+### `get_org_stats`
+
+- **Inputs:** none
+- **Outputs:** aggregate counts and donation stats for organization overview / dashboard-style questions
+- **Surface:** `general`, `members`, `analytics`, and `events`
 
 ### `find_navigation_targets`
 
 - **Inputs:** `query`, optional `limit` (default 5, max 10)
 - **Outputs:** `{ state, query, matches[] }` where each match includes org-scoped `href`, `label`, `description`, and `kind`
 - **Deterministic path:** single-tool navigation turns are rendered in-route as clickable markdown links so the panel can deep-link users directly to matched pages
+
+### `prepare_job_posting`
+
+- **Inputs:** partial job draft fields plus optional `application_url`, `contact_email`, `expires_at`, and `mediaIds`
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft, source_intake? }`
+- `state`: `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
+- **Behavior:** validates a stricter assistant-only job schema, optionally enriches missing fields from an HTTPS source URL, and creates a pending confirmation record when the draft is complete
+- **Write safety:** never writes a job directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `job_postings` is mutated
 
 ### `suggest_connections`
 
@@ -293,6 +325,18 @@ type ToolExecutionResult =
 - `disambiguation_options[]`: display-ready candidate people when `person_query` matched multiple org people
 - **Ranking contract:** shared industry `40`, shared company `30`, shared city `15`, graduation proximity `10` (within 3 years)
 - **Grounding contract:** pass-2 connection prose may only render the fixed connection template, may name only returned `source_person` / `suggestions`, must preserve ranked order, and may claim only returned normalized reason codes for each suggestion
+
+### Write Actions Today
+
+- The only shipped write path is `prepare_job_posting` plus the pending-action confirm/cancel routes.
+- Broader write tools like event creation or announcement publishing are still deferred.
+- The confirmation UI depends on `pending_action` SSE handling in the assistant panel rather than parsing free-form "yes" replies in chat.
+
+### Pending Actions
+
+- SSE now includes a `pending_action` event carrying `actionId`, `actionType`, `summary`, `payload`, and `expiresAt`
+- The panel renders a structured review card from this payload and does not rely on the model's prose for confirmation UI
+- Confirm/cancel requests resolve through dedicated pending-action routes, which verify org, user, thread, status, and expiry before mutating any data
 
 ## Test Coverage
 
