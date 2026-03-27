@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 interface ChatPageProps {
   params: Promise<{ orgSlug: string }>;
 }

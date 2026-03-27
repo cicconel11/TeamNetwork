@@ -185,9 +185,11 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               ? '{"query":"open announcements"}'
               : firstToolName === "list_announcements"
                 ? '{"limit": 5}'
-            : firstToolName === "suggest_connections"
+                : firstToolName === "suggest_connections"
               ? '{"person_query":"Louis Ciccone"}'
-              : '{"limit": 5}';
+              : firstToolName === "prepare_discussion_thread"
+                ? '{"title":"Spring Fundraising Volunteers","body":"Let\\u2019s organize volunteer assignments for the spring fundraiser."}'
+            : '{"limit": 5}';
         yield {
           type: "tool_call_requested",
           id: "call-1",
@@ -260,6 +262,29 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             body_preview: "Practice starts Monday.",
           },
         ]);
+      }
+      if (call.name === "prepare_discussion_thread") {
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            title: "Spring Fundraising Volunteers",
+            body: "Let's organize volunteer assignments for the spring fundraiser.",
+          },
+          pending_action: {
+            id: "pending-123",
+            action_type: "create_discussion_thread",
+            payload: {
+              title: "Spring Fundraising Volunteers",
+              body: "Let's organize volunteer assignments for the spring fundraiser.",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion thread",
+              description: "Confirm the drafted thread before it is posted to discussions.",
+            },
+          },
+        });
       }
       return okToolResult([{ id: "m1", name: "Alice" }]);
     },
@@ -446,6 +471,100 @@ test("action requests do not get forced into find_navigation_targets", async () 
     "suggest_connections",
   ]);
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
+});
+
+test("create discussion requests only attach prepare_discussion_thread on pass 1", async () => {
+  const body = await (
+    await POST(makeRequest("Create a discussion thread about spring volunteer assignments") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /I drafted the discussion thread/i);
+  assert.match(body, /"type":"pending_action"/);
+  assert.match(body, /"actionType":"create_discussion_thread"/);
+});
+
+test("create discussion requests do not get misrouted to find_navigation_targets", async () => {
+  await (
+    await POST(makeRequest("Post a discussion thread about spring volunteer assignments") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
+});
+
+test("create job requests still prefer prepare_job_posting over job reads", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_job_posting",
+            argsJson:
+              '{"title":"Senior Product Designer","company":"Acme Corp","location":"San Francisco, CA","industry":"SaaS","experience_level":"senior","description":"Lead product design across our collaboration suite.","application_url":"https://example.com/jobs/senior-product-designer"}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_job_posting should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            title: "Senior Product Designer",
+            company: "Acme Corp",
+            location: "San Francisco, CA",
+            industry: "SaaS",
+            experience_level: "senior",
+            description: "Lead product design across our collaboration suite.",
+            application_url: "https://example.com/jobs/senior-product-designer",
+          },
+          pending_action: {
+            id: "pending-job-123",
+            action_type: "create_job_posting",
+            payload: {
+              title: "Senior Product Designer",
+              company: "Acme Corp",
+              location: "San Francisco, CA",
+              industry: "SaaS",
+              experience_level: "senior",
+              description: "Lead product design across our collaboration suite.",
+              application_url: "https://example.com/jobs/senior-product-designer",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review job posting",
+              description: "Confirm the drafted job before it is added to the jobs board.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Create a new job posting for Acme Corp") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_job_posting"]);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_job_posting");
+  assert.match(body, /I drafted the job posting/i);
+  assert.match(body, /"type":"pending_action"/);
 });
 
 test("navigation phrasings recognized by the intent router attach find_navigation_targets", async () => {

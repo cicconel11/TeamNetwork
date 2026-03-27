@@ -249,6 +249,7 @@ function describeAvailableTools(tools: readonly ToolName[] | undefined): string[
     list_discussions: "Read recent community discussion threads.",
     list_job_postings: "Read active job postings and career opportunities.",
     prepare_job_posting: "Prepare a new job posting draft and create a confirmation action when ready.",
+    prepare_discussion_thread: "Prepare a new discussion thread draft and create a confirmation action when ready.",
     get_org_stats: "Read top-level organization counts and donation summary.",
     suggest_connections: "Suggest networking or introduction targets for a named member or alumnus.",
     find_navigation_targets: "Find the right in-app page for opening, managing, or creating something.",

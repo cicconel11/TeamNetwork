@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` to validate a stricter draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -18,7 +18,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/response-composer.ts` | Async generator streaming LLM response as SSE chunk/error events | `composeResponse` (L22), `UsageAccumulator` type (L5) |
 | `src/lib/ai/timeout.ts` | Turn-stage timeout constants and abort helpers | `PASS1_MODEL_TIMEOUT_MS`, `PASS2_MODEL_TIMEOUT_MS`, `TOOL_EXECUTION_TIMEOUT_MS`, `createStageAbortSignal`, `withStageTimeout` |
 | `src/lib/ai/sse.ts` | SSE encoding, stream factory, event types | `CacheStatus` type (L1), `SSEEvent` type (L10), `encodeSSE` (L32), `createSSEStream` (L36), `SSE_HEADERS` (L25) |
-| `src/lib/ai/pending-actions.ts` | Pending-action persistence, validation, and status transitions for assistant writes | `createPendingAction`, `getPendingActionForUser`, `markPendingActionCancelled`, `markPendingActionExecuted` |
+| `src/lib/ai/pending-actions.ts` | Pending-action persistence, validation, and status transitions for assistant writes | `createPendingAction`, `getPendingAction`, `updatePendingActionStatus`, `isAuthorizedAction` |
 | `src/lib/ai/audit.ts` | Audit logging with cache/context metadata plus `stage_timings`, secret redaction | `logAiRequest` (L37) |
 | `src/lib/ai/chat-telemetry.ts` | Shared retrieval/stage timing contracts for AI audit payloads | `AiAuditStageTimings`, `AiAuditStageName` |
 | `src/lib/ai/message-safety.ts` | Transport-noise cleanup, prompt-injection assessment, history sanitization | `assessAiMessageSafety`, `sanitizeHistoryMessageForPrompt` |
@@ -120,7 +120,7 @@ Client POST /api/ai/{orgId}/chat
   │            └─ user-role history re-assessed and sanitized before model replay
   ├─ 11. Resolve pass-1 tools from execution policy
   │       ├─ `none` for casual / static_general / out_of_scope
-  │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_job_posting` for job-creation requests
+  │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_job_posting` / `prepare_discussion_thread` for create requests
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
   │       ├─ Pass 1 runs with a 15s timeout budget
   │       ├─ Each requested tool runs with a 5s timeout budget
@@ -130,9 +130,11 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
   │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
   │       ├─ Job creation prompts can expose only `prepare_job_posting`
+  │       ├─ Discussion creation prompts can expose only `prepare_discussion_thread`
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
   │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
   │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
+  │       ├─ `prepare_discussion_thread` returns `missing_fields`, `needs_confirmation`, or `forbidden`
   │       ├─ `needs_confirmation` emits a `pending_action` SSE payload instead of writing immediately
   │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
   │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the Falkor/suggestions stack separately
@@ -313,6 +315,12 @@ type ToolExecutionResult =
 - **Behavior:** validates a stricter assistant-only job schema, optionally enriches missing fields from an HTTPS source URL, and creates a pending confirmation record when the draft is complete
 - **Write safety:** never writes a job directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `job_postings` is mutated
 
+### `prepare_discussion_thread`
+
+- **Purpose:** Validate a top-level discussion-thread draft, collect missing title/body fields, and create a pending confirmation action when complete.
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft }`
+- **Write safety:** never writes a thread directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `discussion_threads` is mutated
+
 ### `suggest_connections`
 
 - **Inputs:** either `person_query` for chat-driven name/email lookups, or `person_type` plus `person_id`; optional `limit` (default 10, max 25)
@@ -328,7 +336,7 @@ type ToolExecutionResult =
 
 ### Write Actions Today
 
-- The only shipped write path is `prepare_job_posting` plus the pending-action confirm/cancel routes.
+- The shipped write paths are `prepare_job_posting` and `prepare_discussion_thread`, both backed by the same pending-action confirm/cancel routes.
 - Broader write tools like event creation or announcement publishing are still deferred.
 - The confirmation UI depends on `pending_action` SSE handling in the assistant panel rather than parsing free-form "yes" replies in chat.
 
