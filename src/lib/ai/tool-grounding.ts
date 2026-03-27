@@ -551,16 +551,6 @@ function verifyListJobPostings(content: string, data: unknown): string[] {
       .filter((value): value is string => Boolean(value))
   );
 
-  const locations = new Set(
-    data
-      .map((row) =>
-        row && typeof row === "object" && typeof (row as { location?: unknown }).location === "string"
-          ? normalizeIdentifier((row as { location: string }).location)
-          : null
-      )
-      .filter((value): value is string => Boolean(value))
-  );
-
   const failures: string[] = [];
 
   // Check count claims
