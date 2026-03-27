@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { resolveSurfaceRouting } from "../src/lib/ai/intent-router";
+import { resolveSurfaceRouting } from "../src/lib/ai/intent-router.ts";
 
 describe("resolveSurfaceRouting — surface axis", () => {
   it("marks casual greetings to skip retrieval without rerouting the surface", () => {
@@ -226,5 +226,56 @@ describe("resolveSurfaceRouting — intent type priority", () => {
     assert.equal(result.intentType, "navigation");
     assert.equal(result.intent, "members_query");
     assert.equal(result.skipRetrieval, false);
+  });
+});
+
+describe("resolveSurfaceRouting — content-type keyword routing", () => {
+  it("routes announcement query to general surface with high confidence", () => {
+    const result = resolveSurfaceRouting("What are the latest announcements?", "general");
+
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+    assert.equal(result.rerouted, false);
+    assert.equal(result.skipRetrieval, false);
+  });
+
+  it("routes discussion query to general surface with high confidence", () => {
+    const result = resolveSurfaceRouting("Show me open discussions", "general");
+
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes job query to general surface with high confidence", () => {
+    const result = resolveSurfaceRouting("Are there any job openings?", "general");
+
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("routes hiring query to general surface with high confidence", () => {
+    const result = resolveSurfaceRouting("Who is hiring right now?", "general");
+
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.confidence, "high");
+  });
+
+  it("marks content-type query from non-general surface as rerouted", () => {
+    const result = resolveSurfaceRouting("Any new threads to read?", "members");
+
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.rerouted, true);
+    assert.equal(result.confidence, "high");
+  });
+
+  it("does not reroute when surface is already general", () => {
+    const result = resolveSurfaceRouting("Any news about upcoming careers?", "general");
+
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.rerouted, false);
   });
 });

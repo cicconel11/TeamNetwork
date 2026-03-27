@@ -204,3 +204,129 @@ test("verifyToolBackedResponse does not treat non-location 'both in' phrasing as
 
   assert.equal(result.grounded, true);
 });
+
+test("verifyToolBackedResponse accepts grounded list_announcements output", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Here are the latest announcements:",
+      "1. Spring Fundraiser Launch — posted 2026-03-01",
+      "2. New Member Welcome — posted 2026-02-15",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_announcements",
+        data: [
+          { title: "Spring Fundraiser Launch", published_at: "2026-03-01T00:00:00.000Z" },
+          { title: "New Member Welcome", published_at: "2026-02-15T00:00:00.000Z" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags announcement title absent from tool rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Here are the latest announcements:",
+      "1. \"Ghost Announcement\" — posted 2026-03-01",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_announcements",
+        data: [
+          { title: "Spring Fundraiser Launch", published_at: "2026-03-01T00:00:00.000Z" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /ghost announcement/i);
+});
+
+test("verifyToolBackedResponse accepts grounded list_discussions output", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Active discussions:",
+      "1. Alumni Networking Ideas — 12 replies",
+      "2. Event Planning Tips — 4 replies",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Alumni Networking Ideas", reply_count: 12 },
+          { title: "Event Planning Tips", reply_count: 4 },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags discussion reply count mismatch", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Active discussions:",
+      "1. \"Alumni Networking Ideas\" — 99 replies",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Alumni Networking Ideas", reply_count: 12 },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /discussion reply count claim 99 did not match 12/i);
+});
+
+test("verifyToolBackedResponse accepts grounded list_job_postings output", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Open positions:",
+      "1. Senior Engineer - Acme Corp",
+      "2. Product Manager - Beta Inc",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_job_postings",
+        data: [
+          { title: "Senior Engineer", company: "Acme Corp" },
+          { title: "Product Manager", company: "Beta Inc" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags job title absent from tool rows", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "Open positions:",
+      "1. \"Ghost Job\" at Mystery Co",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_job_postings",
+        data: [
+          { title: "Senior Engineer", company: "Acme Corp" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /ghost job/i);
+});
