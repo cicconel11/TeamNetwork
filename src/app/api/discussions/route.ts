@@ -3,12 +3,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createThreadSchema } from "@/lib/schemas/discussion";
-import { notifyNewThread } from "@/lib/discussions/notifications";
 import { validateJson, validationErrorResponse, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
-import { linkMediaToEntity } from "@/lib/media/link";
 import { fetchMediaForEntities } from "@/lib/media/fetch";
+import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
@@ -145,76 +144,23 @@ export async function POST(request: NextRequest) {
 
     const { orgId, title, body, mediaIds } = await validateJson(request, bodySchema);
 
-    // Check org membership
-    const membership = await getOrgMembership(supabase, user.id, orgId);
-    if (!membership) {
-      return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
-    }
-
-    // Fetch configurable discussion posting roles from the org
-    const { data: org } = await supabase
-      .from("organizations")
-      .select("discussion_post_roles")
-      .eq("id", orgId)
-      .maybeSingle();
-
-    const allowedRoles = (org as Record<string, unknown> | null)?.discussion_post_roles as string[] || ["admin", "active_member", "alumni"];
-    if (!allowedRoles.includes(membership.role)) {
-      return NextResponse.json({ error: "You do not have permission to create discussions" }, { status: 403 });
-    }
-
-    // Get author name for notification
-    const { data: authorUser } = await supabase
-      .from("users")
-      .select("name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    // Create thread
-    const { data: thread, error } = await supabase
-      .from("discussion_threads")
-      .insert({
-        organization_id: orgId,
-        author_id: user.id,
-        title,
-        body,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to create thread" }, { status: 500 });
-    }
-
-    // Link media attachments if provided
-    if (mediaIds && mediaIds.length > 0) {
-      const serviceClient = createServiceClient();
-      const linkResult = await linkMediaToEntity(serviceClient, {
-        mediaIds,
-        entityType: "discussion_thread",
-        entityId: thread.id,
-        orgId,
-        userId: user.id,
-      });
-      if (linkResult.error) {
-        // Clean up orphaned thread to prevent duplicates on retry
-        await serviceClient.from("discussion_threads").update({ deleted_at: new Date().toISOString() }).eq("id", thread.id);
-        return NextResponse.json({ error: linkResult.error }, { status: 400, headers: rateLimit.headers });
-      }
-    }
-
-    // Send notifications (fire-and-forget, don't block response)
-    notifyNewThread({
+    const serviceSupabase = createServiceClient();
+    const result = await createDiscussionThread({
       supabase,
-      organizationId: orgId,
-      threadTitle: title,
-      threadUrl: `/discussions/${thread.id}`,
-      authorName: authorUser?.name || "A member",
-    }).catch(() => {
-      // Notification failure should not affect thread creation
+      serviceSupabase,
+      orgId,
+      userId: user.id,
+      input: { title, body, mediaIds },
     });
 
-    return NextResponse.json({ data: thread }, { status: 201, headers: rateLimit.headers });
+    if (!result.ok) {
+      return NextResponse.json(
+        result.details ? { error: result.error, details: result.details } : { error: result.error },
+        { status: result.status, headers: rateLimit.headers }
+      );
+    }
+
+    return NextResponse.json({ data: result.thread }, { status: 201, headers: rateLimit.headers });
   } catch (error) {
     if (error instanceof ValidationError) {
       return validationErrorResponse(error);
