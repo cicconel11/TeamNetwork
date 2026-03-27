@@ -76,8 +76,13 @@ BEGIN
 END;
 $$;
 
--- Update redeem_org_invite to check invite-level override first, then org-level
-CREATE OR REPLACE FUNCTION public.redeem_org_invite(p_code text)
+-- Drop and recreate redeem_org_invite (not CREATE OR REPLACE) to force
+-- PostgreSQL to recompile the row type for organization_invites, which now
+-- includes the require_approval column. CREATE OR REPLACE reuses the cached
+-- composite type and v_invite.require_approval silently resolves to NULL.
+DROP FUNCTION IF EXISTS public.redeem_org_invite(text);
+
+CREATE FUNCTION public.redeem_org_invite(p_code text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER

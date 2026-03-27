@@ -171,3 +171,7 @@ Work is NOT complete until `git push` succeeds. Mandatory:
 4. Hand off context for next session
 
 NEVER stop before pushing. NEVER say "ready to push when you are" — YOU must push.
+
+## TODO
+
+- [ ] Invite expiration uses UTC midnight instead of user's local timezone end-of-day — an invite set to expire "March 27" actually expires at 7pm ET on March 26. Fix: append `T23:59:59` in the user's local timezone before converting to ISO string.
