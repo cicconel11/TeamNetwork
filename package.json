@@ -37,6 +37,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.2",
+    "@vercel/speed-insights": "^2.0.0",
     "animejs": "^4.2.2",
     "cheerio": "^1.2.0",
     "falkordb": "^6.6.2",
