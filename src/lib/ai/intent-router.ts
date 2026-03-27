@@ -70,6 +70,26 @@ const ACTION_KEYWORDS: readonly string[] = [
   "enable", "disable", "reset", "upload", "post", "publish",
 ];
 
+// Keywords that map a message to general org content tools even when no surface-specific keyword fires
+const GENERAL_CONTENT_KEYWORDS: readonly string[] = [
+  "discussion",
+  "discussions",
+  "forum",
+  "thread",
+  "threads",
+  "job",
+  "jobs",
+  "posting",
+  "postings",
+  "hiring",
+  "career",
+  "careers",
+  "position",
+  "positions",
+  "opportunity",
+  "opportunities",
+];
+
 // Phrases that signal the user wants to navigate somewhere
 const NAVIGATION_PATTERNS = [
   /(?<!\w)go\s+to(?!\w)/i,
@@ -151,13 +171,14 @@ export function resolveSurfaceRouting(
     .sort((a, b) => b[1] - a[1]) as Array<[Exclude<AiSurface, "general">, number]>;
 
   if (ranked.length === 0) {
+    const hasGeneralContent = countMatches(normalized, GENERAL_CONTENT_KEYWORDS) > 0;
     return {
       intent: SURFACE_TO_INTENT.general,
       intentType,
-      effectiveSurface: requestedSurface,
-      inferredSurface: null,
-      confidence: "low",
-      rerouted: false,
+      effectiveSurface: "general",
+      inferredSurface: hasGeneralContent ? "general" : null,
+      confidence: hasGeneralContent ? "high" : "low",
+      rerouted: hasGeneralContent && requestedSurface !== "general",
     };
   }
 
