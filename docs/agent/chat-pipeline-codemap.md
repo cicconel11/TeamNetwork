@@ -256,6 +256,36 @@ type ToolExecutionResult =
 - **Ranking contract:** direct mentorship `100`, second-degree mentorship `50`, shared company `20`, shared industry `12`, shared major `10`, shared graduation year `8`, shared city `5`
 - **Grounding contract:** pass-2 connection prose may only render the fixed connection template, may name only returned `source_person` / `suggestions`, must preserve ranked order, and may claim only returned normalized reason codes for each suggestion
 
+### `list_announcements`
+
+- **Surface:** `general` only
+- **Inputs:** `limit?: number` (1–25, default 10), `pinned_only?: boolean`
+- **Outputs:** array of `{ id, title, body (truncated 500 chars), audience, is_pinned, published_at, created_at }`
+- **Ordering:** `is_pinned DESC, published_at DESC`
+- **Filters:** `organization_id = orgId`, `deleted_at IS NULL`; when `pinned_only`: additionally `is_pinned = true`
+- **Implementation:** uses `safeToolQuery` pattern
+- **Grounding contract:** pass-2 prose may only reference titles and counts that appear in the returned payload; count claims must match the actual array length
+
+### `list_discussions`
+
+- **Surface:** `general` only
+- **Inputs:** `limit?: number` (1–25, default 10), `pinned_only?: boolean`
+- **Outputs:** array of `{ id, title, body (truncated 500 chars), reply_count, is_pinned, is_locked, last_activity_at, created_at }`
+- **Ordering:** `last_activity_at DESC`
+- **Filters:** `organization_id = orgId`, `deleted_at IS NULL`; when `pinned_only`: additionally `is_pinned = true`
+- **Implementation:** uses `safeToolQuery` pattern
+- **Grounding contract:** pass-2 prose may only reference titles and counts that appear in the returned payload; count claims must match the actual array length
+
+### `list_job_postings`
+
+- **Surface:** `general` only
+- **Inputs:** `limit?: number` (1–25, default 10), `active_only?: boolean` (default `true`)
+- **Outputs:** array of `{ id, title, company, location, location_type, experience_level, industry, description (truncated 500 chars), application_url, expires_at, is_active, created_at }`
+- **Ordering:** `created_at DESC`
+- **Filters:** `organization_id = orgId`, `deleted_at IS NULL`; when `active_only` (default): additionally `is_active = true` AND `(expires_at IS NULL OR expires_at > now())`
+- **Implementation:** uses `safeToolQuery` pattern
+- **Grounding contract:** pass-2 prose may only reference titles and counts that appear in the returned payload; count claims must match the actual array length
+
 ## Test Coverage
 
 | Test File | Cases | Coverage |

@@ -2,7 +2,7 @@
 
 ## Summary
 
-The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`. The current tool set also includes `suggest_connections`, an admin-only member/alumni outreach recommender backed by a single-org Falkor people graph with a SQL-equivalent fallback. Direct-name connection prompts now route to the `members` surface, call `suggest_connections` directly with a server-resolved `person_query`, and hand pass 2 a display-ready payload instead of relying on model-chained `list_members -> suggest_connections`. For setup and sync details, see `docs/agent/falkor-people-graph.md`.
+The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`. The current tool set (Tier 1 complete) includes `suggest_connections`, `list_announcements`, `list_discussions`, and `list_job_postings`. `suggest_connections` is an admin-only member/alumni outreach recommender backed by a single-org Falkor people graph with a SQL-equivalent fallback. Direct-name connection prompts now route to the `members` surface, call `suggest_connections` directly with a server-resolved `person_query`, and hand pass 2 a display-ready payload instead of relying on model-chained `list_members -> suggest_connections`. The three listing tools (`list_announcements`, `list_discussions`, `list_job_postings`) are read-only, scoped to the `general` surface, and use the `safeToolQuery` pattern with deterministic grounding verifiers. For setup and sync details, see `docs/agent/falkor-people-graph.md`.
 
 ## Tech Stack
 
@@ -25,6 +25,17 @@ The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-
 | Semantic Cache | [semantic-cache-codemap.md](semantic-cache-codemap.md) | Exact-hash prompt deduplication, 12h general TTL, hourly bounded purge |
 | Thread Management | [threads-codemap.md](threads-codemap.md) | CRUD for threads and messages, cursor pagination, soft-delete |
 | UI Panel | [ui-panel-codemap.md](ui-panel-codemap.md) | Slide-out panel, SSE stream consumer, thread/message display |
+
+## Read Tools (Tier 1 — Complete)
+
+All tools are admin-only, org-scoped, and documented in the Tool Catalog section of [chat-pipeline-codemap.md](chat-pipeline-codemap.md).
+
+| Tool | Surface | Description |
+|---|---|---|
+| `suggest_connections` | `members` | Member/alumni outreach recommendations via Falkor graph with SQL fallback |
+| `list_announcements` | `general` | List org announcements; args: `limit` (1–25), `pinned_only` |
+| `list_discussions` | `general` | List org discussion threads; args: `limit` (1–25), `pinned_only` |
+| `list_job_postings` | `general` | List org job postings; args: `limit` (1–25), `active_only` (default `true`) |
 
 ## Database Tables
 
