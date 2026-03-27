@@ -72,6 +72,8 @@ const ACTION_KEYWORDS: readonly string[] = [
 
 // Keywords that map a message to general org content tools even when no surface-specific keyword fires
 const GENERAL_CONTENT_KEYWORDS: readonly string[] = [
+  "announcement",
+  "announcements",
   "discussion",
   "discussions",
   "forum",
@@ -172,10 +174,20 @@ export function resolveSurfaceRouting(
 
   if (ranked.length === 0) {
     const hasGeneralContent = countMatches(normalized, GENERAL_CONTENT_KEYWORDS) > 0;
+    if (intentType === "casual") {
+      return {
+        intent: SURFACE_TO_INTENT.general,
+        intentType,
+        effectiveSurface: requestedSurface,
+        inferredSurface: null,
+        confidence: "low",
+        rerouted: false,
+      };
+    }
     return {
       intent: SURFACE_TO_INTENT.general,
       intentType,
-      effectiveSurface: "general",
+      effectiveSurface: hasGeneralContent ? "general" : "general",
       inferredSurface: hasGeneralContent ? "general" : null,
       confidence: hasGeneralContent ? "high" : "low",
       rerouted: hasGeneralContent && requestedSurface !== "general",

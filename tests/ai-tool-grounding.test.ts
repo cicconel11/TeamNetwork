@@ -227,3 +227,107 @@ test("verifyToolBackedResponse ignores adjacency wording that is not a scored re
   assert.equal(result.grounded, true);
   assert.deepEqual(result.failures, []);
 });
+
+test("verifyToolBackedResponse accepts grounded list_discussions output", () => {
+  const result = verifyToolBackedResponse({
+    content: 'Active discussions:\n- "Best practices for onboarding"\n- "Event planning thread"',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Best practices for onboarding", body: "Let's discuss...", reply_count: 5, is_pinned: false, is_locked: false, last_activity_at: "2026-03-20T00:00:00.000Z" },
+          { title: "Event planning thread", body: "Planning...", reply_count: 12, is_pinned: true, is_locked: false, last_activity_at: "2026-03-18T00:00:00.000Z" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags fabricated discussion title", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Real Thread"\n- "Ghost Thread"',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Real Thread", body: "...", reply_count: 3, is_pinned: false, is_locked: false },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /ghost thread/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags incorrect discussion reply count", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Active Discussion" has 99 replies',
+    toolResults: [
+      {
+        name: "list_discussions",
+        data: [
+          { title: "Active Discussion", body: "...", reply_count: 5, is_pinned: false, is_locked: false },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /reply count claim 99 did not match 5/i.test(f)));
+});
+
+test("verifyToolBackedResponse accepts grounded list_job_postings output", () => {
+  const result = verifyToolBackedResponse({
+    content: 'Current openings:\n- "Software Engineer" at "Acme Corp"\n- "Product Manager" at "Beta Inc"',
+    toolResults: [
+      {
+        name: "list_job_postings",
+        data: [
+          { title: "Software Engineer", company: "Acme Corp", location: "San Francisco", is_active: true },
+          { title: "Product Manager", company: "Beta Inc", location: "Remote", is_active: true },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse flags fabricated company in job postings", () => {
+  const result = verifyToolBackedResponse({
+    content: '- "Software Engineer" at "Fake Company"',
+    toolResults: [
+      {
+        name: "list_job_postings",
+        data: [
+          { title: "Software Engineer", company: "Acme Corp", location: "San Francisco", is_active: true },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /fake company/i.test(f)));
+});
+
+test("verifyToolBackedResponse flags inflated job posting count", () => {
+  const result = verifyToolBackedResponse({
+    content: "There are 15 job openings available.",
+    toolResults: [
+      {
+        name: "list_job_postings",
+        data: [
+          { title: "Engineer", company: "Acme", location: "NYC", is_active: true },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.ok(result.failures.some((f) => /job posting count claim 15/i.test(f)));
+});
