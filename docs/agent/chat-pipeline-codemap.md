@@ -258,9 +258,22 @@ type ToolExecutionResult =
 
 ### `list_announcements`
 
-- **Inputs:** optional `limit` (default 10, max 25)
+- **Inputs:** optional `limit` (default 10, max 25), optional `pinned_only` (boolean)
 - **Outputs:** recent announcement rows with `title`, `published_at`, `audience`, `is_pinned`, and `body_preview`
 - **Deterministic path:** single-tool announcement turns are rendered in-route as a compact `Recent announcements` list instead of paying for a second model pass
+
+### `list_discussions`
+
+- **Inputs:** optional `limit` (default 10, max 25), optional `pinned_only` (boolean)
+- **Outputs:** discussion thread rows with `id`, `title`, `body` (truncated 500 chars), `reply_count`, `is_pinned`, `is_locked`, `last_activity_at`, `created_at`; ordered by `last_activity_at DESC`
+- **Surface:** `general` only
+
+### `list_job_postings`
+
+- **Inputs:** optional `limit` (default 10, max 25), optional `active_only` (boolean, default true)
+- **Outputs:** job posting rows with `id`, `title`, `company`, `location`, `location_type`, `experience_level`, `industry`, `description` (truncated 500 chars), `application_url`, `expires_at`, `is_active`, `created_at`; ordered by `created_at DESC`
+- **Active filter:** `is_active = true AND (expires_at IS NULL OR expires_at > now())`
+- **Surface:** `general` only
 
 ### `find_navigation_targets`
 
