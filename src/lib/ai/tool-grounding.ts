@@ -217,6 +217,70 @@ function verifyListEvents(content: string, data: unknown): string[] {
   return failures;
 }
 
+function verifyListDiscussions(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_discussions returned non-array data"];
+  }
+
+  const titles = new Set(
+    data
+      .map((row) =>
+        row && typeof row === "object" && typeof (row as { title?: unknown }).title === "string"
+          ? normalizeIdentifier((row as { title: string }).title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`discussion title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`discussion title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  return failures;
+}
+
+function verifyListJobPostings(content: string, data: unknown): string[] {
+  if (!Array.isArray(data)) {
+    return ["list_job_postings returned non-array data"];
+  }
+
+  const titles = new Set(
+    data
+      .map((row) =>
+        row && typeof row === "object" && typeof (row as { title?: unknown }).title === "string"
+          ? normalizeIdentifier((row as { title: string }).title)
+          : null
+      )
+      .filter((value): value is string => Boolean(value))
+  );
+
+  const failures: string[] = [];
+  for (const title of extractQuotedTitles(content)) {
+    if (!titles.has(normalizeIdentifier(title))) {
+      failures.push(`job posting title ${title} was not present in tool rows`);
+    }
+  }
+
+  for (const candidate of extractListEntryHeads(content)) {
+    const normalizedCandidate = normalizeIdentifier(candidate);
+    if (!titles.has(normalizedCandidate)) {
+      failures.push(`job posting title ${candidate} was not present in tool rows`);
+    }
+  }
+
+  return failures;
+}
+
 function verifyListAnnouncements(content: string, data: unknown): string[] {
   if (!Array.isArray(data)) {
     return ["list_announcements returned non-array data"];
@@ -483,8 +547,17 @@ export function verifyToolBackedResponse(input: {
       case "list_announcements":
         failures.push(...verifyListAnnouncements(input.content, result.data));
         break;
+      case "list_discussions":
+        failures.push(...verifyListDiscussions(input.content, result.data));
+        break;
+      case "list_job_postings":
+        failures.push(...verifyListJobPostings(input.content, result.data));
+        break;
       case "suggest_connections":
         failures.push(...verifySuggestConnections(input.content, result.data));
+        break;
+      default:
+        // No grounding check for this tool
         break;
     }
   }

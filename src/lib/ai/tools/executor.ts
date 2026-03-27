@@ -49,6 +49,19 @@ const listEventsSchema = z
 const listAnnouncementsSchema = z
   .object({
     limit: z.number().int().min(1).max(25).optional(),
+    pinned_only: z.boolean().optional(),
+  })
+  .strict();
+
+const listDiscussionsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(25).optional(),
+  })
+  .strict();
+
+const listJobPostingsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(25).optional(),
   })
   .strict();
 
@@ -80,6 +93,8 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_members: listMembersSchema,
   list_events: listEventsSchema,
   list_announcements: listAnnouncementsSchema,
+  list_discussions: listDiscussionsSchema,
+  list_job_postings: listJobPostingsSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
@@ -159,6 +174,15 @@ async function safeToolCount(
     console.warn("[ai-tools] unexpected count error:", getSafeErrorMessage(err));
     return { ok: false, error: "Unexpected error" };
   }
+}
+
+const MAX_BODY_PREVIEW_CHARS = 500;
+
+function truncateBody(body: string | null | undefined): string | null {
+  if (typeof body !== "string" || body.trim().length === 0) {
+    return null;
+  }
+  return body.trim().slice(0, MAX_BODY_PREVIEW_CHARS);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -311,8 +335,9 @@ async function listAnnouncements(
   args: z.infer<typeof listAnnouncementsSchema>
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
+  const pinnedOnly = args.pinned_only ?? false;
   return safeToolQuery(async () => {
-    const { data, error } = await sb
+    let query = sb
       .from("announcements")
       .select("id, title, body, audience, is_pinned, published_at, created_at")
       .eq("organization_id", orgId)
@@ -320,6 +345,12 @@ async function listAnnouncements(
       .order("is_pinned", { ascending: false })
       .order("published_at", { ascending: false })
       .limit(limit);
+
+    if (pinnedOnly) {
+      query = query.eq("is_pinned", true);
+    }
+
+    const { data, error } = await query;
 
     if (!Array.isArray(data) || error) {
       return { data, error };
@@ -332,10 +363,74 @@ async function listAnnouncements(
         audience: announcement.audience,
         is_pinned: Boolean(announcement.is_pinned),
         published_at: announcement.published_at ?? announcement.created_at ?? null,
-        body_preview:
-          typeof announcement.body === "string" && announcement.body.trim().length > 0
-            ? announcement.body.trim().slice(0, 240)
-            : null,
+        body_preview: truncateBody(announcement.body),
+      })),
+      error: null,
+    };
+  });
+}
+
+async function listDiscussions(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listDiscussionsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  return safeToolQuery(async () => {
+    const { data, error } = await sb
+      .from("discussions")
+      .select("id, title, body, author_id, comment_count, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((discussion) => ({
+        id: discussion.id,
+        title: discussion.title,
+        author_id: discussion.author_id,
+        comment_count: discussion.comment_count ?? 0,
+        created_at: discussion.created_at ?? null,
+        body_preview: truncateBody(discussion.body),
+      })),
+      error: null,
+    };
+  });
+}
+
+async function listJobPostings(
+  sb: SB,
+  orgId: string,
+  args: z.infer<typeof listJobPostingsSchema>
+): Promise<ToolExecutionResult> {
+  const limit = Math.min(args.limit ?? 10, 25);
+  return safeToolQuery(async () => {
+    const { data, error } = await sb
+      .from("job_postings")
+      .select("id, title, company, location, job_type, description, created_at")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (!Array.isArray(data) || error) {
+      return { data, error };
+    }
+
+    return {
+      data: data.map((job) => ({
+        id: job.id,
+        title: job.title,
+        company: job.company ?? null,
+        location: job.location ?? null,
+        job_type: job.job_type ?? null,
+        created_at: job.created_at ?? null,
+        description_preview: truncateBody(job.description),
       })),
       error: null,
     };
@@ -559,6 +654,18 @@ export async function executeToolCall(
             sb,
             ctx.orgId,
             args as z.infer<typeof listAnnouncementsSchema>
+          );
+        case "list_discussions":
+          return listDiscussions(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof listDiscussionsSchema>
+          );
+        case "list_job_postings":
+          return listJobPostings(
+            sb,
+            ctx.orgId,
+            args as z.infer<typeof listJobPostingsSchema>
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId);
