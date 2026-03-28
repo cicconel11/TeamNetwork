@@ -232,7 +232,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
         }
         default:
-          return NextResponse.json({ error: "Unsupported pending action" }, { status: 400 });
+          throw new Error(`Unsupported pending action type: ${action.action_type satisfies never}`);
       }
     } catch (err) {
       // Attempt rollback to pending so the user can retry
