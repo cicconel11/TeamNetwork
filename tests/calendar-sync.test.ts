@@ -27,7 +27,7 @@ function mapEventToCalendarEvent(event: {
     location?: string | null;
     start_date: string;
     end_date?: string | null;
-}): CalendarEvent {
+}, orgTimeZone?: string): CalendarEvent {
     const startDate = new Date(event.start_date);
 
     // If no end_date, default to start_date + 1 hour
@@ -38,8 +38,8 @@ function mapEventToCalendarEvent(event: {
         endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
     }
 
-    // Determine timezone - use UTC if not determinable from the date string
-    const timeZone = "UTC";
+    // Use org timezone so Google Calendar displays events at the correct local time
+    const timeZone = orgTimeZone || "UTC";
 
     return {
         summary: event.title,

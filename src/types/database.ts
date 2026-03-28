@@ -364,6 +364,69 @@ export type Database = {
           },
         ]
       }
+      ai_pending_actions: {
+        Row: {
+          action_type: string
+          created_at: string
+          executed_at: string | null
+          expires_at: string
+          id: string
+          organization_id: string
+          payload: Json
+          result_entity_id: string | null
+          result_entity_type: string | null
+          status: string
+          thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          executed_at?: string | null
+          expires_at: string
+          id?: string
+          organization_id: string
+          payload: Json
+          result_entity_id?: string | null
+          result_entity_type?: string | null
+          status?: string
+          thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          executed_at?: string | null
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          payload?: Json
+          result_entity_id?: string | null
+          result_entity_type?: string | null
+          status?: string
+          thread_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_pending_actions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_pending_actions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "ai_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_semantic_cache: {
         Row: {
           cache_version: number
@@ -475,9 +538,16 @@ export type Database = {
           current_city: string | null
           current_company: string | null
           deleted_at: string | null
+          education_history: Json | null
           email: string | null
+          enriched_at: string | null
+          enrichment_error: string | null
+          enrichment_retry_count: number | null
+          enrichment_snapshot_id: string | null
+          enrichment_status: string | null
           first_name: string
           graduation_year: number | null
+          headline: string | null
           id: string
           industry: string | null
           job_title: string | null
@@ -489,9 +559,12 @@ export type Database = {
           phone_number: string | null
           photo_url: string | null
           position_title: string | null
+          school: string | null
           source: string
+          summary: string | null
           updated_at: string | null
           user_id: string | null
+          work_history: Json | null
         }
         Insert: {
           address_summary?: string | null
@@ -499,9 +572,16 @@ export type Database = {
           current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
+          enriched_at?: string | null
+          enrichment_error?: string | null
+          enrichment_retry_count?: number | null
+          enrichment_snapshot_id?: string | null
+          enrichment_status?: string | null
           first_name: string
           graduation_year?: number | null
+          headline?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
@@ -513,9 +593,12 @@ export type Database = {
           phone_number?: string | null
           photo_url?: string | null
           position_title?: string | null
+          school?: string | null
           source?: string
+          summary?: string | null
           updated_at?: string | null
           user_id?: string | null
+          work_history?: Json | null
         }
         Update: {
           address_summary?: string | null
@@ -523,9 +606,16 @@ export type Database = {
           current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
+          education_history?: Json | null
           email?: string | null
+          enriched_at?: string | null
+          enrichment_error?: string | null
+          enrichment_retry_count?: number | null
+          enrichment_snapshot_id?: string | null
+          enrichment_status?: string | null
           first_name?: string
           graduation_year?: number | null
+          headline?: string | null
           id?: string
           industry?: string | null
           job_title?: string | null
@@ -537,9 +627,12 @@ export type Database = {
           phone_number?: string | null
           photo_url?: string | null
           position_title?: string | null
+          school?: string | null
           source?: string
+          summary?: string | null
           updated_at?: string | null
           user_id?: string | null
+          work_history?: Json | null
         }
         Relationships: [
           {
@@ -1834,6 +1927,8 @@ export type Database = {
           enterprise_id: string
           grace_period_ends_at: string | null
           id: string
+          price_per_sub_org_cents: number | null
+          pricing_model: string | null
           status: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -1848,6 +1943,8 @@ export type Database = {
           enterprise_id: string
           grace_period_ends_at?: string | null
           id?: string
+          price_per_sub_org_cents?: number | null
+          pricing_model?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -1862,6 +1959,8 @@ export type Database = {
           enterprise_id?: string
           grace_period_ends_at?: string | null
           id?: string
+          price_per_sub_org_cents?: number | null
+          pricing_model?: string | null
           status?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -2607,29 +2706,29 @@ export type Database = {
       }
       form_submissions: {
         Row: {
-          data: Json
           deleted_at: string | null
           form_id: string
           id: string
           organization_id: string
+          responses: Json
           submitted_at: string | null
           user_id: string | null
         }
         Insert: {
-          data?: Json
           deleted_at?: string | null
           form_id: string
           id?: string
           organization_id: string
+          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }
         Update: {
-          data?: Json
           deleted_at?: string | null
           form_id?: string
           id?: string
           organization_id?: string
+          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }
@@ -2705,6 +2804,53 @@ export type Database = {
           {
             foreignKeyName: "forms_organization_id_fkey"
             columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      graph_sync_queue: {
+        Row: {
+          action: string
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          org_id: string
+          payload: Json
+          processed_at: string | null
+          source_id: string
+          source_table: string
+        }
+        Insert: {
+          action: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          org_id: string
+          payload?: Json
+          processed_at?: string | null
+          source_id: string
+          source_table: string
+        }
+        Update: {
+          action?: string
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          id?: string
+          org_id?: string
+          payload?: Json
+          processed_at?: string | null
+          source_id?: string
+          source_table?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "graph_sync_queue_org_id_fkey"
+            columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
@@ -2876,6 +3022,39 @@ export type Database = {
           linkedin_name?: string | null
           linkedin_picture_url?: string | null
           linkedin_sub?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      linkedin_manual_sync_attempts: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          id: string
+          month_key: string
+          released_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          month_key: string
+          released_at?: string | null
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          month_key?: string
+          released_at?: string | null
+          status?: string
           updated_at?: string
           user_id?: string
         }
@@ -3144,7 +3323,9 @@ export type Database = {
       }
       members: {
         Row: {
+          bio: string | null
           created_at: string | null
+          current_city: string | null
           current_company: string | null
           deleted_at: string | null
           email: string | null
@@ -3156,6 +3337,7 @@ export type Database = {
           id: string
           last_name: string
           linkedin_url: string | null
+          major: string | null
           organization_id: string
           photo_url: string | null
           role: string | null
@@ -3165,7 +3347,9 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          bio?: string | null
           created_at?: string | null
+          current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
           email?: string | null
@@ -3177,6 +3361,7 @@ export type Database = {
           id?: string
           last_name: string
           linkedin_url?: string | null
+          major?: string | null
           organization_id: string
           photo_url?: string | null
           role?: string | null
@@ -3186,7 +3371,9 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          bio?: string | null
           created_at?: string | null
+          current_city?: string | null
           current_company?: string | null
           deleted_at?: string | null
           email?: string | null
@@ -3198,6 +3385,7 @@ export type Database = {
           id?: string
           last_name?: string
           linkedin_url?: string | null
+          major?: string | null
           organization_id?: string
           photo_url?: string | null
           role?: string | null
@@ -3827,6 +4015,7 @@ export type Database = {
           expires_at: string | null
           id: string
           organization_id: string
+          require_approval: boolean | null
           revoked_at: string | null
           role: string | null
           token: string | null
@@ -3839,6 +4028,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           organization_id: string
+          require_approval?: boolean | null
           revoked_at?: string | null
           role?: string | null
           token?: string | null
@@ -3851,6 +4041,7 @@ export type Database = {
           expires_at?: string | null
           id?: string
           organization_id?: string
+          require_approval?: boolean | null
           revoked_at?: string | null
           role?: string | null
           token?: string | null
@@ -3950,9 +4141,11 @@ export type Database = {
           original_subscription_id: string | null
           original_subscription_status: string | null
           primary_color: string | null
+          require_invite_approval: boolean
           secondary_color: string | null
           slug: string
           stripe_connect_account_id: string | null
+          timezone: string
         }
         Insert: {
           created_at?: string | null
@@ -3975,9 +4168,11 @@ export type Database = {
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
+          require_invite_approval?: boolean
           secondary_color?: string | null
           slug: string
           stripe_connect_account_id?: string | null
+          timezone?: string
         }
         Update: {
           created_at?: string | null
@@ -4000,9 +4195,11 @@ export type Database = {
           original_subscription_id?: string | null
           original_subscription_status?: string | null
           primary_color?: string | null
+          require_invite_approval?: boolean
           secondary_color?: string | null
           slug?: string
           stripe_connect_account_id?: string | null
+          timezone?: string
         }
         Relationships: [
           {
@@ -5199,11 +5396,13 @@ export type Database = {
       assert_alumni_quota: { Args: { p_org_id: string }; Returns: undefined }
       assert_parents_quota: { Args: { p_org_id: string }; Returns: undefined }
       backfill_ai_embedding_queue: { Args: { p_org_id: string }; Returns: Json }
+      backfill_graph_sync_queue: { Args: { p_org_id: string }; Returns: Json }
       bulk_import_alumni_rich: {
         Args: { p_organization_id: string; p_overwrite?: boolean; p_rows: Json }
         Returns: {
           out_email: string
           out_first_name: string
+          out_id: string
           out_last_name: string
           out_status: string
         }[]
@@ -5244,6 +5443,7 @@ export type Database = {
         Args: { p_rsvp_id: string; p_undo?: boolean }
         Returns: Json
       }
+      claim_linkedin_resync: { Args: { p_user_id: string }; Returns: Json }
       claim_stale_stripe_event: {
         Args: { p_event_id: string }
         Returns: {
@@ -5264,6 +5464,10 @@ export type Database = {
       }
       complete_enterprise_invite_redemption: {
         Args: { p_organization_id: string; p_token: string }
+        Returns: Json
+      }
+      complete_linkedin_manual_sync: {
+        Args: { p_attempt_id: string }
         Returns: Json
       }
       create_enterprise_invite: {
@@ -5298,6 +5502,7 @@ export type Database = {
         Args: {
           p_expires_at?: string
           p_organization_id: string
+          p_require_approval?: boolean
           p_role?: string
           p_uses?: number
         }
@@ -5308,6 +5513,7 @@ export type Database = {
           expires_at: string | null
           id: string
           organization_id: string
+          require_approval: boolean | null
           revoked_at: string | null
           role: string | null
           token: string | null
@@ -5321,9 +5527,78 @@ export type Database = {
         }
       }
       debug_user_org_access: { Args: { target_org_id?: string }; Returns: Json }
+      dequeue_ai_embeddings: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          action: string
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          org_id: string
+          processed_at: string | null
+          source_id: string
+          source_table: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ai_embedding_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      dequeue_graph_sync_queue: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          action: string
+          attempts: number
+          created_at: string
+          error: string | null
+          id: string
+          org_id: string
+          payload: Json
+          processed_at: string | null
+          source_id: string
+          source_table: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "graph_sync_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      enrich_alumni_by_id: {
+        Args: {
+          p_alumni_id: string
+          p_current_city?: string
+          p_current_company?: string
+          p_education_history?: Json
+          p_headline?: string
+          p_job_title?: string
+          p_major?: string
+          p_organization_id: string
+          p_position_title?: string
+          p_school?: string
+          p_summary?: string
+          p_work_history?: Json
+        }
+        Returns: Json
+      }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
+      get_linkedin_manual_sync_status: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       get_media_storage_stats: { Args: { p_org_id: string }; Returns: Json }
+      get_mentorship_distances: {
+        Args: { p_org_id: string; p_user_id: string }
+        Returns: {
+          distance: number
+          user_id: string
+        }[]
+      }
       get_org_context_by_slug: { Args: { p_slug: string }; Returns: Json }
       get_parents_relationship_options: {
         Args: { p_org_id: string }
@@ -5345,6 +5620,10 @@ export type Database = {
         Args: { allowed_roles: string[]; org: string }
         Returns: boolean
       }
+      increment_ai_queue_attempts: {
+        Args: { p_error: string; p_id: string }
+        Returns: undefined
+      }
       increment_donation_stats: {
         Args: {
           p_amount_delta: number
@@ -5353,6 +5632,33 @@ export type Database = {
           p_org_id: string
         }
         Returns: undefined
+      }
+      increment_enrichment_retry: {
+        Args: {
+          p_alumni_ids: string[]
+          p_error?: string
+          p_max_retries?: number
+        }
+        Returns: undefined
+      }
+      increment_graph_sync_attempts: {
+        Args: { p_error: string; p_id: string }
+        Returns: undefined
+      }
+      init_ai_chat: {
+        Args: {
+          p_context_surface?: string
+          p_idempotency_key: string
+          p_intent?: string
+          p_intent_type?: string
+          p_message: string
+          p_org_id: string
+          p_surface: string
+          p_thread_id?: string
+          p_title: string
+          p_user_id: string
+        }
+        Returns: Json
       }
       is_chat_group_creator: { Args: { group_id: string }; Returns: boolean }
       is_chat_group_member: { Args: { group_id: string }; Returns: boolean }
@@ -5407,10 +5713,14 @@ export type Database = {
         }[]
       }
       parents_bucket_limit: { Args: { p_bucket: string }; Returns: number }
-      purge_ai_embedding_queue: { Args: never; Returns: number }
+      purge_ai_embedding_queue: {
+        Args: { p_max_attempts?: number }
+        Returns: number
+      }
       purge_analytics_events: { Args: never; Returns: Json }
       purge_expired_ai_semantic_cache: { Args: never; Returns: number }
       purge_expired_usage_events: { Args: never; Returns: Json }
+      purge_graph_sync_queue: { Args: never; Returns: number }
       purge_old_enterprise_audit_logs: { Args: never; Returns: number }
       purge_ops_events: { Args: never; Returns: Json }
       redeem_enterprise_invite: {
@@ -5420,6 +5730,31 @@ export type Database = {
       redeem_org_invite: { Args: { p_code: string }; Returns: Json }
       redeem_org_invite_by_token: { Args: { p_token: string }; Returns: Json }
       redeem_parent_invite: { Args: { p_code: string }; Returns: Json }
+      release_linkedin_manual_sync: {
+        Args: { p_attempt_id: string }
+        Returns: Json
+      }
+      reorder_media_albums: {
+        Args: { p_album_ids: string[]; p_org_id: string }
+        Returns: undefined
+      }
+      reorder_media_gallery: {
+        Args: { p_media_ids: string[]; p_org_id: string }
+        Returns: undefined
+      }
+      replace_ai_chunks: {
+        Args: {
+          p_chunks: Json
+          p_org_id: string
+          p_source_id: string
+          p_source_table: string
+        }
+        Returns: undefined
+      }
+      reserve_linkedin_manual_sync: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       resolve_alumni_quota: {
         Args: { p_organization_id: string }
         Returns: {
@@ -5449,6 +5784,14 @@ export type Database = {
           source_table: string
         }[]
       }
+      shift_media_album_sort_orders: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      shift_media_gallery_sort_orders: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       sync_enterprise_nav_to_org: {
         Args: { p_enterprise_id: string; p_organization_id: string }
         Returns: boolean
@@ -5457,12 +5800,17 @@ export type Database = {
         Args: {
           p_current_city?: string
           p_current_company?: string
+          p_education_history?: Json
           p_enrichment_json?: Json
+          p_headline?: string
           p_job_title?: string
           p_major?: string
+          p_overwrite?: boolean
           p_position_title?: string
           p_school?: string
+          p_summary?: string
           p_user_id: string
+          p_work_history?: Json
         }
         Returns: Json
       }
@@ -5710,84 +6058,3 @@ export const Constants = {
     },
   },
 } as const
-
-// Compatibility aliases (app-wide imports depend on these exports)
-export type AcademicSchedule = Tables<"academic_schedules">;
-export type Alumni = Tables<"alumni">;
-export type Announcement = Tables<"announcements">;
-export type ChatGroup = Tables<"chat_groups">;
-export type ChatGroupMember = Tables<"chat_group_members">;
-export type ChatMessage = Tables<"chat_messages">;
-export type ChatPollVote = Tables<"chat_poll_votes">;
-export type ChatFormResponse = Tables<"chat_form_responses">;
-export type Event = Tables<"events">;
-export type Form = Tables<"forms">;
-export type FormDocument = Tables<"form_documents">;
-export type FormDocumentSubmission = Tables<"form_document_submissions">;
-export type FormSubmission = Tables<"form_submissions">;
-export type Member = Tables<"members">;
-export type NotificationPreference = Tables<"notification_preferences">;
-export type Organization = Tables<"organizations">;
-export type OrganizationDonation = Tables<"organization_donations">;
-export type OrganizationDonationStat = Tables<"organization_donation_stats">;
-export type ScheduleFile = Tables<"schedule_files">;
-export type User = Tables<"users">;
-export type Workout = Tables<"workouts">;
-export type WorkoutLog = Tables<"workout_logs">;
-
-// Enum type exports
-export type EventType = Enums<"event_type">;
-export type ChatMessageStatus = Enums<"chat_message_status">;
-export type MemberStatus = Enums<"member_status">;
-export type MembershipStatus = Enums<"membership_status">;
-export type UserRole = Enums<"user_role">;
-
-// Additional type aliases for backward compatibility and convenience
-export type RsvpStatus = "attending" | "not_attending" | "maybe";
-export type AnnouncementAudience = "all" | "members" | "active_members" | "alumni" | "individuals";
-export type NotificationAudience = "members" | "alumni" | "both";
-export type NotificationChannel = "email" | "sms" | "both";
-export type WorkoutStatus = "not_started" | "in_progress" | "completed";
-export type AlumniBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
-export type ParentsBucket = "none" | "0-250" | "251-500" | "501-1000" | "1001-2500" | "2500-5000" | "5000+";
-export type SubscriptionInterval = "month" | "year";
-export type EmbedType = "link" | "iframe";
-export type OccurrenceType = "single" | "daily" | "weekly" | "monthly";
-
-export type FormFieldType = "text" | "textarea" | "email" | "phone" | "date" | "select" | "checkbox" | "radio";
-
-export interface FormFieldOption {
-  label: string;
-  value: string;
-}
-
-export interface FormField {
-  name: string;
-  label: string;
-  type: FormFieldType;
-  required?: boolean;
-  placeholder?: string;
-  options?: (string | FormFieldOption)[];
-}
-
-export interface PhilanthropyEmbed {
-  id: string;
-  organization_id: string;
-  title: string;
-  url: string;
-  embed_type: "link" | "iframe";
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface DonationEmbed {
-  id: string;
-  organization_id: string;
-  title: string;
-  url: string;
-  embed_type: "link" | "iframe";
-  display_order: number;
-  created_at: string;
-  updated_at: string;
-}

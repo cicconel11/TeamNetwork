@@ -24,11 +24,10 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
 
   const orgId = orgCtx.organization.id;
 
+  // Use 180-day range with 1-day UTC buffer to match client's UnifiedEventFeed
   const now = new Date();
-  const rangeStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const rangeEnd = new Date(rangeStart);
-  rangeEnd.setDate(rangeEnd.getDate() + 30);
-  rangeEnd.setHours(23, 59, 59, 999);
+  const rangeStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  const rangeEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 181, 23, 59, 59, 999));
 
   const [mySchedulesResult, allSchedulesResult, initialEventsResult] = await Promise.all([
     supabase
