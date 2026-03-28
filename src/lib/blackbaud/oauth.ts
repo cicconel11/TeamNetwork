@@ -70,7 +70,7 @@ export function decryptToken(encryptedToken: string): string {
 
 // ── OAuth flow ───────────────────────────────────────────────
 
-const BLACKBAUD_AUTH_URL = "https://oauth2.sky.blackbaud.com/authorization";
+const BLACKBAUD_AUTH_URL = "https://app.blackbaud.com/oauth/authorize";
 const BLACKBAUD_TOKEN_URL = "https://oauth2.sky.blackbaud.com/token";
 
 function getBasicAuthHeader(): string {
