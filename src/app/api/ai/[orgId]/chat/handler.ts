@@ -769,7 +769,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       async () =>
         ctx.supabase
           .from("ai_messages")
-          .select("id, status, thread_id")
+          .select("id, status, thread_id, created_at")
           .eq("idempotency_key", idempotencyKey)
           .maybeSingle()
     );
@@ -787,13 +787,15 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         };
         skipRemainingStages(stageTimings, "cache_lookup");
 
+        // Find the assistant reply that immediately follows the user message with this idempotency key
         const { data: assistantReplay } = await ctx.supabase
           .from("ai_messages")
           .select("content")
           .eq("thread_id", existingMsg.thread_id)
           .eq("role", "assistant")
           .eq("status", "complete")
-          .order("created_at", { ascending: false })
+          .gt("created_at", existingMsg.created_at)
+          .order("created_at", { ascending: true })
           .limit(1)
           .single();
 
@@ -1470,11 +1472,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             skipStage(stageTimings, "pass2");
             pass2BufferedContent = deterministicToolContent;
           } else {
-            const pass2SystemPrompt = successfulToolResults.some(
+            const hasToolErrors = toolResults.length > successfulToolResults.length;
+            const connectionPass2 = successfulToolResults.some(
               (result) => result.name === "suggest_connections"
-            )
-              ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}`
-              : systemPrompt;
+            );
+            const toolErrorInstruction = hasToolErrors
+              ? "\n\nSome tool calls failed. Only cite data from successful tool results. Acknowledge any failures honestly — do not fabricate data."
+              : "";
+            const pass2SystemPrompt = connectionPass2
+              ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}${toolErrorInstruction}`
+              : `${systemPrompt}${toolErrorInstruction}`;
 
             const pass2Outcome = await runModelStage(
               "pass2_model",

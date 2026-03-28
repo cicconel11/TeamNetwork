@@ -57,111 +57,201 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     }
 
     if (action.status !== "pending") {
+      if (action.status === "executed") {
+        return NextResponse.json({
+          ok: true,
+          actionId: action.id,
+          resultEntityType: action.result_entity_type,
+          resultEntityId: action.result_entity_id,
+          replayed: true,
+        });
+      }
+      if (action.status === "cancelled") {
+        return NextResponse.json({ error: "Action was cancelled", reason: "cancelled" }, { status: 409 });
+      }
+      if (action.status === "expired") {
+        return NextResponse.json({ error: "Pending action has expired" }, { status: 410 });
+      }
       return NextResponse.json({ error: "Pending action is no longer available" }, { status: 409 });
     }
 
     if (isPendingActionExpired(action)) {
-      await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, { status: "expired" });
+      await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+        status: "expired",
+        expectedStatus: "pending",
+      });
       return NextResponse.json({ error: "Pending action has expired" }, { status: 410 });
     }
 
-    await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, { status: "confirmed" });
+    // CAS: atomically claim pending → confirmed
+    const casResult = await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+      status: "confirmed",
+      expectedStatus: "pending",
+    });
 
-    switch (action.action_type) {
-      case "create_job_posting": {
-        const payload = action.payload as CreateJobPostingPendingPayload;
-        const result = await createJobPostingFn({
-          supabase: ctx.serviceSupabase,
-          serviceSupabase: ctx.serviceSupabase,
-          orgId: ctx.orgId,
-          userId: ctx.userId,
-          input: payload,
-        });
-
-        if (!result.ok) {
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, { status: "pending" });
-          return NextResponse.json(
-            result.details ? { error: result.error, details: result.details } : { error: result.error },
-            { status: result.status }
-          );
-        }
-
-        await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-          status: "executed",
-          executedAt: new Date().toISOString(),
-          resultEntityType: "job_posting",
-          resultEntityId: result.job.id,
-        });
-
-        const orgSlug =
-          typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-            ? payload.orgSlug
-            : null;
-        const jobUrl = orgSlug ? `/${orgSlug}/jobs/${result.job.id}` : null;
-        const content = jobUrl
-          ? `Created job posting: [${result.job.title}](${jobUrl})`
-          : `Created job posting: ${result.job.title}`;
-
-        await ctx.serviceSupabase.from("ai_messages").insert({
-          thread_id: action.thread_id,
-          role: "assistant",
-          content,
-          status: "complete",
-        });
-
-        return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
+    if (!casResult.updated) {
+      // Re-read to provide appropriate response
+      const current = await getPendingActionFn(ctx.serviceSupabase, actionId);
+      if (!current) {
+        return NextResponse.json({ error: "Pending action not found" }, { status: 404 });
       }
-      case "create_discussion_thread": {
-        const payload = action.payload as CreateDiscussionThreadPendingPayload;
-        const result = await createDiscussionThreadFn({
-          supabase: ctx.serviceSupabase,
-          serviceSupabase: ctx.serviceSupabase,
-          orgId: ctx.orgId,
-          userId: ctx.userId,
-          input: payload,
-          orgSlug:
+      if (current.status === "executed") {
+        return NextResponse.json({
+          ok: true,
+          actionId: current.id,
+          resultEntityType: current.result_entity_type,
+          resultEntityId: current.result_entity_id,
+          replayed: true,
+        });
+      }
+      if (current.status === "cancelled") {
+        return NextResponse.json({ error: "Action was cancelled", reason: "cancelled" }, { status: 409 });
+      }
+      if (current.status === "expired") {
+        return NextResponse.json({ error: "Pending action has expired" }, { status: 410 });
+      }
+      return NextResponse.json({ error: "Pending action is no longer available" }, { status: 409 });
+    }
+
+    try {
+      switch (action.action_type) {
+        case "create_job_posting": {
+          const payload = action.payload as CreateJobPostingPendingPayload;
+          const result = await createJobPostingFn({
+            supabase: ctx.serviceSupabase,
+            serviceSupabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            input: payload,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "job_posting",
+            resultEntityId: result.job.id,
+          });
+
+          const orgSlug =
             typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
               ? payload.orgSlug
-              : null,
-        });
+              : null;
+          const jobUrl = orgSlug ? `/${orgSlug}/jobs/${result.job.id}` : null;
+          const content = jobUrl
+            ? `Created job posting: [${result.job.title}](${jobUrl})`
+            : `Created job posting: ${result.job.title}`;
 
-        if (!result.ok) {
-          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, { status: "pending" });
-          return NextResponse.json(
-            result.details ? { error: result.error, details: result.details } : { error: result.error },
-            { status: result.status }
-          );
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            console.error("[ai-confirm] failed to insert confirmation message:", {
+              actionId: action.id,
+              threadId: action.thread_id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, job: result.job, actionId: action.id });
         }
+        case "create_discussion_thread": {
+          const payload = action.payload as CreateDiscussionThreadPendingPayload;
+          const result = await createDiscussionThreadFn({
+            supabase: ctx.serviceSupabase,
+            serviceSupabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            input: payload,
+            orgSlug:
+              typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+                ? payload.orgSlug
+                : null,
+          });
 
-        await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-          status: "executed",
-          executedAt: new Date().toISOString(),
-          resultEntityType: "discussion_thread",
-          resultEntityId: result.thread.id,
-        });
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
 
-        const orgSlug =
-          typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
-            ? payload.orgSlug
-            : null;
-        const threadUrl = orgSlug
-          ? `/${orgSlug}/messages/threads/${result.thread.id}`
-          : result.threadUrl;
-        const content = threadUrl
-          ? `Created discussion thread: [${result.thread.title}](${threadUrl})`
-          : `Created discussion thread: ${result.thread.title}`;
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "discussion_thread",
+            resultEntityId: result.thread.id,
+          });
 
-        await ctx.serviceSupabase.from("ai_messages").insert({
-          thread_id: action.thread_id,
-          role: "assistant",
-          content,
-          status: "complete",
-        });
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const threadUrl = orgSlug
+            ? `/${orgSlug}/messages/threads/${result.thread.id}`
+            : result.threadUrl;
+          const content = threadUrl
+            ? `Created discussion thread: [${result.thread.title}](${threadUrl})`
+            : `Created discussion thread: ${result.thread.title}`;
 
-        return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            console.error("[ai-confirm] failed to insert confirmation message:", {
+              actionId: action.id,
+              threadId: action.thread_id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
+        }
+        default:
+          return NextResponse.json({ error: "Unsupported pending action" }, { status: 400 });
       }
-      default:
-        return NextResponse.json({ error: "Unsupported pending action" }, { status: 400 });
+    } catch (err) {
+      // Attempt rollback to pending so the user can retry
+      try {
+        await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+          status: "pending",
+          expectedStatus: "confirmed",
+        });
+      } catch (rollbackErr) {
+        console.error("[ai-confirm] rollback failed — action stranded in confirmed state:", {
+          actionId: action.id,
+          orgId: ctx.orgId,
+          userId: ctx.userId,
+          actionType: action.action_type,
+          originalError: err,
+          rollbackError: rollbackErr,
+        });
+      }
+      throw err;
     }
   };
 }

@@ -87,15 +87,18 @@ export function PendingActionCard({
             type="button"
             onClick={() => void onConfirm()}
             disabled={busy}
-            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
+            {busy ? (
+              <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+            ) : null}
             Confirm
           </button>
           <button
             type="button"
             onClick={() => void onCancel()}
             disabled={busy}
-            className="rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-sm font-medium text-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>

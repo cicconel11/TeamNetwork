@@ -48,13 +48,29 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
       return NextResponse.json({ error: "Pending action not found" }, { status: 404 });
     }
 
-    if (action.status !== "pending" && action.status !== "confirmed") {
+    if (action.status === "confirmed") {
+      return NextResponse.json(
+        { error: "Action is currently being executed", reason: "in_progress" },
+        { status: 409 }
+      );
+    }
+
+    if (action.status !== "pending") {
       return NextResponse.json({ error: "Pending action is no longer available" }, { status: 409 });
     }
 
-    await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-      status: isPendingActionExpired(action) ? "expired" : "cancelled",
+    const targetStatus = isPendingActionExpired(action) ? "expired" : "cancelled";
+    const { updated } = await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+      status: targetStatus,
+      expectedStatus: "pending",
     });
+
+    if (!updated) {
+      return NextResponse.json(
+        { error: "Action is no longer available" },
+        { status: 409 }
+      );
+    }
 
     await ctx.serviceSupabase.from("ai_messages").insert({
       thread_id: action.thread_id,

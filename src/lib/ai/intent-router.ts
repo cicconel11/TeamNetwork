@@ -187,7 +187,7 @@ export function resolveSurfaceRouting(
     return {
       intent: SURFACE_TO_INTENT.general,
       intentType,
-      effectiveSurface: hasGeneralContent ? "general" : "general",
+      effectiveSurface: hasGeneralContent ? "general" : requestedSurface,
       inferredSurface: hasGeneralContent ? "general" : null,
       confidence: hasGeneralContent ? "high" : "low",
       rerouted: hasGeneralContent && requestedSurface !== "general",

@@ -47,6 +47,11 @@ export interface PendingActionSummary {
   description: string;
 }
 
+interface PendingActionUpdateChain {
+  eq(column: string, value: string): PendingActionUpdateChain & Promise<{ error: unknown }>;
+  select(columns: string): Promise<{ data: unknown[] | null; error: unknown }>;
+}
+
 interface PendingActionQueryBuilder {
   insert(payload: Record<string, unknown>): {
     select(columns: string): {
@@ -58,9 +63,7 @@ interface PendingActionQueryBuilder {
       maybeSingle(): Promise<{ data: unknown; error: unknown }>;
     };
   };
-  update(payload: Record<string, unknown>): {
-    eq(column: string, value: string): Promise<{ error: unknown }>;
-  };
+  update(payload: Record<string, unknown>): PendingActionUpdateChain;
 }
 
 interface PendingActionSupabase {
@@ -121,11 +124,12 @@ export async function updatePendingActionStatus(
   actionId: string,
   input: {
     status: PendingActionStatus;
+    expectedStatus?: PendingActionStatus;
     resultEntityType?: string | null;
     resultEntityId?: string | null;
     executedAt?: string | null;
   }
-): Promise<void> {
+): Promise<{ updated: boolean }> {
   const payload: Record<string, unknown> = {
     status: input.status,
   };
@@ -133,6 +137,21 @@ export async function updatePendingActionStatus(
   if (input.resultEntityType !== undefined) payload.result_entity_type = input.resultEntityType;
   if (input.resultEntityId !== undefined) payload.result_entity_id = input.resultEntityId;
   if (input.executedAt !== undefined) payload.executed_at = input.executedAt;
+
+  if (input.expectedStatus) {
+    const { data, error } = await supabase
+      .from("ai_pending_actions")
+      .update(payload)
+      .eq("id", actionId)
+      .eq("status", input.expectedStatus)
+      .select("id");
+
+    if (error) {
+      throw new Error("Failed to update pending action");
+    }
+
+    return { updated: Array.isArray(data) && data.length > 0 };
+  }
 
   const { error } = await supabase
     .from("ai_pending_actions")
@@ -142,6 +161,8 @@ export async function updatePendingActionStatus(
   if (error) {
     throw new Error("Failed to update pending action");
   }
+
+  return { updated: true };
 }
 
 export function isPendingActionExpired(record: PendingActionRecord): boolean {
