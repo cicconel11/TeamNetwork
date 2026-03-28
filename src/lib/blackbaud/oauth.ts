@@ -68,6 +68,11 @@ export function decryptToken(encryptedToken: string): string {
 const BLACKBAUD_AUTH_URL = "https://oauth2.sky.blackbaud.com/authorization";
 const BLACKBAUD_TOKEN_URL = "https://oauth2.sky.blackbaud.com/token";
 
+function getBasicAuthHeader(): string {
+  const credentials = `${getBlackbaudClientId()}:${getBlackbaudClientSecret()}`;
+  return `Basic ${Buffer.from(credentials).toString("base64")}`;
+}
+
 /**
  * Generates the Blackbaud OAuth authorization URL.
  * @param state - The UUID of the pending oauth_state row (server-stored state)
@@ -88,26 +93,26 @@ export function getAuthorizationUrl(state: string): string {
  */
 export async function exchangeCodeForTokens(code: string): Promise<BlackbaudTokenResponse> {
   const redirectUri = getRedirectUri();
-  const clientId = getBlackbaudClientId();
   // #region agent log
-  console.error("[blackbaud-debug] exchangeCodeForTokens called", { redirectUri, clientId: clientId.substring(0, 8) + "...", codeLen: code.length, tokenUrl: BLACKBAUD_TOKEN_URL });
+  console.error("[blackbaud-debug] exchangeCodeForTokens called", { redirectUri, codeLen: code.length, tokenUrl: BLACKBAUD_TOKEN_URL });
   // #endregion
   const response = await fetch(BLACKBAUD_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: getBasicAuthHeader(),
+    },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
-      client_id: clientId,
-      client_secret: getBlackbaudClientSecret(),
     }),
   });
 
   if (!response.ok) {
     const text = await response.text();
     // #region agent log
-    console.error("[blackbaud-debug] token exchange FAILED", { status: response.status, statusText: response.statusText, body: text, redirectUri, clientId: clientId.substring(0, 8) + "..." });
+    console.error("[blackbaud-debug] token exchange FAILED", { status: response.status, statusText: response.statusText, body: text, redirectUri });
     // #endregion
     throw new Error(`Blackbaud token exchange failed (${response.status}): ${text}`);
   }
@@ -124,12 +129,13 @@ export async function exchangeCodeForTokens(code: string): Promise<BlackbaudToke
 export async function refreshAccessToken(refreshToken: string): Promise<BlackbaudTokenResponse> {
   const response = await fetch(BLACKBAUD_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: getBasicAuthHeader(),
+    },
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      client_id: getBlackbaudClientId(),
-      client_secret: getBlackbaudClientSecret(),
     }),
   });
 
