@@ -18,32 +18,32 @@ export function isBlackbaudConfigured(): boolean {
 }
 
 function getBlackbaudClientId(): string {
-  const val = process.env.BLACKBAUD_CLIENT_ID;
-  if (!val || val.trim() === "") {
+  const val = process.env.BLACKBAUD_CLIENT_ID?.trim();
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_CLIENT_ID");
   }
   return val;
 }
 
 function getBlackbaudClientSecret(): string {
-  const val = process.env.BLACKBAUD_CLIENT_SECRET;
-  if (!val || val.trim() === "") {
+  const val = process.env.BLACKBAUD_CLIENT_SECRET?.trim();
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_CLIENT_SECRET");
   }
   return val;
 }
 
 function getBlackbaudEncryptionKey(): string {
-  const val = process.env.BLACKBAUD_TOKEN_ENCRYPTION_KEY;
-  if (!val || val.trim() === "") {
+  const val = process.env.BLACKBAUD_TOKEN_ENCRYPTION_KEY?.trim();
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_TOKEN_ENCRYPTION_KEY");
   }
   return val;
 }
 
 export function getBlackbaudSubscriptionKey(): string {
-  const val = process.env.BLACKBAUD_SUBSCRIPTION_KEY;
-  if (!val || val.trim() === "") {
+  const val = process.env.BLACKBAUD_SUBSCRIPTION_KEY?.trim();
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_SUBSCRIPTION_KEY");
   }
   return val;
@@ -69,7 +69,23 @@ const BLACKBAUD_AUTH_URL = "https://oauth2.sky.blackbaud.com/authorization";
 const BLACKBAUD_TOKEN_URL = "https://oauth2.sky.blackbaud.com/token";
 
 function getBasicAuthHeader(): string {
-  const credentials = `${getBlackbaudClientId()}:${getBlackbaudClientSecret()}`;
+  const clientId = getBlackbaudClientId();
+  const clientSecret = getBlackbaudClientSecret();
+  const rawId = process.env.BLACKBAUD_CLIENT_ID ?? "";
+  const rawSecret = process.env.BLACKBAUD_CLIENT_SECRET ?? "";
+  // #region agent log
+  console.error("[blackbaud-debug] credentials check", {
+    clientIdLen: clientId.length,
+    clientSecretLen: clientSecret.length,
+    rawIdLen: rawId.length,
+    rawSecretLen: rawSecret.length,
+    idWasTrimmed: rawId.length !== clientId.length,
+    secretWasTrimmed: rawSecret.length !== clientSecret.length,
+    clientIdPrefix: clientId.substring(0, 8),
+    secretPrefix: clientSecret.substring(0, 4) + "...",
+  });
+  // #endregion
+  const credentials = `${clientId}:${clientSecret}`;
   return `Basic ${Buffer.from(credentials).toString("base64")}`;
 }
 
