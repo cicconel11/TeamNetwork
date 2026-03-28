@@ -264,4 +264,12 @@ describe("resolveSurfaceRouting — content-type keyword routing", () => {
     assert.equal(result.effectiveSurface, "general");
     assert.equal(result.confidence, "high");
   });
+
+  it("preserves requestedSurface when no keywords match (dead ternary fix)", () => {
+    // A message with no surface-specific or general-content keywords
+    // on a non-general surface should keep the requested surface
+    const result = resolveSurfaceRouting("what is going on?", "events");
+    assert.equal(result.effectiveSurface, "events");
+    assert.equal(result.rerouted, false);
+  });
 });
