@@ -45,7 +45,7 @@ export async function runSync(deps: SyncDeps): Promise<SyncResult> {
   // The unique partial index on (integration_id) WHERE status = 'running'
   // atomically prevents concurrent syncs.
   const UNIQUE_VIOLATION = "23505";
-  const STALE_THRESHOLD_MS = 30 * 60 * 1000;
+  const STALE_THRESHOLD_MS = 5 * 60 * 1000;
 
   let syncLogId: string | null = null;
 
