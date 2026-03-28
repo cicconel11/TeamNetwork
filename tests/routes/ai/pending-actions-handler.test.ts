@@ -77,6 +77,7 @@ test("confirm executes create_job_posting and appends assistant message", async 
       }) as any,
     updatePendingActionStatus: async (_supabase, _actionId, payload) => {
       updatedStatuses.push(payload);
+      return { updated: true };
     },
     createJobPosting: async () =>
       ({
@@ -156,6 +157,7 @@ test("confirm executes create_discussion_thread and appends assistant message", 
       }) as any,
     updatePendingActionStatus: async (_supabase, _actionId, payload) => {
       updatedStatuses.push(payload);
+      return { updated: true };
     },
     createDiscussionThread: async () =>
       ({
@@ -231,6 +233,7 @@ test("cancel marks the pending action cancelled", async () => {
       }) as any,
     updatePendingActionStatus: async (_supabase, _actionId, payload) => {
       updatedStatuses.push(payload);
+      return { updated: true };
     },
   });
 
@@ -242,4 +245,238 @@ test("cancel marks the pending action cancelled", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.ok, true);
   assert.equal(updatedStatuses[0].status, "cancelled");
+});
+
+// --- Regression tests ---
+
+function buildPendingAction(overrides: Record<string, unknown> = {}) {
+  return {
+    id: ACTION_ID,
+    organization_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    thread_id: THREAD_ID,
+    action_type: "create_job_posting",
+    payload: {
+      title: "Senior Product Designer",
+      company: "Acme Corp",
+      location: "San Francisco, CA",
+      industry: "SaaS",
+      experience_level: "senior",
+      description: "Lead product design across our platform.",
+      application_url: "https://example.com/jobs/senior-product-designer",
+      orgSlug: "upenn-sprint-football",
+    },
+    status: "pending",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+    executed_at: null,
+    result_entity_type: null,
+    result_entity_id: null,
+    ...overrides,
+  };
+}
+
+function buildBaseDeps(overrides: Record<string, unknown> = {}) {
+  return {
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert() {
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    ...overrides,
+  };
+}
+
+test("CAS race: second concurrent confirm gets idempotent replay", async () => {
+  let casCallCount = 0;
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () => {
+      // On re-read after CAS failure, return executed state
+      if (casCallCount > 0) {
+        return buildPendingAction({
+          status: "executed",
+          result_entity_type: "job_posting",
+          result_entity_id: "job-123",
+        }) as any;
+      }
+      return buildPendingAction() as any;
+    },
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      casCallCount++;
+      if (payload.status === "confirmed" && payload.expectedStatus === "pending") {
+        // Simulate CAS failure — another request claimed the row first
+        return { updated: false };
+      }
+      return { updated: true };
+    },
+    createJobPosting: async () => {
+      throw new Error("should not be called on CAS failure");
+    },
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.replayed, true);
+  assert.equal(body.resultEntityType, "job_posting");
+});
+
+test("exception during write rolls back to pending", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () => buildPendingAction() as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createJobPosting: async () => {
+      throw new Error("Supabase timeout");
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Supabase timeout" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("rollback failure logs structured error and re-throws", async () => {
+  const logged: any[] = [];
+  const originalError = console.error;
+  console.error = (...args: any[]) => logged.push(args);
+
+  try {
+    const handler = createAiPendingActionConfirmHandler({
+      ...buildBaseDeps(),
+      getPendingAction: async () => buildPendingAction() as any,
+      updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+        if (payload.status === "confirmed") return { updated: true };
+        // Rollback fails
+        throw new Error("rollback connection lost");
+      },
+      createJobPosting: async () => {
+        throw new Error("Supabase timeout");
+      },
+    });
+
+    await assert.rejects(
+      handler(buildRequest() as any, {
+        params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+      }),
+      { message: "Supabase timeout" }
+    );
+
+    const rollbackLog = logged.find(
+      (entry) => typeof entry[0] === "string" && entry[0].includes("rollback failed")
+    );
+    assert.ok(rollbackLog, "should log rollback failure");
+    assert.equal(rollbackLog[1].actionId, ACTION_ID);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("failed ai_messages insert is logged but returns 200", async () => {
+  const logged: any[] = [];
+  const originalError = console.error;
+  console.error = (...args: any[]) => logged.push(args);
+
+  try {
+    const handler = createAiPendingActionConfirmHandler({
+      ...buildBaseDeps({
+        getAiOrgContext: async () =>
+          ({
+            ok: true,
+            orgId: ORG_ID,
+            userId: ADMIN_USER.id,
+            role: "admin",
+            supabase: null,
+            serviceSupabase: {
+              from(table: string) {
+                if (table === "ai_messages") {
+                  return {
+                    insert() {
+                      return Promise.resolve({ error: { message: "insert failed" } });
+                    },
+                  };
+                }
+                throw new Error(`unexpected table ${table}`);
+              },
+            },
+          }) as any,
+      }),
+      getPendingAction: async () => buildPendingAction() as any,
+      updatePendingActionStatus: async () => ({ updated: true }),
+      createJobPosting: async () =>
+        ({
+          ok: true,
+          status: 201,
+          job: { id: "job-456", title: "Designer" },
+        }) as any,
+    });
+
+    const response = await handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+
+    const msgLog = logged.find(
+      (entry) => typeof entry[0] === "string" && entry[0].includes("failed to insert confirmation")
+    );
+    assert.ok(msgLog, "should log message insert failure");
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("cancel returns 409 when action is in confirmed (in-progress) state", async () => {
+  const handler = createAiPendingActionCancelHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({ status: "confirmed" }) as any,
+    updatePendingActionStatus: async () => ({ updated: true }),
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.equal(body.reason, "in_progress");
 });
