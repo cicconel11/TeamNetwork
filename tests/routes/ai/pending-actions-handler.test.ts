@@ -480,3 +480,68 @@ test("cancel returns 409 when action is in confirmed (in-progress) state", async
   assert.equal(response.status, 409);
   assert.equal(body.reason, "in_progress");
 });
+
+test("unsupported action type rolls back confirmed claim", async () => {
+  const updatedStatuses: any[] = [];
+  const handler = createAiPendingActionConfirmHandler({
+    ...buildBaseDeps(),
+    getPendingAction: async () =>
+      buildPendingAction({ action_type: "unsupported_action" }) as any,
+    updatePendingActionStatus: async (_supabase: any, _actionId: any, payload: any) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+  });
+
+  await assert.rejects(
+    handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    }),
+    { message: "Unsupported pending action type: unsupported_action" }
+  );
+
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[0].expectedStatus, "pending");
+  assert.equal(updatedStatuses[1].status, "pending");
+  assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+});
+
+test("cancel returns 410 for expired pending action without cancel message", async () => {
+  const insertedMessages: any[] = [];
+  const handler = createAiPendingActionCancelHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from() {
+            return {
+              insert(payload: Record<string, unknown>) {
+                insertedMessages.push(payload);
+                return Promise.resolve({ error: null });
+              },
+            };
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      buildPendingAction({ expires_at: "2000-01-01T00:00:00.000Z" }) as any,
+    updatePendingActionStatus: async () => ({ updated: true }),
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 410);
+  assert.equal(body.error, "Pending action has expired");
+  assert.equal(insertedMessages.length, 0);
+});

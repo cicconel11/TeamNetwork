@@ -59,9 +59,9 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
       return NextResponse.json({ error: "Pending action is no longer available" }, { status: 409 });
     }
 
-    const targetStatus = isPendingActionExpired(action) ? "expired" : "cancelled";
+    const expired = isPendingActionExpired(action);
     const { updated } = await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
-      status: targetStatus,
+      status: expired ? "expired" : "cancelled",
       expectedStatus: "pending",
     });
 
@@ -70,6 +70,10 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
         { error: "Action is no longer available" },
         { status: 409 }
       );
+    }
+
+    if (expired) {
+      return NextResponse.json({ error: "Pending action has expired" }, { status: 410 });
     }
 
     await ctx.serviceSupabase.from("ai_messages").insert({
