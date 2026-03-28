@@ -737,7 +737,7 @@ const COMPONENTS = [
       'src/app/api/ai/[orgId]/chat/handler.ts'
     ],
     built: [
-      'Deterministic verification for current read-tool summaries (members, events, org stats)',
+      'Deterministic verification for read-tool summaries (members, events, announcements, discussions, job postings, org stats)',
       'Tool-backed pass-2 content buffered server-side before release',
       'Ungrounded tool-backed responses replaced with a safe fallback instead of being streamed to the user',
       'Grounding failures emit ops telemetry (tool_grounding_failed)'
@@ -774,10 +774,11 @@ const COMPONENTS = [
       'RLS policies on ai_threads and ai_messages',
       'Abandoned stream detection (5-min timeout, prevents stuck threads)',
       'Distinct suspicious vs blocked safety outcomes with identical fail-closed execution behavior in v1',
-      'Risky prior user messages sanitized before prompt replay so blocked turns do not poison later turns'
+      'Risky prior user messages sanitized before prompt replay so blocked turns do not poison later turns',
+      'Confirmation gate for write tools: prepare_* tools create pending actions requiring explicit user confirmation before execution'
     ],
     missing: [
-      'No per-action permission checks for write tools (read-only tools execute freely)'
+      'Write tool permission checks limited to admin role gate — no granular per-action RBAC beyond admin/non-admin'
     ]
   },
   {
@@ -833,19 +834,22 @@ const COMPONENTS = [
     id: 'actions',
     label: 'Action Executor',
     shortLabel: 'Actions',
-    pct: 80,
+    pct: 90,
     status: 'built',
     layer: 'execution',
     x: 690, y: 170,
     files: [
       'src/lib/ai/tools/definitions.ts',
       'src/lib/ai/tools/executor.ts',
+      'src/lib/ai/pending-actions.ts',
+      'src/lib/ai/navigation-targets.ts',
       'src/lib/ai/response-composer.ts',
-      'src/app/api/ai/[orgId]/chat/handler.ts'
+      'src/app/api/ai/[orgId]/chat/handler.ts',
+      'supabase/migrations/20260727000000_ai_pending_actions.sql'
     ],
     built: [
-      'AI_TOOLS defines 4 OpenAI function-calling tools: list_members, list_events, get_org_stats, suggest_connections',
-      'Full Zod argument validation per tool (limit, upcoming) with fail-closed behavior',
+      'AI_TOOLS defines 10 OpenAI function-calling tools: list_members, list_events, list_announcements, list_discussions, list_job_postings, prepare_job_posting, prepare_discussion_thread, get_org_stats, suggest_connections, find_navigation_targets',
+      'Full Zod argument validation per tool (limit, upcoming, pinned_only, etc.) with fail-closed behavior',
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
       'Two-pass tool loop: Pass 1 conditionally streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
@@ -854,13 +858,20 @@ const COMPONENTS = [
       'Cache bypass when toolCallMade = true (tool responses are dynamic)',
       'Usage accumulated across both passes via usageRef',
       'Tool calls recorded in audit log (toolCalls array)',
-      'Tool-backed pass-2 text is withheld until grounding verification succeeds'
+      'Tool-backed pass-2 text is withheld until grounding verification succeeds',
+      'Confirmation-gated write tools: prepare_job_posting and prepare_discussion_thread create pending actions (ai_pending_actions table) with 15-min expiry',
+      'Pending action lifecycle: pending → confirmed → executed | cancelled | expired (with rollback-safe CAS transitions)',
+      'Confirm handler rolls back to pending on unknown action_type (no stuck confirmed rows)',
+      'Cancel handler returns 410 for already-expired actions instead of false 200',
+      'prepare_job_posting validates draft, identifies missing fields, optionally enriches from application URL via fetchJobSourceDraft',
+      'find_navigation_targets resolves in-app pages for open/manage/create requests against org nav config',
+      'list_announcements supports pinned_only filter; list_discussions and list_job_postings are org-scoped read tools',
+      'Tool execution timeout guard (withStageTimeout) prevents hung tool calls'
     ],
     missing: [
-      'No write actions (create events, send announcements, manage members)',
-      'No action confirmation workflow for write actions',
       'No tool chaining (intentionally limited to single pass)',
-      'No streaming tool execution (tools run synchronously between passes)'
+      'No streaming tool execution (tools run synchronously between passes)',
+      'Write tools limited to job postings and discussion threads (no create events, send announcements, manage members yet)'
     ]
   },
   {
