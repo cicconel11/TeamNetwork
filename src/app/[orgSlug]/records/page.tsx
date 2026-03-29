@@ -5,6 +5,7 @@ import { SoftDeleteButton } from "@/components/ui/SoftDeleteButton";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface RecordsPageProps {
@@ -58,8 +59,10 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
   );
 
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/records", navConfig);
-  const actionLabel = resolveActionLabel("/records", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/records", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/records", navConfig, "Add", t, locale);
 
   return (
     <div className="animate-fade-in">
@@ -190,7 +193,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
             action={
               isAdmin && (
                 <Link href={`/${orgSlug}/records/new`}>
-                  <Button>{resolveActionLabel("/records", navConfig, "Add First")}</Button>
+                  <Button>{resolveActionLabel("/records", navConfig, "Add First", t, locale)}</Button>
                 </Link>
               )
             }

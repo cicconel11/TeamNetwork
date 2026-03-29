@@ -95,5 +95,47 @@
   "sidebar": {
     "switchOrg": "Switch Organization",
     "poweredBy": "Powered by"
+  },
+  "pages": {
+    "dashboard": {
+      "overview": "Overview",
+      "recent": "Recent",
+      "activeMembers": "Active Members",
+      "alumni": "Alumni",
+      "parents": "Parents",
+      "upcomingEvents": "Upcoming Events",
+      "totalDonations": "Total Donations"
+    },
+    "members": {
+      "description": "{count} {status} {label}",
+      "noResults": "No {label} found",
+      "noActive": "No active {label} yet",
+      "noInactive": "No inactive {label}",
+      "active": "active",
+      "inactive": "inactive"
+    },
+    "events": {
+      "upcoming": "upcoming",
+      "past": "past"
+    },
+    "media": {
+      "description": "Browse and share photos and videos with your organization"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "description": "Send announcements to your organization members",
+      "sendTitle": "Send Notification",
+      "sendDescription": "Create and send a notification to your organization"
+    },
+    "philanthropy": {
+      "description": "Community service and fundraising for your organization."
+    },
+    "actions": {
+      "add": "Add",
+      "edit": "Edit",
+      "new": "New",
+      "filtered": "filtered",
+      "inOurNetwork": "in our network"
+    }
   }
 }

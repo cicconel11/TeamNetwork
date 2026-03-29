@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout";
 import { Card, Button, Badge, EmptyState } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { Form, FormDocument } from "@/types/database";
 import { FormsAdminView } from "@/components/forms/FormsAdminView";
@@ -21,7 +22,9 @@ export default async function FormsPage({ params }: FormsPageProps) {
 
   const orgId = orgCtx.organization.id;
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/forms", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/forms", navConfig, t, locale);
 
   if (orgCtx.isAdmin) {
     // Admin view: fetch ALL forms (including inactive)

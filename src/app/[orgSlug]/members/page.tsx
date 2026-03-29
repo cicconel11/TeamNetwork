@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getLocale, getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
@@ -160,8 +161,10 @@ export default async function MembersPage({ params, searchParams }: MembersPageP
   const roles = [...new Set(allMembers?.map((m) => m.role).filter(Boolean))];
 
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/members", navConfig);
-  const actionLabel = resolveActionLabel("/members", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/members", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/members", navConfig, "Add", t, locale);
 
   return (
     <div className="animate-fade-in">

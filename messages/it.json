@@ -95,5 +95,47 @@
   "sidebar": {
     "switchOrg": "Cambia organizzazione",
     "poweredBy": "Realizzato da"
+  },
+  "pages": {
+    "dashboard": {
+      "overview": "Panoramica",
+      "recent": "Recenti",
+      "activeMembers": "Membri attivi",
+      "alumni": "Ex studenti",
+      "parents": "Genitori",
+      "upcomingEvents": "Prossimi eventi",
+      "totalDonations": "Totale donazioni"
+    },
+    "members": {
+      "description": "{count} {status} {label}",
+      "noResults": "Nessun {label} trovato",
+      "noActive": "Nessun {label} attivo ancora",
+      "noInactive": "Nessun {label} inattivo",
+      "active": "attivi",
+      "inactive": "inattivi"
+    },
+    "events": {
+      "upcoming": "in arrivo",
+      "past": "passati"
+    },
+    "media": {
+      "description": "Sfoglia e condividi foto e video con la tua organizzazione"
+    },
+    "notifications": {
+      "title": "Notifiche",
+      "description": "Invia annunci ai membri della tua organizzazione",
+      "sendTitle": "Invia notifica",
+      "sendDescription": "Crea e invia una notifica alla tua organizzazione"
+    },
+    "philanthropy": {
+      "description": "Servizio comunitario e raccolta fondi per la tua organizzazione."
+    },
+    "actions": {
+      "add": "Aggiungi",
+      "edit": "Modifica",
+      "new": "Nuovo",
+      "filtered": "filtrati",
+      "inOurNetwork": "nella nostra rete"
+    }
   }
 }

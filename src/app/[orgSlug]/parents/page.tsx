@@ -5,6 +5,7 @@ import { Card, Badge, Avatar, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { ParentsFilters } from "@/components/parents";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getOrgContext, getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
@@ -101,8 +102,10 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
 
   const hasActiveFilters = filters.relationship || filters.student_name;
 
-  const pageLabel = resolveLabel("/parents", navConfig) || "Parents";
-  const actionLabel = resolveActionLabel("/parents", navConfig) || "Add Parent";
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/parents", navConfig, t, locale) || "Parents";
+  const actionLabel = resolveActionLabel("/parents", navConfig, "Add", t, locale) || "Add Parent";
 
   // Build filter params for pagination links so active filters are preserved across pages
   const filterParams = new URLSearchParams();
@@ -203,7 +206,7 @@ export default async function ParentsPage({ params, searchParams }: ParentsPageP
             action={
               canEdit && !hasActiveFilters && (
                 <Link href={`/${orgSlug}/parents/new`}>
-                  <Button>{resolveActionLabel("/parents", navConfig, "Add First Parent")}</Button>
+                  <Button>{resolveActionLabel("/parents", navConfig, "Add First Parent", t, locale)}</Button>
                 </Link>
               )
             }

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { useLocale, useTranslations } from "next-intl";
 import { editEventSchema, type EditEventForm } from "@/lib/schemas/content";
 import { updateFutureEvents } from "@/lib/events/recurring-operations";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -30,7 +31,10 @@ export default function EditEventPage() {
   const [pendingData, setPendingData] = useState<EditEventForm | null>(null);
 
   // Get the custom label for this page
-  const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
+  const tNav = useTranslations("nav.items");
+  const locale = useLocale();
+  const t = (key: string) => tNav(key);
+  const singularLabel = resolveActionLabel("/events", navConfig, "", t, locale).trim();
 
   const {
     register,

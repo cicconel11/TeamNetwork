@@ -1,4 +1,5 @@
 import { Users, GraduationCap, CalendarClock, HandHeart, Heart } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getOrgContext, getCurrentUser } from "@/lib/auth/roles";
@@ -74,7 +75,10 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     }),
   ]);
 
-  const donationStat = await getCachedDonationStats(org.id);
+  const [donationStat, tDash] = await Promise.all([
+    getCachedDonationStats(org.id),
+    getTranslations("pages.dashboard"),
+  ]);
 
   if (postsError) {
     throw new Error("Failed to load feed");
@@ -168,14 +172,14 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
   const totalDonations = (donationStat?.total_amount_cents ?? 0) / 100;
 
   const stats: StatItem[] = [
-    { label: "Active Members", value: membersCount || 0, href: `/${orgSlug}/members`, icon: Users },
-    { label: "Alumni", value: alumniCount || 0, href: `/${orgSlug}/alumni`, icon: GraduationCap },
+    { label: tDash("activeMembers"), value: membersCount || 0, href: `/${orgSlug}/members`, icon: Users },
+    { label: tDash("alumni"), value: alumniCount || 0, href: `/${orgSlug}/alumni`, icon: GraduationCap },
     ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent") ? [{
-      label: "Parents", value: parentsCount || 0, href: `/${orgSlug}/parents`, icon: Heart,
+      label: tDash("parents"), value: parentsCount || 0, href: `/${orgSlug}/parents`, icon: Heart,
     }] : []),
-    { label: "Upcoming Events", value: eventsCount || 0, href: `/${orgSlug}/events`, icon: CalendarClock },
+    { label: tDash("upcomingEvents"), value: eventsCount || 0, href: `/${orgSlug}/events`, icon: CalendarClock },
     {
-      label: "Total Donations",
+      label: tDash("totalDonations"),
       value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       href: `/${orgSlug}/donations`,
       icon: HandHeart,
@@ -183,14 +187,14 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
   ];
 
   const mobileStatChips: MobileStatChip[] = [
-    { label: "Active Members", value: String(membersCount || 0), href: `/${orgSlug}/members`, iconKey: "users" },
-    { label: "Alumni", value: String(alumniCount || 0), href: `/${orgSlug}/alumni`, iconKey: "graduation-cap" },
+    { label: tDash("activeMembers"), value: String(membersCount || 0), href: `/${orgSlug}/members`, iconKey: "users" },
+    { label: tDash("alumni"), value: String(alumniCount || 0), href: `/${orgSlug}/alumni`, iconKey: "graduation-cap" },
     ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent")
-      ? [{ label: "Parents", value: String(parentsCount || 0), href: `/${orgSlug}/parents`, iconKey: "heart" as const }]
+      ? [{ label: tDash("parents"), value: String(parentsCount || 0), href: `/${orgSlug}/parents`, iconKey: "heart" as const }]
       : []),
-    { label: "Upcoming Events", value: String(eventsCount || 0), href: `/${orgSlug}/events`, iconKey: "calendar-clock" },
+    { label: tDash("upcomingEvents"), value: String(eventsCount || 0), href: `/${orgSlug}/events`, iconKey: "calendar-clock" },
     {
-      label: "Total Donations",
+      label: tDash("totalDonations"),
       value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
       href: `/${orgSlug}/donations`,
       iconKey: "hand-heart",
@@ -215,7 +219,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
           <div className="flex items-center gap-3 mb-4">
             <div className="h-px flex-1 bg-border/50" />
             <span className="text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground/50">
-              Recent
+              {tDash("recent")}
             </span>
             <div className="h-px flex-1 bg-border/50" />
           </div>

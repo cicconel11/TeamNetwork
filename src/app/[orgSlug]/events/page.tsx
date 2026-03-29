@@ -5,6 +5,7 @@ import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { EventsViewTracker } from "@/components/analytics/EventsViewTracker";
 import { GoogleCalendarBanner } from "@/components/events";
@@ -51,8 +52,10 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
   const eventTypes = ["general", "game", "meeting", "social", "fundraiser", "philanthropy"];
 
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/events", navConfig);
-  const actionLabel = resolveActionLabel("/events", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/events", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/events", navConfig, "Add", t, locale);
 
   return (
     <div className="animate-fade-in">
@@ -199,7 +202,7 @@ export default async function EventsPage({ params, searchParams }: EventsPagePro
             action={
               isAdmin && (
                 <Link href={`/${orgSlug}/events/new`}>
-                  <Button>{resolveActionLabel("/events", navConfig, "Create First")}</Button>
+                  <Button>{resolveActionLabel("/events", navConfig, "Create First", t, locale)}</Button>
                 </Link>
               )
             }

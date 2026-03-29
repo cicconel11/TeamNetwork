@@ -7,6 +7,7 @@ import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 interface MentorshipPageProps {
@@ -150,7 +151,9 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
   ).sort((a, b) => b - a);
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/mentorship", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/mentorship", navConfig, t, locale);
 
   return (
     <div className="space-y-6 animate-fade-in">

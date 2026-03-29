@@ -8,6 +8,7 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonationStat } from "@/types/database";
 import { PhilanthropyFilter } from "@/components/philanthropy/PhilanthropyFilter";
@@ -69,7 +70,9 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const isConnected = Boolean(connectStatus?.isReady);
 
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/philanthropy", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/philanthropy", navConfig, t, locale);
   const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (

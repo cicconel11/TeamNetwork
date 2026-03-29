@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Select, Textarea } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { useLocale, useTranslations } from "next-intl";
 import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
 import { expandRecurrence, type RecurrenceRule } from "@/lib/events/recurrence";
 import { createRecurringEvents } from "@/lib/events/recurring-operations";
@@ -39,7 +40,10 @@ export default function NewEventPage() {
   const [repeatEndDate, setRepeatEndDate] = useState<string>("");
 
   // Get the custom label for this page
-  const singularLabel = resolveActionLabel("/events", navConfig, "").trim();
+  const tNav = useTranslations("nav.items");
+  const locale = useLocale();
+  const t = (key: string) => tNav(key);
+  const singularLabel = resolveActionLabel("/events", navConfig, "", t, locale).trim();
 
   const {
     register,

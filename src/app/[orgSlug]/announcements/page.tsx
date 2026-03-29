@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOrgContext } from "@/lib/auth/roles";
 import { filterAnnouncementsForUser } from "@/lib/announcements";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { AnnouncementsFeed } from "@/components/announcements/AnnouncementsFeed";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
@@ -33,14 +34,16 @@ export default async function AnnouncementsPage({ params }: AnnouncementsPagePro
   });
 
   const navConfig = org.nav_config as NavConfig | null;
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
 
   return (
     <AnnouncementsFeed
       announcements={visibleAnnouncements}
       orgSlug={orgSlug}
       isAdmin={orgCtx.isAdmin}
-      pageLabel={resolveLabel("/announcements", navConfig)}
-      actionLabel={resolveActionLabel("/announcements", navConfig, "New")}
+      pageLabel={resolveLabel("/announcements", navConfig, t, locale)}
+      actionLabel={resolveActionLabel("/announcements", navConfig, "New", t, locale)}
     />
   );
 }

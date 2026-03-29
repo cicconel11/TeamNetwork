@@ -5,6 +5,7 @@ import { Button } from "@/components/ui";
 import { getOrgContext } from "@/lib/auth/roles";
 import { CalendarContent } from "@/components/calendar/CalendarContent";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { fetchUnifiedEvents } from "@/lib/calendar/unified-events";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { AcademicSchedule, User } from "@/types/database";
@@ -59,8 +60,10 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
   const initialEvents: UnifiedEvent[] | undefined = initialEventsResult ?? undefined;
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/calendar", navConfig);
-  const actionLabel = resolveActionLabel("/calendar", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/calendar", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/calendar", navConfig, "Add", t, locale);
 
   return (
     <div className="space-y-6 animate-fade-in">

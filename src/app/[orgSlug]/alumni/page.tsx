@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel, AlumniSelectableGrid } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
@@ -127,8 +128,10 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const hasActiveFilters =
     filters.year || filters.industry || filters.company || filters.city || filters.position;
 
-  const pageLabel = resolveLabel("/alumni", navConfig);
-  const actionLabel = resolveActionLabel("/alumni", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/alumni", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/alumni", navConfig, "Add", t, locale);
 
   const pageContent = (
     <div className="animate-fade-in">
@@ -227,7 +230,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
             action={
               canEdit && !hasActiveFilters && (
                 <Link href={`/${orgSlug}/alumni/new`}>
-                  <Button>{resolveActionLabel("/alumni", navConfig, "Add First")}</Button>
+                  <Button>{resolveActionLabel("/alumni", navConfig, "Add First", t, locale)}</Button>
                 </Link>
               )
             }
