@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Select } from "@/components/ui";
@@ -36,7 +36,7 @@ function LanguageSettingsLoading() {
 }
 
 function LanguageSettingsContent() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const t = useTranslations("settings.language");
   const tCommon = useTranslations("common");
   const [loading, setLoading] = useState(true);

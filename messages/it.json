@@ -67,6 +67,11 @@
   },
   "settings": {
     "title": "Impostazioni",
+    "tabs": {
+      "connectedAccounts": "Account collegati",
+      "notifications": "Notifiche",
+      "language": "Lingua"
+    },
     "language": {
       "title": "Lingua",
       "description": "Scegli la tua lingua preferita",

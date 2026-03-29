@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { Organization } from "@/types/database";
 import type { OrgRole } from "@/lib/auth/role-utils";
 import { ORG_NAV_ITEMS, ORG_NAV_GROUPS, type NavConfig, type NavGroupId, GridIcon, LogOutIcon, getConfigKey } from "@/lib/navigation/nav-items";
@@ -32,6 +32,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
+  const locale = useLocale();
   const tNav = useTranslations("nav");
   const tSidebar = useTranslations("sidebar");
   const tAuth = useTranslations("auth");
@@ -65,9 +66,15 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
       const configKey = getConfigKey(item.href);
       const config = navConfig[configKey];
       const translatedLabel = tNav(`items.${item.i18nKey}`);
+      // For non-English locales, prefer the i18n translation over custom labels
+      // (which are typically set in English by admins). For English, custom labels win.
+      const customLabel = config?.label?.trim();
+      const effectiveLabel = locale === "en"
+        ? (customLabel || translatedLabel)
+        : (translatedLabel || customLabel || item.label);
       return {
         ...item,
-        label: (config?.label?.trim() || translatedLabel).slice(0, 80),
+        label: effectiveLabel.slice(0, 80),
         order: config?.order,
       };
     })
@@ -85,7 +92,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
         if (bIdx >= 0) return 1;
       }
       return ORG_NAV_ITEMS.findIndex(i => i.href === a.href) - ORG_NAV_ITEMS.findIndex(i => i.href === b.href);
-    }), [role, hasAlumniAccess, hasParentsAccess, navConfig, profile, tNav]);
+    }), [role, hasAlumniAccess, hasParentsAccess, navConfig, profile, tNav, locale]);
 
   // Auto-expand active group on navigation
   useEffect(() => {

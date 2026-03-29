@@ -67,6 +67,11 @@
   },
   "settings": {
     "title": "Parametres",
+    "tabs": {
+      "connectedAccounts": "Comptes connectes",
+      "notifications": "Notifications",
+      "language": "Langue"
+    },
     "language": {
       "title": "Langue",
       "description": "Choisissez votre langue preferee",

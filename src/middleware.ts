@@ -32,6 +32,10 @@ function syncLocaleCookie(
 
   const current = request.cookies.get("NEXT_LOCALE")?.value;
   if (effective !== current) {
+    // Set on the request so downstream server components (getRequestConfig)
+    // see the updated locale in THIS request, not one request late.
+    request.cookies.set("NEXT_LOCALE", effective);
+    // Set on the response to persist the cookie for future requests.
     response.cookies.set("NEXT_LOCALE", effective, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
@@ -476,12 +480,41 @@ export async function middleware(request: NextRequest) {
           .eq("id", user.id)
           .maybeSingle();
         userLangOverride = userData?.language_override ?? null;
+
+        // When user chose "org default" (override is null), resolve their
+        // primary org's default_language so non-org pages render correctly.
+        if (!userLangOverride) {
+          const { data: membership } = await supabase
+            .from("user_organization_roles")
+            .select("organization_id")
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .is("deleted_at", null)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (membership?.organization_id) {
+            const { data: org } = await supabase
+              .from("organizations")
+              .select("default_language")
+              .eq("id", membership.organization_id)
+              .maybeSingle();
+            orgDefaultLang = org?.default_language ?? null;
+          }
+        }
       } catch {
         // Non-critical — fall through to default locale
       }
     }
 
-    syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
+    // Only sync the locale cookie when we actually have language data to work with.
+    // On non-org routes where the cookie already exists, we skip the DB lookup
+    // (performance optimisation), so both vars stay undefined — calling sync here
+    // would incorrectly reset the cookie to 'en'.
+    if (userLangOverride !== undefined || orgDefaultLang !== undefined || isOrgRoute) {
+      syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
+    }
   }
 
   response.headers.set("x-pathname", pathname);

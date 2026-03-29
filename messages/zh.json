@@ -67,6 +67,11 @@
   },
   "settings": {
     "title": "\u8bbe\u7f6e",
+    "tabs": {
+      "connectedAccounts": "\u5173\u8054\u8d26\u6237",
+      "notifications": "\u901a\u77e5",
+      "language": "\u8bed\u8a00"
+    },
     "language": {
       "title": "\u8bed\u8a00",
       "description": "\u9009\u62e9\u60a8\u7684\u9996\u9009\u8bed\u8a00",

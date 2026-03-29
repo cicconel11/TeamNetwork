@@ -408,10 +408,10 @@ function OrgSettingsContent() {
         setDefaultLanguage(data.default_language);
       }
 
-      // Set the NEXT_LOCALE cookie immediately on the client so the next
-      // server render uses the correct locale. Middleware will re-confirm on
-      // the next full navigation, but we need it now for the reload below.
-      document.cookie = `NEXT_LOCALE=${defaultLanguage};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+      // Clear the cookie so middleware re-resolves the correct locale
+      // (user override → org default → 'en') on the reload below.
+      // Don't set it directly — that would stomp an admin's personal override.
+      document.cookie = "NEXT_LOCALE=;path=/;max-age=0";
 
       // Full reload so next-intl's getRequestConfig re-reads the cookie and
       // loads the correct message bundle. router.refresh() is insufficient
