@@ -8,53 +8,7 @@ process.env.GOOGLE_CLIENT_SECRET = "test-client-secret";
 process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3000";
 process.env.GOOGLE_TOKEN_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-// Types for calendar events (mirrored from calendar-sync.ts for testing)
-interface CalendarEvent {
-    summary: string;
-    description?: string;
-    location?: string;
-    start: { dateTime: string; timeZone: string };
-    end: { dateTime: string; timeZone: string };
-}
-
-/**
- * Maps an organization event to a Google Calendar event format
- * This is a pure function extracted for testing without external dependencies
- */
-function mapEventToCalendarEvent(event: {
-    title: string;
-    description?: string | null;
-    location?: string | null;
-    start_date: string;
-    end_date?: string | null;
-}): CalendarEvent {
-    const startDate = new Date(event.start_date);
-
-    // If no end_date, default to start_date + 1 hour
-    let endDate: Date;
-    if (event.end_date) {
-        endDate = new Date(event.end_date);
-    } else {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
-    }
-
-    // Determine timezone - use UTC if not determinable from the date string
-    const timeZone = "UTC";
-
-    return {
-        summary: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: {
-            dateTime: startDate.toISOString(),
-            timeZone,
-        },
-        end: {
-            dateTime: endDate.toISOString(),
-            timeZone,
-        },
-    };
-}
+import { mapEventToCalendarEvent } from "@/lib/google/calendar-event-mapper";
 
 /**
  * Feature: google-calendar-sync, Property 6: Event Data Mapping Completeness

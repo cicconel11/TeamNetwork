@@ -51,6 +51,10 @@ const patchSchema = z
     media_upload_roles: z.array(z.enum(ALLOWED_ROLES)).min(1).optional(),
     linkedin_resync_enabled: z.boolean().optional(),
     require_invite_approval: z.boolean().optional(),
+    timezone: z.string().max(100).refine(
+      (tz) => { try { Intl.DateTimeFormat(undefined, { timeZone: tz }); return true; } catch { return false; } },
+      { message: "Invalid IANA timezone" },
+    ).optional(),
   })
   .strict();
 const ALLOWED_NAV_PATHS = new Set([...ORG_NAV_ITEMS.map((item) => item.href), "dashboard"]);
@@ -166,7 +170,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     const serviceSupabase = createServiceClient();
 
     // Build update payload - only include fields that were provided
-    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean } = {};
+    const updatePayload: { nav_config?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean; timezone?: string } = {};
 
     // Only update nav_config if navConfig or nav_config was provided in the request
     if (parsedBody.navConfig !== undefined || parsedBody.nav_config !== undefined) {
@@ -210,6 +214,10 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       updatePayload.require_invite_approval = parsedBody.require_invite_approval;
     }
 
+    if (parsedBody.timezone !== undefined) {
+      updatePayload.timezone = parsedBody.timezone;
+    }
+
     // If nothing to update, return early
     if (Object.keys(updatePayload).length === 0) {
       return respond({ error: "No valid fields to update" }, 400);
@@ -221,7 +229,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       .from("organizations")
       .update(updatePayload)
       .eq("id", organizationId)
-      .select("id, name, nav_config, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, require_invite_approval")
+      .select("id, name, nav_config, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, require_invite_approval, timezone")
       .maybeSingle();
 
     if (updateError) {
@@ -233,7 +241,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
 
     // Return response with updated fields
-    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean } = {};
+    const response: { navConfig?: NavConfig; name?: string; feed_post_roles?: string[]; job_post_roles?: string[]; discussion_post_roles?: string[]; media_upload_roles?: string[]; linkedin_resync_enabled?: boolean; require_invite_approval?: boolean; timezone?: string } = {};
     if (updatePayload.nav_config !== undefined) {
       response.navConfig = navConfig;
     }
@@ -257,6 +265,9 @@ export async function PATCH(req: Request, { params }: RouteParams) {
     }
     if (updatePayload.require_invite_approval !== undefined) {
       response.require_invite_approval = updatedOrg.require_invite_approval as boolean;
+    }
+    if (updatePayload.timezone !== undefined) {
+      response.timezone = updatedOrg.timezone as string;
     }
 
     return respond(response);

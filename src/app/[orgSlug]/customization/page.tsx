@@ -7,7 +7,7 @@ import { animate, stagger } from "animejs";
 import { createClient } from "@/lib/supabase/client";
 import type { NotificationPreference, UserRole } from "@/types/database";
 import { normalizeRole, type OrgRole } from "@/lib/auth/role-utils";
-import { Card, Button } from "@/components/ui";
+import { Card, Button, Select } from "@/components/ui";
 import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import { PermissionRoleCard } from "@/components/ui/PermissionRoleCard";
 import { PageHeader } from "@/components/layout";
@@ -15,6 +15,29 @@ import { OrgNameCard } from "@/components/settings/OrgNameCard";
 import { BrandingCard } from "@/components/settings/BrandingCard";
 import { NotificationPrefsCard } from "@/components/settings/NotificationPrefsCard";
 import { StorageUsageCard } from "@/components/settings/StorageUsageCard";
+
+const TIMEZONE_OPTIONS = [
+  { value: "America/New_York", label: "Eastern Time (US)" },
+  { value: "America/Chicago", label: "Central Time (US)" },
+  { value: "America/Denver", label: "Mountain Time (US)" },
+  { value: "America/Los_Angeles", label: "Pacific Time (US)" },
+  { value: "America/Anchorage", label: "Alaska Time" },
+  { value: "Pacific/Honolulu", label: "Hawaii Time" },
+  { value: "America/Phoenix", label: "Arizona (no DST)" },
+  { value: "America/Toronto", label: "Eastern Time (Canada)" },
+  { value: "America/Vancouver", label: "Pacific Time (Canada)" },
+  { value: "America/Mexico_City", label: "Central Time (Mexico)" },
+  { value: "Europe/London", label: "London (GMT/BST)" },
+  { value: "Europe/Berlin", label: "Central European Time" },
+  { value: "Europe/Paris", label: "Paris (CET/CEST)" },
+  { value: "Asia/Tokyo", label: "Japan Standard Time" },
+  { value: "Asia/Shanghai", label: "China Standard Time" },
+  { value: "Asia/Kolkata", label: "India Standard Time" },
+  { value: "Asia/Dubai", label: "Gulf Standard Time" },
+  { value: "Australia/Sydney", label: "Australian Eastern Time" },
+  { value: "Pacific/Auckland", label: "New Zealand Time" },
+  { value: "UTC", label: "UTC" },
+];
 
 export default function OrgSettingsPage() {
   return (
@@ -87,6 +110,12 @@ function OrgSettingsContent() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [mediaSuccess, setMediaSuccess] = useState<string | null>(null);
 
+  // Timezone state
+  const [timezone, setTimezone] = useState("America/New_York");
+  const [timezoneSaving, setTimezoneSaving] = useState(false);
+  const [timezoneError, setTimezoneError] = useState<string | null>(null);
+  const [timezoneSuccess, setTimezoneSuccess] = useState<string | null>(null);
+
   // LinkedIn resync toggle state
   const [linkedinResyncEnabled, setLinkedinResyncEnabled] = useState(false);
   const [linkedinResyncSaving, setLinkedinResyncSaving] = useState(false);
@@ -101,7 +130,7 @@ function OrgSettingsContent() {
 
       const { data: org, error: orgError } = await supabase
         .from("organizations")
-        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled")
+        .select("id, name, logo_url, primary_color, secondary_color, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, linkedin_resync_enabled, timezone")
         .eq("slug", orgSlug)
         .maybeSingle();
 
@@ -121,6 +150,7 @@ function OrgSettingsContent() {
       setDiscussionPostRoles((org as Record<string, unknown>).discussion_post_roles as string[] || ["admin", "active_member", "alumni"]);
       setMediaUploadRoles((org as Record<string, unknown>).media_upload_roles as string[] || ["admin"]);
       setLinkedinResyncEnabled((org as Record<string, unknown>).linkedin_resync_enabled === true);
+      setTimezone(((org as Record<string, unknown>).timezone as string) || "America/New_York");
 
       const {
         data: { user },
@@ -299,6 +329,40 @@ function OrgSettingsContent() {
     }
   };
 
+  const handleTimezoneSave = async () => {
+    if (!orgId) return;
+    if (role !== "admin") {
+      setTimezoneError("Only admins can change the timezone.");
+      return;
+    }
+
+    setTimezoneSaving(true);
+    setTimezoneError(null);
+    setTimezoneSuccess(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Unable to update timezone");
+      }
+
+      if (data?.timezone) {
+        setTimezone(data.timezone);
+      }
+      setTimezoneSuccess("Timezone updated.");
+    } catch (err) {
+      setTimezoneError(err instanceof Error ? err.message : "Unable to update timezone");
+    } finally {
+      setTimezoneSaving(false);
+    }
+  };
+
   const isAdmin = role === "admin";
 
   return (
@@ -331,6 +395,40 @@ function OrgSettingsContent() {
             initialPrimaryColor={initialPrimaryColor}
             initialSecondaryColor={initialSecondaryColor}
           />
+
+          {isAdmin && (
+            <Card className="org-settings-card p-5 space-y-3 opacity-0 translate-y-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-foreground" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
+                </svg>
+                <p className="font-semibold text-foreground">Organization Timezone</p>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Sets the default timezone for Google Calendar sync and event display. All events will be shown in this timezone.
+              </p>
+              <Select
+                label="Timezone"
+                options={TIMEZONE_OPTIONS}
+                value={timezone}
+                onChange={(e) => { setTimezone(e.target.value); setTimezoneSuccess(null); }}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleTimezoneSave}
+                disabled={timezoneSaving}
+              >
+                {timezoneSaving ? "Saving..." : "Save Timezone"}
+              </Button>
+              {timezoneError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{timezoneError}</p>
+              )}
+              {timezoneSuccess && (
+                <p className="text-sm text-green-600 dark:text-green-400">{timezoneSuccess}</p>
+              )}
+            </Card>
+          )}
 
           {initialPrefs && userId && (
             <NotificationPrefsCard

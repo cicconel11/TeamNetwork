@@ -84,8 +84,8 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const canDelete = canEditPage && !isReadOnly;
 
   // Extract enrichment data (may not exist if migration hasn't run)
-  const workHistory: WorkHistoryEntry[] = Array.isArray(alum.work_history) ? alum.work_history : [];
-  const educationHistory: EducationEntry[] = Array.isArray(alum.education_history) ? alum.education_history : [];
+  const workHistory: WorkHistoryEntry[] = Array.isArray(alum.work_history) ? alum.work_history as WorkHistoryEntry[] : [];
+  const educationHistory: EducationEntry[] = Array.isArray(alum.education_history) ? alum.education_history as EducationEntry[] : [];
   const headline = alum.headline || alum.position_title || alum.job_title || null;
   const about = alum.summary || alum.notes || null;
 

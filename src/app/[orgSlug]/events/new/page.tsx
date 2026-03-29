@@ -72,17 +72,23 @@ export default function NewEventPage() {
   const endDate = watch("end_date");
   const endTime = watch("end_time");
 
-  // Auto-select day of week from start_date
+  // Auto-select day of week from start date+time (UTC day must match recurrence engine)
   useEffect(() => {
     if (startDate && repeatType === "weekly" && selectedDays.length === 0) {
-      const d = new Date(startDate + "T00:00:00Z");
+      // Compute UTC day from the actual date+time the event will be stored as.
+      // Without startTime, use noon local as a safe default (same UTC day as local day).
+      const d = startTime
+        ? new Date(`${startDate}T${startTime}`)
+        : new Date(`${startDate}T12:00:00`);
       setSelectedDays([String(d.getUTCDay())]);
     }
     if (startDate && repeatType === "monthly" && !dayOfMonth) {
-      const d = new Date(startDate + "T00:00:00Z");
+      const d = startTime
+        ? new Date(`${startDate}T${startTime}`)
+        : new Date(`${startDate}T12:00:00`);
       setDayOfMonth(String(d.getUTCDate()));
     }
-  }, [startDate, repeatType, selectedDays.length, dayOfMonth]);
+  }, [startDate, startTime, repeatType, selectedDays.length, dayOfMonth]);
 
   // Sync recurrence state to form values
   useEffect(() => {
