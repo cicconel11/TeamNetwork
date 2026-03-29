@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Select } from "@/components/ui";
@@ -38,10 +37,8 @@ function LanguageSettingsLoading() {
 
 function LanguageSettingsContent() {
   const supabase = createClient();
-  const router = useRouter();
   const t = useTranslations("settings.language");
   const tCommon = useTranslations("common");
-  const tFeedback = useTranslations("feedback");
   const [loading, setLoading] = useState(true);
   const [language, setLanguage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -85,10 +82,19 @@ function LanguageSettingsContent() {
 
       if (updateError) throw new Error(updateError.message);
 
-      setSuccess(tFeedback("savedSuccessfully"));
+      // Set the NEXT_LOCALE cookie immediately so the reload picks up the
+      // correct locale. When language is null (org default), clear the cookie
+      // so middleware resolves it from the org's default_language.
+      if (language) {
+        document.cookie = `NEXT_LOCALE=${language};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+      } else {
+        document.cookie = "NEXT_LOCALE=;path=/;max-age=0";
+      }
 
-      // Refresh triggers middleware re-sync which updates the NEXT_LOCALE cookie
-      router.refresh();
+      // Full reload — router.refresh() doesn't re-run middleware or
+      // re-evaluate next-intl's getRequestConfig.
+      window.location.reload();
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save language preference");
     } finally {
