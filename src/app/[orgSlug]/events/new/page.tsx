@@ -80,13 +80,17 @@ export default function NewEventPage() {
 
   // Auto-select day of week from start date+time using org timezone
   useEffect(() => {
-    if (startDate && repeatType === "weekly" && selectedDays.length === 0) {
-      const utcIso = localToUtcIso(startDate, startTime || "12:00", orgTimezone);
-      setSelectedDays([String(getLocalWeekday(utcIso, orgTimezone))]);
-    }
-    if (startDate && repeatType === "monthly" && !dayOfMonth) {
-      const utcIso = localToUtcIso(startDate, startTime || "12:00", orgTimezone);
-      setDayOfMonth(String(getLocalDayOfMonth(utcIso, orgTimezone)));
+    try {
+      if (startDate && repeatType === "weekly" && selectedDays.length === 0) {
+        const utcIso = localToUtcIso(startDate, startTime || "12:00", orgTimezone);
+        setSelectedDays([String(getLocalWeekday(utcIso, orgTimezone))]);
+      }
+      if (startDate && repeatType === "monthly" && !dayOfMonth) {
+        const utcIso = localToUtcIso(startDate, startTime || "12:00", orgTimezone);
+        setDayOfMonth(String(getLocalDayOfMonth(utcIso, orgTimezone)));
+      }
+    } catch {
+      // Ignore nonexistent local times here; submit will surface the validation error.
     }
   }, [startDate, startTime, repeatType, selectedDays.length, dayOfMonth, orgTimezone]);
 
@@ -131,10 +135,9 @@ export default function NewEventPage() {
       recurrence_end_date: repeatEndDate || undefined,
     };
 
-    const startISO = localToUtcIso(startDate, startTime, orgTimezone);
-    const endISO = endDate && endTime ? localToUtcIso(endDate, endTime, orgTimezone) : null;
-
     try {
+      const startISO = localToUtcIso(startDate, startTime, orgTimezone);
+      const endISO = endDate && endTime ? localToUtcIso(endDate, endTime, orgTimezone) : null;
       return expandRecurrence(startISO, endISO, rule).length;
     } catch {
       return 0;

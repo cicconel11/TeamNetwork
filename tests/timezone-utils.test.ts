@@ -86,6 +86,22 @@ describe("localToUtcIso", () => {
     const afterFallback = localToUtcIso("2026-11-02", "12:00", "America/New_York");
     assert.equal(afterFallback, "2026-11-02T17:00:00.000Z");
   });
+
+  it("rejects nonexistent spring-forward local times", () => {
+    assert.throws(
+      () => localToUtcIso("2026-03-08", "02:30", "America/New_York"),
+      /Nonexistent local time/
+    );
+  });
+
+  it("keeps fall-back ambiguous times round-trip stable", () => {
+    const utc = localToUtcIso("2026-11-01", "01:30", "America/New_York");
+    const parts = utcToLocalParts(utc, "America/New_York");
+
+    assert.equal(parts.time, "01:30");
+    assert.equal(parts.date, "2026-11-01");
+    assert.equal(localToUtcIso(parts.date, parts.time, "America/New_York"), utc);
+  });
 });
 
 describe("utcToLocalParts", () => {

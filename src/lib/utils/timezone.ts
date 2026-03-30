@@ -88,10 +88,24 @@ export function localToUtcIso(date: string, time: string, timeZone: string): str
 
   if (correctedOffsetMs !== offsetMs) {
     const finalUtc = new Date(desiredLocal.getTime() - correctedOffsetMs);
-    return finalUtc.toISOString();
+    const finalIso = finalUtc.toISOString();
+    const roundTrip = utcToLocalParts(finalIso, tz);
+
+    if (roundTrip.date !== date || roundTrip.time !== time) {
+      throw new RangeError(`Nonexistent local time in ${tz}: ${date} ${time}`);
+    }
+
+    return finalIso;
   }
 
-  return utc.toISOString();
+  const utcIso = utc.toISOString();
+  const roundTrip = utcToLocalParts(utcIso, tz);
+
+  if (roundTrip.date !== date || roundTrip.time !== time) {
+    throw new RangeError(`Nonexistent local time in ${tz}: ${date} ${time}`);
+  }
+
+  return utcIso;
 }
 
 /**
