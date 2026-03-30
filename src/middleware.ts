@@ -511,13 +511,6 @@ export async function middleware(request: NextRequest) {
     syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
   }
 
-  // Debug: expose locale resolution in response headers (temporary)
-  response.headers.set("x-locale-user-override", String(userLangOverride ?? "null"));
-  response.headers.set("x-locale-org-default", String(orgDefaultLang ?? "null"));
-  response.headers.set("x-locale-is-org-route", String(isOrgRoute));
-  response.headers.set("x-locale-has-user", String(!!user));
-  response.headers.set("x-locale-cookie-after", request.cookies.get("NEXT_LOCALE")?.value ?? "none");
-
   response.headers.set("x-pathname", pathname);
   return response;
 }
