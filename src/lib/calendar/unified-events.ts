@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { eventOverlapsRange } from "@/lib/calendar/event-segments";
 
 export type UnifiedEvent = {
   id: string;
@@ -148,11 +149,11 @@ async function fetchEvents(
     }
     if (!data) return [];
 
-    const overlapping = data.filter((event) => {
-      const eventStart = new Date(event.start_date);
-      const eventEnd = event.end_date ? new Date(event.end_date) : null;
-      return eventStart <= end && (eventEnd ? eventEnd >= start : eventStart >= start);
-    });
+    const overlapping = data.filter((event) => eventOverlapsRange({
+      startAt: event.start_date,
+      endAt: event.end_date,
+      allDay: false,
+    }, start, end));
 
     return overlapping.map((event): UnifiedEvent => {
       const badges: string[] = [];
@@ -248,11 +249,11 @@ async function fetchCalendarEvents(
     }
     if (!data) return [];
 
-    const overlapping = data.filter((event) => {
-      const eventStart = new Date(event.start_at);
-      const eventEnd = event.end_at ? new Date(event.end_at) : null;
-      return eventStart <= end && (eventEnd ? eventEnd >= start : eventStart >= start);
-    });
+    const overlapping = data.filter((event) => eventOverlapsRange({
+      startAt: event.start_at,
+      endAt: event.end_at,
+      allDay: Boolean(event.all_day),
+    }, start, end));
 
     return overlapping.map((event): UnifiedEvent => {
       const feed = Array.isArray(event.calendar_feeds)

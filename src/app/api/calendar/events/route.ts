@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { eventOverlapsRange } from "@/lib/calendar/event-segments";
 
 const MAX_EVENTS = 500;
 const MAX_DATE_RANGE_DAYS = 365;
@@ -97,18 +98,13 @@ export async function GET(request: Request) {
     // Query current user's calendar events
     // Note: RLS policy only allows users to see their own events (auth.uid() = user_id),
     // so we can only fetch the current user's events regardless of mode
-    
-    // Expand the date range to catch all-day events and multi-day events
-    // that might start before but overlap with the requested range
-    const expandedStart = new Date(start);
-    expandedStart.setDate(expandedStart.getDate() - 7); // Look 7 days before
 
     const { data: events, error } = await supabase
       .from("calendar_events")
       .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
       .eq("user_id", user.id)
-      .gte("start_at", expandedStart.toISOString())
       .lte("start_at", end.toISOString())
+      .or(`end_at.gte.${start.toISOString()},end_at.is.null`)
       .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 
@@ -133,8 +129,8 @@ export async function GET(request: Request) {
       .select("id, title, start_at, end_at, location, status")
       .eq("org_id", organizationId)
       .neq("status", "cancelled")
-      .gte("start_at", expandedStart.toISOString())
       .lte("start_at", end.toISOString())
+      .gte("end_at", start.toISOString())
       .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 
@@ -144,22 +140,34 @@ export async function GET(request: Request) {
       scheduleEvents = scheduleData || [];
     }
 
-    const normalizedCalendar = (events || []).map((event) => ({
-      ...event,
-      origin: "calendar" as const,
-    }));
+    const normalizedCalendar = (events || [])
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: Boolean(event.all_day),
+      }, start, end))
+      .map((event) => ({
+        ...event,
+        origin: "calendar" as const,
+      }));
 
-    const normalizedSchedule = scheduleEvents.map((event) => ({
-      id: `schedule:${event.id}`,
-      title: event.title,
-      start_at: event.start_at,
-      end_at: event.end_at,
-      all_day: false,
-      location: event.location,
-      feed_id: null,
-      user_id: `org:${organizationId}`,
-      origin: "schedule" as const,
-    }));
+    const normalizedSchedule = scheduleEvents
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: false,
+      }, start, end))
+      .map((event) => ({
+        id: `schedule:${event.id}`,
+        title: event.title,
+        start_at: event.start_at,
+        end_at: event.end_at,
+        all_day: false,
+        location: event.location,
+        feed_id: null,
+        user_id: `org:${organizationId}`,
+        origin: "schedule" as const,
+      }));
 
     const combined = [...normalizedCalendar, ...normalizedSchedule].sort((a, b) => {
       return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();

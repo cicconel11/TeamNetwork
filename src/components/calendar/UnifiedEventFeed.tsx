@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { UnifiedEvent } from "@/lib/calendar/unified-events";
+import { formatCalendarEventTime } from "@/lib/calendar/event-segments";
 
 type UnifiedEventFeedProps = {
   orgId: string;
@@ -72,41 +73,6 @@ function getSourceColors(sourceType: string) {
         badge: "bg-muted text-muted-foreground",
       };
   }
-}
-
-function formatEventTime(event: UnifiedEvent): string {
-  if (event.allDay) {
-    return "All day";
-  }
-
-  const start = new Date(event.startAt);
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-
-  const startTime = start.toLocaleTimeString("en-US", timeOpts);
-
-  if (!event.endAt) {
-    return startTime;
-  }
-
-  const end = new Date(event.endAt);
-
-  // Same day: "11:30 AM – 1:00 PM"
-  if (start.toDateString() === end.toDateString()) {
-    const endTime = end.toLocaleTimeString("en-US", timeOpts);
-    return `${startTime} – ${endTime}`;
-  }
-
-  // Multi-day: "Feb 12, 11:30 AM – Feb 13, 2:00 PM"
-  const dateTimeOpts: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  return `${start.toLocaleDateString("en-US", dateTimeOpts)} – ${end.toLocaleDateString("en-US", dateTimeOpts)}`;
 }
 
 function groupEventsByDate(events: UnifiedEvent[]): Map<string, UnifiedEvent[]> {
@@ -241,7 +207,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
 
   const renderEventRow = (event: UnifiedEvent) => {
     const { dot, badge } = getSourceColors(event.sourceType);
-    const formattedTime = formatEventTime(event);
+    const formattedTime = formatCalendarEventTime(event);
 
     const rowContent = (
       <>

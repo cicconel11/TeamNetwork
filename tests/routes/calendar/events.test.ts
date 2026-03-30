@@ -105,13 +105,13 @@ function simulateGetEvents(
   // Filter calendar events for this user in the date range
   const calendarEvents = (ctx.calendarEvents || [])
     .filter((e) => e.user_id === userId)
-    .filter((e) => new Date(e.start_at) >= start && new Date(e.start_at) <= end)
+    .filter((e) => new Date(e.start_at) <= end && new Date(e.end_at) >= start)
     .map((e) => ({ ...e, origin: "calendar" as const }));
 
   // Include schedule events (org-wide)
   const scheduleEvents = (ctx.scheduleEvents || [])
     .filter((e) => e.status !== "cancelled")
-    .filter((e) => new Date(e.start_at) >= start && new Date(e.start_at) <= end)
+    .filter((e) => new Date(e.start_at) <= end && new Date(e.end_at) >= start)
     .map((e) => ({
       id: `schedule:${e.id}`,
       title: e.title,
@@ -271,6 +271,48 @@ test("GET events sorts by start time", () => {
   assert.strictEqual(result.status, 200);
   assert.strictEqual(result.events?.[0].title, "Earlier Event");
   assert.strictEqual(result.events?.[1].title, "Later Event");
+});
+
+test("GET events includes overlapping events that start before the requested range", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateGetEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      organizationId: "org-1",
+      start: "2024-01-10T00:00:00Z",
+      end: "2024-01-31T23:59:59Z",
+    },
+    {
+      supabase,
+      calendarEvents: [
+        {
+          id: "cal-overlap",
+          title: "Overnight Trip",
+          start_at: "2024-01-08T18:00:00Z",
+          end_at: "2024-01-10T12:00:00Z",
+          all_day: false,
+          location: null,
+          user_id: "member-user",
+        },
+      ],
+      scheduleEvents: [
+        {
+          id: "sch-overlap",
+          title: "Tournament",
+          start_at: "2024-01-09T08:00:00Z",
+          end_at: "2024-01-11T16:00:00Z",
+          location: null,
+          status: "confirmed",
+        },
+      ],
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Overnight Trip", "Tournament"],
+  );
 });
 
 test("GET events prefixes schedule event IDs", () => {

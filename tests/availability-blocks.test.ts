@@ -159,6 +159,40 @@ describe("computeEventBlocks", () => {
     assert.equal(blocks[0].title, "Holiday");
   });
 
+  it("splits timed multi-day events into per-day blocks", () => {
+    const calendarEvents = [
+      {
+        id: "camp",
+        user_id: "u1",
+        title: "June Camp",
+        start_at: "2026-01-05T08:00:00",
+        end_at: "2026-01-08T17:00:00",
+        all_day: false,
+        users: null,
+      },
+    ];
+
+    const result = computeEventBlocks([], calendarEvents, weekDays);
+
+    assert.deepStrictEqual(
+      ["2026-01-05", "2026-01-06", "2026-01-07", "2026-01-08"].map((dateKey) => ({
+        dateKey,
+        block: result.get(dateKey)?.[0]
+          ? {
+            startMinute: result.get(dateKey)?.[0].startMinute,
+            endMinute: result.get(dateKey)?.[0].endMinute,
+          }
+          : null,
+      })),
+      [
+        { dateKey: "2026-01-05", block: { startMinute: 480, endMinute: 1320 } },
+        { dateKey: "2026-01-06", block: { startMinute: 360, endMinute: 1320 } },
+        { dateKey: "2026-01-07", block: { startMinute: 360, endMinute: 1320 } },
+        { dateKey: "2026-01-08", block: { startMinute: 360, endMinute: 1020 } },
+      ],
+    );
+  });
+
   it("handles org schedule events", () => {
     const calendarEvents = [
       {

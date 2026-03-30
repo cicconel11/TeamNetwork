@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback, useRef, Fragment } from "rea
 import { createClient } from "@/lib/supabase/client";
 import { Card, Badge, Skeleton } from "@/components/ui";
 import type { AcademicSchedule, User } from "@/types/database";
+import { splitEventIntoLocalDaySegments } from "@/lib/calendar/event-segments";
 import { computeSummaryStats, formatDateKey, type ConflictInfo } from "./availability-stats";
 import { computeEventBlocks, resolveOverlaps, type PositionedBlock } from "./availability-blocks";
 
@@ -141,7 +142,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     return () => clearInterval(interval);
   }, [mounted]);
 
-  const { weekStart, weekEnd, weekLabel, weekDays, rangeStart, rangeEnd } = useMemo(() => {
+  const { weekStart, weekLabel, weekDays, rangeStart, rangeEnd } = useMemo(() => {
     // Use a fixed date during SSR to avoid hydration mismatch
     // After mount, use the actual current date
     const today = mounted ? new Date() : new Date(2026, 0, 1); // fallback date for SSR
@@ -252,6 +253,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   // Conflict grid (used by team mode + summary stats)
   const conflictGrid = useMemo(() => {
     const grid: Map<string, ConflictInfo[]> = new Map();
+    const weekDayKeys = new Set(weekDays.map((day) => formatDateKey(day)));
 
     const addConflict = (date: Date, hour: number, conflict: ConflictInfo) => {
       if (hour < GRID_START_HOUR || hour >= GRID_END_HOUR) {
@@ -323,12 +325,6 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     });
 
     calendarEvents.forEach((event) => {
-      const start = new Date(event.start_at);
-      if (Number.isNaN(start.getTime())) {
-        return;
-      }
-
-      const end = event.end_at ? new Date(event.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
       const isOrgEvent = event.origin === "schedule";
       const userId = isOrgEvent ? `org:${event.id}` : event.user_id;
       const fallbackName = mode === "personal" ? "You" : "Unknown";
@@ -338,40 +334,22 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
       const title = event.title || (isOrgEvent ? "Org schedule" : "Calendar event");
       const conflict = { userId, memberName, title, isOrg: isOrgEvent };
 
-      if (event.all_day) {
-        const startDay = startOfDay(start);
-        const endDay = startOfDay(end);
-        const endIsMidnight = end.getHours() === 0 && end.getMinutes() === 0;
-        const inclusiveEnd = endIsMidnight && endDay > startDay
-          ? new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 1)
-          : endDay;
+      const segments = splitEventIntoLocalDaySegments({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: Boolean(event.all_day),
+      });
 
-        for (let day = new Date(startDay); day <= inclusiveEnd; day.setDate(day.getDate() + 1)) {
-          if (day < weekStart || day > weekEnd) continue;
-          addHoursForDay(day, GRID_START_HOUR, GRID_END_HOUR, conflict);
-        }
-        return;
-      }
-
-      const startDay = startOfDay(start);
-      const endDay = startOfDay(end);
-
-      for (let day = new Date(startDay); day <= endDay; day.setDate(day.getDate() + 1)) {
-        if (day < weekStart || day > weekEnd) continue;
-
-        const isFirstDay = day.getTime() === startDay.getTime();
-        const isLastDay = day.getTime() === endDay.getTime();
-        const dayStart = isFirstDay ? start : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, 0, 0);
-        const dayEnd = isLastDay ? end : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59);
-
-        const sHour = dayStart.getHours();
-        const eHour = dayEnd.getHours() + (dayEnd.getMinutes() > 0 ? 1 : 0);
-        addHoursForDay(day, sHour, eHour, conflict);
-      }
+      segments.forEach((segment) => {
+        if (!weekDayKeys.has(segment.dateKey)) return;
+        const startHour = Math.floor(segment.startMinute / 60);
+        const endHour = Math.ceil(segment.endMinute / 60);
+        addHoursForDay(segment.date, startHour, endHour, conflict);
+      });
     });
 
     return grid;
-  }, [calendarEvents, weekDays, weekEnd, weekStart, mode, schedules]);
+  }, [calendarEvents, weekDays, mode, schedules]);
 
   const getConflicts = (dateKey: string, hour: number): ConflictInfo[] => {
     return conflictGrid.get(`${dateKey}-${hour}`) || [];

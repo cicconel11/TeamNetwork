@@ -3,6 +3,8 @@
  * Used by personal mode to render Google Calendar-style event pills.
  */
 
+import { splitEventIntoLocalDaySegments } from "@/lib/calendar/event-segments";
+
 export type EventBlock = {
   id: string;
   startMinute: number; // minutes since midnight (e.g. 540 = 9:00 AM)
@@ -75,6 +77,7 @@ export function computeEventBlocks(
   weekDays: Date[],
 ): Map<string, EventBlock[]> {
   const blocks = new Map<string, EventBlock[]>();
+  const weekDayKeys = new Set(weekDays.map((day) => formatDateKey(day)));
 
   const addBlock = (dateKey: string, block: EventBlock) => {
     // Clamp to grid bounds
@@ -146,68 +149,32 @@ export function computeEventBlocks(
 
   // Process calendar events
   calendarEvents.forEach((event) => {
-    const start = new Date(event.start_at);
-    if (Number.isNaN(start.getTime())) return;
-
-    const end = event.end_at ? new Date(event.end_at) : new Date(start.getTime() + 60 * 60 * 1000);
     const isOrgEvent = event.origin === "schedule";
     const memberName = isOrgEvent
       ? "Org schedule"
       : event.users?.name || event.users?.email || "You";
     const title = event.title || (isOrgEvent ? "Org schedule" : "Calendar event");
 
-    if (event.all_day) {
-      // All-day events: render as a full-grid-height block for each day
-      const startDay = startOfDay(start);
-      const endDay = startOfDay(end);
-      const endIsMidnight = end.getHours() === 0 && end.getMinutes() === 0;
-      const inclusiveEnd = endIsMidnight && endDay > startDay
-        ? new Date(endDay.getFullYear(), endDay.getMonth(), endDay.getDate() - 1)
-        : endDay;
+    const segments = splitEventIntoLocalDaySegments({
+      startAt: event.start_at,
+      endAt: event.end_at,
+      allDay: Boolean(event.all_day),
+    });
 
-      for (let day = new Date(startDay); day <= inclusiveEnd; day.setDate(day.getDate() + 1)) {
-        const dateKey = formatDateKey(day);
-        if (!weekDays.some((wd) => formatDateKey(wd) === dateKey)) continue;
+    segments.forEach((segment) => {
+      if (!weekDayKeys.has(segment.dateKey)) return;
 
-        addBlock(dateKey, {
-          id: `cal-${event.id}-${dateKey}`,
-          startMinute: GRID_START_MINUTE,
-          endMinute: GRID_END_MINUTE,
-          title,
-          memberName,
-          userId: isOrgEvent ? `org:${event.id}` : event.user_id,
-          isOrg: isOrgEvent,
-          origin: isOrgEvent ? "schedule" : "calendar",
-        });
-      }
-      return;
-    }
-
-    // Timed events: may span multiple days
-    const startDay = startOfDay(start);
-    const endDay = startOfDay(end);
-
-    for (let day = new Date(startDay); day <= endDay; day.setDate(day.getDate() + 1)) {
-      const dateKey = formatDateKey(day);
-      if (!weekDays.some((wd) => formatDateKey(wd) === dateKey)) continue;
-
-      const isFirstDay = day.getTime() === startDay.getTime();
-      const isLastDay = day.getTime() === endDay.getTime();
-
-      const dayStartMin = isFirstDay ? start.getHours() * 60 + start.getMinutes() : 0;
-      const dayEndMin = isLastDay ? end.getHours() * 60 + end.getMinutes() : 24 * 60;
-
-      addBlock(dateKey, {
-        id: `cal-${event.id}-${dateKey}`,
-        startMinute: dayStartMin,
-        endMinute: dayEndMin,
+      addBlock(segment.dateKey, {
+        id: `cal-${event.id}-${segment.dateKey}`,
+        startMinute: segment.startMinute,
+        endMinute: segment.endMinute,
         title,
         memberName,
         userId: isOrgEvent ? `org:${event.id}` : event.user_id,
         isOrg: isOrgEvent,
         origin: isOrgEvent ? "schedule" : "calendar",
       });
-    }
+    });
   });
 
   return blocks;
