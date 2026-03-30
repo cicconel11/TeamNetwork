@@ -11,6 +11,7 @@ const PUBLIC_API_ROUTES = [
   // Friction feedback: handlers enforce allowlisted context/trigger + rate limits (see anonymous-friction.ts)
   "/api/feedback/submit",
   "/api/feedback/screenshot",
+  "/api/debug-locale", // Temporary: i18n debugging
 ];
 
 const PUBLIC_ROUTES = [
