@@ -59,7 +59,7 @@ function LanguageSettingsContent() {
         .eq("id", user.id)
         .maybeSingle();
 
-      setLanguage((data as Record<string, unknown>)?.language_override as string | null);
+      setLanguage(data?.language_override ?? null);
       setLoading(false);
     };
 
@@ -77,7 +77,7 @@ function LanguageSettingsContent() {
 
       const { error: updateError } = await supabase
         .from("users")
-        .update({ language_override: language || null } as Record<string, unknown>)
+        .update({ language_override: language || null })
         .eq("id", user.id);
 
       if (updateError) throw new Error(updateError.message);

@@ -2706,29 +2706,29 @@ export type Database = {
       }
       form_submissions: {
         Row: {
+          data: Json
           deleted_at: string | null
           form_id: string
           id: string
           organization_id: string
-          responses: Json
           submitted_at: string | null
           user_id: string | null
         }
         Insert: {
+          data?: Json
           deleted_at?: string | null
           form_id: string
           id?: string
           organization_id: string
-          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }
         Update: {
+          data?: Json
           deleted_at?: string | null
           form_id?: string
           id?: string
           organization_id?: string
-          responses?: Json
           submitted_at?: string | null
           user_id?: string | null
         }
@@ -4122,6 +4122,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          default_language: string
           description: string | null
           discussion_post_roles: string[]
           donation_embed_url: string | null
@@ -4149,6 +4150,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          default_language?: string
           description?: string | null
           discussion_post_roles?: string[]
           donation_embed_url?: string | null
@@ -4176,6 +4178,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          default_language?: string
           description?: string | null
           discussion_post_roles?: string[]
           donation_embed_url?: string | null
@@ -5214,6 +5217,7 @@ export type Database = {
           created_at: string | null
           email: string
           id: string
+          language_override: string | null
           name: string | null
         }
         Insert: {
@@ -5221,6 +5225,7 @@ export type Database = {
           created_at?: string | null
           email: string
           id: string
+          language_override?: string | null
           name?: string | null
         }
         Update: {
@@ -5228,6 +5233,7 @@ export type Database = {
           created_at?: string | null
           email?: string
           id?: string
+          language_override?: string | null
           name?: string | null
         }
         Relationships: []
