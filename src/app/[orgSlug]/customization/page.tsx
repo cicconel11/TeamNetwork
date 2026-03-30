@@ -18,33 +18,11 @@ import { NotificationPrefsCard } from "@/components/settings/NotificationPrefsCa
 import { StorageUsageCard } from "@/components/settings/StorageUsageCard";
 import { LOCALE_NAMES } from "@/i18n/config";
 import type { SupportedLocale } from "@/i18n/config";
+import { getCustomizationTimezoneOptions } from "@/lib/i18n/customization-timezones";
 
 const LANGUAGE_OPTIONS = (Object.entries(LOCALE_NAMES) as [SupportedLocale, string][]).map(
   ([value, label]) => ({ value, label })
 );
-
-const TIMEZONE_OPTIONS = [
-  { value: "America/New_York", label: "Eastern Time (US)" },
-  { value: "America/Chicago", label: "Central Time (US)" },
-  { value: "America/Denver", label: "Mountain Time (US)" },
-  { value: "America/Los_Angeles", label: "Pacific Time (US)" },
-  { value: "America/Anchorage", label: "Alaska Time" },
-  { value: "Pacific/Honolulu", label: "Hawaii Time" },
-  { value: "America/Phoenix", label: "Arizona (no DST)" },
-  { value: "America/Toronto", label: "Eastern Time (Canada)" },
-  { value: "America/Vancouver", label: "Pacific Time (Canada)" },
-  { value: "America/Mexico_City", label: "Central Time (Mexico)" },
-  { value: "Europe/London", label: "London (GMT/BST)" },
-  { value: "Europe/Berlin", label: "Central European Time" },
-  { value: "Europe/Paris", label: "Paris (CET/CEST)" },
-  { value: "Asia/Tokyo", label: "Japan Standard Time" },
-  { value: "Asia/Shanghai", label: "China Standard Time" },
-  { value: "Asia/Kolkata", label: "India Standard Time" },
-  { value: "Asia/Dubai", label: "Gulf Standard Time" },
-  { value: "Australia/Sydney", label: "Australian Eastern Time" },
-  { value: "Pacific/Auckland", label: "New Zealand Time" },
-  { value: "UTC", label: "UTC" },
-];
 
 export default function OrgSettingsPage() {
   return (
@@ -79,6 +57,7 @@ function OrgSettingsContent() {
   const supabase = useMemo(() => createClient(), []);
   const tCustom = useTranslations("customization");
   const tCommon = useTranslations("common");
+  const timezoneOptions = useMemo(() => getCustomizationTimezoneOptions((key) => tCustom(key)), [tCustom]);
 
   // Bootstrap state
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -152,13 +131,13 @@ function OrgSettingsContent() {
         .maybeSingle();
 
       if (!org || orgError) {
-        setPageError(orgError?.message || "Organization not found");
+        setPageError(orgError?.message || tCustom("errors.orgNotFound"));
         setLoading(false);
         return;
       }
 
       setOrgId(org.id);
-      setOrgName(org.name || "Organization");
+      setOrgName(org.name || tCustom("fallbackOrgName"));
       setInitialLogoUrl(org.logo_url);
       setInitialPrimaryColor(org.primary_color || "#1e3a5f");
       setInitialSecondaryColor(org.secondary_color || "#10b981");
@@ -175,7 +154,7 @@ function OrgSettingsContent() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        setPageError("You must be signed in.");
+        setPageError(tCustom("errors.mustBeSignedIn"));
         setLoading(false);
         router.push(`/auth/login?redirect=/${orgSlug}/customization`);
         return;
@@ -193,7 +172,7 @@ function OrgSettingsContent() {
       const normalizedRole = normalizeRole((membership?.role as UserRole | null) ?? null);
 
       if (!membership || membership.status !== "active" || !normalizedRole) {
-        setPageError("You do not have access to this organization.");
+        setPageError(tCustom("errors.noAccess"));
         setLoading(false);
         return;
       }
@@ -223,7 +202,7 @@ function OrgSettingsContent() {
     };
 
     load();
-  }, [orgSlug, router, supabase]);
+  }, [orgSlug, router, supabase, tCustom]);
 
   // Entrance animation
   useEffect(() => {
@@ -254,7 +233,7 @@ function OrgSettingsContent() {
     return async () => {
       if (!orgId) return;
       if (role !== "admin") {
-        setErr(`Only admins can change ${label} permissions.`);
+        setErr(tCustom("permissions.adminOnlyChange", { feature: label }));
         return;
       }
 
@@ -271,15 +250,15 @@ function OrgSettingsContent() {
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
-          throw new Error(data?.error || `Unable to update ${label} permissions`);
+          throw new Error(data?.error || tCustom("permissions.unableToUpdate", { feature: label }));
         }
 
         if (data?.[field]) {
           setRoles(data[field]);
         }
-        setSucc(`${label} permissions updated.`);
+        setSucc(tCustom("permissions.updated", { feature: label }));
       } catch (err) {
-        setErr(err instanceof Error ? err.message : `Unable to update ${label} permissions`);
+        setErr(err instanceof Error ? err.message : tCustom("permissions.unableToUpdate", { feature: label }));
       } finally {
         setSaving(false);
       }
@@ -299,22 +278,22 @@ function OrgSettingsContent() {
     };
   };
 
-  const handleFeedRolesSave = makeRoleSaveHandler("feed_post_roles", feedPostRoles, setFeedSaving, setFeedError, setFeedSuccess, setFeedPostRoles, "Feed posting");
+  const handleFeedRolesSave = makeRoleSaveHandler("feed_post_roles", feedPostRoles, setFeedSaving, setFeedError, setFeedSuccess, setFeedPostRoles, tCustom("permissions.feedTitle"));
   const toggleFeedRole = makeToggleHandler(setFeedPostRoles, setFeedSuccess);
 
-  const handleDiscussionRolesSave = makeRoleSaveHandler("discussion_post_roles", discussionPostRoles, setDiscussionSaving, setDiscussionError, setDiscussionSuccess, setDiscussionPostRoles, "Discussion posting");
+  const handleDiscussionRolesSave = makeRoleSaveHandler("discussion_post_roles", discussionPostRoles, setDiscussionSaving, setDiscussionError, setDiscussionSuccess, setDiscussionPostRoles, tCustom("permissions.discussionTitle"));
   const toggleDiscussionRole = makeToggleHandler(setDiscussionPostRoles, setDiscussionSuccess);
 
-  const handleJobRolesSave = makeRoleSaveHandler("job_post_roles", jobPostRoles, setJobSaving, setJobError, setJobSuccess, setJobPostRoles, "Job posting");
+  const handleJobRolesSave = makeRoleSaveHandler("job_post_roles", jobPostRoles, setJobSaving, setJobError, setJobSuccess, setJobPostRoles, tCustom("permissions.jobTitle"));
   const toggleJobRole = makeToggleHandler(setJobPostRoles, setJobSuccess);
 
-  const handleMediaRolesSave = makeRoleSaveHandler("media_upload_roles", mediaUploadRoles, setMediaSaving, setMediaError, setMediaSuccess, setMediaUploadRoles, "Media upload");
+  const handleMediaRolesSave = makeRoleSaveHandler("media_upload_roles", mediaUploadRoles, setMediaSaving, setMediaError, setMediaSuccess, setMediaUploadRoles, tCustom("permissions.mediaTitle"));
   const toggleMediaRole = makeToggleHandler(setMediaUploadRoles, setMediaSuccess);
 
   const handleLinkedinResyncToggle = async (enabled: boolean) => {
     if (!orgId) return;
     if (role !== "admin") {
-      setLinkedinResyncError("Only admins can change this setting.");
+      setLinkedinResyncError(tCustom("linkedin.adminOnly"));
       return;
     }
 
@@ -333,15 +312,15 @@ function OrgSettingsContent() {
 
       if (!res.ok) {
         setLinkedinResyncEnabled(!enabled); // revert
-        throw new Error(data?.error || "Unable to update LinkedIn sync setting");
+        throw new Error(data?.error || tCustom("linkedin.unableToUpdate"));
       }
 
       if (typeof data?.linkedin_resync_enabled === "boolean") {
         setLinkedinResyncEnabled(data.linkedin_resync_enabled);
       }
-      setLinkedinResyncSuccess(enabled ? "LinkedIn profile sync enabled." : "LinkedIn profile sync disabled.");
+      setLinkedinResyncSuccess(enabled ? tCustom("linkedin.enabled") : tCustom("linkedin.disabled"));
     } catch (err) {
-      setLinkedinResyncError(err instanceof Error ? err.message : "Unable to update setting");
+      setLinkedinResyncError(err instanceof Error ? err.message : tCustom("linkedin.unableToUpdate"));
     } finally {
       setLinkedinResyncSaving(false);
     }
@@ -350,7 +329,7 @@ function OrgSettingsContent() {
   const handleTimezoneSave = async () => {
     if (!orgId) return;
     if (role !== "admin") {
-      setTimezoneError("Only admins can change the timezone.");
+      setTimezoneError(tCustom("timezone.adminOnly"));
       return;
     }
 
@@ -367,15 +346,15 @@ function OrgSettingsContent() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error || "Unable to update timezone");
+        throw new Error(data?.error || tCustom("timezone.unableToUpdate"));
       }
 
       if (data?.timezone) {
         setTimezone(data.timezone);
       }
-      setTimezoneSuccess("Timezone updated.");
+      setTimezoneSuccess(tCustom("timezone.saved"));
     } catch (err) {
-      setTimezoneError(err instanceof Error ? err.message : "Unable to update timezone");
+      setTimezoneError(err instanceof Error ? err.message : tCustom("timezone.unableToUpdate"));
     } finally {
       setTimezoneSaving(false);
     }
@@ -384,7 +363,7 @@ function OrgSettingsContent() {
   const handleLanguageSave = async () => {
     if (!orgId) return;
     if (role !== "admin") {
-      setLanguageError("Only admins can change the default language.");
+      setLanguageError(tCustom("errors.adminOnlyLanguage"));
       return;
     }
 
@@ -401,7 +380,7 @@ function OrgSettingsContent() {
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error || "Unable to update language");
+        throw new Error(data?.error || tCustom("errors.unableToUpdateLanguage"));
       }
 
       if (data?.default_language) {
@@ -430,7 +409,7 @@ function OrgSettingsContent() {
       window.location.reload();
       return; // skip finally while reloading
     } catch (err) {
-      setLanguageError(err instanceof Error ? err.message : "Unable to update language");
+      setLanguageError(err instanceof Error ? err.message : tCustom("errors.unableToUpdateLanguage"));
     } finally {
       setLanguageSaving(false);
     }
@@ -475,14 +454,14 @@ function OrgSettingsContent() {
                 <svg className="w-5 h-5 text-foreground" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z" />
                 </svg>
-                <p className="font-semibold text-foreground">Organization Timezone</p>
+                <p className="font-semibold text-foreground">{tCustom("timezone.title")}</p>
               </div>
               <p className="text-sm text-muted-foreground">
-                Sets the default timezone for Google Calendar sync and event display. All events will be shown in this timezone.
+                {tCustom("timezone.description")}
               </p>
               <Select
-                label="Timezone"
-                options={TIMEZONE_OPTIONS}
+                label={tCustom("timezone.label")}
+                options={timezoneOptions}
                 value={timezone}
                 onChange={(e) => { setTimezone(e.target.value); setTimezoneSuccess(null); }}
               />
@@ -556,13 +535,13 @@ function OrgSettingsContent() {
               >
                 <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
               </svg>
-              <p className="font-semibold text-foreground">Google Calendar Sync</p>
+              <p className="font-semibold text-foreground">{tCustom("googleCalendar.title")}</p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Manage your Google Calendar connection and sync preferences in the Calendar section.
+              {tCustom("googleCalendar.description")}
             </p>
             <Link href={`/${orgSlug}/calendar/my-settings`}>
-              <Button variant="secondary" size="sm">Go to Sync Settings</Button>
+              <Button variant="secondary" size="sm">{tCustom("googleCalendar.goToSync")}</Button>
             </Link>
           </Card>
 
@@ -577,13 +556,13 @@ function OrgSettingsContent() {
                 >
                   <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
                 </svg>
-                <p className="font-semibold text-foreground">Integrations</p>
+                <p className="font-semibold text-foreground">{tCustom("integrations.title")}</p>
               </div>
               <p className="text-sm text-muted-foreground">
-                Connect external services like Blackbaud to sync data with your organization.
+                {tCustom("integrations.description")}
               </p>
               <Link href={`/${orgSlug}/settings/integrations`}>
-                <Button variant="secondary" size="sm">Manage Integrations</Button>
+                <Button variant="secondary" size="sm">{tCustom("integrations.manage")}</Button>
               </Link>
             </Card>
           )}
@@ -591,9 +570,9 @@ function OrgSettingsContent() {
           {/* Posting & Upload Permission Cards (admin-only) */}
           {isAdmin && (
             <PermissionRoleCard
-              title="Feed posting permissions"
-              description="Control which roles can create posts in the Feed."
-              featureVerb="create feed posts"
+              title={tCustom("permissions.feedTitle")}
+              description={tCustom("permissions.feedDescription")}
+              featureVerb={tCustom("permissions.feedVerb")}
               roles={feedPostRoles}
               onToggleRole={toggleFeedRole}
               onSave={handleFeedRolesSave}
@@ -605,9 +584,9 @@ function OrgSettingsContent() {
 
           {isAdmin && (
             <PermissionRoleCard
-              title="Discussion posting permissions"
-              description="Control which roles can create threads in Discussions."
-              featureVerb="create discussion threads"
+              title={tCustom("permissions.discussionTitle")}
+              description={tCustom("permissions.discussionDescription")}
+              featureVerb={tCustom("permissions.discussionVerb")}
               roles={discussionPostRoles}
               onToggleRole={toggleDiscussionRole}
               onSave={handleDiscussionRolesSave}
@@ -619,9 +598,9 @@ function OrgSettingsContent() {
 
           {isAdmin && (
             <PermissionRoleCard
-              title="Job posting permissions"
-              description="Control which roles can post jobs in the Jobs board."
-              featureVerb="post jobs"
+              title={tCustom("permissions.jobTitle")}
+              description={tCustom("permissions.jobDescription")}
+              featureVerb={tCustom("permissions.jobVerb")}
               roles={jobPostRoles}
               onToggleRole={toggleJobRole}
               onSave={handleJobRolesSave}
@@ -633,9 +612,9 @@ function OrgSettingsContent() {
 
           {isAdmin && (
             <PermissionRoleCard
-              title="Media upload permissions"
-              description="Control which roles can upload media to Media."
-              featureVerb="upload media"
+              title={tCustom("permissions.mediaTitle")}
+              description={tCustom("permissions.mediaDescription")}
+              featureVerb={tCustom("permissions.mediaVerb")}
               roles={mediaUploadRoles}
               onToggleRole={toggleMediaRole}
               onSave={handleMediaRolesSave}
@@ -654,10 +633,10 @@ function OrgSettingsContent() {
                     <svg className="w-5 h-5 text-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 14.652" />
                     </svg>
-                    <p className="font-semibold text-foreground">LinkedIn Profile Sync</p>
+                    <p className="font-semibold text-foreground">{tCustom("linkedin.title")}</p>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Allow members to refresh their LinkedIn employment data. When enabled, members can manually sync up to 2 times per month, and a quarterly bulk sync runs automatically for all members with a LinkedIn URL.
+                    {tCustom("linkedin.description")}
                   </p>
                 </div>
                 <ToggleSwitch

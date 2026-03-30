@@ -150,10 +150,91 @@
   },
   "customization": {
     "title": "Personalizacao",
-    "description": "Atualize a marca e notificacoes da sua organizacao.",
+    "description": "Atualize a marca, preferencias e permissoes da sua organizacao em um so lugar.",
+    "fallbackOrgName": "Organizacao",
     "language": {
       "title": "Idioma padrao",
       "description": "Defina o idioma padrao para todos os membros desta organizacao."
+    },
+    "timezone": {
+      "title": "Fuso horario da organizacao",
+      "description": "Define o fuso horario padrao para a sincronizacao do Google Calendar e a exibicao de eventos. Todos os eventos serao mostrados neste fuso horario.",
+      "label": "Fuso horario",
+      "saved": "Fuso horario atualizado.",
+      "adminOnly": "Somente administradores podem alterar o fuso horario.",
+      "unableToUpdate": "Nao foi possivel atualizar o fuso horario",
+      "options": {
+        "newYork": "Hora do Leste (EUA)",
+        "chicago": "Hora Central (EUA)",
+        "denver": "Hora das Montanhas (EUA)",
+        "losAngeles": "Hora do Pacifico (EUA)",
+        "anchorage": "Hora do Alasca",
+        "honolulu": "Hora do Havai",
+        "phoenix": "Arizona (sem horario de verao)",
+        "toronto": "Hora do Leste (Canada)",
+        "vancouver": "Hora do Pacifico (Canada)",
+        "mexicoCity": "Hora Central (Mexico)",
+        "london": "Londres (GMT/BST)",
+        "berlin": "Hora da Europa Central",
+        "paris": "Paris (CET/CEST)",
+        "tokyo": "Horario Padrao do Japao",
+        "shanghai": "Horario Padrao da China",
+        "kolkata": "Horario Padrao da India",
+        "dubai": "Horario Padrao do Golfo",
+        "sydney": "Hora do Leste Australiano",
+        "auckland": "Hora da Nova Zelandia",
+        "utc": "UTC"
+      }
+    },
+    "googleCalendar": {
+      "title": "Sincronizacao do Google Calendar",
+      "description": "Gerencie sua conexao do Google Calendar e as preferencias de sincronizacao na secao Calendario.",
+      "goToSync": "Ir para as configuracoes de sincronizacao"
+    },
+    "integrations": {
+      "title": "Integracoes",
+      "description": "Conecte servicos externos como Blackbaud para sincronizar dados com sua organizacao.",
+      "manage": "Gerenciar integracoes"
+    },
+    "permissions": {
+      "feedTitle": "Permissoes para publicar no feed",
+      "feedDescription": "Controle quais papeis podem criar publicacoes no feed.",
+      "feedVerb": "criar publicacoes no feed",
+      "discussionTitle": "Permissoes para publicar em discussoes",
+      "discussionDescription": "Controle quais papeis podem criar topicos em Discusses.",
+      "discussionVerb": "criar topicos de discussao",
+      "jobTitle": "Permissoes para publicar vagas",
+      "jobDescription": "Controle quais papeis podem publicar vagas no painel de empregos.",
+      "jobVerb": "publicar vagas",
+      "mediaTitle": "Permissoes para enviar midia",
+      "mediaDescription": "Controle quais papeis podem enviar midia para a area de Midia.",
+      "mediaVerb": "enviar midia",
+      "adminOnlyChange": "Somente administradores podem alterar as permissoes de {feature}.",
+      "unableToUpdate": "Nao foi possivel atualizar as permissoes de {feature}",
+      "updated": "Permissoes de {feature} atualizadas.",
+      "adminAlways": "Os administradores sempre podem {verb}.",
+      "allow": "Permitir que {role} possa {verb}.",
+      "savePermissions": "Salvar permissoes",
+      "roleLabels": {
+        "activeMembers": "Membros ativos",
+        "alumni": "Ex-alunos",
+        "parents": "Pais"
+      }
+    },
+    "linkedin": {
+      "title": "Sincronizacao do perfil do LinkedIn",
+      "description": "Permita que os membros atualizem seus dados profissionais do LinkedIn. Quando ativado, os membros podem sincronizar manualmente ate 2 vezes por mes, e uma sincronizacao em massa trimestral e executada automaticamente para todos os membros com URL do LinkedIn.",
+      "enabled": "Sincronizacao do perfil do LinkedIn ativada.",
+      "disabled": "Sincronizacao do perfil do LinkedIn desativada.",
+      "adminOnly": "Somente administradores podem alterar esta configuracao.",
+      "unableToUpdate": "Nao foi possivel atualizar a configuracao"
+    },
+    "errors": {
+      "mustBeSignedIn": "Voce precisa entrar.",
+      "noAccess": "Voce nao tem acesso a esta organizacao.",
+      "orgNotFound": "Organizacao nao encontrada",
+      "unableToUpdateLanguage": "Nao foi possivel atualizar o idioma",
+      "adminOnlyLanguage": "Somente administradores podem alterar o idioma padrao."
     }
   },
   "feedback": {

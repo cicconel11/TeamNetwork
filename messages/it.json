@@ -150,10 +150,91 @@
   },
   "customization": {
     "title": "Personalizzazione",
-    "description": "Aggiorna il marchio e le notifiche della tua organizzazione.",
+    "description": "Aggiorna branding, preferenze e permessi della tua organizzazione in un solo posto.",
+    "fallbackOrgName": "Organizzazione",
     "language": {
       "title": "Lingua predefinita",
       "description": "Imposta la lingua predefinita per tutti i membri di questa organizzazione."
+    },
+    "timezone": {
+      "title": "Fuso orario dell'organizzazione",
+      "description": "Imposta il fuso orario predefinito per la sincronizzazione di Google Calendar e la visualizzazione degli eventi. Tutti gli eventi verranno mostrati in questo fuso orario.",
+      "label": "Fuso orario",
+      "saved": "Fuso orario aggiornato.",
+      "adminOnly": "Solo gli amministratori possono cambiare il fuso orario.",
+      "unableToUpdate": "Impossibile aggiornare il fuso orario",
+      "options": {
+        "newYork": "Ora orientale (USA)",
+        "chicago": "Ora centrale (USA)",
+        "denver": "Ora delle Montagne (USA)",
+        "losAngeles": "Ora del Pacifico (USA)",
+        "anchorage": "Ora dell'Alaska",
+        "honolulu": "Ora delle Hawaii",
+        "phoenix": "Arizona (senza ora legale)",
+        "toronto": "Ora orientale (Canada)",
+        "vancouver": "Ora del Pacifico (Canada)",
+        "mexicoCity": "Ora centrale (Messico)",
+        "london": "Londra (GMT/BST)",
+        "berlin": "Ora dell'Europa centrale",
+        "paris": "Parigi (CET/CEST)",
+        "tokyo": "Ora standard del Giappone",
+        "shanghai": "Ora standard della Cina",
+        "kolkata": "Ora standard dell'India",
+        "dubai": "Ora standard del Golfo",
+        "sydney": "Ora orientale australiana",
+        "auckland": "Ora della Nuova Zelanda",
+        "utc": "UTC"
+      }
+    },
+    "googleCalendar": {
+      "title": "Sincronizzazione Google Calendar",
+      "description": "Gestisci la connessione a Google Calendar e le preferenze di sincronizzazione nella sezione Calendario.",
+      "goToSync": "Vai alle impostazioni di sincronizzazione"
+    },
+    "integrations": {
+      "title": "Integrazioni",
+      "description": "Collega servizi esterni come Blackbaud per sincronizzare i dati con la tua organizzazione.",
+      "manage": "Gestisci integrazioni"
+    },
+    "permissions": {
+      "feedTitle": "Permessi di pubblicazione nel feed",
+      "feedDescription": "Controlla quali ruoli possono creare post nel feed.",
+      "feedVerb": "creare post nel feed",
+      "discussionTitle": "Permessi di pubblicazione nelle discussioni",
+      "discussionDescription": "Controlla quali ruoli possono creare discussioni in Discussioni.",
+      "discussionVerb": "creare discussioni",
+      "jobTitle": "Permessi di pubblicazione delle offerte",
+      "jobDescription": "Controlla quali ruoli possono pubblicare offerte nella bacheca Lavoro.",
+      "jobVerb": "pubblicare offerte",
+      "mediaTitle": "Permessi di caricamento media",
+      "mediaDescription": "Controlla quali ruoli possono caricare contenuti nella sezione Media.",
+      "mediaVerb": "caricare media",
+      "adminOnlyChange": "Solo gli amministratori possono cambiare i permessi di {feature}.",
+      "unableToUpdate": "Impossibile aggiornare i permessi di {feature}",
+      "updated": "Permessi di {feature} aggiornati.",
+      "adminAlways": "Gli amministratori possono sempre {verb}.",
+      "allow": "Consenti a {role} di {verb}.",
+      "savePermissions": "Salva permessi",
+      "roleLabels": {
+        "activeMembers": "Membri attivi",
+        "alumni": "Alumni",
+        "parents": "Genitori"
+      }
+    },
+    "linkedin": {
+      "title": "Sincronizzazione del profilo LinkedIn",
+      "description": "Consenti ai membri di aggiornare i dati lavorativi di LinkedIn. Quando e attiva, i membri possono sincronizzare manualmente fino a 2 volte al mese e una sincronizzazione massiva trimestrale viene eseguita automaticamente per tutti i membri con URL LinkedIn.",
+      "enabled": "Sincronizzazione del profilo LinkedIn attivata.",
+      "disabled": "Sincronizzazione del profilo LinkedIn disattivata.",
+      "adminOnly": "Solo gli amministratori possono cambiare questa impostazione.",
+      "unableToUpdate": "Impossibile aggiornare l'impostazione"
+    },
+    "errors": {
+      "mustBeSignedIn": "Devi effettuare l'accesso.",
+      "noAccess": "Non hai accesso a questa organizzazione.",
+      "orgNotFound": "Organizzazione non trovata",
+      "unableToUpdateLanguage": "Impossibile aggiornare la lingua",
+      "adminOnlyLanguage": "Solo gli amministratori possono cambiare la lingua predefinita."
     }
   },
   "feedback": {

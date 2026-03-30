@@ -150,10 +150,91 @@
   },
   "customization": {
     "title": "自定义",
-    "description": "更新组织品牌和通知设置。",
+    "description": "在一个地方更新组织品牌、偏好设置和权限。",
+    "fallbackOrgName": "组织",
     "language": {
       "title": "默认语言",
       "description": "为此组织的所有成员设置默认语言。"
+    },
+    "timezone": {
+      "title": "组织时区",
+      "description": "为 Google Calendar 同步和活动显示设置默认时区。所有活动都会以此时区显示。",
+      "label": "时区",
+      "saved": "时区已更新。",
+      "adminOnly": "只有管理员可以更改时区。",
+      "unableToUpdate": "无法更新时区",
+      "options": {
+        "newYork": "美国东部时间",
+        "chicago": "美国中部时间",
+        "denver": "美国山地时间",
+        "losAngeles": "美国太平洋时间",
+        "anchorage": "阿拉斯加时间",
+        "honolulu": "夏威夷时间",
+        "phoenix": "亚利桑那州时间（无夏令时）",
+        "toronto": "加拿大东部时间",
+        "vancouver": "加拿大太平洋时间",
+        "mexicoCity": "墨西哥中部时间",
+        "london": "伦敦（GMT/BST）",
+        "berlin": "中欧时间",
+        "paris": "巴黎（CET/CEST）",
+        "tokyo": "日本标准时间",
+        "shanghai": "中国标准时间",
+        "kolkata": "印度标准时间",
+        "dubai": "海湾标准时间",
+        "sydney": "澳大利亚东部时间",
+        "auckland": "新西兰时间",
+        "utc": "UTC"
+      }
+    },
+    "googleCalendar": {
+      "title": "Google Calendar 同步",
+      "description": "在日历部分管理你的 Google Calendar 连接和同步偏好。",
+      "goToSync": "前往同步设置"
+    },
+    "integrations": {
+      "title": "集成",
+      "description": "连接 Blackbaud 等外部服务，与组织同步数据。",
+      "manage": "管理集成"
+    },
+    "permissions": {
+      "feedTitle": "动态发布权限",
+      "feedDescription": "控制哪些角色可以在动态中发布内容。",
+      "feedVerb": "发布动态",
+      "discussionTitle": "讨论发布权限",
+      "discussionDescription": "控制哪些角色可以在讨论中创建主题。",
+      "discussionVerb": "创建讨论主题",
+      "jobTitle": "职位发布权限",
+      "jobDescription": "控制哪些角色可以在职位板块发布岗位。",
+      "jobVerb": "发布职位",
+      "mediaTitle": "媒体上传权限",
+      "mediaDescription": "控制哪些角色可以向媒体板块上传内容。",
+      "mediaVerb": "上传媒体",
+      "adminOnlyChange": "只有管理员可以更改 {feature} 权限。",
+      "unableToUpdate": "无法更新 {feature} 权限",
+      "updated": "{feature} 权限已更新。",
+      "adminAlways": "管理员始终可以{verb}。",
+      "allow": "允许 {role}{verb}。",
+      "savePermissions": "保存权限",
+      "roleLabels": {
+        "activeMembers": "活跃成员",
+        "alumni": "校友",
+        "parents": "家长"
+      }
+    },
+    "linkedin": {
+      "title": "LinkedIn 资料同步",
+      "description": "允许成员刷新 LinkedIn 工作数据。启用后，成员每月最多可手动同步 2 次，并会为所有填写了 LinkedIn URL 的成员自动运行季度批量同步。",
+      "enabled": "LinkedIn 资料同步已启用。",
+      "disabled": "LinkedIn 资料同步已禁用。",
+      "adminOnly": "只有管理员可以更改此设置。",
+      "unableToUpdate": "无法更新设置"
+    },
+    "errors": {
+      "mustBeSignedIn": "你必须先登录。",
+      "noAccess": "你无权访问此组织。",
+      "orgNotFound": "未找到组织",
+      "unableToUpdateLanguage": "无法更新语言",
+      "adminOnlyLanguage": "只有管理员可以更改默认语言。"
     }
   },
   "feedback": {
