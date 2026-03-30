@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  eventOverlapsRange,
   formatCalendarEventTime,
   splitEventIntoLocalDaySegments,
 } from "@/lib/calendar/event-segments";
@@ -72,5 +73,35 @@ describe("formatCalendarEventTime", () => {
     });
 
     assert.equal(formatted, "All day");
+  });
+});
+
+describe("eventOverlapsRange", () => {
+  it("does not overlap the day after an all-day exclusive-end event finishes", () => {
+    const overlaps = eventOverlapsRange(
+      {
+        startAt: "2026-06-01T00:00:00Z",
+        endAt: "2026-06-11T00:00:00Z",
+        allDay: true,
+      },
+      new Date("2026-06-11T04:00:00Z"),
+      new Date("2026-06-12T03:59:59Z"),
+    );
+
+    assert.equal(overlaps, false);
+  });
+
+  it("still overlaps the last visible day of an all-day exclusive-end event", () => {
+    const overlaps = eventOverlapsRange(
+      {
+        startAt: "2026-06-01T00:00:00Z",
+        endAt: "2026-06-11T00:00:00Z",
+        allDay: true,
+      },
+      new Date("2026-06-10T04:00:00Z"),
+      new Date("2026-06-11T03:59:59Z"),
+    );
+
+    assert.equal(overlaps, true);
   });
 });

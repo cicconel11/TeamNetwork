@@ -56,6 +56,14 @@ function resolveEventRange(event: CalendarEventLike) {
   return { start, end };
 }
 
+function resolveOverlapEnd(event: CalendarEventLike, start: Date, end: Date): Date {
+  if (event.allDay && event.endAt && end.getTime() > start.getTime()) {
+    return new Date(end.getTime() - 1);
+  }
+
+  return end;
+}
+
 export function toLocalDateKey(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -154,7 +162,8 @@ export function formatCalendarEventTime(event: CalendarEventLike, locale = "en-U
 export function eventOverlapsRange(event: CalendarEventLike, start: Date, end: Date): boolean {
   const range = resolveEventRange(event);
   if (!range) return false;
+  const overlapEnd = resolveOverlapEnd(event, range.start, range.end);
 
   return range.start.getTime() <= end.getTime()
-    && (event.endAt ? range.end.getTime() >= start.getTime() : range.start.getTime() >= start.getTime());
+    && (event.endAt ? overlapEnd.getTime() >= start.getTime() : range.start.getTime() >= start.getTime());
 }

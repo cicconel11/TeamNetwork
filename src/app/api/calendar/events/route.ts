@@ -104,7 +104,7 @@ export async function GET(request: Request) {
       .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
       .eq("user_id", user.id)
       .lte("start_at", end.toISOString())
-      .or(`end_at.gte.${start.toISOString()},end_at.is.null`)
+      .or(`end_at.gte.${start.toISOString()},and(end_at.is.null,start_at.gte.${start.toISOString()})`)
       .limit(MAX_EVENTS + 1)
       .order("start_at", { ascending: true });
 

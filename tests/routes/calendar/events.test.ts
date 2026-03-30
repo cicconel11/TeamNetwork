@@ -48,7 +48,7 @@ interface EventsContext {
     id: string;
     title: string;
     start_at: string;
-    end_at: string;
+    end_at: string | null;
     all_day: boolean;
     location: string | null;
     user_id: string;
@@ -102,10 +102,20 @@ function simulateGetEvents(
 
   const userId = request.auth.user?.id;
 
-  // Filter calendar events for this user in the date range
-  const calendarEvents = (ctx.calendarEvents || [])
+  // Simulate the route's current query shape:
+  // 1. start_at <= end
+  // 2. (end_at >= start OR end_at IS NULL)
+  // 3. limit before JS overlap filtering
+  const queriedCalendarEvents = (ctx.calendarEvents || [])
     .filter((e) => e.user_id === userId)
-    .filter((e) => new Date(e.start_at) <= end && new Date(e.end_at) >= start)
+    .filter((e) => new Date(e.start_at) <= end)
+    .filter((e) => e.end_at === null ? new Date(e.start_at) >= start : new Date(e.end_at) >= start)
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+    .slice(0, MAX_EVENTS + 1);
+
+  // Filter calendar events for this user in the date range
+  const calendarEvents = queriedCalendarEvents
+    .filter((e) => e.end_at === null ? new Date(e.start_at) >= start : new Date(e.end_at) >= start)
     .map((e) => ({ ...e, origin: "calendar" as const }));
 
   // Include schedule events (org-wide)
@@ -312,6 +322,49 @@ test("GET events includes overlapping events that start before the requested ran
   assert.deepStrictEqual(
     result.events?.map((event) => event.title),
     ["Overnight Trip", "Tournament"],
+  );
+});
+
+test("GET events does not starve newer overlapping rows behind old null-end rows", () => {
+  const supabase = createSupabaseStub();
+  const oldNullEndRows = Array.from({ length: 501 }, (_, index) => ({
+    id: `old-${index}`,
+    title: `Old event ${index}`,
+    start_at: `2023-01-${String((index % 28) + 1).padStart(2, "0")}T09:00:00Z`,
+    end_at: null,
+    all_day: false,
+    location: null,
+    user_id: "member-user",
+  }));
+
+  const result = simulateGetEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      organizationId: "org-1",
+      start: "2024-01-10T00:00:00Z",
+      end: "2024-01-31T23:59:59Z",
+    },
+    {
+      supabase,
+      calendarEvents: [
+        ...oldNullEndRows,
+        {
+          id: "current-overlap",
+          title: "Current event",
+          start_at: "2024-01-15T10:00:00Z",
+          end_at: null,
+          all_day: false,
+          location: null,
+          user_id: "member-user",
+        },
+      ],
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Current event"],
   );
 });
 
