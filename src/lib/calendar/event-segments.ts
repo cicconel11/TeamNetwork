@@ -57,6 +57,7 @@ function resolveEventRange(event: CalendarEventLike) {
 }
 
 function resolveOverlapEnd(event: CalendarEventLike, start: Date, end: Date): Date {
+  // All-day end timestamps are stored as the first instant after the visible range.
   if (event.allDay && event.endAt && end.getTime() > start.getTime()) {
     return new Date(end.getTime() - 1);
   }
@@ -164,6 +165,7 @@ export function eventOverlapsRange(event: CalendarEventLike, start: Date, end: D
   if (!range) return false;
   const overlapEnd = resolveOverlapEnd(event, range.start, range.end);
 
+  // Null-end all-day imports behave as single-day events keyed off their floating start date.
   return range.start.getTime() <= end.getTime()
     && (event.endAt ? overlapEnd.getTime() >= start.getTime() : range.start.getTime() >= start.getTime());
 }

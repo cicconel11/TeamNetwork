@@ -1,12 +1,71 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { eventOverlapsRange } from "@/lib/calendar/event-segments";
 
 const MAX_EVENTS = 500;
 const MAX_DATE_RANGE_DAYS = 365;
+const CALENDAR_QUERY_BATCH_SIZE = 250;
 
 export const dynamic = "force-dynamic";
+
+type CalendarEventRow = {
+  id: string;
+  title: string;
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean | null;
+  location: string | null;
+  feed_id: string | null;
+  user_id: string;
+};
+
+async function fetchOverlappingCalendarEvents(
+  supabase: SupabaseClient,
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<{ events: CalendarEventRow[]; error: unknown | null }> {
+  const events: CalendarEventRow[] = [];
+
+  for (let offset = 0; events.length <= MAX_EVENTS; offset += CALENDAR_QUERY_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from("calendar_events")
+      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
+      .eq("user_id", userId)
+      .lte("start_at", end.toISOString())
+      .or(`end_at.gte.${start.toISOString()},end_at.is.null`)
+      .order("start_at", { ascending: true })
+      .range(offset, offset + CALENDAR_QUERY_BATCH_SIZE - 1);
+
+    if (error) {
+      return { events: [], error };
+    }
+
+    const batch = (data || []) as CalendarEventRow[];
+    for (const event of batch) {
+      if (!eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: Boolean(event.all_day),
+      }, start, end)) {
+        continue;
+      }
+
+      events.push(event);
+      if (events.length > MAX_EVENTS) {
+        break;
+      }
+    }
+
+    if (batch.length < CALENDAR_QUERY_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return { events, error: null };
+}
 
 export async function GET(request: Request) {
   // IP-based rate limiting (before auth to prevent unauthenticated abuse)
@@ -99,14 +158,7 @@ export async function GET(request: Request) {
     // Note: RLS policy only allows users to see their own events (auth.uid() = user_id),
     // so we can only fetch the current user's events regardless of mode
 
-    const { data: events, error } = await supabase
-      .from("calendar_events")
-      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
-      .eq("user_id", user.id)
-      .lte("start_at", end.toISOString())
-      .or(`end_at.gte.${start.toISOString()},and(end_at.is.null,start_at.gte.${start.toISOString()})`)
-      .limit(MAX_EVENTS + 1)
-      .order("start_at", { ascending: true });
+    const { events, error } = await fetchOverlappingCalendarEvents(supabase, user.id, start, end);
 
     if (error) {
       return NextResponse.json(
@@ -140,12 +192,7 @@ export async function GET(request: Request) {
       scheduleEvents = scheduleData || [];
     }
 
-    const normalizedCalendar = (events || [])
-      .filter((event) => eventOverlapsRange({
-        startAt: event.start_at,
-        endAt: event.end_at,
-        allDay: Boolean(event.all_day),
-      }, start, end))
+    const normalizedCalendar = events
       .map((event) => ({
         ...event,
         origin: "calendar" as const,

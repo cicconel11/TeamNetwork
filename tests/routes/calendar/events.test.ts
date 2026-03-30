@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { eventOverlapsRange } from "@/lib/calendar/event-segments";
 import {
   AuthContext,
   isAuthenticated,
@@ -65,6 +66,44 @@ interface EventsContext {
 
 const MAX_EVENTS = 500;
 const MAX_DATE_RANGE_DAYS = 365;
+const CALENDAR_QUERY_BATCH_SIZE = 250;
+
+function queryCalendarEventsForRange(
+  events: NonNullable<EventsContext["calendarEvents"]>,
+  userId: string | undefined,
+  start: Date,
+  end: Date,
+) {
+  const candidates = events
+    .filter((event) => event.user_id === userId)
+    .filter((event) => new Date(event.start_at) <= end)
+    .filter((event) => event.end_at === null || new Date(event.end_at) >= start)
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+
+  const overlapping: Array<(typeof candidates)[number]> = [];
+
+  for (let offset = 0; offset < candidates.length; offset += CALENDAR_QUERY_BATCH_SIZE) {
+    const batch = candidates.slice(offset, offset + CALENDAR_QUERY_BATCH_SIZE);
+
+    for (const event of batch) {
+      if (!eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: event.all_day,
+      }, start, end)) {
+        continue;
+      }
+
+      overlapping.push(event);
+    }
+
+    if (overlapping.length > MAX_EVENTS || batch.length < CALENDAR_QUERY_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return overlapping;
+}
 
 function simulateGetEvents(
   request: EventsRequest,
@@ -102,20 +141,7 @@ function simulateGetEvents(
 
   const userId = request.auth.user?.id;
 
-  // Simulate the route's current query shape:
-  // 1. start_at <= end
-  // 2. (end_at >= start OR end_at IS NULL)
-  // 3. limit before JS overlap filtering
-  const queriedCalendarEvents = (ctx.calendarEvents || [])
-    .filter((e) => e.user_id === userId)
-    .filter((e) => new Date(e.start_at) <= end)
-    .filter((e) => e.end_at === null ? new Date(e.start_at) >= start : new Date(e.end_at) >= start)
-    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
-    .slice(0, MAX_EVENTS + 1);
-
-  // Filter calendar events for this user in the date range
-  const calendarEvents = queriedCalendarEvents
-    .filter((e) => e.end_at === null ? new Date(e.start_at) >= start : new Date(e.end_at) >= start)
+  const calendarEvents = queryCalendarEventsForRange(ctx.calendarEvents || [], userId, start, end)
     .map((e) => ({ ...e, origin: "calendar" as const }));
 
   // Include schedule events (org-wide)
@@ -365,6 +391,81 @@ test("GET events does not starve newer overlapping rows behind old null-end rows
   assert.deepStrictEqual(
     result.events?.map((event) => event.title),
     ["Current event"],
+  );
+});
+
+test("GET events keeps imported null-end all-day rows visible on their local start day", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateGetEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      organizationId: "org-1",
+      start: "2026-06-01T04:00:00Z",
+      end: "2026-06-02T03:59:59Z",
+    },
+    {
+      supabase,
+      calendarEvents: [
+        {
+          id: "all-day-import",
+          title: "Imported all day",
+          start_at: "2026-06-01T00:00:00Z",
+          end_at: null,
+          all_day: true,
+          location: null,
+          user_id: "member-user",
+        },
+      ],
+    },
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Imported all day"],
+  );
+});
+
+test("GET events does not let expired all-day exclusive-end rows consume the query window", () => {
+  const supabase = createSupabaseStub();
+  const expiredAllDayRows = Array.from({ length: 550 }, (_, index) => ({
+    id: `expired-${index}`,
+    title: `Expired all day ${index}`,
+    start_at: "2026-05-01T00:00:00Z",
+    end_at: "2026-06-01T04:00:00Z",
+    all_day: true,
+    location: null,
+    user_id: "member-user",
+  }));
+
+  const result = simulateGetEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      organizationId: "org-1",
+      start: "2026-06-01T04:00:00Z",
+      end: "2026-06-02T03:59:59Z",
+    },
+    {
+      supabase,
+      calendarEvents: [
+        ...expiredAllDayRows,
+        {
+          id: "in-range",
+          title: "Visible all day",
+          start_at: "2026-06-01T04:00:00Z",
+          end_at: "2026-06-02T04:00:00Z",
+          all_day: true,
+          location: null,
+          user_id: "member-user",
+        },
+      ],
+    },
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Visible all day"],
   );
 });
 
