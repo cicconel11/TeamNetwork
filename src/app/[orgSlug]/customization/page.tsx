@@ -411,7 +411,8 @@ function OrgSettingsContent() {
       // Clear the cookie so middleware re-resolves the correct locale
       // (user override → org default → 'en') on the reload below.
       // Don't set it directly — that would stomp an admin's personal override.
-      document.cookie = "NEXT_LOCALE=;path=/;max-age=0";
+      const secure = window.location.protocol === "https:" ? ";secure" : "";
+      document.cookie = `NEXT_LOCALE=;path=/;max-age=0${secure}`;
 
       // Full reload so next-intl's getRequestConfig re-reads the cookie and
       // loads the correct message bundle. router.refresh() is insufficient

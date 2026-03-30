@@ -85,10 +85,11 @@ function LanguageSettingsContent() {
       // Set the NEXT_LOCALE cookie immediately so the reload picks up the
       // correct locale. When language is null (org default), clear the cookie
       // so middleware resolves it from the org's default_language.
+      const secure = window.location.protocol === "https:" ? ";secure" : "";
       if (language) {
-        document.cookie = `NEXT_LOCALE=${language};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+        document.cookie = `NEXT_LOCALE=${language};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax${secure}`;
       } else {
-        document.cookie = "NEXT_LOCALE=;path=/;max-age=0";
+        document.cookie = `NEXT_LOCALE=;path=/;max-age=0${secure}`;
       }
 
       // Full reload — router.refresh() doesn't re-run middleware or
