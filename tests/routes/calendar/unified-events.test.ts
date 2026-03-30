@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert";
+import { eventOverlapsRange } from "@/lib/calendar/event-segments";
 import type { AuthContext } from "../../utils/authMock.ts";
 import {
   isAuthenticated,
@@ -222,11 +223,11 @@ function simulateUnifiedEvents(request: UnifiedRequest, ctx: UnifiedContext): Un
   if (sources.has("events")) {
     const filtered = (ctx.events || [])
       .filter((e) => e.deleted_at === null)
-      .filter((e) => {
-        const s = new Date(e.start_date);
-        const en = e.end_date ? new Date(e.end_date) : null;
-        return s <= end && (en ? en >= start : s >= start);
-      });
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_date,
+        endAt: event.end_date,
+        allDay: false,
+      }, start, end));
 
     filtered.forEach((event) => {
       const badges: string[] = [];
@@ -271,11 +272,11 @@ function simulateUnifiedEvents(request: UnifiedRequest, ctx: UnifiedContext): Un
   if (sources.has("feeds")) {
     const filtered = (ctx.calendarEvents || [])
       .filter((e) => e.scope === "org" || e.user_id === userId)
-      .filter((e) => {
-        const s = new Date(e.start_at);
-        const en = e.end_at ? new Date(e.end_at) : null;
-        return s <= end && (en ? en >= start : s >= start);
-      });
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: event.all_day,
+      }, start, end));
 
     filtered.forEach((event) => {
       allEvents.push({
@@ -403,6 +404,38 @@ test("excludes null-end feed event that starts before range", () => {
   );
   assert.strictEqual(result.status, 200);
   assert.strictEqual(result.events?.length, 0);
+});
+
+test("includes null-end timed feed event that overlaps via synthetic duration", () => {
+  const result = simulateUnifiedEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      orgId: "org-1",
+      start: "2026-06-09T04:00:00Z",
+      end: "2026-06-10T03:59:59Z",
+      sources: "feeds",
+    },
+    {
+      calendarEvents: [
+        {
+          id: "feed-null-end-overlap",
+          title: "Late feed event",
+          start_at: "2026-06-09T03:30:00Z",
+          end_at: null,
+          all_day: false,
+          location: null,
+          scope: "org",
+          user_id: "other-user",
+          provider: "ics",
+        },
+      ],
+    }
+  );
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Late feed event"],
+  );
 });
 
 test("includes overlapping multi-day schedule event", () => {

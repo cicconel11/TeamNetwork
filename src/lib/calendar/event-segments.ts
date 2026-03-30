@@ -164,8 +164,12 @@ export function eventOverlapsRange(event: CalendarEventLike, start: Date, end: D
   const range = resolveEventRange(event);
   if (!range) return false;
   const overlapEnd = resolveOverlapEnd(event, range.start, range.end);
+  const startsBeforeRangeEnds = range.start.getTime() <= end.getTime();
 
   // Null-end all-day imports behave as single-day events keyed off their floating start date.
-  return range.start.getTime() <= end.getTime()
-    && (event.endAt ? overlapEnd.getTime() >= start.getTime() : range.start.getTime() >= start.getTime());
+  if (event.allDay && !event.endAt) {
+    return startsBeforeRangeEnds && range.start.getTime() >= start.getTime();
+  }
+
+  return startsBeforeRangeEnds && overlapEnd.getTime() >= start.getTime();
 }

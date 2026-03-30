@@ -1,10 +1,22 @@
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   eventOverlapsRange,
   formatCalendarEventTime,
   splitEventIntoLocalDaySegments,
 } from "@/lib/calendar/event-segments";
+
+const originalTimeZone = process.env.TZ;
+process.env.TZ = "America/New_York";
+
+after(() => {
+  if (originalTimeZone === undefined) {
+    delete process.env.TZ;
+    return;
+  }
+
+  process.env.TZ = originalTimeZone;
+});
 
 describe("splitEventIntoLocalDaySegments", () => {
   it("splits a timed multi-day event into local day segments", () => {
@@ -77,6 +89,20 @@ describe("formatCalendarEventTime", () => {
 });
 
 describe("eventOverlapsRange", () => {
+  it("keeps timed null-end events visible through their synthetic duration", () => {
+    const overlaps = eventOverlapsRange(
+      {
+        startAt: "2026-06-08T23:30:00-04:00",
+        endAt: null,
+        allDay: false,
+      },
+      new Date("2026-06-09T04:00:00Z"),
+      new Date("2026-06-10T03:59:59Z"),
+    );
+
+    assert.equal(overlaps, true);
+  });
+
   it("does not overlap the day after an all-day exclusive-end event finishes", () => {
     const overlaps = eventOverlapsRange(
       {

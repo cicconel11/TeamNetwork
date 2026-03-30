@@ -351,6 +351,38 @@ test("GET events includes overlapping events that start before the requested ran
   );
 });
 
+test("GET events includes null-end timed events that overlap via synthetic duration", () => {
+  const supabase = createSupabaseStub();
+  const result = simulateGetEvents(
+    {
+      auth: AuthPresets.orgMember("org-1"),
+      organizationId: "org-1",
+      start: "2026-06-09T04:00:00Z",
+      end: "2026-06-10T03:59:59Z",
+    },
+    {
+      supabase,
+      calendarEvents: [
+        {
+          id: "cal-null-end-overlap",
+          title: "Late import",
+          start_at: "2026-06-09T03:30:00Z",
+          end_at: null,
+          all_day: false,
+          location: null,
+          user_id: "member-user",
+        },
+      ],
+    }
+  );
+
+  assert.strictEqual(result.status, 200);
+  assert.deepStrictEqual(
+    result.events?.map((event) => event.title),
+    ["Late import"],
+  );
+});
+
 test("GET events does not starve newer overlapping rows behind old null-end rows", () => {
   const supabase = createSupabaseStub();
   const oldNullEndRows = Array.from({ length: 501 }, (_, index) => ({
