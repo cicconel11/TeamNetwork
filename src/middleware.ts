@@ -446,6 +446,17 @@ export async function middleware(request: NextRequest) {
           }
         }
       } else {
+        // Dev-admin bypasses membership checks but still needs language data
+        try {
+          const { data: ctx } = await supabase.rpc("get_org_context_by_slug", { p_slug: orgSlug });
+          if (ctx?.found) {
+            orgDefaultLang = ctx.organization?.default_language ?? null;
+            userLangOverride = ctx.membership?.language_override ?? null;
+          }
+        } catch {
+          // Non-critical
+        }
+
         // Audit dev-admin bypass
         fireMiddlewareAudit({
           userId: user.id,
