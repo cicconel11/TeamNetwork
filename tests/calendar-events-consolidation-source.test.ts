@@ -31,7 +31,7 @@ describe("calendar/events consolidation source wiring", () => {
     const upcomingWidget = readFileSync("src/components/feed/UpcomingEventsWidget.tsx", "utf-8");
 
     assert.match(unifiedFeed, /calendarNewEventPath/);
-    assert.match(unifiedFeed, /calendarEventDetailPath/);
+    assert.match(unifiedFeed, /getUnifiedEventHref/);
     assert.match(upcomingWidget, /calendarEventsPath/);
     assert.match(upcomingWidget, /calendarEventDetailPath/);
   });

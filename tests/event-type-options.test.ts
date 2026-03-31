@@ -10,6 +10,6 @@ test("EVENT_TYPE_OPTIONS stays aligned with the event_type schema", () => {
   );
   assert.deepEqual(
     EVENT_TYPE_OPTIONS.map((option) => option.label),
-    ["General", "Philanthropy", "Game", "Meeting", "Social", "Fundraiser"],
+    ["General", "Philanthropy", "Game", "Practice", "Meeting", "Social", "Workout", "Fundraiser"],
   );
 });

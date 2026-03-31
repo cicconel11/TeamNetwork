@@ -120,7 +120,7 @@ export const memberStatusSchema = z.enum(["active", "inactive", "pending"]);
 export type MemberStatus = z.infer<typeof memberStatusSchema>;
 
 // Event types
-export const eventTypeSchema = z.enum(["general", "philanthropy", "game", "meeting", "social", "fundraiser"]);
+export const eventTypeSchema = z.enum(["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"]);
 export type EventType = z.infer<typeof eventTypeSchema>;
 
 // Occurrence types for schedules
