@@ -116,9 +116,25 @@ const CONNECTION_PROMPT_PATTERN =
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_JOB_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:create|add|post|publish|make)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make)(?!\w))/i;
+  /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
+  /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
+
+function looksLikeStructuredJobDraft(message: string): boolean {
+  const hasJobContext =
+    /\b(job|job posting|opening|role|position|hiring|apply|application)\b/i.test(message);
+  const structuredFieldMatches = [
+    /\blocation type\b/i,
+    /\bexperience level\b/i,
+    /\bapplication (?:url|link)\b/i,
+    /\bcontact email\b/i,
+    /\bdescription\s*:/i,
+    /\blink\s*:/i,
+    /https?:\/\//i,
+  ].filter((pattern) => pattern.test(message)).length;
+
+  return hasJobContext && structuredFieldMatches >= 2 && message.trim().length >= 80;
+}
 
 const CONNECTION_PASS2_TEMPLATE = [
   "CONNECTION ANSWER CONTRACT:",
@@ -692,11 +708,11 @@ function getPass1Tools(
     return undefined;
   }
 
-  if (intentType === "action_request" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
+  if (CREATE_JOB_PROMPT_PATTERN.test(message) || looksLikeStructuredJobDraft(message)) {
     return [AI_TOOL_MAP.prepare_job_posting];
   }
 
-  if (intentType === "action_request" && CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
+  if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_discussion_thread];
   }
 
@@ -805,12 +821,20 @@ function formatPrepareJobPostingResponse(data: unknown): string | null {
     const missingFields = Array.isArray(payload.missing_fields)
       ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
       : [];
+    const sourceWarning =
+      typeof payload.source_warning === "string" && payload.source_warning.length > 0
+        ? payload.source_warning
+        : null;
 
     if (missingFields.length === 0) {
-      return "I still need a few more job details before I can prepare this posting.";
+      return sourceWarning
+        ? `I couldn't read that job posting URL safely, but I can still draft this job if you share a few more details.`
+        : "I still need a few more job details before I can prepare this posting.";
     }
 
-    return `I can draft this job, but I still need: ${missingFields.join(", ")}.`;
+    return sourceWarning
+      ? `I couldn't read that job posting URL safely, so I still need: ${missingFields.join(", ")}.`
+      : `I can draft this job, but I still need: ${missingFields.join(", ")}.`;
   }
 
   if (payload.state === "needs_confirmation") {
@@ -934,6 +958,220 @@ function mergeDraftPayload(
     ...base,
     ...normalizedOverrides,
   };
+}
+
+type DraftHistoryMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+const DISCUSSION_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you create a discussion thread|i can draft this discussion|i drafted the discussion thread)/i;
+const JOB_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you create a job posting|i can draft this job|i drafted the job posting)/i;
+
+function extractStructuredFieldMap(message: string): Record<string, string> {
+  const entries: Record<string, string> = {};
+  const lines = message
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  let currentLabel: string | null = null;
+  let currentValue: string[] = [];
+
+  const flush = () => {
+    if (!currentLabel) {
+      return;
+    }
+    const value = currentValue.join(" ").trim();
+    if (value.length > 0) {
+      entries[currentLabel] = value;
+    }
+    currentLabel = null;
+    currentValue = [];
+  };
+
+  for (const line of lines) {
+    const match = line.match(/^([a-z][a-z\s]+?)\s*:\s*(.+)$/i);
+    if (match) {
+      flush();
+      currentLabel = match[1].trim().toLowerCase().replace(/\s+/g, " ");
+      currentValue = [match[2].trim()];
+      continue;
+    }
+
+    if (currentLabel) {
+      currentValue.push(line);
+    }
+  }
+
+  flush();
+  return entries;
+}
+
+function normalizeLocationType(value: string | undefined): "remote" | "hybrid" | "onsite" | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "remote" || normalized === "hybrid" || normalized === "onsite") {
+    return normalized;
+  }
+
+  return undefined;
+}
+
+function normalizeExperienceLevel(
+  value: string | undefined
+): "entry" | "mid" | "senior" | "lead" | "executive" | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "entry" || normalized === "mid" || normalized === "senior" || normalized === "lead" || normalized === "executive") {
+    return normalized;
+  }
+
+  if (normalized === "junior" || normalized === "new grad" || normalized === "new graduate") {
+    return "entry";
+  }
+
+  return undefined;
+}
+
+function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const title = getNonEmptyString(fields.title);
+    const body = getNonEmptyString(fields.body);
+
+    if (title) {
+      draft.title = title;
+    }
+    if (body) {
+      draft.body = body;
+    }
+  }
+
+  return draft;
+}
+
+function extractJobDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const title = getNonEmptyString(fields.title);
+    const company = getNonEmptyString(fields.company);
+    const location = getNonEmptyString(fields.location);
+    const description = getNonEmptyString(fields.description);
+    const applicationUrl = getNonEmptyString(fields["application url"] ?? fields["application link"] ?? fields.link);
+    const contactEmail = getNonEmptyString(fields["contact email"]);
+    const industry = getNonEmptyString(fields.industry);
+    const locationType = normalizeLocationType(getNonEmptyString(fields["location type"]) ?? undefined);
+    const experienceLevel = normalizeExperienceLevel(getNonEmptyString(fields["experience level"]) ?? undefined);
+
+    if (title) draft.title = title;
+    if (company) draft.company = company;
+    if (location) draft.location = location;
+    if (description) draft.description = description;
+    if (applicationUrl) draft.application_url = applicationUrl;
+    if (contactEmail) draft.contact_email = contactEmail;
+    if (industry) draft.industry = industry;
+    if (locationType) draft.location_type = locationType;
+    if (experienceLevel) draft.experience_level = experienceLevel;
+  }
+
+  return draft;
+}
+
+function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionType | null {
+  if (message.role === "user") {
+    if (CREATE_JOB_PROMPT_PATTERN.test(message.content) || looksLikeStructuredJobDraft(message.content)) {
+      return "create_job_posting";
+    }
+    if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message.content)) {
+      return "create_discussion_thread";
+    }
+    return null;
+  }
+
+  if (JOB_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "create_job_posting";
+  }
+  if (DISCUSSION_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "create_discussion_thread";
+  }
+  return null;
+}
+
+function inferDraftSessionFromHistory(input: {
+  organizationId: string;
+  userId: string;
+  threadId: string;
+  messages: DraftHistoryMessage[];
+}): DraftSessionRecord | null {
+  for (let index = input.messages.length - 1; index >= 0; index -= 1) {
+    const draftType = inferDraftTypeFromMessage(input.messages[index]);
+    if (!draftType) {
+      continue;
+    }
+
+    const relevantMessages = input.messages.slice(index);
+    const draftPayload =
+      draftType === "create_job_posting"
+        ? extractJobDraftFromHistory(relevantMessages)
+        : extractDiscussionDraftFromHistory(relevantMessages);
+
+    const missingFields =
+      draftType === "create_job_posting"
+        ? [
+            ...(["title", "company", "location", "industry", "experience_level", "description"] as const)
+              .filter((field) => getNonEmptyString(draftPayload[field]) == null),
+            ...(
+              getNonEmptyString(draftPayload.application_url) == null &&
+              getNonEmptyString(draftPayload.contact_email) == null
+                ? ["application_url"]
+                : []
+            ),
+          ]
+        : (["title", "body"] as const).filter((field) => getNonEmptyString(draftPayload[field]) == null);
+
+    if (Object.keys(draftPayload).length === 0 && missingFields.length === 0) {
+      continue;
+    }
+
+    const now = new Date().toISOString();
+    return {
+      id: `inferred-${input.threadId}`,
+      organization_id: input.organizationId,
+      user_id: input.userId,
+      thread_id: input.threadId,
+      draft_type: draftType,
+      status: missingFields.length > 0 ? "collecting_fields" : "ready_for_confirmation",
+      draft_payload: draftPayload as DraftSessionRecord["draft_payload"],
+      missing_fields: missingFields,
+      pending_action_id: null,
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  return null;
 }
 
 function buildDraftSessionContextMessage(
@@ -1194,39 +1432,117 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       }
 
       if (canUseDraftSessions) {
-        activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
-          organizationId: ctx.orgId,
-          userId: ctx.userId,
-          threadId,
-        });
-
-        if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
-          await clearDraftSessionFn(ctx.serviceSupabase, {
+        try {
+          activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
             organizationId: ctx.orgId,
             userId: ctx.userId,
             threadId,
-            pendingActionId: activeDraftSession.pending_action_id,
           });
+
+          if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
+            try {
+              await clearDraftSessionFn(ctx.serviceSupabase, {
+                organizationId: ctx.orgId,
+                userId: ctx.userId,
+                threadId,
+                pendingActionId: activeDraftSession.pending_action_id,
+              });
+            } catch (error) {
+              aiLog("warn", "ai-chat", "failed to clear expired draft session", {
+                ...requestLogContext,
+                threadId,
+              }, { error });
+            }
+            activeDraftSession = null;
+          }
+
+          if (activeDraftSession) {
+            if (
+              shouldContinueDraftSession(
+                messageSafety.promptSafeMessage,
+                activeDraftSession,
+                routing
+              )
+            ) {
+              pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]];
+            } else {
+              try {
+                await clearDraftSessionFn(ctx.serviceSupabase, {
+                  organizationId: ctx.orgId,
+                  userId: ctx.userId,
+                  threadId,
+                  pendingActionId: activeDraftSession.pending_action_id,
+                });
+              } catch (error) {
+                aiLog("warn", "ai-chat", "failed to clear abandoned draft session", {
+                  ...requestLogContext,
+                  threadId,
+                }, { error });
+              }
+              activeDraftSession = null;
+            }
+          }
+        } catch (error) {
           activeDraftSession = null;
+          aiLog("warn", "ai-chat", "failed to load draft session; continuing without it", {
+            ...requestLogContext,
+            threadId,
+          }, { error });
         }
 
-        if (activeDraftSession) {
-          if (
-            shouldContinueDraftSession(
-              messageSafety.promptSafeMessage,
-              activeDraftSession,
-              routing
-            )
-          ) {
-            pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]];
-          } else {
-            await clearDraftSessionFn(ctx.serviceSupabase, {
-              organizationId: ctx.orgId,
-              userId: ctx.userId,
+        if (!activeDraftSession) {
+          try {
+            const { data: draftHistory, error: draftHistoryError } = await ctx.supabase
+              .from("ai_messages")
+              .select("role, content")
+              .eq("thread_id", threadId)
+              .eq("status", "complete")
+              .order("created_at", { ascending: true })
+              .limit(12);
+
+            if (draftHistoryError) {
+              aiLog("warn", "ai-chat", "failed to load thread history for draft inference", {
+                ...requestLogContext,
+                threadId,
+              }, { error: draftHistoryError });
+            } else {
+              const inferredDraftSession = inferDraftSessionFromHistory({
+                organizationId: ctx.orgId,
+                userId: ctx.userId,
+                threadId,
+                messages: (draftHistory ?? [])
+                  .filter(
+                    (row: any): row is { role: "user" | "assistant"; content: string } =>
+                      (row?.role === "user" || row?.role === "assistant") &&
+                      typeof row?.content === "string" &&
+                      row.content.trim().length > 0
+                  )
+                  .map((row) => ({
+                    role: row.role,
+                    content:
+                      row.role === "user"
+                        ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
+                        : row.content,
+                  })),
+              });
+
+              if (
+                inferredDraftSession &&
+                shouldContinueDraftSession(
+                  messageSafety.promptSafeMessage,
+                  inferredDraftSession,
+                  routing
+                )
+              ) {
+                activeDraftSession = inferredDraftSession;
+                pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]];
+              }
+            }
+          } catch (error) {
+            aiLog("warn", "ai-chat", "failed to infer draft session from thread history", {
+              ...requestLogContext,
               threadId,
-              pendingActionId: activeDraftSession.pending_action_id,
-            });
-            activeDraftSession = null;
+            }, { error });
           }
         }
       }
@@ -2092,26 +2408,34 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                         ? toolData.pending_action.expires_at
                         : undefined;
 
-                    activeDraftSession = await saveDraftSessionFn(ctx.serviceSupabase, {
-                      organizationId: ctx.orgId,
-                      userId: ctx.userId,
-                      threadId: threadId!,
-                      draftType:
-                        toolEvent.name === "prepare_job_posting"
-                          ? "create_job_posting"
-                          : "create_discussion_thread",
-                      status:
-                        toolData.state === "needs_confirmation"
-                          ? "ready_for_confirmation"
-                          : "collecting_fields",
-                      draftPayload:
-                        toolData.draft && typeof toolData.draft === "object"
-                          ? (toolData.draft as any)
-                          : (parsedArgs as any),
-                      missingFields,
-                      pendingActionId,
-                      expiresAt: pendingExpiresAt,
-                    });
+                    try {
+                      activeDraftSession = await saveDraftSessionFn(ctx.serviceSupabase, {
+                        organizationId: ctx.orgId,
+                        userId: ctx.userId,
+                        threadId: threadId!,
+                        draftType:
+                          toolEvent.name === "prepare_job_posting"
+                            ? "create_job_posting"
+                            : "create_discussion_thread",
+                        status:
+                          toolData.state === "needs_confirmation"
+                            ? "ready_for_confirmation"
+                            : "collecting_fields",
+                        draftPayload:
+                          toolData.draft && typeof toolData.draft === "object"
+                            ? (toolData.draft as any)
+                            : (parsedArgs as any),
+                        missingFields,
+                        pendingActionId,
+                        expiresAt: pendingExpiresAt,
+                      });
+                    } catch (error) {
+                      activeDraftSession = null;
+                      aiLog("warn", "ai-chat", "failed to persist draft session; continuing without it", {
+                        ...requestLogContext,
+                        threadId: threadId!,
+                      }, { error, toolName: toolEvent.name });
+                    }
                   }
                 }
 
