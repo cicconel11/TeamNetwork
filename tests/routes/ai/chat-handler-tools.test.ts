@@ -12,6 +12,10 @@ let auditEntries: any[] = [];
 let executeToolCallCalls: any[] = [];
 let composeResponseCalls: any[] = [];
 
+function buildThreadId(index: number) {
+  return `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+}
+
 function okToolResult(data: unknown) {
   return { kind: "ok" as const, data };
 }
@@ -154,17 +158,17 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       userId: ADMIN_USER.id,
       role: "admin",
       supabase: supabaseStub,
-      serviceSupabase: {
-        rpc: async (_fn: string, params: any) => ({
-          data: {
-            thread_id:
+        serviceSupabase: {
+          rpc: async (_fn: string, params: any) => ({
+            data: {
+              thread_id:
               params.p_thread_id ??
-              `thread-${++supabaseStub.state.threadCount}`,
-            user_msg_id: "user-1",
-          },
-          error: null,
-        }),
-      },
+              buildThreadId(++supabaseStub.state.threadCount),
+              user_msg_id: "user-1",
+            },
+            error: null,
+          }),
+        },
     }),
     buildPromptContext: async (input: any) => ({
       systemPrompt: "System prompt",
@@ -206,10 +210,10 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       auditEntries.push(entry);
     },
     retrieveRelevantChunks: async () => [],
-    resolveOwnThread: async () => ({
+    resolveOwnThread: async (threadId: string) => ({
       ok: true,
       thread: {
-        id: "t1",
+        id: threadId,
         user_id: ADMIN_USER.id,
         org_id: ORG_ID,
         surface: "general",
@@ -800,6 +804,243 @@ test("create discussion requests still force prepare_discussion_thread when the 
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
   assert.match(body, /I drafted the discussion thread/i);
   assert.match(body, /"type":"pending_action"/);
+});
+
+test("job draft follow-up keeps prepare_job_posting forced and merges missing details", async () => {
+  let draftSession: any = null;
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getDraftSession: async () => draftSession,
+      saveDraftSession: async (_supabase: unknown, input: any) => {
+        draftSession = {
+          id: "draft-job-1",
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: input.threadId,
+          draft_type: input.draftType,
+          status: input.status,
+          draft_payload: input.draftPayload,
+          missing_fields: input.missingFields,
+          pending_action_id: input.pendingActionId ?? null,
+          expires_at: input.expiresAt ?? "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        };
+        return draftSession;
+      },
+      clearDraftSession: async () => {
+        draftSession = null;
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_job_posting",
+            argsJson: draftSession
+              ? '{"location":"Philadelphia, PA","industry":"Sports","application_url":"https://example.com/jobs/volunteer-fundraising"}'
+              : '{"title":"Volunteer Fundraising Coordinator","company":"Test Organization","description":"Help lead fundraising efforts."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_job_posting should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+
+        if (!draftSession) {
+          return okToolResult({
+            state: "missing_fields",
+            missing_fields: ["location", "industry", "application_url"],
+            draft: {
+              title: "Volunteer Fundraising Coordinator",
+              company: "Test Organization",
+              description: "Help lead fundraising efforts.",
+            },
+          });
+        }
+
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-job-continue-123",
+            action_type: "create_job_posting",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review job posting",
+              description: "Confirm the drafted job before it is added to the jobs board.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const firstResponse = await POST(makeRequest("Create a job posting for a volunteer fundraising coordinator") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const firstBody = await firstResponse.text();
+
+  assert.match(firstBody, /I can draft this job, but I still need: location, industry, application_url\./i);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const followUpRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message:
+        "It is in Philadelphia, in the sports industry, and the application URL is https://example.com/jobs/volunteer-fundraising",
+      surface: "general",
+      threadId: draftSession.thread_id,
+      idempotencyKey: "33333333-3333-4333-8333-333333333333",
+    }),
+  });
+
+  const secondResponse = await POST(followUpRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const secondBody = await secondResponse.text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_job_posting"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_job_posting" },
+  });
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    title: "Volunteer Fundraising Coordinator",
+    company: "Test Organization",
+    description: "Help lead fundraising efforts.",
+    location: "Philadelphia, PA",
+    industry: "Sports",
+    application_url: "https://example.com/jobs/volunteer-fundraising",
+  });
+  assert.match(secondBody, /I drafted the job posting/i);
+  assert.match(secondBody, /"type":"pending_action"/);
+});
+
+test("discussion draft follow-up keeps prepare_discussion_thread forced and merges missing details", async () => {
+  let draftSession: any = null;
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getDraftSession: async () => draftSession,
+      saveDraftSession: async (_supabase: unknown, input: any) => {
+        draftSession = {
+          id: "draft-discussion-1",
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: input.threadId,
+          draft_type: input.draftType,
+          status: input.status,
+          draft_payload: input.draftPayload,
+          missing_fields: input.missingFields,
+          pending_action_id: input.pendingActionId ?? null,
+          expires_at: input.expiresAt ?? "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        };
+        return draftSession;
+      },
+      clearDraftSession: async () => {
+        draftSession = null;
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_thread",
+            argsJson: draftSession
+              ? '{"body":"Let\\u2019s organize volunteer assignments for the fundraiser."}'
+              : '{"title":"Spring Volunteer Assignments"}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_thread should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+
+        if (!draftSession) {
+          return okToolResult({
+            state: "missing_fields",
+            missing_fields: ["body"],
+            draft: {
+              title: "Spring Volunteer Assignments",
+            },
+          });
+        }
+
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-discussion-continue-123",
+            action_type: "create_discussion_thread",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion thread",
+              description: "Confirm the drafted thread before it is posted to discussions.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const firstResponse = await POST(makeRequest("Create a discussion thread about spring volunteer assignments") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const firstBody = await firstResponse.text();
+
+  assert.match(firstBody, /I can draft this discussion, but I still need: body\./i);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const followUpRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Let’s organize volunteer assignments for the fundraiser.",
+      surface: "general",
+      threadId: draftSession.thread_id,
+      idempotencyKey: "44444444-4444-4444-8444-444444444444",
+    }),
+  });
+
+  const secondResponse = await POST(followUpRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const secondBody = await secondResponse.text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_thread" },
+  });
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    title: "Spring Volunteer Assignments",
+    body: "Let’s organize volunteer assignments for the fundraiser.",
+  });
+  assert.match(secondBody, /I drafted the discussion thread/i);
+  assert.match(secondBody, /"type":"pending_action"/);
 });
 
 test("navigation phrasings recognized by the intent router attach find_navigation_targets", async () => {

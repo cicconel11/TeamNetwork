@@ -52,6 +52,15 @@ import {
   INTERRUPTED_ASSISTANT_MESSAGE,
 } from "@/lib/ai/assistant-message-display";
 import {
+  clearDraftSession,
+  getDraftSession,
+  isDraftSessionExpired,
+  saveDraftSession,
+  supportsDraftSessionsStore,
+  type DraftSessionRecord,
+  type DraftSessionType,
+} from "@/lib/ai/draft-sessions";
+import {
   createStageAbortSignal,
   isStageTimeoutError,
   PASS1_MODEL_TIMEOUT_MS,
@@ -82,6 +91,9 @@ export interface ChatRouteDeps {
   buildTurnExecutionPolicy?: typeof buildTurnExecutionPolicy;
   verifyToolBackedResponse?: typeof verifyToolBackedResponse;
   trackOpsEventServer?: typeof trackOpsEventServer;
+  getDraftSession?: typeof getDraftSession;
+  saveDraftSession?: typeof saveDraftSession;
+  clearDraftSession?: typeof clearDraftSession;
 }
 
 const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
@@ -882,6 +894,17 @@ const MEMBER_LIST_PASS2_INSTRUCTION = [
   "- You may render a presentation-only role suffix like `Name (Parent)` only when that role exists in the returned row.",
   "- If a row has no trustworthy human name, describe it as an email-only member/admin account instead of inventing a person name.",
 ].join("\n");
+const ACTIVE_DRAFT_CONTINUATION_INSTRUCTION = [
+  "ACTIVE DRAFT CONTINUATION:",
+  "- A matching assistant draft may already be in progress for this thread.",
+  "- When a matching prepare tool is attached, treat the user's latest message as a continuation of that draft unless they clearly changed topics.",
+  "- Call the attached prepare tool with the updated draft details instead of replying with read-only prose.",
+  "- Do not say you lack the ability to create jobs or discussion threads when the matching prepare tool is attached.",
+].join("\n");
+const DRAFT_CANCEL_PATTERN =
+  /(?<!\w)(?:cancel|never\s+mind|nevermind|forget\s+(?:that|it)|scratch\s+that|stop\s+working\s+on\s+that)(?!\w)/i;
+const DIRECT_QUERY_START_PATTERN =
+  /^(?:show|tell|list|what|who|when|where|why|how|give|summarize|explain|open|find)\b/i;
 
 function getGroundingFallbackForTools(toolNames: ToolName[]): string {
   if (toolNames.length > 0 && toolNames.every((toolName) => toolName === "list_members")) {
@@ -889,6 +912,98 @@ function getGroundingFallbackForTools(toolNames: ToolName[]): string {
   }
 
   return TOOL_GROUNDING_FALLBACK;
+}
+
+function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
+  return draftType === "create_job_posting"
+    ? "prepare_job_posting"
+    : "prepare_discussion_thread";
+}
+
+function mergeDraftPayload(
+  base: Record<string, unknown>,
+  overrides: Record<string, unknown>
+): Record<string, unknown> {
+  const normalizedOverrides = Object.fromEntries(
+    Object.entries(overrides).filter(
+      ([, value]) => !(typeof value === "string" && value.trim().length === 0)
+    )
+  );
+
+  return {
+    ...base,
+    ...normalizedOverrides,
+  };
+}
+
+function buildDraftSessionContextMessage(
+  draftSession: DraftSessionRecord
+): string | null {
+  const lines = ["## Active Draft Session"];
+  lines.push(`- Draft type: ${draftSession.draft_type.replace(/_/g, " ")}`);
+  if (draftSession.missing_fields.length > 0) {
+    lines.push(`- Missing fields: ${draftSession.missing_fields.join(", ")}`);
+  }
+
+  const payloadLines = Object.entries(draftSession.draft_payload ?? {})
+    .map(([key, value]) => {
+      if (typeof value === "string" && value.trim().length > 0) {
+        return `- ${key}: ${value}`;
+      }
+      if (Array.isArray(value) && value.length > 0) {
+        return `- ${key}: ${value.join(", ")}`;
+      }
+      return null;
+    })
+    .filter((line): line is string => Boolean(line));
+
+  if (payloadLines.length > 0) {
+    lines.push("- Current draft details:");
+    lines.push(...payloadLines);
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
+}
+
+function shouldContinueDraftSession(
+  message: string,
+  draftSession: DraftSessionRecord,
+  routing: ReturnType<typeof resolveSurfaceRouting>
+): boolean {
+  if (draftSession.draft_type === "create_job_posting" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
+    return true;
+  }
+
+  if (
+    draftSession.draft_type === "create_discussion_thread" &&
+    CREATE_DISCUSSION_PROMPT_PATTERN.test(message)
+  ) {
+    return true;
+  }
+
+  if (
+    (draftSession.draft_type === "create_job_posting" &&
+      CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) ||
+    (draftSession.draft_type === "create_discussion_thread" &&
+      CREATE_JOB_PROMPT_PATTERN.test(message))
+  ) {
+    return false;
+  }
+
+  if (DRAFT_CANCEL_PATTERN.test(message)) {
+    return false;
+  }
+
+  if (routing.intentType === "navigation" || routing.intentType === "casual") {
+    return false;
+  }
+
+  const trimmed = message.trim();
+  if (trimmed.endsWith("?") || DIRECT_QUERY_START_PATTERN.test(trimmed)) {
+    return false;
+  }
+
+  return true;
 }
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
@@ -907,6 +1022,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const verifyToolBackedResponseFn =
     deps.verifyToolBackedResponse ?? verifyToolBackedResponse;
   const trackOpsEventServerFn = deps.trackOpsEventServer ?? trackOpsEventServer;
+  const getDraftSessionFn = deps.getDraftSession ?? getDraftSession;
+  const saveDraftSessionFn = deps.saveDraftSession ?? saveDraftSession;
+  const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
     request: NextRequest,
@@ -939,6 +1057,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       getAiOrgContextFn(orgId, user, rateLimit, { supabase, logContext: baseLogContext })
     );
     if (!ctx.ok) return ctx.response;
+    const canUseDraftSessions =
+      supportsDraftSessionsStore(ctx.serviceSupabase) ||
+      Boolean(deps.getDraftSession || deps.saveDraftSession || deps.clearDraftSession);
     const requestLogContext: AiLogContext = {
       ...baseLogContext,
       userId: ctx.userId,
@@ -959,6 +1080,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     let executionPolicy!: TurnExecutionPolicy;
     let usesSharedStaticContext = false;
     let pass1Tools: ReturnType<typeof getPass1Tools>;
+    let activeDraftSession: DraftSessionRecord | null = null;
     let cacheStatus: CacheStatus;
     let cacheEntryId: string | undefined;
     let cacheBypassReason: string | undefined;
@@ -1044,7 +1166,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const requestNow = new Date().toISOString();
     const requestTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
     const skipRagRetrieval = executionPolicy.retrieval.mode === "skip";
-    const usesToolFirstContext =
+    let usesToolFirstContext =
       !usesSharedStaticContext &&
       executionPolicy.retrieval.reason === "tool_only_structured_query" &&
       isToolFirstEligible(pass1Tools);
@@ -1070,9 +1192,52 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           { status: resolution.status, headers: rateLimit.headers }
         );
       }
+
+      if (canUseDraftSessions) {
+        activeDraftSession = await getDraftSessionFn(ctx.serviceSupabase, {
+          organizationId: ctx.orgId,
+          userId: ctx.userId,
+          threadId,
+        });
+
+        if (activeDraftSession && isDraftSessionExpired(activeDraftSession)) {
+          await clearDraftSessionFn(ctx.serviceSupabase, {
+            organizationId: ctx.orgId,
+            userId: ctx.userId,
+            threadId,
+            pendingActionId: activeDraftSession.pending_action_id,
+          });
+          activeDraftSession = null;
+        }
+
+        if (activeDraftSession) {
+          if (
+            shouldContinueDraftSession(
+              messageSafety.promptSafeMessage,
+              activeDraftSession,
+              routing
+            )
+          ) {
+            pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(activeDraftSession.draft_type)]];
+          } else {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId,
+              pendingActionId: activeDraftSession.pending_action_id,
+            });
+            activeDraftSession = null;
+          }
+        }
+      }
     } else {
       skipStage(stageTimings, "thread_resolution");
     }
+
+    usesToolFirstContext =
+      !usesSharedStaticContext &&
+      executionPolicy.retrieval.reason === "tool_only_structured_query" &&
+      isToolFirstEligible(pass1Tools);
 
     // 5. Abandoned stream cleanup (5-min threshold)
     if (existingThreadId) {
@@ -1777,6 +1942,13 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         return;
       }
 
+      const draftSessionContextMessage = activeDraftSession
+        ? buildDraftSessionContextMessage(activeDraftSession)
+        : null;
+      const pass1SystemPrompt = activeDraftSession
+        ? `${systemPrompt}\n\n${ACTIVE_DRAFT_CONTINUATION_INSTRUCTION}`
+        : systemPrompt;
+
       const historyMessages = (history ?? [])
         .filter((m: any) => m.content)
         .map((m: any) => ({
@@ -1789,8 +1961,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         .filter((m: { content: string }) => Boolean(m.content));
 
       const contextMessages = orgContextMessage
-        ? [{ role: "user" as const, content: orgContextMessage }, ...historyMessages]
-        : historyMessages;
+        ? [
+            { role: "user" as const, content: orgContextMessage },
+            ...(draftSessionContextMessage
+              ? [{ role: "user" as const, content: draftSessionContextMessage }]
+              : []),
+            ...historyMessages,
+          ]
+        : draftSessionContextMessage
+          ? [{ role: "user" as const, content: draftSessionContextMessage }, ...historyMessages]
+          : historyMessages;
 
       const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
@@ -1800,7 +1980,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           PASS1_MODEL_TIMEOUT_MS,
           {
             client,
-            systemPrompt,
+            systemPrompt: pass1SystemPrompt,
             messages: contextMessages,
             tools: pass1Tools,
             toolChoice: pass1ToolChoice,
@@ -1848,6 +2028,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               return "continue";
             }
 
+            if (
+              activeDraftSession &&
+              toolEvent.name === getToolNameForDraftType(activeDraftSession.draft_type)
+            ) {
+              parsedArgs = mergeDraftPayload(
+                activeDraftSession.draft_payload as Record<string, unknown>,
+                parsedArgs
+              );
+            }
+
             auditToolCalls.push({ name: toolEvent.name, args: parsedArgs });
 
             if (toolPassBreakerOpen) {
@@ -1871,6 +2061,60 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
             switch (result.kind) {
               case "ok":
+                if (
+                  canUseDraftSessions &&
+                  (toolEvent.name === "prepare_job_posting" ||
+                    toolEvent.name === "prepare_discussion_thread") &&
+                  result.data &&
+                  typeof result.data === "object"
+                ) {
+                  const toolData = result.data as PendingActionToolPayload;
+                  if (
+                    toolData.state === "missing_fields" ||
+                    toolData.state === "needs_confirmation"
+                  ) {
+                    const missingFields = Array.isArray(toolData.missing_fields)
+                      ? toolData.missing_fields.filter(
+                          (field): field is string =>
+                            typeof field === "string" && field.length > 0
+                        )
+                      : [];
+                    const pendingActionId =
+                      toolData.pending_action &&
+                      typeof toolData.pending_action === "object" &&
+                      typeof toolData.pending_action.id === "string"
+                        ? toolData.pending_action.id
+                        : null;
+                    const pendingExpiresAt =
+                      toolData.pending_action &&
+                      typeof toolData.pending_action === "object" &&
+                      typeof toolData.pending_action.expires_at === "string"
+                        ? toolData.pending_action.expires_at
+                        : undefined;
+
+                    activeDraftSession = await saveDraftSessionFn(ctx.serviceSupabase, {
+                      organizationId: ctx.orgId,
+                      userId: ctx.userId,
+                      threadId: threadId!,
+                      draftType:
+                        toolEvent.name === "prepare_job_posting"
+                          ? "create_job_posting"
+                          : "create_discussion_thread",
+                      status:
+                        toolData.state === "needs_confirmation"
+                          ? "ready_for_confirmation"
+                          : "collecting_fields",
+                      draftPayload:
+                        toolData.draft && typeof toolData.draft === "object"
+                          ? (toolData.draft as any)
+                          : (parsedArgs as any),
+                      missingFields,
+                      pendingActionId,
+                      expiresAt: pendingExpiresAt,
+                    });
+                  }
+                }
+
                 addToolCallTiming(stageTimings, {
                   name: toolEvent.name,
                   status: "completed",
