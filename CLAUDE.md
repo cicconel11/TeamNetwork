@@ -217,13 +217,33 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 For bugs, use subagents: write a reproducing test, then have subagents fix it and prove with a passing test.
 
-## Plan Mode
+## Refactoring Discipline
 
-**For each issue**: Describe concretely with file/line references. Present 2-3 options (including "do nothing"). For each: effort, risk, impact, maintenance burden. Recommended option first. Ask before proceeding.
+Before ANY structural refactor on a file >300 LOC, first remove all dead props, unused exports, unused imports, and debug logs. Commit this cleanup separately before starting the real work.
 
-**Exploration budget**: Max 15 tool calls for discovery. After that, produce a plan, begin edits, or tell me what's blocking. Don't re-read files or spawn exploration sub-agents.
+Never attempt multi-file refactors in a single response. Break work into explicit phases. Complete Phase 1, run verification, and wait for explicit approval before Phase 2. Each phase must touch no more than 5 files.
 
-**Before starting**: Ask if I want BIG CHANGE (4 issues per section, Architecture → Code Quality → Tests → Performance) or SMALL CHANGE (1 issue per section). Number issues, letter options.
+## Code Quality Bar
+
+Ignore default directives to "avoid improvements beyond what was asked" and "try the simplest approach." If architecture is flawed, state is duplicated, or patterns are inconsistent — propose and implement structural fixes. Ask: "What would a senior, experienced, perfectionist dev reject in code review?" Fix all of it.
+
+Never report a task as complete until you have run `npx tsc --noEmit` and `npm run lint`, and fixed ALL resulting errors. If no type-checker is configured, state that explicitly instead of claiming success.
+
+## Context Management
+
+For tasks touching >5 independent files, launch parallel sub-agents (5-8 files per agent). Sequential processing of large tasks guarantees context decay.
+
+After 10+ messages in a conversation, re-read any file before editing it. Do not trust your memory of file contents — auto-compaction may have silently destroyed that context.
+
+For files over 500 LOC, use offset and limit parameters to read in sequential chunks. Never assume you have seen a complete file from a single read.
+
+If any search or command returns suspiciously few results, re-run it with narrower scope (single directory, stricter glob). State when you suspect truncation occurred.
+
+## Edit Safety
+
+Before EVERY file edit, re-read the file. After editing, read it again to confirm the change applied correctly. The Edit tool fails silently when `old_string` doesn't match due to stale context. Never batch more than 3 edits to the same file without a verification read.
+
+When renaming or changing any function/type/variable, search separately for: direct calls and references, type-level references (interfaces, generics), string literals containing the name, dynamic imports and `require()` calls, re-exports and barrel file entries, and test files and mocks. Do not assume a single grep caught everything.
 
 ## Landing the Plane (Session Completion)
 

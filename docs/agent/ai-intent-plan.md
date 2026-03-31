@@ -2,7 +2,7 @@
 
 ## Overview
 
-Each incoming chat message flows through a lightweight intent router that classifies the message content and resolves an effective surface for context loading, caching, and tool selection. The system deliberately separates **thread surface** (stable, set at creation, used for UI grouping) from **message context_surface** (per-turn, content-inferred, determines what data the LLM sees). A small internal `TurnExecutionPolicy` layer then turns existing signals (`threadId`, surface routing, `intent_type`, cache eligibility) into deterministic runtime behavior for tools, RAG, context mode, cache lookup, and audit-only grounding checks. This is stabilization work, not a broader router redesign.
+Each incoming chat message flows through a lightweight intent router that classifies the message content and resolves an effective surface for context loading, caching, and tool selection. The system deliberately separates **thread surface** (stable, set at creation, used for UI grouping) from **message context_surface** (per-turn, content-inferred, determines what data the LLM sees). A small internal `TurnExecutionPolicy` layer then turns existing signals (`threadId`, surface routing, `intent_type`, cache eligibility) into deterministic runtime behavior for tools, RAG, context mode, cache lookup, and audit-only grounding checks. Write-prep routing now also gives `prepare_job_posting` and `prepare_discussion_thread` precedence over navigation-style wording when the prompt still clearly looks like creation intent, including chat-style discussion phrasing, job-creation prompts that say `open`, and structured job-detail pastes. When the draft-session store is unavailable, the handler now also falls back to recent thread history to preserve in-progress job/discussion drafts across follow-up turns instead of dropping back to read-only prose.
 
 ## File Map
 
@@ -82,7 +82,9 @@ init_ai_chat RPC
   │
   ├─ resolve pass-1 tools from execution policy
   │    → `none` for casual / static_general / out_of_scope
-  │    → surface-gated read tools for live_lookup / follow_up
+  │    → create-intent write-prep tools win before navigation/read tools
+  │    → surface-gated read tools for live_lookup / follow_up otherwise
+  │    → if draft-session storage misses, recent thread history can still recover an active draft and re-force the matching write-prep tool
   │
   └─ Stream LLM
        ├─ if successful pass-2 tool summary exists: verifyToolBackedResponse(...)
@@ -136,9 +138,11 @@ Count word-boundary regex matches (`(?<!\w)keyword(?!\w)`) per surface:
 
 5. **`init_ai_chat` is service-role only.** Users cannot inject arbitrary `context_surface` or `intent` values. The RPC is restricted to `service_role` via explicit `REVOKE`/`GRANT`.
 
-6. **Keyword lists are static and hardcoded.** Adding a new surface requires updating `aiSurfaceEnum` in the schema, `SURFACE_KEYWORDS` in intent-router.ts, `SURFACE_PREFIXES` in route-surface.ts, and `SURFACE_DATA_SOURCES` in context-builder.ts.
+6. **Keyword lists are static and hardcoded.** Adding a new surface requires updating `aiSurfaceEnum` in the schema, `SURFACE_KEYWORDS` in intent-router.ts, `SURFACE_PREFIXES` in route-surface.ts, and `SURFACE_DATA_SOURCES` in context-builder.ts. Adjusting write-intent recognition currently also requires updating the create-intent matchers in the chat handler.
 
-7. **Normalization is shared.** Routing and cache utilities now use the same normalization helper, avoiding silent drift between surface routing and cache-key derivation.
+7. **Job URL enrichment is best-effort, not mandatory.** `prepare_job_posting` still attempts safe source intake when a draft is incomplete and a URL may help fill missing fields, but complete user-supplied drafts no longer fail closed just because the source page is oversized or unreadable.
+
+8. **Normalization is shared.** Routing and cache utilities now use the same normalization helper, avoiding silent drift between surface routing and cache-key derivation.
 
 ## Related Docs
 

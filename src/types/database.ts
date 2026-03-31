@@ -444,7 +444,6 @@ export type Database = {
         Row: {
           action_type: string
           created_at: string
-          error_message: string | null
           executed_at: string | null
           expires_at: string
           id: string
@@ -460,9 +459,8 @@ export type Database = {
         Insert: {
           action_type: string
           created_at?: string
-          error_message?: string | null
           executed_at?: string | null
-          expires_at?: string
+          expires_at: string
           id?: string
           organization_id: string
           payload: Json
@@ -476,7 +474,6 @@ export type Database = {
         Update: {
           action_type?: string
           created_at?: string
-          error_message?: string | null
           executed_at?: string | null
           expires_at?: string
           id?: string
@@ -491,7 +488,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ai_pending_actions_org_id_fkey"
+            foreignKeyName: "ai_pending_actions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -3148,42 +3145,6 @@ export type Database = {
         }
         Relationships: []
       }
-      mcp_resources: {
-        Row: {
-          body: string
-          category: string
-          description: string
-          id: string
-          metadata: Json
-          mime_type: string
-          title: string
-          updated_at: string
-          uri: string
-        }
-        Insert: {
-          body: string
-          category: string
-          description: string
-          id?: string
-          metadata?: Json
-          mime_type?: string
-          title: string
-          updated_at?: string
-          uri: string
-        }
-        Update: {
-          body?: string
-          category?: string
-          description?: string
-          id?: string
-          metadata?: Json
-          mime_type?: string
-          title?: string
-          updated_at?: string
-          uri?: string
-        }
-        Relationships: []
-      }
       media_album_items: {
         Row: {
           added_at: string
@@ -5605,14 +5566,6 @@ export type Database = {
         Returns: Json
       }
       claim_linkedin_resync: { Args: { p_user_id: string }; Returns: Json }
-      claim_microsoft_token_refresh_lock: {
-        Args: {
-          p_lock_expires_at: string
-          p_lock_id: string
-          p_user_id: string
-        }
-        Returns: boolean
-      }
       claim_stale_stripe_event: {
         Args: { p_event_id: string }
         Returns: {
@@ -5637,10 +5590,6 @@ export type Database = {
       }
       complete_linkedin_manual_sync: {
         Args: { p_attempt_id: string }
-        Returns: Json
-      }
-      confirm_ai_pending_action: {
-        Args: { p_action_id: string; p_user_id: string }
         Returns: Json
       }
       create_enterprise_invite: {
@@ -5796,13 +5745,6 @@ export type Database = {
       }
       get_alumni_quota: { Args: { p_org_id: string }; Returns: Json }
       get_dropdown_options: { Args: { p_org_id: string }; Returns: Json }
-      get_enterprise_member_counts: {
-        Args: { enterprise_ids: string[] }
-        Returns: {
-          enterprise_id: string
-          member_count: number
-        }[]
-      }
       get_linkedin_manual_sync_status: {
         Args: { p_user_id: string }
         Returns: Json
@@ -5949,10 +5891,6 @@ export type Database = {
       release_linkedin_manual_sync: {
         Args: { p_attempt_id: string }
         Returns: Json
-      }
-      release_microsoft_token_refresh_lock: {
-        Args: { p_lock_id: string; p_user_id: string }
-        Returns: boolean
       }
       reorder_media_albums: {
         Args: { p_album_ids: string[]; p_org_id: string }
