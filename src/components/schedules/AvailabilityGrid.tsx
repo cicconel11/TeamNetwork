@@ -12,6 +12,7 @@ interface AvailabilityGridProps {
   schedules: (AcademicSchedule & { users?: Pick<User, "name" | "email"> | null })[];
   orgId: string;
   mode?: "personal" | "team";
+  timeZone?: string;
 }
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -112,7 +113,7 @@ function getHeatmapOverlay(busyCount: number, totalMembers: number, isOrgBusy: b
   return "";
 }
 
-export function AvailabilityGrid({ schedules, orgId, mode = "team" }: AvailabilityGridProps) {
+export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: AvailabilityGridProps) {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedCell, setSelectedCell] = useState<PopoverState>(null);
   const [totalMembers, setTotalMembers] = useState<number>(mode === "team" ? 0 : 1);
@@ -338,7 +339,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
         startAt: event.start_at,
         endAt: event.end_at,
         allDay: Boolean(event.all_day),
-      });
+      }, timeZone);
 
       segments.forEach((segment) => {
         if (!weekDayKeys.has(segment.dateKey)) return;
@@ -349,7 +350,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
     });
 
     return grid;
-  }, [calendarEvents, weekDays, mode, schedules]);
+  }, [calendarEvents, weekDays, mode, schedules, timeZone]);
 
   const getConflicts = (dateKey: string, hour: number): ConflictInfo[] => {
     return conflictGrid.get(`${dateKey}-${hour}`) || [];
@@ -358,13 +359,13 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team" }: Availabili
   // Event blocks for personal mode
   const eventBlocks = useMemo(() => {
     if (mode !== "personal") return new Map<string, PositionedBlock[]>();
-    const raw = computeEventBlocks(schedules, calendarEvents, weekDays);
+    const raw = computeEventBlocks(schedules, calendarEvents, weekDays, timeZone);
     const positioned = new Map<string, PositionedBlock[]>();
     raw.forEach((blocks, dateKey) => {
       positioned.set(dateKey, resolveOverlaps(blocks));
     });
     return positioned;
-  }, [mode, schedules, calendarEvents, weekDays]);
+  }, [mode, schedules, calendarEvents, weekDays, timeZone]);
 
   // Compute summary stats from the conflict grid
   const summaryStats = useMemo(

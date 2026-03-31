@@ -14,6 +14,7 @@ type AvailabilityTabProps = {
   isAdmin: boolean;
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
+  timeZone?: string;
 };
 
 function UserIcon({ className }: { className?: string }) {
@@ -37,6 +38,7 @@ export function AvailabilityTab({
   isAdmin,
   mySchedules,
   allSchedules,
+  timeZone,
 }: AvailabilityTabProps) {
   return (
     <div className="space-y-8">
@@ -51,7 +53,7 @@ export function AvailabilityTab({
           </div>
         </div>
         <Card className="p-6 overflow-hidden">
-          <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" />
+          <AvailabilityGrid schedules={mySchedules || []} orgId={orgId} mode="personal" timeZone={timeZone} />
         </Card>
       </section>
 
@@ -67,7 +69,7 @@ export function AvailabilityTab({
             </div>
           </div>
           <Card className="p-6 overflow-hidden">
-            <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" />
+            <AvailabilityGrid schedules={allSchedules} orgId={orgId} mode="team" timeZone={timeZone} />
           </Card>
         </section>
       )}

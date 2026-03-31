@@ -42,6 +42,7 @@ export function CalendarContent({
             isAdmin={isAdmin}
             mySchedules={mySchedules}
             allSchedules={allSchedules}
+            timeZone={timeZone}
           />
         )}
       </div>

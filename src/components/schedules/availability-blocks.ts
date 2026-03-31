@@ -75,6 +75,7 @@ export function computeEventBlocks(
   schedules: ScheduleInput[],
   calendarEvents: CalendarEventInput[],
   weekDays: Date[],
+  timeZone?: string,
 ): Map<string, EventBlock[]> {
   const blocks = new Map<string, EventBlock[]>();
   const weekDayKeys = new Set(weekDays.map((day) => formatDateKey(day)));
@@ -159,7 +160,7 @@ export function computeEventBlocks(
       startAt: event.start_at,
       endAt: event.end_at,
       allDay: Boolean(event.all_day),
-    });
+    }, timeZone);
 
     segments.forEach((segment) => {
       if (!weekDayKeys.has(segment.dateKey)) return;

@@ -7,6 +7,7 @@ import { CalendarContent } from "@/components/calendar/CalendarContent";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import { fetchUnifiedEvents } from "@/lib/calendar/unified-events";
+import { getCalendarPrimaryActionHref } from "@/lib/calendar/navigation";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
 import type { AcademicSchedule, User } from "@/types/database";
@@ -25,6 +26,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
   if (!orgCtx.organization || !orgCtx.userId) return null;
 
   const orgId = orgCtx.organization.id;
+  const orgTimeZone = resolveOrgTimezone(orgCtx.organization.timezone);
 
   // Use 180-day range with 1-day UTC buffer to match client's UnifiedEventFeed
   const now = new Date();
@@ -50,6 +52,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
     fetchUnifiedEvents(supabase, orgId, orgCtx.userId, {
       start: rangeStart,
       end: rangeEnd,
+      timeZone: orgTimeZone,
     }).catch((err) => {
       console.error("[calendar] Server-side event fetch failed, client will retry:", err);
       return undefined;
@@ -95,7 +98,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
                 <span className="hidden sm:inline">{tCalendar("sync")}</span>
               </Button>
             </Link>
-            <Link href={`/${orgSlug}/calendar/new`}>
+            <Link href={getCalendarPrimaryActionHref(orgSlug)}>
               <Button>
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -114,7 +117,7 @@ export default async function CalendarPage({ params }: CalendarPageProps) {
         mySchedules={mySchedules}
         allSchedules={allSchedules}
         initialEvents={initialEvents}
-        timeZone={resolveOrgTimezone(orgCtx.organization.timezone)}
+        timeZone={orgTimeZone}
       />
     </div>
   );

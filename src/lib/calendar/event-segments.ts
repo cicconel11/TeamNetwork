@@ -16,6 +16,14 @@ export type LocalEventSegment = {
 
 const DEFAULT_EVENT_DURATION_MS = 60 * 60 * 1000;
 
+type DateTimeParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+};
+
 function startOfLocalDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
@@ -42,6 +50,56 @@ function parseFloatingDate(value: string | null): Date | null {
   const month = Number(match[2]);
   const day = Number(match[3]);
   return new Date(year, month - 1, day);
+}
+
+function getDateTimeParts(date: Date, timeZone?: string): DateTimeParts {
+  if (!timeZone) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+    };
+  }
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+
+  const hour = value("hour");
+
+  return {
+    year: value("year"),
+    month: value("month"),
+    day: value("day"),
+    hour: hour === 24 ? 0 : hour,
+    minute: value("minute"),
+  };
+}
+
+function toDateKeyFromParts(parts: Pick<DateTimeParts, "year" | "month" | "day">): string {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function dateFromDateKey(dateKey: string): Date {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day, 12);
 }
 
 function resolveEventRange(event: CalendarEventLike) {
@@ -72,7 +130,10 @@ export function toLocalDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function splitEventIntoLocalDaySegments(event: CalendarEventLike): LocalEventSegment[] {
+export function splitEventIntoLocalDaySegments(
+  event: CalendarEventLike,
+  timeZone?: string,
+): LocalEventSegment[] {
   const range = resolveEventRange(event);
   if (!range) return [];
 
@@ -88,9 +149,10 @@ export function splitEventIntoLocalDaySegments(event: CalendarEventLike): LocalE
       : endDay;
 
     for (let day = new Date(startDay); day.getTime() <= inclusiveEnd.getTime(); day = addDays(day, 1)) {
+      const dateKey = toLocalDateKey(day);
       segments.push({
-        date: new Date(day),
-        dateKey: toLocalDateKey(day),
+        date: dateFromDateKey(dateKey),
+        dateKey,
         startMinute: 0,
         endMinute: 24 * 60,
         isStart: day.getTime() === startDay.getTime(),
@@ -102,22 +164,24 @@ export function splitEventIntoLocalDaySegments(event: CalendarEventLike): LocalE
     return segments;
   }
 
-  const startDay = startOfLocalDay(start);
-  const endDay = startOfLocalDay(end);
+  const startParts = getDateTimeParts(start, timeZone);
+  const endParts = getDateTimeParts(end, timeZone);
+  const startDayKey = toDateKeyFromParts(startParts);
+  const endDayKey = toDateKeyFromParts(endParts);
 
-  for (let day = new Date(startDay); day.getTime() <= endDay.getTime(); day = addDays(day, 1)) {
-    const isStart = day.getTime() === startDay.getTime();
-    const isEnd = day.getTime() === endDay.getTime();
-    const startMinute = isStart ? (start.getHours() * 60) + start.getMinutes() : 0;
-    const endMinute = isEnd ? (end.getHours() * 60) + end.getMinutes() : 24 * 60;
+  for (let dateKey = startDayKey; dateKey <= endDayKey; dateKey = addDaysToDateKey(dateKey, 1)) {
+    const isStart = dateKey === startDayKey;
+    const isEnd = dateKey === endDayKey;
+    const startMinute = isStart ? (startParts.hour * 60) + startParts.minute : 0;
+    const endMinute = isEnd ? (endParts.hour * 60) + endParts.minute : 24 * 60;
 
     if (startMinute >= endMinute) {
       continue;
     }
 
     segments.push({
-      date: new Date(day),
-      dateKey: toLocalDateKey(day),
+      date: dateFromDateKey(dateKey),
+      dateKey,
       startMinute,
       endMinute,
       isStart,
@@ -146,7 +210,7 @@ export function formatCalendarEventTime(event: CalendarEventLike, locale = "en-U
     return startTime;
   }
 
-  if (start.toDateString() === end.toDateString()) {
+  if (toDateKeyFromParts(getDateTimeParts(start, timeZone)) === toDateKeyFromParts(getDateTimeParts(end, timeZone))) {
     const endTime = end.toLocaleTimeString(locale, timeOptions);
     return `${startTime} – ${endTime}`;
   }

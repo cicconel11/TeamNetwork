@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { fetchUnifiedEvents, parseSourcesParam } from "@/lib/calendar/unified-events";
+import { resolveOrgTimezone } from "@/lib/utils/timezone";
 
 const MAX_EVENTS = 2000;
 const MAX_DATE_RANGE_DAYS = 400;
@@ -99,10 +100,17 @@ export async function GET(request: Request) {
     }
 
     const sources = parseSourcesParam(sourcesParam);
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("timezone")
+      .eq("id", orgId)
+      .maybeSingle();
+
     const allEvents = await fetchUnifiedEvents(supabase, orgId, user.id, {
       start,
       end,
       sources,
+      timeZone: resolveOrgTimezone(org?.timezone),
     });
 
     const total = allEvents.length;

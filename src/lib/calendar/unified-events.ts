@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { eventOverlapsRange } from "@/lib/calendar/event-segments";
+import { localToUtcIso, resolveOrgTimezone } from "@/lib/utils/timezone";
 
 export type UnifiedEvent = {
   id: string;
@@ -12,6 +13,7 @@ export type UnifiedEvent = {
   sourceName: string;
   badges: string[];
   eventId?: string;
+  academicScheduleId?: string;
   color?: string;
 };
 
@@ -21,6 +23,7 @@ export type FetchUnifiedEventsOptions = {
   start: Date;
   end: Date;
   sources?: Set<SourceType>;
+  timeZone?: string;
 };
 
 export function parseSourcesParam(sourcesParam: string | null): Set<SourceType> {
@@ -51,6 +54,10 @@ export function toLocalDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+function normalizeScheduleTime(time: string): string {
+  return time.split(":").slice(0, 2).join(":");
+}
+
 export function expandAcademicSchedule(
   schedule: {
     id: string;
@@ -64,9 +71,11 @@ export function expandAcademicSchedule(
     day_of_month: number | null;
   },
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  timeZone?: string,
 ): UnifiedEvent[] {
   const events: UnifiedEvent[] = [];
+  const resolvedTimeZone = resolveOrgTimezone(timeZone);
   const scheduleStart = parseLocalDate(schedule.start_date);
   const scheduleEnd = schedule.end_date ? parseLocalDate(schedule.end_date) : rangeEnd;
 
@@ -79,19 +88,20 @@ export function expandAcademicSchedule(
 
   const createEvent = (date: Date): UnifiedEvent => {
     const dateStr = toLocalDateString(date);
-    const startDateTime = new Date(`${dateStr}T${schedule.start_time}`);
-    const endDateTime = new Date(`${dateStr}T${schedule.end_time}`);
+    const startAt = localToUtcIso(dateStr, normalizeScheduleTime(schedule.start_time), resolvedTimeZone);
+    const endAt = localToUtcIso(dateStr, normalizeScheduleTime(schedule.end_time), resolvedTimeZone);
 
     return {
       id: `class:${schedule.id}:${dateStr}`,
       title: schedule.title,
-      startAt: startDateTime.toISOString(),
-      endAt: endDateTime.toISOString(),
+      startAt,
+      endAt,
       allDay: false,
       location: null,
       sourceType: "class",
       sourceName: schedule.title,
       badges: [],
+      academicScheduleId: schedule.id,
     };
   };
 
@@ -286,7 +296,8 @@ async function fetchAcademicScheduleEvents(
   orgId: string,
   userId: string,
   start: Date,
-  end: Date
+  end: Date,
+  timeZone?: string,
 ): Promise<UnifiedEvent[]> {
   try {
     const { data, error } = await supabase
@@ -304,7 +315,7 @@ async function fetchAcademicScheduleEvents(
 
     const expanded: UnifiedEvent[] = [];
     for (const schedule of data) {
-      const events = expandAcademicSchedule(schedule, start, end);
+      const events = expandAcademicSchedule(schedule, start, end, timeZone);
       expanded.push(...events);
     }
     return expanded;
@@ -325,15 +336,16 @@ export async function fetchUnifiedEvents(
   supabase: SupabaseClient,
   orgId: string,
   userId: string,
-  { start, end, sources }: FetchUnifiedEventsOptions
+  { start, end, sources, timeZone }: FetchUnifiedEventsOptions,
 ): Promise<UnifiedEvent[]> {
   const activeSources = sources ?? new Set<SourceType>(["events", "schedules", "feeds", "classes"]);
+  const resolvedTimeZone = resolveOrgTimezone(timeZone);
 
   const [eventsResult, schedulesResult, feedsResult, classesResult] = await Promise.all([
     activeSources.has("events") ? fetchEvents(supabase, orgId, start, end) : Promise.resolve([]),
     activeSources.has("schedules") ? fetchScheduleEvents(supabase, orgId, start, end) : Promise.resolve([]),
     activeSources.has("feeds") ? fetchCalendarEvents(supabase, orgId, userId, start, end) : Promise.resolve([]),
-    activeSources.has("classes") ? fetchAcademicScheduleEvents(supabase, orgId, userId, start, end) : Promise.resolve([]),
+    activeSources.has("classes") ? fetchAcademicScheduleEvents(supabase, orgId, userId, start, end, resolvedTimeZone) : Promise.resolve([]),
   ]);
 
   const allEvents = [...eventsResult, ...schedulesResult, ...feedsResult, ...classesResult];
