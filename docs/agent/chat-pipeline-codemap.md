@@ -131,6 +131,7 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
   │       ├─ Job creation prompts can expose only `prepare_job_posting`
   │       ├─ Discussion creation prompts can expose only `prepare_discussion_thread`
+  │       ├─ Clear job/discussion create turns now also force pass-1 `tool_choice` to that single prepare tool so the model cannot bypass the pending-action flow with a freeform draft
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
   │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
   │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
@@ -270,6 +271,7 @@ type ToolExecutionResult =
 - **Inputs:** optional `limit` (default 20, max 50)
 - **Outputs:** active member rows with `id`, `user_id`, `status`, `role`, `created_at`, `name`, `email`
 - **Name handling:** prefers `members.first_name` + `last_name`; falls back to linked `users.name` for placeholder rows; otherwise returns an empty name so the UI/prompt can treat the record as an email-only account
+- **Pass-2 contract:** member answers stay row-backed. They may add presentation-only role suffixes to returned names, but they must not infer org-wide totals or grouped role counts from roster rows alone
 
 ### `list_events`
 

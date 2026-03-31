@@ -18,6 +18,19 @@ function stripMarkdown(value: string): string {
   return value.replace(/[*_`~>#"]/g, "").replace(/\[(.*?)\]\((.*?)\)/g, "$1").trim();
 }
 
+function normalizeMemberCandidate(value: string): string {
+  return normalizeIdentifier(
+    stripMarkdown(value)
+      .replace(/\s+\((?:active member|admin|alumni|parent|email-only member|email-only admin)\)\s*$/i, "")
+      .replace(/^(?:name|member)\s*:\s*/i, "")
+      .trim()
+  );
+}
+
+function isIgnoredMemberCandidate(value: string): boolean {
+  return /^(?:email|role|added|joined|status|member type|type)$/i.test(value.trim());
+}
+
 function parseStatClaim(content: string, label: string): number | null {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const rawLine of content.split("\n")) {
@@ -133,8 +146,9 @@ function verifyListMembers(content: string, data: unknown): string[] {
   }
 
   for (const candidate of extractListEntryHeads(content)) {
-    const normalizedCandidate = normalizeIdentifier(candidate);
+    const normalizedCandidate = normalizeMemberCandidate(candidate);
     if (
+      isIgnoredMemberCandidate(candidate) ||
       normalizedCandidate.includes("@") ||
       normalizedCandidate.length < 3 ||
       /^your organization/.test(normalizedCandidate)
