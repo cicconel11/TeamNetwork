@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Badge, Avatar } from "@/components/ui";
+import { UserContent } from "@/components/i18n/UserContent";
 import { ManageMembersPanel } from "@/components/chat/ManageMembersPanel";
 import { MessageBody } from "@/components/chat/MessageBody";
 import { AttachmentMenu } from "@/components/chat/AttachmentMenu";
@@ -493,6 +494,8 @@ export function ChatMessagePane({
       <MessageTopBar
         title={group.name}
         subtitle={group.description || `${members.length} members`}
+        translateTitle
+        translateSubtitle={Boolean(group.description)}
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -566,7 +569,9 @@ export function ChatMessagePane({
                       {!isGrouped && (
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-sm font-semibold text-foreground">
-                            {message.author?.name || message.author?.email || "Unknown"}
+                            <UserContent>
+                              {message.author?.name || message.author?.email || "Unknown"}
+                            </UserContent>
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {new Date(message.created_at).toLocaleTimeString([], {

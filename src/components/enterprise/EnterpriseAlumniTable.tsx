@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, Badge, Avatar, EmptyState } from "@/components/ui";
 
 interface Alumni {
@@ -40,6 +41,8 @@ export function EnterpriseAlumniTable({
   selectedIds = new Set(),
   onSelectChange,
 }: EnterpriseAlumniTableProps) {
+  const tEnterprise = useTranslations("enterprise");
+  const tCommon = useTranslations("common");
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
 
@@ -98,8 +101,8 @@ export function EnterpriseAlumniTable({
       <Card>
         <EmptyState
           icon={<GraduationCapIcon className="h-12 w-12" />}
-          title="No alumni found"
-          description="Try adjusting your filters or add alumni to your sub-organizations."
+          title={tEnterprise("alumniTable.noAlumni")}
+          description={tEnterprise("alumniTable.noAlumniDesc")}
         />
       </Card>
     );
@@ -120,7 +123,7 @@ export function EnterpriseAlumniTable({
         {children}
         {sortField === field && (
           <span className="text-purple-600 dark:text-purple-400">
-            {sortDirection === "asc" ? "↑" : "↓"}
+            {sortDirection === "asc" ? "\u2191" : "\u2193"}
           </span>
         )}
       </div>
@@ -143,18 +146,18 @@ export function EnterpriseAlumniTable({
                   />
                 </th>
               )}
-              <SortHeader field="name">Name</SortHeader>
-              <SortHeader field="organization">Organization</SortHeader>
-              <SortHeader field="year">Year</SortHeader>
-              <SortHeader field="company">Company</SortHeader>
+              <SortHeader field="name">{tCommon("name")}</SortHeader>
+              <SortHeader field="organization">{tEnterprise("alumniTable.organization")}</SortHeader>
+              <SortHeader field="year">{tCommon("date")}</SortHeader>
+              <SortHeader field="company">{tEnterprise("alumniTable.company")}</SortHeader>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                Position
+                {tEnterprise("alumniTable.position")}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                Location
+                {tEnterprise("alumniTable.location")}
               </th>
               <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">
-                Contact
+                {tEnterprise("alumniTable.contact")}
               </th>
             </tr>
           </thead>

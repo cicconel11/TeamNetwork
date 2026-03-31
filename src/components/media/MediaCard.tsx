@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { GripVertical } from "lucide-react";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card, Badge } from "@/components/ui";
 import { getCardDisplayUrl } from "@/lib/media/display-url";
 
@@ -178,7 +179,7 @@ export function MediaCard({
                 key={tag}
                 className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-muted text-muted-foreground truncate max-w-[80px]"
               >
-                {tag}
+                <UserContent>{tag}</UserContent>
               </span>
             ))}
             {item.tags.length > 3 && (

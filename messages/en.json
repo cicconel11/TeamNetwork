@@ -307,6 +307,7 @@
       "monthly": "Monthly",
       "yearly": "Yearly (save ~17%)",
       "updatePlan": "Update plan",
+      "updated": "Subscription updated.",
       "unableToUpdate": "Unable to update subscription"
     },
     "connectedAccounts": {
@@ -343,19 +344,19 @@
       "saved": "Saved",
       "analytics": {
         "title": "Usage Analytics (Admin)",
-        "descOff": "Enable page-view analytics for this organization. Tracks visits and feature usage — no personal data is collected. Helps admins understand which features are most used.",
-        "descPageViews": "This organization tracks anonymous page-view analytics. No personal data is collected. Opt out to stop all tracking.",
+        "descOff": "Usage analytics are unavailable for this account under the current compliance rules.",
+        "descPageViews": "Control your personal analytics consent for this organization. Your account or organization is limited to page-level analytics even when you opt in.",
         "descOptedIn": "You have opted in to expanded analytics. Your profile and engagement patterns may be used to personalize your experience.",
         "descOptedOut": "You have opted out of expanded analytics. Only anonymous page-view data is collected for this organization.",
-        "descDefault": "Enable page-view analytics for this organization. Tracks visits and feature usage — no personal data is collected.",
+        "descDefault": "Control your personal analytics consent for this organization. Behavioral analytics are disabled by default until you opt in.",
         "badgePageViews": "Page Views Only",
         "badgeOptedIn": "Opted In",
         "badgeOptedOut": "Opted Out",
         "badgeNotSet": "Not Set",
         "toggleOn": "Disable page-view analytics for this org",
         "toggleOff": "Enable page-view analytics for this org",
-        "consentOn": "Opt out of expanded analytics",
-        "consentOff": "Opt in to expanded analytics"
+        "consentOn": "Enable limited opt-in usage analytics",
+        "consentOff": "Enable opt-in usage analytics"
       },
       "unableToSave": "Unable to save navigation",
       "updated": "Navigation updated. Refresh the sidebar to see your changes.",
@@ -855,7 +856,13 @@
     "missingDetails": "We couldn't find your job title or education details. To fix this:",
     "limitReached": "Limit reached \u2014 resets next month",
     "syncsRemaining": "{remaining} of {max} syncs remaining",
-    "resyncManaged": "Re-sync is managed by your organization"
+    "resyncManaged": "Re-sync is managed by your organization",
+    "urlSaved": "LinkedIn URL saved.",
+    "failedSaveUrl": "Failed to save LinkedIn URL",
+    "failedSync": "Failed to sync LinkedIn data",
+    "failedDisconnect": "Failed to disconnect LinkedIn",
+    "disconnectConfirm": "Are you sure you want to disconnect LinkedIn?",
+    "notConfiguredSync": "LinkedIn integration is not configured in this environment. Syncing is unavailable until configuration is restored."
   },
   "googleCalendar": {
     "title": "Google Calendar Sync",
@@ -872,6 +879,9 @@
     "eventTypes": "Event types",
     "eventTypesDesc": "Choose which event types to include in your calendar.",
     "autoSaved": "Changes are saved automatically.",
+    "disconnectConfirm": "Are you sure you want to disconnect Google Calendar?",
+    "failedDisconnect": "Failed to disconnect Google Calendar",
+    "failedSync": "Failed to sync Google Calendar",
     "types": {
       "general": { "label": "General Events", "desc": "General organization events and activities" },
       "game": { "label": "Games", "desc": "Sports games and competitions" },
@@ -900,7 +910,10 @@
     "cannotVerify": "Could not verify Blackbaud API access. Your connection may need to be refreshed.",
     "alreadyRunning": "A sync is already running. Please wait a few minutes and try again.",
     "syncComplete": "Sync complete: {created} created, {updated} updated",
-    "disconnectedMsg": "Blackbaud disconnected"
+    "disconnectedMsg": "Blackbaud disconnected",
+    "disconnectConfirm": "Are you sure you want to disconnect Blackbaud?",
+    "failedDisconnect": "Failed to disconnect Blackbaud",
+    "syncFailed": "Sync failed"
   },
   "enterprise": {
     "createSubOrg": {

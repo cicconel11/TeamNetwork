@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Badge, Button, Card, Input, Select } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
@@ -64,6 +65,9 @@ export function OrgInvitePanel({
   onAlumniInviteCreated,
   orgRequireApproval,
 }: OrgInvitePanelProps) {
+  const tInvites = useTranslations("invites");
+  const tCommon = useTranslations("common");
+  const tRoles = useTranslations("roles");
   const supabase = useMemo(() => createClient(), []);
   const [orgInvites, setOrgInvites] = useState<Invite[]>([]);
   const [parentInvites, setParentInvites] = useState<ParentInvite[]>([]);
@@ -187,7 +191,7 @@ export function OrgInvitePanel({
   };
 
   const handleDeleteParentInvite = async (invite: InviteItem) => {
-    if (!confirm("Delete this parent invite link? Anyone who already joined will keep access.")) {
+    if (!confirm(tInvites("deleteParentConfirm"))) {
       return;
     }
 
@@ -202,7 +206,7 @@ export function OrgInvitePanel({
           .eq("id", invite.id);
 
         if (deleteError) {
-          throw new Error(deleteError.message || "Failed to delete parent invite");
+          throw new Error(deleteError.message || tInvites("failedDeleteParent"));
         }
 
         setOrgInvites((prev) => prev.filter((item) => item.id !== invite.id));
@@ -210,7 +214,7 @@ export function OrgInvitePanel({
         const res = await fetch(`/api/organizations/${orgId}/parents/invite/${invite.id}`, { method: "DELETE" });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to delete parent invite");
+          throw new Error(data.error || tInvites("failedDeleteParent"));
         }
 
         setParentInvites((prev) => prev.filter((item) => item.id !== invite.id));
@@ -218,7 +222,7 @@ export function OrgInvitePanel({
 
       setShowQR((prev) => (prev === `${invite.kind}-${invite.id}` ? null : prev));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete parent invite");
+      setError(err instanceof Error ? err.message : tInvites("failedDeleteParent"));
     } finally {
       setDeletingParentInviteId(null);
     }
@@ -282,29 +286,29 @@ export function OrgInvitePanel({
       {/* Create Invite Form */}
       {showForm && (
         <Card className="p-6 mb-6">
-          <h3 className="font-semibold text-foreground mb-4">Create New Invite</h3>
+          <h3 className="font-semibold text-foreground mb-4">{tInvites("createNew")}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <Select
-              label="Role"
+              label={tCommon("role")}
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as "active_member" | "admin" | "alumni" | "parent")}
               options={[
-                { value: "active_member", label: "Active Member" },
-                { value: "admin", label: "Admin" },
-                { value: "alumni", label: "Alumni" },
-                { value: "parent", label: "Parent" },
+                { value: "active_member", label: tRoles("activeMember") },
+                { value: "admin", label: tRoles("admin") },
+                { value: "alumni", label: tRoles("alumni") },
+                { value: "parent", label: tRoles("parent") },
               ]}
             />
             <Input
-              label="Max Uses"
+              label={tInvites("maxUses")}
               type="number"
               value={newUses}
               onChange={(e) => setNewUses(e.target.value)}
-              placeholder="Unlimited"
+              placeholder={tCommon("unlimited")}
               min={1}
             />
             <Input
-              label="Expires On"
+              label={tInvites("expiresOn")}
               type="date"
               value={newExpires}
               onChange={(e) => setNewExpires(e.target.value)}
@@ -312,7 +316,7 @@ export function OrgInvitePanel({
           </div>
           {orgRequireApproval ? (
             <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm">
-              Approval is required — new members who use this invite will need admin approval before gaining access.
+              {tInvites("approvalNote")}
             </div>
           ) : (
             <div className="mb-4">
@@ -324,22 +328,22 @@ export function OrgInvitePanel({
                   className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                 />
                 <span className="text-sm text-foreground">
-                  Require approval for this invite
+                  {tInvites("requireApprovalLabel")}
                 </span>
               </label>
             </div>
           )}
           {newRole === "alumni" && atAlumniLimit && (
             <p className="text-xs text-amber-600">
-              Alumni limit reached for your plan. Upgrade above to add more alumni invites.
+              {tInvites("alumniLimitReached")}
             </p>
           )}
           <div className="flex gap-3">
             <Button data-testid="invite-submit" onClick={handleCreateInvite} isLoading={isCreating}>
-              Generate Code
+              {tInvites("generateCode")}
             </Button>
             <Button variant="secondary" onClick={() => onShowFormChange(false)}>
-              Cancel
+              {tCommon("cancel")}
             </Button>
           </div>
         </Card>
@@ -373,11 +377,11 @@ export function OrgInvitePanel({
                         <div
                           className="font-mono text-xl font-bold tracking-wider cursor-pointer hover:text-emerald-500 transition-colors"
                           onClick={() => copyToClipboard(invite.code, `code-${inviteKey}`)}
-                          title="Click to copy code"
+                          title={tInvites("clickToCopy")}
                         >
                           {invite.code}
                           {copied === `code-${inviteKey}` && (
-                            <span className="ml-2 text-xs text-emerald-500 font-normal">Copied!</span>
+                            <span className="ml-2 text-xs text-emerald-500 font-normal">{tCommon("copied")}</span>
                           )}
                         </div>
                       </div>
@@ -386,15 +390,15 @@ export function OrgInvitePanel({
                           {getRoleLabel(role)}
                         </Badge>
                         {invite.require_approval === true && (
-                          <Badge variant="warning">Approval required</Badge>
+                          <Badge variant="warning">{tInvites("approvalRequired")}</Badge>
                         )}
                         {invite.require_approval === false && (
-                          <Badge variant="success">Auto-approve</Badge>
+                          <Badge variant="success">{tInvites("autoApprove")}</Badge>
                         )}
-                        {expired && <Badge variant="error">Expired</Badge>}
-                        {exhausted && <Badge variant="error">No uses left</Badge>}
-                        {revoked && <Badge variant="error">Revoked</Badge>}
-                        {accepted && <Badge variant="success">Accepted</Badge>}
+                        {expired && <Badge variant="error">{tCommon("expired")}</Badge>}
+                        {exhausted && <Badge variant="error">{tInvites("noUsesLeft")}</Badge>}
+                        {revoked && <Badge variant="error">{tInvites("revoked")}</Badge>}
+                        {accepted && <Badge variant="success">{tInvites("accepted")}</Badge>}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -407,7 +411,7 @@ export function OrgInvitePanel({
                         <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                         </svg>
-                        {copied === `link-${inviteKey}` ? "Copied!" : "Copy Link"}
+                        {copied === `link-${inviteKey}` ? tCommon("copied") : tInvites("copyLink")}
                       </Button>
                       <Button
                         variant="secondary"
@@ -423,14 +427,14 @@ export function OrgInvitePanel({
                         {invite.source === "organization_invite" ? (
                           <div>
                             {invite.uses_remaining !== null
-                              ? `${invite.uses_remaining} uses left`
-                              : "Unlimited uses"}
+                              ? tCommon("usesLeft", { count: invite.uses_remaining ?? 0 })
+                              : tCommon("unlimitedUses")}
                           </div>
                         ) : (
-                          <div>Legacy parent invite</div>
+                          <div>{tInvites("legacyParent")}</div>
                         )}
                         {invite.expires_at && (
-                          <div>Expires {formatShortDate(invite.expires_at)}</div>
+                          <div>{tInvites("expires")} {formatShortDate(invite.expires_at)}</div>
                         )}
                       </div>
                       {invite.source === "organization_invite" && !revoked && !expired && !exhausted && (
@@ -441,7 +445,7 @@ export function OrgInvitePanel({
                           onClick={() => handleRevokeInvite(invite.id)}
                           className="text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
                         >
-                          Revoke
+                          {tCommon("revoke")}
                         </Button>
                       )}
                       {invite.kind === "parent" && (
@@ -490,11 +494,11 @@ export function OrgInvitePanel({
               <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
           </div>
-          <h3 className="font-semibold text-foreground mb-2">No invite codes yet</h3>
+          <h3 className="font-semibold text-foreground mb-2">{tInvites("noInvitesYet")}</h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Create an invite code to let people join your organization.
+            {tInvites("noInvitesDesc")}
           </p>
-          <Button onClick={() => onShowFormChange(true)}>Create Invite Code</Button>
+          <Button onClick={() => onShowFormChange(true)}>{tInvites("createInviteCode")}</Button>
         </Card>
       )}
     </>

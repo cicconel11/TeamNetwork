@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Button, Badge, Input } from "@/components/ui";
 import type { MediaItem } from "./MediaCard";
 import { AddToAlbumPanel } from "./AddToAlbumPanel";
@@ -228,7 +229,9 @@ export function MediaDetailModal({
                   {merged.description && (
                     <div>
                       <span className="text-muted-foreground">Description</span>
-                      <p className="text-foreground whitespace-pre-wrap">{merged.description}</p>
+                      <UserContent as="p" className="text-foreground whitespace-pre-wrap">
+                        {merged.description}
+                      </UserContent>
                     </div>
                   )}
                   {merged.tags.length > 0 && (
@@ -236,7 +239,9 @@ export function MediaDetailModal({
                       <span className="text-muted-foreground">Tags</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {merged.tags.map((tag) => (
-                          <Badge key={tag} variant="muted">{tag}</Badge>
+                          <Badge key={tag} variant="muted">
+                            <UserContent>{tag}</UserContent>
+                          </Badge>
                         ))}
                       </div>
                     </div>

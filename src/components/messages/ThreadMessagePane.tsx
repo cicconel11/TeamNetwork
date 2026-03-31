@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { MessageTopBar } from "@/components/messages/MessageTopBar";
@@ -138,6 +139,7 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
     <div className="flex flex-col h-full">
       <MessageTopBar
         title={thread.title}
+        translateTitle
         actions={
           isAdmin ? (
             <div className="flex items-center gap-1">
@@ -160,10 +162,12 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
         {/* Thread header card */}
         <div className="bg-muted/50 rounded-lg p-4 border border-border">
           <div className="text-sm text-muted-foreground mb-2">
-            Posted by {thread.author?.name || "Unknown"} &middot; {formatDateTime(thread.created_at)}
+            Posted by <UserContent>{thread.author?.name || "Unknown"}</UserContent> &middot; {formatDateTime(thread.created_at)}
           </div>
           <div className="prose max-w-none">
-            <p className="whitespace-pre-wrap text-foreground text-sm leading-relaxed">{thread.body}</p>
+            <UserContent as="p" className="whitespace-pre-wrap text-foreground text-sm leading-relaxed">
+              {thread.body}
+            </UserContent>
           </div>
         </div>
 
@@ -194,7 +198,7 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
                     {!isGrouped && (
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="text-sm font-semibold text-foreground">
-                          {reply.author?.name || "Unknown"}
+                          <UserContent>{reply.author?.name || "Unknown"}</UserContent>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {formatRelativeTime(reply.created_at)}
@@ -202,7 +206,9 @@ export function ThreadMessagePane({ thread, replies, isAdmin, orgSlug }: ThreadM
                       </div>
                     )}
                     <div className="bg-muted rounded-lg px-3 py-2 inline-block max-w-[85%]">
-                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">{reply.body}</p>
+                      <UserContent as="p" className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                        {reply.body}
+                      </UserContent>
                     </div>
                   </div>
                 </div>

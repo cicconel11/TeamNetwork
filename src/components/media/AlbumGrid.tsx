@@ -18,6 +18,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import { AlbumCard, type MediaAlbum } from "./AlbumCard";
@@ -83,6 +84,9 @@ function SortableAlbumRow({
 }
 
 export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
+  const tMedia = useTranslations("media");
+  const tCommon = useTranslations("common");
+
   const [albums, setAlbums] = useState<MediaAlbum[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,16 +105,16 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
       const res = await fetch(`/api/media/albums?orgId=${encodeURIComponent(orgId)}`);
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to load albums");
+        throw new Error(data?.error || tMedia("failedToLoadAlbums"));
       }
       const result = await res.json();
       setAlbums(result.data || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load albums");
+      setError(err instanceof Error ? err.message : tMedia("failedToLoadAlbums"));
     } finally {
       setLoading(false);
     }
-  }, [orgId]);
+  }, [orgId, tMedia]);
 
   useEffect(() => {
     fetchAlbums();
@@ -172,7 +176,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
     return (
       <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
         {error}
-        <button type="button" onClick={fetchAlbums} className="ml-2 underline">Retry</button>
+        <button type="button" onClick={fetchAlbums} className="ml-2 underline">{tCommon("retry")}</button>
       </div>
     );
   }
@@ -186,8 +190,8 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M2.25 18.75h19.5" />
             </svg>
           }
-          title="No albums yet"
-          description="Albums let you group photos and videos together."
+          title={tMedia("noAlbums")}
+          description={tMedia("albumsDesc")}
         />
       ) : (
         <div className="space-y-4">
@@ -195,8 +199,8 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-muted/30 px-3 py-2.5">
               <p className="text-sm text-muted-foreground">
                 {reorderMode
-                  ? "Drag albums by the handle to change order."
-                  : "Arrange how albums appear on this page."}
+                  ? tMedia("dragAlbums")
+                  : tMedia("arrangeAlbums")}
               </p>
               <button
                 type="button"
@@ -207,7 +211,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
                     : "border-border bg-card text-foreground hover:bg-muted"
                 }`}
               >
-                {reorderMode ? "Done" : "Edit order"}
+                {reorderMode ? tCommon("done") : tMedia("editOrder")}
               </button>
             </div>
           )}
@@ -229,7 +233,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
                   </div>
-                  <span className="text-sm font-medium">New Album</span>
+                  <span className="text-sm font-medium">{tMedia("newAlbum")}</span>
                 </button>
               )}
 

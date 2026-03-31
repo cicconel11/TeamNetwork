@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Badge, Button, Card, InlineBanner } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 
@@ -36,24 +37,24 @@ export interface BlackbaudSettingsPanelProps {
   blackbaudAvailable: boolean;
 }
 
-function formatLastSync(lastSyncedAt: string | null): string {
-  if (!lastSyncedAt) return "Never";
+function formatLastSync(lastSyncedAt: string | null, neverLabel: string): string {
+  if (!lastSyncedAt) return neverLabel;
   return new Date(lastSyncedAt).toLocaleString();
 }
 
-function formatSyncErrorMessage(error: SyncError): string {
+function formatSyncErrorMessage(error: SyncError, tBlackbaud: ReturnType<typeof useTranslations>): string {
   if (error.code === "QUOTA_EXHAUSTED") {
     const retryMatch = error.message.match(/resets? in (\d{2}:\d{2}:\d{2})/i);
     if (retryMatch) {
-      return `Blackbaud API daily quota reached. Try again in ${retryMatch[1]}.`;
+      return tBlackbaud("quotaReachedTime", { time: retryMatch[1] }) as string;
     }
-    return "Blackbaud API daily quota reached. Please try again later.";
+    return tBlackbaud("quotaReached") as string;
   }
   if (error.code === "VERIFY_FAILED" && error.message.includes("quota")) {
-    return "Blackbaud API daily quota reached. Please try again later.";
+    return tBlackbaud("quotaReached") as string;
   }
   if (error.code === "VERIFY_FAILED") {
-    return "Could not verify Blackbaud API access. Your connection may need to be refreshed.";
+    return tBlackbaud("cannotVerify") as string;
   }
   return error.message;
 }
@@ -74,6 +75,9 @@ export function BlackbaudSettingsPanel({
   loading,
   blackbaudAvailable,
 }: BlackbaudSettingsPanelProps) {
+  const tBlackbaud = useTranslations("blackbaud");
+  const tCommon = useTranslations("common");
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
@@ -92,7 +96,7 @@ export function BlackbaudSettingsPanel({
       if (!res.ok) {
         if (res.status === 429 || data?.result?.error?.toLowerCase().includes("quota")) {
           showFeedback(
-            "Blackbaud API daily quota reached. Please try again later — quota resets automatically.",
+            tBlackbaud("quotaReachedReset"),
             "error",
             { duration: 8000 }
           );
@@ -100,25 +104,25 @@ export function BlackbaudSettingsPanel({
         }
         if (data?.result?.error === "Sync already in progress") {
           showFeedback(
-            "A sync is already running. Please wait a few minutes and try again.",
+            tBlackbaud("alreadyRunning"),
             "error",
             { duration: 5000 }
           );
           return;
         }
-        throw new Error(data?.result?.error || data?.error || "Sync failed");
+        throw new Error(data?.result?.error || data?.error || (tBlackbaud("syncFailed") as string));
       }
 
       const result = data.result;
       showFeedback(
-        `Sync complete: ${result.created} created, ${result.updated} updated`,
+        tBlackbaud("syncComplete", { created: result.created, updated: result.updated }),
         "success",
         { duration: 5000 }
       );
       window.location.reload();
     } catch (err) {
       showFeedback(
-        err instanceof Error ? err.message : "Sync failed",
+        err instanceof Error ? err.message : (tBlackbaud("syncFailed") as string),
         "error",
         { duration: 5000 }
       );
@@ -128,7 +132,7 @@ export function BlackbaudSettingsPanel({
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("Disconnect Blackbaud? Imported alumni records will be kept, but future syncs will stop.")) return;
+    if (!confirm(tBlackbaud("disconnectConfirm") as string)) return;
     setIsDisconnecting(true);
     try {
       const res = await fetch(`/api/blackbaud/disconnect?orgSlug=${orgSlug}`, {
@@ -136,13 +140,13 @@ export function BlackbaudSettingsPanel({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || "Failed to disconnect");
+        throw new Error(data?.error || (tBlackbaud("failedDisconnect") as string));
       }
-      showFeedback("Blackbaud disconnected", "success", { duration: 5000 });
+      showFeedback(tBlackbaud("disconnectedMsg"), "success", { duration: 5000 });
       window.location.reload();
     } catch (err) {
       showFeedback(
-        err instanceof Error ? err.message : "Failed to disconnect",
+        err instanceof Error ? err.message : (tBlackbaud("failedDisconnect") as string),
         "error",
         { duration: 5000 }
       );
@@ -177,27 +181,25 @@ export function BlackbaudSettingsPanel({
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <BlackbaudIcon className="w-5 h-5 text-foreground" />
-            <p className="font-medium text-foreground">Blackbaud RE NXT</p>
+            <p className="font-medium text-foreground">{tBlackbaud("title")}</p>
           </div>
-          {isConnected && <Badge variant="success">Connected</Badge>}
-          {isError && <Badge variant="error">Error</Badge>}
-          {isDisconnected && !blackbaudAvailable && <Badge variant="muted">Unavailable</Badge>}
+          {isConnected && <Badge variant="success">{tCommon("connected")}</Badge>}
+          {isError && <Badge variant="error">{tCommon("error")}</Badge>}
+          {isDisconnected && !blackbaudAvailable && <Badge variant="muted">{tCommon("unavailable")}</Badge>}
         </div>
 
         {isDisconnected && (
           <>
             {!blackbaudAvailable ? (
               <p className="text-sm text-muted-foreground">
-                Blackbaud integration is not configured in this environment. Contact your
-                administrator to set up the Blackbaud developer credentials.
+                {tBlackbaud("notConfigured")}
               </p>
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Connect your Blackbaud RE NXT account to automatically sync constituent data
-                  into your alumni directory.
+                  {tBlackbaud("connectDesc")}
                 </p>
-                <Button onClick={handleConnect}>Connect Blackbaud</Button>
+                <Button onClick={handleConnect}>{tBlackbaud("connect")}</Button>
               </>
             )}
           </>
@@ -206,23 +208,25 @@ export function BlackbaudSettingsPanel({
         {isConnected && (
           <>
             <p className="text-xs text-muted-foreground">
-              Last synced: {formatLastSync(integration.lastSyncedAt)}
-              {integration.lastSyncCount !== null && (
-                <> &middot; {integration.lastSyncCount} records synced</>
-              )}
+              {integration.lastSyncCount !== null
+                ? tBlackbaud("lastSyncedRecords", {
+                    time: formatLastSync(integration.lastSyncedAt, tCommon("never")),
+                    count: integration.lastSyncCount,
+                  })
+                : `Last synced: ${formatLastSync(integration.lastSyncedAt, tCommon("never"))}`}
             </p>
           </>
         )}
 
         {isError && integration.lastSyncError && (
           <InlineBanner variant="error">
-            {formatSyncErrorMessage(integration.lastSyncError)}
+            {formatSyncErrorMessage(integration.lastSyncError, tBlackbaud)}
           </InlineBanner>
         )}
 
         {isConnected && integration.lastSyncError && (
           <InlineBanner variant="warning">
-            Last sync issue: {formatSyncErrorMessage(integration.lastSyncError)}
+            Last sync issue: {formatSyncErrorMessage(integration.lastSyncError, tBlackbaud)}
           </InlineBanner>
         )}
       </div>
@@ -230,28 +234,28 @@ export function BlackbaudSettingsPanel({
       {/* Sync details section (connected or error) */}
       {!isDisconnected && lastSyncLog && (
         <div className="p-5 space-y-3">
-          <p className="text-sm font-medium text-foreground">Last Sync Details</p>
+          <p className="text-sm font-medium text-foreground">{tBlackbaud("lastSyncDetails")}</p>
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-muted-foreground">Created</p>
+              <p className="text-muted-foreground">{tBlackbaud("created")}</p>
               <p className="font-medium text-foreground">{lastSyncLog.recordsCreated}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Updated</p>
+              <p className="text-muted-foreground">{tBlackbaud("updated")}</p>
               <p className="font-medium text-foreground">{lastSyncLog.recordsUpdated}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Unchanged</p>
+              <p className="text-muted-foreground">{tBlackbaud("unchanged")}</p>
               <p className="font-medium text-foreground">{lastSyncLog.recordsUnchanged}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Skipped</p>
+              <p className="text-muted-foreground">{tBlackbaud("skipped")}</p>
               <p className="font-medium text-foreground">{lastSyncLog.recordsSkipped}</p>
             </div>
           </div>
           {lastSyncLog.completedAt && (
             <p className="text-xs text-muted-foreground">
-              Completed: {new Date(lastSyncLog.completedAt).toLocaleString()}
+              {tBlackbaud("completed", { time: new Date(lastSyncLog.completedAt).toLocaleString() })}
             </p>
           )}
         </div>
@@ -268,7 +272,7 @@ export function BlackbaudSettingsPanel({
               isLoading={isSyncing}
               disabled={isDisconnecting}
             >
-              {isError ? "Retry Sync" : "Sync Now"}
+              {isError ? tBlackbaud("retrySyncBtn") : tCommon("syncNow")}
             </Button>
             <button
               type="button"
@@ -276,7 +280,7 @@ export function BlackbaudSettingsPanel({
               disabled={isSyncing || isDisconnecting}
               className="text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
             >
-              {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+              {isDisconnecting ? tCommon("disconnecting") : tCommon("disconnect")}
             </button>
           </div>
         </div>

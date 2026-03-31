@@ -18,6 +18,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { showFeedback } from "@/lib/feedback/show-feedback";
 import { Button, EmptyState } from "@/components/ui";
 import { MediaFilters } from "./MediaFilters";
@@ -102,6 +103,9 @@ function SortableMediaRow({
 }
 
 export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: MediaGalleryProps) {
+  const tMedia = useTranslations("media");
+  const tCommon = useTranslations("common");
+
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
   const [selectedAlbum, setSelectedAlbum] = useState<MediaAlbum | null>(null);
@@ -535,7 +539,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {v === "albums" ? "Albums" : "All Photos"}
+              {v === "albums" ? tMedia("albums") : tMedia("allPhotos")}
             </button>
           ))}
         </div>
@@ -584,7 +588,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                       : "border-[var(--border)] text-[var(--muted-foreground)] hover:border-[var(--color-org-secondary)] hover:text-[var(--color-org-secondary)]"
                   }`}
                 >
-                  {selectMode ? "Done" : "Select"}
+                  {selectMode ? tCommon("done") : tCommon("select")}
                 </button>
               )}
 
@@ -595,14 +599,14 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                     onClick={() => setSelectedIds(new Set(items.map((i) => i.id)))}
                     className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors"
                   >
-                    All
+                    {tCommon("all")}
                   </button>
                   {selectedIds.size > 0 && (
                     <button
                       onClick={() => setSelectedIds(new Set())}
                       className="px-2.5 py-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] rounded-lg hover:bg-[var(--muted)] transition-colors"
                     >
-                      None
+                      {tCommon("none")}
                     </button>
                   )}
                 </div>
@@ -612,7 +616,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
 
           {canUpload && (
             <Button onClick={() => setShowUpload(true)} size="sm">
-              Upload
+              {tCommon("upload")}
             </Button>
           )}
         </div>
@@ -622,7 +626,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
       {error && (
         <div className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded-lg p-3">
           {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">Dismiss</button>
+          <button onClick={() => setError(null)} className="ml-2 underline">{tCommon("dismiss")}</button>
         </div>
       )}
 
@@ -671,8 +675,8 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-muted/30 px-3 py-2.5 mb-4">
               <p className="text-sm text-muted-foreground">
                 {photosReorderMode
-                  ? "Drag items by the handle to change gallery order."
-                  : "Arrange how photos and videos appear in the gallery."}
+                  ? tMedia("dragToReorder")
+                  : tMedia("arrangeGallery")}
               </p>
               <button
                 type="button"
@@ -690,14 +694,14 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                     : "border-border bg-card text-foreground hover:bg-muted"
                 }`}
               >
-                {photosReorderLoading ? "Loading…" : photosReorderMode ? "Done" : "Edit order"}
+                {photosReorderLoading ? tCommon("loading") : photosReorderMode ? tCommon("done") : tMedia("editOrder")}
               </button>
             </div>
           )}
 
           {canUpload && isAdmin && !loading && items.length > 0 && !galleryFiltersDefault && (
             <p className="text-sm text-muted-foreground rounded-xl border border-dashed border-border/70 bg-muted/15 px-3 py-2.5 mb-4">
-              Clear filters (all types, all years, no tag, status All) to reorder the gallery.
+              {tMedia("clearFiltersToReorder")}
             </p>
           )}
 
@@ -722,11 +726,11 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
                 </svg>
               }
-              title="No media yet"
-              description="This is where your organization's photos and videos will live. Upload the first one to get started."
+              title={tMedia("noMedia")}
+              description={tMedia("emptyGallery")}
               action={
                 canUpload ? (
-                  <Button onClick={() => setShowUpload(true)}>Upload Media</Button>
+                  <Button onClick={() => setShowUpload(true)}>{tMedia("uploadMedia")}</Button>
                 ) : undefined
               }
             />
@@ -771,7 +775,7 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
               {hasMore && !photosReorderMode && (
                 <div className="flex justify-center mt-8">
                   <Button variant="secondary" onClick={loadMore} isLoading={loadingMore}>
-                    Load more
+                    {tCommon("loadMore")}
                   </Button>
                 </div>
               )}
@@ -795,10 +799,10 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
           {selectedIds.size > 0 && !photosReorderMode && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[var(--card)] border border-[var(--border)] shadow-2xl rounded-2xl px-4 py-3 animate-in slide-in-from-bottom-4 duration-200">
               <span className="text-sm font-medium text-[var(--foreground)] mr-1">
-                {selectedIds.size} selected
+                {tMedia("selected", { count: selectedIds.size })}
               </span>
               <Button size="sm" onClick={() => setShowAlbumPicker(true)}>
-                Add to album
+                {tMedia("addToAlbum")}
               </Button>
               {/* Bulk delete: show if admin or uploader of all selected */}
               {(isAdmin || (currentUserId && items.filter((i) => selectedIds.has(i.id)).every((i) => i.uploaded_by === currentUserId))) && (
@@ -808,13 +812,13 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
                   isLoading={bulkDeleting}
                   onClick={handleBulkDelete}
                 >
-                  {bulkDeleteConfirm ? `Confirm delete (${selectedIds.size})` : "Delete"}
+                  {bulkDeleteConfirm ? tMedia("confirmDeleteCount", { count: selectedIds.size }) : tCommon("delete")}
                 </Button>
               )}
               <button
                 onClick={exitSelectMode}
                 className="w-7 h-7 rounded-full hover:bg-[var(--muted)] flex items-center justify-center transition-colors text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                aria-label="Clear selection"
+                aria-label={tMedia("clearSelection")}
               >
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

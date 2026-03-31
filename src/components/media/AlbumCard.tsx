@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { GripVertical } from "lucide-react";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card } from "@/components/ui";
 
 export interface MediaAlbum {
@@ -61,7 +62,9 @@ export function AlbumCard({ album, onClick, reorderMode = false, dragHandleProps
 
         {/* Overlay with name + count */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-          <p className="text-sm font-semibold text-white truncate">{album.name}</p>
+          <UserContent as="p" className="text-sm font-semibold text-white truncate">
+            {album.name}
+          </UserContent>
           <p className="text-xs text-white/70 mt-0.5">
             {album.item_count} {album.item_count === 1 ? "photo" : "photos"}
           </p>

@@ -70,7 +70,13 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
   const isConnected = Boolean(connectStatus?.isReady);
 
   const navConfig = org.nav_config as NavConfig | null;
-  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const [tNav, locale, tPhilanthropy, tCommon, tEvents] = await Promise.all([
+    getTranslations("nav.items"),
+    getLocale(),
+    getTranslations("philanthropy"),
+    getTranslations("common"),
+    getTranslations("events"),
+  ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/philanthropy", navConfig, t, locale);
   const exportStamp = new Date().toISOString().slice(0, 10);
@@ -80,7 +86,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       <DonationResultTracker organizationId={org.id} />
       <PageHeader
         title={pageLabel}
-        description="Community service and fundraising for your organization."
+        description={tPhilanthropy("description")}
         actions={
           (orgCtx.isAdmin || canEdit) ? (
             <div className="flex flex-wrap gap-2">
@@ -96,7 +102,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
-                    Add Event
+                    {tPhilanthropy("addEvent")}
                   </Button>
                 </Link>
               )}
@@ -108,21 +114,21 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       {onboardingStatus === "success" && isConnected && (
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30 p-4">
           <p className="text-sm font-medium text-emerald-800 dark:text-emerald-200">
-            Stripe account connected successfully! You can now accept donations.
+            {tPhilanthropy("stripeConnectedSuccess")}
           </p>
         </div>
       )}
       {onboardingStatus === "success" && !isConnected && (
         <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 p-4">
           <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-            Stripe account setup submitted. Verification is in progress — this usually takes 1-2 business days.
+            {tPhilanthropy("stripeSubmitted")}
           </p>
         </div>
       )}
       {onboardingStatus === "refresh" && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-4">
           <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Stripe setup was not completed. Please try again when you&apos;re ready.
+            {tPhilanthropy("stripeNotCompleted")}
           </p>
         </div>
       )}
@@ -144,14 +150,14 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         </div>
         <Card className="p-6 space-y-3">
           <div>
-            <p className="text-sm text-muted-foreground">Stripe Donations</p>
+            <p className="text-sm text-muted-foreground">{tPhilanthropy("stripeDonations")}</p>
             <p className="text-3xl font-bold text-foreground font-mono">
               ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
-            <p className="text-sm text-muted-foreground">{donationCount} contributions recorded</p>
+            <p className="text-sm text-muted-foreground">{donationCount} {tPhilanthropy("contributionsRecorded")}</p>
           </div>
           <div className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${isConnected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-            {isConnected ? "Connected" : "Connect Stripe to accept donations"}
+            {isConnected ? tCommon("connected") : tPhilanthropy("connectStripe")}
           </div>
         </Card>
       </div>
@@ -166,7 +172,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground font-mono">{totalEvents}</p>
-              <p className="text-sm text-muted-foreground">Total Events</p>
+              <p className="text-sm text-muted-foreground">{tPhilanthropy("totalEvents")}</p>
             </div>
           </div>
         </Card>
@@ -179,7 +185,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground font-mono">{upcomingCount}</p>
-              <p className="text-sm text-muted-foreground">Upcoming</p>
+              <p className="text-sm text-muted-foreground">{tEvents("upcoming")}</p>
             </div>
           </div>
         </Card>
@@ -192,7 +198,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground font-mono">{pastCount}</p>
-              <p className="text-sm text-muted-foreground">Completed</p>
+              <p className="text-sm text-muted-foreground">{tPhilanthropy("completed")}</p>
             </div>
           </div>
         </Card>
@@ -255,12 +261,12 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
         </div>
       ) : (
         <EmptyState
-          title={filters.view === "past" ? `No past ${pageLabel.toLowerCase()} events` : `No upcoming ${pageLabel.toLowerCase()} events`}
-          description={filters.view === "past" ? "Completed events will appear here." : "Add a new philanthropy event to get started."}
+          title={filters.view === "past" ? tPhilanthropy("noPastEvents", { label: pageLabel.toLowerCase() }) : tPhilanthropy("noUpcomingEvents", { label: pageLabel.toLowerCase() })}
+          description={filters.view === "past" ? tPhilanthropy("completedWillAppear") : tPhilanthropy("addNewEvent")}
           action={
             canEdit ? (
               <Link href={`/${orgSlug}/philanthropy/new`}>
-                <Button>Add Event</Button>
+                <Button>{tPhilanthropy("addEvent")}</Button>
               </Link>
             ) : undefined
           }

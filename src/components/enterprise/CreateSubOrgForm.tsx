@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Button, Input, Card, CardHeader, CardTitle, CardDescription } from "@/components/ui";
 import { OrgLimitUpgradeModal } from "./OrgLimitUpgradeModal";
 import { hexColorSchema } from "@/lib/schemas/common";
@@ -43,6 +44,8 @@ export function CreateSubOrgForm({
   onCancel,
 }: CreateSubOrgFormProps) {
   const router = useRouter();
+  const tEnterprise = useTranslations("enterprise");
+  const tCommon = useTranslations("common");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -179,9 +182,9 @@ export function CreateSubOrgForm({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Create New Organization</CardTitle>
+          <CardTitle>{tEnterprise("createSubOrg.title")}</CardTitle>
           <CardDescription>
-            Create a new organization under this enterprise. It will use the pooled alumni quota.
+            {tEnterprise("createSubOrg.description")}
           </CardDescription>
         </CardHeader>
 
@@ -194,9 +197,9 @@ export function CreateSubOrgForm({
         <form onSubmit={handleSubmit(onSubmit)} className="px-6 pb-6">
           <div className="space-y-4">
             <Input
-              label="Organization Name"
+              label={tEnterprise("createSubOrg.orgName")}
               type="text"
-              placeholder="e.g., Stanford Crew, The Whiffenpoofs"
+              placeholder={tEnterprise("createSubOrg.orgNamePlaceholder")}
               error={errors.name?.message}
               {...register("name", {
                 onChange: (e) => handleNameChange(e.target.value),
@@ -204,10 +207,10 @@ export function CreateSubOrgForm({
             />
 
             <Input
-              label="URL Slug"
+              label={tEnterprise("createSubOrg.urlSlug")}
               type="text"
-              placeholder="my-organization"
-              helperText={`Your organization will be at: teamnetwork.app/${slug || "your-slug"}`}
+              placeholder={tEnterprise("createSubOrg.slugPlaceholder")}
+              helperText={tEnterprise("createSubOrg.slugHint", { slug: slug || "your-slug" })}
               error={errors.slug?.message}
               {...register("slug", {
                 onChange: (e) => {
@@ -218,7 +221,7 @@ export function CreateSubOrgForm({
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Brand Color
+                {tEnterprise("createSubOrg.brandColor")}
               </label>
               <div className="flex items-center gap-4">
                 <input
@@ -236,26 +239,26 @@ export function CreateSubOrgForm({
                 />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                This color will be used for the organization&apos;s branding
+                {tEnterprise("createSubOrg.brandColorHint")}
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">
-                Billing Type
+                {tEnterprise("createSubOrg.billingType")}
               </label>
               <div className="space-y-3">
                 <BillingTypeOption
                   selected={true}
                   onSelect={() => {}}
-                  title="Enterprise Billing"
-                  description="Uses the pooled alumni quota from the enterprise subscription"
+                  title={tEnterprise("createSubOrg.enterpriseBilling")}
+                  description={tEnterprise("createSubOrg.enterpriseBillingDesc")}
                 />
                 <BillingTypeOption
                   selected={false}
                   onSelect={() => {}}
-                  title="Independent Billing (Coming Soon)"
-                  description="Organization pays separately with its own subscription — not yet available"
+                  title={tEnterprise("createSubOrg.independentBilling")}
+                  description={tEnterprise("createSubOrg.independentBillingDesc")}
                   disabled
                 />
               </div>
@@ -270,11 +273,11 @@ export function CreateSubOrgForm({
                   disabled={isLoading}
                   className="flex-1"
                 >
-                  Cancel
+                  {tCommon("cancel")}
                 </Button>
               )}
               <Button type="submit" className="flex-1" isLoading={isLoading}>
-                Create Organization
+                {tEnterprise("createSubOrg.createOrg")}
               </Button>
             </div>
           </div>

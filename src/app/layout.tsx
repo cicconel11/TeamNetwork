@@ -39,7 +39,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir} suppressHydrationWarning>
-      <body className="antialiased">
+      <body className="antialiased" translate="no">
         <NextIntlClientProvider messages={messages}>
           <ThemeProvider>
             <ErrorBoundaryProvider>

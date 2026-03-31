@@ -1,5 +1,6 @@
 "use client";
 
+import { UserContent } from "@/components/i18n/UserContent";
 import type { ChatMessage, ChatPollVote, ChatFormResponse, User } from "@/types/database";
 import { PollMessage } from "./PollMessage";
 import { InlineFormMessage } from "./InlineFormMessage";
@@ -55,5 +56,9 @@ export function MessageBody({
     );
   }
 
-  return <p className="whitespace-pre-wrap break-words">{message.body}</p>;
+  return (
+    <UserContent as="p" className="whitespace-pre-wrap break-words">
+      {message.body}
+    </UserContent>
+  );
 }

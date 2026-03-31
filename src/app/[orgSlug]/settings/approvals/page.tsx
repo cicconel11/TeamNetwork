@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -18,6 +19,8 @@ interface PendingMember {
 }
 
 export default function ApprovalsPage() {
+  const tApprovals = useTranslations("settings.approvals");
+  const tCommon = useTranslations("common");
   const params = useParams();
   const orgSlug = params.orgSlug as string;
 
@@ -96,7 +99,7 @@ export default function ApprovalsPage() {
 
   const handleReject = async (userId: string) => {
     if (!orgId) return;
-    if (!confirm("Are you sure you want to reject this request? This will remove the user.")) return;
+    if (!confirm(tApprovals("confirmReject"))) return;
 
     const supabase = createClient();
 
@@ -119,7 +122,7 @@ export default function ApprovalsPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Pending Approvals" description="Loading..." />
+        <PageHeader title={tApprovals("title")} description={tCommon("loading")} />
         <div className="animate-pulse space-y-4">
           <div className="h-32 bg-muted rounded-xl" />
         </div>
@@ -132,8 +135,8 @@ export default function ApprovalsPage() {
   return (
     <div>
       <PageHeader
-        title="Pending Approvals"
-        description="Review and approve pending membership requests"
+        title={tApprovals("title")}
+        description={tApprovals("description")}
         backHref={`/${orgSlug}/settings/invites`}
       />
 
@@ -145,7 +148,7 @@ export default function ApprovalsPage() {
 
       {/* Pending Members Section */}
       <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-        Pending Members
+        {tApprovals("pendingMembers")}
         {pendingMembers.length > 0 && (
           <Badge variant="warning">{pendingMembers.length}</Badge>
         )}
@@ -164,7 +167,7 @@ export default function ApprovalsPage() {
                     {member.users?.email}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Requested {formatShortDate(member.created_at)} • {getRoleLabel(member.role)}
+                    {tApprovals("requested", { date: formatShortDate(member.created_at) })} • {getRoleLabel(member.role)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -172,7 +175,7 @@ export default function ApprovalsPage() {
                     size="sm"
                     onClick={() => handleApprove(member.user_id)}
                   >
-                    Approve
+                    {tCommon("approve")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -180,7 +183,7 @@ export default function ApprovalsPage() {
                     className="text-red-500 hover:text-red-600"
                     onClick={() => handleReject(member.user_id)}
                   >
-                    Reject
+                    {tCommon("reject")}
                   </Button>
                 </div>
               </div>
@@ -189,13 +192,13 @@ export default function ApprovalsPage() {
         </div>
       ) : (
         <Card className="p-6 text-center mb-8">
-          <p className="text-sm text-muted-foreground">No pending member requests</p>
+          <p className="text-sm text-muted-foreground">{tApprovals("noPendingMembers")}</p>
         </Card>
       )}
 
       {/* Pending Alumni Section */}
       <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-        Pending Alumni
+        {tApprovals("pendingAlumni")}
         {pendingAlumni.length > 0 && (
           <Badge variant="warning">{pendingAlumni.length}</Badge>
         )}
@@ -214,7 +217,7 @@ export default function ApprovalsPage() {
                     {member.users?.email}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Requested {formatShortDate(member.created_at)} • Alumni
+                    {tApprovals("requested", { date: formatShortDate(member.created_at) })} • {getRoleLabel("alumni")}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -222,7 +225,7 @@ export default function ApprovalsPage() {
                     size="sm"
                     onClick={() => handleApprove(member.user_id)}
                   >
-                    Approve
+                    {tCommon("approve")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -230,7 +233,7 @@ export default function ApprovalsPage() {
                     className="text-red-500 hover:text-red-600"
                     onClick={() => handleReject(member.user_id)}
                   >
-                    Reject
+                    {tCommon("reject")}
                   </Button>
                 </div>
               </div>
@@ -239,7 +242,7 @@ export default function ApprovalsPage() {
         </div>
       ) : (
         <Card className="p-6 text-center">
-          <p className="text-sm text-muted-foreground">No pending alumni requests</p>
+          <p className="text-sm text-muted-foreground">{tApprovals("noPendingAlumni")}</p>
         </Card>
       )}
 
@@ -250,12 +253,12 @@ export default function ApprovalsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <p className="text-muted-foreground">All caught up! No pending approvals.</p>
+          <p className="text-muted-foreground">{tApprovals("allCaughtUp")}</p>
           <Link
             href={`/${orgSlug}/settings/invites`}
             className="text-sm text-muted-foreground hover:underline mt-2 inline-block"
           >
-            Back to Settings
+            {tApprovals("backToSettings")}
           </Link>
         </div>
       )}

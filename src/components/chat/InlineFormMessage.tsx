@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { UserContent } from "@/components/i18n/UserContent";
 import type { ChatMessage, ChatFormResponse } from "@/types/database";
 import { formMetadataSchema, type FormMetadata, type ChatFormField } from "@/lib/schemas/chat-polls";
 
@@ -81,7 +82,9 @@ export function InlineFormMessage({
     return (
       <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden max-w-full">
         <div className="p-3 border-b border-[var(--border)] flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-foreground">{metadata.title}</h4>
+          <UserContent as="h4" className="text-sm font-semibold text-foreground">
+            {metadata.title}
+          </UserContent>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[var(--color-org-secondary)]/10 text-[var(--color-org-secondary)] text-xs font-medium">
             Submitted
           </span>
@@ -91,10 +94,12 @@ export function InlineFormMessage({
           {metadata.fields.map((field) => (
             <div key={field.id}>
               <span className="text-xs font-medium text-muted-foreground block mb-0.5">
-                {field.label}
+                <UserContent>{field.label}</UserContent>
               </span>
               <span className="text-sm text-foreground">
-                {submittedValues[field.id] || (
+                {submittedValues[field.id] ? (
+                  <UserContent>{submittedValues[field.id]}</UserContent>
+                ) : (
                   <span className="text-muted-foreground italic">No answer</span>
                 )}
               </span>
@@ -116,14 +121,16 @@ export function InlineFormMessage({
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden max-w-full">
       <div className="p-3 border-b border-[var(--border)]">
-        <h4 className="text-sm font-semibold text-foreground">{metadata.title}</h4>
+        <UserContent as="h4" className="text-sm font-semibold text-foreground">
+          {metadata.title}
+        </UserContent>
       </div>
 
       <div className="p-3 space-y-3">
         {metadata.fields.map((field) => (
           <label key={field.id} className="block">
             <span className="text-xs font-medium text-muted-foreground mb-1 block">
-              {field.label}
+              <UserContent>{field.label}</UserContent>
               {field.required && <span className="text-red-500 ml-0.5">*</span>}
             </span>
 
@@ -135,6 +142,8 @@ export function InlineFormMessage({
                   setValues((prev) => ({ ...prev, [field.id]: e.target.value }))
                 }
                 placeholder={`${field.label}...`}
+                translate="yes"
+                lang="und"
                 aria-required={field.required}
                 autoComplete="off"
                 spellCheck={false}
@@ -155,7 +164,7 @@ export function InlineFormMessage({
               >
                 <option value="">Select...</option>
                 {field.options.map((opt) => (
-                  <option key={opt} value={opt}>
+                  <option key={opt} value={opt} translate="yes" lang="und">
                     {opt}
                   </option>
                 ))}
@@ -176,7 +185,9 @@ export function InlineFormMessage({
                       }
                       className="accent-[var(--color-org-secondary)]"
                     />
-                    <span className="text-sm">{opt}</span>
+                    <UserContent as="span" className="text-sm">
+                      {opt}
+                    </UserContent>
                   </label>
                 ))}
               </div>
