@@ -620,12 +620,13 @@ const COMPONENTS = [
       'Transport-noise cleanup before any model-facing use (Unicode normalization, zero-width/control-char stripping)',
       'Message safety assessment returns none / suspicious / blocked with stable reasons',
       'Prompt-injection and prompt-exfiltration attempts short-circuit before model, tools, RAG, or cache write',
-      'Rate limiting: 30 req/min IP, 20 req/min user',
+      'Rate limiting: 30 req/min IP, 20 req/min user, 60 req/min org (AI_ORG_RATE_LIMIT override)',
       'Idempotency via idempotency_key + localStorage',
       'Duplicate detection with 409 recovery for in-flight requests',
       'Abandoned stream cleanup (5-min threshold, status → error)',
       'Atomic init_ai_chat RPC for thread create/reuse + message insert',
-      'Route-derived surface from pathname via routeToSurface()'
+      'Route-derived surface from pathname via routeToSurface()',
+      'requestId generated at handler entry and threaded through structured AI logs + stage timings'
     ],
     missing: []
   },
@@ -770,7 +771,7 @@ const COMPONENTS = [
       'Fail-closed pattern: DB error returns 503, never proceeds',
       'Thread ownership validation (resolveOwnThread)',
       'Never leaks thread existence to non-owners',
-      'Rate limiting at IP and user level',
+      'Rate limiting at IP, user, and org level',
       'RLS policies on ai_threads and ai_messages',
       'Abandoned stream detection (5-min timeout, prevents stuck threads)',
       'Distinct suspicious vs blocked safety outcomes with identical fail-closed execution behavior in v1',
@@ -822,7 +823,8 @@ const COMPONENTS = [
       'Parent thread title/body enrichment on retrieved replies',
       'RAG wired end-to-end in chat handler — additive, never blocking',
       'RAG silently skipped when EMBEDDING_API_KEY absent (graceful degradation)',
-      'RAG metrics in audit log (rag_chunk_count, rag_top_similarity, rag_error)'
+      'RAG metrics in audit log (rag_chunk_count, rag_top_similarity, rag_error)',
+      'RAG retrieval now uses the shared timed-stage wrapper and emits structured request-scoped logs on failure'
     ],
     missing: [
       'No manual knowledge base management UI (add/remove custom FAQ entries)',
@@ -860,8 +862,9 @@ const COMPONENTS = [
       'Tool calls recorded in audit log (toolCalls array)',
       'Tool-backed pass-2 text is withheld until grounding verification succeeds',
       'Confirmation-gated write tools: prepare_job_posting and prepare_discussion_thread create pending actions (ai_pending_actions table) with 15-min expiry',
-      'Pending action lifecycle: pending → confirmed → executed | cancelled | expired (with rollback-safe CAS transitions)',
+      'Pending action lifecycle: pending → confirmed → executed | failed | cancelled | expired (with rollback-safe CAS transitions)',
       'Confirm handler rolls back to pending on unknown action_type (no stuck confirmed rows)',
+      'Cleanup endpoint recovers stranded confirmed actions by CAS-transitioning stale rows to failed',
       'Cancel handler returns 410 for already-expired actions instead of false 200',
       'prepare_job_posting validates draft, identifies missing fields, optionally enriches from application URL via fetchJobSourceDraft',
       'find_navigation_targets resolves in-app pages for open/manage/create requests against org nav config',
@@ -951,10 +954,12 @@ const COMPONENTS = [
       'SSE encoding with chunk/done/error/tool_status events',
       'Configurable temperature (0.7) and max_tokens (2000)',
       'streaming → complete status transitions on ai_messages',
+      'streaming status write now fails closed instead of fire-and-forget',
       'Tool call detection: streams OpenAI deltas, assembles multi-chunk argsJson by index',
       'Yields tool_call_requested events with assembled tool call data',
       'Pass 2 mode: reconstructs assistant + tool role messages per OpenAI function-calling protocol',
-      'Tool-backed pass-2 content now buffers until the route verifies it before emitting chunk text'
+      'Tool-backed pass-2 content now buffers until the route verifies it before emitting chunk text',
+      'response-composer stream failures log with requestId/orgId context'
     ],
     missing: [
       'No structured output parsing',
@@ -989,7 +994,8 @@ const COMPONENTS = [
       'toolCalls array in audit entries (names + args of all executed tools)',
       'cacheBypassReason: tool_call_made recorded when tools used',
       'Safety short-circuit reasons recorded via bypassReason/message_safety_* paths',
-      'tool_grounding_failed emitted to ops telemetry when buffered verification rejects a tool-backed answer'
+      'tool_grounding_failed emitted to ops telemetry when buffered verification rejects a tool-backed answer',
+      'requestId recorded inside stageTimings.request for cross-log correlation'
     ],
     missing: [
       'No real-time monitoring dashboard',

@@ -2,6 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheSurface } from "./semantic-cache-utils";
 import type { ToolName } from "./tools/definitions";
+import { aiLog, type AiLogContext } from "./logger";
 
 export interface RagChunkInput {
   contentText: string;
@@ -14,6 +15,7 @@ interface BuildPromptInput {
   userId: string;
   role: string;
   serviceSupabase: SupabaseClient;
+  logContext?: AiLogContext;
   contextMode?: "full" | "shared_static";
   surface?: CacheSurface;
   ragChunks?: RagChunkInput[];
@@ -134,6 +136,10 @@ export interface ContextMetadata {
   budgetTokens: number;
 }
 
+function fallbackLogContext(logContext?: AiLogContext): AiLogContext {
+  return logContext ?? { requestId: "unknown_request", orgId: "unknown_org" };
+}
+
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
@@ -162,34 +168,38 @@ function applyContextBudget(
 
 async function safeQuery<T>(
   section: string,
-  fn: () => Promise<{ data: T | null; error: unknown }>
+  fn: () => Promise<{ data: T | null; error: unknown }>,
+  logContext?: AiLogContext
 ): Promise<QueryResult<T | null>> {
   try {
     const { data, error } = await fn();
     if (error) {
-      console.warn(`[ai-context-builder] omitted ${section}:`, error);
+      aiLog("warn", "ai-context-builder", `omitted ${section}`, fallbackLogContext(logContext), { error });
       return { ok: false };
     }
     return { ok: true, data };
   } catch (error) {
-    console.warn(`[ai-context-builder] omitted ${section}:`, error);
+    aiLog("warn", "ai-context-builder", `omitted ${section}`, fallbackLogContext(logContext), { error });
     return { ok: false };
   }
 }
 
 async function safeCount(
   section: string,
-  fn: () => Promise<{ count: number | null; error: unknown }>
+  fn: () => Promise<{ count: number | null; error: unknown }>,
+  logContext?: AiLogContext
 ): Promise<QueryResult<number>> {
   try {
     const { count, error } = await fn();
     if (error || count === null) {
-      console.warn(`[ai-context-builder] omitted ${section}:`, error ?? "count unavailable");
+      aiLog("warn", "ai-context-builder", `omitted ${section}`, fallbackLogContext(logContext), {
+        error: error ?? "count unavailable",
+      });
       return { ok: false };
     }
     return { ok: true, data: count };
   } catch (error) {
-    console.warn(`[ai-context-builder] omitted ${section}:`, error);
+    aiLog("warn", "ai-context-builder", `omitted ${section}`, fallbackLogContext(logContext), { error });
     return { ok: false };
   }
 }
@@ -281,7 +291,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
         .select("name, slug, org_type, description")
         .eq("id", orgId)
         .maybeSingle()
-    ),
+    , input.logContext),
     shouldLoad("userName")
       ? safeQuery<{ name: string }>("user name", () =>
         (serviceSupabase as any)
@@ -289,7 +299,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .select("name")
           .eq("id", userId)
           .maybeSingle()
-      ).then((result) =>
+      , input.logContext).then((result) =>
         result.ok
           ? { ok: true as const, data: result.data?.name ?? null }
           : { ok: false as const }
@@ -303,7 +313,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .eq("organization_id", orgId)
           .is("deleted_at", null)
           .eq("status", "active")
-      )
+      , input.logContext)
       : Promise.resolve({ ok: false as const }),
     shouldLoad("alumniCount")
       ? safeCount("alumni count", () =>
@@ -312,7 +322,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .select("*", { count: "estimated", head: true })
           .eq("organization_id", orgId)
           .is("deleted_at", null)
-      )
+      , input.logContext)
       : Promise.resolve({ ok: false as const }),
     shouldLoad("parentCount")
       ? safeCount("parent count", () =>
@@ -321,7 +331,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .select("*", { count: "estimated", head: true })
           .eq("organization_id", orgId)
           .is("deleted_at", null)
-      )
+      , input.logContext)
       : Promise.resolve({ ok: false as const }),
     // Single query returns both rows (limit 5) and total count
     shouldLoad("upcomingEvents")
@@ -336,12 +346,16 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
             .order("start_date", { ascending: true })
             .limit(5);
           if (error) {
-            console.warn("[ai-context-builder] omitted upcoming events:", error);
+            aiLog("warn", "ai-context-builder", "omitted upcoming events", fallbackLogContext(input.logContext), {
+              error,
+            });
             return { ok: false };
           }
           return { ok: true, data: { events: data ?? [], totalCount: count ?? 0 } };
         } catch (error) {
-          console.warn("[ai-context-builder] omitted upcoming events:", error);
+          aiLog("warn", "ai-context-builder", "omitted upcoming events", fallbackLogContext(input.logContext), {
+            error,
+          });
           return { ok: false };
         }
       })()
@@ -357,8 +371,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .gte("published_at", twoWeeksAgo)
           .order("published_at", { ascending: false })
           .limit(5);
-      }
-      ).then((result) =>
+      }, input.logContext).then((result) =>
         result.ok
           ? { ok: true as const, data: result.data ?? [] }
           : { ok: false as const }
@@ -371,7 +384,7 @@ async function loadPromptContextData(input: BuildPromptInput): Promise<PromptCon
           .select("total_amount_cents, donation_count, last_donation_at")
           .eq("organization_id", orgId)
           .maybeSingle()
-      )
+      , input.logContext)
       : Promise.resolve({ ok: false as const }),
   ]);
 

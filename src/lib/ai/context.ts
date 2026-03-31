@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@supabase/supabase-js";
 import type { RateLimitResult } from "@/lib/security/rate-limit";
 import { createServiceClient } from "@/lib/supabase/service";
+import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 
 // ── Discriminated union return type ──
 
@@ -22,6 +23,7 @@ export type AiOrgContext =
 export interface AiOrgContextDeps {
   serviceSupabase?: any;
   supabase?: any;
+  logContext?: AiLogContext;
 }
 
 // ── Helper ──
@@ -63,7 +65,11 @@ export async function getAiOrgContext(
     .maybeSingle();
 
   if (error) {
-    console.error("[ai-context] role query failed:", error);
+    aiLog("error", "ai-context", "role query failed", deps.logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+      userId: user.id,
+    }, { error });
     return { ok: false, response: respond({ error: "Service unavailable" }, 503) };
   }
 
