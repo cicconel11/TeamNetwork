@@ -555,6 +555,26 @@ function mergeDrafts<T extends Record<string, unknown>>(primary: T, secondary: P
   ) as T;
 }
 
+function hasPreparedJobRequirements(
+  draft: Partial<z.infer<typeof prepareJobPostingSchema>>
+): boolean {
+  const hasRequiredFields = REQUIRED_PREPARED_JOB_FIELDS.every((field) => {
+    const value = draft[field];
+    return typeof value === "string" && value.trim().length > 0;
+  });
+
+  if (!hasRequiredFields) {
+    return false;
+  }
+
+  const hasApplicationUrl =
+    typeof draft.application_url === "string" && draft.application_url.trim().length > 0;
+  const hasContactEmail =
+    typeof draft.contact_email === "string" && draft.contact_email.trim().length > 0;
+
+  return hasApplicationUrl || hasContactEmail;
+}
+
 async function prepareJobPosting(
   sb: SB,
   ctx: ToolExecutionContext,
@@ -571,20 +591,17 @@ async function prepareJobPosting(
   }
 
   let sourceDraft: Partial<z.infer<typeof prepareJobPostingSchema>> = {};
-  if (parsedDraft.data.application_url) {
+  let sourceWarning: string | null = null;
+  if (parsedDraft.data.application_url && !hasPreparedJobRequirements(parsedDraft.data)) {
     try {
       sourceDraft = await fetchJobSourceDraft(parsedDraft.data.application_url);
     } catch (error) {
       if (error instanceof JobSourceIntakeError) {
-        return {
-          kind: "ok",
-          data: {
-            state: "invalid_source_url",
-            message: error.message,
-          },
-        };
+        sourceWarning = error.message;
       }
-      return toolError("Unable to read the job posting URL");
+      if (!(error instanceof JobSourceIntakeError)) {
+        return toolError("Unable to read the job posting URL");
+      }
     }
   }
 
@@ -610,6 +627,7 @@ async function prepareJobPosting(
         missing_fields: Array.from(new Set(missingFields)),
         draft: mergedDraft,
         sourced_fields: Object.keys(sourceDraft),
+        ...(sourceWarning ? { source_warning: sourceWarning } : {}),
       },
     };
   }
@@ -623,6 +641,7 @@ async function prepareJobPosting(
         missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
         draft: mergedDraft,
         sourced_fields: Object.keys(sourceDraft),
+        ...(sourceWarning ? { source_warning: sourceWarning } : {}),
       },
     };
   }

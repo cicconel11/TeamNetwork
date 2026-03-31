@@ -28,13 +28,35 @@ function createSupabaseStub() {
     messages: [] as Array<Record<string, unknown>>,
   };
 
+  function applyFilters(
+    rows: Array<Record<string, unknown>>,
+    filters: Array<{ kind: "eq" | "in" | "lt" | "gt"; column: string; value: unknown }>
+  ) {
+    return rows.filter((row) =>
+      filters.every((filter) => {
+        const value = row[filter.column];
+        if (filter.kind === "eq") return value === filter.value;
+        if (filter.kind === "in") {
+          return Array.isArray(filter.value) && filter.value.includes(value);
+        }
+        if (filter.kind === "lt") {
+          return String(value ?? "") < String(filter.value);
+        }
+        if (filter.kind === "gt") {
+          return String(value ?? "") > String(filter.value);
+        }
+        return true;
+      })
+    );
+  }
+
   function from(table: string) {
     const query = {
       table,
       op: "select" as "select" | "insert" | "update",
       inserted: null as Record<string, unknown> | null,
       updated: null as Record<string, unknown> | null,
-      filters: [] as Array<{ kind: "eq" | "in" | "lt"; column: string; value: unknown }>,
+      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "gt"; column: string; value: unknown }>,
       orderBy: null as { column: string; ascending: boolean } | null,
       limitValue: null as number | null,
     };
@@ -66,27 +88,41 @@ function createSupabaseStub() {
         query.filters.push({ kind: "lt", column, value });
         return builder;
       },
-      order() {
+      gt(column: string, value: unknown) {
+        query.filters.push({ kind: "gt", column, value });
         return builder;
       },
-      limit() {
+      order(column: string, opts?: { ascending?: boolean }) {
+        query.orderBy = { column, ascending: opts?.ascending ?? true };
+        return builder;
+      },
+      limit(value: number) {
+        query.limitValue = value;
         return builder;
       },
     };
 
     const resolve = () => {
       if (table === "ai_messages") {
-        if (
-          query.op === "select" &&
-          query.filters.some(
-            (f) => f.kind === "eq" && f.column === "idempotency_key"
-          )
-        ) {
-          return { data: null, error: null };
-        }
-
         if (query.op === "select") {
-          return { data: [], error: null };
+          let rows = applyFilters(state.messages, query.filters);
+          if (query.orderBy) {
+            rows = [...rows].sort((a, b) => {
+              const left = String(a[query.orderBy!.column] ?? "");
+              const right = String(b[query.orderBy!.column] ?? "");
+              return query.orderBy!.ascending ? left.localeCompare(right) : right.localeCompare(left);
+            });
+          }
+          if (typeof query.limitValue === "number") {
+            rows = rows.slice(0, query.limitValue);
+          }
+          return {
+            data:
+              query.filters.some((f) => f.kind === "eq" && f.column === "idempotency_key")
+                ? (rows[0] ?? null)
+                : rows,
+            error: null,
+          };
         }
 
         if (query.op === "insert" && query.inserted?.role === "assistant") {
@@ -106,19 +142,7 @@ function createSupabaseStub() {
 
         if (query.op === "update") {
           for (const row of state.messages) {
-            const matches = query.filters.every((filter) => {
-              if (filter.kind === "eq") return row[filter.column] === filter.value;
-              if (filter.kind === "in")
-                return (
-                  Array.isArray(filter.value) &&
-                  filter.value.includes(row[filter.column])
-                );
-              if (filter.kind === "lt")
-                return (
-                  String(row[filter.column] ?? "") < String(filter.value)
-                );
-              return true;
-            });
+            const matches = applyFilters([row], query.filters).length === 1;
             if (matches) Object.assign(row, query.updated);
           }
           return { data: null, error: null };
