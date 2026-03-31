@@ -136,6 +136,8 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Discussion creation prompts can expose only `prepare_discussion_thread`
   │       ├─ Clear job/discussion create turns now preempt surface-specific read routing, so keywords like fundraising, alumni, or events do not knock the turn off the pending-action path
   │       ├─ Those single-tool create turns also force pass-1 `tool_choice` to the prepare tool so the model cannot bypass the pending-action flow with a freeform draft
+  │       ├─ Active per-thread draft-session state can keep the matching prepare tool attached across missing-fields follow-ups
+  │       ├─ Those continuation turns merge stored draft payload with new tool args before re-validating the draft
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
   │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
   │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
