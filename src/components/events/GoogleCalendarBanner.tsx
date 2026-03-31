@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { Card, Button } from "@/components/ui";
 import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
 import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
+import { calendarEventsPath } from "@/lib/calendar/routes";
 
 interface GoogleCalendarBannerProps {
   orgId: string;
@@ -72,7 +73,7 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
   const gcal = useGoogleCalendarSync({
     orgId,
     orgSlug,
-    redirectPath: `/${orgSlug}/events`,
+    redirectPath: calendarEventsPath(orgSlug),
   });
 
   const [isDismissed, setIsDismissed] = useState(() => getDismissed(orgId));

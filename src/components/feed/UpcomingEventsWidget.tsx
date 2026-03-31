@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { calendarEventDetailPath, calendarEventsPath } from "@/lib/calendar/routes";
 
 interface Event {
   id: string;
@@ -41,7 +42,7 @@ export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetPr
           return (
             <li key={event.id}>
               <Link
-                href={`/${orgSlug}/events/${event.id}`}
+                href={calendarEventDetailPath(orgSlug, event.id)}
                 className="flex items-center gap-3 p-1.5 -m-1.5 rounded-xl hover:bg-muted transition-all duration-200"
               >
                 <div className="flex-shrink-0 w-11 h-11 bg-muted rounded-lg flex flex-col items-center justify-center">
@@ -55,7 +56,7 @@ export function UpcomingEventsWidget({ events, orgSlug }: UpcomingEventsWidgetPr
         })}
       </ul>
       <Link
-        href={`/${orgSlug}/events`}
+        href={calendarEventsPath(orgSlug)}
         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-org-secondary mt-3 pt-3 border-t border-border transition-colors duration-200"
       >
         See all events <span aria-hidden="true">→</span>

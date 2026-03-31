@@ -229,13 +229,44 @@ export function formatCalendarEventTime(event: CalendarEventLike, locale = "en-U
 export function eventOverlapsRange(event: CalendarEventLike, start: Date, end: Date): boolean {
   const range = resolveEventRange(event);
   if (!range) return false;
+
+  if (event.allDay) {
+    if (event.endAt && event.startAt.includes("T") && event.endAt.includes("T")) {
+      const exactStart = parseEventDate(event.startAt);
+      const exactEnd = parseEventDate(event.endAt);
+
+      if (exactStart && exactEnd) {
+        const inclusiveEnd = new Date(exactEnd.getTime() - 1);
+        return exactStart.getTime() <= end.getTime() &&
+          inclusiveEnd.getTime() >= start.getTime();
+      }
+    }
+
+    const eventStartDay = startOfLocalDay(range.start);
+    const eventEndDay = !event.endAt
+      ? eventStartDay
+      : (() => {
+          const endDay = startOfLocalDay(range.end);
+          const endsAtLocalMidnight =
+            range.end.getHours() === 0 &&
+            range.end.getMinutes() === 0 &&
+            range.end.getSeconds() === 0 &&
+            range.end.getMilliseconds() === 0;
+
+          return endsAtLocalMidnight && endDay.getTime() > eventStartDay.getTime()
+            ? addDays(endDay, -1)
+            : endDay;
+        })();
+
+    const rangeStartDay = startOfLocalDay(start);
+    const rangeEndDay = startOfLocalDay(end);
+
+    return eventStartDay.getTime() <= rangeEndDay.getTime() &&
+      eventEndDay.getTime() >= rangeStartDay.getTime();
+  }
+
   const overlapEnd = resolveOverlapEnd(event, range.start, range.end);
   const startsBeforeRangeEnds = range.start.getTime() <= end.getTime();
-
-  // Null-end all-day imports behave as single-day events keyed off their floating start date.
-  if (event.allDay && !event.endAt) {
-    return startsBeforeRangeEnds && range.start.getTime() >= start.getTime();
-  }
 
   return startsBeforeRangeEnds && overlapEnd.getTime() >= start.getTime();
 }

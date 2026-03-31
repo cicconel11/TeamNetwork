@@ -211,7 +211,7 @@ export default async function PhilanthropyPage({ params, searchParams }: Philant
       {events && events.length > 0 ? (
         <div className="space-y-4 stagger-children">
           {events.map((event) => (
-            <Link key={event.id} href={`/${orgSlug}/events/${event.id}`}>
+            <Link key={event.id} href={`/${orgSlug}/calendar/events/${event.id}`}>
               <Card interactive className="p-5">
                 <div className="flex items-start gap-4">
                   <div className="h-16 w-16 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex flex-col items-center justify-center text-center flex-shrink-0">

@@ -2,8 +2,9 @@
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useCallback } from "react";
+import { parseCalendarView } from "@/lib/calendar/view-state";
 
-type ViewMode = "list" | "availability";
+type ViewMode = "events" | "all" | "availability";
 
 function ListIcon({ className }: { className?: string }) {
   return (
@@ -29,18 +30,25 @@ function GridIcon({ className }: { className?: string }) {
   );
 }
 
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+      <path d="M6 2a.75.75 0 01.75.75V3h6.5v-.25a.75.75 0 011.5 0V3h.75A2.25 2.25 0 0118 5.25v9.5A2.25 2.25 0 0115.75 17h-11.5A2.25 2.25 0 012 14.75v-9.5A2.25 2.25 0 014.25 3H5v-.25A.75.75 0 016 2zm10.5 6.25h-13v6.5c0 .414.336.75.75.75h11.5a.75.75 0 00.75-.75v-6.5z" />
+    </svg>
+  );
+}
+
 export function CalendarViewToggle() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
-  const currentView: ViewMode =
-    searchParams.get("view") === "availability" ? "availability" : "list";
+  const currentView: ViewMode = parseCalendarView(searchParams.get("view") || undefined);
 
   const setView = useCallback(
     (view: ViewMode) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (view === "list") {
+      if (view === "events") {
         params.delete("view");
       } else {
         params.set("view", view);
@@ -57,25 +65,47 @@ export function CalendarViewToggle() {
     <div className="bg-muted/50 rounded-xl p-1 inline-flex">
       <nav className="flex gap-1" aria-label="Calendar views">
         <button
-          onClick={() => setView("list")}
+          onClick={() => setView("events")}
           className={`
             flex items-center gap-2 whitespace-nowrap py-2.5 px-4 text-sm font-medium rounded-lg
             transition-colors duration-200 touch-manipulation
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring
             ${
-              currentView === "list"
+              currentView === "events"
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground hover:bg-card/50"
             }
           `}
-          aria-current={currentView === "list" ? "page" : undefined}
+          aria-current={currentView === "events" ? "page" : undefined}
         >
-          <ListIcon
-            className={`w-4 h-4 ${currentView === "list" ? "text-org-secondary" : ""}`}
+          <CalendarIcon
+            className={`w-4 h-4 ${currentView === "events" ? "text-org-secondary" : ""}`}
             aria-hidden="true"
           />
-          <span className="hidden sm:inline">List</span>
-          <span className="sm:hidden sr-only">List view</span>
+          <span className="hidden sm:inline">Events</span>
+          <span className="sm:hidden sr-only">Events view</span>
+        </button>
+
+        <button
+          onClick={() => setView("all")}
+          className={`
+            flex items-center gap-2 whitespace-nowrap py-2.5 px-4 text-sm font-medium rounded-lg
+            transition-colors duration-200 touch-manipulation
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-ring
+            ${
+              currentView === "all"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+            }
+          `}
+          aria-current={currentView === "all" ? "page" : undefined}
+        >
+          <ListIcon
+            className={`w-4 h-4 ${currentView === "all" ? "text-org-secondary" : ""}`}
+            aria-hidden="true"
+          />
+          <span className="hidden sm:inline">All Activity</span>
+          <span className="sm:hidden sr-only">All activity view</span>
         </button>
 
         <button

@@ -177,7 +177,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent") ? [{
       label: tDash("parents"), value: parentsCount || 0, href: `/${orgSlug}/parents`, icon: Heart,
     }] : []),
-    { label: tDash("upcomingEvents"), value: eventsCount || 0, href: `/${orgSlug}/events`, icon: CalendarClock },
+    { label: tDash("upcomingEvents"), value: eventsCount || 0, href: `/${orgSlug}/calendar`, icon: CalendarClock },
     {
       label: tDash("totalDonations"),
       value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
@@ -192,7 +192,7 @@ export default async function OrgHomePage({ params, searchParams }: HomePageProp
     ...(orgCtx.hasParentsAccess && (parentsCount ?? 0) > 0 && (orgCtx.role === "admin" || orgCtx.role === "active_member" || orgCtx.role === "parent")
       ? [{ label: tDash("parents"), value: String(parentsCount || 0), href: `/${orgSlug}/parents`, iconKey: "heart" as const }]
       : []),
-    { label: tDash("upcomingEvents"), value: String(eventsCount || 0), href: `/${orgSlug}/events`, iconKey: "calendar-clock" },
+    { label: tDash("upcomingEvents"), value: String(eventsCount || 0), href: `/${orgSlug}/calendar`, iconKey: "calendar-clock" },
     {
       label: tDash("totalDonations"),
       value: `$${totalDonations.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,

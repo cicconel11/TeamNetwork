@@ -7,8 +7,9 @@ import {
   getUnifiedEventFloatingDateKey,
   type UnifiedEvent,
 } from "@/lib/calendar/unified-events";
+import { calendarNewEventPath, calendarSourcesPath } from "@/lib/calendar/routes";
 import { formatCalendarEventTime } from "@/lib/calendar/event-segments";
-import { getTeamEventCreationHref, getUnifiedEventHref } from "@/lib/calendar/navigation";
+import { getUnifiedEventHref } from "@/lib/calendar/navigation";
 
 type UnifiedEventFeedProps = {
   orgId: string;
@@ -198,7 +199,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone }: Un
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {hasEventsSource && (
             <Link
-              href={getTeamEventCreationHref(orgSlug)}
+              href={calendarNewEventPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
               Create your first event
@@ -206,7 +207,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone }: Un
           )}
           {hasSchedulesSource && (
             <Link
-              href={`/${orgSlug}/calendar/sources`}
+              href={calendarSourcesPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
             >
               Connect a schedule source
