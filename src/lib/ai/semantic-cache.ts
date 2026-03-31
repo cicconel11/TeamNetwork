@@ -5,6 +5,7 @@ import {
   type CacheSurface,
   type SemanticCacheKeyParts,
 } from "./semantic-cache-utils";
+import { aiLog, type AiLogContext } from "./logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,8 +39,9 @@ export async function lookupSemanticCache(params: {
   orgId: string;
   surface: CacheSurface;
   supabase: SupabaseClient;
+  logContext?: AiLogContext;
 }): Promise<CacheLookupResult> {
-  const { cacheKey, orgId, surface, supabase } = params;
+  const { cacheKey, orgId, surface, supabase, logContext } = params;
 
   const { data, error } = await (supabase as any)
     .from("ai_semantic_cache")
@@ -54,7 +56,10 @@ export async function lookupSemanticCache(params: {
     .maybeSingle();
 
   if (error) {
-    console.error("[ai-cache] lookup failed:", error);
+    aiLog("error", "ai-cache", "lookup failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+    }, { error, surface });
     return { ok: false, reason: "error" };
   }
 
@@ -90,6 +95,7 @@ export async function writeCacheEntry(params: {
   surface: CacheSurface;
   sourceMessageId: string;
   supabase: SupabaseClient;
+  logContext?: AiLogContext;
 }): Promise<CacheWriteResult> {
   const {
     cacheKey,
@@ -98,10 +104,17 @@ export async function writeCacheEntry(params: {
     surface,
     sourceMessageId,
     supabase,
+    logContext,
   } = params;
 
   if (responseContent.length > MAX_RESPONSE_CONTENT_LENGTH) {
-    console.error("[ai-cache] response too large, skipping write");
+    aiLog("error", "ai-cache", "response too large, skipping write", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+    }, {
+      surface,
+      contentLength: responseContent.length,
+    });
     return { status: "skipped_too_large" };
   }
 
@@ -144,12 +157,21 @@ export async function writeCacheEntry(params: {
       // Row already exists — this is expected on concurrent requests, not a failure.
       return { status: "duplicate" };
     }
-    console.error("[ai-cache] write failed:", error);
+    aiLog("error", "ai-cache", "write failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+    }, { error, surface });
     return { status: "error" };
   }
 
   if (!data?.id) {
-    console.error("[ai-cache] write succeeded without returning an id");
+    aiLog("error", "ai-cache", "write succeeded without returning an id", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+    }, {
+      surface,
+      sourceMessageId,
+    });
     return { status: "error" };
   }
 

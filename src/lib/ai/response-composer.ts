@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { getZaiModel } from "./client";
 import type { SSEEvent } from "./sse";
+import { aiLog, type AiLogContext } from "./logger";
 
 export interface UsageAccumulator {
   inputTokens: number;
@@ -29,6 +30,7 @@ interface ComposeOptions {
   tools?: OpenAI.Chat.ChatCompletionTool[];
   onUsage?: (usage: UsageAccumulator) => void;
   signal?: AbortSignal;
+  logContext?: AiLogContext;
 }
 
 /**
@@ -41,7 +43,7 @@ interface ComposeOptions {
 export async function* composeResponse(
   options: ComposeOptions
 ): AsyncGenerator<SSEEvent | ToolCallRequestedEvent> {
-  const { client, systemPrompt, messages, toolResults, tools, onUsage, signal } = options;
+  const { client, systemPrompt, messages, toolResults, tools, onUsage, signal, logContext } = options;
 
   // Build message array
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -137,7 +139,10 @@ export async function* composeResponse(
     if (signal?.aborted) {
       throw signal.reason ?? err;
     }
-    console.error("[response-composer] streaming failed:", err);
+    aiLog("error", "response-composer", "streaming failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId: "unknown_org",
+    }, { error: err });
     yield {
       type: "error",
       message: "Failed to generate response",

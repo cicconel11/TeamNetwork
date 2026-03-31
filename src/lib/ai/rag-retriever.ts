@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateEmbedding } from "./embeddings";
+import { aiLog, type AiLogContext } from "./logger";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,6 +21,7 @@ export interface RetrieveParams {
   query: string;
   orgId: string;
   serviceSupabase: SupabaseClient;
+  logContext?: AiLogContext;
   maxChunks?: number;
   similarityThreshold?: number;
   sourceTables?: string[];
@@ -51,6 +53,7 @@ export async function retrieveRelevantChunks(
     query,
     orgId,
     serviceSupabase,
+    logContext,
     maxChunks = DEFAULT_MAX_CHUNKS,
     similarityThreshold = DEFAULT_SIMILARITY_THRESHOLD,
     sourceTables,
@@ -72,7 +75,10 @@ export async function retrieveRelevantChunks(
   );
 
   if (error) {
-    console.error("[rag-retriever] search failed:", error);
+    aiLog("error", "rag-retriever", "search failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+    }, { error });
     throw new Error(`RAG search failed: ${error.message}`);
   }
 
@@ -91,7 +97,7 @@ export async function retrieveRelevantChunks(
   }));
 
   // Auto-fetch parent thread chunks for reply results
-  return await enrichWithParentChunks(chunks, orgId, serviceSupabase);
+  return await enrichWithParentChunks(chunks, orgId, serviceSupabase, logContext);
 }
 
 /**
@@ -101,7 +107,8 @@ export async function retrieveRelevantChunks(
 async function enrichWithParentChunks(
   chunks: RetrievedChunk[],
   orgId: string,
-  serviceSupabase: SupabaseClient
+  serviceSupabase: SupabaseClient,
+  logContext?: AiLogContext
 ): Promise<RetrievedChunk[]> {
   // Find reply chunks with parent_thread_id metadata
   const parentThreadIds = new Set<string>();
@@ -132,7 +139,10 @@ async function enrichWithParentChunks(
   if (error || !parentChunks) {
     // Non-fatal — return results without parent context
     if (error) {
-      console.warn("[rag-retriever] parent chunk fetch failed:", error);
+      aiLog("warn", "rag-retriever", "parent chunk fetch failed", logContext ?? {
+        requestId: "unknown_request",
+        orgId,
+      }, { error });
     }
     return chunks;
   }

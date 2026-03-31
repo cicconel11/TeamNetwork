@@ -65,6 +65,7 @@ import {
   addToolCallTiming,
   finalizeStageTimings,
 } from "@/lib/ai/chat-telemetry";
+import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 
 export interface ChatRouteDeps {
   createClient?: typeof createClient;
@@ -120,6 +121,21 @@ const CONNECTION_PASS2_TEMPLATE = [
   "- If state=not_found, say you couldn't find that person in the organization's member or alumni data and ask for a narrower identifier.",
   "- If state=no_suggestions, say you found the person but there is not enough strong professional overlap yet to recommend a connection.",
 ].join("\n");
+
+const DEFAULT_AI_ORG_RATE_LIMIT = 60;
+
+function getAiOrgRateLimit(): number {
+  const parsed = Number.parseInt(process.env.AI_ORG_RATE_LIMIT ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_AI_ORG_RATE_LIMIT;
+}
+
+class ToolGroundingVerificationError extends Error {
+  constructor(
+    readonly failures: ReturnType<typeof verifyToolBackedResponse>["failures"]
+  ) {
+    super("tool_grounding_failed");
+  }
+}
 
 interface SuggestConnectionDisplayReason {
   label?: unknown;
@@ -597,8 +613,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   ) {
     const { orgId } = await params;
     const startTime = Date.now();
-    const stageTimings = createStageTimings();
+    const requestId = crypto.randomUUID();
+    const stageTimings = createStageTimings(requestId);
     const cacheDisabled = process.env.DISABLE_AI_CACHE === "true";
+    const baseLogContext: AiLogContext = { requestId, orgId };
     // 1. Rate limit — get user first to allow per-user limiting
     const supabase = await createClientFn();
     const {
@@ -606,18 +624,24 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(request, {
+      orgId,
       userId: user?.id ?? null,
       feature: "ai-chat",
       limitPerIp: 30,
       limitPerUser: 20,
+      limitPerOrg: getAiOrgRateLimit(),
     });
     if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
     // 2. Auth — validate admin role
     const ctx = await runTimedStage(stageTimings, "auth_org_context", async () =>
-      getAiOrgContextFn(orgId, user, rateLimit, { supabase })
+      getAiOrgContextFn(orgId, user, rateLimit, { supabase, logContext: baseLogContext })
     );
     if (!ctx.ok) return ctx.response;
+    const requestLogContext: AiLogContext = {
+      ...baseLogContext,
+      userId: ctx.userId,
+    };
 
     // 3. Validate body and build policy
     let validatedBody: ReturnType<typeof sendMessageSchema.parse> extends infer T ? T : never;
@@ -731,7 +755,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             threadId!,
             ctx.userId,
             ctx.orgId,
-            ctx.serviceSupabase
+            ctx.serviceSupabase,
+            { ...requestLogContext, threadId: threadId! }
           )
       );
       if (!resolution.ok) {
@@ -755,7 +780,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           .in("status", ["pending", "streaming"])
           .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
         if (cleanupError) {
-          console.error("[ai-chat] abandoned stream cleanup failed:", cleanupError);
+          aiLog("error", "ai-chat", "abandoned stream cleanup failed", {
+            ...requestLogContext,
+            threadId: existingThreadId,
+          }, { error: cleanupError });
         }
       });
     } else {
@@ -775,7 +803,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     );
 
     if (idempError) {
-      console.error("[ai-chat] idempotency check failed:", idempError);
+      aiLog("error", "ai-chat", "idempotency check failed", requestLogContext, {
+        error: idempError,
+      });
       return NextResponse.json({ error: "Failed to check message idempotency" }, { status: 500 });
     }
 
@@ -788,7 +818,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         skipRemainingStages(stageTimings, "cache_lookup");
 
         // Find the assistant reply that immediately follows the user message with this idempotency key
-        const { data: assistantReplay } = await ctx.supabase
+        const { data: assistantReplay, error: assistantReplayError } = await ctx.supabase
           .from("ai_messages")
           .select("content")
           .eq("thread_id", existingMsg.thread_id)
@@ -798,6 +828,17 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           .order("created_at", { ascending: true })
           .limit(1)
           .single();
+
+        if (assistantReplayError) {
+          aiLog("error", "ai-chat", "idempotency replay lookup failed", {
+            ...requestLogContext,
+            threadId: existingMsg.thread_id,
+          }, { error: assistantReplayError });
+          return NextResponse.json(
+            { error: "Failed to replay completed response" },
+            { status: 500, headers: rateLimit.headers }
+          );
+        }
 
         return buildSseResponse(
           createSSEStream(async (enqueue) => {
@@ -844,7 +885,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     );
 
     if (initError || !initResult) {
-      console.error("[ai-chat] init_ai_chat RPC failed:", initError);
+      aiLog("error", "ai-chat", "init_ai_chat RPC failed", requestLogContext, {
+        error: initError,
+      });
       return NextResponse.json(
         { error: "Failed to initialize chat" },
         { status: 500, headers: rateLimit.headers }
@@ -889,7 +932,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         });
 
       if (safetyAssistantError || !safetyAssistantMsg) {
-        console.error("[ai-chat] safety assistant message failed:", safetyAssistantError);
+        aiLog("error", "ai-chat", "safety assistant message failed", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: safetyAssistantError });
         return NextResponse.json(
           { error: "Failed to create response" },
           { status: 500, headers: rateLimit.headers }
@@ -924,6 +970,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           "message_safety_blocked",
           Date.now() - startTime
         ),
+      }, {
+        ...requestLogContext,
+        threadId: threadId!,
       });
 
       return buildSseResponse(
@@ -956,6 +1005,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           orgId: ctx.orgId,
           surface: effectiveSurface,
           supabase: ctx.serviceSupabase,
+          logContext: {
+            ...requestLogContext,
+            threadId: threadId!,
+          },
         })
       );
 
@@ -975,7 +1028,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           });
 
         if (cachedAssistantError || !cachedAssistantMsg) {
-          console.error("[ai-chat] cache hit assistant message failed:", cachedAssistantError);
+          aiLog("error", "ai-chat", "cache hit assistant message failed", {
+            ...requestLogContext,
+            threadId: threadId!,
+          }, { error: cachedAssistantError });
           cacheStatus = "error";
           cacheBypassReason = "cache_hit_persist_failed";
         } else {
@@ -1001,6 +1057,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             cacheEntryId: cacheResult.hit.id,
             contextSurface: effectiveSurface,
             stageTimings: finalizeStageTimings(stageTimings, "cache_hit", Date.now() - startTime),
+          }, {
+            ...requestLogContext,
+            threadId: threadId!,
           });
 
           return buildSseResponse(
@@ -1026,14 +1085,18 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
     const hasEmbeddingKey = !!process.env.EMBEDDING_API_KEY;
     if (hasEmbeddingKey && !skipRagRetrieval) {
-      const ragStartedAt = Date.now();
       try {
-        const retrieved = await retrieveRelevantChunksFn({
-          query: messageSafety.promptSafeMessage,
-          orgId: ctx.orgId,
-          serviceSupabase: ctx.serviceSupabase,
-        });
-        setStageStatus(stageTimings, "rag_retrieval", "completed", Date.now() - ragStartedAt);
+        const retrieved = await runTimedStage(stageTimings, "rag_retrieval", async () =>
+          retrieveRelevantChunksFn({
+            query: messageSafety.promptSafeMessage,
+            orgId: ctx.orgId,
+            serviceSupabase: ctx.serviceSupabase,
+            logContext: {
+              ...requestLogContext,
+              threadId: threadId!,
+            },
+          })
+        );
         ragChunkCount = retrieved.length;
         if (retrieved.length > 0) {
           ragTopSimilarity = Math.max(...retrieved.map((c) => c.similarity));
@@ -1045,8 +1108,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }
       } catch (err) {
         ragError = err instanceof Error ? err.message : "rag_retrieval_failed";
-        setStageStatus(stageTimings, "rag_retrieval", "failed", Date.now() - ragStartedAt);
-        console.error("[ai-chat] RAG retrieval failed (continuing without):", err);
+        aiLog("error", "ai-chat", "RAG retrieval failed (continuing without)", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: err });
       }
     } else {
       if (!hasEmbeddingKey && executionPolicy.retrieval.mode === "allow") {
@@ -1069,7 +1134,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     );
 
     if (assistantError || !assistantMsg) {
-      console.error("[ai-chat] assistant placeholder failed:", assistantError);
+      aiLog("error", "ai-chat", "assistant placeholder failed", {
+        ...requestLogContext,
+        threadId: threadId!,
+      }, { error: assistantError });
       return NextResponse.json(
         { error: "Failed to create response" },
         { status: 500, headers: rateLimit.headers }
@@ -1128,6 +1196,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           for await (const event of composeResponseFn({
             ...options,
             signal: stageSignal.signal,
+            logContext: {
+              ...requestLogContext,
+              threadId: threadId!,
+            },
           })) {
             const disposition = await onEvent(event as SSEEvent | ToolCallRequestedEvent);
             if (disposition === "stop") {
@@ -1183,7 +1255,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
       const client = createZaiClientFn();
 
-      await ctx.supabase
+      const { error: streamingStatusError } = await ctx.supabase
         .from("ai_messages")
         .update({
           intent: resolvedIntent,
@@ -1192,6 +1264,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           status: "streaming",
         })
         .eq("id", assistantMessageId);
+
+      if (streamingStatusError) {
+        auditErrorMessage = "assistant_streaming_status_failed";
+        aiLog("error", "ai-chat", "assistant streaming status update failed", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: streamingStatusError, messageId: assistantMessageId });
+        enqueue({
+          type: "error",
+          message: "Failed to start the response stream",
+          retryable: true,
+        });
+        return;
+      }
 
         const contextBuildStartedAt = Date.now();
         const historyLoadStartedAt = Date.now();
@@ -1202,6 +1288,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               userId: ctx.userId,
               role: ctx.role,
               serviceSupabase: ctx.serviceSupabase,
+              logContext: {
+                ...requestLogContext,
+                threadId: threadId!,
+              },
               contextMode: usesSharedStaticContext ? "shared_static" : "full",
               surface: effectiveSurface,
               ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
@@ -1257,7 +1347,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       contextMetadata = metadata;
 
       if (historyError) {
-        console.error("[ai-chat] history fetch failed:", historyError);
+        aiLog("error", "ai-chat", "history fetch failed", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: historyError });
         enqueue({ type: "error", message: "Failed to load conversation history", retryable: true });
         return;
       }
@@ -1347,6 +1440,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 serviceSupabase: ctx.serviceSupabase,
                 authorization: toolAuthorization,
                 threadId,
+                requestId,
               },
               { name: toolEvent.name, args: parsedArgs }
             );
@@ -1522,21 +1616,30 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             pass2BufferedContent.length > 0;
 
           if (groundedToolSummary) {
-            const groundingStartedAt = Date.now();
-            const groundingResult = verifyToolBackedResponseFn({
-              content: pass2BufferedContent,
-              toolResults: successfulToolResults,
-            });
+            try {
+              await runTimedStage(stageTimings, "grounding", async () => {
+                const groundingResult = verifyToolBackedResponseFn({
+                  content: pass2BufferedContent,
+                  toolResults: successfulToolResults,
+                });
 
-            if (!groundingResult.grounded) {
-              setStageStatus(stageTimings, "grounding", "failed", Date.now() - groundingStartedAt);
+                if (!groundingResult.grounded) {
+                  throw new ToolGroundingVerificationError(groundingResult.failures);
+                }
+              });
+            } catch (error) {
+              if (!(error instanceof ToolGroundingVerificationError)) {
+                throw error;
+              }
+
               auditErrorMessage = "tool_grounding_failed";
-              console.warn("[ai-grounding] verification failed:", {
-                orgId: ctx.orgId,
-                threadId,
+              aiLog("warn", "ai-grounding", "verification failed", {
+                ...requestLogContext,
+                threadId: threadId!,
+              }, {
                 messageId: assistantMessageId,
                 tools: successfulToolResults.map((result) => result.name),
-                failures: groundingResult.failures,
+                failures: error.failures,
               });
               void trackOpsEventServerFn(
                 "api_error",
@@ -1549,13 +1652,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 ctx.orgId
               );
               pass2BufferedContent = TOOL_GROUNDING_FALLBACK;
-            } else {
-              setStageStatus(
-                stageTimings,
-                "grounding",
-                "completed",
-                Date.now() - groundingStartedAt
-              );
             }
           } else {
             skipStage(stageTimings, "grounding");
@@ -1583,7 +1679,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       });
       streamCompletedSuccessfully = true;
       } catch (err) {
-        console.error("[ai-chat] stream error:", err);
+        aiLog("error", "ai-chat", "stream error", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: err, messageId: assistantMessageId });
         auditErrorMessage = err instanceof Error ? err.message : "stream_failed";
         if (!streamSignal.aborted) {
           enqueue({ type: "error", message: "An error occurred", retryable: true });
@@ -1611,7 +1710,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         );
 
         if (finalizeError) {
-          console.error("[ai-chat] assistant finalize failed:", finalizeError);
+          aiLog("error", "ai-chat", "assistant finalize failed", {
+            ...requestLogContext,
+            threadId: threadId!,
+          }, { error: finalizeError, messageId: assistantMessageId });
           auditErrorMessage ??= "assistant_finalize_failed";
         }
 
@@ -1633,16 +1735,35 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             role: ctx.role,
           });
 
-          const cacheWriteStartedAt = Date.now();
-          const cacheWriteResult = await writeCacheEntry({
-            cacheKey,
-            responseContent: fullContent,
-            orgId: ctx.orgId,
-            surface: effectiveSurface,
-            sourceMessageId: assistantMessageId,
-            supabase: ctx.serviceSupabase,
-          });
-          setStageStatus(stageTimings, "cache_write", "completed", Date.now() - cacheWriteStartedAt);
+          let cacheWriteResult;
+          try {
+            cacheWriteResult = await runTimedStage(stageTimings, "cache_write", async () => {
+              const result = await writeCacheEntry({
+                cacheKey,
+                responseContent: fullContent,
+                orgId: ctx.orgId,
+                surface: effectiveSurface,
+                sourceMessageId: assistantMessageId,
+                supabase: ctx.serviceSupabase,
+                logContext: {
+                  ...requestLogContext,
+                  threadId: threadId!,
+                },
+              });
+
+              if (result.status === "error") {
+                throw new Error("cache_write_failed");
+              }
+
+              return result;
+            });
+          } catch (error) {
+            cacheWriteResult = { status: "error" as const };
+            aiLog("error", "ai-chat", "cache write failed", {
+              ...requestLogContext,
+              threadId: threadId!,
+            }, { error, messageId: assistantMessageId });
+          }
 
           if (cacheWriteResult.status === "inserted") {
             cacheEntryId = cacheWriteResult.entryId;
@@ -1696,6 +1817,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             requestOutcome,
             Date.now() - startTime
           ),
+        }, {
+          ...requestLogContext,
+          threadId: threadId!,
         });
       }
     }, request.signal);

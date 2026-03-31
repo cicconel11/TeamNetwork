@@ -39,9 +39,11 @@ export type RateLimitResult = {
 type RateLimitConfig = {
   limitPerIp?: number;
   limitPerUser?: number;
+  limitPerOrg?: number;
   windowMs?: number;
   pathOverride?: string;
   userId?: string | null;
+  orgId?: string | null;
   feature?: string;
 };
 
@@ -164,11 +166,13 @@ export function checkRateLimit(request: RequestLike, config: RateLimitConfig = {
   const windowMs = config.windowMs ?? DEFAULT_WINDOW_MS;
   const maxPerIp = config.limitPerIp ?? DEFAULT_IP_LIMIT;
   const maxPerUser = config.limitPerUser ?? DEFAULT_USER_LIMIT;
+  const maxPerOrg = config.limitPerOrg ?? 0;
   const ip = deriveClientIp(request) || "unknown";
   const userId = config.userId?.trim() || null;
+  const orgId = config.orgId?.trim() || null;
   const feature = config.feature || "this endpoint";
 
-  const results: Array<ConsumeResult & { scope: "ip" | "user" }> = [];
+  const results: Array<ConsumeResult & { scope: "ip" | "user" | "org" }> = [];
 
   if (maxPerIp > 0) {
     results.push({
@@ -181,6 +185,13 @@ export function checkRateLimit(request: RequestLike, config: RateLimitConfig = {
     results.push({
       scope: "user",
       ...consume(`user:${path}:${userId}`, maxPerUser, windowMs, now),
+    });
+  }
+
+  if (orgId && maxPerOrg > 0) {
+    results.push({
+      scope: "org",
+      ...consume(`org:${path}:${orgId}`, maxPerOrg, windowMs, now),
     });
   }
 

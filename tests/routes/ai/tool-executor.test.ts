@@ -513,6 +513,65 @@ test("prepare_discussion_thread creates a pending confirmation action when compl
   });
 });
 
+test("prepare_discussion_thread fails closed when organization slug lookup errors", async () => {
+  const discussionStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: {
+        data: null,
+        error: { message: "organization lookup failed" },
+      },
+    },
+  });
+
+  const result = await executeToolCall(
+    { ...makeCtx(discussionStub as any), threadId: "thread-123" },
+    {
+      name: "prepare_discussion_thread",
+      args: {
+        title: "Spring Fundraising Volunteers",
+        body: "Let's organize volunteer assignments for the spring fundraiser.",
+      },
+    }
+  );
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Failed to load organization context",
+  });
+});
+
+test("prepare_job_posting fails closed when organization slug lookup errors", async () => {
+  const jobStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: {
+        data: null,
+        error: { message: "organization lookup failed" },
+      },
+    },
+  });
+
+  const result = await executeToolCall(
+    { ...makeCtx(jobStub as any), threadId: "thread-456" },
+    {
+      name: "prepare_job_posting",
+      args: {
+        title: "Senior Product Designer",
+        company: "Acme Corp",
+        location: "San Francisco, CA",
+        industry: "SaaS",
+        experience_level: "senior",
+        description: "Lead product design across our platform.",
+        contact_email: "jobs@example.com",
+      },
+    }
+  );
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Failed to load organization context",
+  });
+});
+
 test("find_navigation_targets returns org-scoped page matches", async () => {
   const result = expectOk(
     await executeToolCall(ctx, {
