@@ -447,6 +447,74 @@ test("analytics surface only attaches get_org_stats", async () => {
   assert.deepEqual(executeToolCallCalls[0].call.args, {});
 });
 
+test("single-tool org stats requests use tool_first context and skip pass 2", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
+          return;
+        }
+
+        throw new Error("get_org_stats should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          active_members: 35,
+          alumni: 12,
+          parents: 4,
+          upcoming_events: 3,
+          donations: {
+            total_amount_cents: 420000,
+            donation_count: 18,
+            last_donation_at: "2026-03-24T00:00:00.000Z",
+          },
+        });
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Show me our donation metrics",
+      surface: "analytics",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Organization snapshot/);
+  assert.match(body, /Active members: 35/);
+  assert.match(body, /Donations: 18 donations - \$4200 raised - last donation 2026-03-24/);
+  assert.match(body, /"type":"done"/);
+});
+
 test("navigation requests only attach find_navigation_targets on pass 1", async () => {
   const body = await (
     await POST(makeRequest("Open announcements") as any, {
@@ -478,6 +546,21 @@ test("action requests do not get forced into find_navigation_targets", async () 
 });
 
 test("create discussion requests only attach prepare_discussion_thread on pass 1", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+    })
+  );
+
   const body = await (
     await POST(makeRequest("Create a discussion thread about spring volunteer assignments") as any, {
       params: Promise.resolve({ orgId: ORG_ID }),
@@ -492,6 +575,7 @@ test("create discussion requests only attach prepare_discussion_thread on pass 1
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
   assert.equal(composeResponseCalls.length, 1);
+  assert.deepEqual(contextModes, ["tool_first"]);
   assert.match(body, /I drafted the discussion thread/i);
   assert.match(body, /"type":"pending_action"/);
   assert.match(body, /"actionType":"create_discussion_thread"/);
