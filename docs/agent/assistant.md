@@ -6,7 +6,7 @@ The AI assistant is an admin-only, org-scoped chat system exposed through the or
 
 The current server structure is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution-policy decisions, optional RAG retrieval, prompt construction, streaming model output over SSE, deterministic tool execution, grounding verification, persistence, and audit logging.
 
-The shipped tool surface includes live read tools for members, events, announcements, discussions, jobs, org stats, connection suggestions, and navigation targets, plus confirmation-gated write-preparation tools for job postings and discussion threads. Those write flows now surface a structured `pending_action` SSE event, render a review card in the panel UI, and execute only after explicit confirm or cancel requests against dedicated pending-action routes.
+The shipped tool surface includes live read tools for members, events, announcements, discussions, jobs, org stats, connection suggestions, and navigation targets, plus confirmation-gated write-preparation tools for job postings and discussion threads. Those write flows now surface a structured `pending_action` SSE event, render a review card in the panel UI, and execute only after explicit confirm or cancel requests against dedicated pending-action routes. Multi-turn job/discussion drafting is now backed by a persisted draft-session record per thread, so when the assistant asks for missing fields the next reply can continue the same write flow without restating the original create intent.
 
 The panel UI is route-aware and now includes per-surface starter prompts, persisted active-thread selection, live tool status labels, and the pending-action review card. Prompt construction also receives the client pathname and attached tool list as untrusted context, while the execution policy can shift between `full`, `shared_static`, and `tool_first` context modes depending on the turn. For Falkor-backed connection suggestions, graph setup, and sync details, see `docs/agent/falkor-people-graph.md`.
 
@@ -43,6 +43,7 @@ Five migrations create all AI-related schema:
 | `20260321110000_fix_ai_messages_rls_integrity.sql` | Composite FK on `ai_messages`, restored thread-ownership RLS invariant |
 | `20260322000000_ai_threads_updated_at_trigger.sql` | `ai_threads_updated_at` trigger (reuses existing `update_updated_at_column()`) |
 | `20260727000000_ai_pending_actions.sql` | `ai_pending_actions` + RLS + indexes for confirmation-gated assistant writes |
+| `20260728000000_ai_draft_sessions.sql` | `ai_draft_sessions` for persisted multi-turn job/discussion draft continuation |
 
 ### Table Summary
 
@@ -53,6 +54,7 @@ Five migrations create all AI-related schema:
 | `ai_audit_log` | Every AI request logged with latency, tokens, cache status | Service-role only (no user policies) |
 | `ai_semantic_cache` | Cached LLM responses keyed by prompt hash | Service-role only (no user policies) |
 | `ai_pending_actions` | Server-owned pending confirmations for assistant write actions | User + org scoped; admins can only access their own actions |
+| `ai_draft_sessions` | Active per-thread draft state for assistant job/discussion continuation | Service-role only (no user policies) |
 
 ## Environment Variables
 

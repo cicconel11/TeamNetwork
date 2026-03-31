@@ -7,6 +7,10 @@ import {
   isPendingActionExpired,
   updatePendingActionStatus,
 } from "@/lib/ai/pending-actions";
+import {
+  clearDraftSession,
+  supportsDraftSessionsStore,
+} from "@/lib/ai/draft-sessions";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 
 export interface AiPendingActionCancelRouteDeps {
@@ -14,6 +18,7 @@ export interface AiPendingActionCancelRouteDeps {
   getAiOrgContext?: typeof getAiOrgContext;
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
+  clearDraftSession?: typeof clearDraftSession;
 }
 
 export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRouteDeps = {}) {
@@ -21,6 +26,7 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
   const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
   const getPendingActionFn = deps.getPendingAction ?? getPendingAction;
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
+  const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
     request: NextRequest,
@@ -42,6 +48,8 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
 
     const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase });
     if (!ctx.ok) return ctx.response;
+    const canUseDraftSessions =
+      supportsDraftSessionsStore(ctx.serviceSupabase) || Boolean(deps.clearDraftSession);
 
     const action = await getPendingActionFn(ctx.serviceSupabase, actionId);
     if (!action || !isAuthorizedAction(ctx, action)) {
@@ -73,7 +81,24 @@ export function createAiPendingActionCancelHandler(deps: AiPendingActionCancelRo
     }
 
     if (expired) {
+      if (canUseDraftSessions) {
+        await clearDraftSessionFn(ctx.serviceSupabase, {
+          organizationId: ctx.orgId,
+          userId: ctx.userId,
+          threadId: action.thread_id,
+          pendingActionId: action.id,
+        });
+      }
       return NextResponse.json({ error: "Pending action has expired" }, { status: 410 });
+    }
+
+    if (canUseDraftSessions) {
+      await clearDraftSessionFn(ctx.serviceSupabase, {
+        organizationId: ctx.orgId,
+        userId: ctx.userId,
+        threadId: action.thread_id,
+        pendingActionId: action.id,
+      });
     }
 
     await ctx.serviceSupabase.from("ai_messages").insert({

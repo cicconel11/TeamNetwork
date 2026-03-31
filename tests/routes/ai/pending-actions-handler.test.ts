@@ -88,6 +88,7 @@ test("confirm executes create_job_posting and appends assistant message", async 
           title: "Senior Product Designer",
         },
       }) as any,
+    clearDraftSession: async () => {},
   });
 
   const response = await handler(buildRequest() as any, {
@@ -169,6 +170,7 @@ test("confirm executes create_discussion_thread and appends assistant message", 
         },
         threadUrl: "/upenn-sprint-football/messages/threads/thread-123",
       }) as any,
+    clearDraftSession: async () => {},
   });
 
   const response = await handler(buildRequest() as any, {
@@ -235,6 +237,7 @@ test("cancel marks the pending action cancelled", async () => {
       updatedStatuses.push(payload);
       return { updated: true };
     },
+    clearDraftSession: async () => {},
   });
 
   const response = await handler(buildRequest() as any, {
@@ -303,6 +306,7 @@ function buildBaseDeps(overrides: Record<string, unknown> = {}) {
           },
         },
       }) as any,
+    clearDraftSession: async () => {},
     ...overrides,
   };
 }
@@ -534,6 +538,7 @@ test("cancel returns 410 for expired pending action without cancel message", asy
     getPendingAction: async () =>
       buildPendingAction({ expires_at: "2000-01-01T00:00:00.000Z" }) as any,
     updatePendingActionStatus: async () => ({ updated: true }),
+    clearDraftSession: async () => {},
   });
 
   const response = await handler(buildRequest() as any, {

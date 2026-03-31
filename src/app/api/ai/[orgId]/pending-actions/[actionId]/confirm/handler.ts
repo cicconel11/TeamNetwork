@@ -9,6 +9,10 @@ import {
   type CreateDiscussionThreadPendingPayload,
   type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
+import {
+  clearDraftSession,
+  supportsDraftSessionsStore,
+} from "@/lib/ai/draft-sessions";
 import { createJobPosting } from "@/lib/jobs/create-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -21,6 +25,7 @@ export interface AiPendingActionConfirmRouteDeps {
   updatePendingActionStatus?: typeof updatePendingActionStatus;
   createJobPosting?: typeof createJobPosting;
   createDiscussionThread?: typeof createDiscussionThread;
+  clearDraftSession?: typeof clearDraftSession;
 }
 
 export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirmRouteDeps = {}) {
@@ -30,6 +35,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
+  const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
     request: NextRequest,
@@ -53,6 +59,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
     const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase, logContext });
     if (!ctx.ok) return ctx.response;
+    const canUseDraftSessions =
+      supportsDraftSessionsStore(ctx.serviceSupabase) || Boolean(deps.clearDraftSession);
 
     const action = await getPendingActionFn(ctx.serviceSupabase, actionId);
     if (!action || !isAuthorizedAction(ctx, action)) {
@@ -147,6 +155,15 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             resultEntityId: result.job.id,
           });
 
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
           const orgSlug =
             typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
               ? payload.orgSlug
@@ -208,6 +225,15 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             resultEntityType: "discussion_thread",
             resultEntityId: result.thread.id,
           });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
 
           const orgSlug =
             typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
