@@ -455,20 +455,20 @@ function getPass1Tools(
     return undefined;
   }
 
+  if (intentType === "action_request" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_job_posting];
+  }
+
+  if (intentType === "action_request" && CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_discussion_thread];
+  }
+
   if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.find_navigation_targets];
   }
 
   if (effectiveSurface === "members" && CONNECTION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.suggest_connections];
-  }
-
-  if (effectiveSurface === "general" && intentType === "action_request" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_job_posting];
-  }
-
-  if (effectiveSurface === "general" && intentType === "action_request" && CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
-    return [AI_TOOL_MAP.prepare_discussion_thread];
   }
 
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
