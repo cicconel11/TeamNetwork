@@ -16,7 +16,7 @@ interface BuildPromptInput {
   role: string;
   serviceSupabase: SupabaseClient;
   logContext?: AiLogContext;
-  contextMode?: "full" | "shared_static";
+  contextMode?: "full" | "shared_static" | "tool_first";
   surface?: CacheSurface;
   ragChunks?: RagChunkInput[];
   now?: string;
@@ -271,9 +271,8 @@ function describeAvailableTools(tools: readonly ToolName[] | undefined): string[
 async function loadPromptContextData(input: BuildPromptInput): Promise<PromptContextData> {
   const { orgId, userId, serviceSupabase, contextMode = "full", surface = "general" } = input;
   const now = new Date().toISOString();
-  const useSharedStaticContext = contextMode === "shared_static";
   const activeSources = SURFACE_DATA_SOURCES[surface] ?? SURFACE_DATA_SOURCES.general;
-  const shouldLoad = (key: DataSourceKey) => activeSources.has(key) && !useSharedStaticContext;
+  const shouldLoad = (key: DataSourceKey) => activeSources.has(key) && contextMode === "full";
 
   const [
     org,

@@ -527,6 +527,85 @@ test("POST /api/ai/[orgId]/chat skips RAG retrieval for cache-eligible prompts a
   assert.equal(auditEntries[0].cacheBypassReason, undefined);
 });
 
+test("POST /api/ai/[orgId]/chat serves eligible exact cache hits before prompt building", async () => {
+  delete process.env.DISABLE_AI_CACHE;
+  process.env.EMBEDDING_API_KEY = "embed-key";
+
+  const cacheServiceSupabase = createSemanticCacheServiceSupabase({
+    rpc: aiContext.serviceSupabase.rpc,
+    lookupRow: {
+      id: "cache-entry-hit-1",
+      response_content: "Cached answer",
+      created_at: "2026-03-24T00:00:00.000Z",
+    },
+  });
+  aiContext.serviceSupabase = cacheServiceSupabase;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      throw new Error("cache hit should not invoke the model");
+    }) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async (input: any) => {
+      retrieveRelevantChunksCalls.push(input);
+      return [];
+    },
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Explain the organization history",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+
+  assert.match(body, /Cached answer/);
+  assert.equal(buildPromptContextCalls.length, 0);
+  assert.equal(retrieveRelevantChunksCalls.length, 0);
+  assert.equal(initChatCalls.length, 1);
+  assert.equal(auditEntries[0].cacheStatus, "hit_exact");
+  assert.equal(auditEntries[0].cacheEntryId, "cache-entry-hit-1");
+  assert.equal(auditEntries[0].stageTimings.stages.cache_lookup.status, "completed");
+  assert.equal(auditEntries[0].stageTimings.stages.rag_retrieval.status, "skipped");
+});
+
 test("POST /api/ai/[orgId]/chat still runs RAG retrieval for non-casual messages", async () => {
   process.env.EMBEDDING_API_KEY = "embed-key";
 
