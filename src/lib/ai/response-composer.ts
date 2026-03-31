@@ -28,6 +28,7 @@ interface ComposeOptions {
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   toolResults?: ToolResultMessage[];
   tools?: OpenAI.Chat.ChatCompletionTool[];
+  toolChoice?: OpenAI.Chat.ChatCompletionToolChoiceOption;
   onUsage?: (usage: UsageAccumulator) => void;
   signal?: AbortSignal;
   logContext?: AiLogContext;
@@ -43,7 +44,17 @@ interface ComposeOptions {
 export async function* composeResponse(
   options: ComposeOptions
 ): AsyncGenerator<SSEEvent | ToolCallRequestedEvent> {
-  const { client, systemPrompt, messages, toolResults, tools, onUsage, signal, logContext } = options;
+  const {
+    client,
+    systemPrompt,
+    messages,
+    toolResults,
+    tools,
+    toolChoice,
+    onUsage,
+    signal,
+    logContext,
+  } = options;
 
   // Build message array
   const apiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -80,7 +91,7 @@ export async function* composeResponse(
       {
         model: getZaiModel(),
         messages: apiMessages,
-        ...(tools ? { tools, tool_choice: "auto" as const } : {}),
+        ...(tools ? { tools, tool_choice: toolChoice ?? ("auto" as const) } : {}),
         stream: true,
         stream_options: { include_usage: true },
         temperature: 0.7,

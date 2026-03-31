@@ -906,6 +906,75 @@ test("POST /api/ai/[orgId]/chat does not log grounding warnings for grounded too
   assert.equal(trackedOpsEvents.length, 0);
 });
 
+test("POST /api/ai/[orgId]/chat uses member-specific fallback for list_members grounding failures", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      yield {
+        type: "tool_call_requested",
+        id: "tool-call-1",
+        name: "list_members",
+        argsJson: '{"limit":10}',
+      };
+      yield { type: "chunk", content: "You have 35 active members across the organization." };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "ok",
+      data: [{ id: "m1", name: "Alice Jones", role: "admin", email: "alice@example.com" }],
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "List the first 10 members by name.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I can list specific members from the current roster/i);
+  assert.doesNotMatch(body, /I couldn.t verify that answer against your organization.s data/i);
+  assert.match(body, /"type":"done"/);
+});
+
 test("POST /api/ai/[orgId]/chat short-circuits suspicious prompt-injection attempts before model execution", async () => {
   let composeCalls = 0;
 
@@ -1085,4 +1154,62 @@ test("POST /api/ai/[orgId]/chat returns 403 when org access is unauthorized", as
   assert.equal(response.status, 403);
   const body = await response.json();
   assert.deepEqual(body, { error: "AI assistant requires admin role" });
+});
+
+test("POST /api/ai/[orgId]/chat falls back when the model emits no content", async () => {
+  process.env.DISABLE_AI_CACHE = "true";
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {}) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many members do we have?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I didn.t get a usable response for that question/i);
+  assert.match(body, /"type":"done"/);
+  const assistantMessage = supabaseStub.state.messages.find((message) => message.role === "assistant");
+  assert.match(String(assistantMessage?.content), /I didn.t get a usable response for that question/i);
 });
