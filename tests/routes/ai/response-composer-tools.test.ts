@@ -99,6 +99,37 @@ test("composeResponse passes tools and tool_choice to API call", async () => {
   assert.ok(capturedOptions?.signal instanceof AbortSignal);
 });
 
+test("composeResponse passes through an explicit tool_choice override", async () => {
+  let capturedParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming | undefined;
+  const client = {
+    chat: {
+      completions: {
+        create: async (params: OpenAI.Chat.ChatCompletionCreateParamsStreaming) => {
+          capturedParams = params;
+          return { [Symbol.asyncIterator]: async function* () {} };
+        },
+      },
+    },
+  } as unknown as OpenAI;
+
+  const forcedToolChoice = {
+    type: "function" as const,
+    function: { name: "prepare_job_posting" },
+  };
+
+  for await (const event of composeResponse({
+    client,
+    systemPrompt: "test",
+    messages: [],
+    tools: [{ type: "function", function: { name: "prepare_job_posting", parameters: {} } }] as OpenAI.Chat.ChatCompletionTool[],
+    toolChoice: forcedToolChoice,
+  })) {
+    void event;
+  }
+
+  assert.deepEqual(capturedParams?.tool_choice, forcedToolChoice);
+});
+
 test("composeResponse does NOT pass tools/tool_choice when tools is undefined", async () => {
   let capturedParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming | undefined;
   const client = {

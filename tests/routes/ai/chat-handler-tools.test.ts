@@ -324,6 +324,10 @@ function toolNamesForCall(index = 0): string[] | undefined {
   return tools?.map((tool: any) => tool.function.name);
 }
 
+function toolChoiceForCall(index = 0) {
+  return composeResponseCalls[index]?.toolChoice;
+}
+
 test("tool call: SSE stream contains tool_status calling, done, and final chunk", async () => {
   const response = await POST(makeRequest() as any, {
     params: Promise.resolve({ orgId: ORG_ID }),
@@ -481,6 +485,10 @@ test("create discussion requests only attach prepare_discussion_thread on pass 1
   ).text();
 
   assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_thread" },
+  });
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
   assert.equal(composeResponseCalls.length, 1);
@@ -497,6 +505,10 @@ test("create discussion requests do not get misrouted to find_navigation_targets
   ).text();
 
   assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_thread" },
+  });
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
 });
 
@@ -562,6 +574,10 @@ test("create job requests still prefer prepare_job_posting over job reads", asyn
   ).text();
 
   assert.deepEqual(toolNamesForCall(0), ["prepare_job_posting"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_job_posting" },
+  });
   assert.equal(executeToolCallCalls[0].call.name, "prepare_job_posting");
   assert.match(body, /I drafted the job posting/i);
   assert.match(body, /"type":"pending_action"/);
@@ -809,6 +825,27 @@ test("single-tool announcement results render deterministic copy without pass 2"
   assert.match(body, /"type":"done"/);
 });
 
+test("member pass2 prompt forbids inferred list_members summaries", async () => {
+  await (
+    await POST(makeRequest("List the first 10 members by name") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.match(
+    composeResponseCalls[1].systemPrompt,
+    /Only mention members explicitly present in the returned rows\./
+  );
+  assert.match(
+    composeResponseCalls[1].systemPrompt,
+    /Do not infer org-wide totals, grouped counts, or role summaries\./
+  );
+  assert.match(
+    composeResponseCalls[1].systemPrompt,
+    /showing the first returned members/i
+  );
+});
+
 test("tool call: cache write is prevented (bypassReason set in done event)", async () => {
   // Even with cache enabled, tool-triggering prompts hit LIVE_CONTEXT_MARKERS
   // and are marked ineligible. The tool_call_made guard is belt-and-suspenders.
@@ -824,6 +861,34 @@ test("tool call: cache write is prevented (bypassReason set in done event)", asy
   assert.doesNotMatch(body, /"status":"miss"/);
   // Restore
   process.env.DISABLE_AI_CACHE = "true";
+});
+
+test("tool-backed turns fall back when pass 2 emits no content", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
+        }
+      },
+      executeToolCall: async () =>
+        okToolResult({ active_members: 35, alumni: 30, parents: 2, upcoming_events: 1, donations: null }),
+    })
+  );
+
+  const response = await POST(makeRequest("How many members do we have?") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.match(body, /I didn.t get a usable response for that question/i);
+  assert.match(body, /"type":"done"/);
 });
 
 test("no tool call: first pass chunks stream before completion", async () => {

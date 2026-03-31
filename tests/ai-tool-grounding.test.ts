@@ -69,6 +69,81 @@ test("verifyToolBackedResponse flags member names absent from tool rows", () => 
   assert.match(result.failures.join("\n"), /ghost person/i);
 });
 
+test("verifyToolBackedResponse accepts member labels with presentation-only role suffixes", () => {
+  const result = verifyToolBackedResponse({
+    content: "- Patrick Leonard (Parent)\n- Jane Smith (Admin)",
+    toolResults: [
+      {
+        name: "list_members",
+        data: [
+          { name: "Patrick Leonard", email: "patrick@example.com" },
+          { name: "Jane Smith", email: "jane@example.com" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse ignores list-member field labels", () => {
+  const result = verifyToolBackedResponse({
+    content: [
+      "- Patrick Leonard (Parent): Email: patrick@example.com",
+      "- Jane Smith (Admin): Email: jane@example.com",
+    ].join("\n"),
+    toolResults: [
+      {
+        name: "list_members",
+        data: [
+          { name: "Patrick Leonard", email: "patrick@example.com" },
+          { name: "Jane Smith", email: "jane@example.com" },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test("verifyToolBackedResponse rejects unsupported member count claims when answer is not partial", () => {
+  const result = verifyToolBackedResponse({
+    content: "You have 35 active members in this organization.",
+    toolResults: [
+      {
+        name: "list_members",
+        data: Array.from({ length: 20 }, (_, index) => ({
+          name: `Member ${index + 1}`,
+          email: `member${index + 1}@example.com`,
+        })),
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, false);
+  assert.match(result.failures.join("\n"), /member count claim 35 exceeded returned rows 20/i);
+});
+
+test("verifyToolBackedResponse accepts bounded partial member phrasing", () => {
+  const result = verifyToolBackedResponse({
+    content: "Showing the first 20 active members:\n- Member 1\n- Member 2",
+    toolResults: [
+      {
+        name: "list_members",
+        data: Array.from({ length: 20 }, (_, index) => ({
+          name: `Member ${index + 1}`,
+          email: `member${index + 1}@example.com`,
+        })),
+      },
+    ],
+  });
+
+  assert.equal(result.grounded, true);
+  assert.deepEqual(result.failures, []);
+});
+
 test("verifyToolBackedResponse flags event dates absent from tool rows", () => {
   const result = verifyToolBackedResponse({
     content: 'Upcoming event: "Spring Gala" on 2026-05-01.',

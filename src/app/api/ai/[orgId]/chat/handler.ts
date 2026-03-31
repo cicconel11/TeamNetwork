@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
+import type OpenAI from "openai";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import { sendMessageSchema } from "@/lib/schemas";
@@ -473,6 +474,29 @@ function getPass1Tools(
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
+function getForcedPass1ToolChoice(
+  pass1Tools: ReturnType<typeof getPass1Tools>
+): OpenAI.Chat.ChatCompletionToolChoiceOption | undefined {
+  if (!pass1Tools || pass1Tools.length !== 1) {
+    return undefined;
+  }
+
+  const forcedToolName = pass1Tools[0]?.function.name;
+  if (
+    forcedToolName !== "prepare_job_posting" &&
+    forcedToolName !== "prepare_discussion_thread"
+  ) {
+    return undefined;
+  }
+
+  return {
+    type: "function",
+    function: {
+      name: forcedToolName,
+    },
+  };
+}
+
 function getPendingActionFromToolData(data: unknown) {
   if (!data || typeof data !== "object") {
     return null;
@@ -589,6 +613,27 @@ const MESSAGE_SAFETY_FALLBACK =
 
 const TOOL_GROUNDING_FALLBACK =
   "I couldn’t verify that answer against your organization’s data, so I’m not returning it. Please try rephrasing or ask a narrower question.";
+const EMPTY_ASSISTANT_RESPONSE_FALLBACK =
+  "I didn’t get a usable response for that question. Please try again.";
+const MEMBER_TOOL_GROUNDING_FALLBACK =
+  "I can list specific members from the current roster, but I couldn’t verify that summary from this tool. Try asking for a smaller list, recent members, or specific people.";
+const MEMBER_LIST_PASS2_INSTRUCTION = [
+  "When using list_members results:",
+  "- Only mention members explicitly present in the returned rows.",
+  "- Do not infer org-wide totals, grouped counts, or role summaries.",
+  "- If the user asked for more than the tool returned, say you are showing the first returned members.",
+  "- Prefer simple row-backed bullets: name, optional role, optional email, optional added date.",
+  "- You may render a presentation-only role suffix like `Name (Parent)` only when that role exists in the returned row.",
+  "- If a row has no trustworthy human name, describe it as an email-only member/admin account instead of inventing a person name.",
+].join("\n");
+
+function getGroundingFallbackForTools(toolNames: ToolName[]): string {
+  if (toolNames.length > 0 && toolNames.every((toolName) => toolName === "list_members")) {
+    return MEMBER_TOOL_GROUNDING_FALLBACK;
+  }
+
+  return TOOL_GROUNDING_FALLBACK;
+}
 
 export function createChatPostHandler(deps: ChatRouteDeps = {}) {
   const createClientFn = deps.createClient ?? createClient;
@@ -1371,6 +1416,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         : historyMessages;
 
       const toolResults: ToolResultMessage[] = [];
+      const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
         const pass1Outcome = await runModelStage(
           "pass1_model",
           "pass1_model",
@@ -1380,6 +1426,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             systemPrompt,
             messages: contextMessages,
             tools: pass1Tools,
+            toolChoice: pass1ToolChoice,
             onUsage: recordUsage,
           },
           async (event) => {
@@ -1570,11 +1617,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             const connectionPass2 = successfulToolResults.some(
               (result) => result.name === "suggest_connections"
             );
+            const memberRosterPass2 = successfulToolResults.some(
+              (result) => result.name === "list_members"
+            );
             const toolErrorInstruction = hasToolErrors
               ? "\n\nSome tool calls failed. Only cite data from successful tool results. Acknowledge any failures honestly — do not fabricate data."
               : "";
-            const pass2SystemPrompt = connectionPass2
-              ? `${systemPrompt}\n\n${CONNECTION_PASS2_TEMPLATE}${toolErrorInstruction}`
+            const pass2Instructions = [
+              connectionPass2 ? CONNECTION_PASS2_TEMPLATE : null,
+              memberRosterPass2 ? MEMBER_LIST_PASS2_INSTRUCTION : null,
+            ]
+              .filter((value): value is string => Boolean(value))
+              .join("\n\n");
+            const pass2SystemPrompt = pass2Instructions.length > 0
+              ? `${systemPrompt}\n\n${pass2Instructions}${toolErrorInstruction}`
               : `${systemPrompt}${toolErrorInstruction}`;
 
             const pass2Outcome = await runModelStage(
@@ -1651,7 +1707,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 },
                 ctx.orgId
               );
-              pass2BufferedContent = TOOL_GROUNDING_FALLBACK;
+              pass2BufferedContent = getGroundingFallbackForTools(
+                successfulToolResults.map((result) => result.name)
+              );
             }
           } else {
             skipStage(stageTimings, "grounding");
@@ -1665,6 +1723,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           skipStage(stageTimings, "pass2");
           skipStage(stageTimings, "grounding");
         }
+
+      if (fullContent.trim().length === 0) {
+        fullContent = EMPTY_ASSISTANT_RESPONSE_FALLBACK;
+        enqueue({ type: "chunk", content: fullContent });
+        auditErrorMessage ??= "empty_response_fallback";
+      }
 
       const usage = usageRef.current;
       enqueue({
