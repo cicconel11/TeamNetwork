@@ -26,6 +26,7 @@ import {
   type CreateDiscussionThreadPendingPayload,
   type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
+import { aiLog, type AiLogContext } from "@/lib/ai/logger";
 
 export type ToolExecutionAuthorization =
   | { kind: "preverified_admin"; source: "ai_org_context" }
@@ -37,6 +38,7 @@ export interface ToolExecutionContext {
   serviceSupabase: SupabaseClient;
   authorization: ToolExecutionAuthorization;
   threadId?: string;
+  requestId?: string;
 }
 
 export type ToolExecutionResult =
@@ -177,13 +179,27 @@ function toolError(error: string): ToolExecutionResult {
   return { kind: "tool_error", error };
 }
 
+function buildLogContext(
+  ctx: Pick<ToolExecutionContext, "orgId" | "userId" | "threadId" | "requestId">
+): AiLogContext {
+  return {
+    requestId: ctx.requestId ?? "unknown_request",
+    orgId: ctx.orgId,
+    userId: ctx.userId,
+    ...(ctx.threadId ? { threadId: ctx.threadId } : {}),
+  };
+}
+
 async function safeToolQuery(
+  logContext: AiLogContext,
   fn: () => Promise<{ data: unknown; error: unknown }>
 ): Promise<ToolExecutionResult> {
   try {
     const { data, error } = await fn();
     if (error) {
-      console.warn("[ai-tools] query failed:", getSafeErrorMessage(error));
+      aiLog("warn", "ai-tools", "query failed", logContext, {
+        error: getSafeErrorMessage(error),
+      });
       return toolError("Query failed");
     }
     return { kind: "ok", data: data ?? [] };
@@ -191,21 +207,28 @@ async function safeToolQuery(
     if (isStageTimeoutError(err)) {
       throw err;
     }
-    console.warn("[ai-tools] unexpected error:", getSafeErrorMessage(err));
+    aiLog("warn", "ai-tools", "unexpected error", logContext, {
+      error: getSafeErrorMessage(err),
+    });
     return toolError("Unexpected error");
   }
 }
 
 async function safeToolCount(
+  logContext: AiLogContext,
   fn: () => Promise<{ count: number | null; error: unknown }>
 ): Promise<CountResult> {
   try {
     const { count, error } = await fn();
     if (error || count === null) {
       if (error) {
-        console.warn("[ai-tools] count query failed:", getSafeErrorMessage(error));
+        aiLog("warn", "ai-tools", "count query failed", logContext, {
+          error: getSafeErrorMessage(error),
+        });
       } else {
-        console.warn("[ai-tools] count query failed:", "count_unavailable");
+        aiLog("warn", "ai-tools", "count query failed", logContext, {
+          error: "count_unavailable",
+        });
       }
       return { ok: false, error: "Query failed" };
     }
@@ -214,7 +237,9 @@ async function safeToolCount(
     if (isStageTimeoutError(err)) {
       throw err;
     }
-    console.warn("[ai-tools] unexpected count error:", getSafeErrorMessage(err));
+    aiLog("warn", "ai-tools", "unexpected count error", logContext, {
+      error: getSafeErrorMessage(err),
+    });
     return { ok: false, error: "Unexpected error" };
   }
 }
@@ -274,10 +299,11 @@ function isTrustworthyHumanName(value: string | null | undefined): value is stri
 async function listMembers(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof listMembersSchema>
+  args: z.infer<typeof listMembersSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 20, 50);
-  return safeToolQuery(async () => {
+  return safeToolQuery(logContext, async () => {
     const { data, error } = await sb
       .from("members")
       .select("id, user_id, status, role, created_at, first_name, last_name, email")
@@ -350,12 +376,13 @@ async function listMembers(
 async function listEvents(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof listEventsSchema>
+  args: z.infer<typeof listEventsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
   const upcoming = args.upcoming ?? true;
   const now = new Date().toISOString();
-  return safeToolQuery(() => {
+  return safeToolQuery(logContext, () => {
     let query = sb
       .from("events")
       .select("id, title, start_date, end_date, location, description")
@@ -375,11 +402,12 @@ async function listEvents(
 async function listAnnouncements(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof listAnnouncementsSchema>
+  args: z.infer<typeof listAnnouncementsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
   const pinnedOnly = args.pinned_only ?? false;
-  return safeToolQuery(async () => {
+  return safeToolQuery(logContext, async () => {
     let query = sb
       .from("announcements")
       .select("id, title, body, audience, is_pinned, published_at, created_at")
@@ -416,10 +444,11 @@ async function listAnnouncements(
 async function listDiscussions(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof listDiscussionsSchema>
+  args: z.infer<typeof listDiscussionsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
-  return safeToolQuery(async () => {
+  return safeToolQuery(logContext, async () => {
     const { data, error } = await sb
       .from("discussions")
       .select("id, title, body, author_id, comment_count, created_at")
@@ -449,10 +478,11 @@ async function listDiscussions(
 async function listJobPostings(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof listJobPostingsSchema>
+  args: z.infer<typeof listJobPostingsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const limit = Math.min(args.limit ?? 10, 25);
-  return safeToolQuery(async () => {
+  return safeToolQuery(logContext, async () => {
     const { data, error } = await sb
       .from("job_postings")
       .select("id, title, company, location, job_type, description, created_at")
@@ -530,6 +560,7 @@ async function prepareJobPosting(
   ctx: ToolExecutionContext,
   args: z.infer<typeof prepareJobPostingSchema>
 ): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
   if (!ctx.threadId) {
     return toolError("Job preparation requires a thread context");
   }
@@ -596,11 +627,18 @@ async function prepareJobPosting(
     };
   }
 
-  const { data: org } = await sb
+  const { data: org, error: orgError } = await sb
     .from("organizations")
     .select("slug")
     .eq("id", ctx.orgId)
     .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_job_posting org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
 
   const pendingPayload: CreateJobPostingPendingPayload = {
     ...prepared.data,
@@ -637,6 +675,7 @@ async function prepareDiscussionThread(
   ctx: ToolExecutionContext,
   args: z.infer<typeof prepareDiscussionThreadSchema>
 ): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
   if (!ctx.threadId) {
     return toolError("Discussion preparation requires a thread context");
   }
@@ -680,11 +719,18 @@ async function prepareDiscussionThread(
     };
   }
 
-  const { data: org } = await sb
+  const { data: org, error: orgError } = await sb
     .from("organizations")
     .select("slug")
     .eq("id", ctx.orgId)
     .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_discussion_thread org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
 
   const pendingPayload: CreateDiscussionThreadPendingPayload = {
     ...prepared.data,
@@ -715,9 +761,13 @@ async function prepareDiscussionThread(
   };
 }
 
-async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> {
+async function getOrgStats(
+  sb: SB,
+  orgId: string,
+  logContext: AiLogContext
+): Promise<ToolExecutionResult> {
   const [members, alumni, parents, upcomingEvents, donations] = await Promise.all([
-    safeToolCount(() =>
+    safeToolCount(logContext, () =>
       sb
         .from("members")
         .select("*", { count: "estimated", head: true })
@@ -725,21 +775,21 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> 
         .is("deleted_at", null)
         .eq("status", "active")
     ),
-    safeToolCount(() =>
+    safeToolCount(logContext, () =>
       sb
         .from("alumni")
         .select("*", { count: "estimated", head: true })
         .eq("organization_id", orgId)
         .is("deleted_at", null)
     ),
-    safeToolCount(() =>
+    safeToolCount(logContext, () =>
       sb
         .from("parents")
         .select("*", { count: "estimated", head: true })
         .eq("organization_id", orgId)
         .is("deleted_at", null)
     ),
-    safeToolCount(() =>
+    safeToolCount(logContext, () =>
       sb
         .from("events")
         .select("*", { count: "estimated", head: true })
@@ -747,7 +797,7 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> 
         .is("deleted_at", null)
         .gte("start_date", new Date().toISOString())
     ),
-    safeToolQuery(() =>
+    safeToolQuery(logContext, () =>
       sb
         .from("organization_donation_stats")
         .select("total_amount_cents, donation_count, last_donation_at")
@@ -775,9 +825,10 @@ async function getOrgStats(sb: SB, orgId: string): Promise<ToolExecutionResult> 
 async function findNavigationTargets(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof findNavigationTargetsSchema>
+  args: z.infer<typeof findNavigationTargetsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
-  return safeToolQuery(async () => {
+  return safeToolQuery(logContext, async () => {
     const [orgResult, subscriptionResult] = await Promise.all([
       sb
         .from("organizations")
@@ -827,7 +878,8 @@ async function findNavigationTargets(
 async function runSuggestConnections(
   sb: SB,
   orgId: string,
-  args: z.infer<typeof suggestConnectionsSchema>
+  args: z.infer<typeof suggestConnectionsSchema>,
+  logContext: AiLogContext
 ): Promise<ToolExecutionResult> {
   const {
     suggestConnections,
@@ -854,7 +906,9 @@ async function runSuggestConnections(
       throw error;
     }
 
-    console.warn("[ai-tools] suggest_connections failed:", getSafeErrorMessage(error));
+    aiLog("warn", "ai-tools", "suggest_connections failed", logContext, {
+      error: getSafeErrorMessage(error),
+    });
     return toolError("Unexpected error");
   }
 }
@@ -862,6 +916,7 @@ async function runSuggestConnections(
 async function verifyExecutorAccess(
   ctx: ToolExecutionContext
 ): Promise<{ kind: "allowed" } | Extract<ToolExecutionResult, { kind: "forbidden" | "auth_error" }>> {
+  const logContext = buildLogContext(ctx);
   try {
     const { data: membership, error } = await (ctx.serviceSupabase as SB)
       .from("user_organization_roles")
@@ -871,7 +926,9 @@ async function verifyExecutorAccess(
       .maybeSingle();
 
     if (error) {
-      console.warn("[ai-tools] auth check failed:", getSafeErrorMessage(error));
+      aiLog("warn", "ai-tools", "auth check failed", logContext, {
+        error: getSafeErrorMessage(error),
+      });
       return { kind: "auth_error", error: "Auth check failed" };
     }
 
@@ -886,7 +943,9 @@ async function verifyExecutorAccess(
 
     return { kind: "allowed" };
   } catch (err) {
-    console.warn("[ai-tools] auth check failed:", getSafeErrorMessage(err));
+    aiLog("warn", "ai-tools", "auth check failed", logContext, {
+      error: getSafeErrorMessage(err),
+    });
     return { kind: "auth_error", error: "Auth check failed" };
   }
 }
@@ -903,6 +962,7 @@ export async function executeToolCall(
   ctx: ToolExecutionContext,
   call: { name: string; args: unknown }
 ): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
   if (!TOOL_NAMES.has(call.name)) {
     return toolError(`Unknown tool: ${call.name}`);
   }
@@ -925,26 +985,29 @@ export async function executeToolCall(
     return await withStageTimeout(`tool_${toolName}`, TOOL_EXECUTION_TIMEOUT_MS, async () => {
       switch (toolName) {
         case "list_members":
-          return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>);
+          return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>, logContext);
         case "list_events":
-          return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>);
+          return listEvents(sb, ctx.orgId, args as z.infer<typeof listEventsSchema>, logContext);
         case "list_announcements":
           return listAnnouncements(
             sb,
             ctx.orgId,
-            args as z.infer<typeof listAnnouncementsSchema>
+            args as z.infer<typeof listAnnouncementsSchema>,
+            logContext
           );
         case "list_discussions":
           return listDiscussions(
             sb,
             ctx.orgId,
-            args as z.infer<typeof listDiscussionsSchema>
+            args as z.infer<typeof listDiscussionsSchema>,
+            logContext
           );
         case "list_job_postings":
           return listJobPostings(
             sb,
             ctx.orgId,
-            args as z.infer<typeof listJobPostingsSchema>
+            args as z.infer<typeof listJobPostingsSchema>,
+            logContext
           );
         case "prepare_job_posting":
           return prepareJobPosting(
@@ -959,18 +1022,20 @@ export async function executeToolCall(
             args as z.infer<typeof prepareDiscussionThreadSchema>
           );
         case "get_org_stats":
-          return getOrgStats(sb, ctx.orgId);
+          return getOrgStats(sb, ctx.orgId, logContext);
         case "suggest_connections":
           return runSuggestConnections(
             sb,
             ctx.orgId,
-            args as z.infer<typeof suggestConnectionsSchema>
+            args as z.infer<typeof suggestConnectionsSchema>,
+            logContext
           );
         case "find_navigation_targets":
           return findNavigationTargets(
             sb,
             ctx.orgId,
-            args as z.infer<typeof findNavigationTargetsSchema>
+            args as z.infer<typeof findNavigationTargetsSchema>,
+            logContext
           );
       }
     });
@@ -978,7 +1043,9 @@ export async function executeToolCall(
     if (isStageTimeoutError(err)) {
       return { kind: "timeout", error: "Tool timed out" };
     }
-    console.warn("[ai-tools] unexpected error:", getSafeErrorMessage(err));
+    aiLog("warn", "ai-tools", "unexpected error", logContext, {
+      error: getSafeErrorMessage(err),
+    });
     return toolError("Unexpected error");
   }
 }

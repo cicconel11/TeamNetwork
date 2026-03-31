@@ -12,6 +12,7 @@ import {
 import { createJobPosting } from "@/lib/jobs/create-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { aiLog } from "@/lib/ai/logger";
 
 export interface AiPendingActionConfirmRouteDeps {
   createClient?: typeof createClient;
@@ -35,6 +36,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
     { params }: { params: Promise<{ orgId: string; actionId: string }> }
   ) {
     const { orgId, actionId } = await params;
+    const requestId = crypto.randomUUID();
+    const logContext = { requestId, orgId };
 
     const rateLimit = checkRateLimit(request, {
       feature: "AI pending action confirm",
@@ -48,7 +51,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
       data: { user },
     } = await supabase.auth.getUser();
 
-    const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase });
+    const ctx = await getAiOrgContextFn(orgId, user, rateLimit, { supabase, logContext });
     if (!ctx.ok) return ctx.response;
 
     const action = await getPendingActionFn(ctx.serviceSupabase, actionId);
@@ -161,9 +164,12 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (msgError) {
-            console.error("[ai-confirm] failed to insert confirmation message:", {
-              actionId: action.id,
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
               threadId: action.thread_id,
+            }, {
+              actionId: action.id,
               error: msgError,
             });
           }
@@ -222,9 +228,12 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           });
 
           if (msgError) {
-            console.error("[ai-confirm] failed to insert confirmation message:", {
-              actionId: action.id,
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
               threadId: action.thread_id,
+            }, {
+              actionId: action.id,
               error: msgError,
             });
           }
@@ -242,10 +251,12 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           expectedStatus: "confirmed",
         });
       } catch (rollbackErr) {
-        console.error("[ai-confirm] rollback failed — action stranded in confirmed state:", {
-          actionId: action.id,
-          orgId: ctx.orgId,
+        aiLog("error", "ai-confirm", "rollback failed - action stranded in confirmed state", {
+          ...logContext,
           userId: ctx.userId,
+          threadId: action.thread_id,
+        }, {
+          actionId: action.id,
           actionType: action.action_type,
           originalError: err,
           rollbackError: rollbackErr,

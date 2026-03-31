@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheStatus } from "./sse";
 import type { CacheSurface } from "./semantic-cache-utils";
 import type { AiAuditStageTimings } from "./chat-telemetry";
+import { aiLog, type AiLogContext } from "./logger";
 
 export interface AuditEntry {
   threadId: string | null;
@@ -49,7 +50,8 @@ function redactJsonValue<T>(value: T): T {
 
 export async function logAiRequest(
   serviceSupabase: SupabaseClient,
-  entry: AuditEntry
+  entry: AuditEntry,
+  logContext?: AiLogContext
 ): Promise<void> {
   try {
     const toolCallsJson = entry.toolCalls
@@ -88,9 +90,19 @@ export async function logAiRequest(
       .insert(row);
 
     if (error) {
-      console.error("[ai-audit] insert failed:", error);
+      aiLog("error", "ai-audit", "insert failed", logContext ?? {
+        requestId: entry.stageTimings?.request.requestId ?? "unknown_request",
+        orgId: entry.orgId,
+        threadId: entry.threadId ?? undefined,
+        userId: entry.userId,
+      }, { error });
     }
   } catch (err) {
-    console.error("[ai-audit] unexpected error:", err);
+    aiLog("error", "ai-audit", "unexpected error", logContext ?? {
+      requestId: entry.stageTimings?.request.requestId ?? "unknown_request",
+      orgId: entry.orgId,
+      threadId: entry.threadId ?? undefined,
+      userId: entry.userId,
+    }, { error: err });
   }
 }

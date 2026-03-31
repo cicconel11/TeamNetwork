@@ -8,6 +8,7 @@ export type PendingActionStatus =
   | "pending"
   | "confirmed"
   | "executed"
+  | "failed"
   | "cancelled"
   | "expired";
 
@@ -38,6 +39,7 @@ export interface PendingActionRecord<TActionType extends PendingActionType = Pen
   created_at: string;
   updated_at: string;
   executed_at: string | null;
+  error_message?: string | null;
   result_entity_type: string | null;
   result_entity_id: string | null;
 }
@@ -60,7 +62,12 @@ interface PendingActionQueryBuilder {
   };
   select(columns: string): {
     eq(column: string, value: string): {
+      eq(nextColumn: string, nextValue: string): {
+        lt(targetColumn: string, targetValue: string): Promise<{ data: unknown; error: unknown }>;
+      };
+      lt(targetColumn: string, targetValue: string): Promise<{ data: unknown; error: unknown }>;
       maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+      then?: unknown;
     };
   };
   update(payload: Record<string, unknown>): PendingActionUpdateChain;
@@ -128,6 +135,7 @@ export async function updatePendingActionStatus(
     resultEntityType?: string | null;
     resultEntityId?: string | null;
     executedAt?: string | null;
+    errorMessage?: string | null;
   }
 ): Promise<{ updated: boolean }> {
   const payload: Record<string, unknown> = {
@@ -137,6 +145,7 @@ export async function updatePendingActionStatus(
   if (input.resultEntityType !== undefined) payload.result_entity_type = input.resultEntityType;
   if (input.resultEntityId !== undefined) payload.result_entity_id = input.resultEntityId;
   if (input.executedAt !== undefined) payload.executed_at = input.executedAt;
+  if (input.errorMessage !== undefined) payload.error_message = input.errorMessage;
 
   if (input.expectedStatus) {
     const { data, error } = await supabase
@@ -153,16 +162,71 @@ export async function updatePendingActionStatus(
     return { updated: Array.isArray(data) && data.length > 0 };
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("ai_pending_actions")
     .update(payload)
-    .eq("id", actionId);
+    .eq("id", actionId)
+    .select("id");
 
   if (error) {
     throw new Error("Failed to update pending action");
   }
 
-  return { updated: true };
+  return { updated: Array.isArray(data) && data.length > 0 };
+}
+
+export async function cleanupStrandedPendingActions(
+  supabase: PendingActionSupabase,
+  input: {
+    organizationId: string;
+    olderThanIso: string;
+    failureMessage?: string;
+  }
+): Promise<{ scanned: number; recovered: number; skipped: number }> {
+  const { data, error } = await supabase
+    .from("ai_pending_actions")
+    .select("id")
+    .eq("organization_id", input.organizationId)
+    .eq("status", "confirmed")
+    .lt("updated_at", input.olderThanIso);
+
+  if (error) {
+    throw new Error("Failed to load stranded pending actions");
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  let recovered = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    const actionId =
+      row && typeof row === "object" && "id" in row && typeof row.id === "string"
+        ? row.id
+        : null;
+
+    if (!actionId) {
+      skipped += 1;
+      continue;
+    }
+
+    const result = await updatePendingActionStatus(supabase, actionId, {
+      status: "failed",
+      expectedStatus: "confirmed",
+      errorMessage: input.failureMessage ?? "Execution timed out after confirmation",
+    });
+
+    if (result.updated) {
+      recovered += 1;
+    } else {
+      skipped += 1;
+    }
+  }
+
+  return {
+    scanned: rows.length,
+    recovered,
+    skipped,
+  };
 }
 
 export function isPendingActionExpired(record: PendingActionRecord): boolean {

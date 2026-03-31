@@ -1,3 +1,6 @@
+import type { AiLogContext } from "./logger";
+import { aiLog } from "./logger";
+
 /** Minimal interface satisfied by any Supabase client instance. */
 interface AnySupabaseClient {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,7 +15,8 @@ export async function resolveOwnThread(
   threadId: string,
   userId: string,
   orgId: string,
-  serviceSupabase: AnySupabaseClient
+  serviceSupabase: AnySupabaseClient,
+  logContext?: AiLogContext
 ): Promise<ThreadResolution> {
   // Uses a privileged lookup, but normalizes all inaccessible cases to 404 so
   // thread existence is never exposed to callers outside the owner+org scope.
@@ -24,7 +28,12 @@ export async function resolveOwnThread(
     .maybeSingle();
 
   if (error) {
-    console.error("[thread-resolver] query failed:", error);
+    aiLog("error", "thread-resolver", "query failed", logContext ?? {
+      requestId: "unknown_request",
+      orgId,
+      threadId,
+      userId,
+    }, { error, lookupThreadId: threadId });
     return { ok: false, status: 404, message: "Thread not found" };
   }
 

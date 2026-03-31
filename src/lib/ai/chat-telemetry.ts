@@ -83,6 +83,7 @@ export interface AiAuditStageMap {
 export interface AiAuditStageTimings {
   schema_version: 1;
   request: {
+    requestId: string;
     outcome: string;
     total_duration_ms: number;
   };
@@ -101,10 +102,11 @@ export function createDefaultStageSummary(): AiAuditStageSummary {
   return { status: "not_run", duration_ms: 0 };
 }
 
-export function createStageTimings(): AiAuditStageTimings {
+export function createStageTimings(requestId: string): AiAuditStageTimings {
   return {
     schema_version: 1,
     request: {
+      requestId,
       outcome: "pending",
       total_duration_ms: 0,
     },
@@ -222,6 +224,7 @@ export function finalizeStageTimings(
   return {
     ...stageTimings,
     request: {
+      requestId: stageTimings.request.requestId,
       outcome,
       total_duration_ms: totalDurationMs,
     },
