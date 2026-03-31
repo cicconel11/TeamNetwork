@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, and persisted open/close preference. All state is local (no global store). The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
+The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, persisted open/close preference, persisted active-thread selection per org and surface, live tool-status labels, and review/confirm UI for assistant pending actions. All state is local to the panel and hook layer. The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
 
 ## File Map
 
@@ -18,6 +18,7 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
 | `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, error display, route-aware placeholder text | `MessageInput` (L14) |
 | `src/components/ai-assistant/ThreadList.tsx` | Thread listing with select, new, and delete actions | `ThreadList` (L16) |
 | `src/components/ai-assistant/AssistantMessageContent.tsx` | Markdown renderer (react-markdown + remark-gfm) | `AssistantMessageContent` (L11) |
+| `src/components/ai-assistant/PendingActionCard.tsx` | Confirmation UI for assistant-prepared writes | `PendingActionCard` |
 
 ### State & Utilities
 
@@ -25,6 +26,9 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
 |---|---|---|
 | `src/components/ai-assistant/panel-state.ts` | Pure state helpers — optimistic messages, thread deletion, retry identity | `AIPanelThread` type (L1), `AIPanelMessage` type (L8), `createOptimisticUserMessage` (L23), `removePanelMessage` (L38), `resolveRetryRequestIdentity` (L45), `applyThreadDeletion` (L66) |
 | `src/components/ai-assistant/panel-preferences.ts` | Panel auto-open logic (admin + desktop gate) | `AI_PANEL_PREFERENCE_KEY` (L1), `resolveInitialAIPanelOpen` (L8) |
+| `src/components/ai-assistant/active-thread-storage.ts` | Persist and restore active thread by org + surface | `readPersistedActiveThreadId`, `writePersistedActiveThreadId`, `clearPersistedActiveThreadId` |
+| `src/components/ai-assistant/route-surface.ts` | Client-side pathname to assistant surface mapping | `routeToSurface` |
+| `src/components/ai-assistant/tool-status.ts` | Maps SSE tool events into short user-facing progress labels | `deriveToolStatusLabel` |
 | `src/components/ai-assistant/thread-date.ts` | Date formatter for thread timestamps | `formatThreadUpdatedAt` (L8) |
 
 ### Hook
@@ -48,9 +52,12 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
               │     │     │     └── AssistantMessageContent (ReactMarkdown)
               │     │     ├── Preview assistant content (post-stream, pre-refresh)
               │     │     └── Streaming content (with cursor animation)
+              │     ├── PendingActionCard
+              │     │     └── Confirm / Cancel assistant-prepared writes
               │     └── MessageInput
               │           ├── Error banner (dismissible)
               │           ├── Streaming indicator ("Thinking..." + Stop)
+              │           ├── Live tool-status label
               │           └── Textarea + Send/Stop button
               └── [view === "threads"]
                     └── ThreadList
@@ -71,6 +78,9 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 | `messages` | `AIPanelMessage[]` | Messages in the active thread |
 | `messagesLoading` | `boolean` | Message list loading state |
 | `pendingAssistantContent` | `string \| null` | Streamed content shown before server refresh completes |
+| `pendingAction` | `PendingActionState \| null` | Confirm/cancel payload emitted by the backend |
+| `pendingActionBusy` | `boolean` | Locks pending-action controls while confirm/cancel request is in flight |
+| `pendingActionError` | `string \| null` | User-facing pending-action failure state |
 
 ### `useAIStream` Hook State
 
@@ -81,6 +91,7 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 | `currentContent` | `string` | Accumulated content from SSE chunks |
 | `threadId` | `string \| null` | Thread ID from the current/last stream |
 | `toolStatusLabel` | `string \| null` | Human-readable live tool progress label |
+| `pendingAction` | `PendingActionState \| null` | Latest streamed pending action review payload |
 
 ### Panel Open/Close
 
@@ -124,6 +135,7 @@ handleSend(content)
   │           │   ├─ "chunk" → accumulate content, update currentContent state
   │           │   ├─ "done"  → set threadId, clear isStreaming
   │           │   └─ "error" → set error state, return null
+  │           │   └─ "pending_action" → store confirm/cancel payload for `PendingActionCard`
   │           │
   │           └─ Return { threadId, content, replayed?, usage? }
   │
@@ -150,5 +162,6 @@ handleSend(content)
 
 ### Gaps
 
-- **0 component/integration tests** — no React Testing Library or similar tests for `AIPanel`, `MessageList`, `ThreadList`, `MessageInput`, or `AssistantMessageContent`
-- Tests cover pure utility functions and module-level invariants only
+- No full React integration tests cover the complete confirm/cancel pending-action flow in `AIPanel`
+- No browser-level tests exercise persisted active-thread restoration across route or surface changes
+- Most UI coverage is still utility-focused rather than user-journey-focused

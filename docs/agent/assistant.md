@@ -2,7 +2,13 @@
 
 ## Summary
 
-The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-out panel, ask questions about their organization, and receive streaming LLM responses grounded in live org data. Conversations are persisted as threads and messages, with full audit logging and a conservative exact-hash semantic cache for deduplication. In v1, the cache only applies to standalone first-turn `general` prompts, uses `shared_static` context, and skips RAG retrieval entirely for cache-eligible requests so cached responses stay tied to stable org overview data. Exact cache-eligible first turns now check the semantic cache before the broader prompt-building/model path, so cache hits can replay after persistence without paying for context build, retrieval, or model execution. Tool attachment is routed by inferred surface, while exact casual turns skip both RAG and pass-1 tools for lower latency. A deterministic message-safety stage now strips transport noise, blocks prompt-injection style turns before any model/tool path, sanitizes replayed user history before prompt assembly, and buffers tool-backed pass-2 prose until grounding verification passes. For member lookups, the assistant now prefers real human names, falls back to `public.users.name` when linked `members` rows still have placeholder identity, and treats remaining no-name records as email-only accounts instead of rendering `Member(email)`. The currently shipped tool catalog includes 8 live read tools covering active members, events, recent announcements, discussions, job postings, top-level org stats, connection suggestions, and in-app navigation targets, plus 2 confirmation-gated write-preparation tools for assistant-created jobs and discussion threads. Job creation and discussion-thread creation now share the same pending-action review flow: the assistant prepares a stricter draft, emits a structured `pending_action` review event, and only executes the write after explicit admin confirmation through a dedicated route. Direct-name connection prompts still route to the `members` surface and render single-tool answers deterministically, while navigation/action requests now short-circuit to `find_navigation_targets` so the assistant can return direct in-app links such as create/edit pages without a second model pass. Additional single-tool read responses such as announcements, org stats, navigation, events, discussions, and job postings can now render deterministically without a second model pass when the tool result is already presentation-safe. Prompt construction now receives the attached tool list plus a client-reported current page path as untrusted context so the model gets route hints without promoting client input into the trusted system prompt. Structured single-tool read turns can use a slimmer `tool_first` context mode, but confirmation-gated write-prep turns stay on full context to keep prepare-job and prepare-discussion tool calls reliable. Abandoned-stream cleanup is deferred off the request critical path. For setup and sync details, see `docs/agent/falkor-people-graph.md`.
+The AI assistant is an admin-only, org-scoped chat system exposed through the org chat panel at `src/app/[orgSlug]/chat/*` and backed by App Router API endpoints under `src/app/api/ai/[orgId]/*`. Admins can ask questions, navigate to relevant app pages, and prepare a small set of assistant-mediated writes. The runtime persists conversations as threads and messages, logs each turn to `ai_audit_log`, applies a conservative exact-match semantic cache for narrow first-turn `general` prompts, and can augment live turns with route-aware context, retrieval, and server tools.
+
+The current server structure is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution-policy decisions, optional RAG retrieval, prompt construction, streaming model output over SSE, deterministic tool execution, grounding verification, persistence, and audit logging.
+
+The shipped tool surface includes live read tools for members, events, announcements, discussions, jobs, org stats, connection suggestions, and navigation targets, plus confirmation-gated write-preparation tools for job postings and discussion threads. Those write flows now surface a structured `pending_action` SSE event, render a review card in the panel UI, and execute only after explicit confirm or cancel requests against dedicated pending-action routes.
+
+The panel UI is route-aware and now includes per-surface starter prompts, persisted active-thread selection, live tool status labels, and the pending-action review card. Prompt construction also receives the client pathname and attached tool list as untrusted context, while the execution policy can shift between `full`, `shared_static`, and `tool_first` context modes depending on the turn. For Falkor-backed connection suggestions, graph setup, and sync details, see `docs/agent/falkor-people-graph.md`.
 
 ## Tech Stack
 
@@ -24,7 +30,7 @@ The AI assistant is an admin-only, org-scoped chat feature. Admins open a slide-
 | Chat Pipeline | [chat-pipeline-codemap.md](chat-pipeline-codemap.md) | Request validation, auth, context building, LLM streaming, message persistence, audit |
 | Semantic Cache | [semantic-cache-codemap.md](semantic-cache-codemap.md) | Exact-hash prompt deduplication, 12h general TTL, hourly bounded purge |
 | Thread Management | [threads-codemap.md](threads-codemap.md) | CRUD for threads and messages, cursor pagination, soft-delete |
-| UI Panel | [ui-panel-codemap.md](ui-panel-codemap.md) | Slide-out panel, SSE stream consumer, thread/message display |
+| UI Panel | [ui-panel-codemap.md](ui-panel-codemap.md) | Slide-out panel, SSE stream consumer, thread/message display, pending-action review |
 
 ## Database Tables
 
@@ -67,6 +73,7 @@ Five migrations create all AI-related schema:
 | GET | `/api/ai/[orgId]/threads` | List threads (cursor-paginated) |
 | DELETE | `/api/ai/[orgId]/threads/[threadId]` | Soft-delete a thread |
 | GET | `/api/ai/[orgId]/threads/[threadId]/messages` | List messages in a thread |
+| POST | `/api/ai/[orgId]/pending-actions/cleanup` | Best-effort cleanup for expired or abandoned pending actions |
 | GET | `/api/cron/ai-cache-purge` | Hourly cron: drain expired cache rows in bounded batches |
 
 ## Access Control
@@ -78,32 +85,29 @@ Five migrations create all AI-related schema:
 
 ## Remaining Work
 
-### 1. Hydration error (mitigated)
-The `AIPanelContext` uses an `isMounted` ref and returns `isOpen: false` until after first client render. The `ssr: false` dynamic import in the layout also suppresses server-side rendering. Needs verification that the fix is fully resolved across all edge cases.
-
-### 2. Narrow-panel formatting
+### 1. Narrow-panel formatting
 The panel is 384px wide (`sm:w-96`). The system prompt includes a `NARROW_PANEL_POLICY` instructing the LLM to avoid tables and wide layouts, but complex markdown tables may still overflow. The `AssistantMessageContent` component wraps tables in `overflow-x-auto` containers as a fallback.
 
-### 3. `window.confirm` for thread delete
+### 2. `window.confirm` for thread delete
 `ThreadList` uses `window.confirm("Delete this conversation?")` which is inconsistent with the app's dialog/modal patterns used elsewhere.
 
-### 4. Surface picker is still implicit
+### 3. Surface picker is still implicit
 The panel now derives `surface` from the current route instead of hardcoding `"general"`, but there is still no explicit user-facing surface switcher.
 
-### 5. Write-action parity is partial
+### 4. Write-action parity is partial
 The assistant now supports two confirmation-gated write paths: jobs and top-level discussion threads. Broader write parity for events, announcements, role changes, replies, and other mutations is still not implemented.
 
-### 6. Discussion and job reads are live, and both now have shipped create flows
+### 5. Discussion and job reads are live, and both now have shipped create flows
 `list_discussions` and `list_job_postings` are both live tools now, so those prompts can emit `tool_status` events and return deterministic tool-backed answers. The shipped assistant mutations are the confirmation-gated `prepare_job_posting` and `prepare_discussion_thread` flows.
 
-### 7. No UI component tests
-The backend has ~126 test cases across 17+ test files. The UI components (`AIPanel`, `MessageList`, `ThreadList`, `MessageInput`, `AssistantMessageContent`, `AIEdgeTab`) have 0 component/integration tests. Only pure utility functions (`panel-state.ts`, `panel-preferences.ts`, `thread-date.ts`) are tested.
+### 6. UI integration coverage is still light
+The UI no longer has zero coverage: utility and stream-level tests now cover route-surface inference, toggle visibility, message list behavior, SSE parsing, SSR safety, and panel state helpers. But there are still no full React integration tests for the end-to-end pending-action review flow, optimistic thread switching, or panel view transitions.
 
-### 8. Vector similarity cache (deferred to v2)
+### 7. Vector similarity cache (deferred to v2)
 The `20260321100001` migration creates the `vector` extension, but all cache lookups use exact SHA-256 hash matching. Embedding-based semantic similarity is deferred to a future version.
 
-### 9. Migration filename mismatch (fixed)
-The contract test and semantic cache codemap previously referenced `20260321100000` instead of the actual filename `20260321100001`. Fixed in this PR.
+### 8. Docs are codemap-heavy and need periodic refresh
+The agent docs are now reasonably aligned again, but the implementation moves quickly across `handler.ts`, tool definitions, and panel state. Future agent work should keep these codemaps in sync when route structure, pending-action flows, or tool inventory changes.
 
 ## v2 Roadmap — Research-Backed Enhancements
 

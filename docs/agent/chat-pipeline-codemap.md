@@ -30,9 +30,11 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/falkordb/sync.ts` | Graph sync worker for members, alumni, and mentorship pairs | `processGraphSyncQueue` |
 | `src/lib/ai/thread-resolver.ts` | Thread ownership validation (normalizes all failures to 404) | `resolveOwnThread` (L11), `ThreadResolution` type (L7) |
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
-| `src/app/api/ai/[orgId]/chat/route.ts` | POST handler — orchestrates the full pipeline | `POST` (L491), `createChatPostHandler` (L36), `ChatRouteDeps` type (L25) |
+| `src/app/api/ai/[orgId]/chat/route.ts` | Thin Next.js entrypoint — exports runtime config and `POST` handler | `POST` |
+| `src/app/api/ai/[orgId]/chat/handler.ts` | Chat pipeline orchestrator — auth, policy, retrieval, tools, SSE, persistence | `createChatPostHandler`, `ChatRouteDeps` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/route.ts` | POST handler — confirms and executes a pending assistant action | `POST` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/cancel/route.ts` | POST handler — cancels a pending assistant action | `POST` |
+| `src/app/api/ai/[orgId]/pending-actions/cleanup/route.ts` | POST handler — best-effort cleanup for expired or abandoned pending actions | `POST` |
 
 ### Schema
 
@@ -47,7 +49,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 ## Dependency Graph
 
 ```
-src/app/api/ai/[orgId]/chat/route.ts  (orchestrator)
+src/app/api/ai/[orgId]/chat/route.ts  (entrypoint)
+  └── src/app/api/ai/[orgId]/chat/handler.ts (orchestrator)
   ├── src/lib/ai/context.ts             (getAiOrgContext — admin auth)
   │     └── src/lib/supabase/service.ts (createServiceClient)
   ├── src/lib/ai/client.ts              (createZaiClient, getZaiModel)
@@ -138,6 +141,7 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
   │       ├─ `prepare_discussion_thread` returns `missing_fields`, `needs_confirmation`, or `forbidden`
   │       ├─ `needs_confirmation` emits a `pending_action` SSE payload instead of writing immediately
+  │       ├─ the client stores that payload separately from streamed prose so review UI can render even when the assistant returns little or no text
   │       ├─ Successful connection payloads include display-ready `source_person`, ordered `suggestions`, normalized reason labels, `mode`, and `freshness`
   │       ├─ If quick structured queries succeed but connection prompts fail, treat the execution-policy path as healthy first and inspect the Falkor/suggestions stack separately
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
@@ -155,6 +159,7 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ per-stage duration/status for auth, policy, cache, RAG, prompt build, history, pass 1, tools, pass 2, grounding, finalize, cache write
   │       └─ tool call timing includes `auth_mode` and error classification
   │
+  ├─ 13.4 Pending-action cleanup may be deferred out of the critical path
   └─ 13.5 CACHE WRITE (if miss + stream succeeded + finalize succeeded)
           ├─ Invalidate expired conflicting rows
           ├─ Insert new cache row with surface-specific TTL
