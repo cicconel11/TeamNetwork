@@ -206,6 +206,11 @@ function getNonEmptyString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
+function formatIsoDate(value: unknown): string | null {
+  const iso = getNonEmptyString(value);
+  return iso ? iso.slice(0, 10) : null;
+}
+
 function formatDisplayRow(row: { name?: unknown; subtitle?: unknown }): string | null {
   const name = getNonEmptyString(row.name);
   if (!name) {
@@ -378,6 +383,226 @@ function formatAnnouncementsResponse(data: unknown): string | null {
   }
 
   return lines.join("\n");
+}
+
+function formatEventsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any matching events for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+      if (!title) {
+        return null;
+      }
+
+      const metadata = [
+        formatIsoDate((row as { start_date?: unknown }).start_date),
+        getNonEmptyString((row as { location?: unknown }).location),
+      ].filter((value): value is string => Boolean(value));
+      const description = getNonEmptyString((row as { description?: unknown }).description);
+
+      return { title, metadata, description };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        title: string;
+        metadata: string[];
+        description: string | null;
+      } => Boolean(row)
+    )
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const lines = ["Matching events"];
+  for (const row of rows) {
+    lines.push(`- ${row.title}${row.metadata.length > 0 ? ` - ${row.metadata.join(" - ")}` : ""}`);
+    if (row.description) {
+      lines.push(`  Details: ${row.description}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatDiscussionsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any recent discussion threads for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+      if (!title) {
+        return null;
+      }
+
+      const metadata = [
+        formatIsoDate((row as { created_at?: unknown }).created_at),
+        typeof (row as { comment_count?: unknown }).comment_count === "number"
+          ? `${(row as { comment_count: number }).comment_count} comments`
+          : null,
+      ].filter((value): value is string => Boolean(value));
+      const preview = getNonEmptyString((row as { body_preview?: unknown }).body_preview);
+
+      return { title, metadata, preview };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        title: string;
+        metadata: string[];
+        preview: string | null;
+      } => Boolean(row)
+    )
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const lines = ["Recent discussions"];
+  for (const row of rows) {
+    lines.push(`- ${row.title}${row.metadata.length > 0 ? ` - ${row.metadata.join(" - ")}` : ""}`);
+    if (row.preview) {
+      lines.push(`  Preview: ${row.preview}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatJobPostingsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any active job postings for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+      if (!title) {
+        return null;
+      }
+
+      const metadata = [
+        getNonEmptyString((row as { company?: unknown }).company),
+        getNonEmptyString((row as { location?: unknown }).location),
+        getNonEmptyString((row as { job_type?: unknown }).job_type),
+      ].filter((value): value is string => Boolean(value));
+      const preview = getNonEmptyString(
+        (row as { description_preview?: unknown }).description_preview
+      );
+
+      return { title, metadata, preview };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        title: string;
+        metadata: string[];
+        preview: string | null;
+      } => Boolean(row)
+    )
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const lines = ["Active job postings"];
+  for (const row of rows) {
+    lines.push(`- ${row.title}${row.metadata.length > 0 ? ` - ${row.metadata.join(" - ")}` : ""}`);
+    if (row.preview) {
+      lines.push(`  Preview: ${row.preview}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function formatOrgStatsResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    active_members?: unknown;
+    alumni?: unknown;
+    parents?: unknown;
+    upcoming_events?: unknown;
+    donations?: {
+      total_amount_cents?: unknown;
+      donation_count?: unknown;
+      last_donation_at?: unknown;
+    } | null;
+  };
+
+  const lines = ["Organization snapshot"];
+
+  if (typeof payload.active_members === "number") {
+    lines.push(`- Active members: ${payload.active_members}`);
+  }
+  if (typeof payload.alumni === "number") {
+    lines.push(`- Alumni: ${payload.alumni}`);
+  }
+  if (typeof payload.parents === "number") {
+    lines.push(`- Parents: ${payload.parents}`);
+  }
+  if (typeof payload.upcoming_events === "number") {
+    lines.push(`- Upcoming events: ${payload.upcoming_events}`);
+  }
+
+  if (payload.donations && typeof payload.donations === "object") {
+    const donationSummary: string[] = [];
+    if (typeof payload.donations.donation_count === "number") {
+      donationSummary.push(`${payload.donations.donation_count} donations`);
+    }
+    if (typeof payload.donations.total_amount_cents === "number") {
+      donationSummary.push(`$${(payload.donations.total_amount_cents / 100).toFixed(0)} raised`);
+    }
+    const lastDonationDate = formatIsoDate(payload.donations.last_donation_at);
+    if (lastDonationDate) {
+      donationSummary.push(`last donation ${lastDonationDate}`);
+    }
+
+    if (donationSummary.length > 0) {
+      lines.push(`- Donations: ${donationSummary.join(" - ")}`);
+    }
+  }
+
+  return lines.length > 1 ? lines.join("\n") : null;
 }
 
 function formatNavigationTargetsResponse(data: unknown): string | null {
@@ -589,16 +814,28 @@ function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
   return null;
 }
 
-function formatDeterministicToolResponse(name: string, data: unknown): string | null {
+function formatDeterministicToolResponse(
+  name: string,
+  data: unknown,
+  surface: CacheSurface
+): string | null {
   switch (name) {
     case "suggest_connections":
       return formatSuggestConnectionsResponse(data);
+    case "list_events":
+      return formatEventsResponse(data);
     case "list_announcements":
       return formatAnnouncementsResponse(data);
+    case "list_discussions":
+      return formatDiscussionsResponse(data);
+    case "list_job_postings":
+      return formatJobPostingsResponse(data);
     case "prepare_job_posting":
       return formatPrepareJobPostingResponse(data);
     case "prepare_discussion_thread":
       return formatPrepareDiscussionThreadResponse(data);
+    case "get_org_stats":
+      return surface === "analytics" ? formatOrgStatsResponse(data) : null;
     case "find_navigation_targets":
       return formatNavigationTargetsResponse(data);
     default:
@@ -788,6 +1025,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const requestNow = new Date().toISOString();
     const requestTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
     const skipRagRetrieval = executionPolicy.retrieval.mode === "skip";
+    const usesToolFirstContext =
+      !usesSharedStaticContext &&
+      executionPolicy.retrieval.reason === "tool_only_structured_query" &&
+      Boolean(pass1Tools && pass1Tools.length === 1);
 
     // 4. Validate provided thread ownership before any cleanup or writes
     let threadId = existingThreadId;
@@ -816,21 +1057,28 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
     // 5. Abandoned stream cleanup (5-min threshold)
     if (existingThreadId) {
-      await runTimedStage(stageTimings, "abandoned_stream_cleanup", async () => {
-        const { error: cleanupError } = await ctx.supabase
-          .from("ai_messages")
-          .update({ status: "error", content: INTERRUPTED_ASSISTANT_MESSAGE })
-          .eq("thread_id", existingThreadId)
-          .eq("role", "assistant")
-          .in("status", ["pending", "streaming"])
-          .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString());
-        if (cleanupError) {
+      skipStage(stageTimings, "abandoned_stream_cleanup");
+      void ctx.supabase
+        .from("ai_messages")
+        .update({ status: "error", content: INTERRUPTED_ASSISTANT_MESSAGE })
+        .eq("thread_id", existingThreadId)
+        .eq("role", "assistant")
+        .in("status", ["pending", "streaming"])
+        .lt("created_at", new Date(Date.now() - 5 * 60 * 1000).toISOString())
+        .then(({ error: cleanupError }: { error: unknown }) => {
+          if (cleanupError) {
+            aiLog("error", "ai-chat", "abandoned stream cleanup failed", {
+              ...requestLogContext,
+              threadId: existingThreadId,
+            }, { error: cleanupError });
+          }
+        })
+        .catch((cleanupError: unknown) => {
           aiLog("error", "ai-chat", "abandoned stream cleanup failed", {
             ...requestLogContext,
             threadId: existingThreadId,
           }, { error: cleanupError });
-        }
-      });
+        });
     } else {
       skipStage(stageTimings, "abandoned_stream_cleanup");
     }
@@ -908,6 +1156,50 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         { error: "Request already in progress", threadId: existingMsg.thread_id },
         { status: 409, headers: rateLimit.headers }
       );
+    }
+
+    let preInitCacheHit:
+      | {
+          id: string;
+          responseContent: string;
+        }
+      | undefined;
+    let preInitCacheLookupPerformed = false;
+
+    if (
+      !cacheDisabled &&
+      executionPolicy.cachePolicy === "lookup_exact" &&
+      !existingThreadId &&
+      messageSafety.riskLevel === "none"
+    ) {
+      preInitCacheLookupPerformed = true;
+      const cacheKey = buildSemanticCacheKeyParts({
+        message: messageSafety.promptSafeMessage,
+        orgId: ctx.orgId,
+        role: ctx.role,
+      });
+
+      const cacheResult = await runTimedStage(stageTimings, "cache_lookup", async () =>
+        lookupSemanticCache({
+          cacheKey,
+          orgId: ctx.orgId,
+          surface: effectiveSurface,
+          supabase: ctx.serviceSupabase,
+          logContext: requestLogContext,
+        })
+      );
+
+      if (cacheResult.ok) {
+        preInitCacheHit = {
+          id: cacheResult.hit.id,
+          responseContent: cacheResult.hit.responseContent,
+        };
+      } else {
+        cacheStatus = cacheResult.reason === "miss" ? "miss" : "error";
+        if (cacheResult.reason === "error") {
+          cacheBypassReason = "cache_lookup_failed";
+        }
+      }
     }
 
     // 7+8. Atomically create/reuse thread and insert user message via RPC
@@ -1037,7 +1329,69 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       );
     }
 
-    if (!cacheDisabled && executionPolicy.cachePolicy === "lookup_exact") {
+    if (preInitCacheHit) {
+      const { data: cachedAssistantMsg, error: cachedAssistantError } =
+        await insertAssistantMessage({
+          content: preInitCacheHit.responseContent,
+          status: "complete",
+        });
+
+      if (cachedAssistantError || !cachedAssistantMsg) {
+        aiLog("error", "ai-chat", "cache hit assistant message failed", {
+          ...requestLogContext,
+          threadId: threadId!,
+        }, { error: cachedAssistantError });
+        cacheStatus = "error";
+        cacheBypassReason = "cache_hit_persist_failed";
+      } else {
+        cacheStatus = "hit_exact";
+        cacheEntryId = preInitCacheHit.id;
+        stageTimings.retrieval = {
+          decision: "skip",
+          reason: "cache_hit",
+        };
+        skipRemainingStages(stageTimings, "rag_retrieval");
+
+        const cachedStream = createSSEStream(async (enqueue) => {
+          enqueue({ type: "chunk", content: preInitCacheHit!.responseContent });
+          enqueue({
+            type: "done",
+            threadId: threadId!,
+            replayed: true,
+            cache: { status: "hit_exact", entryId: preInitCacheHit!.id },
+          });
+        });
+
+        await logAiRequestFn(ctx.serviceSupabase, {
+          threadId: threadId!,
+          messageId: cachedAssistantMsg.id,
+          userId: ctx.userId,
+          orgId: ctx.orgId,
+          intent: resolvedIntent,
+          intentType: resolvedIntentType,
+          latencyMs: Date.now() - startTime,
+          cacheStatus: "hit_exact",
+          cacheEntryId: preInitCacheHit.id,
+          contextSurface: effectiveSurface,
+          stageTimings: finalizeStageTimings(stageTimings, "cache_hit", Date.now() - startTime),
+        }, {
+          ...requestLogContext,
+          threadId: threadId!,
+        });
+
+        return buildSseResponse(
+          cachedStream,
+          { ...SSE_HEADERS, ...rateLimit.headers },
+          threadId!
+        );
+      }
+    }
+
+    if (
+      !preInitCacheLookupPerformed &&
+      !cacheDisabled &&
+      executionPolicy.cachePolicy === "lookup_exact"
+    ) {
       const cacheKey = buildSemanticCacheKeyParts({
         message: messageSafety.promptSafeMessage,
         orgId: ctx.orgId,
@@ -1119,7 +1473,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           cacheBypassReason = "cache_lookup_failed";
         }
       }
-    } else {
+    } else if (!preInitCacheLookupPerformed) {
       skipStage(stageTimings, "cache_lookup");
     }
 
@@ -1337,7 +1691,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 ...requestLogContext,
                 threadId: threadId!,
               },
-              contextMode: usesSharedStaticContext ? "shared_static" : "full",
+              contextMode: usesSharedStaticContext
+                ? "shared_static"
+                : usesToolFirstContext
+                  ? "tool_first"
+                  : "full",
               surface: effectiveSurface,
               ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
               now: requestNow,
@@ -1605,7 +1963,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             toolResults[0].name === successfulToolResults[0].name
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
-                  successfulToolResults[0].data
+                  successfulToolResults[0].data,
+                  effectiveSurface
                 )
               : null;
 
