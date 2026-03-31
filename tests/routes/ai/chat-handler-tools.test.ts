@@ -575,7 +575,7 @@ test("create discussion requests only attach prepare_discussion_thread on pass 1
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
   assert.equal(composeResponseCalls.length, 1);
-  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.deepEqual(contextModes, ["full"]);
   assert.match(body, /I drafted the discussion thread/i);
   assert.match(body, /"type":"pending_action"/);
   assert.match(body, /"actionType":"create_discussion_thread"/);
@@ -668,8 +668,18 @@ test("create job requests still prefer prepare_job_posting over job reads", asyn
 });
 
 test("create job requests still force prepare_job_posting when the wording includes analytics keywords", async () => {
+  const contextModes: Array<string | undefined> = [];
+
   POST = createChatPostHandler(
     buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
       composeResponse: async function* (options: any) {
         composeResponseCalls.push(options);
         if (options.tools && !options.toolResults) {
@@ -725,6 +735,7 @@ test("create job requests still force prepare_job_posting when the wording inclu
     type: "function",
     function: { name: "prepare_job_posting" },
   });
+  assert.deepEqual(contextModes, ["full"]);
   assert.equal(executeToolCallCalls[0].call.name, "prepare_job_posting");
   assert.match(body, /I drafted the job posting/i);
   assert.match(body, /"type":"pending_action"/);

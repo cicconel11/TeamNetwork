@@ -722,6 +722,25 @@ function getForcedPass1ToolChoice(
   };
 }
 
+function isToolFirstEligible(
+  pass1Tools: ReturnType<typeof getPass1Tools>
+): boolean {
+  if (!pass1Tools || pass1Tools.length !== 1) {
+    return false;
+  }
+
+  const toolName = pass1Tools[0]?.function.name;
+  return (
+    toolName === "get_org_stats" ||
+    toolName === "find_navigation_targets" ||
+    toolName === "list_announcements" ||
+    toolName === "list_events" ||
+    toolName === "list_discussions" ||
+    toolName === "list_job_postings" ||
+    toolName === "suggest_connections"
+  );
+}
+
 function getPendingActionFromToolData(data: unknown) {
   if (!data || typeof data !== "object") {
     return null;
@@ -1028,7 +1047,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     const usesToolFirstContext =
       !usesSharedStaticContext &&
       executionPolicy.retrieval.reason === "tool_only_structured_query" &&
-      Boolean(pass1Tools && pass1Tools.length === 1);
+      isToolFirstEligible(pass1Tools);
 
     // 4. Validate provided thread ownership before any cleanup or writes
     let threadId = existingThreadId;
