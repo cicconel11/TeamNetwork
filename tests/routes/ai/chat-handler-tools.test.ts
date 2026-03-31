@@ -583,6 +583,130 @@ test("create job requests still prefer prepare_job_posting over job reads", asyn
   assert.match(body, /"type":"pending_action"/);
 });
 
+test("create job requests still force prepare_job_posting when the wording includes analytics keywords", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_job_posting",
+            argsJson:
+              '{"title":"Volunteer Fundraising Coordinator","description":"Coordinate fundraising campaigns and donor outreach.","location":"Philadelphia, PA"}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_job_posting should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            title: "Volunteer Fundraising Coordinator",
+            description: "Coordinate fundraising campaigns and donor outreach.",
+            location: "Philadelphia, PA",
+          },
+          pending_action: {
+            id: "pending-job-analytics-123",
+            action_type: "create_job_posting",
+            payload: {
+              title: "Volunteer Fundraising Coordinator",
+              description: "Coordinate fundraising campaigns and donor outreach.",
+              location: "Philadelphia, PA",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review job posting",
+              description: "Confirm the drafted job before it is added to the jobs board.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Create a job posting for a volunteer fundraising coordinator") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_job_posting"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_job_posting" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_job_posting");
+  assert.match(body, /I drafted the job posting/i);
+  assert.match(body, /"type":"pending_action"/);
+});
+
+test("create discussion requests still force prepare_discussion_thread when the wording includes members keywords", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_thread",
+            argsJson:
+              '{"title":"Alumni Mentorship Volunteers","body":"Let’s coordinate alumni mentors for current members."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_thread should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            title: "Alumni Mentorship Volunteers",
+            body: "Let’s coordinate alumni mentors for current members.",
+          },
+          pending_action: {
+            id: "pending-discussion-members-123",
+            action_type: "create_discussion_thread",
+            payload: {
+              title: "Alumni Mentorship Volunteers",
+              body: "Let’s coordinate alumni mentors for current members.",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion thread",
+              description: "Confirm the drafted thread before it is posted to discussions.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Create a discussion thread for alumni mentorship volunteers") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_thread"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_thread" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
+  assert.match(body, /I drafted the discussion thread/i);
+  assert.match(body, /"type":"pending_action"/);
+});
+
 test("navigation phrasings recognized by the intent router attach find_navigation_targets", async () => {
   await (
     await POST(makeRequest("show me the members page") as any, {
