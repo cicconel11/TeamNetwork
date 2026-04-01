@@ -11,6 +11,7 @@ import {
 } from "@/lib/security/validation";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { galleryUpdateMediaSchema, moderateMediaSchema } from "@/lib/schemas/media";
+import { softDeleteMediaItems } from "@/lib/media/delete-media";
 import { getMediaUrls } from "@/lib/media/urls";
 
 export const dynamic = "force-dynamic";
@@ -251,17 +252,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json(readOnlyResponse(), { status: 403 });
     }
 
-    // Soft delete
-    const { error: deleteError } = await serviceClient
-      .from("media_items")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", mediaId);
+    const deletion = await softDeleteMediaItems(serviceClient, {
+      orgId: item.organization_id,
+      mediaIds: [mediaId],
+      actor: { isAdmin, userId: user.id },
+      forbiddenMessage: "Forbidden",
+    });
 
-    if (deleteError) {
-      return NextResponse.json({ error: "Failed to delete media item" }, { status: 500 });
+    if (!deletion.ok) {
+      return NextResponse.json({ error: deletion.error }, { status: deletion.status });
     }
 
-    console.log("[media/gallery] Deleted", { mediaId });
+    console.log("[media/gallery] Deleted", { mediaId, deletedIds: deletion.deletedIds });
 
     return NextResponse.json({ success: true }, { headers: rateLimit.headers });
   } catch {

@@ -44,6 +44,15 @@ test("album deletion clears matching import overlays without resetting the whole
   assert.doesNotMatch(dismissImportAlbumBlock, /cancelAll\(/);
 });
 
+test("single media deletes use the shared soft-delete helper and album removals update local counts", () => {
+  const singleDeleteRoute = readSource("src/app/api/media/[mediaId]/route.ts");
+  const albumViewSource = readSource("src/components/media/AlbumView.tsx");
+
+  assert.match(singleDeleteRoute, /softDeleteMediaItems\(serviceClient, \{/);
+  assert.match(albumViewSource, /const albumUpdates = getAlbumUpdatesAfterMediaDelete\(album, \[mediaId\], 1\)/);
+  assert.match(albumViewSource, /onAlbumUpdated\?\.\(albumUpdates\)/);
+});
+
 test("media upload route uses the transactional gallery upload RPC", () => {
   const source = readSource("src/app/api/media/route.ts");
   const normalized = squishWhitespace(source);

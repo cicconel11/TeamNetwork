@@ -178,6 +178,10 @@ export function AlbumView({
       }
       setItems((prev) => prev.filter((i) => i.id !== mediaId));
       setSelectedItem(null);
+      const albumUpdates = getAlbumUpdatesAfterMediaDelete(album, [mediaId], 1);
+      if (Object.keys(albumUpdates).length > 0) {
+        onAlbumUpdated?.(albumUpdates);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Remove failed");
     }

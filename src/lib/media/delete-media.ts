@@ -86,8 +86,22 @@ export async function softDeleteMediaItems(
     return { ok: false, status: 500, error: "Failed to delete media items" };
   }
 
+  const deletedIds = (data ?? []).map((row) => row.id as string);
+
+  if (deletedIds.length > 0) {
+    const { error: albumItemDeleteError } = await serviceClient
+      .from("media_album_items")
+      .delete()
+      .in("media_item_id", deletedIds);
+
+    if (albumItemDeleteError) {
+      console.error("[media/delete-media] Failed to remove deleted media from albums:", albumItemDeleteError);
+      return { ok: false, status: 500, error: "Failed to remove deleted media from albums" };
+    }
+  }
+
   return {
     ok: true,
-    deletedIds: (data ?? []).map((row) => row.id as string),
+    deletedIds,
   };
 }
