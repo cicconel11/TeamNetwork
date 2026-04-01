@@ -17,6 +17,7 @@ import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { AIPanelProvider } from "@/components/ai-assistant";
 import { JoinOrgGate } from "@/components/join/JoinOrgGate";
+import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
 import dynamic from "next/dynamic";
 const AIPanel = dynamic(
   () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
@@ -262,9 +263,11 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 
-      <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
-        {children}
-      </OrgMainContent>
+      <MediaUploadManagerProvider orgId={organization.id}>
+        <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
+          {children}
+        </OrgMainContent>
+      </MediaUploadManagerProvider>
 
       {isDevAdmin && (
         <DevPanel

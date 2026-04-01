@@ -16,6 +16,10 @@ export interface MediaAlbum {
   created_by: string;
   created_at: string;
   updated_at: string;
+  import_status?: "creating_album" | "waiting_for_uploads" | "adding_items" | "partial_success" | "success" | "failed";
+  import_expected_count?: number;
+  import_uploaded_count?: number;
+  import_failed_count?: number;
 }
 
 interface AlbumCardProps {
@@ -28,6 +32,8 @@ interface AlbumCardProps {
 }
 
 export function AlbumCard({ album, onClick, reorderMode = false, dragHandleProps, isDragging = false }: AlbumCardProps) {
+  const importLabel = getAlbumImportLabel(album);
+
   return (
     <Card
       interactive={!reorderMode}
@@ -60,6 +66,12 @@ export function AlbumCard({ album, onClick, reorderMode = false, dragHandleProps
           <AlbumPlaceholder />
         )}
 
+        {importLabel && !reorderMode && (
+          <div className="absolute right-2 top-2 z-10 rounded-full bg-background/90 px-2.5 py-1 text-[11px] font-medium text-foreground shadow-sm backdrop-blur-sm">
+            {importLabel}
+          </div>
+        )}
+
         {/* Overlay with name + count */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3">
           <UserContent as="p" className="text-sm font-semibold text-white truncate">
@@ -72,6 +84,25 @@ export function AlbumCard({ album, onClick, reorderMode = false, dragHandleProps
       </div>
     </Card>
   );
+}
+
+function getAlbumImportLabel(album: MediaAlbum): string | null {
+  switch (album.import_status) {
+    case "creating_album":
+      return "Starting import";
+    case "waiting_for_uploads":
+    case "adding_items":
+      if (typeof album.import_expected_count === "number" && album.import_expected_count > 0) {
+        return `Importing ${album.import_uploaded_count ?? 0}/${album.import_expected_count}`;
+      }
+      return "Importing";
+    case "partial_success":
+      return "Partially imported";
+    case "failed":
+      return "Import failed";
+    default:
+      return null;
+  }
 }
 
 function AlbumPlaceholder() {

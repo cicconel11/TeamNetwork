@@ -21,8 +21,10 @@ import { CSS } from "@dnd-kit/utilities";
 import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
+import { mergeFolderImportAlbum } from "@/lib/media/folder-import-session";
 import { AlbumCard, type MediaAlbum } from "./AlbumCard";
 import { CreateAlbumModal } from "./CreateAlbumModal";
+import { useMediaUploadManager } from "./MediaUploadManagerContext";
 
 interface AlbumGridProps {
   orgId: string;
@@ -86,6 +88,7 @@ function SortableAlbumRow({
 export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
+  const { importingAlbum } = useMediaUploadManager();
 
   const [albums, setAlbums] = useState<MediaAlbum[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +97,11 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
   const [reorderMode, setReorderMode] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const albumsRef = useRef<MediaAlbum[]>([]);
-  albumsRef.current = albums;
+  const visibleAlbums = useMemo(
+    () => mergeFolderImportAlbum(albums, importingAlbum),
+    [albums, importingAlbum],
+  );
+  albumsRef.current = visibleAlbums;
 
   const canReorder = canCreate;
 
@@ -120,7 +127,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
     fetchAlbums();
   }, [fetchAlbums]);
 
-  const albumIds = useMemo(() => albums.map((a) => a.id), [albums]);
+  const albumIds = useMemo(() => visibleAlbums.map((a) => a.id), [visibleAlbums]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -238,7 +245,7 @@ export function AlbumGrid({ orgId, canCreate, onSelectAlbum }: AlbumGridProps) {
               )}
 
               <SortableContext items={albumIds} strategy={rectSortingStrategy}>
-                {albums.map((album) => (
+                {visibleAlbums.map((album) => (
                   <SortableAlbumRow
                     key={album.id}
                     album={album}

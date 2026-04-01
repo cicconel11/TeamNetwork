@@ -16,6 +16,7 @@ import {
   getAlbumCoverPickerItems,
   getAlbumUpdatesAfterMediaDelete,
 } from "@/lib/media/albums";
+import { buildOptimisticMediaItem } from "@/lib/media/gallery-upload-client";
 
 interface AlbumViewProps {
   album: MediaAlbum;
@@ -106,7 +107,7 @@ export function AlbumView({
       });
 
     return () => { cancelled = true; };
-  }, [fetchItems]);
+  }, [album.import_failed_count, album.import_uploaded_count, fetchItems]);
 
   useEffect(() => {
     setBulkDeleteConfirm(false);
@@ -305,30 +306,11 @@ export function AlbumView({
   // Handle upload completion — add to album item list optimistically
   const handleFileComplete = useCallback(
     (entry: UploadFileEntry, mediaId: string) => {
-      const isVideo = entry.mimeType.startsWith("video/");
-      const optimisticItem: MediaItem = {
-        id: mediaId,
-        title: entry.title || entry.fileName,
-        description: entry.description || null,
-        media_type: isVideo ? "video" : "image",
-        url: entry.previewUrl,
-        thumbnail_url: isVideo ? null : entry.previewUrl,
-        tags: entry.tags,
-        taken_at: entry.takenAt ? new Date(entry.takenAt).toISOString() : null,
-        created_at: new Date().toISOString(),
-        uploaded_by: currentUserId || "",
-        status: isAdmin ? "approved" : "pending",
-      };
+      const optimisticItem: MediaItem = buildOptimisticMediaItem(entry, mediaId, {
+        currentUserId,
+        isAdmin,
+      });
       setItems((prev) => [optimisticItem, ...prev]);
-
-      // Fetch real data
-      fetch(`/api/media/${mediaId}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((real: MediaItem | null) => {
-          if (!real) return;
-          setItems((prev) => prev.map((i) => (i.id === mediaId ? { ...i, ...real } : i)));
-        })
-        .catch(() => {});
     },
     [currentUserId, isAdmin],
   );
@@ -358,6 +340,13 @@ export function AlbumView({
 
   return (
     <div>
+      {album.import_status && album.import_status !== "success" && (
+        <div className="mb-4 rounded-xl border border-[var(--color-org-secondary)]/20 bg-[var(--color-org-secondary)]/8 px-4 py-3">
+          <p className="text-sm font-medium text-[var(--foreground)]">{getAlbumImportHeadline(album)}</p>
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">{getAlbumImportDetail(album)}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <button
@@ -612,4 +601,35 @@ export function AlbumView({
       )}
     </div>
   );
+}
+
+function getAlbumImportHeadline(album: MediaAlbum): string {
+  switch (album.import_status) {
+    case "creating_album":
+      return "Creating album import";
+    case "partial_success":
+      return "Album import finished with some failures";
+    case "failed":
+      return "Album import failed";
+    default:
+      return "Album import in progress";
+  }
+}
+
+function getAlbumImportDetail(album: MediaAlbum): string {
+  const uploaded = album.import_uploaded_count ?? 0;
+  const expected = album.import_expected_count ?? 0;
+  const failed = album.import_failed_count ?? 0;
+
+  if (album.import_status === "failed") {
+    return failed > 0
+      ? `${failed} file${failed === 1 ? "" : "s"} failed before the album could finish importing.`
+      : "The album is waiting for another retry to complete.";
+  }
+
+  if (album.import_status === "partial_success") {
+    return `${uploaded} of ${expected} files finished importing. Retry the failed uploads to complete the album.`;
+  }
+
+  return `${uploaded} of ${expected} files imported so far. You can leave this page while the upload continues.`;
 }

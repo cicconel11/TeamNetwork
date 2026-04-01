@@ -170,7 +170,7 @@ export function galleryUploadReducer(state: State, action: Action): State {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_CONCURRENT = 3;
+const MAX_CONCURRENT = 4;
 const STAGGER_MS = 500;
 const MAX_RETRIES = 3;
 

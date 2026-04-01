@@ -34,6 +34,7 @@ import {
   buildOptimisticMediaItem,
   mergeUploadTags,
 } from "@/lib/media/gallery-upload-client";
+import { useMediaUploadManager } from "./MediaUploadManagerContext";
 
 interface MediaGalleryProps {
   orgId: string;
@@ -109,6 +110,7 @@ function SortableMediaRow({
 export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: MediaGalleryProps) {
   const tMedia = useTranslations("media");
   const tCommon = useTranslations("common");
+  const { importingAlbum } = useMediaUploadManager();
 
   // View tab state
   const [view, setView] = useState<GalleryView>("albums");
@@ -149,6 +151,10 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   const itemsRef = useRef<MediaItem[]>([]);
   itemsRef.current = items;
   const reducedMotion = usePrefersReducedMotion();
+  const displayedSelectedAlbum =
+    selectedAlbum && importingAlbum && importingAlbum.id === selectedAlbum.id
+      ? { ...selectedAlbum, ...importingAlbum }
+      : selectedAlbum;
 
   const galleryFiltersDefault =
     mediaType === "all" && !year && !tag && (!isAdmin || statusFilter === "all");
@@ -619,9 +625,9 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
         />
       )}
 
-      {view === "albums" && selectedAlbum && (
+      {view === "albums" && displayedSelectedAlbum && (
         <AlbumView
-          album={selectedAlbum}
+          album={displayedSelectedAlbum}
           orgId={orgId}
           isAdmin={isAdmin}
           canUpload={canUpload}
