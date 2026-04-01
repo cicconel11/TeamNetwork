@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  createAlbumSchema,
   galleryUploadIntentSchema,
   galleryUpdateMediaSchema,
   moderateMediaSchema,
@@ -163,6 +164,17 @@ describe("galleryUpdateMediaSchema", () => {
   it("accepts empty object (no fields)", () => {
     const result = galleryUpdateMediaSchema.safeParse({});
     assert.ok(result.success);
+  });
+});
+
+describe("createAlbumSchema", () => {
+  it("accepts upload draft albums in the internal create payload", () => {
+    const result = createAlbumSchema.safeParse({
+      name: "Spring Photos",
+      isUploadDraft: true,
+    });
+    assert.ok(result.success);
+    assert.equal(result.data.isUploadDraft, true);
   });
 });
 

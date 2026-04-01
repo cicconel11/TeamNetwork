@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import { GALLERY_ALBUM_BATCH_RATE_LIMIT, getNextGallerySortOrder } from "@/lib/media/gallery-upload-server";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { galleryUploadIntentSchema, mediaListQuerySchema, GALLERY_ALLOWED_MIME_TYPES } from "@/lib/schemas/media";
 import {
@@ -178,8 +179,7 @@ export async function POST(request: NextRequest) {
     const rateLimit = checkRateLimit(request, {
       userId: user.id,
       feature: "media upload",
-      limitPerIp: 20,
-      limitPerUser: 10,
+      ...GALLERY_ALBUM_BATCH_RATE_LIMIT,
     });
     if (!rateLimit.ok) {
       return buildRateLimitResponse(rateLimit);
@@ -231,14 +231,21 @@ export async function POST(request: NextRequest) {
     // Start in "uploading" state — finalize endpoint transitions to final status
     const initialStatus = "uploading";
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC not in generated client surface
-    const { error: shiftError } = await (serviceClient as any).rpc("shift_media_gallery_sort_orders", {
-      p_org_id: orgId,
-    });
-    if (shiftError) {
-      console.error("[media/gallery] shift gallery sort failed:", shiftError);
+    const { data: firstGalleryItem, error: sortOrderError } = await serviceClient
+      .from("media_items")
+      .select("gallery_sort_order")
+      .eq("organization_id", orgId)
+      .is("deleted_at", null)
+      .order("gallery_sort_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (sortOrderError) {
+      console.error("[media/gallery] next gallery sort lookup failed:", sortOrderError);
       return NextResponse.json({ error: "Failed to create media item" }, { status: 500 });
     }
+
+    const nextGallerySortOrder = getNextGallerySortOrder(firstGalleryItem?.gallery_sort_order ?? null);
 
     const { data: mediaItem, error: insertError } = await serviceClient
       .from("media_items")
@@ -255,7 +262,7 @@ export async function POST(request: NextRequest) {
         tags: tags || [],
         taken_at: takenAt || null,
         status: initialStatus,
-        gallery_sort_order: 0,
+        gallery_sort_order: nextGallerySortOrder,
       })
       .select("id")
       .single();

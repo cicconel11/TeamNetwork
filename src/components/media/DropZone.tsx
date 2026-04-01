@@ -256,7 +256,7 @@ export function DropZone({ onFiles, onFolder, disabled = false }: DropZoneProps)
               )}
             </p>
             <p className="text-xs text-[var(--muted-foreground)]">
-              Images up to 10 MB, videos up to 100 MB. Max 20 files.
+              Images up to 10 MB, videos up to 100 MB. Max 100 files.
             </p>
           </>
         )}

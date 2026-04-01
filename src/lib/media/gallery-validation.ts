@@ -2,7 +2,7 @@ import { GALLERY_ALLOWED_MIME_TYPES } from "@/lib/schemas/media";
 
 const GALLERY_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 const GALLERY_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB
-const MAX_BATCH_SIZE = 20;
+const MAX_BATCH_SIZE = 100;
 
 const HEIC_EXTENSIONS = new Set([".heic", ".heif"]);
 

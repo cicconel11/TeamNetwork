@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { GALLERY_ALBUM_BATCH_RATE_LIMIT } from "@/lib/media/gallery-upload-server";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { z } from "zod";
 import { baseSchemas } from "@/lib/security/validation";
@@ -28,8 +29,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const rateLimit = checkRateLimit(request, {
       feature: "media album add items",
-      limitPerIp: 30,
-      limitPerUser: 20,
+      ...GALLERY_ALBUM_BATCH_RATE_LIMIT,
     });
     if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     // Verify album exists and user has permission
     const { data: album, error: albumError } = await (serviceClient as any)
       .from("media_albums")
-      .select("id, created_by, organization_id")
+      .select("id, created_by, organization_id, is_upload_draft")
       .eq("id", albumId)
       .eq("organization_id", orgId)
       .is("deleted_at", null)
@@ -100,6 +100,21 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (insertError) {
       console.error("[media/albums/items] Insert failed:", insertError);
       return NextResponse.json({ error: "Failed to add items to album" }, { status: 500 });
+    }
+
+    if (album.is_upload_draft) {
+      const { error: draftUpdateError } = await serviceClient
+        .from("media_albums")
+        .update({
+          is_upload_draft: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", albumId);
+
+      if (draftUpdateError) {
+        console.error("[media/albums/items] Draft clear failed:", draftUpdateError);
+        return NextResponse.json({ error: "Failed to finalize album upload" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ success: true, added: mediaIds.length }, { headers: rateLimit.headers });

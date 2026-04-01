@@ -53,7 +53,29 @@ export function MediaUploadPanel({
   onAlbumCreated,
 }: MediaUploadPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const pendingFolderSelectionRef = useRef<{ files: File[]; folderName: string } | null>(null);
   const [folderAlbum, setFolderAlbum] = useState<FolderAlbumState>(INITIAL_FOLDER_ALBUM_STATE);
+
+  const effectiveTargetAlbumId = targetAlbumId ?? folderAlbum.album?.id;
+
+  const handleUploadComplete = useCallback((entry: UploadFileEntry, mediaId: string) => {
+    setFolderAlbum((prev) => {
+      if (!prev.album || prev.attachedMediaIds.includes(mediaId)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        attachedMediaIds: [...prev.attachedMediaIds, mediaId],
+        album: {
+          ...prev.album,
+          item_count: prev.album.item_count + 1,
+          updated_at: new Date().toISOString(),
+        },
+      };
+    });
+    onFileComplete?.(entry, mediaId);
+  }, [onFileComplete]);
 
   const {
     files,
@@ -67,7 +89,7 @@ export function MediaUploadPanel({
     updateField,
     updateTags,
     setPendingAlbumName,
-  } = useGalleryUpload({ orgId, targetAlbumId, onFileComplete });
+  } = useGalleryUpload({ orgId, targetAlbumId: effectiveTargetAlbumId, onFileComplete: handleUploadComplete });
 
   // Combine gallery tags + tags from the current batch for suggestions
   const batchTags = files.flatMap((f) => f.tags);
@@ -83,99 +105,106 @@ export function MediaUploadPanel({
     setFolderAlbum(INITIAL_FOLDER_ALBUM_STATE);
   }, []);
 
+  const deleteDraftAlbum = useCallback(async (albumId: string) => {
+    const response = await fetch(`/api/media/albums/${albumId}?orgId=${encodeURIComponent(orgId)}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error || "Failed to delete album");
+    }
+  }, [orgId]);
+
   const handleClearPendingAlbum = useCallback(() => {
+    const emptyDraftAlbumId =
+      folderAlbum.album && folderAlbum.attachedMediaIds.length === 0
+        ? folderAlbum.album.id
+        : null;
+
+    pendingFolderSelectionRef.current = null;
     cancelAll();
     resetFolderAlbum();
-  }, [cancelAll, resetFolderAlbum]);
 
-  const processFolderAlbum = useCallback(async (mediaIds: string[]) => {
-    if (!pendingAlbumName || mediaIds.length === 0) return;
+    if (emptyDraftAlbumId) {
+      void deleteDraftAlbum(emptyDraftAlbumId).catch(() => {});
+    }
+  }, [cancelAll, deleteDraftAlbum, folderAlbum.album, folderAlbum.attachedMediaIds.length, resetFolderAlbum]);
 
-    let nextAlbum = folderAlbum.album;
-    setFolderAlbum((prev) => ({
-      ...prev,
-      status: prev.album ? "adding_items" : "creating_album",
-      error: null,
-      requiresManualRetry: false,
-    }));
+  const provisionFolderAlbum = useCallback(async (folderFiles: File[], folderName: string) => {
+    pendingFolderSelectionRef.current = { files: folderFiles, folderName };
+
+    const previousEmptyDraftAlbumId =
+      folderAlbum.album && folderAlbum.attachedMediaIds.length === 0
+        ? folderAlbum.album.id
+        : null;
+
+    cancelAll();
+    setPendingAlbumName(folderName);
+    setFolderAlbum({
+      ...INITIAL_FOLDER_ALBUM_STATE,
+      status: "creating_album",
+    });
 
     try {
-      if (!nextAlbum) {
-        const albumRes = await fetch("/api/media/albums", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orgId, name: pendingAlbumName }),
-        });
-        if (!albumRes.ok) {
-          const data = await albumRes.json().catch(() => null);
-          throw new Error(data?.error || "Failed to create album");
-        }
-        nextAlbum = await albumRes.json();
+      if (previousEmptyDraftAlbumId) {
+        await deleteDraftAlbum(previousEmptyDraftAlbumId);
       }
 
-      setFolderAlbum((prev) => ({
-        ...prev,
-        album: nextAlbum,
-        status: "adding_items",
-      }));
-
-      if (!nextAlbum) {
-        throw new Error("Failed to create album");
-      }
-
-      const itemsRes = await fetch(`/api/media/albums/${nextAlbum.id}/items`, {
+      const albumRes = await fetch("/api/media/albums", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId, mediaIds }),
+        body: JSON.stringify({ orgId, name: folderName, isUploadDraft: true }),
       });
-      if (!itemsRes.ok) {
-        const data = await itemsRes.json().catch(() => null);
-        throw new Error(data?.error || "Failed to add items to album");
+      if (!albumRes.ok) {
+        const data = await albumRes.json().catch(() => null);
+        throw new Error(data?.error || "Failed to create album");
       }
 
-      setFolderAlbum((prev) => ({
-        ...prev,
-        album: nextAlbum,
+      const album: MediaAlbum = await albumRes.json();
+      const addResult = addFiles(folderFiles, { replaceExisting: true });
+      const acceptedFiles = folderFiles.length - addResult.rejected.length;
+
+      if (acceptedFiles === 0) {
+        pendingFolderSelectionRef.current = null;
+        await deleteDraftAlbum(album.id);
+        setFolderAlbum({
+          ...INITIAL_FOLDER_ALBUM_STATE,
+          status: "failed",
+          error: addResult.rejected[0]?.error || "No valid files were added to the album.",
+        });
+        return;
+      }
+
+      pendingFolderSelectionRef.current = null;
+      setFolderAlbum({
+        ...INITIAL_FOLDER_ALBUM_STATE,
         status: "waiting_for_uploads",
-        error: null,
-        requiresManualRetry: false,
-        attachedMediaIds: Array.from(new Set([...prev.attachedMediaIds, ...mediaIds])),
-      }));
+        album,
+      });
     } catch (err) {
-      setFolderAlbum((prev) => ({
-        ...prev,
-        album: nextAlbum ?? prev.album,
+      setFolderAlbum({
+        ...INITIAL_FOLDER_ALBUM_STATE,
         status: "failed",
         error: err instanceof Error ? err.message : "Failed to create album",
         requiresManualRetry: true,
-      }));
+      });
     }
-  }, [folderAlbum.album, orgId, pendingAlbumName]);
-
-  useEffect(() => {
-    if (targetAlbumId || !pendingAlbumName || !folderAlbumSummary) return;
-    if (folderAlbum.requiresManualRetry) return;
-    if (folderAlbum.status === "creating_album" || folderAlbum.status === "adding_items") return;
-    if (!folderAlbumSummary.allSettled) return;
-    if (!folderAlbumSummary.hasSuccessfulUploads) return;
-    if (folderAlbumSummary.pendingMediaIds.length === 0) return;
-
-    void processFolderAlbum(folderAlbumSummary.pendingMediaIds);
   }, [
-    targetAlbumId,
-    pendingAlbumName,
-    folderAlbumSummary,
-    folderAlbum.requiresManualRetry,
-    folderAlbum.status,
-    processFolderAlbum,
+    addFiles,
+    deleteDraftAlbum,
+    folderAlbum.album,
+    folderAlbum.attachedMediaIds.length,
+    orgId,
+    cancelAll,
+    setPendingAlbumName,
   ]);
 
   useEffect(() => {
     if (!pendingAlbumName || !folderAlbumSummary || targetAlbumId) return;
+    if (folderAlbum.requiresManualRetry) return;
 
-    const nextStatus = folderAlbum.requiresManualRetry
-      ? folderAlbum.status
-      : getFolderAlbumBatchStatus(folderAlbumSummary, folderAlbum.album?.id ?? null);
+    const nextStatus = getFolderAlbumBatchStatus(folderAlbumSummary, folderAlbum.album?.id ?? null);
 
     setFolderAlbum((prev) => {
       if (!folderAlbumSummary.hasSuccessfulUploads && folderAlbumSummary.allSettled) {
@@ -211,10 +240,10 @@ export function MediaUploadPanel({
   }, [
     pendingAlbumName,
     folderAlbumSummary,
-    folderAlbum.requiresManualRetry,
     folderAlbum.status,
     folderAlbum.album,
     targetAlbumId,
+    folderAlbum.requiresManualRetry,
   ]);
 
   useEffect(() => {
@@ -234,16 +263,10 @@ export function MediaUploadPanel({
   // Handle folder upload: add files + set pending album name (unless targeting an album)
   const handleFolder = useCallback(
     (folderFiles: File[], folderName: string) => {
-      addFiles(folderFiles, { replaceExisting: true });
-      if (!targetAlbumId) {
-        setPendingAlbumName(folderName);
-        setFolderAlbum({
-          ...INITIAL_FOLDER_ALBUM_STATE,
-          status: "waiting_for_uploads",
-        });
-      }
+      if (targetAlbumId) return;
+      void provisionFolderAlbum(folderFiles, folderName);
     },
-    [addFiles, setPendingAlbumName, targetAlbumId],
+    [provisionFolderAlbum, targetAlbumId],
   );
 
   // Escape to close (only when not uploading)
@@ -275,23 +298,71 @@ export function MediaUploadPanel({
     onClose();
   }, [stats.isUploading, onClose]);
 
-  const retryAlbumCreation = useCallback(() => {
-    if (!folderAlbumSummary || folderAlbumSummary.pendingMediaIds.length === 0) return;
-    void processFolderAlbum(folderAlbumSummary.pendingMediaIds);
-  }, [folderAlbumSummary, processFolderAlbum]);
+  useEffect(() => {
+    if (targetAlbumId || !folderAlbum.album || !pendingAlbumName) return;
+
+    const nextName = pendingAlbumName.trim();
+    if (!nextName || nextName === folderAlbum.album.name) return;
+
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/media/albums/${folderAlbum.album?.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orgId, name: nextName }),
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => null);
+            throw new Error(data?.error || "Failed to update album");
+          }
+
+          const updatedAlbum = await response.json();
+          setFolderAlbum((prev) => {
+            if (!prev.album || prev.album.id !== updatedAlbum.id) {
+              return prev;
+            }
+            return {
+              ...prev,
+              album: {
+                ...prev.album,
+                name: updatedAlbum.name,
+                updated_at: updatedAlbum.updated_at,
+              },
+              error: prev.error === "Failed to update album" ? null : prev.error,
+            };
+          });
+        } catch (err) {
+          setFolderAlbum((prev) => ({
+            ...prev,
+            error: err instanceof Error ? err.message : "Failed to update album",
+          }));
+        }
+      })();
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [folderAlbum.album, orgId, pendingAlbumName, targetAlbumId]);
+
+  const retryAlbumProvision = useCallback(() => {
+    if (!pendingFolderSelectionRef.current) return;
+    void provisionFolderAlbum(
+      pendingFolderSelectionRef.current.files,
+      pendingFolderSelectionRef.current.folderName,
+    );
+  }, [provisionFolderAlbum]);
 
   const isFolderAlbumFlow = !targetAlbumId && pendingAlbumName !== null;
-  const isAlbumProcessing = folderAlbum.status === "creating_album" || folderAlbum.status === "adding_items";
+  const isAlbumProcessing = folderAlbum.status === "creating_album";
   const showAlbumSuccess = folderAlbum.status === "success" || folderAlbum.status === "partial_success";
   const albumStatusLabel = isAlbumProcessing
-    ? folderAlbum.status === "creating_album"
-      ? "Creating album..."
-      : "Adding photos to album..."
+    ? "Creating album..."
     : showAlbumSuccess
       ? folderAlbum.status === "partial_success"
         ? "Album created with partial success"
         : "Album created!"
-      : "Creating album from folder";
+      : "Uploading folder to album";
 
   return (
     <>
@@ -352,7 +423,7 @@ export function MediaUploadPanel({
           <DropZone
             onFiles={addFiles}
             onFolder={handleFolder}
-            disabled={stats.isUploading && files.length >= 20}
+            disabled={stats.isUploading && files.length >= 100}
           />
 
           {/* Pending album name (from folder upload) */}
@@ -374,7 +445,7 @@ export function MediaUploadPanel({
                   onChange={(e) => setPendingAlbumName(e.target.value)}
                   placeholder="Album name"
                   maxLength={200}
-                  disabled={isAlbumProcessing || folderAlbum.album !== null}
+                  disabled={isAlbumProcessing}
                 />
               </div>
               {folderAlbum.error && (
@@ -385,10 +456,10 @@ export function MediaUploadPanel({
                   {folderAlbumSummary.completedMediaIds.length} uploaded to the album, {folderAlbumSummary.failedFileIds.length} still need attention.
                 </p>
               )}
-              {folderAlbum.status === "failed" && folderAlbumSummary?.hasSuccessfulUploads && (
+              {folderAlbum.requiresManualRetry && (
                 <button
                   type="button"
-                  onClick={retryAlbumCreation}
+                  onClick={retryAlbumProvision}
                   className="text-xs font-medium text-[var(--color-org-secondary)] hover:underline"
                   disabled={isAlbumProcessing}
                 >

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isStaleEmptyUploadDraftAlbum } from "@/lib/media/gallery-upload-server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 
@@ -35,15 +36,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Failed to query stale uploads" }, { status: 500 });
     }
 
-    if (!staleUploads || staleUploads.length === 0) {
-      return NextResponse.json({ success: true, cleanedUp: 0 });
-    }
+    let cleanedUpUploads = 0;
 
-    let cleanedUp = 0;
-
-    for (const upload of staleUploads) {
-      // Delete file from storage (ignore errors for missing files)
-      await supabase.storage.from(BUCKET).remove([upload.storage_path]);
+    for (const upload of staleUploads || []) {
+      if (upload.storage_path) {
+        await supabase.storage.from(BUCKET).remove([upload.storage_path]);
+      }
 
       // Mark as orphaned
       const { error: updateError } = await supabase
@@ -55,13 +53,51 @@ export async function GET(request: Request) {
         .eq("id", upload.id);
 
       if (!updateError) {
-        cleanedUp++;
+        cleanedUpUploads++;
       } else {
         console.error(`[cron/media-cleanup] Failed to mark ${upload.id} as orphaned:`, updateError);
       }
     }
 
-    return NextResponse.json({ success: true, cleanedUp });
+    const { data: candidateDraftAlbums, error: draftQueryError } = await supabase
+      .from("media_albums")
+      .select("id, is_upload_draft, item_count, created_at, deleted_at")
+      .eq("is_upload_draft", true)
+      .eq("item_count", 0)
+      .is("deleted_at", null)
+      .lt("created_at", cutoff)
+      .limit(BATCH_SIZE);
+
+    if (draftQueryError) {
+      console.error("[cron/media-cleanup] Draft album query error:", draftQueryError);
+      return NextResponse.json({ error: "Failed to query stale draft albums" }, { status: 500 });
+    }
+
+    let cleanedUpDraftAlbums = 0;
+
+    for (const album of candidateDraftAlbums || []) {
+      if (!isStaleEmptyUploadDraftAlbum(album, cutoff)) continue;
+
+      const { error: deleteDraftError } = await supabase
+        .from("media_albums")
+        .update({
+          deleted_at: new Date().toISOString(),
+        })
+        .eq("id", album.id);
+
+      if (!deleteDraftError) {
+        cleanedUpDraftAlbums++;
+      } else {
+        console.error(`[cron/media-cleanup] Failed to delete draft album ${album.id}:`, deleteDraftError);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      cleanedUp: cleanedUpUploads + cleanedUpDraftAlbums,
+      cleanedUpUploads,
+      cleanedUpDraftAlbums,
+    });
   } catch (err) {
     console.error("[cron/media-cleanup] Error:", err);
     return NextResponse.json({ error: "Failed to clean up media" }, { status: 500 });

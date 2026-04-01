@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { GALLERY_ALBUM_BATCH_RATE_LIMIT } from "@/lib/media/gallery-upload-server";
 import { validateMagicBytes } from "@/lib/media/validation";
 
 export const dynamic = "force-dynamic";
@@ -37,8 +38,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rateLimit = checkRateLimit(request, {
       userId: user.id,
       feature: "media finalize",
-      limitPerIp: 20,
-      limitPerUser: 10,
+      ...GALLERY_ALBUM_BATCH_RATE_LIMIT,
     });
     if (!rateLimit.ok) {
       return buildRateLimitResponse(rateLimit);

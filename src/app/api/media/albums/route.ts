@@ -6,6 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse, baseSchemas } from "@/lib/security/validation";
 import { createAlbumSchema } from "@/lib/schemas/media";
+import { shouldListMediaAlbum } from "@/lib/media/gallery-upload-server";
 import { batchGetGridPreviewUrls } from "@/lib/media/urls";
 import { shouldExposeAlbumCover } from "@/lib/media/albums";
 import { z } from "zod";
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     let query = (serviceClient as any)
       .from("media_albums")
-      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at")
+      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft")
       .eq("organization_id", orgId)
       .is("deleted_at", null)
       .order("sort_order", { ascending: true })
@@ -79,8 +80,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch albums" }, { status: 500 });
     }
 
+    const visibleAlbums = (albums || []).filter((album: Record<string, unknown>) => shouldListMediaAlbum({
+      is_upload_draft: album.is_upload_draft as boolean | null | undefined,
+      item_count: album.item_count as number | null | undefined,
+    }));
+
     // Attach cover image URLs for albums that have a cover_media_id
-    const coversToFetch = (albums || [])
+    const coversToFetch = visibleAlbums
       .filter((a: Record<string, unknown>) => a.cover_media_id)
       .map((a: Record<string, unknown>) => a.cover_media_id as string);
 
@@ -113,10 +119,14 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const enriched = (albums || []).map((a: Record<string, unknown>) => ({
-      ...a,
-      cover_url: a.cover_media_id ? (coverUrlMap.get(a.cover_media_id as string) || null) : null,
-    }));
+    const enriched = visibleAlbums.map((a: Record<string, unknown>) => {
+      const album: Record<string, unknown> = {
+        ...a,
+        cover_url: a.cover_media_id ? (coverUrlMap.get(a.cover_media_id as string) || null) : null,
+      };
+      delete album.is_upload_draft;
+      return album;
+    });
 
     return NextResponse.json({ data: enriched }, { headers: rateLimit.headers });
   } catch (error) {
@@ -147,7 +157,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await validateJson(request, createAlbumBodySchema);
-    const { orgId, name, description } = body;
+    const { orgId, name, description, isUploadDraft } = body;
 
     const membership = await getOrgMembership(supabase, user.id, orgId);
     if (!membership) {
@@ -183,9 +193,10 @@ export async function POST(request: NextRequest) {
         name,
         description: description || null,
         created_by: user.id,
+        is_upload_draft: isUploadDraft ?? false,
         sort_order: 0,
       })
-      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at")
+      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft")
       .single();
 
     if (error) {
@@ -193,7 +204,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create album" }, { status: 500 });
     }
 
-    return NextResponse.json({ ...album, cover_url: null }, { status: 201, headers: rateLimit.headers });
+    const responseAlbum: Record<string, unknown> = { ...album };
+    delete responseAlbum.is_upload_draft;
+    return NextResponse.json({ ...responseAlbum, cover_url: null }, { status: 201, headers: rateLimit.headers });
   } catch (error) {
     if (error instanceof ValidationError) return validationErrorResponse(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

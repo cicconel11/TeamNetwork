@@ -82,6 +82,7 @@ export const mediaIdsSchema = z
 export const createAlbumSchema = z.object({
   name: safeString(200, 2),
   description: optionalSafeString(2000),
+  isUploadDraft: z.boolean().optional(),
 });
 export type CreateAlbumForm = z.infer<typeof createAlbumSchema>;
 
