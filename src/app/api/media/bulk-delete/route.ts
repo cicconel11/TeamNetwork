@@ -6,6 +6,7 @@ import { validateJson, ValidationError, validationErrorResponse, baseSchemas } f
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
+import { softDeleteMediaItems } from "@/lib/media/delete-media";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,65 +66,22 @@ export async function POST(req: Request) {
   }
 
   const serviceClient = createServiceClient();
-  const now = new Date().toISOString();
+  const deletion = await softDeleteMediaItems(serviceClient, {
+    orgId,
+    mediaIds,
+    actor: { isAdmin, userId: user.id },
+    forbiddenMessage: "You can only bulk-delete your own media",
+  });
 
-  // If not admin, verify user uploaded ALL requested items
-  if (!isAdmin) {
-    const { data: items, error: fetchError } = await serviceClient
-      .from("media_items")
-      .select("id, uploaded_by")
-      .in("id", mediaIds)
-      .eq("organization_id", orgId)
-      .is("deleted_at", null);
-
-    if (fetchError) {
-      return NextResponse.json({ error: "Failed to verify ownership" }, { status: 500, headers: rateLimit.headers });
-    }
-
-    const allOwned = (items || []).length === mediaIds.length &&
-      (items || []).every((item) => item.uploaded_by === user.id);
-
-    if (!allOwned) {
-      return NextResponse.json(
-        { error: "You can only bulk-delete your own media" },
-        { status: 403, headers: rateLimit.headers },
-      );
-    }
-  }
-
-  const { error: clearCoverError } = await serviceClient
-    .from("media_albums")
-    .update({ cover_media_id: null, updated_at: now })
-    .eq("organization_id", orgId)
-    .in("cover_media_id", mediaIds)
-    .is("deleted_at", null);
-
-  if (clearCoverError) {
-    console.error("[media/bulk-delete] Failed to clear album covers:", clearCoverError);
+  if (!deletion.ok) {
     return NextResponse.json(
-      { error: "Failed to clear album covers" },
-      { status: 500, headers: rateLimit.headers },
+      { error: deletion.error },
+      { status: deletion.status, headers: rateLimit.headers },
     );
   }
 
-  // Soft delete
-  const { data, error: deleteError } = await serviceClient
-    .from("media_items")
-    .update({ deleted_at: now })
-    .eq("organization_id", orgId)
-    .in("id", mediaIds)
-    .is("deleted_at", null)
-    .select("id");
-
-  if (deleteError) {
-    console.error("[media/bulk-delete] Soft delete failed:", deleteError);
-    return NextResponse.json(
-      { error: "Failed to delete media items" },
-      { status: 500, headers: rateLimit.headers },
-    );
-  }
-
-  const deletedIds = (data ?? []).map((r) => r.id as string);
-
-  return NextResponse.json({ deleted: deletedIds.length, deletedIds }, { headers: rateLimit.headers });
+  return NextResponse.json(
+    { deleted: deletion.deletedIds.length, deletedIds: deletion.deletedIds },
+    { headers: rateLimit.headers },
+  );
 }

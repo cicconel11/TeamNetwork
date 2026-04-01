@@ -21,6 +21,8 @@ interface AlbumLike {
   item_count?: number;
 }
 
+export type AlbumDeleteMode = "album_only" | "album_and_media";
+
 export function canUploadDirectlyToAlbum(canUpload: boolean, canEdit: boolean): boolean {
   return canUpload && canEdit;
 }
@@ -48,6 +50,17 @@ export function getAlbumBulkDeleteEligibleIds<T extends Pick<AlbumItemLike, "id"
   return items
     .filter((item) => canDeleteMediaFromAlbumView(item, actor))
     .map((item) => item.id);
+}
+
+export function canDeleteAlbumAndMedia<T extends Pick<AlbumItemLike, "uploaded_by">>(
+  items: T[],
+  actor: AlbumDeleteActor,
+): boolean {
+  return items.every((item) => canDeleteMediaFromAlbumView(item, actor));
+}
+
+export function resolveAlbumDeleteMode(mode: string | null | undefined): AlbumDeleteMode {
+  return mode === "album_and_media" ? "album_and_media" : "album_only";
 }
 
 export function getAlbumCoverValidationError(candidate: AlbumCoverCandidate | null): string | null {

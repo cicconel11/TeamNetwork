@@ -10,7 +10,9 @@ import { CoverPickerModal } from "./CoverPickerModal";
 import type { MediaAlbum } from "./AlbumCard";
 import type { UploadFileEntry } from "@/hooks/useGalleryUpload";
 import {
+  canDeleteAlbumAndMedia,
   canDeleteMediaFromAlbumView,
+  type AlbumDeleteMode,
   canUploadDirectlyToAlbum,
   getAlbumBulkDeleteEligibleIds,
   getAlbumCoverPickerItems,
@@ -46,8 +48,8 @@ export function AlbumView({
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedItem, setSelectedItem] = useState<MediaItem | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingMode, setDeletingMode] = useState<AlbumDeleteMode | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -71,6 +73,7 @@ export function AlbumView({
   const canDirectUpload = canUploadDirectlyToAlbum(canUpload, canEdit);
   const deleteActor = { isAdmin, currentUserId };
   const eligibleDeleteIds = getAlbumBulkDeleteEligibleIds(items, deleteActor);
+  const canDeleteAlbumPhotos = canDeleteAlbumAndMedia(items, deleteActor);
   const coverPickerItems = getAlbumCoverPickerItems(items, isAdmin);
 
   const fetchItems = useCallback(
@@ -240,26 +243,23 @@ export function AlbumView({
     }
   };
 
-  const handleDeleteAlbum = async () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    setDeleting(true);
+  const handleDeleteAlbum = async (mode: AlbumDeleteMode) => {
+    setDeletingMode(mode);
     try {
+      const params = new URLSearchParams({ orgId, mode });
       const res = await fetch(
-        `/api/media/albums/${album.id}?orgId=${encodeURIComponent(orgId)}`,
+        `/api/media/albums/${album.id}?${params.toString()}`,
         { method: "DELETE" },
       );
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error || "Failed to delete album");
       }
+      setShowDeleteModal(false);
       onAlbumDeleted();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Delete failed");
-      setDeleting(false);
-      setConfirmDelete(false);
+      setDeletingMode(null);
     }
   };
 
@@ -479,13 +479,11 @@ export function AlbumView({
             )}
             {canEdit && (
               <Button
-                variant={confirmDelete ? "danger" : "ghost"}
+                variant="ghost"
                 size="sm"
-                isLoading={deleting}
-                onClick={handleDeleteAlbum}
-                onBlur={() => setConfirmDelete(false)}
+                onClick={() => setShowDeleteModal(true)}
               >
-                {confirmDelete ? "Confirm delete" : "Delete album"}
+                Delete album
               </Button>
             )}
           </div>
@@ -598,6 +596,78 @@ export function AlbumView({
           onClose={() => setShowCoverPicker(false)}
           saving={coverSaving}
         />
+      )}
+
+      {showDeleteModal && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+            onClick={() => {
+              if (!deletingMode) setShowDeleteModal(false);
+            }}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div
+              role="dialog"
+              aria-label="Delete album options"
+              className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] shadow-2xl"
+            >
+              <div className="border-b border-[var(--border)] px-5 py-4">
+                <h3 className="text-base font-semibold text-[var(--foreground)]">Delete album</h3>
+                <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+                  Choose whether to keep this album&apos;s photos in All Photos or remove them too.
+                </p>
+              </div>
+
+              <div className="space-y-3 px-5 py-4">
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAlbum("album_only")}
+                  disabled={deletingMode !== null}
+                  className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-left transition-colors hover:border-[var(--foreground)]/20 hover:bg-[var(--muted)] disabled:opacity-60"
+                >
+                  <p className="text-sm font-semibold text-[var(--foreground)]">Delete album only</p>
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                    The album goes away, but all {items.length} photo{items.length === 1 ? "" : "s"} stay in All Photos.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteAlbum("album_and_media")}
+                  disabled={deletingMode !== null || !canDeleteAlbumPhotos}
+                  className="w-full rounded-xl border border-red-200 bg-red-50/70 px-4 py-3 text-left transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:bg-red-950/20"
+                >
+                  <p className="text-sm font-semibold text-red-700 dark:text-red-300">Delete album and all photos</p>
+                  <p className="mt-1 text-xs text-red-600/90 dark:text-red-300/80">
+                    This removes the album and deletes its {items.length} photo{items.length === 1 ? "" : "s"} from All Photos.
+                  </p>
+                </button>
+
+                {!canDeleteAlbumPhotos && (
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Delete album and all photos is only available when you can delete every upload in this album.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-4">
+                <Button
+                  variant="secondary"
+                  onClick={() => setShowDeleteModal(false)}
+                  disabled={deletingMode !== null}
+                >
+                  Cancel
+                </Button>
+                {deletingMode && (
+                  <span className="self-center text-xs text-[var(--muted-foreground)]">
+                    Deleting...
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

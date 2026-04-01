@@ -6,7 +6,11 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse, baseSchemas, safeString } from "@/lib/security/validation";
 import { batchGetGridPreviewUrls } from "@/lib/media/urls";
-import { getAlbumCoverValidationError } from "@/lib/media/albums";
+import {
+  getAlbumCoverValidationError,
+  resolveAlbumDeleteMode,
+} from "@/lib/media/albums";
+import { softDeleteMediaItems } from "@/lib/media/delete-media";
 import { decodeCursor } from "@/lib/pagination/cursor";
 import { z } from "zod";
 
@@ -279,6 +283,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const { searchParams } = new URL(request.url);
     const orgId = searchParams.get("orgId");
     if (!orgId) return NextResponse.json({ error: "orgId required" }, { status: 400 });
+    const deleteMode = resolveAlbumDeleteMode(searchParams.get("mode"));
 
     const membership = await getOrgMembership(supabase, user.id, orgId);
     if (!membership) {
@@ -302,6 +307,31 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     if (!isAdmin && album.created_by !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (deleteMode === "album_and_media") {
+      const { data: albumItems, error: itemsError } = await serviceClient
+        .from("media_album_items")
+        .select("media_item_id")
+        .eq("album_id", albumId);
+
+      if (itemsError) {
+        console.error("[media/albums/[albumId]] Delete media lookup failed:", itemsError);
+        return NextResponse.json({ error: "Failed to load album media" }, { status: 500 });
+      }
+
+      const mediaIds = (albumItems ?? []).map((item) => item.media_item_id as string);
+      const deletion = await softDeleteMediaItems(serviceClient, {
+        orgId,
+        mediaIds,
+        actor: { isAdmin, userId: user.id },
+        forbiddenMessage:
+          "You can only delete all photos when you have permission to delete every upload in this album.",
+      });
+
+      if (!deletion.ok) {
+        return NextResponse.json({ error: deletion.error }, { status: deletion.status });
+      }
     }
 
     const { error: deleteError } = await (serviceClient as any)
