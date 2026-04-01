@@ -6,7 +6,10 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse, baseSchemas } from "@/lib/security/validation";
 import { createAlbumSchema } from "@/lib/schemas/media";
-import { shouldListMediaAlbum } from "@/lib/media/gallery-upload-server";
+import {
+  shouldListMediaAlbum,
+  withMediaAlbumsDraftColumnFallback,
+} from "@/lib/media/gallery-upload-server";
 import { batchGetGridPreviewUrls } from "@/lib/media/urls";
 import { shouldExposeAlbumCover } from "@/lib/media/albums";
 import { z } from "zod";
@@ -52,14 +55,18 @@ export async function GET(request: NextRequest) {
     }
 
     const serviceClient = createServiceClient();
+    const selectWithDraftColumn = "id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft";
+    const selectWithoutDraftColumn = "id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at";
 
-    let query = (serviceClient as any)
-      .from("media_albums")
-      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft")
-      .eq("organization_id", orgId)
-      .is("deleted_at", null)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: false });
+    const buildAlbumsQuery = (includeDraftColumn: boolean) => {
+      return (serviceClient as any)
+        .from("media_albums")
+        .select(includeDraftColumn ? selectWithDraftColumn : selectWithoutDraftColumn)
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+    };
 
     if (containsItemId) {
       // Filter to albums containing this media item
@@ -71,64 +78,47 @@ export async function GET(request: NextRequest) {
       if (albumIds.length === 0) {
         return NextResponse.json({ data: [] }, { headers: rateLimit.headers });
       }
-      query = query.in("id", albumIds);
+      // Reuse the same fallback path for both select shapes.
+      const { data: albums, error, usedDraftColumn } = await withMediaAlbumsDraftColumnFallback({
+        withDraftColumn: async () => buildAlbumsQuery(true).in("id", albumIds),
+        withoutDraftColumn: async () => buildAlbumsQuery(false).in("id", albumIds),
+      });
+
+      if (error) {
+        console.error("[media/albums] List failed:", error);
+        return NextResponse.json({ error: "Failed to fetch albums" }, { status: 500 });
+      }
+
+      const albumRows = normalizeAlbumRows(albums);
+      const visibleAlbums = usedDraftColumn
+        ? albumRows.filter((album) => shouldListMediaAlbum({
+          is_upload_draft: album.is_upload_draft as boolean | null | undefined,
+          item_count: album.item_count as number | null | undefined,
+        }))
+        : albumRows;
+
+      return enrichAlbumsWithCovers(serviceClient, visibleAlbums, rateLimit.headers);
     }
 
-    const { data: albums, error } = await query;
+    const { data: albums, error, usedDraftColumn } = await withMediaAlbumsDraftColumnFallback({
+      withDraftColumn: async () => buildAlbumsQuery(true),
+      withoutDraftColumn: async () => buildAlbumsQuery(false),
+    });
+
     if (error) {
       console.error("[media/albums] List failed:", error);
       return NextResponse.json({ error: "Failed to fetch albums" }, { status: 500 });
     }
 
-    const visibleAlbums = (albums || []).filter((album: Record<string, unknown>) => shouldListMediaAlbum({
-      is_upload_draft: album.is_upload_draft as boolean | null | undefined,
-      item_count: album.item_count as number | null | undefined,
-    }));
+    const albumRows = normalizeAlbumRows(albums);
+    const visibleAlbums = usedDraftColumn
+      ? albumRows.filter((album) => shouldListMediaAlbum({
+        is_upload_draft: album.is_upload_draft as boolean | null | undefined,
+        item_count: album.item_count as number | null | undefined,
+      }))
+      : albumRows;
 
-    // Attach cover image URLs for albums that have a cover_media_id
-    const coversToFetch = visibleAlbums
-      .filter((a: Record<string, unknown>) => a.cover_media_id)
-      .map((a: Record<string, unknown>) => a.cover_media_id as string);
-
-    const coverUrlMap = new Map<string, string>();
-    if (coversToFetch.length > 0) {
-      const { data: coverItems } = await serviceClient
-        .from("media_items")
-        .select("id, storage_path, mime_type, media_type, status")
-        .in("id", coversToFetch)
-        .is("deleted_at", null);
-
-      if (coverItems && coverItems.length > 0) {
-        const urlMap = await batchGetGridPreviewUrls(
-          serviceClient,
-          coverItems
-            .filter((ci) => shouldExposeAlbumCover(ci))
-            .filter((ci) => ci.storage_path)
-            .map((ci) => ({
-              id: ci.id,
-              storage_path: ci.storage_path as string,
-              mime_type: (ci.mime_type as string) || "application/octet-stream",
-              media_type: ci.media_type as "image" | "video",
-            })),
-        );
-        for (const [id, urls] of urlMap) {
-          if (urls.thumbnailUrl) {
-            coverUrlMap.set(id, urls.thumbnailUrl);
-          }
-        }
-      }
-    }
-
-    const enriched = visibleAlbums.map((a: Record<string, unknown>) => {
-      const album: Record<string, unknown> = {
-        ...a,
-        cover_url: a.cover_media_id ? (coverUrlMap.get(a.cover_media_id as string) || null) : null,
-      };
-      delete album.is_upload_draft;
-      return album;
-    });
-
-    return NextResponse.json({ data: enriched }, { headers: rateLimit.headers });
+    return enrichAlbumsWithCovers(serviceClient, visibleAlbums, rateLimit.headers);
   } catch (error) {
     if (error instanceof ValidationError) return validationErrorResponse(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
@@ -186,29 +176,102 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to create album" }, { status: 500 });
     }
 
-    const { data: album, error } = await (serviceClient as any)
-      .from("media_albums")
-      .insert({
-        organization_id: orgId,
-        name,
-        description: description || null,
-        created_by: user.id,
-        is_upload_draft: isUploadDraft ?? false,
-        sort_order: 0,
-      })
-      .select("id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft")
-      .single();
+    const selectWithDraftColumn = "id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at, is_upload_draft";
+    const selectWithoutDraftColumn = "id, name, description, cover_media_id, item_count, sort_order, created_by, created_at, updated_at";
+    const baseInsert = {
+      organization_id: orgId,
+      name,
+      description: description || null,
+      created_by: user.id,
+      sort_order: 0,
+    };
+
+    const { data: album, error } = await withMediaAlbumsDraftColumnFallback({
+      withDraftColumn: async () => await (serviceClient as any)
+        .from("media_albums")
+        .insert({
+          ...baseInsert,
+          is_upload_draft: isUploadDraft ?? false,
+        })
+        .select(selectWithDraftColumn)
+        .single(),
+      withoutDraftColumn: async () => await (serviceClient as any)
+        .from("media_albums")
+        .insert(baseInsert)
+        .select(selectWithoutDraftColumn)
+        .single(),
+    });
 
     if (error) {
       console.error("[media/albums] Create failed:", error);
       return NextResponse.json({ error: "Failed to create album" }, { status: 500 });
     }
 
-    const responseAlbum: Record<string, unknown> = { ...album };
+    const albumRecord = normalizeSingleAlbumRow(album);
+    const responseAlbum: Record<string, unknown> = { ...albumRecord };
     delete responseAlbum.is_upload_draft;
     return NextResponse.json({ ...responseAlbum, cover_url: null }, { status: 201, headers: rateLimit.headers });
   } catch (error) {
     if (error instanceof ValidationError) return validationErrorResponse(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
+}
+
+function normalizeAlbumRows(data: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(data)) return [];
+  return data.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object");
+}
+
+function normalizeSingleAlbumRow(data: unknown): Record<string, unknown> {
+  return data && typeof data === "object" ? data as Record<string, unknown> : {};
+}
+
+async function enrichAlbumsWithCovers(
+  serviceClient: ReturnType<typeof createServiceClient>,
+  albums: Record<string, unknown>[],
+  headers: HeadersInit,
+) {
+  const coversToFetch = albums
+    .filter((album) => album.cover_media_id)
+    .map((album) => album.cover_media_id as string);
+
+  const coverUrlMap = new Map<string, string>();
+  if (coversToFetch.length > 0) {
+    const { data: coverItems } = await serviceClient
+      .from("media_items")
+      .select("id, storage_path, mime_type, media_type, status")
+      .in("id", coversToFetch)
+      .is("deleted_at", null);
+
+    if (coverItems && coverItems.length > 0) {
+      const urlMap = await batchGetGridPreviewUrls(
+        serviceClient,
+        coverItems
+          .filter((coverItem) => shouldExposeAlbumCover(coverItem))
+          .filter((coverItem) => coverItem.storage_path)
+          .map((coverItem) => ({
+            id: coverItem.id,
+            storage_path: coverItem.storage_path as string,
+            mime_type: (coverItem.mime_type as string) || "application/octet-stream",
+            media_type: coverItem.media_type as "image" | "video",
+          })),
+      );
+      for (const [id, urls] of urlMap) {
+        if (urls.thumbnailUrl) {
+          coverUrlMap.set(id, urls.thumbnailUrl);
+        }
+      }
+    }
+  }
+
+  const enriched = albums.map((album) => {
+    const responseAlbum: Record<string, unknown> = {
+      ...album,
+      cover_url: album.cover_media_id ? (coverUrlMap.get(album.cover_media_id as string) || null) : null,
+    };
+    delete responseAlbum.is_upload_draft;
+    return responseAlbum;
+  });
+
+  return NextResponse.json({ data: enriched }, { headers });
 }

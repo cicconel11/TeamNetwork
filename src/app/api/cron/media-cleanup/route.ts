@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { isStaleEmptyUploadDraftAlbum } from "@/lib/media/gallery-upload-server";
+import {
+  isMissingMediaAlbumsDraftColumnError,
+  isStaleEmptyUploadDraftAlbum,
+} from "@/lib/media/gallery-upload-server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { validateCronAuth } from "@/lib/security/cron-auth";
 
@@ -69,6 +72,14 @@ export async function GET(request: Request) {
       .limit(BATCH_SIZE);
 
     if (draftQueryError) {
+      if (isMissingMediaAlbumsDraftColumnError(draftQueryError)) {
+        return NextResponse.json({
+          success: true,
+          cleanedUp: cleanedUpUploads,
+          cleanedUpUploads,
+          cleanedUpDraftAlbums: 0,
+        });
+      }
       console.error("[cron/media-cleanup] Draft album query error:", draftQueryError);
       return NextResponse.json({ error: "Failed to query stale draft albums" }, { status: 500 });
     }

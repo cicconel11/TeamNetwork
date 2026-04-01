@@ -30,6 +30,10 @@ import { AlbumView } from "./AlbumView";
 import { AlbumPickerModal } from "./AlbumPickerModal";
 import type { MediaAlbum } from "./AlbumCard";
 import type { UploadFileEntry } from "@/hooks/useGalleryUpload";
+import {
+  buildOptimisticMediaItem,
+  mergeUploadTags,
+} from "@/lib/media/gallery-upload-client";
 
 interface MediaGalleryProps {
   orgId: string;
@@ -352,20 +356,10 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
   // Optimistic insertion when a file finishes uploading
   const handleFileComplete = useCallback(
     (entry: UploadFileEntry, mediaId: string) => {
-      const isVideo = entry.mimeType.startsWith("video/");
-      const optimisticItem: MediaItem = {
-        id: mediaId,
-        title: entry.title || entry.fileName,
-        description: entry.description || null,
-        media_type: isVideo ? "video" : "image",
-        url: entry.previewUrl,
-        thumbnail_url: isVideo ? null : entry.previewUrl,
-        tags: entry.tags,
-        taken_at: entry.takenAt ? new Date(entry.takenAt).toISOString() : null,
-        created_at: new Date().toISOString(),
-        uploaded_by: currentUserId || "",
-        status: isAdmin ? "approved" : "pending",
-      };
+      const optimisticItem: MediaItem = buildOptimisticMediaItem(entry, mediaId, {
+        currentUserId,
+        isAdmin,
+      });
 
       // Only add to items list if we're on the photos tab
       if (view === "photos") {
@@ -373,22 +367,8 @@ export function MediaGallery({ orgId, canUpload, isAdmin, currentUserId }: Media
       }
 
       if (entry.tags.length > 0) {
-        setAvailableTags((prev) => {
-          const set = new Set(prev);
-          entry.tags.forEach((t) => set.add(t));
-          return Array.from(set).sort();
-        });
+        setAvailableTags((prev) => mergeUploadTags(prev, entry.tags));
       }
-
-      fetch(`/api/media/${mediaId}`)
-        .then((res) => (res.ok ? res.json() : null))
-        .then((real: MediaItem | null) => {
-          if (!real) return;
-          setItems((prev) =>
-            prev.map((i) => (i.id === mediaId ? { ...i, ...real } : i)),
-          );
-        })
-        .catch(() => {});
     },
     [currentUserId, isAdmin, view],
   );
