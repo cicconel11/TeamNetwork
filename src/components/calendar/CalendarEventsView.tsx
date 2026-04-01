@@ -7,6 +7,7 @@ import { GoogleCalendarBanner } from "@/components/events";
 import { LocalDateMonth, LocalDateDay, LocalTime } from "@/components/ui";
 import { calendarEventDetailPath, calendarEventsPath, calendarNewEventPath, type CalendarEventTimeframe } from "@/lib/calendar/routes";
 import { resolveEventActionLabel, resolveEventLabel } from "@/lib/events/labels";
+import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
 type CalendarEventsViewProps = {
@@ -25,7 +26,6 @@ type CalendarEventsViewProps = {
   };
 };
 
-const EVENT_TYPES = ["general", "game", "meeting", "social", "fundraiser", "philanthropy"];
 
 export async function CalendarEventsView({
   orgId,
@@ -90,20 +90,20 @@ export async function CalendarEventsView({
           {tEvents("pastLabel")}
         </Link>
         <div className="w-px bg-border mx-2" />
-        {EVENT_TYPES.map((type) => (
+        {EVENT_TYPE_OPTIONS.map((option) => (
           <Link
-            key={type}
+            key={option.value}
             href={calendarEventsPath(orgSlug, {
               timeframe: filters.timeframe,
-              type: type === filters.type ? null : type,
+              type: option.value === filters.type ? null : option.value,
             })}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors capitalize ${
-              filters.type === type
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              filters.type === option.value
                 ? "bg-org-primary text-white"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
-            {type}
+            {tEvents(option.value)}
           </Link>
         ))}
       </div>

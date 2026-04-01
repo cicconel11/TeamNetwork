@@ -17,7 +17,15 @@ export interface SyncResult {
 }
 
 // Event types that can be synced
-export type EventType = "general" | "game" | "meeting" | "social" | "fundraiser" | "philanthropy";
+export type EventType =
+    | "general"
+    | "game"
+    | "meeting"
+    | "social"
+    | "fundraiser"
+    | "philanthropy"
+    | "practice"
+    | "workout";
 
 // Sync operation types
 export type SyncOperation = "create" | "update" | "delete";
@@ -206,6 +214,8 @@ export function isUserEligibleForSync(
         sync_social?: boolean | null;
         sync_fundraiser?: boolean | null;
         sync_philanthropy?: boolean | null;
+        sync_practice?: boolean | null;
+        sync_workout?: boolean | null;
     } | null,
     userRole: "member" | "active_member" | "alumni" | "admin" | null
 ): boolean {
@@ -270,6 +280,10 @@ export function isUserEligibleForSync(
             return preferences.sync_fundraiser !== false;
         case "philanthropy":
             return preferences.sync_philanthropy !== false;
+        case "practice":
+            return preferences.sync_practice !== false;
+        case "workout":
+            return preferences.sync_workout !== false;
         default:
             // Unknown event type, default to syncing
             return true;

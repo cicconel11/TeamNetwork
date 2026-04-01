@@ -12,6 +12,8 @@ export interface SyncPreferences {
   sync_social: boolean;
   sync_fundraiser: boolean;
   sync_philanthropy: boolean;
+  sync_practice: boolean;
+  sync_workout: boolean;
 }
 
 interface CalendarConnection {
@@ -47,22 +49,39 @@ interface GoogleCalendarSyncPanelProps {
   onPreferenceChange: (prefs: SyncPreferences) => Promise<void>;
 }
 
-const EVENT_TYPE_KEYS: (keyof SyncPreferences)[] = [
-  "sync_general",
-  "sync_game",
-  "sync_meeting",
-  "sync_social",
-  "sync_fundraiser",
-  "sync_philanthropy",
-];
-
-const EVENT_TYPE_I18N_MAP: Record<keyof SyncPreferences, string> = {
-  sync_general: "general",
-  sync_game: "game",
-  sync_meeting: "meeting",
-  sync_social: "social",
-  sync_fundraiser: "fundraiser",
-  sync_philanthropy: "philanthropy",
+const EVENT_TYPE_LABELS: Record<keyof SyncPreferences, { label: string; description: string }> = {
+  sync_general: {
+    label: "General Events",
+    description: "General organization events and activities",
+  },
+  sync_game: {
+    label: "Games",
+    description: "Sports games and competitions",
+  },
+  sync_meeting: {
+    label: "Meetings",
+    description: "Chapter meetings and gatherings",
+  },
+  sync_social: {
+    label: "Social Events",
+    description: "Social gatherings and parties",
+  },
+  sync_fundraiser: {
+    label: "Fundraisers",
+    description: "Fundraising events and campaigns",
+  },
+  sync_philanthropy: {
+    label: "Philanthropy",
+    description: "Community service and philanthropy events",
+  },
+  sync_practice: {
+    label: "Practices",
+    description: "Team practices and training sessions",
+  },
+  sync_workout: {
+    label: "Workouts",
+    description: "Workout and fitness sessions",
+  },
 };
 
 function CalendarIcon() {
@@ -77,9 +96,22 @@ function CalendarIcon() {
   );
 }
 
-function formatLastSync(lastSyncAt: string | null, neverLabel: string): string {
-  if (!lastSyncAt) return neverLabel;
+function formatLastSync(lastSyncAt: string | null): string {
+  if (!lastSyncAt) return "Never";
   return new Date(lastSyncAt).toLocaleString();
+}
+
+function getStatusBadge(status: CalendarConnection["status"]) {
+  switch (status) {
+    case "connected":
+      return <Badge variant="success">Connected</Badge>;
+    case "disconnected":
+      return <Badge variant="warning">Disconnected</Badge>;
+    case "error":
+      return <Badge variant="error">Error</Badge>;
+    default:
+      return <Badge variant="muted">Unknown</Badge>;
+  }
 }
 
 function Spinner() {
@@ -126,10 +158,7 @@ export function GoogleCalendarSyncPanel({
   onTargetCalendarChange,
   onPreferenceChange,
 }: GoogleCalendarSyncPanelProps) {
-  const tGCal = useTranslations("googleCalendar");
-  const tCommon = useTranslations("common");
-  const tSchedules = useTranslations("schedules");
-
+  const tEvents = useTranslations("events");
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [targetError, setTargetError] = useState<string | null>(null);
@@ -144,12 +173,12 @@ export function GoogleCalendarSyncPanel({
   }, [preferences]);
 
   const handleDisconnect = async () => {
-    if (!confirm(tGCal("disconnectConfirm"))) return;
+    if (!confirm("Disconnect your Google Calendar? Events already synced will remain.")) return;
     setIsDisconnecting(true);
     try {
       await onDisconnect();
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : tGCal("failedDisconnect"), "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : "Failed to disconnect", "error", { duration: 5000 });
     } finally {
       setIsDisconnecting(false);
     }
@@ -161,7 +190,7 @@ export function GoogleCalendarSyncPanel({
       const result = await onSync();
       showFeedback(result.message, "success", { duration: 5000 });
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : tGCal("failedSync"), "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : "Failed to sync", "error", { duration: 5000 });
     } finally {
       setIsSyncing(false);
     }
@@ -198,7 +227,7 @@ export function GoogleCalendarSyncPanel({
 
   // Build calendar dropdown options
   const calendarOptions = calendarsLoading
-    ? [{ value: targetCalendarId, label: tSchedules("loadingCalendars") }]
+    ? [{ value: targetCalendarId, label: "Loading calendars..." }]
     : calendars.length > 0
     ? calendars.map((cal) => ({
         value: cal.id,
@@ -242,39 +271,39 @@ export function GoogleCalendarSyncPanel({
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">
           <CalendarIcon />
-          <p className="font-medium text-foreground">{tGCal("title")}</p>
+          <p className="font-medium text-foreground">Google Calendar Sync</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          {tGCal("description", { orgName })}
+          Automatically sync {orgName}&apos;s events to your personal Google Calendar.
+          Games, meetings, socials, and more — always up to date.
         </p>
 
         {connection?.status === "disconnected" && (
-          <InlineBanner variant="warning">{tGCal("disconnected")}</InlineBanner>
+          <InlineBanner variant="warning">Your Google Calendar connection has been disconnected. Please reconnect to continue syncing events.</InlineBanner>
         )}
         {connection?.status === "error" && (
-          <InlineBanner variant="error">{tGCal("errorConnection")}</InlineBanner>
+          <InlineBanner variant="error">There was an error with your Google Calendar connection. Please try reconnecting.</InlineBanner>
         )}
 
         <Button onClick={onConnect}>
-          {tGCal("connect")}
+          Connect Google Calendar
         </Button>
       </Card>
     );
   }
 
   // --- Connected state ---
-  function getStatusBadge(status: CalendarConnection["status"]) {
-    switch (status) {
-      case "connected":
-        return <Badge variant="success">{tCommon("connected")}</Badge>;
-      case "disconnected":
-        return <Badge variant="warning">{tCommon("disconnect")}</Badge>;
-      case "error":
-        return <Badge variant="error">{tCommon("error")}</Badge>;
-      default:
-        return <Badge variant="muted">Unknown</Badge>;
-    }
-  }
+  const eventTypeKeys = Object.keys(EVENT_TYPE_LABELS) as (keyof SyncPreferences)[];
+  const eventTypeLabels: Record<keyof SyncPreferences, string> = {
+    sync_general: EVENT_TYPE_LABELS.sync_general.label,
+    sync_game: tEvents("game"),
+    sync_meeting: tEvents("meeting"),
+    sync_social: tEvents("social"),
+    sync_fundraiser: tEvents("fundraiser"),
+    sync_philanthropy: tEvents("philanthropy"),
+    sync_practice: tEvents("practice"),
+    sync_workout: tEvents("workout"),
+  };
 
   return (
     <Card className="divide-y divide-border/60">
@@ -283,28 +312,28 @@ export function GoogleCalendarSyncPanel({
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <CalendarIcon />
-            <p className="font-medium text-foreground">{tGCal("title")}</p>
+            <p className="font-medium text-foreground">Google Calendar Sync</p>
           </div>
           {connection && getStatusBadge(connection.status)}
         </div>
 
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{tGCal("account")}</span>
+            <span className="text-muted-foreground">Account:</span>
             <span className="font-medium text-foreground">{connection?.googleEmail}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{tGCal("lastSynced")}</span>
-            <span className="text-foreground">{formatLastSync(connection?.lastSyncAt ?? null, tCommon("never"))}</span>
+            <span className="text-muted-foreground">Last synced:</span>
+            <span className="text-foreground">{formatLastSync(connection?.lastSyncAt ?? null)}</span>
           </div>
         </div>
 
         <p className="text-sm text-muted-foreground">
-          {tGCal("syncDesc", { orgName })}
+          {orgName}&apos;s events sync to your Google Calendar automatically.
         </p>
 
         {connection?.status === "error" && (
-          <InlineBanner variant="error">{tGCal("errorConnection")}</InlineBanner>
+          <InlineBanner variant="error">There was an error with your Google Calendar connection. Please try reconnecting.</InlineBanner>
         )}
 
       </div>
@@ -314,16 +343,16 @@ export function GoogleCalendarSyncPanel({
         {reconnectRequired ? (
           <>
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              {tGCal("reconnectDesc")}
+              Reconnect your Google account to enable calendar selection. Your sync will continue using your primary calendar.
             </p>
             <Button variant="secondary" size="sm" onClick={onReconnect}>
-              {tGCal("reconnect")}
+              Reconnect Google Account
             </Button>
           </>
         ) : (
           <>
             <Select
-              label={tGCal("syncEventsTo")}
+              label="Sync events to"
               options={calendarOptions}
               value={targetCalendarId}
               onChange={(e) => handleTargetCalendarChange(e.target.value)}
@@ -353,9 +382,9 @@ export function GoogleCalendarSyncPanel({
         ) : (
           <>
             <div>
-              <p className="font-medium text-sm text-foreground">{tGCal("eventTypes")}</p>
+              <p className="font-medium text-sm text-foreground">Event types</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {tGCal("eventTypesDesc")}
+                Choose which event types to include in your calendar.
               </p>
             </div>
 
@@ -364,9 +393,7 @@ export function GoogleCalendarSyncPanel({
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
-              {EVENT_TYPE_KEYS.map((key) => {
-                const typeKey = EVENT_TYPE_I18N_MAP[key];
-                const label = tGCal(`types.${typeKey}.label` as Parameters<typeof tGCal>[0]);
+              {eventTypeKeys.map((key) => {
                 const isChecked = localPreferences[key];
                 const isSaving = savingKey === key;
 
@@ -393,14 +420,14 @@ export function GoogleCalendarSyncPanel({
                         </div>
                       )}
                     </div>
-                    <span className="text-sm text-foreground">{label}</span>
+                    <span className="text-sm text-foreground">{eventTypeLabels[key]}</span>
                   </label>
                 );
               })}
             </div>
 
             <p className="text-xs text-muted-foreground">
-              {tGCal("autoSaved")}
+              Changes are saved automatically.
             </p>
           </>
         )}
@@ -416,7 +443,7 @@ export function GoogleCalendarSyncPanel({
           isLoading={isSyncing}
           disabled={isDisconnecting}
         >
-          {tCommon("syncNow")}
+          Sync Now
         </Button>
         <button
           type="button"
@@ -424,7 +451,7 @@ export function GoogleCalendarSyncPanel({
           disabled={isSyncing || isDisconnecting}
           className="text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
         >
-          {isDisconnecting ? tCommon("disconnecting") : tCommon("disconnect")}
+          {isDisconnecting ? "Disconnecting..." : "Disconnect"}
         </button>
         </div>
       </div>

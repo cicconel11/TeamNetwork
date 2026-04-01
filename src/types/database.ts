@@ -105,6 +105,7 @@ export type Database = {
           rag_chunk_count: number | null
           rag_error: string | null
           rag_top_similarity: number | null
+          stage_timings: Json | null
           thread_id: string | null
           tool_calls: Json | null
           user_id: string
@@ -130,6 +131,7 @@ export type Database = {
           rag_chunk_count?: number | null
           rag_error?: string | null
           rag_top_similarity?: number | null
+          stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id: string
@@ -155,6 +157,7 @@ export type Database = {
           rag_chunk_count?: number | null
           rag_error?: string | null
           rag_top_similarity?: number | null
+          stage_timings?: Json | null
           thread_id?: string | null
           tool_calls?: Json | null
           user_id?: string
@@ -1032,7 +1035,9 @@ export type Database = {
           sync_general: boolean | null
           sync_meeting: boolean | null
           sync_philanthropy: boolean | null
+          sync_practice: boolean | null
           sync_social: boolean | null
+          sync_workout: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -1045,7 +1050,9 @@ export type Database = {
           sync_general?: boolean | null
           sync_meeting?: boolean | null
           sync_philanthropy?: boolean | null
+          sync_practice?: boolean | null
           sync_social?: boolean | null
+          sync_workout?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -1058,7 +1065,9 @@ export type Database = {
           sync_general?: boolean | null
           sync_meeting?: boolean | null
           sync_philanthropy?: boolean | null
+          sync_practice?: boolean | null
           sync_social?: boolean | null
+          sync_workout?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
@@ -5866,11 +5875,11 @@ export type Database = {
         | "general"
         | "philanthropy"
         | "game"
-        | "practice"
         | "meeting"
         | "social"
-        | "workout"
         | "fundraiser"
+        | "practice"
+        | "workout"
       media_entity_type: "feed_post" | "discussion_thread" | "job_posting"
       media_status: "uploading" | "pending" | "approved" | "rejected"
       media_upload_status: "pending" | "ready" | "failed" | "orphaned"
@@ -6043,6 +6052,8 @@ export const Constants = {
         "meeting",
         "social",
         "fundraiser",
+        "practice",
+        "workout",
       ],
       media_entity_type: ["feed_post", "discussion_thread", "job_posting"],
       media_status: ["uploading", "pending", "approved", "rejected"],

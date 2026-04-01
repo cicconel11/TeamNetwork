@@ -52,6 +52,8 @@ const DEFAULT_PREFERENCES: SyncPreferences = {
   sync_social: true,
   sync_fundraiser: true,
   sync_philanthropy: true,
+  sync_practice: true,
+  sync_workout: true,
 };
 
 export function useGoogleCalendarSync({

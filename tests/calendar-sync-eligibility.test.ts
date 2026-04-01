@@ -27,6 +27,8 @@ function allPrefsEnabled() {
     sync_social: true,
     sync_fundraiser: true,
     sync_philanthropy: true,
+    sync_practice: true,
+    sync_workout: true,
   };
 }
 
@@ -263,7 +265,7 @@ test("enabled event type includes user", () => {
 });
 
 test("each event type respects its preference", () => {
-  const types = ["general", "game", "meeting", "social", "fundraiser", "philanthropy"] as const;
+  const types = ["general", "game", "meeting", "social", "fundraiser", "philanthropy", "practice", "workout"] as const;
   for (const eventType of types) {
     // Enabled
     const enabledResult = isUserEligibleForSync(

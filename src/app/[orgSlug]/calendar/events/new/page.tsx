@@ -12,6 +12,7 @@ import { newEventSchema, type NewEventForm } from "@/lib/schemas/content";
 import { expandRecurrence, type RecurrenceRule } from "@/lib/events/recurrence";
 import { createRecurringEvents } from "@/lib/events/recurring-operations";
 import { resolveEventActionLabel } from "@/lib/events/labels";
+import { EVENT_TYPE_OPTIONS } from "@/lib/events/event-type-options";
 import { calendarEventsPath } from "@/lib/calendar/routes";
 import { localToUtcIso, resolveOrgTimezone, getLocalWeekday, getLocalDayOfMonth } from "@/lib/utils/timezone";
 import type { NavConfig } from "@/lib/navigation/nav-items";
@@ -36,6 +37,7 @@ export default function NewCalendarEventPage() {
   const [userOptions, setUserOptions] = useState<TargetUser[]>([]);
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
   const tNav = useTranslations("nav.items");
+  const tEvents = useTranslations("events");
   const locale = useLocale();
   const t = (key: string) => tNav(key);
   const singularLabel = resolveEventActionLabel(navConfig, "", t, locale).trim();
@@ -484,14 +486,7 @@ export default function NewCalendarEventPage() {
           <Select
             label="Event Type"
             error={errors.event_type?.message}
-            options={[
-              { value: "general", label: "General" },
-              { value: "game", label: "Game" },
-              { value: "meeting", label: "Meeting" },
-              { value: "social", label: "Social" },
-              { value: "fundraiser", label: "Fundraiser" },
-              { value: "philanthropy", label: "Philanthropy" },
-            ]}
+            options={EVENT_TYPE_OPTIONS.map((o) => ({ value: o.value, label: tEvents(o.value) }))}
             {...register("event_type")}
           />
 
