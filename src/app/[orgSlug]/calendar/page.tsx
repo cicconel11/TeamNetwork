@@ -131,6 +131,7 @@ export default async function CalendarPage({ params, searchParams }: CalendarPag
               isAdmin={orgCtx.isAdmin}
               mySchedules={mySchedules}
               allSchedules={allSchedules}
+              timeZone={orgTimeZone}
             />
           ) : currentView === "all" ? (
             <UnifiedEventFeed

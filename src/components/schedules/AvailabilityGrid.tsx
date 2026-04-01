@@ -31,7 +31,7 @@ type CalendarEventSummary = {
   end_at: string | null;
   all_day: boolean | null;
   users?: { name: string | null; email: string | null } | null;
-  origin?: "calendar" | "schedule";
+  origin?: "calendar" | "schedule" | "org";
 };
 
 type PopoverState = {
@@ -286,7 +286,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: 
     });
 
     calendarEvents.forEach((event) => {
-      const isOrgEvent = event.origin === "schedule";
+      const isOrgEvent = event.origin === "schedule" || event.origin === "org";
       const userId = isOrgEvent ? `org:${event.id}` : event.user_id;
       const fallbackName = mode === "personal" ? "You" : "Unknown";
       const memberName = isOrgEvent

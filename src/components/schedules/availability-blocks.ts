@@ -13,7 +13,7 @@ export type EventBlock = {
   memberName: string;
   userId: string;
   isOrg: boolean;
-  origin: "calendar" | "schedule" | "academic";
+  origin: "calendar" | "schedule" | "academic" | "org";
 };
 
 export type PositionedBlock = EventBlock & {
@@ -43,7 +43,7 @@ type CalendarEventInput = {
   end_at: string | null;
   all_day: boolean | null;
   users?: { name: string | null; email: string | null } | null;
-  origin?: "calendar" | "schedule";
+  origin?: "calendar" | "schedule" | "org";
 };
 
 const GRID_START_HOUR = 6;
@@ -150,7 +150,7 @@ export function computeEventBlocks(
 
   // Process calendar events
   calendarEvents.forEach((event) => {
-    const isOrgEvent = event.origin === "schedule";
+    const isOrgEvent = event.origin === "schedule" || event.origin === "org";
     const memberName = isOrgEvent
       ? "Org schedule"
       : event.users?.name || event.users?.email || "You";
@@ -173,7 +173,7 @@ export function computeEventBlocks(
         memberName,
         userId: isOrgEvent ? `org:${event.id}` : event.user_id,
         isOrg: isOrgEvent,
-        origin: isOrgEvent ? "schedule" : "calendar",
+        origin: isOrgEvent ? (event.origin as "schedule" | "org") : "calendar",
       });
     });
   });

@@ -227,6 +227,29 @@ describe("computeEventBlocks", () => {
     assert.equal(blocks[0].memberName, "Org schedule");
   });
 
+  it("handles org-origin events (from events table)", () => {
+    const calendarEvents = [
+      {
+        id: "org2",
+        user_id: "u1",
+        title: "Team Meeting",
+        start_at: "2026-01-06T10:00:00",
+        end_at: "2026-01-06T11:00:00",
+        all_day: false,
+        users: null,
+        origin: "org" as const,
+      },
+    ];
+
+    const result = computeEventBlocks([], calendarEvents, weekDays);
+    const blocks = result.get("2026-01-06")!;
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0].isOrg, true);
+    assert.equal(blocks[0].origin, "org");
+    assert.equal(blocks[0].memberName, "Org schedule");
+    assert.equal(blocks[0].userId, "org:org2");
+  });
+
   it("uses org timezone when placing timed calendar blocks", () => {
     const calendarEvents = [
       {

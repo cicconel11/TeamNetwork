@@ -8,6 +8,7 @@ import {
   CUSTOMIZATION_TIMEZONE_OPTION_KEYS,
   getCustomizationTimezoneOptions,
 } from "../src/lib/i18n/customization-timezones.ts";
+import { EVENT_TYPE_OPTIONS } from "../src/lib/events/event-type-options.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -80,6 +81,20 @@ test("all supported locales provide the customization translations used by the p
         getNestedValue(messages, "customization.timezone.description"),
         getNestedValue(englishMessages, "customization.timezone.description"),
         `${locale} is still falling back to English for customization.timezone.description`,
+      );
+    }
+  }
+});
+
+test("all supported locales provide event type translations for calendar forms", () => {
+  for (const locale of SUPPORTED_LOCALES) {
+    const messages = readJson(`messages/${locale}.json`);
+
+    for (const option of EVENT_TYPE_OPTIONS) {
+      assert.notEqual(
+        getNestedValue(messages, `events.${option.value}`),
+        undefined,
+        `${locale} is missing events.${option.value}`,
       );
     }
   }
