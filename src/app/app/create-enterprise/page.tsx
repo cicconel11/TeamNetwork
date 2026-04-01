@@ -12,7 +12,7 @@ import {
   ENTERPRISE_SEAT_PRICING,
   ALUMNI_BUCKET_PRICING,
 } from "@/types/enterprise";
-import { isSalesLed } from "@/lib/enterprise/pricing";
+import { isSalesLed, getFreeSubOrgCount } from "@/lib/enterprise/pricing";
 
 const MIN_SEATS = 1;
 const MAX_SEATS = 100;
@@ -78,9 +78,11 @@ const ALUMNI_BUCKET_OPTIONS = [
 
 function calculateSeatPrice(
   quantity: number,
+  bucketQuantity: number,
 ): { totalCentsYearly: number; billableOrgs: number; freeOrgs: number } {
-  const freeOrgs = Math.min(quantity, ENTERPRISE_SEAT_PRICING.freeSubOrgs);
-  const billableOrgs = Math.max(0, quantity - ENTERPRISE_SEAT_PRICING.freeSubOrgs);
+  const freeCount = getFreeSubOrgCount(bucketQuantity);
+  const freeOrgs = Math.min(quantity, freeCount);
+  const billableOrgs = Math.max(0, quantity - freeCount);
   const totalCentsYearly = billableOrgs * ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly;
 
   return { totalCentsYearly, billableOrgs, freeOrgs };
@@ -206,7 +208,7 @@ export default function CreateEnterprisePage() {
     setValue("seatQuantity", newValue);
   };
 
-  const seatPricing = calculateSeatPrice(seatQuantity);
+  const seatPricing = calculateSeatPrice(seatQuantity, alumniBucketQuantity);
   const selectedBucket = ALUMNI_BUCKET_OPTIONS.find((opt) => opt.buckets === alumniBucketQuantity);
   const isContactSales = isSalesLed(alumniBucketQuantity);
 
@@ -375,7 +377,7 @@ export default function CreateEnterprisePage() {
                     {/* Free tier callout */}
                     <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                       <p className="text-sm text-green-800 dark:text-green-200">
-                        <span className="font-semibold">First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} organizations are FREE!</span>
+                        <span className="font-semibold">First {getFreeSubOrgCount(alumniBucketQuantity)} organizations are FREE! (3 per alumni bucket)</span>
                         <span className="block mt-1 text-green-700 dark:text-green-300">
                           ${(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100).toFixed(0)}/year for each additional organization
                         </span>
@@ -419,13 +421,13 @@ export default function CreateEnterprisePage() {
                         </button>
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {seatQuantity <= ENTERPRISE_SEAT_PRICING.freeSubOrgs ? (
+                        {seatQuantity <= getFreeSubOrgCount(alumniBucketQuantity) ? (
                           <span className="text-green-600 dark:text-green-400 font-medium">
                             Free!
                           </span>
                         ) : (
                           <span>
-                            {seatQuantity - ENTERPRISE_SEAT_PRICING.freeSubOrgs} paid @ {formatCents(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly)}/yr each
+                            {seatQuantity - getFreeSubOrgCount(alumniBucketQuantity)} paid @ {formatCents(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly)}/yr each
                           </span>
                         )}
                       </div>
@@ -611,7 +613,7 @@ export default function CreateEnterprisePage() {
                   Enterprise Benefits
                 </h4>
                 <ul className="text-xs text-purple-700 dark:text-purple-300 space-y-1">
-                  <li>First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} organizations free</li>
+                  <li>3 free organizations per alumni bucket</li>
                   <li>Pooled alumni quota across organizations</li>
                   <li>Unified billing for all sub-orgs</li>
                   <li>Centralized admin dashboard</li>

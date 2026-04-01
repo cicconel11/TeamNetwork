@@ -265,8 +265,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // Calculate old and new billable counts
-    const oldBillable = getBillableOrgCount(reconciledSubscription.sub_org_quantity ?? 0);
-    const newBillable = getBillableOrgCount(newQuantity);
+    const bucketQty = reconciledSubscription.alumni_bucket_quantity;
+    const oldBillable = getBillableOrgCount(reconciledSubscription.sub_org_quantity ?? 0, bucketQty);
+    const newBillable = getBillableOrgCount(newQuantity, bucketQty);
 
     try {
       let periodEnd: string | null = null;
@@ -288,7 +289,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           return respond({ error: "Failed to update subscription quantity" }, 500);
         }
 
-        const pricing = getSubOrgPricing(newQuantity, reconciledSubscription.billing_interval);
+        const pricing = getSubOrgPricing(newQuantity, reconciledSubscription.billing_interval, reconciledSubscription.alumni_bucket_quantity);
 
         logEnterpriseAuditAction({
           actorUserId: ctx.userId,

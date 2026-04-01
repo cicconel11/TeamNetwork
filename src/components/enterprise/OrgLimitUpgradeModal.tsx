@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui";
-import { ENTERPRISE_SEAT_PRICING, ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
+import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
 
 export interface PendingOrgData {
   name: string;
@@ -25,6 +26,7 @@ interface SubOrgUpgradeProps extends BaseUpgradeModalProps {
   pendingOrgData: PendingOrgData;
   currentCount: number;
   maxAllowed: number;
+  bucketQuantity?: number;
 }
 
 interface AlumniBucketUpgradeProps extends BaseUpgradeModalProps {
@@ -157,7 +159,7 @@ export function OrgLimitUpgradeModal(props: OrgLimitUpgradeModalProps) {
               {/* Pricing info */}
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm text-muted-foreground">
-                  First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} organizations are free. Additional organizations are ${ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly / 100}/year each.
+                  First {getFreeSubOrgCount(props.bucketQuantity ?? 1)} organizations are free (3 per alumni bucket). Additional organizations are $150/year each.
                 </p>
               </div>
 

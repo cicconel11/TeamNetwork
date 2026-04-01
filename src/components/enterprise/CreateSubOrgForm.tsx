@@ -34,12 +34,14 @@ interface UpgradeInfo {
 
 interface CreateSubOrgFormProps {
   enterpriseSlug: string;
+  bucketQuantity?: number;
   onSuccess?: (slug: string) => void;
   onCancel?: () => void;
 }
 
 export function CreateSubOrgForm({
   enterpriseSlug,
+  bucketQuantity = 1,
   onSuccess,
   onCancel,
 }: CreateSubOrgFormProps) {
@@ -297,6 +299,7 @@ export function CreateSubOrgForm({
           }}
           currentCount={upgradeInfo.currentCount}
           maxAllowed={upgradeInfo.maxAllowed}
+          bucketQuantity={bucketQuantity}
           isLoading={isUpgrading}
         />
       )}

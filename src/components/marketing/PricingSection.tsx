@@ -210,7 +210,7 @@ export function PricingSection({ showCta = true }: { showCta?: boolean }) {
                 </h3>
                 <div className="flex flex-wrap gap-x-6 gap-y-1.5">
                   <span className="text-landing-cream/50 text-sm">
-                    <span className="text-landing-green font-semibold">3 orgs free</span>
+                    <span className="text-landing-green font-semibold">3 free orgs per alumni bucket</span>
                   </span>
                   <span className="text-landing-cream/50 text-sm">
                     <span className="font-semibold text-landing-cream">$150/yr</span> per additional org

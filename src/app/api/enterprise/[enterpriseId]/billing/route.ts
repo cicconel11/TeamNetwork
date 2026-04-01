@@ -67,7 +67,8 @@ export async function GET(req: Request, { params }: RouteParams) {
   const salesManaged = isSalesLed(bucketQuantity);
   const subOrgPricing = getSubOrgPricing(
     subscription.sub_org_quantity ?? 0,
-    billingInterval
+    billingInterval,
+    bucketQuantity
   );
 
   // Build billing overview

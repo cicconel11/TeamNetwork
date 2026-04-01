@@ -112,7 +112,7 @@ export async function POST(req: Request) {
 
       // Calculate billable orgs (defaults to 3 if not provided = free tier)
       const totalOrgs = subOrgQuantity ?? 3;
-      const billableOrgs = getBillableOrgCount(totalOrgs);
+      const billableOrgs = getBillableOrgCount(totalOrgs, alumniBucketQuantity);
 
       // Get appropriate price IDs based on billing interval
       const alumniBucketPriceId = billingInterval === "month"

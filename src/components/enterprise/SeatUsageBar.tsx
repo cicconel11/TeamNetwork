@@ -1,9 +1,11 @@
 import { Button } from "@/components/ui";
-import { ENTERPRISE_SEAT_PRICING, type BillingInterval } from "@/types/enterprise";
+import { type BillingInterval } from "@/types/enterprise";
+import { getFreeSubOrgCount } from "@/lib/enterprise/pricing";
 
 interface SeatUsageBarProps {
   currentSeats: number;
   billingInterval: BillingInterval;
+  bucketQuantity?: number;
   onAddSeats?: () => void;
   className?: string;
 }
@@ -11,13 +13,15 @@ interface SeatUsageBarProps {
 function PerSubOrgUsageBar({
   currentSeats,
   billingInterval,
+  bucketQuantity = 1,
   onAddSeats,
 }: {
   currentSeats: number;
   billingInterval: BillingInterval;
+  bucketQuantity?: number;
   onAddSeats?: () => void;
 }) {
-  const freeOrgs = ENTERPRISE_SEAT_PRICING.freeSubOrgs;
+  const freeOrgs = getFreeSubOrgCount(bucketQuantity);
   const freeOrgsUsed = Math.min(currentSeats, freeOrgs);
   const paidOrgsUsed = Math.max(0, currentSeats - freeOrgs);
   const allFreeUsed = freeOrgsUsed >= freeOrgs;
@@ -90,6 +94,7 @@ function PerSubOrgUsageBar({
 export function SeatUsageBar({
   currentSeats,
   billingInterval,
+  bucketQuantity = 1,
   onAddSeats,
   className = "",
 }: SeatUsageBarProps) {
@@ -98,6 +103,7 @@ export function SeatUsageBar({
       <PerSubOrgUsageBar
         currentSeats={currentSeats}
         billingInterval={billingInterval}
+        bucketQuantity={bucketQuantity}
         onAddSeats={onAddSeats}
       />
     </div>

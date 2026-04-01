@@ -21,7 +21,8 @@ export const ALUMNI_BUCKET_PRICING = {
 
 // Team add-on pricing constants (cents)
 export const ENTERPRISE_SEAT_PRICING = {
-  freeSubOrgs: 3, // First 3 organizations are included
+  freeSubOrgs: 3, // Base free orgs (1-bucket default)
+  freeSubOrgsPerBucket: 3, // 3 free orgs per alumni bucket purchased
   pricePerAdditionalCentsMonthly: 1500, // $15/month per additional org
   pricePerAdditionalCentsYearly: 15000, // $150/year per additional org
 } as const;
