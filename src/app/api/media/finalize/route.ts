@@ -123,7 +123,9 @@ export async function POST(request: NextRequest) {
     const headerBytes = buffer.subarray(0, MAGIC_BYTE_READ_SIZE);
     if (!validateMagicBytes(headerBytes, media.mime_type)) {
       // Delete the spoofed file and mark as failed
-      await serviceClient.storage.from(BUCKET).remove([media.storage_path]);
+      await serviceClient.storage.from(BUCKET).remove(
+        [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+      );
       await serviceClient
         .from("media_uploads")
         .update({ status: "failed" })
@@ -133,6 +135,71 @@ export async function POST(request: NextRequest) {
         { error: "File content does not match declared type" },
         { status: 400, headers: rateLimit.headers },
       );
+    }
+
+    if (media.preview_storage_path) {
+      const previewMimeType = media.preview_storage_path.endsWith(".png")
+        ? "image/png"
+        : media.preview_storage_path.endsWith(".webp")
+          ? "image/webp"
+          : media.preview_storage_path.endsWith(".jpg") || media.preview_storage_path.endsWith(".jpeg")
+            ? "image/jpeg"
+            : null;
+
+      const { data: signedPreviewData } = await serviceClient.storage
+        .from(BUCKET)
+        .createSignedUrl(media.preview_storage_path, 60);
+
+      if (!previewMimeType || !signedPreviewData?.signedUrl) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Upload may have failed." },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
+
+      const previewRes = await fetch(signedPreviewData.signedUrl, {
+        headers: { Range: `bytes=0-${MAGIC_BYTE_READ_SIZE - 1}` },
+      });
+
+      if (!previewRes.ok && previewRes.status !== 206) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Upload may have failed." },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
+
+      const previewBuffer = Buffer.from(await previewRes.arrayBuffer());
+      const previewHeaderBytes = previewBuffer.subarray(0, MAGIC_BYTE_READ_SIZE);
+      if (!validateMagicBytes(previewHeaderBytes, previewMimeType)) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file content does not match declared type" },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
     }
 
     // Update record: status=ready, actual file size, entity link

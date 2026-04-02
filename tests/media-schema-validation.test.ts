@@ -69,6 +69,23 @@ describe("galleryUploadIntentSchema", () => {
     assert.ok(!result.success);
   });
 
+  it("rejects unsupported preview MIME type", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      previewMimeType: "image/gif",
+    });
+    assert.ok(!result.success);
+  });
+
+  it("rejects preview MIME type for video uploads", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      mimeType: "video/mp4",
+      previewMimeType: "image/jpeg",
+    });
+    assert.ok(!result.success);
+  });
+
   it("rejects image over 10MB", () => {
     const result = galleryUploadIntentSchema.safeParse({
       ...validPayload,

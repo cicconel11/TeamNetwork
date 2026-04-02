@@ -236,6 +236,23 @@ describe("uploadIntentSchema", () => {
     });
     assert.strictEqual(result.success, true);
   });
+
+  test("rejects unsupported preview mime type", () => {
+    const result = uploadIntentSchema.safeParse({
+      ...validInput,
+      previewMimeType: "image/gif",
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  test("rejects preview mime type for video uploads", () => {
+    const result = uploadIntentSchema.safeParse({
+      ...validInput,
+      mimeType: "video/mp4",
+      previewMimeType: "image/jpeg",
+    });
+    assert.strictEqual(result.success, false);
+  });
 });
 
 describe("finalizeUploadSchema", () => {
