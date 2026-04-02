@@ -119,6 +119,14 @@ const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
+const MEMBER_STATS_PROMPT_PATTERN =
+  /(?:(?:how\s+many|count|number\s+of|total|stats?|metrics?|snapshot|breakdown)[\s\S]{0,60}\b(?:members?|alumni|parents?)\b|\b(?:members?|alumni|parents?)\b[\s\S]{0,60}(?:how\s+many|count|number\s+of|total|stats?|metrics?|snapshot|breakdown))/i;
+const SIMPLE_MEMBER_LIST_PROMPT_PATTERN =
+  /(?:(?:tell\s+me\s+about|show|recent|latest|newest|who\s+are)[\s\S]{0,60}\b(?:members?|admins?|parents?)\b|\b(?:members?|admins?|parents?)\b[\s\S]{0,60}(?:recent|latest|newest|roster|directory))/i;
+const EVENT_STATS_PROMPT_PATTERN =
+  /(?:(?:how\s+many|count|number\s+of|total|stats?|metrics?)[\s\S]{0,60}\bevents?\b|\bevents?\b[\s\S]{0,60}(?:how\s+many|count|number\s+of|total|stats?|metrics?))/i;
+const SIMPLE_EVENT_LIST_PROMPT_PATTERN =
+  /(?:(?:what(?:'s| is)?|show|list|recent|latest|upcoming)[\s\S]{0,60}\bevents?\b|\bevents?\b[\s\S]{0,60}(?:coming\s+up|upcoming|recent|latest|schedule))/i;
 
 function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
@@ -200,6 +208,13 @@ interface AnnouncementDisplayRow {
   body_preview?: unknown;
 }
 
+interface MemberDisplayRow {
+  name?: unknown;
+  role?: unknown;
+  email?: unknown;
+  created_at?: unknown;
+}
+
 interface NavigationDisplayTarget {
   label?: unknown;
   href?: unknown;
@@ -228,6 +243,7 @@ interface PendingActionToolPayload {
   missing_fields?: unknown;
   draft?: unknown;
   message?: unknown;
+  source_warning?: unknown;
 }
 
 function getNonEmptyString(value: unknown): string | null {
@@ -247,6 +263,92 @@ function formatDisplayRow(row: { name?: unknown; subtitle?: unknown }): string |
 
   const subtitle = getNonEmptyString(row.subtitle);
   return subtitle ? `${name} - ${subtitle}` : name;
+}
+
+function formatMemberRole(value: unknown): string | null {
+  const role = getNonEmptyString(value);
+  if (!role) {
+    return null;
+  }
+
+  switch (role) {
+    case "active_member":
+      return "Active Member";
+    case "admin":
+      return "Admin";
+    case "alumni":
+      return "Alumni";
+    case "parent":
+      return "Parent";
+    default:
+      return role.replace(/_/g, " ");
+  }
+}
+
+function hasTrustworthyMemberName(value: unknown): value is string {
+  const name = getNonEmptyString(value);
+  return Boolean(name && name !== "Member" && !name.includes("@"));
+}
+
+function formatMembersResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any active members for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const member = row as MemberDisplayRow;
+      const name = hasTrustworthyMemberName(member.name)
+        ? member.name.trim()
+        : getNonEmptyString(member.email);
+
+      if (!name) {
+        return null;
+      }
+
+      return {
+        name,
+        role: formatMemberRole(member.role),
+        email: getNonEmptyString(member.email),
+        createdAt: formatIsoDate(member.created_at),
+      };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        name: string;
+        role: string | null;
+        email: string | null;
+        createdAt: string | null;
+      } => Boolean(row)
+    )
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const lines = ["Recent active members"];
+  for (const row of rows) {
+    lines.push(`- ${row.name}${row.role ? ` (${row.role})` : ""}`);
+    if (row.createdAt) {
+      lines.push(`  Added: ${row.createdAt}`);
+    }
+    if (row.email) {
+      lines.push(`  Email: ${row.email}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function formatSuggestConnectionsResponse(data: unknown): string | null {
@@ -724,6 +826,32 @@ function getPass1Tools(
     return [AI_TOOL_MAP.suggest_connections];
   }
 
+  if (intentType === "knowledge_query") {
+    if (effectiveSurface === "analytics") {
+      return [AI_TOOL_MAP.get_org_stats];
+    }
+
+    if (effectiveSurface === "members") {
+      if (MEMBER_STATS_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.get_org_stats];
+      }
+
+      if (SIMPLE_MEMBER_LIST_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.list_members];
+      }
+    }
+
+    if (effectiveSurface === "events") {
+      if (EVENT_STATS_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.get_org_stats];
+      }
+
+      if (SIMPLE_EVENT_LIST_PROMPT_PATTERN.test(message)) {
+        return [AI_TOOL_MAP.list_events];
+      }
+    }
+  }
+
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
@@ -737,7 +865,10 @@ function getForcedPass1ToolChoice(
   const forcedToolName = pass1Tools[0]?.function.name;
   if (
     forcedToolName !== "prepare_job_posting" &&
-    forcedToolName !== "prepare_discussion_thread"
+    forcedToolName !== "prepare_discussion_thread" &&
+    forcedToolName !== "list_members" &&
+    forcedToolName !== "list_events" &&
+    forcedToolName !== "get_org_stats"
   ) {
     return undefined;
   }
@@ -759,6 +890,7 @@ function isToolFirstEligible(
 
   const toolName = pass1Tools[0]?.function.name;
   return (
+    toolName === "list_members" ||
     toolName === "get_org_stats" ||
     toolName === "find_navigation_targets" ||
     toolName === "list_announcements" ||
@@ -871,10 +1003,11 @@ function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
 
 function formatDeterministicToolResponse(
   name: string,
-  data: unknown,
-  surface: CacheSurface
+  data: unknown
 ): string | null {
   switch (name) {
+    case "list_members":
+      return formatMembersResponse(data);
     case "suggest_connections":
       return formatSuggestConnectionsResponse(data);
     case "list_events":
@@ -890,7 +1023,7 @@ function formatDeterministicToolResponse(
     case "prepare_discussion_thread":
       return formatPrepareDiscussionThreadResponse(data);
     case "get_org_stats":
-      return surface === "analytics" ? formatOrgStatsResponse(data) : null;
+      return formatOrgStatsResponse(data);
     case "find_navigation_targets":
       return formatNavigationTargetsResponse(data);
     default:
@@ -964,6 +1097,49 @@ type DraftHistoryMessage = {
   role: "user" | "assistant";
   content: string;
 };
+
+function buildPromptHistoryMessages(rows: unknown): DraftHistoryMessage[] {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .filter(
+      (row): row is { role: "user" | "assistant"; content: string } =>
+        (row?.role === "user" || row?.role === "assistant") &&
+        typeof row?.content === "string" &&
+        row.content.trim().length > 0
+    )
+    .map((row) => ({
+      role: row.role,
+      content:
+        row.role === "user"
+          ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
+          : row.content,
+    }))
+    .filter((row) => row.content.length > 0);
+}
+
+function ensureCurrentPromptInHistory(
+  messages: DraftHistoryMessage[],
+  promptSafeMessage: string
+): DraftHistoryMessage[] {
+  const lastMessage = messages[messages.length - 1];
+  if (
+    lastMessage?.role === "user" &&
+    lastMessage.content === promptSafeMessage
+  ) {
+    return messages;
+  }
+
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: promptSafeMessage,
+    },
+  ];
+}
 
 const DISCUSSION_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a discussion thread|i can draft this discussion|i drafted the discussion thread)/i;
@@ -1490,61 +1666,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           }, { error });
         }
 
-        if (!activeDraftSession) {
-          try {
-            const { data: draftHistory, error: draftHistoryError } = await ctx.supabase
-              .from("ai_messages")
-              .select("role, content")
-              .eq("thread_id", threadId)
-              .eq("status", "complete")
-              .order("created_at", { ascending: true })
-              .limit(12);
-
-            if (draftHistoryError) {
-              aiLog("warn", "ai-chat", "failed to load thread history for draft inference", {
-                ...requestLogContext,
-                threadId,
-              }, { error: draftHistoryError });
-            } else {
-              const inferredDraftSession = inferDraftSessionFromHistory({
-                organizationId: ctx.orgId,
-                userId: ctx.userId,
-                threadId,
-                messages: (draftHistory ?? [])
-                  .filter(
-                    (row: any): row is { role: "user" | "assistant"; content: string } =>
-                      (row?.role === "user" || row?.role === "assistant") &&
-                      typeof row?.content === "string" &&
-                      row.content.trim().length > 0
-                  )
-                  .map((row) => ({
-                    role: row.role,
-                    content:
-                      row.role === "user"
-                        ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
-                        : row.content,
-                  })),
-              });
-
-              if (
-                inferredDraftSession &&
-                shouldContinueDraftSession(
-                  messageSafety.promptSafeMessage,
-                  inferredDraftSession,
-                  routing
-                )
-              ) {
-                activeDraftSession = inferredDraftSession;
-                pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]];
-              }
-            }
-          } catch (error) {
-            aiLog("warn", "ai-chat", "failed to infer draft session from thread history", {
-              ...requestLogContext,
-              threadId,
-            }, { error });
-          }
-        }
       }
     } else {
       skipStage(stageTimings, "thread_resolution");
@@ -1620,7 +1741,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           .gt("created_at", existingMsg.created_at)
           .order("created_at", { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (assistantReplayError) {
           aiLog("error", "ai-chat", "idempotency replay lookup failed", {
@@ -1633,11 +1754,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           );
         }
 
+        if (!assistantReplay?.content) {
+          aiLog("warn", "ai-chat", "idempotency replay not ready", {
+            ...requestLogContext,
+            threadId: existingMsg.thread_id,
+          }, {
+            userMessageId: existingMsg.id,
+          });
+          return NextResponse.json(
+            { error: "Request already in progress", threadId: existingMsg.thread_id },
+            { status: 409, headers: rateLimit.headers }
+          );
+        }
+
         return buildSseResponse(
           createSSEStream(async (enqueue) => {
-            if (assistantReplay?.content) {
-              enqueue({ type: "chunk", content: assistantReplay.content });
-            }
+            enqueue({ type: "chunk", content: assistantReplay.content });
             enqueue({
               type: "done",
               threadId: existingMsg.thread_id,
@@ -2178,85 +2310,124 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         return;
       }
 
-        const contextBuildStartedAt = Date.now();
+      let historyMessages: DraftHistoryMessage[] = ensureCurrentPromptInHistory(
+        [],
+        messageSafety.promptSafeMessage
+      );
+
+      if (existingThreadId) {
         const historyLoadStartedAt = Date.now();
-        const [contextResult, { data: history, error: historyError }] =
-          await Promise.all([
-            buildPromptContextFn({
-              orgId: ctx.orgId,
-              userId: ctx.userId,
-              role: ctx.role,
-              serviceSupabase: ctx.serviceSupabase,
-              logContext: {
-                ...requestLogContext,
-                threadId: threadId!,
-              },
-              contextMode: usesSharedStaticContext
-                ? "shared_static"
-                : usesToolFirstContext
-                  ? "tool_first"
-                  : "full",
-              surface: effectiveSurface,
-              ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
-              now: requestNow,
-              timeZone: requestTimeZone,
-              currentPath,
-              availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
-            }).then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
-              setStageStatus(
-                stageTimings,
-                "context_build",
-                "completed",
-                Date.now() - contextBuildStartedAt
-              );
-              return result;
-            }).catch((error: unknown) => {
-              setStageStatus(
-                stageTimings,
-                "context_build",
-                "failed",
-                Date.now() - contextBuildStartedAt
-              );
-              throw error;
-            }),
-            ctx.supabase
-              .from("ai_messages")
-              .select("role, content")
-              .eq("thread_id", threadId)
-              .eq("status", "complete")
-              .order("created_at", { ascending: true })
-              .limit(20)
-              .then((result: { error: unknown }) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  result.error ? "failed" : "completed",
-                  Date.now() - historyLoadStartedAt
-                );
-                return result;
-              })
-              .catch((error: unknown) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  "failed",
-                  Date.now() - historyLoadStartedAt
-                );
-                throw error;
-              }),
-          ]);
+
+        try {
+          const { data: history, error: historyError } = await ctx.supabase
+            .from("ai_messages")
+            .select("role, content")
+            .eq("thread_id", threadId)
+            .eq("status", "complete")
+            .order("created_at", { ascending: true })
+            .limit(20);
+
+          setStageStatus(
+            stageTimings,
+            "history_load",
+            historyError ? "failed" : "completed",
+            Date.now() - historyLoadStartedAt
+          );
+
+          if (historyError) {
+            aiLog("warn", "ai-chat", "history fetch failed; continuing with current turn only", {
+              ...requestLogContext,
+              threadId: threadId!,
+            }, { error: historyError });
+          } else {
+            historyMessages = ensureCurrentPromptInHistory(
+              buildPromptHistoryMessages(history),
+              messageSafety.promptSafeMessage
+            );
+          }
+        } catch (error) {
+          setStageStatus(
+            stageTimings,
+            "history_load",
+            "failed",
+            Date.now() - historyLoadStartedAt
+          );
+          aiLog("warn", "ai-chat", "history fetch failed; continuing with current turn only", {
+            ...requestLogContext,
+            threadId: threadId!,
+          }, { error });
+        }
+      } else {
+        setStageStatus(stageTimings, "history_load", "completed", 0);
+      }
+
+      if (!activeDraftSession && canUseDraftSessions && existingThreadId) {
+        const inferredDraftSession = inferDraftSessionFromHistory({
+          organizationId: ctx.orgId,
+          userId: ctx.userId,
+          threadId: threadId!,
+          messages: historyMessages,
+        });
+
+        if (
+          inferredDraftSession &&
+          shouldContinueDraftSession(
+            messageSafety.promptSafeMessage,
+            inferredDraftSession,
+            routing
+          )
+        ) {
+          activeDraftSession = inferredDraftSession;
+          pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]];
+        }
+      }
+
+      usesToolFirstContext =
+        !usesSharedStaticContext &&
+        executionPolicy.retrieval.reason === "tool_only_structured_query" &&
+        isToolFirstEligible(pass1Tools);
+
+      const contextBuildStartedAt = Date.now();
+      const contextResult = await buildPromptContextFn({
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        role: ctx.role,
+        serviceSupabase: ctx.serviceSupabase,
+        logContext: {
+          ...requestLogContext,
+          threadId: threadId!,
+        },
+        contextMode: usesSharedStaticContext
+          ? "shared_static"
+          : usesToolFirstContext
+            ? "tool_first"
+            : "full",
+        surface: effectiveSurface,
+        ragChunks: ragChunks.length > 0 ? ragChunks : undefined,
+        now: requestNow,
+        timeZone: requestTimeZone,
+        currentPath,
+        availableTools: pass1Tools?.map((tool) => tool.function.name as ToolName),
+      }).then((result: Awaited<ReturnType<typeof buildPromptContext>>) => {
+        setStageStatus(
+          stageTimings,
+          "context_build",
+          "completed",
+          Date.now() - contextBuildStartedAt
+        );
+        return result;
+      }).catch((error: unknown) => {
+        setStageStatus(
+          stageTimings,
+          "context_build",
+          "failed",
+          Date.now() - contextBuildStartedAt
+        );
+        throw error;
+      });
 
       const { systemPrompt, orgContextMessage, metadata } = contextResult;
       contextMetadata = metadata;
-
-      if (historyError) {
-        aiLog("error", "ai-chat", "history fetch failed", {
-          ...requestLogContext,
-          threadId: threadId!,
-        }, { error: historyError });
-        enqueue({ type: "error", message: "Failed to load conversation history", retryable: true });
-        return;
-      }
 
       const draftSessionContextMessage = activeDraftSession
         ? buildDraftSessionContextMessage(activeDraftSession)
@@ -2264,17 +2435,6 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       const pass1SystemPrompt = activeDraftSession
         ? `${systemPrompt}\n\n${ACTIVE_DRAFT_CONTINUATION_INSTRUCTION}`
         : systemPrompt;
-
-      const historyMessages = (history ?? [])
-        .filter((m: any) => m.content)
-        .map((m: any) => ({
-          role: m.role as "user" | "assistant",
-          content:
-            m.role === "user"
-              ? sanitizeHistoryMessageForPrompt(m.content as string).promptSafeMessage
-              : (m.content as string),
-        }))
-        .filter((m: { content: string }) => Boolean(m.content));
 
       const contextMessages = orgContextMessage
         ? [
@@ -2544,14 +2704,21 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }
 
         if (toolCallMade && toolResults.length > 0) {
+          const deterministicToolName =
+            toolResults.length === 1 && successfulToolResults.length === 1
+              ? successfulToolResults[0].name
+              : null;
+          const allowDeterministicToolResponse =
+            deterministicToolName !== "list_members" ||
+            (pass1Tools?.length === 1 && pass1Tools[0]?.function.name === "list_members");
           const deterministicToolContent =
+            allowDeterministicToolResponse &&
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
             toolResults[0].name === successfulToolResults[0].name
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
-                  successfulToolResults[0].data,
-                  effectiveSurface
+                  successfulToolResults[0].data
                 )
               : null;
 
