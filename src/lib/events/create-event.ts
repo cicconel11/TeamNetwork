@@ -44,11 +44,32 @@ export async function createEvent(req: CreateEventInput): Promise<CreateEventRes
   }
 
   const input = validationResult.data;
-  const startDateTime = new Date(`${input.start_date}T${input.start_time}`).toISOString();
+
+  // Treat as wall-clock time (no timezone shift) — matches browser form behavior
+  const startDateTime = `${input.start_date}T${input.start_time}:00.000Z`;
+
+  // Handle partial end info: fill in missing half from start values
+  const effectiveEndDate = input.end_date || input.start_date;
+  const effectiveEndTime = input.end_time || input.start_time;
   const endDateTime =
-    input.end_date && input.end_time
-      ? new Date(`${input.end_date}T${input.end_time}`).toISOString()
+    input.end_date || input.end_time
+      ? `${effectiveEndDate}T${effectiveEndTime}:00.000Z`
       : null;
+
+  // Validate dates are real calendar dates
+  const startCheck = new Date(startDateTime);
+  if (isNaN(startCheck.getTime())) {
+    return { ok: false, status: 400, error: "Invalid start date or time" };
+  }
+  if (endDateTime) {
+    const endCheck = new Date(endDateTime);
+    if (isNaN(endCheck.getTime())) {
+      return { ok: false, status: 400, error: "Invalid end date or time" };
+    }
+    if (endCheck <= startCheck) {
+      return { ok: false, status: 400, error: "End date/time must be after start date/time" };
+    }
+  }
 
   const { data: event, error } = await req.supabase
     .from("events")
@@ -60,7 +81,7 @@ export async function createEvent(req: CreateEventInput): Promise<CreateEventRes
       end_date: endDateTime,
       location: input.location || null,
       event_type: input.event_type,
-      is_philanthropy: input.is_philanthropy,
+      is_philanthropy: input.is_philanthropy || input.event_type === "philanthropy",
       created_by_user_id: req.userId,
       audience: "both",
     })
