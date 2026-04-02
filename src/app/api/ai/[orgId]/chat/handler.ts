@@ -119,14 +119,8 @@ const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
-const MEMBER_STATS_PROMPT_PATTERN =
-  /(?:(?:how\s+many|count|number\s+of|total|stats?|metrics?|snapshot|breakdown)[\s\S]{0,60}\b(?:members?|alumni|parents?)\b|\b(?:members?|alumni|parents?)\b[\s\S]{0,60}(?:how\s+many|count|number\s+of|total|stats?|metrics?|snapshot|breakdown))/i;
-const SIMPLE_MEMBER_LIST_PROMPT_PATTERN =
-  /(?:(?:tell\s+me\s+about|show|recent|latest|newest|who\s+are)[\s\S]{0,60}\b(?:members?|admins?|parents?)\b|\b(?:members?|admins?|parents?)\b[\s\S]{0,60}(?:recent|latest|newest|roster|directory))/i;
-const EVENT_STATS_PROMPT_PATTERN =
-  /(?:(?:how\s+many|count|number\s+of|total|stats?|metrics?)[\s\S]{0,60}\bevents?\b|\bevents?\b[\s\S]{0,60}(?:how\s+many|count|number\s+of|total|stats?|metrics?))/i;
-const SIMPLE_EVENT_LIST_PROMPT_PATTERN =
-  /(?:(?:what(?:'s| is)?|show|list|recent|latest|upcoming)[\s\S]{0,60}\bevents?\b|\bevents?\b[\s\S]{0,60}(?:coming\s+up|upcoming|recent|latest|schedule))/i;
+const CREATE_EVENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
 
 function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
@@ -818,6 +812,10 @@ function getPass1Tools(
     return [AI_TOOL_MAP.prepare_discussion_thread];
   }
 
+  if (CREATE_EVENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_event];
+  }
+
   if (intentType === "navigation" && DIRECT_NAVIGATION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.find_navigation_targets];
   }
@@ -866,9 +864,7 @@ function getForcedPass1ToolChoice(
   if (
     forcedToolName !== "prepare_job_posting" &&
     forcedToolName !== "prepare_discussion_thread" &&
-    forcedToolName !== "list_members" &&
-    forcedToolName !== "list_events" &&
-    forcedToolName !== "get_org_stats"
+    forcedToolName !== "prepare_event"
   ) {
     return undefined;
   }
@@ -1001,6 +997,31 @@ function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
   return null;
 }
 
+function formatPrepareEventResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (missingFields.length === 0) {
+      return "I still need an event title, start date, and start time before I can prepare this event.";
+    }
+
+    return `I can draft this event, but I still need: ${missingFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the event. Review the details below and confirm when you're ready to add it to the calendar.";
+  }
+
+  return null;
+}
+
 function formatDeterministicToolResponse(
   name: string,
   data: unknown
@@ -1022,6 +1043,8 @@ function formatDeterministicToolResponse(
       return formatPrepareJobPostingResponse(data);
     case "prepare_discussion_thread":
       return formatPrepareDiscussionThreadResponse(data);
+    case "prepare_event":
+      return formatPrepareEventResponse(data);
     case "get_org_stats":
       return formatOrgStatsResponse(data);
     case "find_navigation_targets":
@@ -1056,7 +1079,7 @@ const ACTIVE_DRAFT_CONTINUATION_INSTRUCTION = [
   "- A matching assistant draft may already be in progress for this thread.",
   "- When a matching prepare tool is attached, treat the user's latest message as a continuation of that draft unless they clearly changed topics.",
   "- Call the attached prepare tool with the updated draft details instead of replying with read-only prose.",
-  "- Do not say you lack the ability to create jobs or discussion threads when the matching prepare tool is attached.",
+  "- Do not say you lack the ability to create jobs, events, or discussion threads when the matching prepare tool is attached.",
 ].join("\n");
 const DRAFT_CANCEL_PATTERN =
   /(?<!\w)(?:cancel|never\s+mind|nevermind|forget\s+(?:that|it)|scratch\s+that|stop\s+working\s+on\s+that)(?!\w)/i;
@@ -1072,9 +1095,14 @@ function getGroundingFallbackForTools(toolNames: ToolName[]): string {
 }
 
 function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
-  return draftType === "create_job_posting"
-    ? "prepare_job_posting"
-    : "prepare_discussion_thread";
+  switch (draftType) {
+    case "create_job_posting":
+      return "prepare_job_posting";
+    case "create_discussion_thread":
+      return "prepare_discussion_thread";
+    case "create_event":
+      return "prepare_event";
+  }
 }
 
 function mergeDraftPayload(
@@ -1145,6 +1173,8 @@ const DISCUSSION_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a discussion thread|i can draft this discussion|i drafted the discussion thread)/i;
 const JOB_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a job posting|i can draft this job|i drafted the job posting)/i;
+const EVENT_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you create an event|i can draft this event|i drafted the event)/i;
 
 function extractStructuredFieldMap(message: string): Record<string, string> {
   const entries: Record<string, string> = {};
@@ -1218,6 +1248,44 @@ function normalizeExperienceLevel(
   return undefined;
 }
 
+function normalizeEventType(
+  value: string | undefined
+): "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser" | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === "general" ||
+    normalized === "philanthropy" ||
+    normalized === "game" ||
+    normalized === "meeting" ||
+    normalized === "social" ||
+    normalized === "fundraiser"
+  ) {
+    return normalized;
+  }
+
+  return undefined;
+}
+
+function normalizeBooleanFlag(value: string | undefined): boolean | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (["true", "yes", "y", "1"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "no", "n", "0"].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+}
+
 function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
   const draft: Record<string, unknown> = {};
 
@@ -1236,6 +1304,41 @@ function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Rec
     if (body) {
       draft.body = body;
     }
+  }
+
+  return draft;
+}
+
+function extractEventDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const title = getNonEmptyString(fields.title);
+    const description = getNonEmptyString(fields.description);
+    const startDate = getNonEmptyString(fields["start date"]);
+    const startTime = getNonEmptyString(fields["start time"]);
+    const endDate = getNonEmptyString(fields["end date"]);
+    const endTime = getNonEmptyString(fields["end time"]);
+    const location = getNonEmptyString(fields.location);
+    const eventType = normalizeEventType(getNonEmptyString(fields["event type"]) ?? undefined);
+    const isPhilanthropy = normalizeBooleanFlag(
+      getNonEmptyString(fields["is philanthropy"] ?? fields.philanthropy) ?? undefined
+    );
+
+    if (title) draft.title = title;
+    if (description) draft.description = description;
+    if (startDate) draft.start_date = startDate;
+    if (startTime) draft.start_time = startTime;
+    if (endDate) draft.end_date = endDate;
+    if (endTime) draft.end_time = endTime;
+    if (location) draft.location = location;
+    if (eventType) draft.event_type = eventType;
+    if (typeof isPhilanthropy === "boolean") draft.is_philanthropy = isPhilanthropy;
   }
 
   return draft;
@@ -1282,6 +1385,9 @@ function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionTy
     if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message.content)) {
       return "create_discussion_thread";
     }
+    if (CREATE_EVENT_PROMPT_PATTERN.test(message.content)) {
+      return "create_event";
+    }
     return null;
   }
 
@@ -1290,6 +1396,9 @@ function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionTy
   }
   if (DISCUSSION_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "create_discussion_thread";
+  }
+  if (EVENT_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "create_event";
   }
   return null;
 }
@@ -1307,24 +1416,36 @@ function inferDraftSessionFromHistory(input: {
     }
 
     const relevantMessages = input.messages.slice(index);
-    const draftPayload =
-      draftType === "create_job_posting"
-        ? extractJobDraftFromHistory(relevantMessages)
-        : extractDiscussionDraftFromHistory(relevantMessages);
+    let draftPayload: Record<string, unknown>;
+    let missingFields: string[];
 
-    const missingFields =
-      draftType === "create_job_posting"
-        ? [
-            ...(["title", "company", "location", "industry", "experience_level", "description"] as const)
-              .filter((field) => getNonEmptyString(draftPayload[field]) == null),
-            ...(
-              getNonEmptyString(draftPayload.application_url) == null &&
-              getNonEmptyString(draftPayload.contact_email) == null
-                ? ["application_url"]
-                : []
-            ),
-          ]
-        : (["title", "body"] as const).filter((field) => getNonEmptyString(draftPayload[field]) == null);
+    switch (draftType) {
+      case "create_job_posting":
+        draftPayload = extractJobDraftFromHistory(relevantMessages);
+        missingFields = [
+          ...(["title", "company", "location", "industry", "experience_level", "description"] as const)
+            .filter((field) => getNonEmptyString(draftPayload[field]) == null),
+          ...(
+            getNonEmptyString(draftPayload.application_url) == null &&
+            getNonEmptyString(draftPayload.contact_email) == null
+              ? ["application_url"]
+              : []
+          ),
+        ];
+        break;
+      case "create_discussion_thread":
+        draftPayload = extractDiscussionDraftFromHistory(relevantMessages);
+        missingFields = (["title", "body"] as const).filter(
+          (field) => getNonEmptyString(draftPayload[field]) == null
+        );
+        break;
+      case "create_event":
+        draftPayload = extractEventDraftFromHistory(relevantMessages);
+        missingFields = (["title", "start_date", "start_time"] as const).filter(
+          (field) => getNonEmptyString(draftPayload[field]) == null
+        );
+        break;
+    }
 
     if (Object.keys(draftPayload).length === 0 && missingFields.length === 0) {
       continue;
@@ -1384,22 +1505,26 @@ function shouldContinueDraftSession(
   draftSession: DraftSessionRecord,
   routing: ReturnType<typeof resolveSurfaceRouting>
 ): boolean {
-  if (draftSession.draft_type === "create_job_posting" && CREATE_JOB_PROMPT_PATTERN.test(message)) {
+  const isJobPrompt = CREATE_JOB_PROMPT_PATTERN.test(message);
+  const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
+  const isEventPrompt = CREATE_EVENT_PROMPT_PATTERN.test(message);
+
+  if (draftSession.draft_type === "create_job_posting" && isJobPrompt) {
+    return true;
+  }
+
+  if (draftSession.draft_type === "create_discussion_thread" && isDiscussionPrompt) {
+    return true;
+  }
+
+  if (draftSession.draft_type === "create_event" && isEventPrompt) {
     return true;
   }
 
   if (
-    draftSession.draft_type === "create_discussion_thread" &&
-    CREATE_DISCUSSION_PROMPT_PATTERN.test(message)
-  ) {
-    return true;
-  }
-
-  if (
-    (draftSession.draft_type === "create_job_posting" &&
-      CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) ||
-    (draftSession.draft_type === "create_discussion_thread" &&
-      CREATE_JOB_PROMPT_PATTERN.test(message))
+    (draftSession.draft_type === "create_job_posting" && (isDiscussionPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_discussion_thread" && (isJobPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_event" && (isJobPrompt || isDiscussionPrompt))
   ) {
     return false;
   }
@@ -1666,6 +1791,61 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           }, { error });
         }
 
+        if (!activeDraftSession) {
+          try {
+            const { data: draftHistory, error: draftHistoryError } = await ctx.supabase
+              .from("ai_messages")
+              .select("role, content")
+              .eq("thread_id", threadId)
+              .eq("status", "complete")
+              .order("created_at", { ascending: true })
+              .limit(12);
+
+            if (draftHistoryError) {
+              aiLog("warn", "ai-chat", "failed to load thread history for draft inference", {
+                ...requestLogContext,
+                threadId,
+              }, { error: draftHistoryError });
+            } else {
+              const inferredDraftSession = inferDraftSessionFromHistory({
+                organizationId: ctx.orgId,
+                userId: ctx.userId,
+                threadId,
+                messages: (draftHistory ?? [])
+                  .filter(
+                    (row: any): row is { role: "user" | "assistant"; content: string } =>
+                      (row?.role === "user" || row?.role === "assistant") &&
+                      typeof row?.content === "string" &&
+                      row.content.trim().length > 0
+                  )
+                  .map((row: { role: "user" | "assistant"; content: string }) => ({
+                    role: row.role,
+                    content:
+                      row.role === "user"
+                        ? sanitizeHistoryMessageForPrompt(row.content).promptSafeMessage
+                        : row.content,
+                  })),
+              });
+
+              if (
+                inferredDraftSession &&
+                shouldContinueDraftSession(
+                  messageSafety.promptSafeMessage,
+                  inferredDraftSession,
+                  routing
+                )
+              ) {
+                activeDraftSession = inferredDraftSession;
+                pass1Tools = [AI_TOOL_MAP[getToolNameForDraftType(inferredDraftSession.draft_type)]];
+              }
+            }
+          } catch (error) {
+            aiLog("warn", "ai-chat", "failed to infer draft session from thread history", {
+              ...requestLogContext,
+              threadId,
+            }, { error });
+          }
+        }
       }
     } else {
       skipStage(stageTimings, "thread_resolution");
@@ -2540,7 +2720,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 if (
                   canUseDraftSessions &&
                   (toolEvent.name === "prepare_job_posting" ||
-                    toolEvent.name === "prepare_discussion_thread") &&
+                    toolEvent.name === "prepare_discussion_thread" ||
+                    toolEvent.name === "prepare_event") &&
                   result.data &&
                   typeof result.data === "object"
                 ) {
@@ -2576,7 +2757,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                         draftType:
                           toolEvent.name === "prepare_job_posting"
                             ? "create_job_posting"
-                            : "create_discussion_thread",
+                            : toolEvent.name === "prepare_discussion_thread"
+                              ? "create_discussion_thread"
+                              : "create_event",
                         status:
                           toolData.state === "needs_confirmation"
                             ? "ready_for_confirmation"

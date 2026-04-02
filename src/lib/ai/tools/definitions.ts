@@ -28,6 +28,18 @@ export interface PrepareDiscussionThreadArgs {
   mediaIds?: string[];
 }
 
+export interface PrepareEventArgs {
+  title?: string;
+  description?: string;
+  start_date?: string;
+  start_time?: string;
+  end_date?: string;
+  end_time?: string;
+  location?: string;
+  event_type?: string;
+  is_philanthropy?: boolean;
+}
+
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
@@ -215,6 +227,44 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_event: {
+    type: "function" as const,
+    function: {
+      name: "prepare_event" as const,
+      description:
+        "Prepare a new calendar event draft for the assistant. Use this when the user wants you to create, add, or schedule an event. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the draft is ready. Only supports single (non-recurring) events.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string" as const },
+          description: { type: "string" as const },
+          start_date: {
+            type: "string" as const,
+            description: "Event date in YYYY-MM-DD format",
+          },
+          start_time: {
+            type: "string" as const,
+            description: "Event start time in HH:MM 24-hour format",
+          },
+          end_date: {
+            type: "string" as const,
+            description: "Event end date in YYYY-MM-DD format (optional)",
+          },
+          end_time: {
+            type: "string" as const,
+            description: "Event end time in HH:MM 24-hour format (optional)",
+          },
+          location: { type: "string" as const },
+          event_type: {
+            type: "string" as const,
+            enum: ["general", "philanthropy", "game", "meeting", "social", "fundraiser"],
+          },
+          is_philanthropy: { type: "boolean" as const },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_org_stats: {
     type: "function" as const,
     function: {
@@ -298,6 +348,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_job_postings,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_discussion_thread,
+  TOOL_BY_NAME.prepare_event,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,

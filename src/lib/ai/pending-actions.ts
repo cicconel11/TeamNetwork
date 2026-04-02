@@ -1,9 +1,13 @@
 import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
+import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
-export type PendingActionType = "create_job_posting" | "create_discussion_thread";
+export type PendingActionType =
+  | "create_job_posting"
+  | "create_discussion_thread"
+  | "create_event";
 export type PendingActionStatus =
   | "pending"
   | "confirmed"
@@ -20,9 +24,14 @@ export interface CreateDiscussionThreadPendingPayload extends AssistantPreparedD
   orgSlug?: string | null;
 }
 
+export interface CreateEventPendingPayload extends AssistantPreparedEvent {
+  orgSlug?: string | null;
+}
+
 export interface PendingActionPayloadByType {
   create_job_posting: CreateJobPostingPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
+  create_event: CreateEventPendingPayload;
 }
 
 export type PendingActionPayload = PendingActionPayloadByType[PendingActionType];
@@ -251,6 +260,11 @@ export function buildPendingActionSummary(record: PendingActionRecord): PendingA
       return {
         title: "Review discussion thread",
         description: "Confirm the drafted thread before it is posted to discussions.",
+      };
+    case "create_event":
+      return {
+        title: "Review event",
+        description: "Confirm the drafted event before it is added to the calendar.",
       };
     default:
       return {
