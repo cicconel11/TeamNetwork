@@ -37,6 +37,10 @@ interface EducationEntry {
   institute_logo_url?: string | null;
 }
 
+function isObjectEntry<T extends object>(value: unknown): value is T {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 export default async function AlumniDetailPage({ params }: AlumniDetailPageProps) {
   const { orgSlug, alumniId } = await params;
   const supabase = await createClient();
@@ -84,8 +88,16 @@ export default async function AlumniDetailPage({ params }: AlumniDetailPageProps
   const canDelete = canEditPage && !isReadOnly;
 
   // Extract enrichment data (may not exist if migration hasn't run)
-  const workHistory: WorkHistoryEntry[] = Array.isArray(alum.work_history) ? alum.work_history as WorkHistoryEntry[] : [];
-  const educationHistory: EducationEntry[] = Array.isArray(alum.education_history) ? alum.education_history as EducationEntry[] : [];
+  const rawWorkHistory = Array.isArray(alum.work_history) ? (alum.work_history as unknown[]) : [];
+  const rawEducationHistory = Array.isArray(alum.education_history)
+    ? (alum.education_history as unknown[])
+    : [];
+  const workHistory: WorkHistoryEntry[] = rawWorkHistory.filter((entry): entry is WorkHistoryEntry =>
+    isObjectEntry<WorkHistoryEntry>(entry)
+  );
+  const educationHistory: EducationEntry[] = rawEducationHistory.filter(
+    (entry): entry is EducationEntry => isObjectEntry<EducationEntry>(entry)
+  );
   const headline = alum.headline || alum.position_title || alum.job_title || null;
   const about = alum.summary || alum.notes || null;
 
