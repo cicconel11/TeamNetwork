@@ -115,13 +115,13 @@ const prepareDiscussionThreadSchema = z
 
 const prepareEventSchema = z
   .object({
-    title: z.string().trim().min(1).optional(),
-    description: z.string().trim().min(1).optional(),
-    start_date: z.string().trim().min(1).optional(),
-    start_time: z.string().trim().min(1).optional(),
-    end_date: z.string().trim().min(1).optional(),
-    end_time: z.string().trim().min(1).optional(),
-    location: z.string().trim().min(1).optional(),
+    title: z.string().trim().optional(),
+    description: z.string().trim().optional(),
+    start_date: z.string().trim().optional(),
+    start_time: z.string().trim().optional(),
+    end_date: z.string().trim().optional(),
+    end_time: z.string().trim().optional(),
+    location: z.string().trim().optional(),
     event_type: z
       .enum(["general", "philanthropy", "game", "meeting", "social", "fundraiser"])
       .optional(),
@@ -817,10 +817,17 @@ async function prepareEvent(
     return toolError("Event preparation requires a thread context");
   }
 
+  // Normalize empty strings to undefined (LLM often sends "")
+  const normalized = Object.fromEntries(
+    Object.entries(args).filter(
+      ([, v]) => !(typeof v === "string" && v.trim().length === 0)
+    )
+  ) as typeof args;
+
   const draftWithDefaults = {
-    ...args,
-    event_type: args.event_type ?? "general",
-    is_philanthropy: args.is_philanthropy ?? false,
+    ...normalized,
+    event_type: normalized.event_type ?? "general",
+    is_philanthropy: normalized.is_philanthropy ?? false,
   };
 
   const parsedDraft = assistantEventDraftSchema.safeParse(draftWithDefaults);
