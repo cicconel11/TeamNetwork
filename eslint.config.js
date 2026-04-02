@@ -9,6 +9,7 @@ module.exports = [
     ignores: [
       "**/.next/**",
       "**/node_modules/**",
+      "**/.claude/worktrees/**",
       "**/.worktrees/**",
       "apps/**",
       "packages/**",
