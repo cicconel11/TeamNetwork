@@ -430,7 +430,7 @@ test("hybrid greeting with events question uses routed events tool set", async (
     })
   ).text();
 
-  assert.deepEqual(toolNamesForCall(0), ["list_events", "get_org_stats"]);
+  assert.deepEqual(toolNamesForCall(0), ["list_events"]);
   assert.equal(executeToolCallCalls.length, 1);
   assert.equal(executeToolCallCalls[0].call.name, "list_events");
 });
@@ -473,6 +473,134 @@ test("analytics surface only attaches get_org_stats", async () => {
   assert.deepEqual(toolNamesForCall(0), ["get_org_stats"]);
   assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
   assert.deepEqual(executeToolCallCalls[0].call.args, {});
+});
+
+test("simple member roster requests use list_members tool_first and skip pass 2", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+
+        throw new Error("list_members fast path should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "member-1",
+            name: "Frank Ciccone",
+            role: "admin",
+            email: "frank@example.com",
+            created_at: "2026-04-02T00:00:00.000Z",
+          },
+          {
+            id: "member-2",
+            name: "Patrick Leonard",
+            role: "parent",
+            email: "patrick@example.com",
+            created_at: "2026-03-27T00:00:00.000Z",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Tell me about members") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_members"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_members" },
+  });
+  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Recent active members/);
+  assert.match(body, /Frank Ciccone \(Admin\)/);
+  assert.match(body, /patrick@example\.com/);
+});
+
+test("member count and alumni queries attach get_org_stats only and skip pass 2", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
+          return;
+        }
+
+        throw new Error("get_org_stats fast path should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          active_members: 35,
+          alumni: 12,
+          parents: 4,
+          upcoming_events: 3,
+          donations: {
+            total_amount_cents: 420000,
+            donation_count: 18,
+            last_donation_at: "2026-03-24T00:00:00.000Z",
+          },
+        });
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("How many alumni do we have?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["get_org_stats"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "get_org_stats" },
+  });
+  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Organization snapshot/);
+  assert.match(body, /Alumni: 12/);
 });
 
 test("single-tool org stats requests use tool_first context and skip pass 2", async () => {
@@ -541,6 +669,65 @@ test("single-tool org stats requests use tool_first context and skip pass 2", as
   assert.match(body, /Active members: 35/);
   assert.match(body, /Donations: 18 donations - \$4200 raised - last donation 2026-03-24/);
   assert.match(body, /"type":"done"/);
+});
+
+test("simple event requests use list_events tool_first and skip pass 2", async () => {
+  const contextModes: Array<string | undefined> = [];
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      buildPromptContext: async (input: any) => {
+        contextModes.push(input.contextMode);
+        return {
+          systemPrompt: "System prompt",
+          orgContextMessage: null,
+          metadata: { surface: input.surface, estimatedTokens: 100 },
+        };
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_events",
+            argsJson: '{"limit":5,"upcoming":true}',
+          };
+          return;
+        }
+
+        throw new Error("list_events fast path should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "event-1",
+            title: "Spring Fundraiser",
+            start_date: "2026-04-10T18:00:00.000Z",
+            location: "Philadelphia",
+            description: "Annual community fundraiser.",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("What events are coming up?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_events"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_events" },
+  });
+  assert.deepEqual(contextModes, ["tool_first"]);
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Matching events/);
+  assert.match(body, /Spring Fundraiser/);
 });
 
 test("navigation requests only attach find_navigation_targets on pass 1", async () => {
@@ -1356,17 +1543,21 @@ test("tool-backed turns fall back when pass 2 emits no content", async () => {
           yield {
             type: "tool_call_requested",
             id: "call-1",
+            name: "list_members",
+            argsJson: '{"limit": 5}',
+          };
+          yield {
+            type: "tool_call_requested",
+            id: "call-2",
             name: "get_org_stats",
             argsJson: "{}",
           };
         }
       },
-      executeToolCall: async () =>
-        okToolResult({ active_members: 35, alumni: 30, parents: 2, upcoming_events: 1, donations: null }),
     })
   );
 
-  const response = await POST(makeRequest("How many members do we have?") as any, {
+  const response = await POST(makeRequest("Give me members and stats") as any, {
     params: Promise.resolve({ orgId: ORG_ID }),
   });
   const body = await response.text();
@@ -1434,25 +1625,31 @@ test("tool call: pass 1 text before tool execution is buffered while pass 2 comp
           yield { type: "chunk", content: "Let me check..." };
           yield {
             type: "tool_call_requested",
+            id: "call-1",
+            name: "list_members",
+            argsJson: '{"limit": 5}',
+          };
+          yield {
+            type: "tool_call_requested",
             id: "call-2",
             name: "get_org_stats",
             argsJson: "{}",
           };
         } else {
           options.onUsage?.({ inputTokens: 8, outputTokens: 4 });
-          yield { type: "chunk", content: "You have 42 active members." };
+          yield { type: "chunk", content: "Here is the combined member and stats summary." };
         }
       },
     })
   );
 
-  const response = await POST(makeRequest("How many members?") as any, {
+  const response = await POST(makeRequest("Give me members and stats") as any, {
     params: Promise.resolve({ orgId: ORG_ID }),
   });
   const body = await response.text();
 
   assert.doesNotMatch(body, /Let me check/);
-  assert.match(body, /You have 42 active members/);
+  assert.match(body, /combined member and stats summary/);
   assert.match(body, /"type":"tool_status".*"status":"calling"/);
   assert.match(body, /"type":"tool_status".*"status":"done"/);
 });
@@ -1633,6 +1830,12 @@ test("pass 2 timeout suppresses buffered text and ends without done", async () =
             type: "tool_call_requested",
             id: "call-1",
             name: "list_members",
+            argsJson: '{"limit": 5}',
+          };
+          yield {
+            type: "tool_call_requested",
+            id: "call-2",
+            name: "get_org_stats",
             argsJson: "{}",
           };
           return;
@@ -1716,16 +1919,22 @@ test("tool call: usage is accumulated across both passes", async () => {
             name: "list_members",
             argsJson: '{"limit": 5}',
           };
+          yield {
+            type: "tool_call_requested",
+            id: "call-2",
+            name: "get_org_stats",
+            argsJson: "{}",
+          };
           return;
         }
 
         options.onUsage?.({ inputTokens: 4, outputTokens: 2 });
-        yield { type: "chunk", content: "Here are 5 members..." };
+        yield { type: "chunk", content: "Here is the combined result." };
       },
     })
   );
 
-  const response = await POST(makeRequest() as any, {
+  const response = await POST(makeRequest("Give me members and stats") as any, {
     params: Promise.resolve({ orgId: ORG_ID }),
   });
   const body = await response.text();
