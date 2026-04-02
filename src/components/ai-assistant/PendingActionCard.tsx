@@ -31,6 +31,11 @@ export function PendingActionCard({
   const title = getValue(payload, "title");
   const company = getValue(payload, "company");
   const location = getValue(payload, "location");
+  const startDate = getValue(payload, "start_date");
+  const startTime = getValue(payload, "start_time");
+  const endDate = getValue(payload, "end_date");
+  const endTime = getValue(payload, "end_time");
+  const eventType = getValue(payload, "event_type");
   const industry = getValue(payload, "industry");
   const experienceLevel = getValue(payload, "experience_level");
   const applicationUrl = getValue(payload, "application_url");
@@ -59,6 +64,30 @@ export function PendingActionCard({
               ) : null}
               {mediaCount > 0 ? (
                 <p><span className="font-medium">Attachments:</span> {mediaCount}</p>
+              ) : null}
+            </>
+          ) : action.actionType === "create_event" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {eventType ? <p><span className="font-medium">Type:</span> {eventType}</p> : null}
+              {(startDate || startTime) ? (
+                <p>
+                  <span className="font-medium">Starts:</span>{" "}
+                  {[startDate, startTime].filter(Boolean).join(" ")}
+                </p>
+              ) : null}
+              {(endDate || endTime) ? (
+                <p>
+                  <span className="font-medium">Ends:</span>{" "}
+                  {[endDate, endTime].filter(Boolean).join(" ")}
+                </p>
+              ) : null}
+              {location ? <p><span className="font-medium">Location:</span> {location}</p> : null}
+              {description ? (
+                <div>
+                  <p className="font-medium text-foreground">Description</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{description}</p>
+                </div>
               ) : null}
             </>
           ) : (
