@@ -7,12 +7,14 @@ import {
   isPendingActionExpired,
   updatePendingActionStatus,
   type CreateDiscussionThreadPendingPayload,
+  type CreateEventPendingPayload,
   type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
 import {
   clearDraftSession,
   supportsDraftSessionsStore,
 } from "@/lib/ai/draft-sessions";
+import { createEvent } from "@/lib/events/create-event";
 import { createJobPosting } from "@/lib/jobs/create-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -25,6 +27,7 @@ export interface AiPendingActionConfirmRouteDeps {
   updatePendingActionStatus?: typeof updatePendingActionStatus;
   createJobPosting?: typeof createJobPosting;
   createDiscussionThread?: typeof createDiscussionThread;
+  createEvent?: typeof createEvent;
   clearDraftSession?: typeof clearDraftSession;
 }
 
@@ -35,6 +38,7 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
+  const createEventFn = deps.createEvent ?? createEvent;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
 
   return async function POST(
@@ -265,6 +269,98 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
+        }
+        case "create_event": {
+          const payload = action.payload as CreateEventPendingPayload;
+          const result = await createEventFn({
+            supabase: ctx.serviceSupabase,
+            serviceSupabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            input: payload,
+            orgSlug:
+              typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+                ? payload.orgSlug
+                : null,
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "event",
+            resultEntityId: result.event.id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const content = result.eventUrl
+            ? `Created event: [${result.event.title}](${result.eventUrl})`
+            : `Created event: ${result.event.title}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          // Fire-and-forget: sync to Google Calendar
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+          fetch(`${appUrl}/api/calendar/event-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              eventId: result.event.id,
+              organizationId: ctx.orgId,
+              operation: "create",
+            }),
+          }).catch(() => {});
+
+          // Fire-and-forget: send notification
+          fetch(`${appUrl}/api/notifications/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              organizationId: ctx.orgId,
+              title: `New Event: ${result.event.title}`,
+              body: `Event scheduled for ${payload.start_date} at ${payload.start_time}${payload.location ? `\nWhere: ${payload.location}` : ""}`,
+              channel: "email",
+              audience: "both",
+              category: "event",
+            }),
+          }).catch(() => {});
+
+          return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
         }
         default:
           throw new Error(`Unsupported pending action type: ${action.action_type satisfies never}`);

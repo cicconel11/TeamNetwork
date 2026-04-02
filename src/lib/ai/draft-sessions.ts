@@ -1,4 +1,5 @@
 import type { AssistantDiscussionDraft } from "@/lib/schemas/discussion";
+import type { AssistantEventDraft } from "@/lib/schemas/events-ai";
 import type { AssistantJobDraft } from "@/lib/schemas/jobs";
 import { AI_PENDING_ACTION_EXPIRY_MS, type PendingActionType } from "@/lib/ai/pending-actions";
 
@@ -8,6 +9,7 @@ export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 export interface DraftSessionPayloadByType {
   create_job_posting: AssistantJobDraft;
   create_discussion_thread: AssistantDiscussionDraft;
+  create_event: AssistantEventDraft;
 }
 
 export type DraftSessionPayload = DraftSessionPayloadByType[DraftSessionType];
@@ -59,11 +61,9 @@ interface DraftSessionSupabase {
 export function supportsDraftSessionsStore(
   supabase: unknown
 ): supabase is DraftSessionSupabase {
-  if (!supabase || typeof supabase !== "object") {
-    return false;
-  }
-
   return (
+    supabase != null &&
+    typeof supabase === "object" &&
     "from" in supabase &&
     typeof (supabase as { from?: unknown }).from === "function"
   );

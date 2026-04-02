@@ -374,6 +374,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
       if (activeThreadId) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
+      window.dispatchEvent(new CustomEvent("calendar:refresh"));
     } finally {
       setPendingActionBusy(false);
     }
