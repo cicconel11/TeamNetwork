@@ -67,18 +67,20 @@ function createSemanticCacheServiceSupabase(options: {
   };
 }
 
-function createSupabaseStub() {
+function createSupabaseStub(options: { failHistoryQueries?: boolean } = {}) {
   const state = {
     threadCount: 0,
     assistantCount: 0,
     threads: [] as Array<Record<string, unknown>>,
     messages: [] as Array<Record<string, unknown>>,
+    historyQueryCount: 0,
   };
 
   function from(table: string) {
     const query = {
       table,
       op: "select" as "select" | "insert" | "update",
+      selectedColumns: null as string | null,
       inserted: null as Record<string, unknown> | null,
       updated: null as Record<string, unknown> | null,
       filters: [] as Array<{ kind: "eq" | "in" | "lt"; column: string; value: unknown }>,
@@ -88,7 +90,7 @@ function createSupabaseStub() {
 
     const builder: Record<string, any> = {
       select(columns: string) {
-        void columns;
+        query.selectedColumns = columns;
         return builder;
       },
       insert(payload: Record<string, unknown>) {
@@ -131,6 +133,13 @@ function createSupabaseStub() {
       }
 
       if (table === "ai_messages") {
+        if (query.op === "select" && query.selectedColumns === "role, content") {
+          state.historyQueryCount += 1;
+          if (options.failHistoryQueries) {
+            return { data: null, error: new Error("history query failed") };
+          }
+        }
+
         if (
           query.op === "select" &&
           query.filters.some((filter) => filter.kind === "eq" && filter.column === "idempotency_key")
@@ -222,6 +231,7 @@ const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/
 let POST = createChatPostHandler();
 
 beforeEach(() => {
+  (globalThis as { __rateLimitStore?: Map<string, unknown> }).__rateLimitStore?.clear();
   authUser = ADMIN_USER;
   supabaseStub = createSupabaseStub();
   auditEntries = [];
@@ -646,6 +656,138 @@ test("POST /api/ai/[orgId]/chat still runs RAG retrieval for non-casual messages
   assert.equal(auditEntries[0].stageTimings.stages.rag_retrieval.status, "completed");
 });
 
+test("POST /api/ai/[orgId]/chat skips history queries for new threads", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Tell me about members",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(supabaseStub.state.historyQueryCount, 0);
+  assert.equal(auditEntries[0].stageTimings.stages.history_load.status, "completed");
+});
+
+test("POST /api/ai/[orgId]/chat returns 409 when an idempotent replay has no assistant reply yet", async () => {
+  const replaySupabase = {
+    auth: {
+      getUser: async () => ({ data: { user: ADMIN_USER } }),
+    },
+    from(table: string) {
+      if (table !== "ai_messages") {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+
+      const filters = new Map<string, unknown>();
+      const builder: Record<string, any> = {
+        select() {
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          filters.set(column, value);
+          return builder;
+        },
+        gt(column: string, value: unknown) {
+          filters.set(`gt:${column}`, value);
+          return builder;
+        },
+        order() {
+          return builder;
+        },
+        limit() {
+          return builder;
+        },
+        maybeSingle: async () => {
+          if (filters.has("idempotency_key")) {
+            return {
+              data: {
+                id: "user-msg-1",
+                status: "complete",
+                thread_id: "thread-replay-1",
+                created_at: "2026-03-23T00:00:00.000Z",
+              },
+              error: null,
+            };
+          }
+
+          return { data: null, error: null };
+        },
+      };
+
+      return builder;
+    },
+  };
+
+  aiContext = {
+    ok: true,
+    orgId: ORG_ID,
+    userId: ADMIN_USER.id,
+    role: "admin",
+    supabase: replaySupabase,
+    serviceSupabase: { rpc: async () => ({ data: null, error: null }) },
+  };
+
+  POST = createChatPostHandler({
+    createClient: async () => replaySupabase as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async () => {
+      throw new Error("buildPromptContext should not run for idempotent replay");
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      throw new Error("composeResponse should not run for idempotent replay");
+    }) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-replay-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Replay thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Tell me about members",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "Request already in progress",
+    threadId: "thread-replay-1",
+  });
+});
+
 test("POST /api/ai/[orgId]/chat skips RAG on tool-only follow-up refinements but still loads history", async () => {
   process.env.EMBEDDING_API_KEY = "embed-key";
   const existingThreadId = "11111111-1111-4111-8111-111111111119";
@@ -685,6 +827,76 @@ test("POST /api/ai/[orgId]/chat skips RAG on tool-only follow-up refinements but
     "tool_only_structured_query"
   );
   assert.equal(auditEntries[0].stageTimings.stages.history_load.status, "completed");
+});
+
+test("POST /api/ai/[orgId]/chat continues when history load fails for an existing thread", async () => {
+  const existingThreadId = "11111111-1111-4111-8111-111111111121";
+  const failingSupabase = createSupabaseStub({ failHistoryQueries: true });
+  let capturedMessages: Array<{ role: string; content: string }> = [];
+
+  supabaseStub = failingSupabase;
+  aiContext = {
+    ...aiContext,
+    supabase: failingSupabase,
+  };
+
+  POST = createChatPostHandler({
+    createClient: async () => failingSupabase as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { messages: Array<{ role: string; content: string }> }) {
+      capturedMessages = options.messages;
+      yield { type: "chunk", content: "Hello world" };
+    }) as any,
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: existingThreadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Tell me about members",
+      surface: "general",
+      threadId: existingThreadId,
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  await response.text();
+
+  assert.equal(failingSupabase.state.historyQueryCount, 1);
+  assert.deepEqual(capturedMessages, [{ role: "user", content: "Tell me about members" }]);
+  assert.equal(auditEntries[0].stageTimings.stages.history_load.status, "failed");
 });
 
 test("POST /api/ai/[orgId]/chat keeps RAG for context-dependent follow-ups", async () => {
@@ -852,19 +1064,41 @@ test("POST /api/ai/[orgId]/chat logs grounding failures for unsupported tool sum
     },
     createZaiClient: () => ({ client: "fake" } as any),
     getZaiModel: () => "glm-5",
-    composeResponse: (async function* () {
-      yield {
-        type: "tool_call_requested",
-        id: "tool-call-1",
-        name: "get_org_stats",
-        argsJson: "{}",
-      };
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "list_members",
+          argsJson: '{"limit": 5}',
+        };
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-2",
+          name: "get_org_stats",
+          argsJson: "{}",
+        };
+        return;
+      }
+
       yield { type: "chunk", content: "Your organization has 99 active members." };
     }) as any,
-    executeToolCall: async () => ({
-      kind: "ok",
-      data: { active_members: 23, alumni: 10, parents: 1, upcoming_events: 4, donations: null },
-    }),
+    executeToolCall: async (_ctx: unknown, call: { name: string }) =>
+      call.name === "list_members"
+        ? ({
+            kind: "ok",
+            data: [{ id: "member-1", name: "Alice Example", email: "alice@example.com" }],
+          } as const)
+        : ({
+            kind: "ok",
+            data: {
+              active_members: 23,
+              alumni: 10,
+              parents: 1,
+              upcoming_events: 4,
+              donations: null,
+            },
+          } as const),
     logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
       auditEntries.push(entry);
     },
