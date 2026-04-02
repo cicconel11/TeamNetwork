@@ -334,6 +334,32 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             });
           }
 
+          // Fire-and-forget: sync to Google Calendar
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+          fetch(`${appUrl}/api/calendar/event-sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              eventId: result.event.id,
+              organizationId: ctx.orgId,
+              operation: "create",
+            }),
+          }).catch(() => {});
+
+          // Fire-and-forget: send notification
+          fetch(`${appUrl}/api/notifications/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              organizationId: ctx.orgId,
+              title: `New Event: ${result.event.title}`,
+              body: `Event scheduled for ${payload.start_date} at ${payload.start_time}${payload.location ? `\nWhere: ${payload.location}` : ""}`,
+              channel: "email",
+              audience: "both",
+              category: "event",
+            }),
+          }).catch(() => {});
+
           return NextResponse.json({ ok: true, event: result.event, actionId: action.id });
         }
         default:
