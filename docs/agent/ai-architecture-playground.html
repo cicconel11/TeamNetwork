@@ -623,6 +623,7 @@ const COMPONENTS = [
       'Rate limiting: 30 req/min IP, 20 req/min user, 60 req/min org (AI_ORG_RATE_LIMIT override)',
       'Idempotency via idempotency_key + localStorage',
       'Duplicate detection with 409 recovery for in-flight requests',
+      'Completed duplicate requests now also return 409 when the original assistant reply is not ready yet (instead of a replay error)',
       'Abandoned stream cleanup (5-min threshold, status → error)',
       'Atomic init_ai_chat RPC for thread create/reuse + message insert',
       'Route-derived surface from pathname via routeToSurface()',
@@ -652,6 +653,7 @@ const COMPONENTS = [
       'ContextMetadata returned (sectionsIncluded, sectionsExcluded, estimatedTokens)',
       'Untrusted org context injected as user role (prompt injection safe)',
       'System prompt with NARROW_PANEL_POLICY',
+      'tool_first context mode keeps simple deterministic read turns lighter than full-context live lookups',
       'shared_static mode overrides surface for cache-eligible miss contexts',
       'Cross-surface thread reset on navigation (prevents thread/surface mismatch)',
       'Thread list filtered by current surface',
@@ -718,7 +720,8 @@ const COMPONENTS = [
       'Maps surface → intent: members_query, analytics_query, events_query, general_query, ambiguous_query',
       'Routing based on classified intent — effectiveSurface drives context selection',
       'Routing/classification now consumes promptSafeMessage rather than raw user text',
-      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface'
+      'Exact casual turns omit pass-1 tools; non-casual turns gate tools by effectiveSurface',
+      'Simple member roster, event list, and stats prompts can narrow to a single fast-path read tool before the model plans anything more expensive'
     ],
     missing: [
       'No plan decomposition for multi-step requests',
@@ -776,7 +779,8 @@ const COMPONENTS = [
       'Abandoned stream detection (5-min timeout, prevents stuck threads)',
       'Distinct suspicious vs blocked safety outcomes with identical fail-closed execution behavior in v1',
       'Risky prior user messages sanitized before prompt replay so blocked turns do not poison later turns',
-      'Confirmation gate for write tools: prepare_* tools create pending actions requiring explicit user confirmation before execution'
+      'Confirmation gate for write tools: prepare_* tools create pending actions requiring explicit user confirmation before execution',
+      'Existing-thread history lookup failures now degrade to current-turn-only execution instead of aborting the chat request'
     ],
     missing: [
       'Write tool permission checks limited to admin role gate — no granular per-action RBAC beyond admin/non-admin'
@@ -855,6 +859,8 @@ const COMPONENTS = [
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
       'Two-pass tool loop: Pass 1 conditionally streams with tools, Pass 2 feeds tool results back (no tools, prevents chaining)',
+      'Single-tool deterministic fast path for list_members, list_events, get_org_stats, list_announcements, suggest_connections, and find_navigation_targets skips pass 2 entirely',
+      'Simple member / alumni / donation / events prompts can force a single read tool and use tool_first context for lower latency',
       'tool_status SSE events emitted: calling, done, error',
       'Malformed args fail closed — no {} fallback, error pushed to tool results',
       'Cache bypass when toolCallMade = true (tool responses are dynamic)',
@@ -959,6 +965,7 @@ const COMPONENTS = [
       'Yields tool_call_requested events with assembled tool call data',
       'Pass 2 mode: reconstructs assistant + tool role messages per OpenAI function-calling protocol',
       'Tool-backed pass-2 content now buffers until the route verifies it before emitting chunk text',
+      'Deterministic read turns can emit the final chunk directly from trusted tool data without a second model pass',
       'response-composer stream failures log with requestId/orgId context'
     ],
     missing: [
