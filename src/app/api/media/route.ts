@@ -139,6 +139,7 @@ export async function GET(request: NextRequest) {
       .map((item: Record<string, unknown>) => ({
         id: item.id as string,
         storage_path: item.storage_path as string,
+        preview_storage_path: (item.preview_storage_path as string | null) ?? null,
         mime_type: (item.mime_type as string) || "application/octet-stream",
         media_type: item.media_type as "image" | "video",
       }));
@@ -232,6 +233,15 @@ export async function POST(request: NextRequest) {
     // Generate storage path
     const ext = extname(fileName).replace(".", "").toLowerCase() || mimeType.split("/")[1] || "bin";
     const storagePath = `${orgId}/${mediaType}/${Date.now()}-${randomUUID()}.${ext}`;
+    const previewStoragePath = mediaType === "image" && body.previewMimeType
+      ? `${storagePath.replace(/\.[^.]+$/, "")}-preview.${
+          body.previewMimeType === "image/png"
+            ? "png"
+            : body.previewMimeType === "image/webp"
+              ? "webp"
+              : "jpg"
+        }`
+      : null;
 
     // Start in "uploading" state — finalize endpoint transitions to final status
     const initialStatus = "uploading";
@@ -246,6 +256,7 @@ export async function POST(request: NextRequest) {
           orgId,
           uploadedBy: user.id,
           storagePath,
+          previewStoragePath,
           fileName,
           mimeType,
           fileSizeBytes,
@@ -267,14 +278,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate signed upload URL
-    const { data: signedData, error: signedError } = await serviceClient.storage
-      .from("org-media")
-      .createSignedUploadUrl(storagePath);
+    const [signedOriginal, signedPreview] = await Promise.all([
+      serviceClient.storage.from("org-media").createSignedUploadUrl(storagePath),
+      previewStoragePath
+        ? serviceClient.storage.from("org-media").createSignedUploadUrl(previewStoragePath)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
-    if (signedError || !signedData) {
+    if (signedOriginal.error || !signedOriginal.data) {
       // Clean up the DB row if we can't get a signed URL
       await serviceClient.from("media_items").delete().eq("id", mediaId);
       return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
+    }
+
+    if (previewStoragePath && (signedPreview.error || !signedPreview.data)) {
+      await serviceClient.from("media_items").delete().eq("id", mediaId);
+      return NextResponse.json({ error: "Failed to generate preview upload URL" }, { status: 500 });
     }
 
     console.log("[media/gallery] Upload intent created", {
@@ -283,14 +302,18 @@ export async function POST(request: NextRequest) {
       mimeType,
       fileSizeBytes,
       creationPath,
+      hasPreviewUpload: Boolean(previewStoragePath),
     });
 
     return NextResponse.json(
       {
         mediaId,
-        signedUrl: signedData.signedUrl,
-        token: signedData.token,
+        signedUrl: signedOriginal.data.signedUrl,
+        token: signedOriginal.data.token,
         path: storagePath,
+        previewSignedUrl: signedPreview.data?.signedUrl ?? null,
+        previewToken: signedPreview.data?.token ?? null,
+        previewPath: previewStoragePath,
       },
       { status: 201, headers: rateLimit.headers },
     );

@@ -200,6 +200,7 @@ describe("uploadIntentSchema", () => {
     fileName: "photo.png",
     mimeType: "image/png",
     fileSize: 1024,
+    previewMimeType: "image/jpeg",
   };
 
   test("accepts valid input", () => {
@@ -225,6 +226,31 @@ describe("uploadIntentSchema", () => {
   test("rejects missing orgId", () => {
     const { orgId: _, ...noOrg } = validInput;
     const result = uploadIntentSchema.safeParse(noOrg);
+    assert.strictEqual(result.success, false);
+  });
+
+  test("accepts uploads without a preview mime type", () => {
+    const result = uploadIntentSchema.safeParse({
+      ...validInput,
+      previewMimeType: undefined,
+    });
+    assert.strictEqual(result.success, true);
+  });
+
+  test("rejects unsupported preview mime type", () => {
+    const result = uploadIntentSchema.safeParse({
+      ...validInput,
+      previewMimeType: "image/gif",
+    });
+    assert.strictEqual(result.success, false);
+  });
+
+  test("rejects preview mime type for video uploads", () => {
+    const result = uploadIntentSchema.safeParse({
+      ...validInput,
+      mimeType: "video/mp4",
+      previewMimeType: "image/jpeg",
+    });
     assert.strictEqual(result.success, false);
   });
 });

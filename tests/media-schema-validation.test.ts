@@ -27,6 +27,7 @@ describe("galleryUploadIntentSchema", () => {
   it("accepts valid payload with optional fields", () => {
     const result = galleryUploadIntentSchema.safeParse({
       ...validPayload,
+      previewMimeType: "image/jpeg",
       title: "Summer BBQ",
       description: "Photos from the summer BBQ event",
       tags: ["summer", "BBQ", "2026"],
@@ -64,6 +65,23 @@ describe("galleryUploadIntentSchema", () => {
     const result = galleryUploadIntentSchema.safeParse({
       ...validPayload,
       mimeType: "application/pdf",
+    });
+    assert.ok(!result.success);
+  });
+
+  it("rejects unsupported preview MIME type", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      previewMimeType: "image/gif",
+    });
+    assert.ok(!result.success);
+  });
+
+  it("rejects preview MIME type for video uploads", () => {
+    const result = galleryUploadIntentSchema.safeParse({
+      ...validPayload,
+      mimeType: "video/mp4",
+      previewMimeType: "image/jpeg",
     });
     assert.ok(!result.success);
   });

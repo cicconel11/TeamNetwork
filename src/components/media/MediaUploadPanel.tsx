@@ -73,7 +73,7 @@ export function MediaUploadPanel({
   );
 
   const handleFiles = useCallback(
-    (newFiles: File[]) => addFiles(newFiles),
+    async (newFiles: File[]) => addFiles(newFiles),
     [addFiles],
   );
 

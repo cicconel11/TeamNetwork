@@ -44,6 +44,8 @@ export type UpdateMediaForm = z.infer<typeof updateMediaSchema>;
 
 export const mediaFeatureEnum = z.enum(["feed_post", "discussion_thread", "job_posting"]);
 export type MediaUploadFeature = z.infer<typeof mediaFeatureEnum>;
+export const previewImageMimeTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp"]);
+export type PreviewImageMimeType = z.infer<typeof previewImageMimeTypeSchema>;
 
 export const uploadIntentSchema = z.object({
   orgId: baseSchemas.uuid,
@@ -51,7 +53,14 @@ export const uploadIntentSchema = z.object({
   fileName: safeString(255),
   mimeType: safeString(127),
   fileSize: z.number().int().positive().max(25 * 1024 * 1024),
-});
+  previewMimeType: previewImageMimeTypeSchema.optional(),
+}).refine(
+  (data) => data.mimeType.startsWith("image/") || data.previewMimeType === undefined,
+  {
+    message: "Preview uploads are only supported for images",
+    path: ["previewMimeType"],
+  },
+);
 
 export type UploadIntentInput = z.infer<typeof uploadIntentSchema>;
 
@@ -136,6 +145,7 @@ export const galleryUploadIntentSchema = z.object({
   fileName: safeString(255),
   mimeType: galleryMimeTypeSchema,
   fileSizeBytes: z.number().int().positive().max(GALLERY_VIDEO_MAX_BYTES),
+  previewMimeType: previewImageMimeTypeSchema.optional(),
   title: optionalSafeString(200),
   description: optionalSafeString(2000),
   tags: galleryTagsSchema,
@@ -149,6 +159,12 @@ export const galleryUploadIntentSchema = z.object({
     return true;
   },
   { message: "Images must be under 10MB", path: ["fileSizeBytes"] },
+).refine(
+  (data) => data.mimeType.startsWith("image/") || data.previewMimeType === undefined,
+  {
+    message: "Preview uploads are only supported for images",
+    path: ["previewMimeType"],
+  },
 );
 export type GalleryUploadIntentInput = z.infer<typeof galleryUploadIntentSchema>;
 

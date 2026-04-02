@@ -33,6 +33,13 @@ export function validateGalleryFile(file: File): ValidationResult {
     };
   }
 
+  if (mimeType === "image/heic") {
+    return {
+      valid: false,
+      error: "HEIC uploads are not supported in the browser yet. Convert to JPG, PNG, or WebP first.",
+    };
+  }
+
   const isImage = mimeType.startsWith("image/");
   const maxBytes = isImage ? GALLERY_IMAGE_MAX_BYTES : GALLERY_VIDEO_MAX_BYTES;
 

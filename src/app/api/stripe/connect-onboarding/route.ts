@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to start Stripe onboarding";
       console.error("[connect-onboarding] Error:", message);
-      return respond({ error: message }, 400);
+      return respond({ error: "Unable to start Stripe onboarding" }, 400);
     }
   } catch (error) {
     if (error instanceof ValidationError) {

@@ -14,6 +14,7 @@ interface GalleryUploadRecordInput {
   orgId: string;
   uploadedBy: string;
   storagePath: string;
+  previewStoragePath?: string | null;
   fileName: string;
   mimeType: string;
   fileSizeBytes: number;
@@ -113,6 +114,7 @@ export async function createMediaGalleryUploadRecord(
     p_org_id: input.orgId,
     p_uploaded_by: input.uploadedBy,
     p_storage_path: input.storagePath,
+    p_preview_storage_path: input.previewStoragePath ?? null,
     p_file_name: input.fileName,
     p_mime_type: input.mimeType,
     p_file_size_bytes: input.fileSizeBytes,
@@ -157,6 +159,7 @@ export async function createMediaGalleryUploadRecord(
       organization_id: input.orgId,
       uploaded_by: input.uploadedBy,
       storage_path: input.storagePath,
+      preview_storage_path: input.previewStoragePath ?? null,
       file_name: input.fileName,
       mime_type: input.mimeType,
       file_size_bytes: input.fileSizeBytes,

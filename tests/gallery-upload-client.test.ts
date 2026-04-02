@@ -10,9 +10,11 @@ function makeEntry(overrides: Partial<UploadFileEntry> = {}): UploadFileEntry {
   return {
     id: "entry-1",
     file: null,
+    previewFile: null,
     fileName: "spring-game.jpg",
     fileSize: 1024,
     mimeType: "image/jpeg",
+    previewMimeType: "image/jpeg",
     previewUrl: "blob:preview",
     title: "Spring Game",
     description: "",

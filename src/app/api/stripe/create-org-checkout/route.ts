@@ -188,8 +188,7 @@ export async function POST(req: Request) {
           await supabase.from("organizations").delete().eq("id", organizationId);
         }
 
-        const message = error instanceof Error ? error.message : "Unable to start checkout";
-        return respond({ error: message }, 400);
+        return respond({ error: "Unable to start checkout" }, 400);
       }
     }
 
@@ -379,8 +378,7 @@ export async function POST(req: Request) {
         await serviceSupabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
       }
 
-      const message = error instanceof Error ? error.message : "Unable to start checkout";
-      return respond({ error: message }, 400);
+      return respond({ error: "Unable to start checkout" }, 400);
     }
   } catch (error) {
     if (error instanceof ValidationError) {

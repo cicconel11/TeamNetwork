@@ -239,7 +239,7 @@ async function enrichAlbumsWithCovers(
   if (coversToFetch.length > 0) {
     const { data: coverItems } = await serviceClient
       .from("media_items")
-      .select("id, storage_path, mime_type, media_type, status")
+      .select("id, storage_path, preview_storage_path, mime_type, media_type, status")
       .in("id", coversToFetch)
       .is("deleted_at", null);
 
@@ -252,6 +252,7 @@ async function enrichAlbumsWithCovers(
           .map((coverItem) => ({
             id: coverItem.id,
             storage_path: coverItem.storage_path as string,
+            preview_storage_path: (coverItem.preview_storage_path as string | null) ?? null,
             mime_type: (coverItem.mime_type as string) || "application/octet-stream",
             media_type: coverItem.media_type as "image" | "video",
           })),

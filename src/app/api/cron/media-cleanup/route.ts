@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     // Fetch stale pending uploads
     const { data: staleUploads, error: queryError } = await supabase
       .from("media_uploads")
-      .select("id, storage_path")
+      .select("id, storage_path, preview_storage_path")
       .eq("status", "pending")
       .is("deleted_at", null)
       .lt("created_at", cutoff)
@@ -42,8 +42,10 @@ export async function GET(request: Request) {
     let cleanedUpUploads = 0;
 
     for (const upload of staleUploads || []) {
-      if (upload.storage_path) {
-        await supabase.storage.from(BUCKET).remove([upload.storage_path]);
+      const storagePaths = [upload.storage_path, upload.preview_storage_path]
+        .filter((path): path is string => Boolean(path));
+      if (storagePaths.length > 0) {
+        await supabase.storage.from(BUCKET).remove(storagePaths);
       }
 
       // Mark as orphaned

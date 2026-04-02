@@ -10,6 +10,7 @@ import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ExportCsvButton } from "@/components/shared";
+import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
 
@@ -59,18 +60,16 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const donationCount = stats?.donation_count ?? donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
 
-  const purposeTotals = donationRows.reduce<Record<string, number>>((acc, donation) => {
-    const label = donation.purpose || tDonations("generalSupport");
-    acc[label] = (acc[label] || 0) + (donation.amount_cents || 0);
-    return acc;
-  }, {});
-
   const navConfig = org.nav_config as NavConfig | null;
-  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const [tNav, locale, tDonations, tCommon] = await Promise.all([
+    getTranslations("nav.items"),
+    getLocale(),
+    getTranslations("donations"),
+    getTranslations("common"),
+  ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/donations", navConfig, t, locale);
-  const tDonations = await getTranslations("donations");
-  const tCommon = await getTranslations("common");
+  const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
   const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (
@@ -144,7 +143,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                   </div>
                 ))
             ) : (
-              <p className="text-sm text-muted-foreground">{tDonations("willBeGrouped", { label: pageLabel })}</p>
+              <p className="text-sm text-muted-foreground">{tDonations("willGroupHere", { label: pageLabel })}</p>
             )}
           </div>
         </Card>
@@ -154,7 +153,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
             <h3 className="font-semibold text-foreground">Recent {pageLabel}</h3>
             {canEdit && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {isConnected ? tDonations("fundsSettleViaStripe") : tDonations("stripeNotConnected")}
+                {isConnected ? tDonations("fundsSettle") : tDonations("stripeNotConnected")}
               </div>
             )}
           </div>
@@ -207,8 +206,8 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
             </div>
           ) : (
             <EmptyState
-              title={tDonations("noDonationsYet", { label: pageLabel.toLowerCase() })}
-              description={tDonations("donationsWillAppear", { label: pageLabel })}
+              title={`No ${pageLabel.toLowerCase()} yet`}
+              description={tDonations("willAppear", { label: pageLabel })}
               action={
                 <Link href={`/${orgSlug}/philanthropy`} className="text-sm text-muted-foreground hover:text-foreground">
                   View philanthropy events →

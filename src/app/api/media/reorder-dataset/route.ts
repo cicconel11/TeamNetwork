@@ -106,6 +106,7 @@ export async function GET(request: NextRequest) {
       .map((item: Record<string, unknown>) => ({
         id: item.id as string,
         storage_path: item.storage_path as string,
+        preview_storage_path: (item.preview_storage_path as string | null) ?? null,
         mime_type: (item.mime_type as string) || "application/octet-stream",
         media_type: item.media_type as "image" | "video",
       }));

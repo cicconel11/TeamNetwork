@@ -49,7 +49,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // Fetch the media item — must be status='uploading' and owned by the user
     const { data: item, error: fetchError } = await serviceClient
       .from("media_items")
-      .select("id, storage_path, mime_type, uploaded_by, status, organization_id")
+      .select("id, storage_path, preview_storage_path, mime_type, uploaded_by, status, organization_id")
       .eq("id", mediaId)
       .is("deleted_at", null)
       .single();
@@ -119,7 +119,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // File content doesn't match declared MIME type — reject
       // Clean up the uploaded file and mark item as rejected
       console.error("[media/gallery] Magic bytes mismatch — rejected", { mediaId });
-      await serviceClient.storage.from("org-media").remove([item.storage_path]);
+      await serviceClient.storage.from("org-media").remove(
+        [item.storage_path, item.preview_storage_path].filter((path): path is string => Boolean(path)),
+      );
       await serviceClient
         .from("media_items")
         .update({ deleted_at: new Date().toISOString() })
@@ -129,6 +131,72 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { error: "File content does not match declared type. Upload rejected." },
         { status: 400 },
       );
+    }
+
+    if (item.preview_storage_path) {
+      const previewMimeType = item.preview_storage_path.endsWith(".png")
+        ? "image/png"
+        : item.preview_storage_path.endsWith(".webp")
+          ? "image/webp"
+          : item.preview_storage_path.endsWith(".jpg") || item.preview_storage_path.endsWith(".jpeg")
+            ? "image/jpeg"
+            : null;
+
+      const { data: signedPreviewData } = await serviceClient.storage
+        .from("org-media")
+        .createSignedUrl(item.preview_storage_path, 60);
+
+      if (!previewMimeType || !signedPreviewData?.signedUrl) {
+        await serviceClient.storage.from("org-media").remove(
+          [item.storage_path, item.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_items")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Please upload the preview first." },
+          { status: 400 },
+        );
+      }
+
+      const previewRes = await fetch(signedPreviewData.signedUrl, {
+        headers: { Range: "bytes=0-11" },
+      });
+
+      if (!previewRes.ok && previewRes.status !== 206) {
+        await serviceClient.storage.from("org-media").remove(
+          [item.storage_path, item.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_items")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Please upload the preview first." },
+          { status: 400 },
+        );
+      }
+
+      const previewBuffer = Buffer.from(await previewRes.arrayBuffer());
+
+      if (!validateMagicBytes(previewBuffer, previewMimeType)) {
+        console.error("[media/gallery] Preview magic bytes mismatch — rejected", { mediaId });
+        await serviceClient.storage.from("org-media").remove(
+          [item.storage_path, item.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_items")
+          .update({ deleted_at: new Date().toISOString() })
+          .eq("id", mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file content does not match declared type. Upload rejected." },
+          { status: 400 },
+        );
+      }
     }
 
     // Determine final status: admin uploads auto-approve, others go to moderation

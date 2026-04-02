@@ -72,13 +72,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Download first bytes from storage for magic byte validation
-    const { data: fileData, error: downloadError } = await serviceClient.storage
+    const { data: signedData } = await serviceClient.storage
       .from(BUCKET)
-      .download(media.storage_path);
+      .createSignedUrl(media.storage_path, 60);
 
-    if (downloadError || !fileData) {
-      // File not uploaded yet or storage error
+    if (!signedData?.signedUrl) {
       await serviceClient
         .from("media_uploads")
         .update({ status: "failed" })
@@ -90,14 +88,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const arrayBuffer = await fileData.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const headRes = await fetch(signedData.signedUrl, {
+      headers: { Range: `bytes=0-${MAGIC_BYTE_READ_SIZE - 1}` },
+    });
+
+    if (!headRes.ok && headRes.status !== 206) {
+      await serviceClient
+        .from("media_uploads")
+        .update({ status: "failed" })
+        .eq("id", body.mediaId);
+
+      return NextResponse.json(
+        { error: "File not found in storage. Upload may have failed." },
+        { status: 400, headers: rateLimit.headers },
+      );
+    }
+
+    let actualFileSize: number | null = null;
+    const contentRange = headRes.headers.get("Content-Range");
+    if (contentRange) {
+      const match = contentRange.match(/\/(\d+)$/);
+      if (match) actualFileSize = Number.parseInt(match[1], 10);
+    }
+
+    if (actualFileSize === null) {
+      const headOnly = await fetch(signedData.signedUrl, { method: "HEAD" });
+      const contentLength = headOnly.headers.get("Content-Length");
+      if (contentLength) actualFileSize = Number.parseInt(contentLength, 10);
+    }
+
+    const buffer = Buffer.from(await headRes.arrayBuffer());
 
     // Validate magic bytes
     const headerBytes = buffer.subarray(0, MAGIC_BYTE_READ_SIZE);
     if (!validateMagicBytes(headerBytes, media.mime_type)) {
       // Delete the spoofed file and mark as failed
-      await serviceClient.storage.from(BUCKET).remove([media.storage_path]);
+      await serviceClient.storage.from(BUCKET).remove(
+        [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+      );
       await serviceClient
         .from("media_uploads")
         .update({ status: "failed" })
@@ -109,10 +137,75 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (media.preview_storage_path) {
+      const previewMimeType = media.preview_storage_path.endsWith(".png")
+        ? "image/png"
+        : media.preview_storage_path.endsWith(".webp")
+          ? "image/webp"
+          : media.preview_storage_path.endsWith(".jpg") || media.preview_storage_path.endsWith(".jpeg")
+            ? "image/jpeg"
+            : null;
+
+      const { data: signedPreviewData } = await serviceClient.storage
+        .from(BUCKET)
+        .createSignedUrl(media.preview_storage_path, 60);
+
+      if (!previewMimeType || !signedPreviewData?.signedUrl) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Upload may have failed." },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
+
+      const previewRes = await fetch(signedPreviewData.signedUrl, {
+        headers: { Range: `bytes=0-${MAGIC_BYTE_READ_SIZE - 1}` },
+      });
+
+      if (!previewRes.ok && previewRes.status !== 206) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file not found in storage. Upload may have failed." },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
+
+      const previewBuffer = Buffer.from(await previewRes.arrayBuffer());
+      const previewHeaderBytes = previewBuffer.subarray(0, MAGIC_BYTE_READ_SIZE);
+      if (!validateMagicBytes(previewHeaderBytes, previewMimeType)) {
+        await serviceClient.storage.from(BUCKET).remove(
+          [media.storage_path, media.preview_storage_path].filter((path): path is string => Boolean(path)),
+        );
+        await serviceClient
+          .from("media_uploads")
+          .update({ status: "failed" })
+          .eq("id", body.mediaId);
+
+        return NextResponse.json(
+          { error: "Preview file content does not match declared type" },
+          { status: 400, headers: rateLimit.headers },
+        );
+      }
+    }
+
     // Update record: status=ready, actual file size, entity link
     const updateData: Record<string, unknown> = {
       status: "ready",
-      file_size: buffer.byteLength,
+      file_size: actualFileSize ?? media.file_size,
       finalized_at: new Date().toISOString(),
     };
 
@@ -137,16 +230,20 @@ export async function POST(request: NextRequest) {
     console.log("[media/finalize] Success", { mediaId: body.mediaId });
 
     // Generate signed URLs
-    const urls = await getMediaUrls(serviceClient, media.storage_path, media.mime_type);
+    const urls = await getMediaUrls(
+      serviceClient,
+      media.storage_path,
+      media.preview_storage_path,
+    );
 
     return NextResponse.json(
       {
         media: {
           id: body.mediaId,
-          url: urls.url,
-          thumbnailUrl: urls.thumbnailUrl,
+          originalUrl: urls.originalUrl,
+          previewUrl: urls.previewUrl,
           mimeType: media.mime_type,
-          fileSize: buffer.byteLength,
+          fileSize: actualFileSize ?? media.file_size,
           fileName: media.file_name,
         },
       },

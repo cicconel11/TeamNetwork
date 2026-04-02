@@ -9,9 +9,11 @@ function makeEntry(id: string, overrides: Partial<UploadFileEntry> = {}): Upload
   return {
     id,
     file: null,
+    previewFile: null,
     fileName: `${id}.jpg`,
     fileSize: 1234,
     mimeType: "image/jpeg",
+    previewMimeType: "image/jpeg",
     previewUrl: null,
     title: id,
     description: "",

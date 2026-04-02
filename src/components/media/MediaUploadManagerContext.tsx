@@ -211,7 +211,7 @@ export function MediaUploadManagerProvider({
         }
 
         const album: MediaAlbum = await albumRes.json();
-        const addResult = addFiles(folderFiles, { replaceExisting: true });
+        const addResult = await addFiles(folderFiles, { replaceExisting: true });
         const acceptedFiles = folderFiles.length - addResult.rejected.length;
 
         if (acceptedFiles === 0) {

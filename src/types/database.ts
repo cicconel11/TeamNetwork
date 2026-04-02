@@ -3185,6 +3185,7 @@ export type Database = {
           moderated_at: string | null
           moderated_by: string | null
           organization_id: string
+          preview_storage_path: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["media_status"]
           storage_path: string | null
@@ -3213,6 +3214,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id: string
+          preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
           storage_path?: string | null
@@ -3241,6 +3243,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id?: string
+          preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
           storage_path?: string | null
@@ -3282,6 +3285,7 @@ export type Database = {
           id: string
           mime_type: string
           organization_id: string
+          preview_storage_path: string | null
           status: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
           uploader_id: string
@@ -3297,6 +3301,7 @@ export type Database = {
           id?: string
           mime_type: string
           organization_id: string
+          preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
           uploader_id: string
@@ -3312,6 +3317,7 @@ export type Database = {
           id?: string
           mime_type?: string
           organization_id?: string
+          preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path?: string
           uploader_id?: string

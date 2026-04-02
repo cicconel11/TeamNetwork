@@ -373,6 +373,6 @@ export async function POST(req: Request) {
       await supabase.from("payment_attempts").update(errorUpdate).eq("id", resolvedAttemptId);
     }
     console.error("[create-donation] Error:", message);
-    return respond({ error: message }, 400);
+    return respond({ error: "Unable to start donation checkout" }, 400);
   }
 }

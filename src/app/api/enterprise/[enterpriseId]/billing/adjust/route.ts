@@ -6,7 +6,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_BILLING_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, logEnterpriseAuditActionAwaited, extractRequestContext } from "@/lib/audit/enterprise-audit";
-import { getBillableOrgCount, getFreeSubOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
+import { getBillableOrgCount, getSubOrgPricing } from "@/lib/enterprise/pricing";
 import { ALUMNI_BUCKET_PRICING } from "@/types/enterprise";
 import { requireEnv } from "@/lib/env";
 

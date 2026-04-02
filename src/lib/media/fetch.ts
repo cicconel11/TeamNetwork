@@ -1,11 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { batchGetMediaUrls } from "./urls";
+import { batchGetMediaBrowseUrls } from "./urls";
 import type { MediaFeature } from "./constants";
 
 export type MediaAttachment = {
   id: string;
-  url: string | null;
-  thumbnailUrl: string | null;
+  previewUrl: string | null;
+  originalUrl: string | null;
   mimeType: string;
   fileSize: number | null;
   fileName: string;
@@ -30,7 +30,7 @@ export async function fetchMediaForEntities(
   // Single query for all media across entities
   let query = serviceClient
     .from("media_uploads")
-    .select("id, entity_id, storage_path, mime_type, file_size, file_name")
+    .select("id, entity_id, storage_path, preview_storage_path, mime_type, file_size, file_name")
     .eq("entity_type", entityType)
     .in("entity_id", entityIds)
     .eq("status", "ready")
@@ -48,15 +48,15 @@ export async function fetchMediaForEntities(
   }
 
   // Generate signed URLs in batch
-  const urlMap = await batchGetMediaUrls(serviceClient, mediaRows);
+  const urlMap = await batchGetMediaBrowseUrls(serviceClient, mediaRows);
 
   // Group by entity_id
   for (const row of mediaRows) {
-    const urls = urlMap.get(row.id) ?? { url: null, thumbnailUrl: null };
+    const urls = urlMap.get(row.id) ?? { thumbnailUrl: null };
     const attachment: MediaAttachment = {
       id: row.id,
-      url: urls.url,
-      thumbnailUrl: urls.thumbnailUrl,
+      previewUrl: urls.thumbnailUrl,
+      originalUrl: null,
       mimeType: row.mime_type,
       fileSize: row.file_size,
       fileName: row.file_name,

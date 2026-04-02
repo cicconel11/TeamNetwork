@@ -12,6 +12,7 @@ import {
   getGalleryRetryProgress,
   getGalleryUploadMode,
 } from "@/lib/media/gallery-upload-flow";
+import { prepareImageUpload } from "@/lib/media/image-preparation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,9 +30,11 @@ export type FileUploadStatus =
 export interface UploadFileEntry {
   id: string;
   file: File | null; // nulled after upload completes to free memory
+  previewFile: File | null;
   fileName: string;
   fileSize: number;
   mimeType: string;
+  previewMimeType: string | null;
   previewUrl: string | null;
   title: string;
   description: string;
@@ -216,7 +219,7 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
 
   // ------- Add files -------
   const addFiles = useCallback(
-    (newFiles: File[], options?: { replaceExisting?: boolean }) => {
+    async (newFiles: File[], options?: { replaceExisting?: boolean }) => {
       const batchCheck = checkBatchLimit(newFiles.length);
       if (!batchCheck.valid) {
         return { rejected: newFiles.map((f) => ({ name: f.name, error: batchCheck.error! })) };
@@ -243,14 +246,44 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
         }
 
         const mimeType = resolveGalleryMimeType(file);
-        const previewUrl = URL.createObjectURL(file);
+        let uploadFile = file;
+        let previewFile: File | null = null;
+        let previewUrl: string | null = URL.createObjectURL(file);
+        let previewMimeType: string | null = null;
+        let fileSize = file.size;
+
+        if (mimeType.startsWith("image/")) {
+          try {
+            const prepared = await prepareImageUpload(file);
+            uploadFile = prepared.file;
+            previewFile = prepared.previewFile;
+            previewMimeType = prepared.previewMimeType;
+            fileSize = prepared.file.size;
+            URL.revokeObjectURL(previewUrl);
+            previewUrl = prepared.previewUrl;
+            console.log("[media/upload] prepared gallery image", {
+              fileName: file.name,
+              originalBytes: prepared.originalBytes,
+              normalizedBytes: prepared.normalizedBytes,
+            });
+          } catch (error) {
+            if (previewUrl) URL.revokeObjectURL(previewUrl);
+            rejected.push({
+              name: file.name,
+              error: error instanceof Error ? error.message : "Failed to prepare image upload.",
+            });
+            continue;
+          }
+        }
 
         const entry: UploadFileEntry = {
           id: crypto.randomUUID(),
-          file,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType,
+          file: uploadFile,
+          previewFile,
+          fileName: uploadFile.name,
+          fileSize,
+          mimeType: uploadFile.type || mimeType,
+          previewMimeType,
           previewUrl,
           title: deriveDefaultTitle(file.name),
           description: "",
@@ -265,7 +298,7 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
         };
 
         entries.push(entry);
-        existingEntries.push({ name: file.name, size: file.size });
+        existingEntries.push({ name: uploadFile.name, size: fileSize });
       }
 
       if (entries.length > 0) {
@@ -349,6 +382,7 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
             fileName: entry.fileName,
             mimeType: entry.mimeType,
             fileSizeBytes: entry.fileSize,
+            previewMimeType: entry.previewMimeType ?? undefined,
             title: entry.title.trim() || deriveDefaultTitle(entry.fileName),
             description: entry.description.trim() || undefined,
             tags,
@@ -361,7 +395,7 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
           throw new Error(data?.error || "Failed to initiate upload");
         }
 
-        const { mediaId, signedUrl, token } = await intentRes.json();
+        const { mediaId, signedUrl, token, previewSignedUrl } = await intentRes.json();
         dispatch({ type: "SET_MEDIA_ID", id: entry.id, mediaId });
 
         dispatch({ type: "SET_STATUS", id: entry.id, status: "uploading" });
@@ -401,6 +435,18 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
           if (token) xhr.setRequestHeader("x-upsert", "true");
           xhr.send(entry.file);
         });
+
+        if (previewSignedUrl && entry.previewFile) {
+          const previewUploadRes = await fetch(previewSignedUrl, {
+            method: "PUT",
+            headers: { "Content-Type": entry.previewFile.type },
+            body: entry.previewFile,
+          });
+
+          if (!previewUploadRes.ok) {
+            throw new Error("Preview upload failed");
+          }
+        }
 
         dispatch({ type: "SET_STATUS", id: entry.id, status: "finalizing" });
         dispatch({ type: "SET_PROGRESS", id: entry.id, progress: 100 });

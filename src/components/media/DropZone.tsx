@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 
 interface DropZoneProps {
-  onFiles: (files: File[]) => { rejected: { name: string; error: string }[] };
+  onFiles: (files: File[]) => { rejected: { name: string; error: string }[] } | Promise<{ rejected: { name: string; error: string }[] }>;
   onFolder?: (files: File[], folderName: string) => void;
   disabled?: boolean;
 }
@@ -54,10 +54,10 @@ export function DropZone({ onFiles, onFolder, disabled = false }: DropZoneProps)
   const [rejections, setRejections] = useState<{ name: string; error: string }[]>([]);
 
   const handleFiles = useCallback(
-    (files: FileList | File[]) => {
+    async (files: FileList | File[]) => {
       const arr = Array.from(files);
       if (arr.length === 0) return;
-      const result = onFiles(arr);
+      const result = await onFiles(arr);
       if (result.rejected.length > 0) {
         setRejections(result.rejected);
         setTimeout(() => setRejections([]), 5000);
@@ -94,7 +94,7 @@ export function DropZone({ onFiles, onFolder, disabled = false }: DropZoneProps)
         }
       }
 
-      handleFiles(e.dataTransfer.files);
+      await handleFiles(e.dataTransfer.files);
     },
     [disabled, handleFiles, onFolder],
   );
@@ -166,7 +166,7 @@ export function DropZone({ onFiles, onFolder, disabled = false }: DropZoneProps)
         accept="image/*,video/*"
         className="hidden"
         onChange={(e) => {
-          if (e.target.files) handleFiles(e.target.files);
+          if (e.target.files) void handleFiles(e.target.files);
           e.target.value = "";
         }}
       />

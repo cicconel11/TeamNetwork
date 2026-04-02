@@ -84,9 +84,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     let thumbnailUrl: string | null = null;
 
     if (item.storage_path && item.mime_type) {
-      const urls = await getMediaUrls(serviceClient, item.storage_path, item.mime_type);
-      url = urls.url;
-      thumbnailUrl = urls.thumbnailUrl;
+      const urls = await getMediaUrls(
+        serviceClient,
+        item.storage_path,
+        item.preview_storage_path,
+      );
+      url = urls.originalUrl;
+      thumbnailUrl = urls.previewUrl;
     }
 
     return NextResponse.json(

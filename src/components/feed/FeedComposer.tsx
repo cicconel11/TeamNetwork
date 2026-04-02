@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { createPostSchema } from "@/lib/schemas/feed";
+import { prepareImageUpload } from "@/lib/media/image-preparation";
 import { PollBuilder } from "./PollBuilder";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -19,6 +20,16 @@ interface FeedComposerProps {
   userName?: string;
 }
 
+type PreparedFeedImage = {
+  file: File;
+  previewFile: File | null;
+  previewUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  previewMimeType: string | null;
+};
+
 export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,7 +39,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const [error, setError] = useState<string | null>(null);
 
   // Image state — supports up to MAX_IMAGES files
-  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imageFiles, setImageFiles] = useState<PreparedFeedImage[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const previewUrlsRef = useRef<string[]>([]);
@@ -50,7 +61,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
     };
   }, []);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
@@ -94,9 +105,48 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
 
     if (validFiles.length === 0) return;
 
-    const newUrls = validFiles.map((f) => URL.createObjectURL(f));
-    setImageFiles((prev) => [...prev, ...validFiles]);
-    setPreviewUrls((prev) => [...prev, ...newUrls]);
+    const preparedFiles: PreparedFeedImage[] = [];
+
+    try {
+      for (const file of validFiles) {
+        if (file.type.startsWith("image/")) {
+          const prepared = await prepareImageUpload(file);
+          console.log("[media/upload] prepared feed image", {
+            fileName: file.name,
+            originalBytes: prepared.originalBytes,
+            normalizedBytes: prepared.normalizedBytes,
+          });
+          preparedFiles.push({
+            file: prepared.file,
+            previewFile: prepared.previewFile,
+            previewUrl: prepared.previewUrl || URL.createObjectURL(prepared.file),
+            fileName: prepared.file.name,
+            fileSize: prepared.file.size,
+            mimeType: prepared.mimeType,
+            previewMimeType: prepared.previewMimeType,
+          });
+          continue;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        preparedFiles.push({
+          file,
+          previewFile: null,
+          previewUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          previewMimeType: null,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to prepare image upload");
+      preparedFiles.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      return;
+    }
+
+    setImageFiles((prev) => [...prev, ...preparedFiles]);
+    setPreviewUrls((prev) => [...prev, ...preparedFiles.map((f) => f.previewUrl)]);
   }, [imageFiles.length]);
 
   const removeImage = useCallback((index: number) => {
@@ -117,7 +167,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  const uploadImage = async (file: File, index: number, total: number): Promise<string> => {
+  const uploadImage = async (file: PreparedFeedImage, index: number, total: number): Promise<string> => {
     setUploadProgress(`Uploading ${index + 1} of ${total}...`);
     const intentRes = await fetch("/api/media/upload-intent", {
       method: "POST",
@@ -125,25 +175,35 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
       body: JSON.stringify({
         orgId,
         feature: "feed_post",
-        fileName: file.name,
-        mimeType: file.type,
-        fileSize: file.size,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileSize: file.fileSize,
+        previewMimeType: file.previewMimeType,
       }),
     });
 
     if (!intentRes.ok) {
       const data = await intentRes.json();
-      throw new Error(data.error || `Failed to prepare upload for ${file.name}`);
+      throw new Error(data.error || `Failed to prepare upload for ${file.fileName}`);
     }
 
-    const { mediaId, signedUrl } = await intentRes.json();
+    const { mediaId, signedUrl, previewSignedUrl } = await intentRes.json();
 
     const putRes = await fetch(signedUrl, {
       method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: file,
+      headers: { "Content-Type": file.mimeType },
+      body: file.file,
     });
-    if (!putRes.ok) throw new Error(`Failed to upload ${file.name}`);
+    if (!putRes.ok) throw new Error(`Failed to upload ${file.fileName}`);
+
+    if (previewSignedUrl && file.previewFile) {
+      const previewPutRes = await fetch(previewSignedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.previewFile.type },
+        body: file.previewFile,
+      });
+      if (!previewPutRes.ok) throw new Error(`Failed to upload preview for ${file.fileName}`);
+    }
 
     setUploadProgress(`Finalizing ${index + 1} of ${total}...`);
     const finalizeRes = await fetch("/api/media/finalize", {
@@ -154,7 +214,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
 
     if (!finalizeRes.ok) {
       const data = await finalizeRes.json();
-      throw new Error(data.error || `Failed to finalize ${file.name}`);
+      throw new Error(data.error || `Failed to finalize ${file.fileName}`);
     }
 
     return mediaId;

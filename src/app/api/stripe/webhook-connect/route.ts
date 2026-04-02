@@ -346,7 +346,7 @@ async function handleConnectWebhook(req: Request, deps: ConnectWebhookDeps = def
   } catch (err) {
     const message = err instanceof Error ? err.message : "Webhook processing failed";
     console.error("[webhook-connect] Handler error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 }
 
