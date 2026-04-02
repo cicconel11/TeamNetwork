@@ -59,9 +59,11 @@ interface DraftSessionSupabase {
 export function supportsDraftSessionsStore(
   supabase: unknown
 ): supabase is DraftSessionSupabase {
+  if (!supabase || typeof supabase !== "object") {
+    return false;
+  }
+
   return (
-    Boolean(supabase) &&
-    typeof supabase === "object" &&
     "from" in supabase &&
     typeof (supabase as { from?: unknown }).from === "function"
   );
