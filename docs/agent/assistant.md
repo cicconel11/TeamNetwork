@@ -4,11 +4,11 @@
 
 The AI assistant is an admin-only, org-scoped chat system exposed through the org chat panel at `src/app/[orgSlug]/chat/*` and backed by App Router API endpoints under `src/app/api/ai/[orgId]/*`. Admins can ask questions, navigate to relevant app pages, and prepare a small set of assistant-mediated writes. The runtime persists conversations as threads and messages, logs each turn to `ai_audit_log`, applies a conservative exact-match semantic cache for narrow first-turn `general` prompts, and can augment live turns with route-aware context, retrieval, and server tools.
 
-The current server structure is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution-policy decisions, optional RAG retrieval, prompt construction, streaming model output over SSE, deterministic tool execution, grounding verification, persistence, and audit logging.
+The current server structure is split into thin `route.ts` entrypoints and testable `handler.ts` factories for chat, thread, message, and pending-action endpoints. The main chat handler orchestrates auth, rate limiting, message safety, idempotency, surface and intent routing, execution-policy decisions, optional RAG retrieval, prompt construction, streaming model output over SSE, deterministic tool execution, grounding verification, persistence, and audit logging. For simple live-lookups, the route now short-circuits to single-tool `tool_first` turns with deterministic in-route formatting for `list_members`, `list_events`, `list_announcements`, `list_discussions`, `list_job_postings`, `get_org_stats`, `suggest_connections`, and `find_navigation_targets`, which avoids an unnecessary second model pass on straightforward roster, events, alumni, and donation questions.
 
 The shipped tool surface includes live read tools for members, events, announcements, discussions, jobs, org stats, connection suggestions, and navigation targets, plus confirmation-gated write-preparation tools for job postings and discussion threads. Those write flows now surface a structured `pending_action` SSE event, render a review card in the panel UI, and execute only after explicit confirm or cancel requests against dedicated pending-action routes. Multi-turn job/discussion drafting is now backed by a persisted draft-session record per thread, so when the assistant asks for missing fields the next reply can continue the same write flow without restating the original create intent.
 
-The panel UI is route-aware and now includes per-surface starter prompts, persisted active-thread selection, live tool status labels, and the pending-action review card. Prompt construction also receives the client pathname and attached tool list as untrusted context, while the execution policy can shift between `full`, `shared_static`, and `tool_first` context modes depending on the turn. For Falkor-backed connection suggestions, graph setup, and sync details, see `docs/agent/falkor-people-graph.md`.
+The panel UI is route-aware and now includes per-surface starter prompts, persisted active-thread selection, live tool status labels, and the pending-action review card. Prompt construction also receives the client pathname and attached tool list as untrusted context, while the execution policy can shift between `full`, `shared_static`, and `tool_first` context modes depending on the turn. The chat route also now degrades more safely around duplicated or partially-finished turns: when an idempotent replay finds the original user message before the assistant reply exists, it returns a recoverable `409` instead of surfacing a replay error, and existing-thread history failures fall back to the current turn instead of aborting the request. For Falkor-backed connection suggestions, graph setup, and sync details, see `docs/agent/falkor-people-graph.md`.
 
 ## Tech Stack
 
@@ -105,10 +105,13 @@ The assistant now supports two confirmation-gated write paths: jobs and top-leve
 ### 6. UI integration coverage is still light
 The UI no longer has zero coverage: utility and stream-level tests now cover route-surface inference, toggle visibility, message list behavior, SSE parsing, SSR safety, and panel state helpers. But there are still no full React integration tests for the end-to-end pending-action review flow, optimistic thread switching, or panel view transitions.
 
-### 7. Vector similarity cache (deferred to v2)
+### 7. `get_org_stats` is still the slowest deterministic read path
+Simple roster and event questions now take the fast single-tool path, but full org snapshots still depend on the aggregate `get_org_stats` query. The remaining latency on donation / alumni / top-level metrics prompts is now more likely to come from the stats query itself than from chat orchestration.
+
+### 8. Vector similarity cache (deferred to v2)
 The `20260321100001` migration creates the `vector` extension, but all cache lookups use exact SHA-256 hash matching. Embedding-based semantic similarity is deferred to a future version.
 
-### 8. Docs are codemap-heavy and need periodic refresh
+### 9. Docs are codemap-heavy and need periodic refresh
 The agent docs are now reasonably aligned again, but the implementation moves quickly across `handler.ts`, tool definitions, and panel state. Future agent work should keep these codemaps in sync when route structure, pending-action flows, or tool inventory changes.
 
 ## v2 Roadmap — Research-Backed Enhancements

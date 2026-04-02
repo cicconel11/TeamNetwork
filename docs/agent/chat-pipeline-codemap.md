@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. The route now also has a materially faster single-tool deterministic path for simple `list_members`, `list_events`, and `get_org_stats` turns, which runs with `tool_first` context, skips pass 2 entirely, and emits the final answer directly from trusted tool data. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -85,7 +85,8 @@ Client POST /api/ai/{orgId}/chat
   ├─ 4.  Thread ownership check (resolveOwnThread if threadId provided)
   ├─ 5.  Abandoned stream cleanup (mark pending/streaming msgs >5 min as error)
   ├─ 6.  Idempotency check (by idempotencyKey → ai_messages unique index)
-  │       ├─ Complete duplicate → SSE done event (replayed: true), return early
+  │       ├─ Complete duplicate with assistant reply → SSE done event (replayed: true), return early
+  │       ├─ Complete duplicate before assistant reply exists → 409 { error, threadId }
   │       └─ In-flight duplicate → 409 { error, threadId }
   ├─ 7.  Upsert thread (insert new if no threadId, title = first 100 chars)
   ├─ 8.  Insert user message (status: complete) + touch thread updated_at
@@ -112,15 +113,17 @@ Client POST /api/ai/{orgId}/chat
   │       └─ record final retrieval decision/reason in audit `stage_timings`
   │
   ├─ 9.  Insert assistant placeholder (status: pending)
-  ├─ 10. Build prompt context + fetch history (parallel)
+  ├─ 10. Load history, infer draft continuation, then build prompt context
+  │       ├─ Existing-thread history is fetched once and reused for both prompt replay and draft-session inference
+  │       ├─ New threads skip the history query entirely
+  │       ├─ History fetch failures degrade to the current turn instead of aborting the request
   │       ├─ buildPromptContext (surface-gated queries + token budget)
   │       │   ├─ Queries gated by surface: events only loads org+events, etc.
   │       │   ├─ 4000-token budget drops lowest-priority sections first
   │       │   ├─ Trusted system prompt includes current local date/time
   │       │   ├─ Returns { systemPrompt, orgContextMessage, metadata }
-  │       │   └─ "shared_static" mode: org overview only (overrides surface)
-  │       └─ Last 20 complete messages from thread
-  │            └─ user-role history re-assessed and sanitized before model replay
+  │       │   └─ `tool_first` mode keeps prompt context intentionally lighter for single-tool read turns
+  │       └─ user-role history is re-assessed and sanitized before model replay
   ├─ 11. Resolve pass-1 tools from execution policy
   │       ├─ `none` for casual / static_general / out_of_scope
   │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_job_posting` / `prepare_discussion_thread` for create requests
@@ -130,6 +133,9 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Chat route calls pass an explicit `preverified_admin` authorization contract so duplicate membership lookups can be skipped safely
   │       ├─ Non-chat executor callers still use the fallback membership verification path
   │       ├─ Tool executor returns one of `ok`, `tool_error`, `timeout`, `forbidden`, `auth_error`
+  │       ├─ Simple member roster asks can expose only `list_members`
+  │       ├─ Simple member/alumni/parent count asks can expose only `get_org_stats`
+  │       ├─ Simple event list asks can expose only `list_events`
   │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
   │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
   │       ├─ Job creation prompts can expose only `prepare_job_posting`
@@ -149,7 +155,8 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Tool `timeout` opens a per-pass breaker, skips later tools in that pass, then still allows a single fallback pass 2
   │       ├─ Tool `forbidden` / `auth_error` fail the turn closed, emit SSE error, and skip pass 2
   │       ├─ When tools are available, pass-1 text is buffered until the route knows whether the turn stayed text-only or switched into tool mode
-  │       ├─ Single-tool `suggest_connections`, `list_announcements`, and `find_navigation_targets` results are rendered deterministically in-route
+  │       ├─ Single-tool `list_members`, `list_events`, `get_org_stats`, `suggest_connections`, `list_announcements`, and `find_navigation_targets` results are rendered deterministically in-route
+  │       ├─ Those deterministic turns force pass-1 `tool_choice` to the selected read tool so the model can skip planner ambiguity
   │       ├─ Pass 2 runs with a 15s timeout budget for the remaining tool-backed turns and still receives an extra fixed-template contract for `suggest_connections` when mixed tool results require model synthesis
   │       ├─ Pass-2 text is buffered server-side, never streamed immediately
   │       └─ `tool_status` SSE events still stream live during tool execution
@@ -279,6 +286,7 @@ type ToolExecutionResult =
 - **Inputs:** optional `limit` (default 20, max 50)
 - **Outputs:** active member rows with `id`, `user_id`, `status`, `role`, `created_at`, `name`, `email`
 - **Name handling:** prefers `members.first_name` + `last_name`; falls back to linked `users.name` for placeholder rows; otherwise returns an empty name so the UI/prompt can treat the record as an email-only account
+- **Fast path:** simple member-roster prompts now force a single-tool `tool_first` turn and render a deterministic `Recent active members` list directly in the route
 - **Pass-2 contract:** member answers stay row-backed. They may add presentation-only role suffixes to returned names, but they must not infer org-wide totals or grouped role counts from roster rows alone
 
 ### `list_events`
@@ -286,6 +294,7 @@ type ToolExecutionResult =
 - **Inputs:** optional `limit` (default 10, max 25), optional `upcoming` (boolean, default `true`)
 - **Outputs:** event rows with `id`, `title`, `start_date`, `end_date`, `location`, `description`
 - **Behavior:** `upcoming: true` filters to `start_date >= now`, `false` filters to past events and reverses ordering
+- **Fast path:** simple event-list prompts now force a single-tool `tool_first` turn and render a deterministic `Matching events` list directly in the route
 
 ### `list_announcements`
 
@@ -310,6 +319,7 @@ type ToolExecutionResult =
 - **Inputs:** none
 - **Outputs:** aggregate counts and donation stats for organization overview / dashboard-style questions
 - **Surface:** `general`, `members`, `analytics`, and `events`
+- **Fast path:** simple member-count, alumni-count, donation-metrics, and high-level stats prompts now force a single-tool `tool_first` turn and render `Organization snapshot` directly in the route
 
 ### `find_navigation_targets`
 
@@ -368,5 +378,5 @@ type ToolExecutionResult =
 | `tests/ai-stream-consumer.test.ts` | 2 | `consumeSSEStream` — chunk/done parsing |
 | `tests/ai-stream-failures.test.ts` | 2 | `parseAIChatFailure` — 409 handling, error fallback |
 | `tests/ai-middleware-noise.test.ts` | 1 | Middleware suppresses AI route console noise |
-| `tests/routes/ai/chat.test.ts` | 40 | Route simulation: auth, validation, idempotency, streaming, cache flows, schema aliases |
-| `tests/routes/ai/chat-handler.test.ts` | 1 | Handler factory DI pattern |
+| `tests/routes/ai/chat-handler.test.ts` | 21 | Route simulation: auth, validation, idempotency, cache flows, history fallback, grounding, safety |
+| `tests/routes/ai/chat-handler-tools.test.ts` | 43 | Tool routing, deterministic fast paths, pending-action flows, pass-2 fallbacks, timeout/error handling |
