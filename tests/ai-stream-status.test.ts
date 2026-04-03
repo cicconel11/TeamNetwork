@@ -241,6 +241,16 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
     /clearAttachment\(\{ deleteRemote: false \}\);/,
     "AIPanel should leave extractor-owned attachments alone after a successful send"
   );
+  assert.match(
+    source,
+    /const router = useRouter\(\);/,
+    "AIPanel should capture the Next router so confirmation can refresh server-rendered calendar views"
+  );
+  assert.match(
+    source,
+    /router\.refresh\(\);/,
+    "AIPanel should refresh the current route after confirming a pending action"
+  );
 });
 
 test("useAIStream resets tool status during key lifecycle transitions", () => {
