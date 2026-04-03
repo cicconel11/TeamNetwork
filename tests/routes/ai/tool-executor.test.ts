@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
+import { getZaiImageModel } from "../../../src/lib/ai/client.ts";
 import { executeToolCall } from "../../../src/lib/ai/tools/executor.ts";
 import { getSuggestionObservabilityByOrg } from "../../../src/lib/falkordb/suggestions.ts";
 import { resetFalkorTelemetryForTests } from "../../../src/lib/falkordb/telemetry.ts";
@@ -380,6 +381,24 @@ test("schedule extraction uses separate Z.AI models for text and image sources",
   assert.equal(completionCalls[0]?.model, "glm-5");
   assert.equal(completionCalls[1]?.model, "glm-5v-turbo");
   assert.match(JSON.stringify(completionCalls[1]?.messages), /image_url/);
+});
+
+test("getZaiImageModel rejects token-like configuration values", () => {
+  const previous = process.env.ZAI_IMAGE_MODEL;
+  process.env.ZAI_IMAGE_MODEL = "7f7732de249c4bc1a2a434bf7014818b.NDlA78k4ON44EGQQ";
+
+  try {
+    assert.throws(
+      () => getZaiImageModel(),
+      /Invalid ZAI_IMAGE_MODEL value .*Expected a Z\.AI vision model such as glm-5v-turbo/i
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.ZAI_IMAGE_MODEL;
+    } else {
+      process.env.ZAI_IMAGE_MODEL = previous;
+    }
+  }
 });
 
 test("list_members returns org-scoped members", async () => {
@@ -1562,6 +1581,48 @@ test("extract_schedule_pdf returns a mapped tool_error when image extraction fai
   assert.deepEqual(result, {
     kind: "tool_error",
     error: "Unable to read attached schedule image",
+  });
+});
+
+test("extract_schedule_pdf returns a configuration error for invalid ZAI image model settings", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () => ({}) as any,
+    getImageModel: () => {
+      throw new Error(
+        'Invalid ZAI_IMAGE_MODEL value "bad-token". Expected a Z.AI vision model such as glm-5v-turbo.'
+      );
+    },
+  });
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("fake image bytes")]),
+        error: null,
+      }),
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-config-error",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000004_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error:
+      "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo.",
   });
 });
 

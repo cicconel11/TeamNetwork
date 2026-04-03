@@ -1176,6 +1176,13 @@ function formatDeterministicToolErrorResponse(name: string, error: string): stri
     return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
   }
 
+  if (
+    error ===
+    "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo."
+  ) {
+    return "Schedule image extraction is misconfigured in this environment. Set ZAI_IMAGE_MODEL to a Z.AI vision model like glm-5v-turbo and restart the server.";
+  }
+
   if (error === "Unable to read attached PDF") {
     return "I couldn't read that PDF schedule. Try re-exporting the PDF or upload a clear image instead.";
   }

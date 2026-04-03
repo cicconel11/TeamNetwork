@@ -229,6 +229,11 @@ function toolError(error: string): ToolExecutionResult {
   return { kind: "tool_error", error };
 }
 
+function isScheduleImageConfigurationError(error: unknown): boolean {
+  const message = getSafeErrorMessage(error);
+  return /ZAI_IMAGE_MODEL|vision model|model such as glm-5v-turbo/i.test(message);
+}
+
 function buildLogContext(
   ctx: Pick<ToolExecutionContext, "orgId" | "userId" | "threadId" | "requestId">
 ): AiLogContext {
@@ -1362,6 +1367,17 @@ async function extractSchedulePdf(
     } catch (error) {
       if (attachment.mimeType === "application/pdf") {
         return toolError("Unable to read attached PDF");
+      }
+
+      if (isScheduleImageConfigurationError(error)) {
+        aiLog("warn", "ai-tools", "extract_schedule_pdf image configuration invalid", logContext, {
+          error: getSafeErrorMessage(error),
+          storagePath: attachment.storagePath,
+          mimeType: attachment.mimeType,
+        });
+        return toolError(
+          "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo."
+        );
       }
 
       aiLog("warn", "ai-tools", "extract_schedule_pdf image extraction failed", logContext, {
