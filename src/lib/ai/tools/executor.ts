@@ -1388,7 +1388,9 @@ async function extractSchedulePdf(
       return toolError("Unable to read attached schedule image");
     }
 
-    if (extracted.events.length === 0) {
+    const extractionValidationErrors = extracted.rejected_rows ?? [];
+
+    if (extracted.events.length === 0 && extractionValidationErrors.length === 0) {
       return {
         kind: "ok",
         data: {
@@ -1405,13 +1407,14 @@ async function extractSchedulePdf(
       logContext,
       typeof org?.slug === "string" ? org.slug : null
     );
+    const allValidationErrors = [...extractionValidationErrors, ...validationErrors];
 
     if (pendingActions.length === 0) {
       return {
         kind: "ok",
         data: {
           state: "missing_fields",
-          validation_errors: validationErrors,
+          validation_errors: allValidationErrors,
         },
       };
     }
@@ -1421,7 +1424,7 @@ async function extractSchedulePdf(
       data: {
         state: "needs_batch_confirmation",
         pending_actions: pendingActions,
-        validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
+        validation_errors: allValidationErrors.length > 0 ? allValidationErrors : undefined,
       },
     };
   } finally {

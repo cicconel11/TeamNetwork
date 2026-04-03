@@ -4,6 +4,8 @@ import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client"
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
 const MAX_EXTRACTED_EVENTS = 25;
+const MAX_REJECTED_ROWS = 25;
+const REQUIRED_EVENT_FIELDS = ["title", "start_date", "start_time"] as const;
 const defaultDeps: ScheduleExtractionDeps = {
   createClient: createZaiClient,
   getTextModel: getZaiModel,
@@ -39,8 +41,15 @@ export interface ExtractedScheduleEvent {
   event_type?: "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
 }
 
+export interface ExtractedScheduleRejectedRow {
+  index: number;
+  missing_fields: string[];
+  draft: Record<string, unknown>;
+}
+
 export interface ScheduleExtractionResult {
   events: ExtractedScheduleEvent[];
+  rejected_rows: ExtractedScheduleRejectedRow[];
   source_summary: string;
   confidence: "high" | "medium" | "low";
 }
@@ -78,6 +87,7 @@ export async function extractScheduleFromText(
   if (truncatedText.trim().length === 0) {
     return {
       events: [],
+      rejected_rows: [],
       source_summary: `No usable text found in ${context.sourceLabel}.`,
       confidence: "low",
     };
@@ -196,11 +206,12 @@ function buildSystemPrompt(context: ScheduleExtractionContext): string {
 
   return [
     "You extract structured calendar events from uploaded schedule sources.",
-    "Return only a single JSON object with keys: events, source_summary, confidence.",
+    "Return only a single JSON object with keys: events, candidate_rows, source_summary, confidence.",
     "Each event must use YYYY-MM-DD for dates and HH:MM 24-hour time for times.",
     "Only include events that are explicitly present or strongly implied by the source.",
     "Resolve relative dates against the provided current timestamp.",
-    "If a required event field is missing or ambiguous, omit that event instead of inventing values.",
+    "If a required event field is missing or ambiguous, omit that event from events instead of inventing values.",
+    "If a schedule row is readable but still missing required fields, include it in candidate_rows with whatever fields you can confidently read plus raw_text when helpful.",
     "Valid event_type values are general, philanthropy, game, meeting, social, fundraiser.",
     "Keep source_summary concise and factual.",
     `Current timestamp for date resolution: ${context.now}`,
@@ -293,22 +304,51 @@ function readCompletionText(response: OpenAI.Chat.ChatCompletion): string {
 
 function parseExtractionResponse(
   rawResponse: string,
-  context: { sourceLabel: string }
+  context: ScheduleExtractionContext
 ): ScheduleExtractionResult {
   const normalizedJson = normalizeJsonText(rawResponse);
   const parsed = JSON.parse(normalizedJson) as Record<string, unknown>;
 
   const rawEvents = Array.isArray(parsed.events) ? parsed.events : [];
+  const rawCandidateRows = Array.isArray(parsed.candidate_rows)
+    ? parsed.candidate_rows
+    : Array.isArray(parsed.rows)
+    ? parsed.rows
+    : [];
   const events: ExtractedScheduleEvent[] = [];
+  const rejectedRowsByKey = new Map<
+    string,
+    Omit<ExtractedScheduleRejectedRow, "index">
+  >();
+  const seenEventKeys = new Set<string>();
 
-  for (const rawEvent of rawEvents) {
-    const validated = extractedScheduleEventSchema.safeParse(rawEvent);
-    if (!validated.success) {
+  for (const rawEntry of [...rawCandidateRows, ...rawEvents]) {
+    const normalized = normalizeScheduleCandidate(rawEntry);
+    if (!normalized) {
       continue;
     }
-    events.push(validated.data);
-    if (events.length >= MAX_EXTRACTED_EVENTS) {
-      break;
+
+    if ("event" in normalized) {
+      const eventKey = buildEventKey(normalized.event);
+      if (seenEventKeys.has(eventKey)) {
+        continue;
+      }
+
+      seenEventKeys.add(eventKey);
+      events.push(normalized.event);
+      if (events.length >= MAX_EXTRACTED_EVENTS) {
+        break;
+      }
+      continue;
+    }
+
+    const rejectionKey = buildRejectedRowKey(normalized.rejected);
+    const existing = rejectedRowsByKey.get(rejectionKey);
+    if (!existing || getDraftSignalScore(normalized.rejected.draft) > getDraftSignalScore(existing.draft)) {
+      rejectedRowsByKey.set(rejectionKey, {
+        missing_fields: normalized.rejected.missing_fields,
+        draft: normalized.rejected.draft,
+      });
     }
   }
 
@@ -321,9 +361,282 @@ function parseExtractionResponse(
 
   return {
     events,
+    rejected_rows: Array.from(rejectedRowsByKey.values())
+      .slice(0, MAX_REJECTED_ROWS)
+      .map((row, index) => ({
+        index,
+        missing_fields: row.missing_fields,
+        draft: row.draft,
+      })),
     source_summary: sourceSummary,
     confidence: confidence.success ? confidence.data : "low",
   };
+}
+
+function normalizeScheduleCandidate(
+  rawCandidate: unknown
+):
+  | { event: ExtractedScheduleEvent }
+  | { rejected: Omit<ExtractedScheduleRejectedRow, "index"> }
+  | null {
+  if (!rawCandidate || typeof rawCandidate !== "object") {
+    return null;
+  }
+
+  const record = rawCandidate as Record<string, unknown>;
+  const draft: Record<string, unknown> = {};
+
+  const rawText = getTrimmedStringField(record, ["raw_text", "rawText", "row_text", "text"], 500);
+  if (rawText) {
+    draft.raw_text = rawText;
+  }
+
+  const title = getTrimmedStringField(
+    record,
+    ["title", "name", "event", "opponent", "opponent_name"],
+    200
+  );
+  if (title) {
+    draft.title = title;
+  }
+
+  const startDate = normalizeDateValue(
+    getTrimmedStringField(record, ["start_date", "startDate", "date"], 50)
+  );
+  if (startDate) {
+    draft.start_date = startDate;
+  }
+
+  const startTime = normalizeTimeValue(
+    getTrimmedStringField(record, ["start_time", "startTime", "time"], 50)
+  );
+  if (startTime) {
+    draft.start_time = startTime;
+  }
+
+  const endDate = normalizeDateValue(
+    getTrimmedStringField(record, ["end_date", "endDate"], 50)
+  );
+  if (endDate) {
+    draft.end_date = endDate;
+  }
+
+  const endTime = normalizeTimeValue(
+    getTrimmedStringField(record, ["end_time", "endTime"], 50)
+  );
+  if (endTime) {
+    draft.end_time = endTime;
+  }
+
+  const location = getTrimmedStringField(record, ["location", "venue"], 500);
+  if (location) {
+    draft.location = location;
+  }
+
+  const description = getTrimmedStringField(record, ["description", "notes"], 5000);
+  if (description) {
+    draft.description = description;
+  }
+
+  const eventType = normalizeEventType(
+    getTrimmedStringField(record, ["event_type", "eventType", "type"], 50)
+  );
+  if (eventType) {
+    draft.event_type = eventType;
+  }
+
+  if (!hasMeaningfulScheduleSignal(draft)) {
+    return null;
+  }
+
+  const missingFields = REQUIRED_EVENT_FIELDS.filter((field) => {
+    const value = draft[field];
+    return typeof value !== "string" || value.trim().length === 0;
+  });
+
+  if (missingFields.length === 0) {
+    const validated = extractedScheduleEventSchema.safeParse(draft);
+    if (validated.success) {
+      return { event: validated.data };
+    }
+
+    return {
+      rejected: {
+        missing_fields: validated.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft,
+      },
+    };
+  }
+
+  return {
+    rejected: {
+      missing_fields: [...missingFields],
+      draft,
+    },
+  };
+}
+
+function getTrimmedStringField(
+  record: Record<string, unknown>,
+  keys: string[],
+  maxLength: number
+): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    return trimmed.slice(0, maxLength);
+  }
+
+  return undefined;
+}
+
+function normalizeDateValue(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const isoMatch = value.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2].padStart(2, "0")}-${isoMatch[3].padStart(2, "0")}`;
+  }
+
+  const usMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (usMatch) {
+    const year = usMatch[3].length === 2 ? `20${usMatch[3]}` : usMatch[3];
+    return `${year}-${usMatch[1].padStart(2, "0")}-${usMatch[2].padStart(2, "0")}`;
+  }
+
+  return undefined;
+}
+
+function normalizeTimeValue(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (/^\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const normalized = value.replace(/\./g, ":").replace(/\s+/g, " ").trim();
+  const meridiemMatch = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp])[.]?[Mm][.]?$/);
+  if (meridiemMatch) {
+    let hour = Number.parseInt(meridiemMatch[1] ?? "", 10);
+    const minute = meridiemMatch[2] ?? "00";
+    const meridiem = (meridiemMatch[3] ?? "").toUpperCase();
+
+    if (Number.isNaN(hour) || hour < 1 || hour > 12) {
+      return undefined;
+    }
+
+    if (meridiem === "P" && hour < 12) {
+      hour += 12;
+    }
+    if (meridiem === "A" && hour === 12) {
+      hour = 0;
+    }
+
+    return `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  const hourMinuteMatch = normalized.match(/^(\d{1,2}):(\d{2})$/);
+  if (hourMinuteMatch) {
+    const hour = Number.parseInt(hourMinuteMatch[1] ?? "", 10);
+    const minute = hourMinuteMatch[2] ?? "";
+    if (Number.isNaN(hour) || hour < 0 || hour > 23) {
+      return undefined;
+    }
+    return `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  return undefined;
+}
+
+function normalizeEventType(value: string | undefined): ExtractedScheduleEvent["event_type"] {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  switch (normalized) {
+    case "general":
+    case "philanthropy":
+    case "game":
+    case "meeting":
+    case "social":
+    case "fundraiser":
+      return normalized;
+    default:
+      return undefined;
+  }
+}
+
+function hasMeaningfulScheduleSignal(draft: Record<string, unknown>): boolean {
+  return getDraftSignalScore(draft) >= 2;
+}
+
+function getDraftSignalScore(draft: Record<string, unknown>): number {
+  const keys = [
+    "title",
+    "start_date",
+    "start_time",
+    "end_date",
+    "end_time",
+    "location",
+    "description",
+    "event_type",
+    "raw_text",
+  ];
+
+  return keys.reduce((score, key) => {
+    const value = draft[key];
+    return typeof value === "string" && value.trim().length > 0 ? score + 1 : score;
+  }, 0);
+}
+
+function buildEventKey(event: ExtractedScheduleEvent): string {
+  return [
+    event.title,
+    event.start_date,
+    event.start_time,
+    event.end_date ?? "",
+    event.end_time ?? "",
+    event.location ?? "",
+    event.description ?? "",
+    event.event_type ?? "",
+  ].join("|");
+}
+
+function buildRejectedRowKey(row: Omit<ExtractedScheduleRejectedRow, "index">): string {
+  const draftIdentity = [
+    row.draft.title,
+    row.draft.start_date,
+    row.draft.start_time,
+    row.draft.end_date,
+    row.draft.end_time,
+    row.draft.location,
+    row.draft.description,
+    row.draft.event_type,
+  ]
+    .map((value) => (typeof value === "string" ? value : ""))
+    .join("|");
+
+  const fallbackIdentity =
+    draftIdentity.replace(/\|/g, "").length > 0
+      ? draftIdentity
+      : typeof row.draft.raw_text === "string"
+      ? row.draft.raw_text
+      : JSON.stringify(row.draft);
+
+  return `${fallbackIdentity}::${row.missing_fields.join(",")}`;
 }
 
 function normalizeJsonText(value: string): string {

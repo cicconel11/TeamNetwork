@@ -1468,6 +1468,97 @@ test("POST /api/ai/[orgId]/chat deterministically formats no-events schedule ima
   assert.equal(composeCalls, 1);
 });
 
+test("POST /api/ai/[orgId]/chat deterministically formats partial schedule image results", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "partial fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        validation_errors: [
+          {
+            index: 0,
+            missing_fields: ["start_time"],
+            draft: {
+              title: "Acme vs Central",
+              start_date: "2026-04-10",
+            },
+          },
+        ],
+      },
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/17120000000015_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I could read the schedule file, but I still need: start_time/i);
+  assert.doesNotMatch(body, /partial fallback prose should not appear/);
+  assert.equal(composeCalls, 1);
+});
+
 test("POST /api/ai/[orgId]/chat deterministically formats schedule image extraction failures", async () => {
   let composeCalls = 0;
 
