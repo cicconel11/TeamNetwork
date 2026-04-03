@@ -383,6 +383,67 @@ test("schedule extraction uses separate Z.AI models for text and image sources",
   assert.match(JSON.stringify(completionCalls[1]?.messages), /image_url/);
 });
 
+test("schedule image extraction preserves readable partial rows for follow-up validation", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      events: [
+                        {
+                          title: "Acme vs Central",
+                          start_date: "2026-04-10",
+                        },
+                      ],
+                      candidate_rows: [
+                        {
+                          raw_text: "Acme vs Central, Friday 4/10, 6:30 PM, Main Gym",
+                          title: "Acme vs Central",
+                          start_date: "2026-04-10",
+                        },
+                      ],
+                      source_summary: "One readable row is missing a time.",
+                      confidence: "medium",
+                    }),
+                  },
+                },
+              ],
+            }),
+          },
+        },
+      }) as any,
+  });
+
+  const extracted = await extractScheduleFromImage(
+    {
+      url: "https://example.com/schedule.png",
+      mimeType: "image/png",
+    },
+    {
+      sourceLabel: "schedule.png",
+      now: "2026-04-03T12:00:00.000Z",
+    }
+  );
+
+  assert.deepEqual(extracted.events, []);
+  assert.deepEqual(extracted.rejected_rows, [
+    {
+      index: 0,
+      missing_fields: ["start_time"],
+      draft: {
+        raw_text: "Acme vs Central, Friday 4/10, 6:30 PM, Main Gym",
+        title: "Acme vs Central",
+        start_date: "2026-04-10",
+      },
+    },
+  ]);
+});
+
 test("getZaiImageModel rejects token-like configuration values", () => {
   const previous = process.env.ZAI_IMAGE_MODEL;
   process.env.ZAI_IMAGE_MODEL = "7f7732de249c4bc1a2a434bf7014818b.NDlA78k4ON44EGQQ";
@@ -1434,6 +1495,86 @@ test("extract_schedule_pdf returns no_events_found for image uploads with no ext
       paths: [`${ORG_ID}/${USER_ID}/1712000000001_schedule.png`],
     },
   ]);
+});
+
+test("extract_schedule_pdf returns missing_fields for image uploads with readable partial rows", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      events: [],
+                      candidate_rows: [
+                        {
+                          raw_text: "Acme vs Central, Friday 4/10, Main Gym",
+                          title: "Acme vs Central",
+                          start_date: "2026-04-10",
+                        },
+                      ],
+                      source_summary: "One row was readable but missing a time.",
+                      confidence: "medium",
+                    }),
+                  },
+                },
+              ],
+            }),
+          },
+        },
+      }) as any,
+  });
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("fake image bytes")]),
+        error: null,
+      }),
+    },
+    organizations: {
+      maybeSingle: {
+        data: { slug: "acme", name: "Acme Athletics" },
+        error: null,
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-partial",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/17120000000015_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "extract_schedule_pdf",
+      args: {},
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "missing_fields",
+    validation_errors: [
+      {
+        index: 0,
+        missing_fields: ["start_time"],
+        draft: {
+          raw_text: "Acme vs Central, Friday 4/10, Main Gym",
+          title: "Acme vs Central",
+          start_date: "2026-04-10",
+        },
+      },
+    ],
+  });
 });
 
 test("extract_schedule_pdf returns needs_batch_confirmation for image uploads with extracted events", async () => {
