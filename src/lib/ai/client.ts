@@ -15,3 +15,7 @@ export function createZaiClient(): OpenAI {
 export function getZaiModel(): string {
   return process.env.ZAI_MODEL || "glm-5";
 }
+
+export function getZaiImageModel(): string {
+  return process.env.ZAI_IMAGE_MODEL || "glm-5v-turbo";
+}
