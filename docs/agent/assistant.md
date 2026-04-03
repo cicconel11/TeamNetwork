@@ -34,7 +34,7 @@ The panel UI is route-aware and now includes per-surface starter prompts, persis
 
 ## Database Tables
 
-Five migrations create all AI-related schema:
+Eight migrations create all AI-related schema:
 
 | Migration | Tables / Objects |
 |---|---|
@@ -44,6 +44,9 @@ Five migrations create all AI-related schema:
 | `20260322000000_ai_threads_updated_at_trigger.sql` | `ai_threads_updated_at` trigger (reuses existing `update_updated_at_column()`) |
 | `20260727000000_ai_pending_actions.sql` | `ai_pending_actions` + RLS + indexes for confirmation-gated assistant writes |
 | `20260728000000_ai_draft_sessions.sql` | `ai_draft_sessions` for persisted multi-turn job/discussion draft continuation |
+| `20260402120000_ai_schedule_uploads_bucket.sql` | Private `ai-schedule-uploads` storage bucket + INSERT/SELECT RLS policies |
+| `20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills image MIME types on existing buckets |
+| `20260403120000_ai_schedule_uploads_auth_delete.sql` | Authenticated DELETE RLS policy for schedule uploads |
 
 ### Table Summary
 
@@ -76,6 +79,8 @@ Five migrations create all AI-related schema:
 | DELETE | `/api/ai/[orgId]/threads/[threadId]` | Soft-delete a thread |
 | GET | `/api/ai/[orgId]/threads/[threadId]/messages` | List messages in a thread |
 | POST | `/api/ai/[orgId]/pending-actions/cleanup` | Best-effort cleanup for expired or abandoned pending actions |
+| POST | `/api/ai/[orgId]/upload-schedule` | Upload a schedule file (PDF/image) for AI extraction |
+| DELETE | `/api/ai/[orgId]/upload-schedule` | Delete a pending schedule upload |
 | GET | `/api/cron/ai-cache-purge` | Hourly cron: drain expired cache rows in bounded batches |
 
 ## Access Control
