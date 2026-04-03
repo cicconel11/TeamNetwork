@@ -1343,12 +1343,14 @@ async function extractSchedulePdf(
           ? await extractScheduleTextFromPdfBuffer(attachmentBuffer, ctx, logContext, extractionContext)
           : await (async () => {
               const { extractScheduleFromImage } = await getScheduleExtractionModule();
+              const imageUrl = await createSignedScheduleUploadUrl(
+                sb,
+                attachment.storagePath,
+                logContext
+              );
               return extractScheduleFromImage(
                 {
-                  dataUrl: buildScheduleAttachmentDataUrl(
-                    attachmentBuffer,
-                    attachment.mimeType as ScheduleImageMimeType
-                  ),
+                  url: imageUrl,
                   mimeType: attachment.mimeType as ScheduleImageMimeType,
                 },
                 {
@@ -1470,11 +1472,32 @@ async function deleteScheduleUpload(
   }
 }
 
-function buildScheduleAttachmentDataUrl(
-  fileBuffer: Buffer,
-  mimeType: ScheduleImageMimeType
-): string {
-  return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+async function createSignedScheduleUploadUrl(
+  sb: SB,
+  storagePath: string,
+  logContext: AiLogContext
+): Promise<string> {
+  const storageBucket = sb.storage.from(SCHEDULE_UPLOAD_BUCKET);
+
+  if (typeof storageBucket.createSignedUrl !== "function") {
+    throw new Error("Signed URLs are unavailable for schedule uploads");
+  }
+
+  const { data, error } = await storageBucket.createSignedUrl(storagePath, 60);
+  const signedUrl =
+    data && typeof data === "object" && "signedUrl" in data && typeof data.signedUrl === "string"
+      ? data.signedUrl
+      : null;
+
+  if (error || !signedUrl) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf signed url failed", logContext, {
+      error: getSafeErrorMessage(error),
+      storagePath,
+    });
+    throw new Error("Unable to create schedule image URL");
+  }
+
+  return signedUrl;
 }
 
 async function getOrgStats(
