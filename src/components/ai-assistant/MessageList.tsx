@@ -14,11 +14,13 @@ interface MessageListProps {
   previewAssistantContent?: string;
   suggestedPrompts?: string[];
   onSelectPrompt?: (message: string) => Promise<void> | void;
-  pendingAction?: PendingActionState | null;
-  pendingActionBusy?: boolean;
-  pendingActionError?: string | null;
-  onConfirmPendingAction?: () => Promise<void> | void;
-  onCancelPendingAction?: () => Promise<void> | void;
+  pendingActions?: PendingActionState[];
+  pendingActionBusyIds?: Set<string>;
+  pendingActionErrors?: Record<string, string>;
+  onConfirmPendingAction?: (actionId: string) => Promise<void> | void;
+  onCancelPendingAction?: (actionId: string) => Promise<void> | void;
+  onConfirmAllPendingActions?: () => Promise<void> | void;
+  onCancelAllPendingActions?: () => Promise<void> | void;
 }
 
 export function MessageList({
@@ -29,11 +31,13 @@ export function MessageList({
   previewAssistantContent,
   suggestedPrompts,
   onSelectPrompt,
-  pendingAction,
-  pendingActionBusy,
-  pendingActionError,
+  pendingActions,
+  pendingActionBusyIds,
+  pendingActionErrors,
   onConfirmPendingAction,
   onCancelPendingAction,
+  onConfirmAllPendingActions,
+  onCancelAllPendingActions,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastAssistantMessage = [...messages]
@@ -144,14 +148,42 @@ export function MessageList({
           </div>
         </div>
       )}
-      {pendingAction ? (
-        <PendingActionCard
-          action={pendingAction}
-          busy={pendingActionBusy}
-          error={pendingActionError}
-          onConfirm={() => void onConfirmPendingAction?.()}
-          onCancel={() => void onCancelPendingAction?.()}
-        />
+      {pendingActions && pendingActions.length > 0 ? (
+        <div className="space-y-2">
+          {pendingActions.length > 1 && (
+            <div className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-800 dark:bg-indigo-950/50">
+              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">
+                Review {pendingActions.length} events
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-white px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:ring-gray-600 dark:hover:bg-gray-700"
+                  onClick={() => void onCancelAllPendingActions?.()}
+                >
+                  Cancel All
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-500"
+                  onClick={() => void onConfirmAllPendingActions?.()}
+                >
+                  Confirm All
+                </button>
+              </div>
+            </div>
+          )}
+          {pendingActions.map((action) => (
+            <PendingActionCard
+              key={action.actionId}
+              action={action}
+              busy={pendingActionBusyIds?.has(action.actionId)}
+              error={pendingActionErrors?.[action.actionId] ?? null}
+              onConfirm={() => void onConfirmPendingAction?.(action.actionId)}
+              onCancel={() => void onCancelPendingAction?.(action.actionId)}
+            />
+          ))}
+        </div>
       ) : null}
       <div ref={bottomRef} />
     </div>

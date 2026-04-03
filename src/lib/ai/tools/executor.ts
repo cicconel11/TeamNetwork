@@ -129,6 +129,12 @@ const prepareEventSchema = z
   })
   .strict();
 
+const prepareEventsBatchSchema = z
+  .object({
+    events: z.array(prepareEventSchema).min(1).max(10),
+  })
+  .strict();
+
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
   .object({
@@ -162,6 +168,7 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   prepare_job_posting: prepareJobPostingSchema,
   prepare_discussion_thread: prepareDiscussionThreadSchema,
   prepare_event: prepareEventSchema,
+  prepare_events_batch: prepareEventsBatchSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
@@ -912,6 +919,135 @@ async function prepareEvent(
   };
 }
 
+async function prepareEventsBatch(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareEventsBatchSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Event preparation requires a thread context");
+  }
+
+  // Look up org slug once for all events
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_events_batch org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const orgSlug = typeof org?.slug === "string" ? org.slug : null;
+  const pendingActions: Array<{
+    id: string;
+    action_type: string;
+    payload: CreateEventPendingPayload;
+    expires_at: string;
+    summary: { title: string; description: string };
+  }> = [];
+  const validationErrors: Array<{
+    index: number;
+    missing_fields: string[];
+    draft: Record<string, unknown>;
+  }> = [];
+
+  for (let i = 0; i < args.events.length; i++) {
+    const eventArgs = args.events[i];
+
+    // Normalize empty strings to undefined
+    const normalized = Object.fromEntries(
+      Object.entries(eventArgs).filter(
+        ([, v]) => !(typeof v === "string" && v.trim().length === 0)
+      )
+    ) as typeof eventArgs;
+
+    const draftWithDefaults = {
+      ...normalized,
+      event_type: normalized.event_type ?? "general",
+      is_philanthropy: normalized.is_philanthropy ?? false,
+    };
+
+    const parsedDraft = assistantEventDraftSchema.safeParse(draftWithDefaults);
+    if (!parsedDraft.success) {
+      validationErrors.push({
+        index: i,
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: draftWithDefaults,
+      });
+      continue;
+    }
+
+    const missingFields = REQUIRED_PREPARED_EVENT_FIELDS.filter((field) => {
+      const value = parsedDraft.data[field];
+      return typeof value !== "string" || value.trim().length === 0;
+    });
+
+    if (missingFields.length > 0) {
+      validationErrors.push({
+        index: i,
+        missing_fields: [...missingFields],
+        draft: parsedDraft.data as unknown as Record<string, unknown>,
+      });
+      continue;
+    }
+
+    const prepared = assistantPreparedEventSchema.safeParse(parsedDraft.data);
+    if (!prepared.success) {
+      validationErrors.push({
+        index: i,
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: parsedDraft.data as unknown as Record<string, unknown>,
+      });
+      continue;
+    }
+
+    const pendingPayload: CreateEventPendingPayload = {
+      ...prepared.data,
+      orgSlug,
+    };
+    const pendingAction = await createPendingAction(sb, {
+      organizationId: ctx.orgId,
+      userId: ctx.userId,
+      threadId: ctx.threadId,
+      actionType: "create_event",
+      payload: pendingPayload,
+    });
+    const summary = buildPendingActionSummary(pendingAction);
+    pendingActions.push({
+      id: pendingAction.id,
+      action_type: pendingAction.action_type,
+      payload: pendingPayload,
+      expires_at: pendingAction.expires_at,
+      summary,
+    });
+  }
+
+  if (pendingActions.length === 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        validation_errors: validationErrors,
+      },
+    };
+  }
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_batch_confirmation",
+      pending_actions: pendingActions,
+      validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
+    },
+  };
+}
+
 async function getOrgStats(
   sb: SB,
   orgId: string,
@@ -1177,6 +1313,12 @@ export async function executeToolCall(
             sb,
             ctx,
             args as z.infer<typeof prepareEventSchema>
+          );
+        case "prepare_events_batch":
+          return prepareEventsBatch(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareEventsBatchSchema>
           );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId, logContext);

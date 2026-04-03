@@ -153,16 +153,16 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [messages, setMessages] = useState<AIPanelMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [pendingAssistantContent, setPendingAssistantContent] = useState<string | null>(null);
-  const [pendingAction, setPendingAction] = useState<PendingActionState | null>(null);
-  const [pendingActionBusy, setPendingActionBusy] = useState(false);
-  const [pendingActionError, setPendingActionError] = useState<string | null>(null);
+  const [pendingActions, setPendingActions] = useState<PendingActionState[]>([]);
+  const [pendingActionBusyIds, setPendingActionBusyIds] = useState<Set<string>>(new Set());
+  const [pendingActionErrors, setPendingActionErrors] = useState<Record<string, string>>({});
   const panelScopeKey = `${orgId}:${surface}`;
   const {
     isStreaming,
     error,
     currentContent,
     toolStatusLabel,
-    pendingAction: streamPendingAction,
+    pendingActions: streamPendingActions,
     sendMessage,
     cancel,
     clearError,
@@ -198,7 +198,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
           setActiveThreadId(null);
           setMessages([]);
           setPendingAssistantContent(null);
-          setPendingAction(null);
+          setPendingActions([]);
           void loadThreads();
           return false;
         }
@@ -231,7 +231,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
     setActiveThreadId(null);
     setMessages([]);
     setPendingAssistantContent(null);
-    setPendingAction(null);
+    setPendingActions([]);
     void loadThreads();
   }, [loadThreads, panelScopeKey]);
 
@@ -265,11 +265,11 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const skipEffectLoadRef = useRef(false);
 
   useEffect(() => {
-    if (streamPendingAction) {
-      setPendingAction(streamPendingAction);
-      setPendingActionError(null);
+    if (streamPendingActions.length > 0) {
+      setPendingActions(streamPendingActions);
+      setPendingActionErrors({});
     }
-  }, [streamPendingAction]);
+  }, [streamPendingActions]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -277,7 +277,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
       setMessages([]);
       setMessagesLoading(false);
       setPendingAssistantContent(null);
-      setPendingAction(null);
+      setPendingActions([]);
       return;
     }
     if (skipEffectLoadRef.current) {
@@ -293,8 +293,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const handleSend = useCallback(
     async (content: string) => {
       setPendingAssistantContent(null);
-      setPendingAction(null);
-      setPendingActionError(null);
+      setPendingActions([]);
+      setPendingActionErrors({});
 
       // Reuse keys only for retries of the same content within the same thread.
       const requestIdentity = resolveRetryRequestIdentity(
@@ -354,56 +354,82 @@ export function AIPanel({ orgId }: AIPanelProps) {
     [activeThreadId, loadMessages, loadThreads, pathname, sendMessage, surface]
   );
 
-  const handleConfirmPendingAction = useCallback(async () => {
-    if (!pendingAction) return;
-
-    setPendingActionBusy(true);
-    setPendingActionError(null);
+  const handleConfirmPendingAction = useCallback(async (actionId: string) => {
+    setPendingActionBusyIds((prev) => new Set(prev).add(actionId));
+    setPendingActionErrors((prev) => {
+      const next = { ...prev };
+      delete next[actionId];
+      return next;
+    });
     try {
       const response = await fetch(
-        `/api/ai/${orgId}/pending-actions/${pendingAction.actionId}/confirm`,
+        `/api/ai/${orgId}/pending-actions/${actionId}/confirm`,
         { method: "POST" }
       );
       const data = await response.json().catch(() => ({ error: "Request failed" }));
       if (!response.ok) {
-        setPendingActionError(data.error || "Failed to confirm pending action");
+        setPendingActionErrors((prev) => ({ ...prev, [actionId]: data.error || "Failed to confirm" }));
         return;
       }
 
-      setPendingAction(null);
+      setPendingActions((prev) => prev.filter((a) => a.actionId !== actionId));
       if (activeThreadId) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
       window.dispatchEvent(new CustomEvent("calendar:refresh"));
     } finally {
-      setPendingActionBusy(false);
+      setPendingActionBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(actionId);
+        return next;
+      });
     }
-  }, [activeThreadId, loadMessages, loadThreads, orgId, pendingAction]);
+  }, [activeThreadId, loadMessages, loadThreads, orgId]);
 
-  const handleCancelPendingAction = useCallback(async () => {
-    if (!pendingAction) return;
+  const handleConfirmAllPendingActions = useCallback(async () => {
+    const ids = pendingActions.map((a) => a.actionId);
+    const results = await Promise.allSettled(
+      ids.map((id) => handleConfirmPendingAction(id))
+    );
+    // Errors are tracked per-action by handleConfirmPendingAction
+    void results;
+  }, [pendingActions, handleConfirmPendingAction]);
 
-    setPendingActionBusy(true);
-    setPendingActionError(null);
+  const handleCancelPendingAction = useCallback(async (actionId: string) => {
+    setPendingActionBusyIds((prev) => new Set(prev).add(actionId));
+    setPendingActionErrors((prev) => {
+      const next = { ...prev };
+      delete next[actionId];
+      return next;
+    });
     try {
       const response = await fetch(
-        `/api/ai/${orgId}/pending-actions/${pendingAction.actionId}/cancel`,
+        `/api/ai/${orgId}/pending-actions/${actionId}/cancel`,
         { method: "POST" }
       );
       const data = await response.json().catch(() => ({ error: "Request failed" }));
       if (!response.ok) {
-        setPendingActionError(data.error || "Failed to cancel pending action");
+        setPendingActionErrors((prev) => ({ ...prev, [actionId]: data.error || "Failed to cancel" }));
         return;
       }
 
-      setPendingAction(null);
+      setPendingActions((prev) => prev.filter((a) => a.actionId !== actionId));
       if (activeThreadId) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
     } finally {
-      setPendingActionBusy(false);
+      setPendingActionBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(actionId);
+        return next;
+      });
     }
-  }, [activeThreadId, loadMessages, loadThreads, orgId, pendingAction]);
+  }, [activeThreadId, loadMessages, loadThreads, orgId]);
+
+  const handleCancelAllPendingActions = useCallback(async () => {
+    const ids = pendingActions.map((a) => a.actionId);
+    await Promise.allSettled(ids.map((id) => handleCancelPendingAction(id)));
+  }, [pendingActions, handleCancelPendingAction]);
 
   const handleDeleteThread = useCallback(
     async (threadId: string) => {
@@ -475,11 +501,13 @@ export function AIPanel({ orgId }: AIPanelProps) {
               previewAssistantContent={pendingAssistantContent ?? undefined}
               suggestedPrompts={starterPrompts}
               onSelectPrompt={handleSend}
-              pendingAction={pendingAction}
-              pendingActionBusy={pendingActionBusy}
-              pendingActionError={pendingActionError}
+              pendingActions={pendingActions}
+              pendingActionBusyIds={pendingActionBusyIds}
+              pendingActionErrors={pendingActionErrors}
               onConfirmPendingAction={handleConfirmPendingAction}
               onCancelPendingAction={handleCancelPendingAction}
+              onConfirmAllPendingActions={handleConfirmAllPendingActions}
+              onCancelAllPendingActions={handleCancelAllPendingActions}
             />
             <MessageInput
               isStreaming={isStreaming}
@@ -498,7 +526,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
             activeThreadId={activeThreadId}
             onSelectThread={(id) => {
               setPendingAssistantContent(null);
-              setPendingAction(null);
+              setPendingActions([]);
               setActiveThreadId(id);
               setView("chat");
             }}
@@ -506,7 +534,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
               setActiveThreadId(null);
               setMessages([]);
               setPendingAssistantContent(null);
-              setPendingAction(null);
+              setPendingActions([]);
               setView("chat");
             }}
             onDeleteThread={handleDeleteThread}

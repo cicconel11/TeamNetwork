@@ -176,7 +176,7 @@ test("useAIStream resets tool status during key lifecycle transitions", () => {
   );
   assert.match(
     source,
-    /setState\(\{\s*isStreaming: true,\s*error: null,\s*currentContent: \"\",\s*threadId: opts\.threadId \?\? null,\s*toolStatusLabel: null,\s*pendingAction: null,\s*\}\);/s,
+    /setState\(\{\s*isStreaming: true,\s*error: null,\s*currentContent: \"\",\s*threadId: opts\.threadId \?\? null,\s*toolStatusLabel: null,\s*pendingActions: \[\],\s*\}\);/s,
     "new requests should start with a cleared tool status"
   );
   assert.match(

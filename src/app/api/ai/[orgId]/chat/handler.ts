@@ -813,6 +813,11 @@ function getPass1Tools(
   }
 
   if (CREATE_EVENT_PROMPT_PATTERN.test(message)) {
+    // Detect multi-event intent: "create 3 events", "schedule multiple events", numbered list patterns
+    const multiEventPattern = /(?:\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|multiple|several|a few|some|batch)\s+events?\b|(?:events?.*,.*(?:and|&)\s))/i;
+    if (multiEventPattern.test(message)) {
+      return [AI_TOOL_MAP.prepare_events_batch];
+    }
     return [AI_TOOL_MAP.prepare_event];
   }
 
@@ -864,7 +869,8 @@ function getForcedPass1ToolChoice(
   if (
     forcedToolName !== "prepare_job_posting" &&
     forcedToolName !== "prepare_discussion_thread" &&
-    forcedToolName !== "prepare_event"
+    forcedToolName !== "prepare_event" &&
+    forcedToolName !== "prepare_events_batch"
   ) {
     return undefined;
   }
@@ -931,6 +937,60 @@ function getPendingActionFromToolData(data: unknown) {
     },
     payload: pending.payload as Record<string, unknown>,
   };
+}
+
+function getBatchPendingActionsFromToolData(data: unknown) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as { state?: string; pending_actions?: unknown[] };
+  if (payload.state !== "needs_batch_confirmation" || !Array.isArray(payload.pending_actions)) {
+    return null;
+  }
+
+  const actions: Array<{
+    actionId: string;
+    actionType: string;
+    summary: { title: string; description: string };
+    payload: Record<string, unknown>;
+    expiresAt: string;
+  }> = [];
+
+  for (const pa of payload.pending_actions) {
+    if (!pa || typeof pa !== "object") continue;
+    const pending = pa as {
+      id?: string;
+      action_type?: string;
+      expires_at?: string;
+      summary?: { title?: string; description?: string };
+      payload?: unknown;
+    };
+    if (
+      typeof pending.id !== "string" ||
+      typeof pending.action_type !== "string" ||
+      typeof pending.expires_at !== "string" ||
+      !pending.summary ||
+      typeof pending.summary.title !== "string" ||
+      typeof pending.summary.description !== "string" ||
+      !pending.payload ||
+      typeof pending.payload !== "object"
+    ) {
+      continue;
+    }
+    actions.push({
+      actionId: pending.id,
+      actionType: pending.action_type,
+      expiresAt: pending.expires_at,
+      summary: {
+        title: pending.summary.title,
+        description: pending.summary.description,
+      },
+      payload: pending.payload as Record<string, unknown>,
+    });
+  }
+
+  return actions.length > 0 ? actions : null;
 }
 
 function formatPrepareJobPostingResponse(data: unknown): string | null {
@@ -1022,6 +1082,40 @@ function formatPrepareEventResponse(data: unknown): string | null {
   return null;
 }
 
+function formatPrepareEventsBatchResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    state?: string;
+    pending_actions?: unknown[];
+    validation_errors?: Array<{ index: number; missing_fields: string[] }>;
+  };
+
+  if (payload.state === "missing_fields") {
+    const errors = payload.validation_errors ?? [];
+    const allMissing = errors.flatMap((e) => e.missing_fields);
+    const unique = [...new Set(allMissing)];
+    if (unique.length === 0) {
+      return "I need more details for these events before I can prepare them.";
+    }
+    return `None of the events are ready yet. I still need: ${unique.join(", ")} for each event.`;
+  }
+
+  if (payload.state === "needs_batch_confirmation") {
+    const count = Array.isArray(payload.pending_actions) ? payload.pending_actions.length : 0;
+    const errorCount = Array.isArray(payload.validation_errors) ? payload.validation_errors.length : 0;
+    let msg = `I drafted ${count} event${count !== 1 ? "s" : ""}. Review the details below and confirm when you're ready.`;
+    if (errorCount > 0) {
+      msg += ` ${errorCount} event${errorCount !== 1 ? "s" : ""} couldn't be prepared — I'll need more details for ${errorCount === 1 ? "that one" : "those"}.`;
+    }
+    return msg;
+  }
+
+  return null;
+}
+
 function formatDeterministicToolResponse(
   name: string,
   data: unknown
@@ -1045,6 +1139,8 @@ function formatDeterministicToolResponse(
       return formatPrepareDiscussionThreadResponse(data);
     case "prepare_event":
       return formatPrepareEventResponse(data);
+    case "prepare_events_batch":
+      return formatPrepareEventsBatchResponse(data);
     case "get_org_stats":
       return formatOrgStatsResponse(data);
     case "find_navigation_targets":
@@ -2806,6 +2902,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                     payload: pendingAction.payload,
                     expiresAt: pendingAction.expiresAt,
                   });
+                } else {
+                  const batchActions = getBatchPendingActionsFromToolData(result.data);
+                  if (batchActions) {
+                    enqueue({
+                      type: "pending_actions_batch",
+                      actions: batchActions,
+                    });
+                  }
                 }
                 successfulToolResults.push({
                   name: toolEvent.name as ToolName,

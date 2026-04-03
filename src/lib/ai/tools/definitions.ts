@@ -40,6 +40,10 @@ export interface PrepareEventArgs {
   is_philanthropy?: boolean;
 }
 
+export interface PrepareEventsBatchArgs {
+  events: PrepareEventArgs[];
+}
+
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
@@ -265,6 +269,57 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_events_batch: {
+    type: "function" as const,
+    function: {
+      name: "prepare_events_batch" as const,
+      description:
+        "Prepare multiple calendar event drafts at once. Use this when the user asks to create, add, or schedule 2 or more events in a single message. Each event is validated individually and creates its own confirmation action. Only supports single (non-recurring) events.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          events: {
+            type: "array" as const,
+            minItems: 1,
+            maxItems: 10,
+            description: "Array of event drafts to prepare",
+            items: {
+              type: "object" as const,
+              properties: {
+                title: { type: "string" as const },
+                description: { type: "string" as const },
+                start_date: {
+                  type: "string" as const,
+                  description: "Event date in YYYY-MM-DD format",
+                },
+                start_time: {
+                  type: "string" as const,
+                  description: "Event start time in HH:MM 24-hour format",
+                },
+                end_date: {
+                  type: "string" as const,
+                  description: "Event end date in YYYY-MM-DD format (optional)",
+                },
+                end_time: {
+                  type: "string" as const,
+                  description: "Event end time in HH:MM 24-hour format (optional)",
+                },
+                location: { type: "string" as const },
+                event_type: {
+                  type: "string" as const,
+                  enum: ["general", "philanthropy", "game", "meeting", "social", "fundraiser"],
+                },
+                is_philanthropy: { type: "boolean" as const },
+              },
+              additionalProperties: false as const,
+            },
+          },
+        },
+        required: ["events"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_org_stats: {
     type: "function" as const,
     function: {
@@ -349,6 +404,7 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
+  TOOL_BY_NAME.prepare_events_batch,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,
