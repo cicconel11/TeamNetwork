@@ -1167,9 +1167,34 @@ function formatExtractScheduleFileResponse(data: unknown): string | null {
   return null;
 }
 
-function formatDeterministicToolErrorResponse(name: string, error: string): string | null {
+function formatDeterministicToolErrorResponse(
+  name: string,
+  error: string,
+  errorCode?: string | null
+): string | null {
   if (name !== "extract_schedule_pdf") {
     return null;
+  }
+
+  switch (errorCode) {
+    case "attachment_required":
+      return "I need an uploaded schedule file before I can import anything. Please attach a PDF or schedule image and try again.";
+    case "invalid_attachment_path":
+      return "That uploaded schedule file is no longer valid for this session. Please upload it again.";
+    case "org_context_failed":
+      return "I couldn't load the organization context for that schedule import right now. Please try again.";
+    case "attachment_unavailable":
+      return "I couldn't load that uploaded schedule file. Please re-upload it and try again.";
+    case "image_too_large":
+      return "That schedule image is too large to process. Please upload an image under 2MB or use a PDF instead.";
+    case "image_unreadable":
+      return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
+    case "image_model_misconfigured":
+      return "Schedule image extraction is misconfigured in this environment. Set ZAI_IMAGE_MODEL to a Z.AI vision model like glm-5v-turbo and restart the server.";
+    case "pdf_unreadable":
+      return "I couldn't read that PDF schedule. Try re-exporting the PDF or upload a clear image instead.";
+    default:
+      break;
   }
 
   if (error === "Unable to read attached schedule image") {
@@ -2972,7 +2997,10 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   toolCallId: toolEvent.id,
                   name: toolEvent.name,
                   args: parsedArgs,
-                  data: { error: result.error },
+                  data: {
+                    error: result.error,
+                    error_code: result.code,
+                  },
                 });
                 return "continue";
               case "timeout":
@@ -3057,11 +3085,21 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             typeof toolResults[0].data.error === "string"
               ? toolResults[0].data.error
               : null;
+          const singleToolErrorCode =
+            toolResults.length === 1 &&
+            successfulToolResults.length === 0 &&
+            toolResults[0].data &&
+            typeof toolResults[0].data === "object" &&
+            "error_code" in toolResults[0].data &&
+            typeof toolResults[0].data.error_code === "string"
+              ? toolResults[0].data.error_code
+              : null;
           const deterministicToolErrorContent =
             singleToolError
               ? formatDeterministicToolErrorResponse(
                   toolResults[0].name,
-                  singleToolError
+                  singleToolError,
+                  singleToolErrorCode
                 )
               : null;
 
