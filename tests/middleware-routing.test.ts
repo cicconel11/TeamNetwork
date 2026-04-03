@@ -67,6 +67,58 @@ describe("middleware routing decisions", () => {
     it("undefined → null", () => assert.strictEqual(getRedirectForMembershipStatus(undefined, "my-org"), null));
   });
 
+  describe("isOrgContextRpcResult type guard", () => {
+    /**
+     * Mirrors the type guard in middleware.ts that validates the RPC result shape
+     * before accessing .organization?.default_language and .membership?.language_override.
+     */
+    function isOrgContextRpcResult(value: unknown): value is {
+      found: boolean;
+      organization?: { default_language?: string | null } | null;
+      membership?: { status?: string | null; language_override?: string | null } | null;
+    } {
+      return typeof value === "object" && value !== null && "found" in value &&
+        typeof (value as Record<string, unknown>).found === "boolean";
+    }
+
+    it("accepts valid found=true result", () => {
+      const ctx = { found: true, organization: { default_language: "es" }, membership: { status: "active", language_override: null } };
+      assert.strictEqual(isOrgContextRpcResult(ctx), true);
+    });
+
+    it("accepts valid found=false result", () => {
+      assert.strictEqual(isOrgContextRpcResult({ found: false }), true);
+    });
+
+    it("rejects null", () => {
+      assert.strictEqual(isOrgContextRpcResult(null), false);
+    });
+
+    it("rejects undefined", () => {
+      assert.strictEqual(isOrgContextRpcResult(undefined), false);
+    });
+
+    it("rejects string", () => {
+      assert.strictEqual(isOrgContextRpcResult("not an object"), false);
+    });
+
+    it("rejects array", () => {
+      assert.strictEqual(isOrgContextRpcResult([1, 2, 3]), false);
+    });
+
+    it("rejects object without found property", () => {
+      assert.strictEqual(isOrgContextRpcResult({ organization: {} }), false);
+    });
+
+    it("rejects object with non-boolean found", () => {
+      assert.strictEqual(isOrgContextRpcResult({ found: "true" }), false);
+    });
+
+    it("rejects number", () => {
+      assert.strictEqual(isOrgContextRpcResult(42), false);
+    });
+  });
+
   describe("shouldRedirectToCanonicalHost", () => {
     it("bare domain → true", () => assert.strictEqual(shouldRedirectToCanonicalHost("myteamnetwork.com"), true));
     it("www domain → false", () => assert.strictEqual(shouldRedirectToCanonicalHost("www.myteamnetwork.com"), false));

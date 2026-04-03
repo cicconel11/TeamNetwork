@@ -187,6 +187,13 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: rpcError.message || "Failed to create invite" }, 400);
   }
 
+  if (!invite || typeof invite.id !== "string") {
+    console.error("[enterprise/invites POST] RPC returned null or invalid invite", {
+      enterpriseId: ctx.enterpriseId,
+    });
+    return respond({ error: "Failed to create invite" }, 500);
+  }
+
   logEnterpriseAuditAction({
     actorUserId: ctx.userId,
     actorEmail: ctx.userEmail,

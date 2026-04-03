@@ -121,6 +121,83 @@ describe("Graduation System Bug Fixes", () => {
     });
   });
 
+  describe("[P3] RPC null data guards", () => {
+    /**
+     * Simulates the RPC call + null-data guard pattern used in:
+     * - transitionToAlumni
+     * - revokeMemberAccess
+     * - reinstateToActiveMember
+     *
+     * Before fix: `data as { success: boolean }` crashes on null.success
+     * After fix: null data returns { success: false, error: "RPC returned no data" }
+     */
+    function simulateRpcWithNullGuard(
+      data: { success: boolean; skipped?: boolean; error?: string } | null,
+      error: { message: string } | null
+    ): { success: boolean; skipped?: boolean; error?: string } {
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (!data) {
+        return { success: false, error: "RPC returned no data" };
+      }
+
+      return data;
+    }
+
+    it("transitionToAlumni returns { success: false } when data is null", () => {
+      const result = simulateRpcWithNullGuard(null, null);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.error, "RPC returned no data");
+    });
+
+    it("revokeMemberAccess returns { success: false } when data is null", () => {
+      const result = simulateRpcWithNullGuard(null, null);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.error, "RPC returned no data");
+    });
+
+    it("reinstateToActiveMember returns { success: false } when data is null", () => {
+      const result = simulateRpcWithNullGuard(null, null);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.error, "RPC returned no data");
+    });
+
+    it("still returns error when RPC itself errors", () => {
+      const result = simulateRpcWithNullGuard(null, { message: "connection timeout" });
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.error, "connection timeout");
+    });
+
+    it("passes through valid data", () => {
+      const result = simulateRpcWithNullGuard({ success: true, skipped: false }, null);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.skipped, false);
+    });
+  });
+
+  describe("[P3] Enterprise alumni stats null org_stats", () => {
+    it("null org_stats produces empty array via null coalesce", () => {
+      // Simulates: (statsResult.org_stats ?? []).map(...)
+      const orgStats: { name: string; count: number }[] | null = null;
+      const result = (orgStats ?? []).map(({ name, count }) => ({ name, count }));
+      assert.deepStrictEqual(result, []);
+    });
+
+    it("valid org_stats maps correctly", () => {
+      const orgStats = [
+        { name: "Org A", count: 5 },
+        { name: "Org B", count: 10 },
+      ];
+      const result = (orgStats ?? []).map(({ name, count }) => ({ name, count }));
+      assert.deepStrictEqual(result, [
+        { name: "Org A", count: 5 },
+        { name: "Org B", count: 10 },
+      ]);
+    });
+  });
+
   describe("[P2] Graduation year parsing should be timezone-safe", () => {
     it("should correctly parse year from YYYY-MM-DD without timezone issues", () => {
       // This is the buggy pattern:

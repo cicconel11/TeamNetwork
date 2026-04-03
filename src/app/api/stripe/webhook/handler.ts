@@ -411,7 +411,10 @@ export async function handleStripeWebhookPost(
               error: subError.message,
               enterpriseId: enterprise.id,
             });
-            // Don't fail the webhook - enterprise exists, subscription can be fixed
+            return NextResponse.json(
+              { error: "Enterprise subscription provisioning failed" },
+              { status: 500 }
+            );
           }
 
           // Grant owner role to creator (idempotent)

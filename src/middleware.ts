@@ -18,6 +18,20 @@ import type { SupportedLocale } from "./i18n/config";
 // Validate at module load
 validateAuthTestMode();
 
+interface OrgContextRpcResult {
+  found: boolean;
+  organization?: { default_language?: string | null } | null;
+  membership?: {
+    status?: string | null;
+    language_override?: string | null;
+  } | null;
+}
+
+function isOrgContextRpcResult(value: unknown): value is OrgContextRpcResult {
+  return typeof value === "object" && value !== null && "found" in value &&
+    typeof (value as Record<string, unknown>).found === "boolean";
+}
+
 /** Sync the NEXT_LOCALE cookie from DB language preferences (user override → org default → 'en'). */
 function syncLocaleCookie(
   request: NextRequest,
@@ -417,13 +431,13 @@ export async function middleware(request: NextRequest) {
 
               membershipStatus = membership?.status;
             }
-          } else if (ctx?.found) {
+          } else if (isOrgContextRpcResult(ctx) && ctx.found) {
             membershipStatus = ctx.membership?.status;
             // Capture language fields from RPC for locale cookie sync (no extra query)
             orgDefaultLang = ctx.organization?.default_language ?? null;
             userLangOverride = ctx.membership?.language_override ?? null;
           }
-          // If !ctx?.found the org doesn't exist — layout.tsx handles the 404 gate
+          // If ctx is invalid or !ctx.found the org doesn't exist — layout.tsx handles the 404 gate
 
           const membershipRedirect = getRedirectForMembershipStatus(membershipStatus, orgSlug);
           if (membershipRedirect) {
@@ -439,7 +453,7 @@ export async function middleware(request: NextRequest) {
         // Dev-admin bypasses membership checks but still needs language data
         try {
           const { data: ctx } = await supabase.rpc("get_org_context_by_slug", { p_slug: orgSlug });
-          if (ctx?.found) {
+          if (isOrgContextRpcResult(ctx) && ctx.found) {
             orgDefaultLang = ctx.organization?.default_language ?? null;
             userLangOverride = ctx.membership?.language_override ?? null;
           }

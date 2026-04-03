@@ -1,10 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import { acceptAdoptionRequest } from "../../src/lib/enterprise/adoption.ts";
+import { createSupabaseStub } from "../utils/supabaseStub.ts";
 
 /**
  * Tests for enterprise adoption library functions.
  *
- * Because createAdoptionRequest/acceptAdoptionRequest/rejectAdoptionRequest
+ * Because createAdoptionRequest/rejectAdoptionRequest
  * call createServiceClient() and checkAdoptionQuota() internally, we test them
  * via simulation functions that replicate the exact branching logic from
  * adoption.ts, using dependency-injected mocks — the same pattern used in
@@ -754,6 +756,22 @@ describe("acceptAdoptionRequest", () => {
     assert.strictEqual(result.error, "Internal error");
   });
 
+  it("org points to different enterprise → returns error", () => {
+    const result = simulateAcceptAdoptionRequest({
+      request: makeRequest({ enterprise_id: "enterprise-1" }),
+      reVerifiedOrg: { enterprise_id: "enterprise-other" },
+      quotaCheck: { allowed: true },
+      seatQuota: { currentCount: 0, maxAllowed: null },
+      orgSub: null,
+      orgUpdateError: null,
+      subUpdateError: null,
+      subCreateError: null,
+    });
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.error, "Organization already belongs to an enterprise");
+  });
+
   it("returns 503 when org re-verify DB errors", () => {
     const result = simulateAcceptAdoptionRequest({
       request: makeRequest(),
@@ -770,6 +788,42 @@ describe("acceptAdoptionRequest", () => {
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.status, 503);
     assert.strictEqual(result.error, "Internal error");
+  });
+
+  it("retries partial adoption by reconciling subscription before accepting", async () => {
+    const supabase = createSupabaseStub();
+
+    supabase.seed("enterprise_adoption_requests", [{
+      id: "request-1",
+      enterprise_id: "enterprise-1",
+      organization_id: "org-1",
+      requested_by: "user-requester",
+      status: "pending",
+      expires_at: null,
+    }]);
+    supabase.seed("organizations", [{
+      id: "org-1",
+      enterprise_id: "enterprise-1",
+      enterprise_relationship_type: "adopted",
+      enterprise_adopted_at: "2026-01-01T00:00:00.000Z",
+    }]);
+
+    const result = await acceptAdoptionRequest("request-1", "user-admin", {
+      supabase: supabase as never,
+      checkAdoptionQuotaFn: async () => ({ allowed: true }),
+      canEnterpriseAddSubOrgFn: async () => ({ currentCount: 0, maxAllowed: null }),
+    });
+
+    assert.deepStrictEqual(result, { success: true });
+
+    const requests = supabase.getRows("enterprise_adoption_requests");
+    assert.strictEqual(requests[0].status, "accepted");
+    assert.strictEqual(requests[0].responded_by, "user-admin");
+
+    const subscriptions = supabase.getRows("organization_subscriptions");
+    assert.strictEqual(subscriptions.length, 1);
+    assert.strictEqual(subscriptions[0].organization_id, "org-1");
+    assert.strictEqual(subscriptions[0].status, "enterprise_managed");
   });
 });
 

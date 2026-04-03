@@ -125,3 +125,62 @@ test("handles null raw_user_meta_data as empty object", () => {
   const result = simulateUserLookup("carol@test.org", testUsers);
   assert.deepStrictEqual(result.targetUser?.user_metadata, {});
 });
+
+// ── Null invite shape guard (enterprise/invites POST) ────────────────────────
+
+/**
+ * Simulates the invite shape guard added to enterprise/invites/route.ts POST.
+ * Before fix: null invite spread into response = HTTP 200 with no invite data.
+ * After fix: null or missing id returns 500.
+ */
+function simulateInviteShapeGuard(
+  invite: Record<string, unknown> | null,
+  rpcError: { message: string } | null
+): { status: number; body: Record<string, unknown> } {
+  if (rpcError) {
+    return { status: 400, body: { error: rpcError.message || "Failed to create invite" } };
+  }
+
+  if (!invite || typeof invite.id !== "string") {
+    return { status: 500, body: { error: "Failed to create invite" } };
+  }
+
+  return {
+    status: 200,
+    body: {
+      ...invite,
+      organization_name: "Test Org",
+      is_enterprise_wide: false,
+    },
+  };
+}
+
+test("invite shape guard: null invite returns 500", () => {
+  const result = simulateInviteShapeGuard(null, null);
+  assert.strictEqual(result.status, 500);
+  assert.strictEqual(result.body.error, "Failed to create invite");
+});
+
+test("invite shape guard: invite without id returns 500", () => {
+  const result = simulateInviteShapeGuard({ role: "admin" }, null);
+  assert.strictEqual(result.status, 500);
+});
+
+test("invite shape guard: invite with numeric id returns 500", () => {
+  const result = simulateInviteShapeGuard({ id: 123 }, null);
+  assert.strictEqual(result.status, 500);
+});
+
+test("invite shape guard: valid invite returns 200 with spread data", () => {
+  const result = simulateInviteShapeGuard({ id: "inv-1", role: "admin", code: "ABC123" }, null);
+  assert.strictEqual(result.status, 200);
+  assert.strictEqual(result.body.id, "inv-1");
+  assert.strictEqual(result.body.organization_name, "Test Org");
+  assert.strictEqual(result.body.code, "ABC123");
+});
+
+test("invite shape guard: RPC error takes precedence", () => {
+  const result = simulateInviteShapeGuard(null, { message: "permission denied" });
+  assert.strictEqual(result.status, 400);
+  assert.strictEqual(result.body.error, "permission denied");
+});
