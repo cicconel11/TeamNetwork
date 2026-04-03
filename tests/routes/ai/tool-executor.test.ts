@@ -1373,6 +1373,7 @@ test("extract_schedule_pdf rejects attachments outside the caller upload prefix"
   assert.deepEqual(result, {
     kind: "tool_error",
     error: "Invalid schedule attachment path",
+    code: "invalid_attachment_path",
   });
   assert.deepEqual(stub.storageDownloads, []);
 });
@@ -1419,6 +1420,41 @@ test("extract_schedule_pdf allows in-prefix attachments to reach storage downloa
   assert.deepEqual(result, {
     kind: "tool_error",
     error: "Unable to read attached PDF",
+    code: "pdf_unreadable",
+  });
+});
+
+test("extract_schedule_pdf returns attachment_unavailable when the uploaded file cannot be downloaded", async () => {
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: null,
+        error: { message: "Object not found" },
+      }),
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-missing",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/17120000000005_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Unable to load attached schedule file",
+    code: "attachment_unavailable",
   });
 });
 
@@ -1722,6 +1758,7 @@ test("extract_schedule_pdf returns a mapped tool_error when image extraction fai
   assert.deepEqual(result, {
     kind: "tool_error",
     error: "Unable to read attached schedule image",
+    code: "image_unreadable",
   });
 });
 
@@ -1764,6 +1801,47 @@ test("extract_schedule_pdf returns a configuration error for invalid ZAI image m
     kind: "tool_error",
     error:
       "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo.",
+    code: "image_model_misconfigured",
+  });
+});
+
+test("extract_schedule_pdf returns image_too_large for oversized image uploads", async () => {
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([new Uint8Array((2 * 1024 * 1024) + 1)]),
+        error: null,
+      }),
+    },
+    organizations: {
+      maybeSingle: {
+        data: { slug: "acme", name: "Acme Athletics" },
+        error: null,
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-too-large",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000006_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Image too large for extraction (2MB). Maximum is 2MB.",
+    code: "image_too_large",
   });
 });
 
