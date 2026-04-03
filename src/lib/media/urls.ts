@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const SIGNED_URL_EXPIRY = 3600;
+const SIGNED_URL_EXPIRY = 86400;
 const BUCKET = "org-media";
 
 // Keep cached responses comfortably shorter than the signed URL lifetime so
@@ -57,18 +57,25 @@ export async function batchGetMediaBrowseUrls(
 ): Promise<Map<string, GridPreviewUrlResult>> {
   const results = new Map<string, GridPreviewUrlResult>();
 
-  const entries = await Promise.all(
-    media.map(async (m) => {
-      const previewUrl = await signStoragePath(
-        serviceClient,
-        m.preview_storage_path ?? m.storage_path,
-      );
-      return [m.id, { thumbnailUrl: previewUrl }] as const;
-    }),
-  );
+  if (media.length === 0) return results;
 
-  for (const [id, urls] of entries) {
-    results.set(id, urls);
+  const paths = media.map((m) => m.preview_storage_path ?? m.storage_path);
+
+  const { data, error } = await serviceClient.storage
+    .from(BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_EXPIRY);
+
+  if (error || !data) {
+    for (const m of media) {
+      results.set(m.id, { thumbnailUrl: null });
+    }
+    return results;
+  }
+
+  for (let i = 0; i < media.length; i++) {
+    const item = data[i];
+    const url = item?.error ? null : (item?.signedUrl ?? null);
+    results.set(media[i].id, { thumbnailUrl: url });
   }
 
   return results;
@@ -86,24 +93,37 @@ export async function batchGetGridPreviewUrls(
 ): Promise<Map<string, GridPreviewUrlResult>> {
   const results = new Map<string, GridPreviewUrlResult>();
 
-  const entries = await Promise.all(
-    media.map(async (m) => {
-      const isVideo = m.media_type === "video" || m.mime_type.startsWith("video/");
-      if (isVideo) {
-        return [m.id, { thumbnailUrl: null }] as const;
-      }
+  const images: Array<{ index: number; id: string; path: string }> = [];
 
-      const previewUrl = await signStoragePath(
-        serviceClient,
-        m.preview_storage_path ?? m.storage_path,
-      );
+  for (let i = 0; i < media.length; i++) {
+    const m = media[i];
+    const isVideo = m.media_type === "video" || m.mime_type.startsWith("video/");
+    if (isVideo) {
+      results.set(m.id, { thumbnailUrl: null });
+    } else {
+      images.push({ index: i, id: m.id, path: m.preview_storage_path ?? m.storage_path });
+    }
+  }
 
-      return [m.id, { thumbnailUrl: previewUrl }] as const;
-    }),
-  );
+  if (images.length === 0) return results;
 
-  for (const [id, urls] of entries) {
-    results.set(id, urls);
+  const paths = images.map((img) => img.path);
+
+  const { data, error } = await serviceClient.storage
+    .from(BUCKET)
+    .createSignedUrls(paths, SIGNED_URL_EXPIRY);
+
+  if (error || !data) {
+    for (const img of images) {
+      results.set(img.id, { thumbnailUrl: null });
+    }
+    return results;
+  }
+
+  for (let i = 0; i < images.length; i++) {
+    const item = data[i];
+    const url = item?.error ? null : (item?.signedUrl ?? null);
+    results.set(images[i].id, { thumbnailUrl: url });
   }
 
   return results;

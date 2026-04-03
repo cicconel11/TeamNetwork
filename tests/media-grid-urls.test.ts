@@ -9,6 +9,7 @@ import { getCardDisplayUrl } from "@/lib/media/display-url";
 
 function createMockClient() {
   const calls: string[] = [];
+  const batchCalls: string[][] = [];
   const mockClient = {
     storage: {
       from: () => ({
@@ -16,16 +17,23 @@ function createMockClient() {
           calls.push(path);
           return { data: { signedUrl: `https://example.com/${path}` } };
         },
+        createSignedUrls: async (paths: string[]) => {
+          batchCalls.push(paths);
+          return {
+            data: paths.map((p) => ({ path: p, signedUrl: `https://example.com/${p}`, error: null })),
+            error: null,
+          };
+        },
       }),
     },
   };
 
-  return { calls, mockClient };
+  return { calls, batchCalls, mockClient };
 }
 
 describe("batchGetGridPreviewUrls", () => {
   it("uses stored preview assets for images and skips video originals", async () => {
-    const { calls, mockClient } = createMockClient();
+    const { batchCalls, mockClient } = createMockClient();
 
     const map = await batchGetGridPreviewUrls(mockClient as never, [
       {
@@ -38,32 +46,58 @@ describe("batchGetGridPreviewUrls", () => {
       { id: "b", storage_path: "o/v/1.mp4", mime_type: "video/mp4", media_type: "video" },
     ]);
 
-    assert.deepEqual(calls, ["o/i/1-preview.jpg"]);
+    assert.equal(batchCalls.length, 1);
+    assert.deepEqual(batchCalls[0], ["o/i/1-preview.jpg"]);
     assert.equal(map.get("a")?.thumbnailUrl, "https://example.com/o/i/1-preview.jpg");
     assert.equal(map.get("b")?.thumbnailUrl, null);
+  });
+
+  it("makes exactly 1 batch call for multiple images", async () => {
+    const { batchCalls, mockClient } = createMockClient();
+
+    const media = Array.from({ length: 5 }, (_, i) => ({
+      id: `img-${i}`,
+      storage_path: `o/i/${i}.jpg`,
+      preview_storage_path: `o/i/${i}-preview.jpg`,
+      mime_type: "image/jpeg" as const,
+      media_type: "image" as const,
+    }));
+
+    const map = await batchGetGridPreviewUrls(mockClient as never, media);
+
+    assert.equal(batchCalls.length, 1, "should make exactly 1 batch SDK call");
+    assert.equal(batchCalls[0].length, 5, "batch call should contain all 5 paths");
+    for (let i = 0; i < 5; i++) {
+      assert.equal(
+        map.get(`img-${i}`)?.thumbnailUrl,
+        `https://example.com/o/i/${i}-preview.jpg`,
+      );
+    }
   });
 });
 
 describe("batchGetMediaBrowseUrls", () => {
   it("does not sign originals when a preview path exists", async () => {
-    const { calls, mockClient } = createMockClient();
+    const { batchCalls, mockClient } = createMockClient();
 
     const map = await batchGetMediaBrowseUrls(mockClient as never, [
       { id: "browse-1", storage_path: "feed/full.jpg", preview_storage_path: "feed/preview.jpg" },
     ]);
 
-    assert.deepEqual(calls, ["feed/preview.jpg"]);
+    assert.equal(batchCalls.length, 1);
+    assert.deepEqual(batchCalls[0], ["feed/preview.jpg"]);
     assert.equal(map.get("browse-1")?.thumbnailUrl, "https://example.com/feed/preview.jpg");
   });
 
   it("falls back to the original path for older rows without stored previews", async () => {
-    const { calls, mockClient } = createMockClient();
+    const { batchCalls, mockClient } = createMockClient();
 
     const map = await batchGetMediaBrowseUrls(mockClient as never, [
       { id: "browse-2", storage_path: "feed/legacy.jpg" },
     ]);
 
-    assert.deepEqual(calls, ["feed/legacy.jpg"]);
+    assert.equal(batchCalls.length, 1);
+    assert.deepEqual(batchCalls[0], ["feed/legacy.jpg"]);
     assert.equal(map.get("browse-2")?.thumbnailUrl, "https://example.com/feed/legacy.jpg");
   });
 });
