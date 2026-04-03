@@ -2674,17 +2674,20 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }))
         .filter((m: { content: string }) => Boolean(m.content));
 
-      if (attachment && historyMessages.length > 0) {
-        const lastHistoryMessage = historyMessages[historyMessages.length - 1];
-        if (lastHistoryMessage?.role === "user") {
-          historyMessages[historyMessages.length - 1] = {
-            ...lastHistoryMessage,
-            content:
-              `${lastHistoryMessage.content}\n\n` +
-              `[Attached schedule file: "${attachment.fileName}", storage path: "${attachment.storagePath}"]`,
-          };
-        }
-      }
+      const finalHistory =
+        attachment &&
+        historyMessages.length > 0 &&
+        historyMessages[historyMessages.length - 1]?.role === "user"
+          ? [
+              ...historyMessages.slice(0, -1),
+              {
+                ...historyMessages[historyMessages.length - 1],
+                content:
+                  `${historyMessages[historyMessages.length - 1].content}\n\n` +
+                  `[Attached schedule file: "${attachment.fileName}", storage path: "${attachment.storagePath}"]`,
+              },
+            ]
+          : historyMessages;
 
       const contextMessages = orgContextMessage
         ? [
@@ -2692,11 +2695,11 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
             ...(draftSessionContextMessage
               ? [{ role: "user" as const, content: draftSessionContextMessage }]
               : []),
-            ...historyMessages,
+            ...finalHistory,
           ]
         : draftSessionContextMessage
-          ? [{ role: "user" as const, content: draftSessionContextMessage }, ...historyMessages]
-          : historyMessages;
+          ? [{ role: "user" as const, content: draftSessionContextMessage }, ...finalHistory]
+          : finalHistory;
 
       const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);

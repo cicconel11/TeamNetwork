@@ -2,8 +2,8 @@
 import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-const ORG_ID = "org-uuid-1";
-const ADMIN_USER = { id: "org-admin-user", email: "admin@example.com" };
+const ORG_ID = "00000000-0000-4000-a000-000000000001";
+const ADMIN_USER = { id: "00000000-0000-4000-a000-000000000099", email: "admin@example.com" };
 
 const {
   createAiScheduleUploadDeleteHandler,
@@ -400,7 +400,7 @@ test("upload-schedule keeps unknown storage failures generic", async () => {
 
   assert.equal(response.status, 500);
   assert.deepEqual(body, {
-    error: "storage service unavailable",
+    error: "Failed to upload schedule",
   });
 });
 

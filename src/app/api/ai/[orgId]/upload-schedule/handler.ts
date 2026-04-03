@@ -3,7 +3,9 @@ import { getAiOrgContext } from "@/lib/ai/context";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { validateMagicBytes } from "@/lib/media/validation";
+import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const BUCKET = "ai-schedule-uploads";
 const MAX_BYTES = 10 * 1024 * 1024;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -128,7 +130,6 @@ function getUploadFailureMessage(
   uploadError: StorageUploadError
 ): string {
   const details = buildUploadErrorDetails(uploadError);
-  const message = typeof uploadError?.message === "string" ? uploadError.message.trim() : "";
 
   if (isImageBucketMisconfiguration(mimeType, uploadError)) {
     return IMAGE_BUCKET_MISCONFIGURATION_ERROR;
@@ -146,16 +147,11 @@ function getUploadFailureMessage(
     return STORAGE_COLLISION_ERROR;
   }
 
-  if (message.length > 0) {
-    return message;
-  }
-
   return GENERIC_UPLOAD_ERROR;
 }
 
 function getDeleteFailureMessage(removeError: StorageUploadError): string {
   const details = buildUploadErrorDetails(removeError);
-  const message = typeof removeError?.message === "string" ? removeError.message.trim() : "";
 
   if (isMissingBucketError(removeError) || isMissingStorageObjectError(removeError)) {
     return "";
@@ -163,10 +159,6 @@ function getDeleteFailureMessage(removeError: StorageUploadError): string {
 
   if (/(permission|forbidden|unauthorized|access denied|row-level security|rls|policy)/.test(details)) {
     return STORAGE_PERMISSION_ERROR;
-  }
-
-  if (message.length > 0) {
-    return message;
   }
 
   return GENERIC_DELETE_ERROR;
@@ -209,19 +201,6 @@ function bucketNeedsReconciliation(bucket: StorageBucketRecord): boolean {
   );
 
   return ALLOWED_MIME_TYPES.some((mimeType) => !allowedMimeTypes.has(mimeType));
-}
-
-function isOwnedScheduleUploadPath(orgId: string, userId: string, storagePath: string): boolean {
-  if (typeof storagePath !== "string" || storagePath.trim().length === 0) {
-    return false;
-  }
-
-  const expectedPrefix = `${orgId}/${userId}/`;
-  if (!storagePath.startsWith(expectedPrefix)) {
-    return false;
-  }
-
-  return !storagePath.slice(expectedPrefix.length).includes("..");
 }
 
 async function ensureScheduleUploadBucket(
@@ -285,6 +264,11 @@ export function createAiScheduleUploadHandler(
   ) {
     try {
       const { orgId } = await params;
+
+      if (!orgId || !UUID_RE.test(orgId)) {
+        return NextResponse.json({ error: "Invalid organization" }, { status: 400 });
+      }
+
       const supabase = await createClientFn();
       const {
         data: { user },
@@ -410,6 +394,11 @@ export function createAiScheduleUploadDeleteHandler(
   ) {
     try {
       const { orgId } = await params;
+
+      if (!orgId || !UUID_RE.test(orgId)) {
+        return NextResponse.json({ error: "Invalid organization" }, { status: 400 });
+      }
+
       const supabase = await createClientFn();
       const {
         data: { user },
