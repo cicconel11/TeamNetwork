@@ -192,6 +192,100 @@ test("confirm executes create_discussion_thread and appends assistant message", 
   );
 });
 
+test("confirm executes create_event and appends assistant message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_event",
+        payload: {
+          title: "Sprint Football Practice",
+          description: "Film and conditioning",
+          start_date: "2026-04-10",
+          start_time: "18:00",
+          end_date: "2026-04-10",
+          end_time: "20:00",
+          location: "Franklin Field",
+          event_type: "practice",
+          is_philanthropy: false,
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createEvent: async () =>
+      ({
+        ok: true,
+        status: 201,
+        event: {
+          id: "event-123",
+          title: "Sprint Football Practice",
+        },
+        eventUrl: "/upenn-sprint-football/calendar/events/event-123",
+      }) as any,
+    clearDraftSession: async () => {},
+  });
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.event.id, "event-123");
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "event");
+  assert.equal(updatedStatuses[1].resultEntityId, "event-123");
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.match(String(insertedMessages[0].content), /Created event/);
+  assert.match(
+    String(insertedMessages[0].content),
+    /upenn-sprint-football\/calendar\/events\/event-123/
+  );
+});
+
 test("cancel marks the pending action cancelled", async () => {
   const updatedStatuses: any[] = [];
 

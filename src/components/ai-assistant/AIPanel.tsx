@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
 import { useAIPanel } from "./AIPanelContext";
@@ -146,6 +146,7 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
 export function AIPanel({ orgId }: AIPanelProps) {
   const { isOpen, closePanel } = useAIPanel();
   const pathname = usePathname();
+  const router = useRouter();
   const surface = routeToSurface(pathname);
   const scopeLabel = getAssistantScopeLabel(pathname, surface);
   const starterPrompts = getStarterPrompts(pathname, surface);
@@ -492,6 +493,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
       window.dispatchEvent(new CustomEvent("calendar:refresh"));
+      router.refresh();
     } finally {
       setPendingActionBusyIds((prev) => {
         const next = new Set(prev);
@@ -499,7 +501,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         return next;
       });
     }
-  }, [activeThreadId, loadMessages, loadThreads, orgId]);
+  }, [activeThreadId, loadMessages, loadThreads, orgId, router]);
 
   const handleConfirmAllPendingActions = useCallback(async () => {
     const ids = pendingActions.map((a) => a.actionId);
