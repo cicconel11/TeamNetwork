@@ -17,6 +17,7 @@ import {
 import { createEvent } from "@/lib/events/create-event";
 import { createJobPosting } from "@/lib/jobs/create-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
+import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
 
@@ -312,8 +313,15 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
             });
           }
 
-          const content = result.eventUrl
-            ? `Created event: [${result.event.title}](${result.eventUrl})`
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const eventUrl = orgSlug
+            ? calendarEventDetailPath(orgSlug, result.event.id)
+            : result.eventUrl;
+          const content = eventUrl
+            ? `Created event: [${result.event.title}](${eventUrl})`
             : `Created event: ${result.event.title}`;
 
           const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
