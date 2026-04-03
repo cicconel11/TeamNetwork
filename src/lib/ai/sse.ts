@@ -32,7 +32,17 @@ export type SSEEvent =
       };
     }
   | { type: "error"; message: string; retryable: boolean }
-  | { type: "tool_status"; toolName: string; status: "calling" | "done" | "error" };
+  | { type: "tool_status"; toolName: string; status: "calling" | "done" | "error" }
+  | {
+      type: "pending_actions_batch";
+      actions: Array<{
+        actionId: string;
+        actionType: string;
+        summary: { title: string; description: string };
+        payload: Record<string, unknown>;
+        expiresAt: string;
+      }>;
+    };
 
 export const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
