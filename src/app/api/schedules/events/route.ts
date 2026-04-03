@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { debugLog } from "@/lib/debug";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 const MAX_EVENTS = 2000;
 const MAX_DATE_RANGE_DAYS = 400;
@@ -57,18 +58,12 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", orgId)
-      .maybeSingle();
-
-    // Note: We intentionally allow all org members (not just admins) to view schedule events.
+    // Note: We intentionally allow all active org members (not just admins) to view schedule events.
     // This is read-only display data for the calendar UI - no admin role check needed.
-    if (!membership || membership.status === "revoked") {
+    const membership = await getOrgMembership(supabase, user.id, orgId);
+    if (!membership) {
       return NextResponse.json(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Active membership required." },
         { status: 403, headers: rateLimit.headers }
       );
     }

@@ -42,6 +42,8 @@ export const calendarPreferencesUpdateSchema = z
         sync_social: z.boolean().optional(),
         sync_fundraiser: z.boolean().optional(),
         sync_philanthropy: z.boolean().optional(),
+        sync_practice: z.boolean().optional(),
+        sync_workout: z.boolean().optional(),
       })
       .strict()
       .refine(

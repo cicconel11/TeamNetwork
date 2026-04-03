@@ -24,6 +24,8 @@ type BlackbaudIntegrationWithTokens = BlackbaudIntegration & {
   token_expires_at: string;
 };
 
+const QUOTA_PATTERN = /quota exhausted/i;
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ organizationId: string }> }
@@ -50,7 +52,6 @@ export async function POST(
     );
   }
 
-  // Verify org admin explicitly (uses orgId, not orgSlug)
   try {
     await requireOrgRole({ orgId: organizationId, allowedRoles: ["admin"] });
   } catch {
@@ -96,7 +97,6 @@ export async function POST(
     token_expires_at: activeIntegration.token_expires_at,
   };
 
-  // Get valid access token (refresh if needed)
   let accessToken: string;
   try {
     accessToken = await refreshTokenWithFallback(hydratedIntegration, serviceSupabase);
@@ -128,8 +128,16 @@ export async function POST(
     lastSyncedAt: activeIntegration.last_synced_at,
   });
 
+  if (!result.ok) {
+    const isQuota = QUOTA_PATTERN.test(result.error ?? "");
+    return NextResponse.json(
+      { result },
+      { status: isQuota ? 429 : 500, headers: rateLimit.headers }
+    );
+  }
+
   return NextResponse.json(
     { result },
-    { status: result.ok ? 200 : 500, headers: rateLimit.headers }
+    { status: 200, headers: rateLimit.headers }
   );
 }

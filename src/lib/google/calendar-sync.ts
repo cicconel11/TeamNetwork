@@ -5,15 +5,10 @@ import {
     getValidAccessToken,
     getCalendarConnection,
 } from "./oauth";
-
-// Types for calendar events
-export interface CalendarEvent {
-    summary: string;
-    description?: string;
-    location?: string;
-    start: { dateTime: string; timeZone: string };
-    end: { dateTime: string; timeZone: string };
-}
+import type { CalendarEvent } from "./calendar-event-mapper";
+import { mapEventToCalendarEvent } from "./calendar-event-mapper";
+export type { CalendarEvent };
+export { mapEventToCalendarEvent };
 
 export interface SyncResult {
     success: boolean;
@@ -22,7 +17,15 @@ export interface SyncResult {
 }
 
 // Event types that can be synced
-export type EventType = "general" | "game" | "meeting" | "social" | "fundraiser" | "philanthropy";
+export type EventType =
+    | "general"
+    | "game"
+    | "meeting"
+    | "social"
+    | "fundraiser"
+    | "philanthropy"
+    | "practice"
+    | "workout";
 
 // Sync operation types
 export type SyncOperation = "create" | "update" | "delete";
@@ -182,54 +185,6 @@ export async function deleteCalendarEvent(
 
 
 /**
- * Maps an organization event to a Google Calendar event format
- * @param event - The organization event from the database
- * @returns CalendarEvent formatted for Google Calendar API
- * 
- * Requirements: 2.2
- * - summary equal to event.title
- * - description equal to event.description (if present)
- * - location equal to event.location (if present)
- * - start.dateTime equal to event.start_date
- * - end.dateTime equal to event.end_date (or start_date + 1 hour if no end_date)
- */
-export function mapEventToCalendarEvent(event: {
-    title: string;
-    description?: string | null;
-    location?: string | null;
-    start_date: string;
-    end_date?: string | null;
-}): CalendarEvent {
-    const startDate = new Date(event.start_date);
-
-    // If no end_date, default to start_date + 1 hour
-    let endDate: Date;
-    if (event.end_date) {
-        endDate = new Date(event.end_date);
-    } else {
-        endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // +1 hour
-    }
-
-    // Determine timezone - use UTC if not determinable from the date string
-    const timeZone = "UTC";
-
-    return {
-        summary: event.title,
-        description: event.description ?? undefined,
-        location: event.location ?? undefined,
-        start: {
-            dateTime: startDate.toISOString(),
-            timeZone,
-        },
-        end: {
-            dateTime: endDate.toISOString(),
-            timeZone,
-        },
-    };
-}
-
-
-/**
  * Determines if a user should receive calendar sync for an event based on:
  * 1. User has a connected Google Calendar
  * 2. User is eligible based on event audience (members, alumni, both, or specific users)
@@ -259,6 +214,8 @@ export function isUserEligibleForSync(
         sync_social?: boolean | null;
         sync_fundraiser?: boolean | null;
         sync_philanthropy?: boolean | null;
+        sync_practice?: boolean | null;
+        sync_workout?: boolean | null;
     } | null,
     userRole: "member" | "active_member" | "alumni" | "admin" | null
 ): boolean {
@@ -323,6 +280,10 @@ export function isUserEligibleForSync(
             return preferences.sync_fundraiser !== false;
         case "philanthropy":
             return preferences.sync_philanthropy !== false;
+        case "practice":
+            return preferences.sync_practice !== false;
+        case "workout":
+            return preferences.sync_workout !== false;
         default:
             // Unknown event type, default to syncing
             return true;
@@ -439,17 +400,28 @@ export async function syncEventToUsers(
     operation: SyncOperation
 ): Promise<void> {
 
-    // Fetch the event details
-    const { data: event, error: eventError } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", eventId)
-        .single();
+    // Fetch the event details and org timezone in parallel
+    const [eventResult, orgResult] = await Promise.all([
+        supabase
+            .from("events")
+            .select("*")
+            .eq("id", eventId)
+            .single(),
+        supabase
+            .from("organizations")
+            .select("timezone")
+            .eq("id", organizationId)
+            .single(),
+    ]);
+
+    const { data: event, error: eventError } = eventResult;
 
     if (eventError || !event) {
         console.error("[calendar-sync] Failed to fetch event:", eventError);
         return;
     }
+
+    const orgTimeZone = orgResult.data?.timezone || "America/New_York";
 
     // For delete operations, we need to process existing entries
     if (operation === "delete") {
@@ -468,14 +440,14 @@ export async function syncEventToUsers(
         return;
     }
 
-    // Map the event to calendar format
+    // Map the event to calendar format with the org's timezone
     const calendarEvent = mapEventToCalendarEvent({
         title: event.title,
         description: event.description,
         location: event.location,
         start_date: event.start_date,
         end_date: event.end_date,
-    });
+    }, orgTimeZone);
 
     // Process each eligible user
     for (const userId of eligibleUserIds) {

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Card, Button, Input, Textarea, Select } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 import { resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { useLocale, useTranslations } from "next-intl";
 import { newAnnouncementSchema, type NewAnnouncementForm } from "@/lib/schemas/content";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 
@@ -28,7 +29,10 @@ export default function NewAnnouncementPage() {
   const [targetUserIds, setTargetUserIds] = useState<string[]>([]);
 
   // Get the custom label for this page
-  const singularLabel = resolveActionLabel("/announcements", navConfig, "").trim();
+  const tNav = useTranslations("nav.items");
+  const locale = useLocale();
+  const t = (key: string) => tNav(key);
+  const singularLabel = resolveActionLabel("/announcements", navConfig, "", t, locale).trim();
 
   const {
     register,

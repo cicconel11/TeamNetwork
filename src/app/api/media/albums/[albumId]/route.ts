@@ -5,8 +5,12 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse, baseSchemas, safeString } from "@/lib/security/validation";
-import { batchGetMediaUrls } from "@/lib/media/urls";
-import { getAlbumCoverValidationError } from "@/lib/media/albums";
+import { batchGetGridPreviewUrls } from "@/lib/media/urls";
+import {
+  getAlbumCoverValidationError,
+  resolveAlbumDeleteMode,
+} from "@/lib/media/albums";
+import { softDeleteMediaItems } from "@/lib/media/delete-media";
 import { decodeCursor } from "@/lib/pagination/cursor";
 import { z } from "zod";
 
@@ -86,7 +90,7 @@ export async function GET(request: NextRequest, { params }: Params) {
         sort_order,
         added_at,
         media_items!inner(
-          id, title, description, media_type, storage_path, mime_type, thumbnail_url,
+          id, title, description, media_type, storage_path, preview_storage_path, mime_type, thumbnail_url,
           external_url, tags, taken_at, created_at, uploaded_by, status,
           users!media_items_uploaded_by_users_fkey(name)
         )
@@ -150,19 +154,22 @@ export async function GET(request: NextRequest, { params }: Params) {
       .map((item: Record<string, unknown>) => ({
         id: item.id as string,
         storage_path: item.storage_path as string,
+        preview_storage_path: (item.preview_storage_path as string | null) ?? null,
         mime_type: (item.mime_type as string) || "application/octet-stream",
+        media_type: item.media_type as "image" | "video",
       }));
 
     const urlMap = storageItems.length > 0
-      ? await batchGetMediaUrls(serviceClient, storageItems)
+      ? await batchGetGridPreviewUrls(serviceClient, storageItems)
       : new Map();
 
     const enriched = cleanData.map((item: Record<string, unknown>) => {
       const urls = urlMap.get(item.id as string);
+      const hasStorage = Boolean(item.storage_path);
       return {
         ...item,
-        url: urls?.url || item.external_url || null,
-        thumbnail_url: urls?.thumbnailUrl || item.thumbnail_url || null,
+        url: hasStorage ? null : ((item.external_url as string | null) ?? null),
+        thumbnail_url: urls?.thumbnailUrl ?? (item.thumbnail_url as string | null) ?? null,
       };
     });
 
@@ -277,6 +284,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const { searchParams } = new URL(request.url);
     const orgId = searchParams.get("orgId");
     if (!orgId) return NextResponse.json({ error: "orgId required" }, { status: 400 });
+    const deleteMode = resolveAlbumDeleteMode(searchParams.get("mode"));
 
     const membership = await getOrgMembership(supabase, user.id, orgId);
     if (!membership) {
@@ -300,6 +308,31 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     if (!isAdmin && album.created_by !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (deleteMode === "album_and_media") {
+      const { data: albumItems, error: itemsError } = await serviceClient
+        .from("media_album_items")
+        .select("media_item_id")
+        .eq("album_id", albumId);
+
+      if (itemsError) {
+        console.error("[media/albums/[albumId]] Delete media lookup failed:", itemsError);
+        return NextResponse.json({ error: "Failed to load album media" }, { status: 500 });
+      }
+
+      const mediaIds = (albumItems ?? []).map((item) => item.media_item_id as string);
+      const deletion = await softDeleteMediaItems(serviceClient, {
+        orgId,
+        mediaIds,
+        actor: { isAdmin, userId: user.id },
+        forbiddenMessage:
+          "You can only delete all photos when you have permission to delete every upload in this album.",
+      });
+
+      if (!deletion.ok) {
+        return NextResponse.json({ error: deletion.error }, { status: deletion.status });
+      }
     }
 
     const { error: deleteError } = await (serviceClient as any)

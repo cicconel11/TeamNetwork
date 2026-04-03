@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, EmptyState } from "@/components/ui";
 import { MentorshipPairCard } from "./MentorshipPairCard";
 
@@ -43,6 +44,7 @@ export function MentorshipPairsList({
   canLogActivity,
   orgId,
 }: MentorshipPairsListProps) {
+  const tMentorship = useTranslations("mentorship");
   const [pairs, setPairs] = useState<MentorshipPair[]>(initialPairs);
 
   const userLabel = (id: string) => {
@@ -58,8 +60,8 @@ export function MentorshipPairsList({
     return (
       <Card>
         <EmptyState
-          title="No mentorship pairs yet"
-          description="Pairs will appear here once created."
+          title={tMentorship("noPairs")}
+          description={tMentorship("pairsWillAppear")}
         />
       </Card>
     );

@@ -33,7 +33,7 @@ function normalizeMembershipRow(data: { role?: unknown; status?: unknown } | nul
 } {
   return {
     role: normalizeRole((data?.role as UserRole | null) ?? null),
-    status: (data?.status as MembershipStatus | null) ?? "active",
+    status: (data?.status as MembershipStatus | null) ?? null,
   };
 }
 
@@ -76,7 +76,7 @@ export async function requireOrgRole(params: {
 }): Promise<OrgRoleResult> {
   const membership = await getOrgRole({ orgId: params.orgId, userId: undefined });
   const allowed =
-    membership.role && membership.status !== "revoked" && params.allowedRoles.includes(membership.role);
+    membership.role && membership.status === "active" && params.allowedRoles.includes(membership.role);
 
   if (!allowed) {
     if (params.redirectTo) {
@@ -104,7 +104,7 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
     supabase
       .from("organizations")
       .select(
-        "id, name, slug, logo_url, primary_color, secondary_color, nav_config, stripe_connect_account_id, org_type, donation_embed_url, created_at, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles"
+        "id, name, slug, logo_url, primary_color, secondary_color, nav_config, stripe_connect_account_id, org_type, donation_embed_url, created_at, feed_post_roles, job_post_roles, discussion_post_roles, media_upload_roles, timezone"
       )
       .eq("slug", orgSlug)
       .maybeSingle(),
@@ -160,7 +160,7 @@ export const getOrgContext = cache(async (orgSlug: string): Promise<OrgContextRe
   const gracePeriod = getGracePeriodInfo(subscription);
 
   const { role, status: memberStatus } = normalizeMembershipRow(membershipData?.data);
-  const flags = memberStatus === "revoked" ? roleFlags(null) : roleFlags(role);
+  const flags = memberStatus === "active" ? roleFlags(role) : roleFlags(null);
 
   return {
     organization: org as Organization,

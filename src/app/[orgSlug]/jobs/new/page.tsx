@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout";
 import { JobForm } from "@/components/jobs/JobForm";
+import { getTranslations } from "next-intl/server";
 
 interface PageProps {
   params: Promise<{ orgSlug: string }>;
@@ -22,11 +23,13 @@ export default async function NewJobPage({ params }: PageProps) {
     return notFound();
   }
 
+  const tJobs = await getTranslations("jobs");
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Post a Job"
-        description="Share a career opportunity with the community"
+        title={tJobs("postJob")}
+        description={tJobs("postDescription")}
       />
 
       <div className="max-w-3xl">

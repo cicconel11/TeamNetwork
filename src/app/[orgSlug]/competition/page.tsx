@@ -97,7 +97,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
         description={competition?.description || "Track team standings and points"}
         actions={
           isAdmin && !competition && (
-            <Link href={`/${orgSlug}/competitions/new`}>
+            <Link href={`/${orgSlug}/competition/new`}>
               <Button variant="secondary">New Competition</Button>
             </Link>
           )
@@ -111,7 +111,7 @@ export default async function CompetitionPage({ params }: CompetitionPageProps) 
             description="Create a competition to start tracking standings."
             action={
               isAdmin && (
-                <Link href={`/${orgSlug}/competitions/new`}>
+                <Link href={`/${orgSlug}/competition/new`}>
                   <Button>Create Competition</Button>
                 </Link>
               )

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/layout";
 import { AlumniFilters, AlumniActionsProvider, AlumniActionsMenu, AlumniImportPanel, AlumniSelectableGrid } from "@/components/alumni";
 import { uniqueStringsCaseInsensitive } from "@/lib/string-utils";
 import { resolveLabel, resolveActionLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { resolveDataClient } from "@/lib/auth/dev-admin";
 import { getOrgRole } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
@@ -127,15 +128,20 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
   const hasActiveFilters =
     filters.year || filters.industry || filters.company || filters.city || filters.position;
 
-  const pageLabel = resolveLabel("/alumni", navConfig);
-  const actionLabel = resolveActionLabel("/alumni", navConfig);
+  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/alumni", navConfig, t, locale);
+  const actionLabel = resolveActionLabel("/alumni", navConfig, "Add", t, locale);
+  const tAlumni = await getTranslations("alumni");
+  const tMembers2 = await getTranslations("members");
+  const tActions = await getTranslations("pages.actions");
 
   const pageContent = (
     <div className="animate-fade-in">
       <DirectoryViewTracker organizationId={org.id} directoryType="alumni" />
       <PageHeader
         title={pageLabel}
-        description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? " (filtered)" : " in our network"}`}
+        description={`${alumni?.length || 0} ${pageLabel.toLowerCase()}${hasActiveFilters ? ` ${tActions("filtered")}` : ` ${tActions("inOurNetwork")}`}`}
         actions={
           canEdit && (
             <AlumniActionsMenu
@@ -195,7 +201,7 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                       )}
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         {alum.graduation_year && (
-                          <Badge variant="muted">Class of {alum.graduation_year}</Badge>
+                          <Badge variant="muted">{tMembers2("classOf", { year: alum.graduation_year })}</Badge>
                         )}
                         {alum.industry && (
                           <Badge variant="primary">{alum.industry}</Badge>
@@ -222,12 +228,12 @@ export default async function AlumniPage({ params, searchParams }: AlumniPagePro
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
               </svg>
             }
-            title={`No ${pageLabel.toLowerCase()} found`}
-            description={hasActiveFilters ? "Try adjusting your filters" : `No ${pageLabel.toLowerCase()} in the directory yet`}
+            title={tAlumni("noAlumniFound", { label: pageLabel.toLowerCase() })}
+            description={hasActiveFilters ? tAlumni("tryAdjustingFilters") : tAlumni("noAlumniInDirectory", { label: pageLabel.toLowerCase() })}
             action={
               canEdit && !hasActiveFilters && (
                 <Link href={`/${orgSlug}/alumni/new`}>
-                  <Button>{resolveActionLabel("/alumni", navConfig, "Add First")}</Button>
+                  <Button>{resolveActionLabel("/alumni", navConfig, "Add First", t, locale)}</Button>
                 </Link>
               )
             }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { SyncPreferences } from "@/components/settings/GoogleCalendarSyncPanel";
+import { resolveGoogleCalendarConnectionState } from "@/lib/google/calendar-connection-state";
 
 interface CalendarConnection {
   googleEmail: string;
@@ -52,6 +53,8 @@ const DEFAULT_PREFERENCES: SyncPreferences = {
   sync_social: true,
   sync_fundraiser: true,
   sync_philanthropy: true,
+  sync_practice: true,
+  sync_workout: true,
 };
 
 export function useGoogleCalendarSync({
@@ -138,39 +141,35 @@ export function useGoogleCalendarSync({
     setReconnectRequired(false);
     try {
       const response = await fetch("/api/google/calendars");
-      if (response.status === 403) {
-        const data = await response.json();
-        if (data.error === "reconnect_required") {
-          setReconnectRequired(true);
-          setCalendars([]);
-          return;
-        }
-      }
-      // 404 means server couldn't get a valid token (expired/revoked);
-      // the server-side refreshAndStoreToken likely already updated the
-      // DB status to "disconnected", so reload the connection row.
-      if (response.status === 404) {
+      const data = await response.json();
+      const resolved = resolveGoogleCalendarConnectionState(response.status, data);
+
+      if (resolved.reconnectRequired) {
         setReconnectRequired(true);
         setCalendars([]);
-        await loadConnection();
         return;
       }
-      if (!response.ok) return;
-      if (response.ok) {
-        const data = await response.json();
-        const cals: GoogleCalendar[] = data.calendars || [];
-        setCalendars(cals);
 
-        // One-time normalization: resolve "primary" alias to actual calendar ID
-        // so the dropdown value matches an option and mismatch detection works.
-        if (targetCalendarIdRef.current === "primary") {
-          const primaryCal = cals.find((c) => c.primary);
-          if (primaryCal && primaryCal.id && primaryCal.id !== "primary") {
-            try {
-              await setTargetCalendar(primaryCal.id);
-            } catch {
-              // Best-effort: next page load will retry
-            }
+      if (resolved.disconnected) {
+        setReconnectRequired(false);
+        setCalendars([]);
+        return;
+      }
+
+      if (!response.ok) return;
+
+      const cals: GoogleCalendar[] = resolved.calendars;
+      setCalendars(cals);
+
+      // One-time normalization: resolve "primary" alias to actual calendar ID
+      // so the dropdown value matches an option and mismatch detection works.
+      if (targetCalendarIdRef.current === "primary") {
+        const primaryCal = cals.find((c) => c.primary);
+        if (primaryCal && primaryCal.id && primaryCal.id !== "primary") {
+          try {
+            await setTargetCalendar(primaryCal.id);
+          } catch {
+            // Best-effort: next page load will retry
           }
         }
       }
@@ -179,7 +178,7 @@ export function useGoogleCalendarSync({
     } finally {
       setCalendarsLoading(false);
     }
-  }, [setTargetCalendar, loadConnection]);
+  }, [setTargetCalendar]);
 
   // Load sync preferences
   const loadPreferences = useCallback(async () => {

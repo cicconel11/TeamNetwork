@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
 import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
@@ -34,6 +35,8 @@ export function EnterpriseInviteList({
   onDelete,
   groupByOrg = true,
 }: EnterpriseInviteListProps) {
+  const tEnterprise = useTranslations("enterprise");
+  const tCommon = useTranslations("common");
   const [copied, setCopied] = useState<string | null>(null);
   const [showQR, setShowQR] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,8 +71,8 @@ export function EnterpriseInviteList({
       <Card>
         <EmptyState
           icon={<InviteIcon className="h-12 w-12" />}
-          title="No invite codes yet"
-          description="Create an invite code to let people join your sub-organizations."
+          title={tEnterprise("inviteList.noInvites")}
+          description={tEnterprise("inviteList.noInvitesDesc")}
         />
       </Card>
     );
@@ -78,7 +81,7 @@ export function EnterpriseInviteList({
   // Group invites by organization if enabled
   const groupedInvites = groupByOrg
     ? invites.reduce((acc, invite) => {
-        const key = invite.organization_name ?? "Enterprise-wide";
+        const key = invite.organization_name ?? tEnterprise("inviteList.enterpriseWide");
         if (!acc[key]) acc[key] = [];
         acc[key].push(invite);
         return acc;
@@ -114,7 +117,7 @@ export function EnterpriseInviteList({
                         >
                           {invite.code}
                           {copied === `code-${invite.id}` && (
-                            <span className="ml-2 text-xs text-emerald-500 font-normal">Copied!</span>
+                            <span className="ml-2 text-xs text-emerald-500 font-normal">{tCommon("copied")}</span>
                           )}
                         </div>
                         <div className="flex gap-2 flex-wrap">
@@ -123,12 +126,12 @@ export function EnterpriseInviteList({
                           </Badge>
                           {!groupByOrg && (
                             <Badge variant="muted" className="text-xs">
-                              {invite.organization_name ?? "Enterprise-wide"}
+                              {invite.organization_name ?? tEnterprise("inviteList.enterpriseWide")}
                             </Badge>
                           )}
-                          {expired && <Badge variant="error">Expired</Badge>}
-                          {exhausted && <Badge variant="error">No uses left</Badge>}
-                          {revoked && <Badge variant="error">Revoked</Badge>}
+                          {expired && <Badge variant="error">{tCommon("expired")}</Badge>}
+                          {exhausted && <Badge variant="error">{tCommon("usesLeft", { count: 0 })}</Badge>}
+                          {revoked && <Badge variant="error">{tCommon("revoke")}</Badge>}
                         </div>
                       </div>
 
@@ -139,7 +142,7 @@ export function EnterpriseInviteList({
                           onClick={() => copyToClipboard(inviteLink, `link-${invite.id}`)}
                         >
                           <LinkIcon className="h-4 w-4 mr-1" />
-                          {copied === `link-${invite.id}` ? "Copied!" : "Copy Link"}
+                          {copied === `link-${invite.id}` ? tCommon("copied") : tCommon("copy")}
                         </Button>
                         <Button
                           variant="secondary"
@@ -155,7 +158,7 @@ export function EnterpriseInviteList({
                             onClick={() => onRevoke(invite.id)}
                             className="text-amber-500 hover:text-amber-600"
                           >
-                            Revoke
+                            {tCommon("revoke")}
                           </Button>
                         )}
                         <Button
@@ -172,13 +175,13 @@ export function EnterpriseInviteList({
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span>
                         {invite.uses_remaining !== null
-                          ? `${invite.uses_remaining} uses left`
-                          : "Unlimited uses"}
+                          ? tCommon("usesLeft", { count: invite.uses_remaining })
+                          : tCommon("unlimitedUses")}
                       </span>
                       {invite.expires_at && (
-                        <span>Expires {formatShortDate(invite.expires_at)}</span>
+                        <span>{tCommon("expired")} {formatShortDate(invite.expires_at)}</span>
                       )}
-                      <span>Created {formatShortDate(invite.created_at)}</span>
+                      <span>{tCommon("date")} {formatShortDate(invite.created_at)}</span>
                     </div>
 
                     {showQR === invite.id && (

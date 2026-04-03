@@ -14,6 +14,7 @@ type CalendarContentProps = {
   mySchedules: AcademicSchedule[];
   allSchedules: (AcademicSchedule & { users: Pick<User, "name" | "email"> | null })[];
   initialEvents?: UnifiedEvent[];
+  timeZone?: string;
 };
 
 export function CalendarContent({
@@ -23,6 +24,7 @@ export function CalendarContent({
   mySchedules,
   allSchedules,
   initialEvents,
+  timeZone,
 }: CalendarContentProps) {
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") === "availability" ? "availability" : "list";
@@ -33,13 +35,14 @@ export function CalendarContent({
 
       <div className="animate-fade-in">
         {currentView === "list" ? (
-          <UnifiedEventFeed orgId={orgId} orgSlug={orgSlug} initialEvents={initialEvents} />
+          <UnifiedEventFeed orgId={orgId} orgSlug={orgSlug} initialEvents={initialEvents} timeZone={timeZone} />
         ) : (
           <AvailabilityTab
             orgId={orgId}
             isAdmin={isAdmin}
             mySchedules={mySchedules}
             allSchedules={allSchedules}
+            timeZone={timeZone}
           />
         )}
       </div>

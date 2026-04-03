@@ -196,4 +196,42 @@ describe("RAG migration contract", () => {
       assert.ok(sql.includes("processed_at IS NOT NULL OR attempts >= 3"));
     });
   });
+
+  describe("20260807000000_fix_ai_embedding_trigger_field_access.sql", () => {
+    let sql: string;
+
+    it("migration file exists", () => {
+      sql = readMigration("20260807000000_fix_ai_embedding_trigger_field_access.sql");
+      assert.ok(sql.length > 0);
+    });
+
+    it("replaces enqueue_ai_embedding with source-table-aware branching", () => {
+      assert.ok(sql.includes("CREATE OR REPLACE FUNCTION public.enqueue_ai_embedding()"));
+      assert.ok(sql.includes("TG_TABLE_NAME = 'announcements'"));
+      assert.ok(sql.includes("TG_TABLE_NAME = 'events'"));
+      assert.ok(sql.includes("TG_TABLE_NAME = 'discussion_threads'"));
+      assert.ok(sql.includes("TG_TABLE_NAME = 'discussion_replies'"));
+      assert.ok(sql.includes("TG_TABLE_NAME = 'job_postings'"));
+    });
+
+    it("does not inspect body fields in the events trigger branch", () => {
+      const eventBranch = sql.match(
+        /ELSIF TG_TABLE_NAME = 'events' THEN([\s\S]*?)ELSIF TG_TABLE_NAME = 'discussion_threads' THEN/
+      );
+
+      assert.ok(eventBranch, "expected an explicit events branch in enqueue_ai_embedding");
+      assert.doesNotMatch(eventBranch[1], /NEW\.body|OLD\.body/i);
+      assert.match(eventBranch[1], /NEW\.description|OLD\.description/i);
+      assert.match(eventBranch[1], /NEW\.start_date|OLD\.start_date/i);
+      assert.match(eventBranch[1], /NEW\.end_date|OLD\.end_date/i);
+      assert.match(eventBranch[1], /NEW\.location|OLD\.location/i);
+      assert.match(eventBranch[1], /NEW\.audience|OLD\.audience/i);
+    });
+
+    it("preserves delete enqueue behavior and queue dedupe", () => {
+      assert.match(sql, /VALUES \(NEW\.organization_id, TG_TABLE_NAME, NEW\.id, 'delete'\)/);
+      assert.match(sql, /VALUES \(NEW\.organization_id, TG_TABLE_NAME, NEW\.id, 'upsert'\)/);
+      assert.match(sql, /ON CONFLICT DO NOTHING/);
+    });
+  });
 });

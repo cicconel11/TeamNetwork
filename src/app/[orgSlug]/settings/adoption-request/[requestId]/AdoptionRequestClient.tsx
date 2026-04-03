@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, Button, Badge } from "@/components/ui";
 import { PageHeader } from "@/components/layout";
 
@@ -26,6 +27,8 @@ interface AdoptionRequestDetails {
 export function AdoptionRequestClient() {
   const params = useParams();
   const router = useRouter();
+  const tAdoption = useTranslations("settings.adoptionRequest");
+  const tCommon = useTranslations("common");
   const orgSlug = params.orgSlug as string;
   const requestId = params.requestId as string;
 
@@ -91,7 +94,7 @@ export function AdoptionRequestClient() {
         throw new Error(data.error || "Failed to accept request");
       }
 
-      setSuccessMessage("Adoption request accepted! Your organization is now part of the enterprise.");
+      setSuccessMessage(tAdoption("accepted"));
       setRequest((prev) => (prev ? { ...prev, status: "accepted" } : null));
 
       // Redirect after short delay
@@ -108,7 +111,7 @@ export function AdoptionRequestClient() {
   const handleReject = async () => {
     if (!orgId) return;
 
-    if (!confirm("Are you sure you want to reject this adoption request?")) return;
+    if (!confirm(tAdoption("confirmReject"))) return;
 
     setIsProcessing(true);
     setError(null);
@@ -125,7 +128,7 @@ export function AdoptionRequestClient() {
         throw new Error(data.error || "Failed to reject request");
       }
 
-      setSuccessMessage("Adoption request rejected.");
+      setSuccessMessage(tAdoption("rejected"));
       setRequest((prev) => (prev ? { ...prev, status: "rejected" } : null));
 
       // Redirect after short delay
@@ -142,7 +145,7 @@ export function AdoptionRequestClient() {
   if (isLoading) {
     return (
       <div className="animate-fade-in max-w-2xl mx-auto">
-        <PageHeader title="Adoption Request" description="Loading..." />
+        <PageHeader title={tAdoption("title")} description={tCommon("loading")} />
         <div className="animate-pulse space-y-4">
           <div className="h-64 bg-muted rounded-xl" />
         </div>
@@ -153,9 +156,9 @@ export function AdoptionRequestClient() {
   if (!request) {
     return (
       <div className="animate-fade-in max-w-2xl mx-auto">
-        <PageHeader title="Adoption Request" backHref={`/${orgSlug}/settings/invites`} />
+        <PageHeader title={tAdoption("title")} backHref={`/${orgSlug}/settings/invites`} />
         <Card className="p-8 text-center">
-          <p className="text-muted-foreground">Adoption request not found.</p>
+          <p className="text-muted-foreground">{tAdoption("notFound")}</p>
         </Card>
       </div>
     );
@@ -167,8 +170,8 @@ export function AdoptionRequestClient() {
   return (
     <div className="animate-fade-in max-w-2xl mx-auto">
       <PageHeader
-        title="Adoption Request"
-        description="Review this enterprise adoption request"
+        title={tAdoption("title")}
+        description={tAdoption("description")}
         backHref={`/${orgSlug}/settings/invites`}
       />
 
@@ -250,24 +253,24 @@ export function AdoptionRequestClient() {
       {/* What happens */}
       <Card className="p-6 mb-6 border-amber-300 dark:border-amber-700/50 bg-amber-50/50 dark:bg-amber-900/10">
         <h3 className="font-semibold text-amber-800 dark:text-amber-200 mb-3">
-          What happens if you accept?
+          {tAdoption("whatHappens")}
         </h3>
         <ul className="space-y-2 text-sm text-amber-700 dark:text-amber-300">
           <li className="flex items-start gap-2">
             <CheckIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-            <span>Your organization will become part of the enterprise</span>
+            <span>{tAdoption("benefit1")}</span>
           </li>
           <li className="flex items-start gap-2">
             <CheckIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-            <span>Billing will transfer to the enterprise (you won&apos;t pay separately)</span>
+            <span>{tAdoption("benefit2")}</span>
           </li>
           <li className="flex items-start gap-2">
             <CheckIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-            <span>Alumni counts will be pooled with the enterprise quota</span>
+            <span>{tAdoption("benefit3")}</span>
           </li>
           <li className="flex items-start gap-2">
             <CheckIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-            <span>Your organization will retain all its settings and data</span>
+            <span>{tAdoption("benefit4")}</span>
           </li>
         </ul>
       </Card>
@@ -282,7 +285,7 @@ export function AdoptionRequestClient() {
             disabled={isProcessing}
             className="flex-1"
           >
-            Reject
+            {tCommon("reject")}
           </Button>
           <Button
             onClick={handleAccept}
@@ -290,14 +293,14 @@ export function AdoptionRequestClient() {
             disabled={isProcessing}
             className="flex-1"
           >
-            Accept
+            {tCommon("approve")}
           </Button>
         </div>
       ) : (
         <Card className="p-4 text-center text-muted-foreground">
           {isExpired
-            ? "This request has expired."
-            : `This request has been ${request.status}.`}
+            ? tAdoption("expired")
+            : tAdoption("statusMessage", { status: request.status })}
         </Card>
       )}
     </div>

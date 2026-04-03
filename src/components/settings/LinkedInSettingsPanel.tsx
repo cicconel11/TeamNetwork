@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Badge, Button, Card, Input, Avatar, InlineBanner } from "@/components/ui";
 import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
 import { optionalLinkedInProfileUrlSchema } from "@/lib/alumni/linkedin-url";
@@ -47,8 +48,8 @@ export interface LinkedInSettingsPanelProps {
   onDisconnect: () => Promise<void>;
 }
 
-function formatLastSync(lastSyncAt: string | null): string {
-  if (!lastSyncAt) return "Never";
+function formatLastSync(lastSyncAt: string | null, neverLabel: string): string {
+  if (!lastSyncAt) return neverLabel;
   return new Date(lastSyncAt).toLocaleString();
 }
 
@@ -69,6 +70,9 @@ export function LinkedInSettingsPanel({
   onBrightDataSync,
   onDisconnect,
 }: LinkedInSettingsPanelProps) {
+  const tLinkedin = useTranslations("linkedin");
+  const tCommon = useTranslations("common");
+
   const [urlValue, setUrlValue] = useState(linkedInUrl);
   const [urlSaving, setUrlSaving] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
@@ -95,9 +99,9 @@ export function LinkedInSettingsPanel({
     setUrlSaving(true);
     try {
       await onLinkedInUrlSave(result.data ?? "");
-      showFeedback("LinkedIn URL saved", "success", { duration: 5000 });
+      showFeedback(tLinkedin("urlSaved"), "success", { duration: 5000 });
     } catch (err) {
-      setUrlError(err instanceof Error ? err.message : "Failed to save URL");
+      setUrlError(err instanceof Error ? err.message : tLinkedin("failedSaveUrl"));
     } finally {
       setUrlSaving(false);
     }
@@ -109,7 +113,7 @@ export function LinkedInSettingsPanel({
       const result = await onOauthSync();
       showFeedback(result.message, "success", { duration: 5000 });
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : "Failed to sync", "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : tLinkedin("failedSync"), "error", { duration: 5000 });
     } finally {
       setIsOauthSyncing(false);
     }
@@ -121,19 +125,19 @@ export function LinkedInSettingsPanel({
       const result = await onBrightDataSync();
       showFeedback(result.message, "success", { duration: 5000 });
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : "Failed to sync LinkedIn data", "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : tLinkedin("failedSync"), "error", { duration: 5000 });
     } finally {
       setIsBrightDataSyncing(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!confirm("Disconnect your LinkedIn account? Your manual profile URL will be kept.")) return;
+    if (!confirm(tLinkedin("disconnectConfirm"))) return;
     setIsDisconnecting(true);
     try {
       await onDisconnect();
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : "Failed to disconnect", "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : tLinkedin("failedDisconnect"), "error", { duration: 5000 });
     } finally {
       setIsDisconnecting(false);
     }
@@ -175,16 +179,16 @@ export function LinkedInSettingsPanel({
       <div className="p-5 space-y-3">
         <div className="flex items-center gap-2">
           <LinkedInIcon />
-          <p className="font-medium text-foreground">LinkedIn Profile URL</p>
+          <p className="font-medium text-foreground">{tLinkedin("profileUrl")}</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          Add your LinkedIn profile URL so others in your organization can find you.
+          {tLinkedin("profileUrlDesc")}
         </p>
         <div className="max-w-md space-y-3">
           <Input
-            label="Profile URL"
+            label={tLinkedin("profileUrlLabel")}
             type="url"
-            placeholder="https://www.linkedin.com/in/yourname"
+            placeholder={tLinkedin("profileUrlPlaceholder")}
             value={urlValue}
             onChange={(e) => {
               setUrlValue(e.target.value);
@@ -200,7 +204,7 @@ export function LinkedInSettingsPanel({
             isLoading={urlSaving}
             disabled={urlSaving || isBrightDataSyncing}
           >
-            Save
+            {tCommon("save")}
           </Button>
           {manualSyncState.visible && (
             <div className="space-y-2">
@@ -212,15 +216,36 @@ export function LinkedInSettingsPanel({
                   isLoading={isBrightDataSyncing}
                   disabled={manualSyncState.disabled || urlSaving || isDisconnecting || isOauthSyncing}
                 >
-                  Sync LinkedIn Data
+                  {tLinkedin("syncData")}
                 </Button>
                 <span className="text-xs text-muted-foreground">
                   {manualSyncState.helperText}
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Refresh your headline, company, and school from the public LinkedIn URL above.
+                {tLinkedin("refreshDesc")}
               </p>
+              <div className="text-xs text-muted-foreground/70 space-y-1">
+                <p>
+                  <span className="font-medium text-muted-foreground">{tLinkedin("tip")}</span> {tLinkedin("publicSections")}
+                </p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1">
+                  <li>
+                    Open your{" "}
+                    <a
+                      href="https://www.linkedin.com/public-profile/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {tLinkedin("publicSettings")}
+                    </a>
+                  </li>
+                  <li>Toggle on <span className="font-medium text-muted-foreground">{tLinkedin("experience")}</span>, <span className="font-medium text-muted-foreground">{tLinkedin("education")}</span>, and <span className="font-medium text-muted-foreground">{tLinkedin("headline")}</span></li>
+                  <li>{tLinkedin("waitAfterChange")}</li>
+                  <li>{tLinkedin("comeBackSync")}</li>
+                </ol>
+              </div>
             </div>
           )}
         </div>
@@ -232,9 +257,9 @@ export function LinkedInSettingsPanel({
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-2">
               <LinkedInIcon />
-              <p className="font-medium text-foreground">Connected Account</p>
+              <p className="font-medium text-foreground">{tLinkedin("connectedAccount")}</p>
             </div>
-            <Badge variant="success">Connected</Badge>
+            <Badge variant="success">{tCommon("connected")}</Badge>
           </div>
 
           <div className="flex items-center gap-3">
@@ -271,7 +296,7 @@ export function LinkedInSettingsPanel({
           )}
 
           <p className="text-xs text-muted-foreground">
-            Last synced: {formatLastSync(connection.lastSyncAt)}
+            {tLinkedin("lastSynced", { time: formatLastSync(connection.lastSyncAt, tCommon("never")) })}
           </p>
 
           {connection.syncError && (
@@ -285,27 +310,24 @@ export function LinkedInSettingsPanel({
         <div className="p-5 space-y-3">
           <div className="flex items-center gap-2">
             <LinkedInIcon />
-            <p className="font-medium text-foreground">LinkedIn Connection</p>
-            {!oauthAvailable && <Badge variant="muted">Unavailable</Badge>}
+            <p className="font-medium text-foreground">{tLinkedin("connection")}</p>
+            {!oauthAvailable && <Badge variant="muted">{tCommon("unavailable")}</Badge>}
           </div>
 
           {!oauthAvailable ? (
             <p className="text-sm text-muted-foreground">
-              LinkedIn integration is not configured in this environment. You can still save your
-              profile URL above to share it with your organization.
+              {tLinkedin("notConfigured")}
             </p>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
-                Connect your LinkedIn account to automatically sync your profile
-                photo and name to your organization profile.
+                {tLinkedin("connectDesc")}
               </p>
 
               {connection?.status === "error" && !isOidcLoginOnly && (
                 <div className="space-y-3">
                   <p className="text-sm text-red-600 dark:text-red-400">
-                    There was an error with your LinkedIn connection. Try syncing again first.
-                    If it keeps failing, reconnect LinkedIn.
+                    {tLinkedin("errorDesc")}
                   </p>
                   <div className="flex items-center gap-3">
                     <Button
@@ -315,14 +337,14 @@ export function LinkedInSettingsPanel({
                       isLoading={isOauthSyncing}
                       disabled={isDisconnecting || isBrightDataSyncing}
                     >
-                      Sync Now
+                      {tCommon("syncNow")}
                     </Button>
                     <Button
                       size="sm"
                       onClick={onConnect}
                       disabled={isOauthSyncing || isBrightDataSyncing}
                     >
-                      Reconnect LinkedIn
+                      {tLinkedin("reconnect")}
                     </Button>
                   </div>
                 </div>
@@ -330,14 +352,13 @@ export function LinkedInSettingsPanel({
 
               {isOidcLoginOnly && (
                 <p className="text-sm text-muted-foreground">
-                  You signed in with LinkedIn, but profile sync still requires a separate
-                  LinkedIn connection for reusable OAuth tokens.
+                  {tLinkedin("oidcNote")}
                 </p>
               )}
 
               {!canRetrySync && (
                 <Button onClick={onConnect}>
-                  Connect LinkedIn
+                  {tLinkedin("connectLinkedIn")}
                 </Button>
               )}
             </>
@@ -352,7 +373,7 @@ export function LinkedInSettingsPanel({
             <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182M2.985 14.652" />
             </svg>
-            <p className="font-medium text-foreground text-sm">Profile Sync</p>
+            <p className="font-medium text-foreground text-sm">{tLinkedin("profileSync")}</p>
           </div>
 
           {/* Enrichment data preview */}
@@ -381,9 +402,33 @@ export function LinkedInSettingsPanel({
             </div>
           )}
 
+          {connection?.enrichment && !connection.enrichment.jobTitle && !connection.enrichment.school && connection.lastSyncAt && (
+            <InlineBanner variant="info">
+              <div className="space-y-1">
+                <p>{tLinkedin("missingDetails")}</p>
+                <ol className="list-decimal list-inside space-y-0.5 pl-1 text-sm">
+                  <li>
+                    Open your{" "}
+                    <a
+                      href="https://www.linkedin.com/public-profile/settings"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {tLinkedin("publicSettings")}
+                    </a>
+                  </li>
+                  <li>Toggle on <span className="font-medium">{tLinkedin("experience")}</span>, <span className="font-medium">{tLinkedin("education")}</span>, and <span className="font-medium">{tLinkedin("headline")}</span></li>
+                  <li>{tLinkedin("waitAfterChange")}</li>
+                  <li>{tLinkedin("comeBackSync")}</li>
+                </ol>
+              </div>
+            </InlineBanner>
+          )}
+
           {connection?.lastSyncAt && (
             <p className="text-xs text-muted-foreground">
-              Last synced {formatLastSync(connection.lastSyncAt)}
+              {tLinkedin("lastSyncedShort", { time: formatLastSync(connection.lastSyncAt, tCommon("never")) })}
             </p>
           )}
 
@@ -393,7 +438,7 @@ export function LinkedInSettingsPanel({
 
           {!oauthAvailable && (
             <div className="rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-              LinkedIn integration is not configured in this environment. Syncing is unavailable until configuration is restored.
+              {tLinkedin("notConfiguredSync")}
             </div>
           )}
 
@@ -408,19 +453,19 @@ export function LinkedInSettingsPanel({
                   isLoading={isOauthSyncing}
                   disabled={!oauthAvailable || isDisconnecting || isBrightDataSyncing || resyncRemaining <= 0}
                 >
-                  Sync Now
+                  {tCommon("syncNow")}
                 </Button>
               )}
               {(resyncEnabled || resyncIsAdmin) && (
                 <span className={`text-xs ${resyncRemaining <= 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
                   {resyncRemaining <= 0
-                    ? "Limit reached \u2014 resets next month"
-                    : `${resyncRemaining} of ${resyncMaxPerMonth} syncs remaining`}
+                    ? tLinkedin("limitReached")
+                    : tLinkedin("syncsRemaining", { remaining: resyncRemaining, max: resyncMaxPerMonth })}
                 </span>
               )}
               {!resyncEnabled && !resyncIsAdmin && oauthAvailable && (
                 <span className="text-xs text-muted-foreground">
-                  Re-sync is managed by your organization
+                  {tLinkedin("resyncManaged")}
                 </span>
               )}
             </div>
@@ -430,7 +475,7 @@ export function LinkedInSettingsPanel({
               disabled={isOauthSyncing || isBrightDataSyncing || isDisconnecting}
               className="text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
             >
-              {isDisconnecting ? "Disconnecting..." : "Disconnect"}
+              {isDisconnecting ? tCommon("disconnecting") : tCommon("disconnect")}
             </button>
           </div>
         </div>

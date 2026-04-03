@@ -1,11 +1,13 @@
+import {
+  canDeleteAllMediaItems,
+  canDeleteMediaItem,
+  getBulkDeleteEligibleIds,
+  type MediaDeleteActor,
+} from "@/lib/media/delete-selection";
+
 interface AlbumCoverCandidate {
   media_type: string | null;
   status: string | null;
-}
-
-interface AlbumDeleteActor {
-  isAdmin: boolean;
-  currentUserId?: string;
 }
 
 interface AlbumItemLike {
@@ -20,6 +22,8 @@ interface AlbumLike {
   cover_url?: string | null;
   item_count?: number;
 }
+
+export type AlbumDeleteMode = "album_only" | "album_and_media";
 
 export function canUploadDirectlyToAlbum(canUpload: boolean, canEdit: boolean): boolean {
   return canUpload && canEdit;
@@ -36,18 +40,27 @@ export function getAlbumCoverPickerItems<T extends Pick<AlbumItemLike, "media_ty
 
 export function canDeleteMediaFromAlbumView(
   item: Pick<AlbumItemLike, "uploaded_by">,
-  actor: AlbumDeleteActor,
+  actor: MediaDeleteActor,
 ): boolean {
-  return actor.isAdmin || Boolean(actor.currentUserId && item.uploaded_by === actor.currentUserId);
+  return canDeleteMediaItem(item, actor);
 }
 
 export function getAlbumBulkDeleteEligibleIds<T extends Pick<AlbumItemLike, "id" | "uploaded_by">>(
   items: T[],
-  actor: AlbumDeleteActor,
+  actor: MediaDeleteActor,
 ): string[] {
-  return items
-    .filter((item) => canDeleteMediaFromAlbumView(item, actor))
-    .map((item) => item.id);
+  return getBulkDeleteEligibleIds(items, actor);
+}
+
+export function canDeleteAlbumAndMedia<T extends Pick<AlbumItemLike, "uploaded_by">>(
+  items: T[],
+  actor: MediaDeleteActor,
+): boolean {
+  return canDeleteAllMediaItems(items, actor);
+}
+
+export function resolveAlbumDeleteMode(mode: string | null | undefined): AlbumDeleteMode {
+  return mode === "album_and_media" ? "album_and_media" : "album_only";
 }
 
 export function getAlbumCoverValidationError(candidate: AlbumCoverCandidate | null): string | null {

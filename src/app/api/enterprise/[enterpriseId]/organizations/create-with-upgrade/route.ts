@@ -76,6 +76,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       return respond({ error: "Enterprise not found" }, 404);
     }
 
+    // Fetch subscription for bucket quantity (needed for free sub-org calculation)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: subscription } = await (ctx.serviceSupabase as any)
+      .from("enterprise_subscriptions")
+      .select("alumni_bucket_quantity")
+      .eq("enterprise_id", ctx.enterpriseId)
+      .single() as { data: { alumni_bucket_quantity: number } | null };
+
+    const bucketQuantity = subscription?.alumni_bucket_quantity ?? 1;
+
     // Check current seat quota (hybrid model: always allowed, billing kicks in after free tier)
     const seatQuota = await canEnterpriseAddSubOrg(ctx.enterpriseId);
     if (seatQuota.error) {
@@ -119,7 +129,7 @@ export async function POST(req: Request, { params }: RouteParams) {
         subscription: null,
       }, 201);
     }
-    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year");
+    const pricing = getSubOrgPricing(updatedQuota.currentCount, "year", bucketQuantity);
 
     return respond({
       organization: result.org,

@@ -9,12 +9,22 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { validateFileConstraints } from "@/lib/media/validation";
-import type { MediaFeature } from "@/lib/media/constants";
+import { isImageMimeType, type MediaFeature } from "@/lib/media/constants";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const BUCKET = "org-media";
+
+function extensionForMimeType(mimeType: string): string {
+  if (mimeType === "image/png") return "png";
+  if (mimeType === "image/webp") return "webp";
+  if (mimeType === "image/gif") return "gif";
+  if (mimeType === "video/webm") return "webm";
+  if (mimeType === "video/quicktime") return "mov";
+  if (mimeType === "video/mp4") return "mp4";
+  return "jpg";
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,18 +108,31 @@ export async function POST(request: NextRequest) {
     // Generate storage path
     const ext = extname(body.fileName).replace(".", "").toLowerCase() || "bin";
     const storagePath = `${body.orgId}/${body.feature}/${randomUUID()}.${ext}`;
+    const previewStoragePath = isImageMimeType(body.mimeType) && body.previewMimeType
+      ? `${storagePath.replace(/\.[^.]+$/, "")}-preview.${extensionForMimeType(body.previewMimeType)}`
+      : null;
 
     const serviceClient = createServiceClient();
 
-    // Create signed upload URL
-    const { data: signedData, error: signedError } = await serviceClient.storage
-      .from(BUCKET)
-      .createSignedUploadUrl(storagePath);
+    const [signedOriginal, signedPreview] = await Promise.all([
+      serviceClient.storage.from(BUCKET).createSignedUploadUrl(storagePath),
+      previewStoragePath
+        ? serviceClient.storage.from(BUCKET).createSignedUploadUrl(previewStoragePath)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
-    if (signedError || !signedData) {
-      console.error("[media/upload-intent] Signed URL error:", signedError);
+    if (signedOriginal.error || !signedOriginal.data) {
+      console.error("[media/upload-intent] Signed URL error:", signedOriginal.error);
       return NextResponse.json(
         { error: "Failed to create upload URL" },
+        { status: 500, headers: rateLimit.headers },
+      );
+    }
+
+    if (previewStoragePath && (signedPreview.error || !signedPreview.data)) {
+      console.error("[media/upload-intent] Preview signed URL error:", signedPreview.error);
+      return NextResponse.json(
+        { error: "Failed to create preview upload URL" },
         { status: 500, headers: rateLimit.headers },
       );
     }
@@ -121,6 +144,7 @@ export async function POST(request: NextRequest) {
         organization_id: body.orgId,
         uploader_id: user.id,
         storage_path: storagePath,
+        preview_storage_path: previewStoragePath,
         file_name: body.fileName,
         mime_type: body.mimeType,
         file_size: body.fileSize,
@@ -137,14 +161,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[media/upload-intent] Created", { orgId: body.orgId, mediaId: mediaRecord.id, feature: body.feature });
+    console.log("[media/upload-intent] Created", {
+      orgId: body.orgId,
+      mediaId: mediaRecord.id,
+      feature: body.feature,
+      hasPreviewUpload: Boolean(previewStoragePath),
+    });
 
     return NextResponse.json(
       {
         mediaId: mediaRecord.id,
-        signedUrl: signedData.signedUrl,
-        token: signedData.token,
-        path: signedData.path,
+        signedUrl: signedOriginal.data.signedUrl,
+        token: signedOriginal.data.token,
+        path: signedOriginal.data.path,
+        previewSignedUrl: signedPreview.data?.signedUrl ?? null,
+        previewToken: signedPreview.data?.token ?? null,
+        previewPath: signedPreview.data?.path ?? null,
       },
       { status: 201, headers: rateLimit.headers },
     );

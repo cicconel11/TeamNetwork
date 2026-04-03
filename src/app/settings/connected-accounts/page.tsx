@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { Card } from "@/components/ui";
 import { LinkedInSettingsPanel } from "@/components/settings/LinkedInSettingsPanel";
 import { useLinkedIn } from "@/hooks/useLinkedIn";
@@ -14,30 +15,34 @@ export default function ConnectedAccountsPage() {
 }
 
 function ConnectedAccountsLoading() {
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Settings</p>
-        <h1 className="text-2xl font-bold text-foreground">Connected Accounts</h1>
+        <p className="text-sm text-muted-foreground">{tSettings("title")}</p>
+        <h1 className="text-2xl font-bold text-foreground">{tSettings("connectedAccounts.title")}</h1>
         <p className="text-muted-foreground">
-          Manage your LinkedIn connection and other linked accounts.
+          {tSettings("connectedAccounts.description")}
         </p>
       </div>
-      <Card className="p-5 text-muted-foreground text-sm">Loading…</Card>
+      <Card className="p-5 text-muted-foreground text-sm">{tCommon("loading")}</Card>
     </div>
   );
 }
 
 function ConnectedAccountsContent() {
+  const tSettings = useTranslations("settings");
   const linkedIn = useLinkedIn();
 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <p className="text-sm text-muted-foreground">Settings</p>
-        <h1 className="text-2xl font-bold text-foreground">Connected Accounts</h1>
+        <p className="text-sm text-muted-foreground">{tSettings("title")}</p>
+        <h1 className="text-2xl font-bold text-foreground">{tSettings("connectedAccounts.title")}</h1>
         <p className="text-muted-foreground">
-          Manage your LinkedIn connection and other linked accounts.
+          {tSettings("connectedAccounts.description")}
         </p>
       </div>
 
@@ -60,10 +65,9 @@ function ConnectedAccountsContent() {
       />
 
       <Card className="p-5 space-y-3">
-        <p className="font-medium text-foreground">Google Calendar Sync</p>
+        <p className="font-medium text-foreground">{tSettings("connectedAccounts.googleCalTitle")}</p>
         <p className="text-sm text-muted-foreground">
-          Google Calendar sync is managed per-organization from the Calendar settings
-          within each org you belong to.
+          {tSettings("connectedAccounts.googleCalDesc")}
         </p>
       </Card>
     </div>

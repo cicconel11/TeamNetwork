@@ -27,8 +27,7 @@ export async function GET() {
     const accessToken = await getValidAccessToken(supabase, user.id);
     if (!accessToken) {
       return NextResponse.json(
-        { error: "Not connected to Google Calendar" },
-        { status: 404 }
+        { calendars: [], connected: false }
       );
     }
 

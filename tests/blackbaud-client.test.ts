@@ -45,12 +45,12 @@ describe("BlackbaudClient", () => {
     );
   });
 
-  it("throws specific error on rate limit (429)", async () => {
+  it("throws BlackbaudApiError with isQuotaExhausted on rate limit (429)", async () => {
     const mockFetch = mock.fn(async () => {
       return new Response("Rate limited", { status: 429 });
     });
 
-    const { createBlackbaudClient } = await import("../src/lib/blackbaud/client");
+    const { createBlackbaudClient, BlackbaudApiError } = await import("../src/lib/blackbaud/client");
     const client = createBlackbaudClient({
       accessToken: "test-token",
       subscriptionKey: "test-sub-key",
@@ -59,7 +59,39 @@ describe("BlackbaudClient", () => {
 
     await assert.rejects(
       () => client.get("/constituent/v1/constituents"),
-      (err: Error) => err.message.includes("rate limit")
+      (err: unknown) => {
+        assert.ok(err instanceof BlackbaudApiError);
+        assert.equal(err.status, 429);
+        assert.equal(err.isQuotaExhausted, true);
+        return true;
+      }
+    );
+  });
+
+  it("detects quota exhaustion from 403 body text", async () => {
+    const mockFetch = mock.fn(async () => {
+      return new Response(
+        JSON.stringify({ statusCode: 403, message: "Out of call volume quota. Quota will be replenished in 07:30:00." }),
+        { status: 403 }
+      );
+    });
+
+    const { createBlackbaudClient, BlackbaudApiError } = await import("../src/lib/blackbaud/client");
+    const client = createBlackbaudClient({
+      accessToken: "test-token",
+      subscriptionKey: "test-sub-key",
+      fetchFn: mockFetch as unknown as typeof fetch,
+    });
+
+    await assert.rejects(
+      () => client.get("/constituent/v1/constituents"),
+      (err: unknown) => {
+        assert.ok(err instanceof BlackbaudApiError);
+        assert.equal(err.status, 403);
+        assert.equal(err.isQuotaExhausted, true);
+        assert.equal(err.retryAfterHuman, "07:30:00");
+        return true;
+      }
     );
   });
 });

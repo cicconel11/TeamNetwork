@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Textarea } from "@/components/ui/Textarea";
@@ -8,15 +8,27 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Avatar } from "@/components/ui/Avatar";
 import { createPostSchema } from "@/lib/schemas/feed";
+import { prepareImageUpload } from "@/lib/media/image-preparation";
 import { PollBuilder } from "./PollBuilder";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_IMAGES = 4;
 const ACCEPTED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 interface FeedComposerProps {
   orgId: string;
   userName?: string;
 }
+
+type PreparedFeedImage = {
+  file: File;
+  previewFile: File | null;
+  previewUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  previewMimeType: string | null;
+};
 
 export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const router = useRouter();
@@ -26,72 +38,174 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Image state
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Image state — supports up to MAX_IMAGES files
+  const [imageFiles, setImageFiles] = useState<PreparedFeedImage[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const previewUrlsRef = useRef<string[]>([]);
 
   // Poll state
   const [isPollMode, setIsPollMode] = useState(false);
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [pollAllowChange, setPollAllowChange] = useState(true);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Keep ref in sync so unmount cleanup revokes the latest URLs
+  useEffect(() => {
+    previewUrlsRef.current = previewUrls;
+  }, [previewUrls]);
 
-    if (!ACCEPTED_TYPES.has(file.type)) {
-      setError("Only JPEG, PNG, WebP, and GIF images are supported");
-      return;
-    }
-
-    if (file.size > MAX_FILE_SIZE) {
-      setError("Image must be under 10MB");
-      return;
-    }
-
-    setError(null);
-    setImageFile(file);
-    setPreviewUrl(URL.createObjectURL(file));
+  // Revoke all preview URLs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    };
   }, []);
 
-  const removeImage = useCallback(() => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setImageFile(null);
-    setPreviewUrl(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  }, [previewUrl]);
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-  const uploadImage = async (file: File): Promise<string | null> => {
-    setUploadProgress("Preparing upload...");
+    // Reset input so the same file(s) can be re-selected after removal
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // Validate and filter files outside the state updater to avoid
+    // side effects that break under React 18 Strict Mode double-invocation
+    const currentCount = imageFiles.length;
+    const slotsAvailable = MAX_IMAGES - currentCount;
+
+    if (slotsAvailable <= 0) {
+      setError(`Maximum ${MAX_IMAGES} images per post`);
+      return;
+    }
+
+    const validFiles: File[] = [];
+    const skipped: string[] = [];
+
+    for (const file of files) {
+      if (validFiles.length >= slotsAvailable) {
+        skipped.push(`${file.name}: maximum ${MAX_IMAGES} images reached`);
+        continue;
+      }
+      if (!ACCEPTED_TYPES.has(file.type)) {
+        skipped.push(`${file.name}: only JPEG, PNG, WebP, and GIF supported`);
+        continue;
+      }
+      if (file.size > MAX_FILE_SIZE) {
+        skipped.push(`${file.name}: must be under 10MB`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (skipped.length > 0) {
+      setError(`Skipped: ${skipped.join("; ")}`);
+    } else {
+      setError(null);
+    }
+
+    if (validFiles.length === 0) return;
+
+    const preparedFiles: PreparedFeedImage[] = [];
+
+    try {
+      for (const file of validFiles) {
+        if (file.type.startsWith("image/")) {
+          const prepared = await prepareImageUpload(file);
+          console.log("[media/upload] prepared feed image", {
+            fileName: file.name,
+            originalBytes: prepared.originalBytes,
+            normalizedBytes: prepared.normalizedBytes,
+          });
+          preparedFiles.push({
+            file: prepared.file,
+            previewFile: prepared.previewFile,
+            previewUrl: prepared.previewUrl || URL.createObjectURL(prepared.file),
+            fileName: prepared.file.name,
+            fileSize: prepared.file.size,
+            mimeType: prepared.mimeType,
+            previewMimeType: prepared.previewMimeType,
+          });
+          continue;
+        }
+
+        const previewUrl = URL.createObjectURL(file);
+        preparedFiles.push({
+          file,
+          previewFile: null,
+          previewUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+          previewMimeType: null,
+        });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to prepare image upload");
+      preparedFiles.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      return;
+    }
+
+    setImageFiles((prev) => [...prev, ...preparedFiles]);
+    setPreviewUrls((prev) => [...prev, ...preparedFiles.map((f) => f.previewUrl)]);
+  }, [imageFiles.length]);
+
+  const removeImage = useCallback((index: number) => {
+    setPreviewUrls((prev) => {
+      const url = prev[index];
+      if (url) URL.revokeObjectURL(url);
+      return [...prev.slice(0, index), ...prev.slice(index + 1)];
+    });
+    setImageFiles((prev) => [...prev.slice(0, index), ...prev.slice(index + 1)]);
+  }, []);
+
+  const removeAllImages = useCallback(() => {
+    setPreviewUrls((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+    setImageFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, []);
+
+  const uploadImage = async (file: PreparedFeedImage, index: number, total: number): Promise<string> => {
+    setUploadProgress(`Uploading ${index + 1} of ${total}...`);
     const intentRes = await fetch("/api/media/upload-intent", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         orgId,
         feature: "feed_post",
-        fileName: file.name,
-        mimeType: file.type,
-        fileSize: file.size,
+        fileName: file.fileName,
+        mimeType: file.mimeType,
+        fileSize: file.fileSize,
+        previewMimeType: file.previewMimeType,
       }),
     });
 
     if (!intentRes.ok) {
       const data = await intentRes.json();
-      throw new Error(data.error || "Failed to prepare upload");
+      throw new Error(data.error || `Failed to prepare upload for ${file.fileName}`);
     }
 
-    const { mediaId, signedUrl } = await intentRes.json();
+    const { mediaId, signedUrl, previewSignedUrl } = await intentRes.json();
 
-    setUploadProgress("Uploading image...");
     const putRes = await fetch(signedUrl, {
       method: "PUT",
-      headers: { "Content-Type": file.type },
-      body: file,
+      headers: { "Content-Type": file.mimeType },
+      body: file.file,
     });
-    if (!putRes.ok) throw new Error("Failed to upload image");
+    if (!putRes.ok) throw new Error(`Failed to upload ${file.fileName}`);
 
-    setUploadProgress("Finalizing...");
+    if (previewSignedUrl && file.previewFile) {
+      const previewPutRes = await fetch(previewSignedUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.previewFile.type },
+        body: file.previewFile,
+      });
+      if (!previewPutRes.ok) throw new Error(`Failed to upload preview for ${file.fileName}`);
+    }
+
+    setUploadProgress(`Finalizing ${index + 1} of ${total}...`);
     const finalizeRes = await fetch("/api/media/finalize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,7 +214,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
 
     if (!finalizeRes.ok) {
       const data = await finalizeRes.json();
-      throw new Error(data.error || "Failed to finalize upload");
+      throw new Error(data.error || `Failed to finalize ${file.fileName}`);
     }
 
     return mediaId;
@@ -109,8 +223,8 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
   const togglePollMode = useCallback(() => {
     setIsPollMode((prev) => {
       if (!prev) {
-        // Entering poll mode — clear image
-        removeImage();
+        // Entering poll mode — clear all images
+        removeAllImages();
       } else {
         // Leaving poll mode — reset poll state
         setPollOptions(["", ""]);
@@ -118,7 +232,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
       }
       return !prev;
     });
-  }, [removeImage]);
+  }, [removeAllImages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,9 +252,12 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
 
     try {
       let mediaIds: string[] = [];
-      if (!isPollMode && imageFile) {
-        const mediaId = await uploadImage(imageFile);
-        if (mediaId) mediaIds = [mediaId];
+      if (!isPollMode && imageFiles.length > 0) {
+        // Upload sequentially for clear progress feedback
+        for (let i = 0; i < imageFiles.length; i++) {
+          const mediaId = await uploadImage(imageFiles[i], i, imageFiles.length);
+          mediaIds = [...mediaIds, mediaId];
+        }
       }
 
       setUploadProgress(null);
@@ -165,7 +282,7 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
       }
 
       setBody("");
-      removeImage();
+      removeAllImages();
       if (isPollMode) {
         setIsPollMode(false);
         setPollOptions(["", ""]);
@@ -197,6 +314,8 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
     );
   }
 
+  const canAddMoreImages = !isPollMode && imageFiles.length < MAX_IMAGES;
+
   return (
     <Card className="px-4 pt-4 pb-3">
       <form onSubmit={handleSubmit}>
@@ -225,32 +344,54 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
           />
         )}
 
-        {/* Image preview */}
-        {!isPollMode && previewUrl && (
-          <div className="relative inline-block mt-3">
-            <div className="rounded-xl overflow-hidden ring-1 ring-border shadow-sm">
-              <Image
-                src={previewUrl}
-                alt="Upload preview"
-                width={300}
-                height={200}
-                className="object-cover max-h-52 w-auto"
-                unoptimized
-              />
-            </div>
-            <button
-              type="button"
-              onClick={removeImage}
-              className="absolute top-2 right-2 bg-foreground/80 backdrop-blur-sm text-background rounded-full w-7 h-7 flex items-center justify-center text-xs font-medium hover:bg-foreground transition-all duration-200 shadow-lg"
-              aria-label="Remove image"
-            >
-              ✕
-            </button>
-            {uploadProgress && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-org-secondary/20 rounded-b-xl overflow-hidden">
-                <div className="h-full bg-org-secondary rounded-full animate-pulse" style={{ width: "60%" }} />
+        {/* Image previews */}
+        {!isPollMode && previewUrls.length > 0 && (
+          <div className={`mt-3 gap-1.5 ${previewUrls.length === 1 ? "flex" : "grid grid-cols-2"}`}>
+            {previewUrls.map((url, index) => (
+              <div key={url} className={`relative ${previewUrls.length === 1 ? "inline-block" : "aspect-square"}`}>
+                <div className={`rounded-xl overflow-hidden ring-1 ring-border shadow-sm ${previewUrls.length === 1 ? "" : "h-full"}`}>
+                  <Image
+                    src={url}
+                    alt={`Upload preview ${index + 1}`}
+                    width={300}
+                    height={200}
+                    className={`object-cover ${previewUrls.length === 1 ? "max-h-52 w-auto" : "w-full h-full"}`}
+                    unoptimized
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  className="absolute top-2 right-2 bg-foreground/80 backdrop-blur-sm text-background rounded-full w-7 h-7 flex items-center justify-center text-xs font-medium hover:bg-foreground transition-all duration-200 shadow-lg"
+                  aria-label={`Remove image ${index + 1}`}
+                >
+                  ✕
+                </button>
               </div>
+            ))}
+            {canAddMoreImages && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="aspect-square rounded-xl border-2 border-dashed border-border/60 hover:border-border hover:bg-muted/40 transition-all duration-200 flex flex-col items-center justify-center gap-1 text-muted-foreground"
+                aria-label="Add more images"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                <span className="text-xs">{MAX_IMAGES - imageFiles.length} left</span>
+              </button>
             )}
+          </div>
+        )}
+
+        {/* Upload progress */}
+        {uploadProgress && (
+          <div className="mt-2 text-xs text-muted-foreground flex items-center gap-2">
+            <div className="h-1 flex-1 bg-org-secondary/20 rounded-full overflow-hidden">
+              <div className="h-full bg-org-secondary rounded-full animate-pulse" style={{ width: "60%" }} />
+            </div>
+            <span>{uploadProgress}</span>
           </div>
         )}
 
@@ -261,20 +402,26 @@ export function FeedComposer({ orgId, userName }: FeedComposerProps) {
               ref={fileInputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
               onChange={handleFileSelect}
               className="hidden"
             />
             <button
               type="button"
-              onClick={() => { if (!isPollMode) fileInputRef.current?.click(); }}
-              className={`p-2 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isPollMode ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-org-secondary hover:bg-org-secondary/10"}`}
+              onClick={() => { if (canAddMoreImages) fileInputRef.current?.click(); }}
+              className={`p-2 rounded-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${!canAddMoreImages ? "text-muted-foreground/30 cursor-not-allowed" : "text-muted-foreground hover:text-org-secondary hover:bg-org-secondary/10"}`}
               aria-label="Add image"
-              disabled={isSubmitting || isPollMode}
+              disabled={isSubmitting || !canAddMoreImages}
             >
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
               </svg>
             </button>
+            {imageFiles.length > 0 && !isPollMode && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {imageFiles.length}/{MAX_IMAGES}
+              </span>
+            )}
             <button
               type="button"
               onClick={togglePollMode}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations, useFormatter } from "next-intl";
 import { Button, Card, Input } from "@/components/ui";
 
 interface DangerZoneCardProps {
@@ -22,6 +23,9 @@ export function DangerZoneCard({
   currentPeriodEnd,
   onSubscriptionCancelled,
 }: DangerZoneCardProps) {
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
+  const format = useFormatter();
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
@@ -29,12 +33,15 @@ export function DangerZoneCard({
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const formatDate = (dateStr: string) =>
+    format.dateTime(new Date(dateStr), { year: "numeric", month: "long", day: "numeric" });
+
   const cancelSubscription = async () => {
     const periodEnd = currentPeriodEnd
-      ? new Date(currentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-      : "the end of your billing period";
+      ? formatDate(currentPeriodEnd)
+      : tSettings("cancelSub.description");
 
-    if (!confirm(`Are you sure you want to cancel your subscription?\n\nYour subscription will remain active until ${periodEnd}. After that, you'll have 30 days of read-only access before the organization is deleted.\n\nYou can resubscribe anytime during this period.`)) {
+    if (!confirm(tSettings("cancelSub.confirmPrompt", { periodEnd }))) {
       return;
     }
 
@@ -45,25 +52,25 @@ export function DangerZoneCard({
       const res = await fetch(`/api/organizations/${orgId}/cancel-subscription`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Unable to cancel subscription");
+        throw new Error(data.error || tSettings("cancelSub.unableToCancel"));
       }
 
       const endDate = data.currentPeriodEnd
-        ? new Date(data.currentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
-        : "the end of your billing period";
+        ? formatDate(data.currentPeriodEnd)
+        : tSettings("cancelSub.description");
 
-      alert(`Your subscription has been cancelled.\n\nYou will have access until ${endDate}, followed by 30 days of read-only access.\n\nYou can resubscribe anytime to keep your organization.`);
+      alert(tSettings("cancelSub.cancelledAlert", { endDate }));
 
       onSubscriptionCancelled();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to cancel subscription");
+      setError(err instanceof Error ? err.message : tSettings("cancelSub.unableToCancel"));
     } finally {
       setIsCancelling(false);
     }
   };
 
   const handleDeleteOrganization = () => {
-    if (!confirm("WARNING: You are about to permanently delete this organization.\n\nAll data including members, alumni, events, records, and files will be lost forever.\n\nThis action CANNOT be undone.\n\nAre you sure you want to continue?")) {
+    if (!confirm(tSettings("deleteOrg.warningPrompt"))) {
       return;
     }
 
@@ -72,7 +79,7 @@ export function DangerZoneCard({
 
   const confirmDeleteOrganization = async () => {
     if (deleteConfirmText !== orgName && deleteConfirmText !== orgSlug) {
-      setError(`Please type "${orgName}" or "${orgSlug}" to confirm deletion.`);
+      setError(tSettings("deleteOrg.typeError", { orgName, orgSlug }));
       return;
     }
 
@@ -83,13 +90,13 @@ export function DangerZoneCard({
       const res = await fetch(`/api/organizations/${orgId}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Unable to delete organization");
+        throw new Error(data.error || tSettings("deleteOrg.unableToDelete"));
       }
 
-      alert("Your organization has been deleted and your payments have been ended.");
+      alert(tSettings("deleteOrg.deleted"));
       window.location.href = "/app";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to delete organization");
+      setError(err instanceof Error ? err.message : tSettings("deleteOrg.unableToDelete"));
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -109,15 +116,15 @@ export function DangerZoneCard({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Unable to open billing portal");
+        throw new Error(data.error || tSettings("billing.unableToOpen"));
       }
       if (data.url) {
         window.location.href = data.url as string;
         return;
       }
-      throw new Error("No billing portal URL returned");
+      throw new Error(tSettings("billing.noUrl"));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to open billing portal");
+      setError(err instanceof Error ? err.message : tSettings("billing.unableToOpen"));
     } finally {
       setIsOpeningPortal(false);
     }
@@ -129,9 +136,9 @@ export function DangerZoneCard({
       <Card className="p-6 mt-8 border border-gray-200 dark:border-gray-700">
         <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
           <div>
-            <h3 className="font-semibold">Billing Management</h3>
+            <h3 className="font-semibold">{tSettings("billing.title")}</h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Manage payment methods, view invoices, or update your subscription.
+              {tSettings("billing.description")}
             </p>
           </div>
           <Button
@@ -140,7 +147,7 @@ export function DangerZoneCard({
             isLoading={isOpeningPortal}
             disabled={!stripeCustomerId}
           >
-            Manage Billing
+            {tSettings("billing.manage")}
           </Button>
         </div>
       </Card>
@@ -149,9 +156,9 @@ export function DangerZoneCard({
       <Card className="p-6 mt-8 border border-amber-300 dark:border-amber-700/50 bg-amber-50/50 dark:bg-amber-900/10">
         <div className="flex flex-col gap-6">
           <div>
-            <h3 className="text-amber-800 dark:text-amber-200 font-semibold">Danger Zone</h3>
+            <h3 className="text-amber-800 dark:text-amber-200 font-semibold">{tSettings("dangerZone.title")}</h3>
             <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
-              These actions can affect your organization&apos;s access and data.
+              {tSettings("dangerZone.description")}
             </p>
           </div>
 
@@ -159,10 +166,9 @@ export function DangerZoneCard({
           <div className="border-t border-amber-300 dark:border-amber-700/50 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <h4 className="font-medium text-amber-800 dark:text-amber-200">Cancel Subscription</h4>
+                <h4 className="font-medium text-amber-800 dark:text-amber-200">{tSettings("cancelSub.title")}</h4>
                 <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
-                  Your subscription will remain active until the end of your billing period.
-                  After that, you&apos;ll have 30 days of read-only access to resubscribe.
+                  {tSettings("cancelSub.description")}
                 </p>
               </div>
               <Button
@@ -171,12 +177,12 @@ export function DangerZoneCard({
                 isLoading={isCancelling}
                 disabled={isCancelling || subscriptionStatus === "canceling" || subscriptionStatus === "canceled"}
               >
-                {subscriptionStatus === "canceling" ? "Cancellation Scheduled" : "Cancel Subscription"}
+                {subscriptionStatus === "canceling" ? tSettings("cancelSub.scheduled") : tSettings("cancelSub.button")}
               </Button>
             </div>
             {subscriptionStatus === "canceling" && currentPeriodEnd && (
               <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-                Your subscription will end on {new Date(currentPeriodEnd).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.
+                {tSettings("cancelSub.endsOn", { date: formatDate(currentPeriodEnd) })}
               </p>
             )}
           </div>
@@ -185,10 +191,9 @@ export function DangerZoneCard({
           <div className="border-t border-amber-300 dark:border-amber-700/50 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div>
-                <h4 className="font-medium text-amber-800 dark:text-amber-200">Delete Organization</h4>
+                <h4 className="font-medium text-amber-800 dark:text-amber-200">{tSettings("deleteOrg.title")}</h4>
                 <p className="text-sm text-amber-700/80 dark:text-amber-300/80">
-                  Permanently delete this organization and all its data.
-                  This action cannot be undone.
+                  {tSettings("deleteOrg.description")}
                 </p>
               </div>
               <Button
@@ -198,7 +203,7 @@ export function DangerZoneCard({
                 disabled={isDeleting}
                 className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
-                Delete Organization
+                {tSettings("deleteOrg.button")}
               </Button>
             </div>
           </div>
@@ -217,27 +222,27 @@ export function DangerZoneCard({
           <Card className="max-w-md w-full p-6 space-y-4">
             <div>
               <h3 className="text-lg font-bold text-amber-700 dark:text-amber-300">
-                Confirm Organization Deletion
+                {tSettings("deleteOrg.confirmTitle")}
               </h3>
               <p className="text-sm text-muted-foreground mt-2">
-                This will permanently delete <strong>{orgName}</strong> and all associated data including:
+                {tSettings("deleteOrg.confirmDesc", { orgName })}
               </p>
               <ul className="text-sm text-muted-foreground mt-2 list-disc list-inside">
-                <li>All members and alumni records</li>
-                <li>Events, announcements, and forms</li>
-                <li>Files and documents</li>
-                <li>Subscription and billing data</li>
+                <li>{tSettings("deleteOrg.dataMembers")}</li>
+                <li>{tSettings("deleteOrg.dataEvents")}</li>
+                <li>{tSettings("deleteOrg.dataFiles")}</li>
+                <li>{tSettings("deleteOrg.dataBilling")}</li>
               </ul>
             </div>
 
             <div>
               <label className="text-sm font-medium block mb-2">
-                Type <span className="font-mono bg-muted px-1 rounded">{orgName}</span> or <span className="font-mono bg-muted px-1 rounded">{orgSlug}</span> to confirm:
+                {tSettings("deleteOrg.typeToConfirm", { orgName, orgSlug })}
               </label>
               <Input
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder={`Type "${orgName}" to confirm`}
+                placeholder={tSettings("deleteOrg.typePlaceholder", { orgName })}
                 className="w-full"
               />
             </div>
@@ -251,7 +256,7 @@ export function DangerZoneCard({
                   setError(null);
                 }}
               >
-                Cancel
+                {tCommon("cancel")}
               </Button>
               <Button
                 onClick={confirmDeleteOrganization}
@@ -259,7 +264,7 @@ export function DangerZoneCard({
                 isLoading={isDeleting}
                 className="!bg-amber-600 !text-white hover:!bg-amber-700 !border-amber-600"
               >
-                Delete Forever
+                {tSettings("deleteOrg.deleteForever")}
               </Button>
             </div>
           </Card>

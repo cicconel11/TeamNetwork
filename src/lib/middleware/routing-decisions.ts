@@ -28,6 +28,16 @@ const PUBLIC_ROUTES = [
 
 const AUTH_ONLY_ROUTES = ["/auth/login", "/auth/signup", "/auth/forgot-password"];
 
+const NON_ORG_TOP_LEVEL_SEGMENTS = [
+  "app",
+  "auth",
+  "api",
+  "settings",
+  "enterprise",
+  "_next",
+  "favicon.ico",
+];
+
 /** Returns true for API routes that bypass auth middleware entirely. */
 export function shouldBypassAuth(pathname: string): boolean {
   return PUBLIC_API_ROUTES.includes(pathname);
@@ -60,6 +70,24 @@ export function isPublicRoute(pathname: string): boolean {
  */
 export function isAuthOnlyRoute(pathname: string): boolean {
   return AUTH_ONLY_ROUTES.includes(pathname);
+}
+
+/**
+ * Returns true for paths that should be treated as organization-scoped routes.
+ * Static top-level pages and system segments are excluded here so middleware
+ * doesn't need to maintain its own duplicate blocklist.
+ */
+export function isOrgRoute(pathname: string): boolean {
+  if (!pathname || pathname === "/" || isPublicRoute(pathname)) {
+    return false;
+  }
+
+  const [firstSegment] = pathname.split("/").filter(Boolean);
+  if (!firstSegment) {
+    return false;
+  }
+
+  return !NON_ORG_TOP_LEVEL_SEGMENTS.includes(firstSegment);
 }
 
 /**

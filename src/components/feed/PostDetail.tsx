@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { LikeButton } from "./LikeButton";
@@ -50,7 +51,9 @@ export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetail
     <Card className="p-6">
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">{post.author?.name || "Unknown"}</span>
+          <span className="font-medium text-foreground">
+            <UserContent>{post.author?.name || "Unknown"}</UserContent>
+          </span>
           {" · "}
           {formatDateTime(post.created_at)}
         </div>
@@ -61,7 +64,9 @@ export function PostDetail({ post, orgSlug, currentUserId, isAdmin }: PostDetail
         )}
       </div>
       <div className="prose max-w-none">
-        <p className="whitespace-pre-wrap text-foreground">{post.body}</p>
+        <UserContent as="p" className="whitespace-pre-wrap text-foreground">
+          {post.body}
+        </UserContent>
       </div>
       {post.media && post.media.length > 0 && (
         <PostMedia media={post.media} />

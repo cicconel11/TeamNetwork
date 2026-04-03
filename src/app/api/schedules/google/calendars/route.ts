@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getValidAccessToken } from "@/lib/google/oauth";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +42,8 @@ export async function GET(request: Request) {
     }
 
     // Check admin role
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", orgId)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, orgId);
+    if (!membership || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can manage schedule sources." },
         { status: 403 }

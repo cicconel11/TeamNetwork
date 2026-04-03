@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, Badge, Avatar, Button, EmptyState, Select } from "@/components/ui";
 import { MentorRegistration } from "./MentorRegistration";
 
@@ -38,6 +39,10 @@ export function MentorDirectory({
   orgId,
   orgSlug,
 }: MentorDirectoryProps) {
+  const tMentorship = useTranslations("mentorship");
+  const tMembers = useTranslations("members");
+  const tCommon = useTranslations("common");
+
   const [filters, setFilters] = useState({
     industry: "",
     year: "",
@@ -66,28 +71,28 @@ export function MentorDirectory({
   };
 
   const industryOptions = [
-    { value: "", label: "All Industries" },
+    { value: "", label: tMentorship("allIndustries") },
     ...industries.map((i) => ({ value: i, label: i })),
   ];
 
   const yearOptions = [
-    { value: "", label: "All Years" },
-    ...years.map((y) => ({ value: y.toString(), label: `Class of ${y}` })),
+    { value: "", label: tMentorship("allYears") },
+    ...years.map((y) => ({ value: y.toString(), label: tMembers("classOf", { year: y }) })),
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold mb-2">Willing to Help</h2>
+        <h2 className="text-xl font-semibold mb-2">{tMentorship("willingToHelp")}</h2>
         <p className="text-muted-foreground text-sm mb-4">
-          Connect with alumni who are available to mentor and share their expertise
+          {tMentorship("directoryDesc")}
         </p>
 
         {/* Filters */}
         <div className="flex flex-wrap items-end gap-3 mb-6">
           <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">
             <Select
-              label="Industry"
+              label={tMentorship("industry")}
               value={filters.industry}
               onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
               options={industryOptions}
@@ -95,7 +100,7 @@ export function MentorDirectory({
           </div>
           <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">
             <Select
-              label="Graduation Year"
+              label={tMentorship("graduationYear")}
               value={filters.year}
               onChange={(e) => setFilters({ ...filters, year: e.target.value })}
               options={yearOptions}
@@ -121,7 +126,7 @@ export function MentorDirectory({
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
-              Clear filters
+              {tMentorship("clearFilters")}
             </Button>
           )}
         </div>
@@ -131,13 +136,13 @@ export function MentorDirectory({
           <Card className="mb-6 bg-muted/30 border-dashed">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-medium mb-1">Want to give back?</h3>
+                <h3 className="font-medium mb-1">{tMentorship("wantToGiveBack")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  Join our directory and help current members with your expertise
+                  {tMentorship("joinDirectory")}
                 </p>
               </div>
               <Button onClick={() => setShowRegistrationForm(true)}>
-                Become a Mentor
+                {tMentorship("becomeMentor")}
               </Button>
             </div>
           </Card>
@@ -172,11 +177,11 @@ export function MentorDirectory({
                 />
               </svg>
             }
-            title={hasActiveFilters ? "No mentors found" : "No mentors yet"}
+            title={hasActiveFilters ? tMentorship("noMentorsFound") : tMentorship("noMentorsYet")}
             description={
               hasActiveFilters
-                ? "Try adjusting your filters to see more results"
-                : "Check back later as alumni register to help"
+                ? tMentorship("adjustFilters")
+                : tMentorship("checkBackLater")
             }
           />
         ) : (
@@ -223,7 +228,7 @@ export function MentorDirectory({
                   {mentor.expertise_areas && mentor.expertise_areas.length > 0 && (
                     <div className="mb-3">
                       <p className="text-xs font-medium text-muted-foreground mb-1">
-                        Expertise
+                        {tMentorship("expertise")}
                       </p>
                       <div className="flex flex-wrap gap-1">
                         {mentor.expertise_areas.map((area, idx) => {
@@ -257,7 +262,7 @@ export function MentorDirectory({
                             d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                           />
                         </svg>
-                        Email
+                        {tCommon("email")}
                       </a>
                     )}
                     {mentor.contact_linkedin && (
@@ -274,7 +279,7 @@ export function MentorDirectory({
                         >
                           <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z" />
                         </svg>
-                        LinkedIn
+                        {tMentorship("linkedin")}
                       </a>
                     )}
                     {mentor.contact_phone && (
@@ -295,7 +300,7 @@ export function MentorDirectory({
                             d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
                           />
                         </svg>
-                        Phone
+                        {tMentorship("phone")}
                       </a>
                     )}
                   </div>

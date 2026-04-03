@@ -265,8 +265,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     }
 
     // Calculate old and new billable counts
-    const oldBillable = getBillableOrgCount(reconciledSubscription.sub_org_quantity ?? 0);
-    const newBillable = getBillableOrgCount(newQuantity);
+    const bucketQty = reconciledSubscription.alumni_bucket_quantity;
+    const oldBillable = getBillableOrgCount(reconciledSubscription.sub_org_quantity ?? 0, bucketQty);
+    const newBillable = getBillableOrgCount(newQuantity, bucketQty);
 
     try {
       let periodEnd: string | null = null;
@@ -288,7 +289,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           return respond({ error: "Failed to update subscription quantity" }, 500);
         }
 
-        const pricing = getSubOrgPricing(newQuantity, reconciledSubscription.billing_interval);
+        const pricing = getSubOrgPricing(newQuantity, reconciledSubscription.billing_interval, reconciledSubscription.alumni_bucket_quantity);
 
         logEnterpriseAuditAction({
           actorUserId: ctx.userId,
@@ -667,6 +668,44 @@ export async function POST(req: Request, { params }: RouteParams) {
         return respond({ error: "Billing updated but failed to save. Please contact support." }, 500);
       }
 
+      // Recalculate sub-org billing: changing bucket count changes the free tier
+      const oldBucketQty = reconciledSubscription.alumni_bucket_quantity;
+      const currentSubOrgQty = reconciledSubscription.sub_org_quantity ?? 0;
+      const oldSubOrgBillable = getBillableOrgCount(currentSubOrgQty, oldBucketQty);
+      const newSubOrgBillable = getBillableOrgCount(currentSubOrgQty, newQuantity);
+
+      if (oldSubOrgBillable !== newSubOrgBillable) {
+        const subOrgItem = (await stripe.subscriptions.retrieve(reconciledSubscription.stripe_subscription_id))
+          .items?.data?.find((item) => {
+            const itemPriceId = typeof item.price === "string" ? item.price : item.price.id;
+            return itemPriceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY") ||
+                   itemPriceId === requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+          });
+
+        if (newSubOrgBillable === 0 && subOrgItem) {
+          // All orgs now free — remove the sub-org line item
+          await stripe.subscriptionItems.del(subOrgItem.id, { proration_behavior: "create_prorations" });
+        } else if (newSubOrgBillable > 0 && subOrgItem) {
+          // Update existing sub-org line item quantity
+          await stripe.subscriptionItems.update(subOrgItem.id, {
+            quantity: newSubOrgBillable,
+            proration_behavior: "create_prorations",
+          });
+        } else if (newSubOrgBillable > 0 && !subOrgItem) {
+          // Need to add a sub-org line item (downgrade created billable orgs)
+          const resolvedInterval = intervalChanged ? effectiveInterval : reconciledSubscription.billing_interval;
+          const subOrgPriceId = resolvedInterval === "month"
+            ? requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_MONTHLY")
+            : requireEnv("STRIPE_PRICE_ENTERPRISE_SUB_ORG_YEARLY");
+          await stripe.subscriptionItems.create({
+            subscription: reconciledSubscription.stripe_subscription_id,
+            price: subOrgPriceId,
+            quantity: newSubOrgBillable,
+            proration_behavior: "create_prorations",
+          });
+        }
+      }
+
       logEnterpriseAuditAction({
         actorUserId: ctx.userId,
         actorEmail: ctx.userEmail,
@@ -679,6 +718,7 @@ export async function POST(req: Request, { params }: RouteParams) {
           newQuantity,
           previousQuantity: reconciledSubscription.alumni_bucket_quantity,
           ...(intervalChanged ? { previousInterval: reconciledSubscription.billing_interval, newInterval: effectiveInterval } : {}),
+          ...(oldSubOrgBillable !== newSubOrgBillable ? { subOrgBillableChange: { from: oldSubOrgBillable, to: newSubOrgBillable } } : {}),
         },
         ...extractRequestContext(req),
       });

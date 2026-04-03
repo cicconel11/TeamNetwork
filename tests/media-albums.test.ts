@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  canDeleteAlbumAndMedia,
   canDeleteMediaFromAlbumView,
   canUploadDirectlyToAlbum,
   getAlbumBulkDeleteEligibleIds,
   getAlbumCoverPickerItems,
   getAlbumCoverValidationError,
   getAlbumUpdatesAfterMediaDelete,
+  resolveAlbumDeleteMode,
   shouldExposeAlbumCover,
 } from "@/lib/media/albums";
 
@@ -92,6 +94,33 @@ test("album bulk delete eligible ids only includes items the actor can delete", 
     getAlbumBulkDeleteEligibleIds(items, { isAdmin: true }),
     ["item-1", "item-2"],
   );
+});
+
+test("album delete-all mode is only available when every album item is deletable by the actor", () => {
+  const items = [
+    { id: "item-1", uploaded_by: "owner-1" },
+    { id: "item-2", uploaded_by: "owner-1" },
+  ];
+
+  assert.equal(
+    canDeleteAlbumAndMedia(items, { isAdmin: false, currentUserId: "owner-1" }),
+    true,
+  );
+  assert.equal(
+    canDeleteAlbumAndMedia(
+      [...items, { id: "item-3", uploaded_by: "owner-2" }],
+      { isAdmin: false, currentUserId: "owner-1" },
+    ),
+    false,
+  );
+  assert.equal(canDeleteAlbumAndMedia(items, { isAdmin: true }), true);
+});
+
+test("album delete mode defaults safely to album_only", () => {
+  assert.equal(resolveAlbumDeleteMode(null), "album_only");
+  assert.equal(resolveAlbumDeleteMode("album_only"), "album_only");
+  assert.equal(resolveAlbumDeleteMode("album_and_media"), "album_and_media");
+  assert.equal(resolveAlbumDeleteMode("unexpected"), "album_only");
 });
 
 test("album state clears deleted cover media and decrements item count", () => {

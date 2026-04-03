@@ -5,6 +5,7 @@ import {
   isPublicApiPattern,
   isPublicRoute,
   isAuthOnlyRoute,
+  isOrgRoute,
   getRedirectForMembershipStatus,
   shouldRedirectToCanonicalHost,
 } from "../src/lib/middleware/routing-decisions.ts";
@@ -43,6 +44,19 @@ describe("middleware routing decisions", () => {
     it("signup is auth-only", () => assert.strictEqual(isAuthOnlyRoute("/auth/signup"), true));
     it("forgot-password is auth-only", () => assert.strictEqual(isAuthOnlyRoute("/auth/forgot-password"), true));
     it("callback is NOT auth-only", () => assert.strictEqual(isAuthOnlyRoute("/auth/callback"), false));
+  });
+
+  describe("isOrgRoute", () => {
+    it("org member path is org-scoped", () => assert.strictEqual(isOrgRoute("/my-org/members"), true));
+    it("root is not org-scoped", () => assert.strictEqual(isOrgRoute("/"), false));
+    it("app is not org-scoped", () => assert.strictEqual(isOrgRoute("/app"), false));
+    it("settings is not org-scoped", () => assert.strictEqual(isOrgRoute("/settings/language"), false));
+    it("enterprise is not org-scoped", () => assert.strictEqual(isOrgRoute("/enterprise/acme"), false));
+    it("public top-level pages are not org-scoped", () => {
+      assert.strictEqual(isOrgRoute("/terms"), false);
+      assert.strictEqual(isOrgRoute("/privacy"), false);
+      assert.strictEqual(isOrgRoute("/demos"), false);
+    });
   });
 
   describe("getRedirectForMembershipStatus", () => {

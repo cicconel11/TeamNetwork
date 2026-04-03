@@ -17,33 +17,38 @@ export function isBlackbaudConfigured(): boolean {
   );
 }
 
+function cleanEnvValue(raw: string | undefined): string {
+  if (!raw) return "";
+  return raw.replace(/\\n/g, "").trim();
+}
+
 function getBlackbaudClientId(): string {
-  const val = process.env.BLACKBAUD_CLIENT_ID;
-  if (!val || val.trim() === "") {
+  const val = cleanEnvValue(process.env.BLACKBAUD_CLIENT_ID);
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_CLIENT_ID");
   }
   return val;
 }
 
 function getBlackbaudClientSecret(): string {
-  const val = process.env.BLACKBAUD_CLIENT_SECRET;
-  if (!val || val.trim() === "") {
+  const val = cleanEnvValue(process.env.BLACKBAUD_CLIENT_SECRET);
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_CLIENT_SECRET");
   }
   return val;
 }
 
 function getBlackbaudEncryptionKey(): string {
-  const val = process.env.BLACKBAUD_TOKEN_ENCRYPTION_KEY;
-  if (!val || val.trim() === "") {
+  const val = cleanEnvValue(process.env.BLACKBAUD_TOKEN_ENCRYPTION_KEY);
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_TOKEN_ENCRYPTION_KEY");
   }
   return val;
 }
 
 export function getBlackbaudSubscriptionKey(): string {
-  const val = process.env.BLACKBAUD_SUBSCRIPTION_KEY;
-  if (!val || val.trim() === "") {
+  const val = cleanEnvValue(process.env.BLACKBAUD_SUBSCRIPTION_KEY);
+  if (!val) {
     throw new Error("Missing required environment variable: BLACKBAUD_SUBSCRIPTION_KEY");
   }
   return val;
@@ -65,8 +70,13 @@ export function decryptToken(encryptedToken: string): string {
 
 // ── OAuth flow ───────────────────────────────────────────────
 
-const BLACKBAUD_AUTH_URL = "https://oauth2.sky.blackbaud.com/authorization";
+const BLACKBAUD_AUTH_URL = "https://app.blackbaud.com/oauth/authorize";
 const BLACKBAUD_TOKEN_URL = "https://oauth2.sky.blackbaud.com/token";
+
+function getBasicAuthHeader(): string {
+  const credentials = `${getBlackbaudClientId()}:${getBlackbaudClientSecret()}`;
+  return `Basic ${Buffer.from(credentials).toString("base64")}`;
+}
 
 /**
  * Generates the Blackbaud OAuth authorization URL.
@@ -89,13 +99,14 @@ export function getAuthorizationUrl(state: string): string {
 export async function exchangeCodeForTokens(code: string): Promise<BlackbaudTokenResponse> {
   const response = await fetch(BLACKBAUD_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: getBasicAuthHeader(),
+    },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
       redirect_uri: getRedirectUri(),
-      client_id: getBlackbaudClientId(),
-      client_secret: getBlackbaudClientSecret(),
     }),
   });
 
@@ -113,12 +124,13 @@ export async function exchangeCodeForTokens(code: string): Promise<BlackbaudToke
 export async function refreshAccessToken(refreshToken: string): Promise<BlackbaudTokenResponse> {
   const response = await fetch(BLACKBAUD_TOKEN_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: getBasicAuthHeader(),
+    },
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: refreshToken,
-      client_id: getBlackbaudClientId(),
-      client_secret: getBlackbaudClientSecret(),
     }),
   });
 

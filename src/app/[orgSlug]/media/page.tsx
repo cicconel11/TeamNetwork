@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import dynamic from "next/dynamic";
+import { getTranslations } from "next-intl/server";
 import { getOrgContext } from "@/lib/auth/roles";
 import { PageHeader } from "@/components/layout/PageHeader";
 
@@ -27,8 +28,8 @@ export default async function MediaArchivePage({
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       <PageHeader
-        title="Media Archive"
-        description="Browse and share photos and videos with your organization"
+        title={(await getTranslations("nav.items"))("media")}
+        description={(await getTranslations("pages.media"))("description")}
       />
       <MediaGallery
         orgId={orgCtx.organization.id}

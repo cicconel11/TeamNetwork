@@ -1,11 +1,72 @@
 import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { eventOverlapsRange } from "@/lib/calendar/event-segments";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 const MAX_EVENTS = 500;
 const MAX_DATE_RANGE_DAYS = 365;
+const CALENDAR_QUERY_BATCH_SIZE = 250;
 
 export const dynamic = "force-dynamic";
+
+type CalendarEventRow = {
+  id: string;
+  title: string;
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean | null;
+  location: string | null;
+  feed_id: string | null;
+  user_id: string;
+};
+
+async function fetchOverlappingCalendarEvents(
+  supabase: SupabaseClient,
+  userId: string,
+  start: Date,
+  end: Date,
+): Promise<{ events: CalendarEventRow[]; error: unknown | null }> {
+  const events: CalendarEventRow[] = [];
+
+  for (let offset = 0; events.length <= MAX_EVENTS; offset += CALENDAR_QUERY_BATCH_SIZE) {
+    const { data, error } = await supabase
+      .from("calendar_events")
+      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
+      .eq("user_id", userId)
+      .lte("start_at", end.toISOString())
+      .or(`end_at.gte.${start.toISOString()},end_at.is.null`)
+      .order("start_at", { ascending: true })
+      .range(offset, offset + CALENDAR_QUERY_BATCH_SIZE - 1);
+
+    if (error) {
+      return { events: [], error };
+    }
+
+    const batch = (data || []) as CalendarEventRow[];
+    for (const event of batch) {
+      if (!eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: Boolean(event.all_day),
+      }, start, end)) {
+        continue;
+      }
+
+      events.push(event);
+      if (events.length > MAX_EVENTS) {
+        break;
+      }
+    }
+
+    if (batch.length < CALENDAR_QUERY_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return { events, error: null };
+}
 
 export async function GET(request: Request) {
   // IP-based rate limiting (before auth to prevent unauthenticated abuse)
@@ -54,16 +115,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked") {
+    const membership = await getOrgMembership(supabase, user.id, organizationId);
+    if (!membership) {
       return NextResponse.json(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Active membership required." },
         { status: 403 }
       );
     }
@@ -94,74 +149,114 @@ export async function GET(request: Request) {
       );
     }
 
-    // Query current user's calendar events
-    // Note: RLS policy only allows users to see their own events (auth.uid() = user_id),
-    // so we can only fetch the current user's events regardless of mode
-    
-    // Expand the date range to catch all-day events and multi-day events
-    // that might start before but overlap with the requested range
-    const expandedStart = new Date(start);
-    expandedStart.setDate(expandedStart.getDate() - 7); // Look 7 days before
+    // Query all three event sources in parallel
+    // Note: RLS policy only allows users to see their own calendar_events (auth.uid() = user_id)
 
-    const { data: events, error } = await supabase
-      .from("calendar_events")
-      .select("id, title, start_at, end_at, all_day, location, feed_id, user_id")
-      .eq("user_id", user.id)
-      .gte("start_at", expandedStart.toISOString())
-      .lte("start_at", end.toISOString())
-      .limit(MAX_EVENTS + 1)
-      .order("start_at", { ascending: true });
+    const [calendarResult, scheduleResult, orgResult] = await Promise.all([
+      fetchOverlappingCalendarEvents(supabase, user.id, start, end),
 
-    if (error) {
+      supabase
+        .from("schedule_events")
+        .select("id, title, start_at, end_at, location, status")
+        .eq("org_id", organizationId)
+        .neq("status", "cancelled")
+        .lte("start_at", end.toISOString())
+        .gte("end_at", start.toISOString())
+        .limit(MAX_EVENTS + 1)
+        .order("start_at", { ascending: true }),
+
+      supabase
+        .from("events")
+        .select("id, title, start_date, end_date, location, event_type, organization_id, audience, target_user_ids")
+        .eq("organization_id", organizationId)
+        .is("deleted_at", null)
+        .lte("start_date", end.toISOString())
+        .or(`end_date.gte.${start.toISOString()},end_date.is.null`)
+        .limit(MAX_EVENTS + 1)
+        .order("start_date", { ascending: true }),
+    ]);
+
+    if (calendarResult.error) {
       return NextResponse.json(
         { error: "Database error", message: "Failed to fetch events." },
         { status: 500 }
       );
     }
 
-    let scheduleEvents: {
-      id: string;
-      title: string;
-      start_at: string;
-      end_at: string;
-      location: string | null;
-      status: string;
-    }[] = [];
+    const events = calendarResult.events;
 
-    const { data: scheduleData, error: scheduleError } = await supabase
-      .from("schedule_events")
-      .select("id, title, start_at, end_at, location, status")
-      .eq("org_id", organizationId)
-      .neq("status", "cancelled")
-      .gte("start_at", expandedStart.toISOString())
-      .lte("start_at", end.toISOString())
-      .limit(MAX_EVENTS + 1)
-      .order("start_at", { ascending: true });
-
-    if (scheduleError) {
-      console.error("[calendar-events] Failed to fetch schedule events:", scheduleError);
-    } else {
-      scheduleEvents = scheduleData || [];
+    if (scheduleResult.error) {
+      console.error("[calendar-events] Failed to fetch schedule events:", scheduleResult.error);
     }
+    const scheduleEvents = scheduleResult.data || [];
 
-    const normalizedCalendar = (events || []).map((event) => ({
-      ...event,
-      origin: "calendar" as const,
-    }));
+    if (orgResult.error) {
+      console.error("[calendar-events] Failed to fetch org events:", orgResult.error);
+    }
+    const orgEvents = orgResult.data || [];
 
-    const normalizedSchedule = scheduleEvents.map((event) => ({
-      id: `schedule:${event.id}`,
-      title: event.title,
-      start_at: event.start_at,
-      end_at: event.end_at,
-      all_day: false,
-      location: event.location,
-      feed_id: null,
-      user_id: `org:${organizationId}`,
-      origin: "schedule" as const,
-    }));
+    const normalizedCalendar = events
+      .map((event) => ({
+        ...event,
+        origin: "calendar" as const,
+      }));
 
-    const combined = [...normalizedCalendar, ...normalizedSchedule].sort((a, b) => {
+    const normalizedSchedule = scheduleEvents
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_at,
+        endAt: event.end_at,
+        allDay: false,
+      }, start, end))
+      .map((event) => ({
+        id: `schedule:${event.id}`,
+        title: event.title,
+        start_at: event.start_at,
+        end_at: event.end_at,
+        all_day: false,
+        location: event.location,
+        feed_id: null,
+        user_id: `org:${organizationId}`,
+        origin: "schedule" as const,
+      }));
+
+    const normalizedOrg = orgEvents
+      .filter((event) => {
+        const targetUserIds = Array.isArray(event.target_user_ids) ? event.target_user_ids : [];
+        if (targetUserIds.length > 0) {
+          return targetUserIds.includes(user.id);
+        }
+
+        switch (event.audience) {
+          case "members":
+            return membership.role === "admin" || membership.role === "active_member" || membership.role === "member";
+          case "alumni":
+            return membership.role === "alumni";
+          case "all":
+          case "both":
+          case null:
+            return true;
+          default:
+            return true;
+        }
+      })
+      .filter((event) => eventOverlapsRange({
+        startAt: event.start_date,
+        endAt: event.end_date,
+        allDay: false,
+      }, start, end))
+      .map((event) => ({
+        id: `org:${event.id}`,
+        title: event.title,
+        start_at: event.start_date,
+        end_at: event.end_date,
+        all_day: false,
+        location: event.location,
+        feed_id: null,
+        user_id: `org:${organizationId}`,
+        origin: "org" as const,
+      }));
+
+    const combined = [...normalizedCalendar, ...normalizedSchedule, ...normalizedOrg].sort((a, b) => {
       return new Date(a.start_at).getTime() - new Date(b.start_at).getTime();
     });
 

@@ -45,9 +45,11 @@ export interface BrightDataEducation {
 /** The profile fields we consume from Bright Data LinkedIn Profiles API. */
 export interface BrightDataProfileResult {
   name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   city: string | null;
-  position: string | null; // headline/title
-  about: string | null; // bio/summary
+  position: string | null; // headline/title — Bright Data may use "position" or "headline"
+  about: string | null; // bio/summary — Bright Data may use "about" or "summary"
   current_company: string | null; // can be string or {name, title, ...} object
   current_company_name: string | null;
   experience: BrightDataExperience[];
@@ -209,7 +211,9 @@ function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | nu
   const raw = data as Record<string, unknown>;
   const hasPrimaryIdentity =
     typeof raw.name === "string" ||
+    typeof raw.first_name === "string" ||
     typeof raw.position === "string" ||
+    typeof raw.headline === "string" ||
     typeof raw.current_company === "string" ||
     (raw.current_company && typeof raw.current_company === "object") ||
     typeof raw.current_company_name === "string" ||
@@ -220,19 +224,78 @@ function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | nu
     return null;
   }
 
+  const companyName = normalizeCurrentCompany(raw.current_company);
+  const companyNameAlt = typeof raw.current_company_name === "string" ? raw.current_company_name : null;
+  const educationsDetails = typeof raw.educations_details === "string" ? raw.educations_details : null;
+
+  let experience: BrightDataExperience[] = Array.isArray(raw.experience)
+    ? raw.experience as BrightDataExperience[]
+    : [];
+
+  // Bright Data returns experience: null when the section is restricted.
+  // Synthesize a minimal entry from current_company so the current job isn't lost.
+  if (experience.length === 0 && (companyName || companyNameAlt)) {
+    const companyObj = raw.current_company as { link?: string; company_id?: string } | null;
+    experience = [{
+      title: null,
+      company: companyName || companyNameAlt,
+      company_id: (companyObj && typeof companyObj === "object" && typeof companyObj.company_id === "string")
+        ? companyObj.company_id : null,
+      location: null,
+      start_date: null,
+      end_date: null,
+      description_html: null,
+      url: (companyObj && typeof companyObj === "object" && typeof companyObj.link === "string")
+        ? companyObj.link : null,
+      company_logo_url: null,
+    }];
+  }
+
+  let education: BrightDataEducation[] = Array.isArray(raw.education)
+    ? raw.education as BrightDataEducation[]
+    : [];
+
+  // Bright Data often returns education entries missing title/degree/field_of_study
+  // (privacy-restricted). Backfill from educations_details and per-entry fallbacks.
+  if (education.length > 0 && educationsDetails) {
+    education = education.map((edu, i) => {
+      const e = { ...edu };
+      // Backfill school name from educations_details for the first entry when title is missing
+      if (!e.title && i === 0) {
+        e.title = educationsDetails;
+      }
+      return e;
+    });
+  } else if (education.length === 0 && educationsDetails) {
+    // No education array at all, but we have the summary string — create a minimal entry
+    education = [{
+      title: educationsDetails,
+      degree: null,
+      field_of_study: null,
+      url: null,
+      start_year: null,
+      end_year: null,
+      description: null,
+      description_html: null,
+      institute_logo_url: null,
+    }];
+  }
+
   return {
     name: typeof raw.name === "string" ? raw.name : null,
-    city: typeof raw.city === "string" ? raw.city : null,
-    position: typeof raw.position === "string" ? raw.position : null,
-    about: typeof raw.about === "string" ? raw.about : null,
-    current_company: normalizeCurrentCompany(raw.current_company),
-    current_company_name:
-      typeof raw.current_company_name === "string" ? raw.current_company_name : null,
-    // Bright Data may return experience as null (not just empty array) for private profiles
-    experience: Array.isArray(raw.experience) ? raw.experience as BrightDataExperience[] : [],
-    education: Array.isArray(raw.education) ? raw.education as BrightDataEducation[] : [],
-    educations_details:
-      typeof raw.educations_details === "string" ? raw.educations_details : null,
+    first_name: typeof raw.first_name === "string" ? raw.first_name : null,
+    last_name: typeof raw.last_name === "string" ? raw.last_name : null,
+    city: typeof raw.city === "string" ? raw.city
+      : typeof raw.location === "string" ? raw.location : null,
+    position: typeof raw.position === "string" ? raw.position
+      : typeof raw.headline === "string" ? raw.headline : null,
+    about: typeof raw.about === "string" ? raw.about
+      : typeof raw.summary === "string" ? raw.summary : null,
+    current_company: companyName,
+    current_company_name: companyNameAlt,
+    experience,
+    education,
+    educations_details: educationsDetails,
     avatar: typeof raw.avatar === "string" ? raw.avatar : null,
   };
 }

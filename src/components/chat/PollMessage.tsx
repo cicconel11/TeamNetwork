@@ -1,5 +1,6 @@
 "use client";
 
+import { UserContent } from "@/components/i18n/UserContent";
 import type { ChatMessage, ChatPollVote, User } from "@/types/database";
 import { pollMetadataSchema, type PollMetadata } from "@/lib/schemas/chat-polls";
 
@@ -40,7 +41,7 @@ export function PollMessage({
         className="p-3 text-sm font-semibold text-foreground"
         style={{ textWrap: "balance" } as React.CSSProperties}
       >
-        {metadata.question}
+        <UserContent>{metadata.question}</UserContent>
       </h4>
 
       <div className="divide-y divide-[var(--border)]">
@@ -80,7 +81,9 @@ export function PollMessage({
                 .join(" ")}
               style={{ touchAction: "manipulation" }}
             >
-              <span className="flex-1">{option.label}</span>
+              <UserContent as="span" className="flex-1">
+                {option.label}
+              </UserContent>
               <span
                 className="text-xs text-muted-foreground"
                 style={{ fontVariantNumeric: "tabular-nums" }}

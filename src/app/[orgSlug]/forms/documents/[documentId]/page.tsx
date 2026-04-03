@@ -172,7 +172,7 @@ export default function DocumentSubmitPage() {
   if (success) {
     return (
       <div className="animate-fade-in">
-        <PageHeader title={document.title} backHref={`/${orgSlug}/forms/documents`} />
+        <PageHeader title={document.title} backHref={`/${orgSlug}/forms/documents`} translateTitle />
         <Card className="p-8 text-center max-w-xl mx-auto">
           <div className="text-green-500 mb-4">
             <svg className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -193,6 +193,8 @@ export default function DocumentSubmitPage() {
         title={document.title}
         description={document.description || undefined}
         backHref={`/${orgSlug}/forms/documents`}
+        translateTitle
+        translateDescription={Boolean(document.description)}
       />
 
       <div className="max-w-2xl space-y-6">

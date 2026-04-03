@@ -59,6 +59,5 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Failed to initiate connection" }, { status: 500, headers: rateLimit.headers });
   }
 
-  const authUrl = getAuthorizationUrl(oauthState.id);
-  return NextResponse.redirect(authUrl);
+  return NextResponse.redirect(getAuthorizationUrl(oauthState.id));
 }

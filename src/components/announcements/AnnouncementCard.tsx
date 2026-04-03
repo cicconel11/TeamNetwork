@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card, Badge, Button, SoftDeleteButton } from "@/components/ui";
 import { MegaphoneIcon } from "./icons";
 import type { Database } from "@/types/database";
@@ -80,15 +81,15 @@ export function AnnouncementCard({
           </div>
 
           {/* Title */}
-          <h3 className="text-base font-semibold text-foreground mt-1">
+          <UserContent as="h3" className="text-base font-semibold text-foreground mt-1">
             {announcement.title}
-          </h3>
+          </UserContent>
 
           {/* Body preview */}
           {announcement.body && (
-            <p className="text-muted-foreground mt-2 line-clamp-3 whitespace-pre-wrap">
+            <UserContent as="p" className="text-muted-foreground mt-2 line-clamp-3 whitespace-pre-wrap">
               {announcement.body}
-            </p>
+            </UserContent>
           )}
         </div>
       </div>

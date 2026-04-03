@@ -55,6 +55,40 @@ test("dedupes via instance_key", () => {
   assert.equal(events.length, 1);
 });
 
+test("preserves the floating date key for VALUE=DATE ICS events", () => {
+  const icsText = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//TeamMeet//Calendar Sync Test//EN",
+    "BEGIN:VEVENT",
+    "UID:all-day-1@example.com",
+    "DTSTAMP:20250101T120000Z",
+    "DTSTART;VALUE=DATE:20250110",
+    "DTEND;VALUE=DATE:20250111",
+    "SUMMARY:Founders Day",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\n");
+
+  const events = expandIcsEvents(icsText, window);
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].allDay, true);
+  assert.deepStrictEqual(events[0].raw, {
+    uid: "all-day-1@example.com",
+    summary: "Founders Day",
+    description: null,
+    location: null,
+    start: events[0].startAt,
+    end: events[0].endAt,
+    dateType: "date",
+    dateKey: "2025-01-10",
+    endDateKey: "2025-01-11",
+    rrule: null,
+    exdate: null,
+  });
+});
+
 test("updates last_error/status on failures", async () => {
   const updates: { table: string; values: Record<string, unknown> }[] = [];
 

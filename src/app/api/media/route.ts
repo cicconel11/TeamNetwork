@@ -6,10 +6,20 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse } from "@/lib/security/validation";
+import {
+  createMediaGalleryUploadRecord,
+  GALLERY_ALBUM_BATCH_RATE_LIMIT,
+  type GalleryUploadRecordClient,
+  isMissingCreateMediaGalleryUploadRpcError,
+} from "@/lib/media/gallery-upload-server";
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { galleryUploadIntentSchema, mediaListQuerySchema, GALLERY_ALLOWED_MIME_TYPES } from "@/lib/schemas/media";
-import { decodeCursor, applyCursorFilter, buildCursorResponse } from "@/lib/pagination/cursor";
-import { batchGetMediaUrls } from "@/lib/media/urls";
+import {
+  decodeGalleryCursor,
+  applyGalleryCursorFilter,
+  buildGalleryCursorResponse,
+} from "@/lib/pagination/cursor";
+import { batchGetGridPreviewUrls } from "@/lib/media/urls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -70,8 +80,8 @@ export async function GET(request: NextRequest) {
       .select("*, users!media_items_uploaded_by_users_fkey(name)")
       .eq("organization_id", orgId)
       .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
+      .order("gallery_sort_order", { ascending: true })
+      .order("id", { ascending: true })
       .limit(limit + 1);
 
     // Status filter: non-admins can only see approved + own items
@@ -103,13 +113,13 @@ export async function GET(request: NextRequest) {
       query = query.eq("uploaded_by", uploadedBy);
     }
 
-    // Apply cursor
+    // Apply cursor (gallery sort keyset)
     if (cursor) {
-      const decoded = decodeCursor(cursor);
+      const decoded = decodeGalleryCursor(cursor);
       if (!decoded) {
         return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
       }
-      query = applyCursorFilter(query, decoded);
+      query = applyGalleryCursorFilter(query, decoded);
     }
 
     const { data: items, error } = await query;
@@ -118,7 +128,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch media" }, { status: 500 });
     }
 
-    const { data, nextCursor, hasMore } = buildCursorResponse(items || [], limit);
+    const { data, nextCursor, hasMore } = buildGalleryCursorResponse(
+      (items || []) as { gallery_sort_order: number; id: string; created_at: string }[],
+      limit,
+    );
 
     // Generate signed URLs for items with storage paths
     const storageItems = data
@@ -126,20 +139,23 @@ export async function GET(request: NextRequest) {
       .map((item: Record<string, unknown>) => ({
         id: item.id as string,
         storage_path: item.storage_path as string,
+        preview_storage_path: (item.preview_storage_path as string | null) ?? null,
         mime_type: (item.mime_type as string) || "application/octet-stream",
+        media_type: item.media_type as "image" | "video",
       }));
 
     const urlMap = storageItems.length > 0
-      ? await batchGetMediaUrls(serviceClient, storageItems)
+      ? await batchGetGridPreviewUrls(serviceClient, storageItems)
       : new Map();
 
-    // Attach URLs to items
+    // Grid payload: thumbnail transform only; full URLs via GET /api/media/[id]
     const enrichedData = data.map((item: Record<string, unknown>) => {
       const urls = urlMap.get(item.id as string);
+      const hasStorage = Boolean(item.storage_path);
       return {
         ...item,
-        url: urls?.url || item.external_url || null,
-        thumbnail_url: urls?.thumbnailUrl || item.thumbnail_url || null,
+        url: hasStorage ? null : ((item.external_url as string | null) ?? null),
+        thumbnail_url: urls?.thumbnailUrl ?? (item.thumbnail_url as string | null) ?? null,
       };
     });
 
@@ -169,8 +185,7 @@ export async function POST(request: NextRequest) {
     const rateLimit = checkRateLimit(request, {
       userId: user.id,
       feature: "media upload",
-      limitPerIp: 20,
-      limitPerUser: 10,
+      ...GALLERY_ALBUM_BATCH_RATE_LIMIT,
     });
     if (!rateLimit.ok) {
       return buildRateLimitResponse(rateLimit);
@@ -218,52 +233,87 @@ export async function POST(request: NextRequest) {
     // Generate storage path
     const ext = extname(fileName).replace(".", "").toLowerCase() || mimeType.split("/")[1] || "bin";
     const storagePath = `${orgId}/${mediaType}/${Date.now()}-${randomUUID()}.${ext}`;
+    const previewStoragePath = mediaType === "image" && body.previewMimeType
+      ? `${storagePath.replace(/\.[^.]+$/, "")}-preview.${
+          body.previewMimeType === "image/png"
+            ? "png"
+            : body.previewMimeType === "image/webp"
+              ? "webp"
+              : "jpg"
+        }`
+      : null;
 
     // Start in "uploading" state — finalize endpoint transitions to final status
     const initialStatus = "uploading";
 
-    const { data: mediaItem, error: insertError } = await serviceClient
-      .from("media_items")
-      .insert({
-        organization_id: orgId,
-        uploaded_by: user.id,
-        storage_path: storagePath,
-        file_name: fileName,
-        mime_type: mimeType,
-        file_size_bytes: fileSizeBytes,
-        media_type: mediaType,
-        title: title || fileName,
-        description: description || null,
-        tags: tags || [],
-        taken_at: takenAt || null,
-        status: initialStatus,
-      })
-      .select("id")
-      .single();
+    let mediaId: string;
+    let creationPath: "rpc" | "fallback";
 
-    if (insertError) {
+    try {
+      ({ mediaId, creationPath } = await createMediaGalleryUploadRecord(
+        serviceClient as unknown as GalleryUploadRecordClient,
+        {
+          orgId,
+          uploadedBy: user.id,
+          storagePath,
+          previewStoragePath,
+          fileName,
+          mimeType,
+          fileSizeBytes,
+          mediaType,
+          title: title || fileName,
+          description: description || null,
+          tags: tags || [],
+          takenAt: takenAt || null,
+          status: initialStatus,
+        },
+      ));
+    } catch (createError) {
+      console.error("[media/gallery] create upload row failed:", {
+        orgId,
+        missingRpc: isMissingCreateMediaGalleryUploadRpcError(createError),
+        error: createError,
+      });
       return NextResponse.json({ error: "Failed to create media item" }, { status: 500 });
     }
 
     // Generate signed upload URL
-    const { data: signedData, error: signedError } = await serviceClient.storage
-      .from("org-media")
-      .createSignedUploadUrl(storagePath);
+    const [signedOriginal, signedPreview] = await Promise.all([
+      serviceClient.storage.from("org-media").createSignedUploadUrl(storagePath),
+      previewStoragePath
+        ? serviceClient.storage.from("org-media").createSignedUploadUrl(previewStoragePath)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
 
-    if (signedError || !signedData) {
+    if (signedOriginal.error || !signedOriginal.data) {
       // Clean up the DB row if we can't get a signed URL
-      await serviceClient.from("media_items").delete().eq("id", mediaItem.id);
+      await serviceClient.from("media_items").delete().eq("id", mediaId);
       return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
     }
 
-    console.log("[media/gallery] Upload intent created", { orgId, mediaId: mediaItem.id, mimeType, fileSizeBytes });
+    if (previewStoragePath && (signedPreview.error || !signedPreview.data)) {
+      await serviceClient.from("media_items").delete().eq("id", mediaId);
+      return NextResponse.json({ error: "Failed to generate preview upload URL" }, { status: 500 });
+    }
+
+    console.log("[media/gallery] Upload intent created", {
+      orgId,
+      mediaId,
+      mimeType,
+      fileSizeBytes,
+      creationPath,
+      hasPreviewUpload: Boolean(previewStoragePath),
+    });
 
     return NextResponse.json(
       {
-        mediaId: mediaItem.id,
-        signedUrl: signedData.signedUrl,
-        token: signedData.token,
+        mediaId,
+        signedUrl: signedOriginal.data.signedUrl,
+        token: signedOriginal.data.token,
         path: storagePath,
+        previewSignedUrl: signedPreview.data?.signedUrl ?? null,
+        previewToken: signedPreview.data?.token ?? null,
+        previewPath: previewStoragePath,
       },
       { status: 201, headers: rateLimit.headers },
     );

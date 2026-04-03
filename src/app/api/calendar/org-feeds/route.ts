@@ -9,6 +9,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { calendarFeedCreateSchema, googleCalendarFeedCreateSchema } from "@/lib/schemas";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -114,14 +115,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, organizationId);
+    if (!membership || membership.role !== "admin") {
       return respond(
         { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
         403
@@ -218,14 +213,8 @@ async function handleIcsFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, calendarFeedCreateSchema);
 
-  const { data: membership } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", body.organizationId)
-    .maybeSingle();
-
-  if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
+  if (!membership || membership.role !== "admin") {
     return respond(
       { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
       403
@@ -301,14 +290,8 @@ async function handleGoogleFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, googleCalendarFeedCreateSchema);
 
-  const { data: membership } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", body.organizationId)
-    .maybeSingle();
-
-  if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
+  if (!membership || membership.role !== "admin") {
     return respond(
       { error: "Forbidden", message: "Only admins can manage org calendar feeds." },
       403

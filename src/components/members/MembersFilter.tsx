@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { trackBehavioralEvent } from "@/lib/analytics/events";
 
 interface MembersFilterProps {
@@ -13,6 +14,8 @@ interface MembersFilterProps {
 }
 
 export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, roles }: MembersFilterProps) {
+  const tCommon = useTranslations("common");
+  const tMembers = useTranslations("members");
   const [open, setOpen] = useState(false);
   const buildFilterKeys = (status?: string, role?: string) => {
     const keys: string[] = [];
@@ -30,13 +33,13 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
   };
 
   const statusItems = [
-    { label: "Active", value: "active" },
-    { label: "Inactive", value: "inactive" },
-    { label: "All statuses", value: undefined },
+    { label: tCommon("active"), value: "active" },
+    { label: tCommon("inactive"), value: "inactive" },
+    { label: tMembers("allStatuses"), value: undefined },
   ];
 
   const roleItems = [
-    { label: "All roles", value: undefined },
+    { label: tMembers("allRoles"), value: undefined },
     ...roles
       .filter((r): r is string => typeof r === "string" && r.trim().length > 0)
       .map((r) => ({ label: r, value: r })),
@@ -52,7 +55,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
         </svg>
-        Filter
+        {tCommon("filter")}
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
         </svg>
@@ -61,7 +64,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
       {open && (
         <div className="absolute mt-2 w-52 rounded-xl border border-border bg-card shadow-lg z-10">
           <div className="py-2">
-            <p className="px-4 pb-2 text-xs text-muted-foreground uppercase tracking-wide">Status</p>
+            <p className="px-4 pb-2 text-xs text-muted-foreground uppercase tracking-wide">{tCommon("status")}</p>
             {statusItems.map((item) => {
               const active = (currentStatus || "active") === (item.value || "active");
               return (
@@ -87,7 +90,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
 
             <div className="h-px bg-border my-2" />
 
-            <p className="px-4 pb-2 text-xs text-muted-foreground uppercase tracking-wide">Role</p>
+            <p className="px-4 pb-2 text-xs text-muted-foreground uppercase tracking-wide">{tCommon("role")}</p>
             {roleItems.map((item) => {
               const active = (currentRole ?? "") === (item.value ?? "");
               return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { maskUrl } from "@/lib/schedule-connectors/fetch";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -66,14 +67,8 @@ export async function PATCH(
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", source.org_id)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, source.org_id);
+    if (!membership || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can update schedule sources." },
         { status: 403 }
@@ -181,14 +176,8 @@ export async function DELETE(
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", source.org_id)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, source.org_id);
+    if (!membership || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can remove schedule sources." },
         { status: 403 }

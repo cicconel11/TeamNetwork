@@ -13,6 +13,8 @@ const VALID_EVENT_TYPES = [
     "sync_social",
     "sync_fundraiser",
     "sync_philanthropy",
+    "sync_practice",
+    "sync_workout",
 ] as const;
 
 type EventTypePreference = typeof VALID_EVENT_TYPES[number];
@@ -24,6 +26,8 @@ interface SyncPreferences {
     sync_social: boolean;
     sync_fundraiser: boolean;
     sync_philanthropy: boolean;
+    sync_practice: boolean;
+    sync_workout: boolean;
 }
 
 /**
@@ -111,6 +115,8 @@ export async function GET(request: Request) {
             sync_social: true,
             sync_fundraiser: true,
             sync_philanthropy: true,
+            sync_practice: true,
+            sync_workout: true,
         };
 
         const responsePreferences: SyncPreferences = preferences
@@ -121,6 +127,8 @@ export async function GET(request: Request) {
                 sync_social: preferences.sync_social ?? true,
                 sync_fundraiser: preferences.sync_fundraiser ?? true,
                 sync_philanthropy: preferences.sync_philanthropy ?? true,
+                sync_practice: preferences.sync_practice ?? true,
+                sync_workout: preferences.sync_workout ?? true,
             }
             : defaultPreferences;
 
@@ -266,6 +274,8 @@ export async function PUT(request: Request) {
             sync_social: updatedPreferences.sync_social ?? true,
             sync_fundraiser: updatedPreferences.sync_fundraiser ?? true,
             sync_philanthropy: updatedPreferences.sync_philanthropy ?? true,
+            sync_practice: updatedPreferences.sync_practice ?? true,
+            sync_workout: updatedPreferences.sync_workout ?? true,
         };
 
         return respond({

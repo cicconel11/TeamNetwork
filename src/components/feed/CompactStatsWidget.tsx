@@ -1,41 +1,26 @@
-import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Card } from "@/components/ui/Card";
+import { StatRowLink } from "@/components/feed/StatRowLink";
+import type { StatItem } from "@/components/feed/stat-item-types";
 
-export interface StatItem {
-  label: string;
-  value: number | string;
-  href: string;
-  icon: LucideIcon;
-}
+export type { StatItem } from "@/components/feed/stat-item-types";
 
 interface CompactStatsWidgetProps {
   stats: StatItem[];
 }
 
-export function CompactStatsWidget({ stats }: CompactStatsWidgetProps) {
+export async function CompactStatsWidget({ stats }: CompactStatsWidgetProps) {
+  const t = await getTranslations("pages.dashboard");
   return (
     <Card className="overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground font-mono">
-          Overview
+      <div className="border-b border-border px-4 py-3">
+        <h3 className="font-mono text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          {t("overview")}
         </h3>
       </div>
       <div className="divide-y divide-border/50">
         {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors group"
-          >
-            <stat.icon className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
-            <span className="text-sm text-muted-foreground group-hover:text-foreground transition-colors flex-1 truncate">
-              {stat.label}
-            </span>
-            <span className="text-sm font-semibold font-mono text-foreground">
-              {stat.value}
-            </span>
-          </Link>
+          <StatRowLink key={stat.label} href={stat.href} label={stat.label} value={stat.value} icon={stat.icon} />
         ))}
       </div>
     </Card>

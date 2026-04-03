@@ -91,48 +91,52 @@ export default async function LandingPage() {
       <LandingHeader />
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 pt-12 lg:pt-20 pb-20 px-6">
+      <section className="relative z-10 px-6 pb-20 pt-12 sm:px-8 lg:px-6 lg:pt-20">
         {/* Stadium Light Beams */}
         <StadiumLightBeams />
 
-        <div className="max-w-6xl mx-auto">
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-            {/* Left - Copy */}
-            <div>
-              <div className="hero-animate inline-flex items-center gap-2 px-4 py-2 rounded-full bg-landing-cream/10 border border-landing-cream/20 mb-4">
-                <span className="w-2 h-2 rounded-full bg-landing-green gold-shimmer" />
-                <span className="text-landing-cream/80 text-sm font-medium">Built for organizations that go the distance</span>
+        <div className="mx-auto max-w-6xl">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-20">
+            {/* Left - Copy (centered on mobile/tablet, left-aligned on desktop) */}
+            <div className="text-center lg:text-left">
+              <div className="hero-animate mb-4 flex justify-center lg:justify-start">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-landing-cream/20 bg-landing-cream/10 px-4 py-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-landing-green gold-shimmer" />
+                  <span className="text-balance text-center text-sm font-medium text-landing-cream/80">
+                    Built for organizations that go the distance
+                  </span>
+                </div>
               </div>
 
-              <h1 className="hero-animate mb-6">
+              <h1 className="hero-animate mb-6 flex justify-center lg:justify-start">
                 <span className="sr-only">TeamNetwork: The platform that keeps your organization connected, past and present</span>
                 <Image
                   src="/TeamNetwor.png"
                   alt=""
                   width={541}
                   height={303}
-                  className="w-[300px] sm:w-[360px] lg:w-[420px] h-auto drop-shadow-[0_0_40px_rgba(34,197,94,0.15)]"
+                  className="h-auto w-[min(100%,300px)] drop-shadow-[0_0_40px_rgba(34,197,94,0.15)] sm:w-[360px] lg:w-[420px]"
                   aria-hidden="true"
                   priority
                 />
               </h1>
 
-              <p className="hero-animate text-xl text-landing-cream/70 max-w-lg mb-10 leading-relaxed">
+              <p className="hero-animate mx-auto mb-10 max-w-lg text-lg leading-relaxed text-landing-cream/70 sm:text-xl lg:mx-0">
                 Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, Greek life, clubs, and organizations of all kinds.
               </p>
 
-              <div className="hero-animate flex flex-col sm:flex-row gap-4">
-                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-8 py-6 text-base cta-glow">
+              <div className="hero-animate flex flex-col items-stretch gap-4 sm:flex-row sm:justify-center lg:justify-start">
+                <ButtonLink href="/auth/signup" variant="custom" size="lg" className="cta-glow bg-landing-green-dark px-6 py-5 text-base font-semibold text-white hover:bg-[#15803d] sm:px-8 sm:py-6">
                   Create Your Organization
                 </ButtonLink>
-                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="bg-landing-cream/10 text-landing-cream hover:bg-landing-cream/20 border border-landing-cream/20 px-8 py-6 text-base">
+                <ButtonLink href="/auth/login?redirect=/app/join" size="lg" variant="custom" className="border border-landing-cream/20 bg-landing-cream/10 px-6 py-5 text-base text-landing-cream hover:bg-landing-cream/20 sm:px-8 sm:py-6">
                   Join an Organization
                 </ButtonLink>
               </div>
 
               {/* Already a member */}
               <div className="hero-animate mt-6">
-                <Link href="/auth/login" className="text-landing-cream/50 hover:text-landing-cream/70 transition-colors text-sm">
+                <Link href="/auth/login" className="text-sm text-landing-cream/50 transition-colors hover:text-landing-cream/70">
                   Already a member? <span className="underline underline-offset-2">Sign in</span>
                 </Link>
               </div>
@@ -178,8 +182,8 @@ export default async function LandingPage() {
       </section>
 
       {/* How It Works - "The Playbook" (moved before Features) */}
-      <section className="relative z-10 py-24 px-6">
-        <div className="chalkboard max-w-5xl mx-auto rounded-2xl p-8 sm:p-12">
+      <section className="relative z-10 px-5 py-20 sm:px-6 sm:py-24">
+        <div className="chalkboard mx-auto max-w-5xl rounded-2xl p-6 sm:p-10 md:p-12">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
               The <span className="text-landing-cream">Playbook</span>

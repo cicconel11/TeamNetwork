@@ -3,7 +3,12 @@ import "./globals.css";
 import { ErrorBoundaryProvider } from "@/components/errors/ErrorBoundaryProvider";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { Toaster } from "sonner";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { SITE_DESCRIPTION, SITE_ICON_PATHS, SITE_NAME, SITE_URL } from "@/lib/site-metadata";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
+import { RTL_LOCALES } from "@/i18n/config";
+import type { SupportedLocale } from "@/i18n/config";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -23,20 +28,27 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  const dir = RTL_LOCALES.includes(locale as SupportedLocale) ? "rtl" : "ltr";
+
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
-        <ThemeProvider>
-          <ErrorBoundaryProvider>
-            {children}
-          </ErrorBoundaryProvider>
-          <Toaster position="bottom-right" richColors closeButton />
-        </ThemeProvider>
+    <html lang={locale} dir={dir} suppressHydrationWarning>
+      <body className="antialiased" translate="no">
+        <NextIntlClientProvider messages={messages}>
+          <ThemeProvider>
+            <ErrorBoundaryProvider>
+              {children}
+            </ErrorBoundaryProvider>
+            <Toaster position="bottom-right" richColors closeButton />
+            <SpeedInsights />
+          </ThemeProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { Card, Button } from "@/components/ui";
 import { buildAuthRetryHref } from "@/lib/auth/signup-flow";
+import { getTranslations } from "next-intl/server";
 
 export default async function AuthErrorPage({
   searchParams,
 }: {
   searchParams: Promise<{ message?: string; redirect?: string; mode?: string }>;
 }) {
+  const t = await getTranslations("auth");
+  const tCommon = await getTranslations("common");
   const params = await searchParams;
-  const message = params?.message || "Something went wrong during authentication. Please try again.";
+  const message = params?.message || t("authErrorMessage");
   const retryHref = buildAuthRetryHref(params?.mode, params?.redirect);
 
   return (
@@ -20,7 +23,7 @@ export default async function AuthErrorPage({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">Authentication Error</h1>
+          <h1 className="text-2xl font-bold text-white">{t("authError")}</h1>
           <p className="text-white/50 mt-2">
             {message}
           </p>
@@ -29,10 +32,10 @@ export default async function AuthErrorPage({
         <Card className="p-6">
           <div className="space-y-4">
             <Link href={retryHref}>
-              <Button className="w-full">Try Again</Button>
+              <Button className="w-full">{tCommon("tryAgain")}</Button>
             </Link>
             <Link href="/">
-              <Button variant="secondary" className="w-full">Go Home</Button>
+              <Button variant="secondary" className="w-full">{t("goHome")}</Button>
             </Link>
           </div>
         </Card>

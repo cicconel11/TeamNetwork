@@ -10,6 +10,7 @@ import { EnterpriseCard } from "@/components/enterprise";
 import { getUserEnterprises } from "@/lib/auth/enterprise-context";
 import { SeedEnterpriseButton } from "@/components/dev/SeedEnterpriseButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ interface AppHomePageProps {
 
 export default async function AppHomePage({ searchParams }: AppHomePageProps) {
   const { error: errorParam, pending: pendingOrg, checkout, org: orgSlug } = await searchParams;
+  const [tApp, tAuth] = await Promise.all([getTranslations("app"), getTranslations("auth")]);
   const supabase = await createClient();
   // Use getUser() instead of getSession() - validates JWT and refreshes tokens for OAuth
   const { data: { user } } = await supabase.auth.getUser();
@@ -174,13 +176,13 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
           <div className="app-hero-animate flex items-center gap-2" style={{ opacity: 0 }}>
             <ThemeToggle />
             <form action="/auth/signout" method="POST">
-              <Button variant="ghost" size="sm" type="submit">Sign Out</Button>
+              <Button variant="ghost" size="sm" type="submit">{tAuth("signOut")}</Button>
             </form>
             <Link href="/app/join">
-              <Button variant="ghost" size="sm">Join Org</Button>
+              <Button variant="ghost" size="sm">{tApp("joinOrg")}</Button>
             </Link>
             <Link href="/app/create">
-              <Button size="sm">Create Org</Button>
+              <Button size="sm">{tApp("createOrg")}</Button>
             </Link>
           </div>
         </div>
@@ -211,7 +213,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
               </svg>
               <p className="text-sm text-red-700 dark:text-red-300">
-                Your access to this organization has been revoked. Please contact an admin if you believe this is an error.
+                {tApp("accessRevoked")}
               </p>
             </div>
           </Card>
@@ -225,7 +227,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <p className="text-sm text-amber-700 dark:text-amber-300">
-                Your request to join <strong>{pendingOrg}</strong> is pending admin approval. You&apos;ll be able to access it once approved.
+                {tApp("pendingApproval", { org: pendingOrg })}
               </p>
             </div>
           </Card>
@@ -233,15 +235,15 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
 
         <div className="mb-8 flex items-center justify-between">
           <div className="app-hero-animate" style={{ opacity: 0 }}>
-            <p className="text-sm text-muted-foreground">Welcome back</p>
-            <h2 className="text-2xl font-bold text-foreground">Your organizations</h2>
+            <p className="text-sm text-muted-foreground">{tApp("welcomeBack")}</p>
+            <h2 className="text-2xl font-bold text-foreground">{tApp("yourOrgs")}</h2>
           </div>
           <div className="app-hero-animate hidden sm:flex items-center gap-2" style={{ opacity: 0 }}>
             <Link href="/app/join">
-              <Button variant="secondary" size="sm">Join existing</Button>
+              <Button variant="secondary" size="sm">{tApp("joinExisting")}</Button>
             </Link>
             <Link href="/app/create">
-              <Button size="sm">Create new</Button>
+              <Button size="sm">{tApp("createNew")}</Button>
             </Link>
           </div>
         </div>
@@ -253,21 +255,21 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2" />
               </svg>
             }
-            title="No organizations yet"
-            description="Create a new organization or join one you were invited to."
+            title={tApp("noOrgsYet")}
+            description={tApp("noOrgsDescription")}
             action={
               <div className="flex flex-col gap-3">
                 <div className="flex gap-3">
                   <Link href="/app/create">
-                    <Button>Create organization</Button>
+                    <Button>{tApp("createOrganization")}</Button>
                   </Link>
                   <Link href="/app/join">
-                    <Button variant="secondary">Join organization</Button>
+                    <Button variant="secondary">{tApp("joinOrganization")}</Button>
                   </Link>
                 </div>
                 {enterprises.length === 0 && (
                   <Link href="/app/create-enterprise" className="text-sm text-purple-600 hover:text-purple-700 text-center">
-                    Or create an enterprise to manage multiple organizations
+                    {tApp("orCreateEnterprise")}
                   </Link>
                 )}
               </div>
@@ -316,10 +318,10 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         <section className="mt-10">
           <div className="flex items-center justify-between mb-4">
             <div className="app-hero-animate" style={{ opacity: 0 }}>
-              <h2 className="text-xl font-semibold text-foreground">Your Enterprises</h2>
+              <h2 className="text-xl font-semibold text-foreground">{tApp("yourEnterprises")}</h2>
             </div>
             <Link href="/app/create-enterprise" className="app-hero-animate text-sm text-purple-600 hover:text-purple-700" style={{ opacity: 0 }}>
-              Create Enterprise
+              {tApp("createEnterprise")}
             </Link>
           </div>
           {enterprises.length > 0 ? (
@@ -390,12 +392,12 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">
-                    Manage multiple organizations under one billing account
+                    {tApp("enterpriseDescription")}
                   </p>
                 </div>
                 <div className="flex flex-col gap-2">
                   <Link href="/app/create-enterprise">
-                    <Button variant="secondary" size="sm">Create your first enterprise</Button>
+                    <Button variant="secondary" size="sm">{tApp("createFirstEnterprise")}</Button>
                   </Link>
                   {process.env.NODE_ENV === "development" && <SeedEnterpriseButton />}
                 </div>
@@ -408,7 +410,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
         {pendingDisplayMemberships.length > 0 && (
           <div className="mt-8">
             <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-              Pending Approval
+              {tApp("pendingApprovalTitle")}
               <Badge variant="warning">{pendingDisplayMemberships.length}</Badge>
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -439,7 +441,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                     </div>
                     <Badge variant="warning" className="ml-auto">Pending</Badge>
                   </div>
-                  <p className="text-sm text-muted-foreground">Awaiting admin approval</p>
+                  <p className="text-sm text-muted-foreground">{tApp("awaitingAdminApproval")}</p>
                 </Card>
               ))}
             </div>

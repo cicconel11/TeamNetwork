@@ -16,6 +16,7 @@ import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
 import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { useTranslations } from "next-intl";
 
 type SignupStep = "age_gate" | "registration";
 
@@ -48,6 +49,7 @@ export function SignupClient({
   redirectTo = "/app",
   initialError = null,
 }: SignupClientProps) {
+  const t = useTranslations("auth");
   const router = useRouter();
   const [step, setStep] = useState<SignupStep>("age_gate");
   const [ageBracket, setAgeBracket] = useState<AgeBracket | null>(null);
@@ -156,12 +158,12 @@ export function SignupClient({
 
   const handleSocialSignup = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
     if (!ageBracket || isMinor === null || !ageToken) {
-      setError("Please complete the date of birth step first");
+      setError(t("completeDobFirst"));
       return;
     }
 
@@ -190,12 +192,12 @@ export function SignupClient({
 
   const onSubmit = async (data: SignupForm) => {
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
     if (!ageBracket || isMinor === null || !ageToken) {
-      setError("Please complete the date of birth step first");
+      setError(t("completeDobFirst"));
       return;
     }
 
@@ -226,7 +228,7 @@ export function SignupClient({
     }
 
     clearAgeGateData();
-    setMessage("Check your email to confirm your account!");
+    setMessage(t("checkEmailConfirm"));
     setIsLoading(false);
     captchaRef.current?.reset();
   };
@@ -272,7 +274,7 @@ export function SignupClient({
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Continue with Google
+        {t("continueWithGoogle")}
       </Button>
 
       {linkedinOauthAvailable && (
@@ -286,7 +288,7 @@ export function SignupClient({
           data-testid="signup-linkedin"
         >
           <LinkedInIcon className="h-5 w-5 mr-2" />
-          Continue with LinkedIn
+          {t("continueWithLinkedIn")}
         </Button>
       )}
 
@@ -295,7 +297,7 @@ export function SignupClient({
           <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with email</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">{t("orContinueWithEmail")}</span>
         </div>
       </div>
 
@@ -317,27 +319,27 @@ export function SignupClient({
       <form data-testid="signup-form" onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
-            label="Full Name"
+            label={t("fullNameLabel")}
             type="text"
-            placeholder="John Doe"
+            placeholder={t("fullNamePlaceholder")}
             data-testid="signup-name"
             error={errors.name?.message}
             {...register("name")}
           />
 
           <Input
-            label="Email"
+            label={t("emailLabel")}
             type="email"
-            placeholder="you@example.com"
+            placeholder={t("emailPlaceholder")}
             data-testid="signup-email"
             error={errors.email?.message}
             {...register("email")}
           />
 
           <Input
-            label="Password"
+            label={t("passwordLabel")}
             type="password"
-            placeholder="••••••••"
+            placeholder={t("passwordPlaceholder")}
             helperText={PASSWORD_REQUIREMENTS}
             data-testid="signup-password"
             error={errors.password?.message}
@@ -362,15 +364,15 @@ export function SignupClient({
             disabled={!isVerified}
             data-testid="signup-submit"
           >
-            Create Account
+            {t("createAccountBtn")}
           </Button>
         </div>
       </form>
 
       <div className="mt-6 text-center text-sm text-white/50">
-        Already have an account?{" "}
+        {t("haveAccount")}{" "}
         <Link href={buildAuthLink("/auth/login", redirectTo)} className="text-white font-medium hover:underline">
-          Sign in
+          {t("signIn")}
         </Link>
       </div>
     </Card>

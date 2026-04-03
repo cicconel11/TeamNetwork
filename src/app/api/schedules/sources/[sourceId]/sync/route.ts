@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -59,14 +60,8 @@ export async function POST(
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", source.org_id)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, source.org_id);
+    if (!membership || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can sync schedule sources." },
         { status: 403 }

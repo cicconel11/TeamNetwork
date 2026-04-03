@@ -2,6 +2,25 @@ import type { BlackbaudListResponse } from "./types";
 
 const SKY_API_BASE = "https://api.sky.blackbaud.com";
 
+export class BlackbaudApiError extends Error {
+  status: number;
+  path: string;
+  body: string;
+  isQuotaExhausted: boolean;
+  retryAfterHuman: string | null;
+
+  constructor(status: number, path: string, body: string) {
+    super(`Blackbaud API error (${status}) on ${path}: ${body}`);
+    this.status = status;
+    this.path = path;
+    this.body = body;
+
+    const quotaMatch = body.match(/Out of call volume quota.*?replenished in (\d{2}:\d{2}:\d{2})/i);
+    this.isQuotaExhausted = !!quotaMatch || (status === 429);
+    this.retryAfterHuman = quotaMatch?.[1] ?? null;
+  }
+}
+
 export interface BlackbaudClientConfig {
   accessToken: string;
   subscriptionKey: string;
@@ -33,13 +52,10 @@ export function createBlackbaudClient(config: BlackbaudClientConfig): BlackbaudC
       },
     });
 
-    if (response.status === 429) {
-      throw new Error(`Blackbaud rate limit hit (429) on ${path}`);
-    }
-
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`Blackbaud API error (${response.status}) on ${path}: ${text}`);
+      const err = new BlackbaudApiError(response.status, path, text);
+      throw err;
     }
 
     return response.json() as Promise<T>;

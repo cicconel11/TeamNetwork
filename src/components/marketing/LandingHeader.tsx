@@ -94,21 +94,23 @@ export function LandingHeader() {
 
   return (
     <header className="relative z-20 sticky top-0 bg-landing-navy/95 backdrop-blur-md border-b border-landing-cream/10">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-        <Link href="#top" className="group flex items-center gap-2.5">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4">
+        <Link href="#top" className="group flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
           <Image
             src="/TeamNetwor.png"
             alt=""
             width={541}
             height={303}
             sizes="28px"
-            className="h-7 w-auto object-contain"
+            className="h-8 w-auto shrink-0 object-contain sm:h-7"
             aria-hidden="true"
           />
-          <span className="font-display text-base sm:text-xl font-bold tracking-tight text-landing-cream">
+          {/* Wordmark hidden on very narrow screens — avoids "TeamNe…" truncation; logo is enough */}
+          <span className="font-display hidden text-base font-bold tracking-tight text-landing-cream sm:inline sm:text-xl">
             <span className="text-landing-green">Team</span>
             <span className="text-landing-cream">Network</span>
           </span>
+          <span className="sr-only">TeamNetwork</span>
         </Link>
 
         {/* Desktop nav */}
@@ -128,19 +130,19 @@ export function LandingHeader() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           <ButtonLink
             href="/auth/login"
             variant="custom"
             size="sm"
-            className="sm:px-4 sm:py-2.5 text-landing-cream/80 hover:text-landing-cream hover:bg-landing-cream/10"
+            className="whitespace-nowrap px-2 py-2 text-sm text-landing-cream/80 hover:bg-landing-cream/10 hover:text-landing-cream sm:px-4 sm:py-2.5"
           >
             Sign In
           </ButtonLink>
           <ButtonLink
             href="/auth/signup"
             variant="custom"
-            className="bg-landing-green-dark hover:bg-[#15803d] text-white font-semibold px-3 sm:px-5"
+            className="whitespace-nowrap bg-landing-green-dark px-2.5 py-2 text-sm font-semibold text-white hover:bg-[#15803d] sm:px-5 sm:text-base"
           >
             Get Started
           </ButtonLink>
@@ -151,7 +153,7 @@ export function LandingHeader() {
             onClick={() => setOpen((prev) => !prev)}
             aria-expanded={open}
             aria-label={open ? "Close menu" : "Open menu"}
-            className="md:hidden ml-1 p-2 rounded-lg text-landing-cream/70 hover:text-landing-cream hover:bg-landing-cream/10 transition-colors"
+            className="md:hidden -mr-1 inline-flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-lg p-2 text-landing-cream/70 transition-colors hover:bg-landing-cream/10 hover:text-landing-cream"
           >
             <svg
               className="w-6 h-6"

@@ -29,16 +29,9 @@ export function AIPanelProvider({ children, autoOpen = false }: AIPanelProviderP
       return;
     }
 
-    const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
-    const storedPreference = window.localStorage.getItem(AI_PANEL_PREFERENCE_KEY);
+    setIsOpen(resolveInitialAIPanelOpen());
 
-    setIsOpen(
-      resolveInitialAIPanelOpen({
-        isAdmin: autoOpen,
-        isDesktop,
-        storedPreference,
-      })
-    );
+    window.localStorage.removeItem(AI_PANEL_PREFERENCE_KEY);
   }, [autoOpen]);
 
   useEffect(() => {

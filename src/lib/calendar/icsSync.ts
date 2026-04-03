@@ -243,7 +243,13 @@ function isAllDayEvent(event: IcsEvent, start: Date, end: Date | null) {
   return startsAtMidnight && endsAtMidnight;
 }
 
+function toLocalDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function serializeRawEvent(event: IcsEvent, start: Date, end: Date | null): Json {
+  const isDateOnly = event.datetype === "date";
+
   return {
     uid: event.uid ?? null,
     summary: event.summary ?? null,
@@ -251,6 +257,9 @@ function serializeRawEvent(event: IcsEvent, start: Date, end: Date | null): Json
     location: event.location ?? null,
     start: start.toISOString(),
     end: end ? end.toISOString() : null,
+    dateType: isDateOnly ? "date" : null,
+    dateKey: isDateOnly ? toLocalDateKey(start) : null,
+    endDateKey: isDateOnly && end ? toLocalDateKey(end) : null,
     rrule: event.rrule && "toString" in event.rrule ? String(event.rrule) : null,
     exdate: event.exdate ? Object.keys(event.exdate) : null,
   };

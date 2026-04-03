@@ -9,6 +9,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { ValidationError, validationErrorResponse } from "@/lib/security/validation";
 import { calendarFeedCreateSchema, googleCalendarFeedCreateSchema } from "@/lib/schemas";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -111,16 +112,10 @@ export async function GET(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", organizationId)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked") {
+    const membership = await getOrgMembership(supabase, user.id, organizationId);
+    if (!membership) {
       return respond(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Active membership required." },
         403
       );
     }
@@ -216,16 +211,10 @@ async function handleIcsFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, calendarFeedCreateSchema);
 
-  const { data: membership } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", body.organizationId)
-    .maybeSingle();
-
-  if (!membership || membership.status === "revoked") {
+  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
+  if (!membership) {
     return respond(
-      { error: "Forbidden", message: "You are not a member of this organization." },
+      { error: "Forbidden", message: "Active membership required." },
       403
     );
   }
@@ -300,16 +289,10 @@ async function handleGoogleFeedCreate(
 ) {
   const body = parseBodyWithSchema(rawBody, googleCalendarFeedCreateSchema);
 
-  const { data: membership } = await supabase
-    .from("user_organization_roles")
-    .select("role,status")
-    .eq("user_id", user.id)
-    .eq("organization_id", body.organizationId)
-    .maybeSingle();
-
-  if (!membership || membership.status === "revoked") {
+  const membership = await getOrgMembership(supabase, user.id, body.organizationId);
+  if (!membership) {
     return respond(
-      { error: "Forbidden", message: "You are not a member of this organization." },
+      { error: "Forbidden", message: "Active membership required." },
       403
     );
   }

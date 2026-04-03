@@ -48,6 +48,8 @@ describe("Bright Data LinkedIn client", () => {
     it("extracts current job from experience with no end_date", () => {
       const profile: BrightDataProfileResult = {
         name: "Jane Doe",
+        first_name: "Jane",
+        last_name: "Doe",
         city: "San Francisco",
         position: null,
         about: null,
@@ -76,6 +78,8 @@ describe("Bright Data LinkedIn client", () => {
     it("falls back to first experience when none has null end_date", () => {
       const profile: BrightDataProfileResult = {
         name: "Bob",
+        first_name: "Bob",
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -99,6 +103,8 @@ describe("Bright Data LinkedIn client", () => {
     it("handles empty profile gracefully", () => {
       const profile: BrightDataProfileResult = {
         name: null,
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -121,6 +127,8 @@ describe("Bright Data LinkedIn client", () => {
     it("uses current_company_name over experience company", () => {
       const profile: BrightDataProfileResult = {
         name: null,
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -139,6 +147,8 @@ describe("Bright Data LinkedIn client", () => {
     it("handles non-array experience/education gracefully", () => {
       const profile = {
         name: null,
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         current_company: null,
@@ -155,6 +165,8 @@ describe("Bright Data LinkedIn client", () => {
     it("uses documented current_company and position fields when experience is absent", () => {
       const profile: BrightDataProfileResult = {
         name: "Satya Nadella",
+        first_name: "Satya",
+        last_name: "Nadella",
         city: "Redmond, Washington, United States",
         position: "Chairman and CEO at Microsoft",
         about: null,
@@ -193,12 +205,26 @@ describe("Bright Data LinkedIn client", () => {
       if (!result.ok) return;
       assert.deepEqual(result.profile, {
         name: "Satya Nadella",
+        first_name: null,
+        last_name: null,
         city: "Redmond, Washington, United States",
         position: "Chairman and CEO at Microsoft",
         about: null,
         current_company: "Microsoft",
         current_company_name: null,
-        experience: [],
+        experience: [
+          {
+            title: null,
+            company: "Microsoft",
+            company_id: null,
+            location: null,
+            start_date: null,
+            end_date: null,
+            description_html: null,
+            url: null,
+            company_logo_url: null,
+          },
+        ],
         education: [{ school: "University of Chicago", field_of_study: null }],
         educations_details: null,
         avatar: null,

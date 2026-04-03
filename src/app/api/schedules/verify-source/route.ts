@@ -5,6 +5,7 @@ import { checkHostStatus } from "@/lib/schedule-security/allowlist";
 import { ScheduleSecurityError } from "@/lib/schedule-security/errors";
 import { verifyAndEnroll } from "@/lib/schedule-security/verifyAndEnroll";
 import { normalizeUrl, maskUrl } from "@/lib/schedule-security/url";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -54,16 +55,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", body.orgId)
-      .maybeSingle();
-
-    if (!membership || membership.status === "revoked") {
+    const membership = await getOrgMembership(supabase, user.id, body.orgId);
+    if (!membership) {
       return NextResponse.json(
-        { error: "Forbidden", message: "You are not a member of this organization." },
+        { error: "Forbidden", message: "Active membership required." },
         { status: 403, headers: rateLimit.headers }
       );
     }

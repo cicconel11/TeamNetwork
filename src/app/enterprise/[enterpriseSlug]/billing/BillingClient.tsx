@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/layout";
 import { AlumniUsageBar } from "@/components/enterprise/AlumniUsageBar";
 import { SeatUsageBar } from "@/components/enterprise/SeatUsageBar";
 import { ALUMNI_BUCKET_PRICING, ENTERPRISE_SEAT_PRICING, type BillingInterval } from "@/types/enterprise";
-import { isSalesLed } from "@/lib/enterprise/pricing";
+import { isSalesLed, getFreeSubOrgCount } from "@/lib/enterprise/pricing";
 import { resolveCurrentQuantity } from "@/lib/enterprise/quota-logic";
 
 interface BillingInfo {
@@ -165,7 +165,7 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
 
     try {
       const rawQuantity = billing?.subOrgQuantity;
-      const currentQuantity = resolveCurrentQuantity(rawQuantity, billing?.subOrgCount ?? 0);
+      const currentQuantity = resolveCurrentQuantity(rawQuantity, billing?.subOrgCount ?? 0, getFreeSubOrgCount(billing?.alumniBucketQuantity ?? 1));
 
       const response = await fetch(`/api/enterprise/${enterpriseId}/billing/adjust`, {
         method: "POST",
@@ -323,6 +323,7 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
           <SeatUsageBar
             currentSeats={billing?.subOrgCount ?? 0}
             billingInterval={billing?.billingInterval ?? "year"}
+            bucketQuantity={billing?.alumniBucketQuantity ?? 1}
             onAddSeats={!isAddingSeats ? handleAddSeats : undefined}
           />
         </div>
@@ -339,7 +340,7 @@ export function BillingClient({ enterpriseId, enterpriseSlug }: { enterpriseId: 
               </li>
             )}
             <li>
-              <span className="text-green-600 dark:text-green-400">First {ENTERPRISE_SEAT_PRICING.freeSubOrgs} organizations: Free</span>
+              <span className="text-green-600 dark:text-green-400">First {getFreeSubOrgCount(billing?.alumniBucketQuantity ?? 1)} organizations: Free (3 per alumni bucket)</span>
             </li>
             <li>
               Additional organizations: ${billing?.billingInterval === "month"

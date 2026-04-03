@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { CALENDAR_FEED_SYNC_SELECT, syncFeedByProvider } from "@/lib/calendar/feedSync";
 import type { CalendarFeedRow } from "@/lib/calendar/syncHelpers";
+import { getOrgMembership } from "@/lib/auth/api-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -46,14 +47,15 @@ async function handleSync(params: { feedId: string }) {
       );
     }
 
-    const { data: membership } = await supabase
-      .from("user_organization_roles")
-      .select("role,status")
-      .eq("user_id", user.id)
-      .eq("organization_id", typedFeed.organization_id)
-      .maybeSingle();
+    if (!typedFeed.organization_id) {
+      return NextResponse.json(
+        { error: "Not found", message: "Feed not found." },
+        { status: 404 }
+      );
+    }
 
-    if (!membership || membership.status === "revoked" || membership.role !== "admin") {
+    const membership = await getOrgMembership(supabase, user.id, typedFeed.organization_id);
+    if (!membership || membership.role !== "admin") {
       return NextResponse.json(
         { error: "Forbidden", message: "Only admins can sync org feeds." },
         { status: 403 }

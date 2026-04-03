@@ -753,16 +753,18 @@ noscript~.scroll-reveal {
   mask-image: linear-gradient(to right, transparent, black 5%, black 95%, transparent);
 }
 
-/* Mobile timeline for How It Works */
+/* Mobile timeline for How It Works — marker is 3.5rem; need gutter ≥ marker + gap or text overlaps */
 @media (max-width: 767px) {
   .mobile-timeline {
     position: relative;
-    padding-left: 3rem;
+    /* text starts here; marker sits wholly to the left in the padding gutter */
+    padding-left: 5.25rem;
   }
 
   .mobile-timeline::before {
     content: '';
     position: absolute;
+    /* vertical dash through center of play-marker column (marker center = 1.75rem) */
     left: 1.75rem;
     top: 1.75rem;
     bottom: 1.75rem;
@@ -778,11 +780,14 @@ noscript~.scroll-reveal {
 
   .mobile-timeline > * {
     position: relative;
+    /* keep titles/copy clear of the absolutely positioned circle */
+    padding-top: 0.125rem;
   }
 
   .mobile-timeline .play-marker {
     position: absolute;
-    left: -3rem;
+    /* 5.25rem gutter − 3.5rem marker = left edge aligns past timeline line */
+    left: -5.25rem;
     top: 0;
   }
 }

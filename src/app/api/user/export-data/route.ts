@@ -201,7 +201,7 @@ export async function GET(request: Request) {
     // Fetch calendar sync preferences
     const { data: calendarPrefs } = await serviceSupabase
       .from("calendar_sync_preferences")
-      .select("organization_id, sync_general, sync_game, sync_meeting, sync_social, sync_fundraiser, sync_philanthropy")
+      .select("organization_id, sync_general, sync_game, sync_meeting, sync_social, sync_fundraiser, sync_philanthropy, sync_practice, sync_workout")
       .eq("user_id", user.id);
 
     if (calendarPrefs) {
@@ -213,6 +213,8 @@ export async function GET(request: Request) {
         syncSocial: p.sync_social ?? true,
         syncFundraiser: p.sync_fundraiser ?? true,
         syncPhilanthropy: p.sync_philanthropy ?? true,
+        syncPractice: p.sync_practice ?? true,
+        syncWorkout: p.sync_workout ?? true,
       }));
     }
 

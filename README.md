@@ -1,4 +1,4 @@
-TeamNetwork is a multi-tenant Next.js 14 application for organization membership, alumni directories, communication, scheduling, payments, and enterprise administration.
+TeamNetwork is a multi-tenant Next.js application for organization membership, alumni directories, communication, scheduling, payments, and enterprise administration.
 
 ## Getting Started
 

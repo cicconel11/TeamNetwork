@@ -1035,7 +1035,9 @@ export type Database = {
           sync_general: boolean | null
           sync_meeting: boolean | null
           sync_philanthropy: boolean | null
+          sync_practice: boolean | null
           sync_social: boolean | null
+          sync_workout: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -1048,7 +1050,9 @@ export type Database = {
           sync_general?: boolean | null
           sync_meeting?: boolean | null
           sync_philanthropy?: boolean | null
+          sync_practice?: boolean | null
           sync_social?: boolean | null
+          sync_workout?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -1061,7 +1065,9 @@ export type Database = {
           sync_general?: boolean | null
           sync_meeting?: boolean | null
           sync_philanthropy?: boolean | null
+          sync_practice?: boolean | null
           sync_social?: boolean | null
+          sync_workout?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
@@ -3110,6 +3116,7 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           id: string
+          is_upload_draft: boolean
           item_count: number
           name: string
           organization_id: string
@@ -3123,6 +3130,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: string
+          is_upload_draft?: boolean
           item_count?: number
           name: string
           organization_id: string
@@ -3136,6 +3144,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: string
+          is_upload_draft?: boolean
           item_count?: number
           name?: string
           organization_id?: string
@@ -3176,6 +3185,7 @@ export type Database = {
           moderated_at: string | null
           moderated_by: string | null
           organization_id: string
+          preview_storage_path: string | null
           rejection_reason: string | null
           status: Database["public"]["Enums"]["media_status"]
           storage_path: string | null
@@ -3204,6 +3214,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id: string
+          preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
           storage_path?: string | null
@@ -3232,6 +3243,7 @@ export type Database = {
           moderated_at?: string | null
           moderated_by?: string | null
           organization_id?: string
+          preview_storage_path?: string | null
           rejection_reason?: string | null
           status?: Database["public"]["Enums"]["media_status"]
           storage_path?: string | null
@@ -3273,6 +3285,7 @@ export type Database = {
           id: string
           mime_type: string
           organization_id: string
+          preview_storage_path: string | null
           status: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
           uploader_id: string
@@ -3288,6 +3301,7 @@ export type Database = {
           id?: string
           mime_type: string
           organization_id: string
+          preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path: string
           uploader_id: string
@@ -3303,6 +3317,7 @@ export type Database = {
           id?: string
           mime_type?: string
           organization_id?: string
+          preview_storage_path?: string | null
           status?: Database["public"]["Enums"]["media_upload_status"]
           storage_path?: string
           uploader_id?: string
@@ -5797,6 +5812,23 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      create_media_gallery_upload: {
+        Args: {
+          p_description?: string
+          p_file_name: string
+          p_file_size_bytes: number
+          p_media_type: string
+          p_mime_type: string
+          p_org_id: string
+          p_status?: string
+          p_storage_path: string
+          p_tags?: string[]
+          p_taken_at?: string
+          p_title: string
+          p_uploaded_by: string
+        }
+        Returns: string
+      }
       shift_media_gallery_sort_orders: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -5872,6 +5904,8 @@ export type Database = {
         | "meeting"
         | "social"
         | "fundraiser"
+        | "practice"
+        | "workout"
       media_entity_type: "feed_post" | "discussion_thread" | "job_posting"
       media_status: "uploading" | "pending" | "approved" | "rejected"
       media_upload_status: "pending" | "ready" | "failed" | "orphaned"
@@ -6044,6 +6078,8 @@ export const Constants = {
         "meeting",
         "social",
         "fundraiser",
+        "practice",
+        "workout",
       ],
       media_entity_type: ["feed_post", "discussion_thread", "job_posting"],
       media_status: ["uploading", "pending", "approved", "rejected"],

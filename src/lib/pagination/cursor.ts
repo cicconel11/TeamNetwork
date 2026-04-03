@@ -93,3 +93,50 @@ export function buildCursorResponse<T extends { created_at: string; id: string }
 
   return { data, nextCursor, hasMore };
 }
+
+/** Media gallery keyset: ascending (gallery_sort_order, id). */
+
+type GalleryCursorPayload = { g: number; i: string };
+
+export function encodeGalleryCursor(gallerySortOrder: number, id: string): string {
+  const payload: GalleryCursorPayload = { g: gallerySortOrder, i: id };
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+
+export function decodeGalleryCursor(cursor: string): { gallerySortOrder: number; id: string } | null {
+  try {
+    const json = Buffer.from(cursor, "base64url").toString("utf8");
+    const payload = JSON.parse(json) as GalleryCursorPayload;
+    if (typeof payload.g !== "number" || !Number.isFinite(payload.g) || typeof payload.i !== "string") {
+      return null;
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.i)) {
+      return null;
+    }
+    return { gallerySortOrder: payload.g, id: payload.i };
+  } catch {
+    return null;
+  }
+}
+
+export function applyGalleryCursorFilter<T extends { or: (filter: string) => T }>(
+  query: T,
+  cursor: { gallerySortOrder: number; id: string },
+): T {
+  return query.or(
+    `gallery_sort_order.gt.${cursor.gallerySortOrder},and(gallery_sort_order.eq.${cursor.gallerySortOrder},id.gt.${cursor.id})`,
+  );
+}
+
+export function buildGalleryCursorResponse<T extends { gallery_sort_order: number; id: string }>(
+  items: T[],
+  limit: number,
+): { data: T[]; nextCursor: string | null; hasMore: boolean } {
+  const hasMore = items.length > limit;
+  const data = hasMore ? items.slice(0, limit) : items;
+  const lastItem = data[data.length - 1];
+  const nextCursor = hasMore && lastItem
+    ? encodeGalleryCursor(lastItem.gallery_sort_order, lastItem.id)
+    : null;
+  return { data, nextCursor, hasMore };
+}

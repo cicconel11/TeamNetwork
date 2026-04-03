@@ -2,12 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { UnifiedEvent } from "@/lib/calendar/unified-events";
+import {
+  buildUnifiedCalendarDateRange,
+  getUnifiedEventFloatingDateKey,
+  type UnifiedEvent,
+} from "@/lib/calendar/unified-events";
+import { calendarNewEventPath, calendarSourcesPath } from "@/lib/calendar/routes";
+import { formatCalendarEventTime } from "@/lib/calendar/event-segments";
+import { getUnifiedEventHref } from "@/lib/calendar/navigation";
 
 type UnifiedEventFeedProps = {
   orgId: string;
   orgSlug: string;
   initialEvents?: UnifiedEvent[];
+  timeZone?: string;
 };
 
 type SourceFilterKey = "events" | "schedules" | "feeds" | "classes";
@@ -74,50 +82,28 @@ function getSourceColors(sourceType: string) {
   }
 }
 
-function formatEventTime(event: UnifiedEvent): string {
-  if (event.allDay) {
-    return "All day";
-  }
-
-  const start = new Date(event.startAt);
-  const timeOpts: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-
-  const startTime = start.toLocaleTimeString("en-US", timeOpts);
-
-  if (!event.endAt) {
-    return startTime;
-  }
-
-  const end = new Date(event.endAt);
-
-  // Same day: "11:30 AM – 1:00 PM"
-  if (start.toDateString() === end.toDateString()) {
-    const endTime = end.toLocaleTimeString("en-US", timeOpts);
-    return `${startTime} – ${endTime}`;
-  }
-
-  // Multi-day: "Feb 12, 11:30 AM – Feb 13, 2:00 PM"
-  const dateTimeOpts: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  return `${start.toLocaleDateString("en-US", dateTimeOpts)} – ${end.toLocaleDateString("en-US", dateTimeOpts)}`;
-}
-
-function groupEventsByDate(events: UnifiedEvent[]): Map<string, UnifiedEvent[]> {
+function groupEventsByDate(events: UnifiedEvent[], timeZone?: string): Map<string, UnifiedEvent[]> {
   const grouped = new Map<string, UnifiedEvent[]>();
 
   events.forEach((event) => {
-    const dateKey = new Date(event.startAt).toLocaleDateString("en-US", {
+    const opts: Intl.DateTimeFormatOptions = {
       weekday: "long",
       month: "short",
       day: "numeric",
-    });
+    };
+    const floatingDateKey = getUnifiedEventFloatingDateKey(event);
+    const floatingMatch = floatingDateKey ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(floatingDateKey) : null;
+    let dateKey: string;
+
+    if (floatingMatch) {
+      const [, year, month, day] = floatingMatch;
+      const floatingDate = new Date(Number(year), Number(month) - 1, Number(day), 12);
+      dateKey = floatingDate.toLocaleDateString("en-US", opts);
+    } else {
+      if (timeZone) opts.timeZone = timeZone;
+      dateKey = new Date(event.startAt).toLocaleDateString("en-US", opts);
+    }
+
     const existing = grouped.get(dateKey) || [];
     existing.push(event);
     grouped.set(dateKey, existing);
@@ -133,21 +119,14 @@ function getBadgeColor(badgeText: string): string {
   return "bg-muted text-muted-foreground";
 }
 
-export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEventFeedProps) {
+export function UnifiedEventFeed({ orgId, orgSlug, initialEvents, timeZone }: UnifiedEventFeedProps) {
   const hasInitialData = initialEvents !== undefined;
   const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>("all");
 
-  const dateRange = useMemo(() => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = new Date();
-    end.setDate(end.getDate() + 180);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-  }, []);
+  const dateRange = useMemo(() => buildUnifiedCalendarDateRange(), []);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -208,7 +187,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
     setActiveFilter(key);
   };
 
-  const groupedEvents = useMemo(() => groupEventsByDate(events), [events]);
+  const groupedEvents = useMemo(() => groupEventsByDate(events, timeZone), [events, timeZone]);
 
   const renderEmptyState = () => {
     const hasEventsSource = activeFilter === "all" || activeFilter === "events";
@@ -220,7 +199,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {hasEventsSource && (
             <Link
-              href={`/${orgSlug}/events/new`}
+              href={calendarNewEventPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
             >
               Create your first event
@@ -228,7 +207,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
           )}
           {hasSchedulesSource && (
             <Link
-              href={`/${orgSlug}/calendar/sources`}
+              href={calendarSourcesPath(orgSlug)}
               className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
             >
               Connect a schedule source
@@ -241,7 +220,7 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
 
   const renderEventRow = (event: UnifiedEvent) => {
     const { dot, badge } = getSourceColors(event.sourceType);
-    const formattedTime = formatEventTime(event);
+    const formattedTime = formatCalendarEventTime(event, "en-US", timeZone);
 
     const rowContent = (
       <>
@@ -277,12 +256,13 @@ export function UnifiedEventFeed({ orgId, orgSlug, initialEvents }: UnifiedEvent
     );
 
     const className = "flex items-start gap-3 py-3";
+    const href = getUnifiedEventHref(orgSlug, event);
 
-    if (event.sourceType === "event" && event.eventId) {
+    if (href) {
       return (
         <Link
           key={event.id}
-          href={`/${orgSlug}/events/${event.eventId}`}
+          href={href}
           className={`${className} hover:bg-accent/50 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`}
         >
           {rowContent}

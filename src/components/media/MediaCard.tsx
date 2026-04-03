@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { GripVertical } from "lucide-react";
+import { UserContent } from "@/components/i18n/UserContent";
 import { Card, Badge } from "@/components/ui";
 import { getCardDisplayUrl } from "@/lib/media/display-url";
 
@@ -19,6 +21,7 @@ export interface MediaItem {
   created_at: string;
   uploaded_by: string;
   status: string;
+  gallery_sort_order?: number;
   users?: { name: string | null } | null;
 }
 
@@ -29,6 +32,9 @@ interface MediaCardProps {
   selected?: boolean;
   onToggle?: () => void;
   selectionDisabled?: boolean;
+  reorderMode?: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLButtonElement>;
+  isDragging?: boolean;
 }
 
 export function MediaCard({
@@ -38,6 +44,9 @@ export function MediaCard({
   selected,
   onToggle,
   selectionDisabled = false,
+  reorderMode = false,
+  dragHandleProps,
+  isDragging = false,
 }: MediaCardProps) {
   const displayUrl = getCardDisplayUrl(item);
   const uploaderName = item.users?.name || "Unknown";
@@ -46,6 +55,7 @@ export function MediaCard({
     : new Date(item.created_at).toLocaleDateString();
 
   const handleClick = () => {
+    if (reorderMode) return;
     if (selectable) {
       if (selectionDisabled) return;
       onToggle?.();
@@ -56,9 +66,11 @@ export function MediaCard({
 
   return (
     <Card
-      interactive
+      interactive={!reorderMode}
       padding="none"
       className={`group overflow-hidden transition-all duration-150 ${
+        isDragging ? "ring-2 ring-[var(--color-org-secondary)] shadow-xl" : ""
+      } ${
         selected
           ? "ring-2 ring-[var(--color-org-secondary)] ring-offset-1 scale-[0.97]"
           : selectionDisabled
@@ -69,6 +81,17 @@ export function MediaCard({
     >
       {/* Image/Video container */}
       <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+        {reorderMode && dragHandleProps && (
+          <button
+            type="button"
+            className="absolute left-2 top-2 z-20 p-2 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-sm text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing touch-none"
+            aria-label={`Drag to reorder ${item.title}`}
+            onClick={(e) => e.stopPropagation()}
+            {...dragHandleProps}
+          >
+            <GripVertical className="w-5 h-5" aria-hidden />
+          </button>
+        )}
         {item.media_type === "video" && !displayUrl ? (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-700 to-slate-900">
             <VideoPlaceholderIcon />
@@ -88,7 +111,7 @@ export function MediaCard({
         )}
 
         {/* Selection checkbox */}
-        {selectable && (
+        {selectable && !reorderMode && (
           <div
             className={`absolute top-2 left-2 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
               selected
@@ -124,7 +147,11 @@ export function MediaCard({
 
         {/* Status badge for non-approved items */}
         {item.status !== "approved" && (
-          <div className={`absolute top-2 ${selectable ? "left-9" : "left-2"}`}>
+          <div
+            className={`absolute top-2 ${
+              reorderMode ? "left-12" : selectable ? "left-9" : "left-2"
+            }`}
+          >
             <Badge variant={item.status === "pending" ? "warning" : "muted"}>
               {item.status}
             </Badge>
@@ -152,7 +179,7 @@ export function MediaCard({
                 key={tag}
                 className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-muted text-muted-foreground truncate max-w-[80px]"
               >
-                {tag}
+                <UserContent>{tag}</UserContent>
               </span>
             ))}
             {item.tags.length > 3 && (

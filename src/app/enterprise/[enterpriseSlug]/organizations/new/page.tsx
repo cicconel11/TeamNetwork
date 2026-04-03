@@ -16,7 +16,7 @@ export default async function NewOrganizationPage({ params }: NewOrganizationPag
     redirect("/app?error=no_enterprise_access");
   }
 
-  const { role } = context;
+  const { role, subscription } = context;
   const permissions = getEnterprisePermissions(role);
 
   if (!permissions.canCreateSubOrg) {
@@ -31,7 +31,10 @@ export default async function NewOrganizationPage({ params }: NewOrganizationPag
         backHref={`/enterprise/${enterpriseSlug}/organizations`}
       />
 
-      <CreateSubOrgForm enterpriseSlug={enterpriseSlug} />
+      <CreateSubOrgForm
+        enterpriseSlug={enterpriseSlug}
+        bucketQuantity={subscription?.alumni_bucket_quantity ?? 1}
+      />
     </div>
   );
 }

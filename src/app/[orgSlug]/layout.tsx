@@ -16,6 +16,8 @@ import { ConsentModal } from "@/components/analytics/ConsentModal";
 import { LinkedInUrlPrompt } from "@/components/linkedin/LinkedInUrlPrompt";
 import { AnalyticsProvider } from "@/components/analytics/AnalyticsProvider";
 import { AIPanelProvider } from "@/components/ai-assistant";
+import { JoinOrgGate } from "@/components/join/JoinOrgGate";
+import { MediaUploadManagerProvider } from "@/components/media/MediaUploadManagerContext";
 import dynamic from "next/dynamic";
 const AIPanel = dynamic(
   () => import("@/components/ai-assistant/AIPanel").then((m) => m.AIPanel),
@@ -65,16 +67,25 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     );
   }
 
-  if (!orgContext.role && !isDevAdmin) {
+  if (orgContext.status === "pending" && !isDevAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-6">
         <div className="max-w-lg text-center space-y-4">
-          <h1 className="text-2xl font-bold text-foreground">No membership found</h1>
+          <h1 className="text-2xl font-bold text-foreground">Pending admin approval</h1>
           <p className="text-muted-foreground">
-            You are signed in but do not have access to this organization. Please ask an admin to invite you.
+            Your request to join this organization is awaiting admin approval. You&apos;ll gain access once an admin approves your membership.
           </p>
         </div>
       </div>
+    );
+  }
+
+  if (!orgContext.role && !isDevAdmin) {
+    return (
+      <JoinOrgGate
+        orgName={orgContext.organization.name}
+        orgSlug={orgSlug}
+      />
     );
   }
 
@@ -252,9 +263,11 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 
-      <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
-        {children}
-      </OrgMainContent>
+      <MediaUploadManagerProvider orgId={organization.id}>
+        <OrgMainContent hasTopBanner={orgContext.gracePeriod.isInGracePeriod || orgContext.gracePeriod.isCanceling}>
+          {children}
+        </OrgMainContent>
+      </MediaUploadManagerProvider>
 
       {isDevAdmin && (
         <DevPanel

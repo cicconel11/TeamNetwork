@@ -50,7 +50,6 @@ export async function GET(req: Request) {
     .maybeSingle();
 
   if (claimError || !oauthState) {
-    // Either the state doesn't exist, was already consumed, or DB error
     return NextResponse.redirect(`${appUrl}/app?error=blackbaud_invalid_state`);
   }
 

@@ -7,9 +7,10 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 
 const createInviteSchema = z.object({
-  role: z.enum(["admin", "active_member", "alumni"]),
+  role: z.enum(["admin", "active_member", "alumni", "parent"]),
   uses: z.number().int().positive().optional().nullable(),
   expiresAt: z.string().datetime().optional().nullable(),
+  requireApproval: z.boolean().optional().nullable(),
 });
 
 export const dynamic = "force-dynamic";
@@ -83,6 +84,7 @@ export async function POST(req: Request, { params }: RouteParams) {
     p_role: body.role,
     p_uses: body.uses ?? null,
     p_expires_at: body.expiresAt ?? null,
+    p_require_approval: body.requireApproval ?? null,
   });
 
   if (rpcError || !invite) {

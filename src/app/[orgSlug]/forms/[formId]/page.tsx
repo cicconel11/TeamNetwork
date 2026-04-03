@@ -144,7 +144,7 @@ export default function FillFormPage() {
   if (success) {
     return (
       <div className="animate-fade-in">
-        <PageHeader title={form.title} backHref={`/${orgSlug}/forms`} />
+        <PageHeader title={form.title} backHref={`/${orgSlug}/forms`} translateTitle />
         <Card className="p-8 text-center max-w-xl mx-auto">
           <div className="text-green-500 mb-4">
             <svg className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -167,6 +167,8 @@ export default function FillFormPage() {
         title={form.title}
         description={form.description || undefined}
         backHref={`/${orgSlug}/forms`}
+        translateTitle
+        translateDescription={Boolean(form.description)}
       />
 
       <Card className="max-w-2xl">

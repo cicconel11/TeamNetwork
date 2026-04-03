@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/layout";
-import { Button } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
+import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { SubscriptionInfo } from "@/types/subscription";
 import { OrgInvitePanel } from "@/components/settings/OrgInvitePanel";
 import { MembershipPanel } from "@/components/settings/MembershipPanel";
@@ -14,6 +17,8 @@ import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 export default function InvitesPage() {
   const params = useParams();
   const orgSlug = params.orgSlug as string;
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState("");
@@ -21,6 +26,10 @@ export default function InvitesPage() {
   const [quota, setQuota] = useState<SubscriptionInfo | null>(null);
   const [isLoadingQuota, setIsLoadingQuota] = useState(true);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [isSavingToggle, setIsSavingToggle] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
 
   const loadQuota = useCallback(async (organizationId: string) => {
     setIsLoadingQuota(true);
@@ -43,17 +52,28 @@ export default function InvitesPage() {
   useEffect(() => {
     const fetchData = async () => {
       const supabase = createClient();
-      const { data: orgs, error: orgError } = await supabase
+      // Cast needed: require_invite_approval exists in DB but not yet in generated types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: orgs, error: orgError } = await (supabase as any)
         .from("organizations")
-        .select("id, name")
+        .select("id, name, require_invite_approval")
         .eq("slug", orgSlug)
         .limit(1);
 
-      const org = orgs?.[0];
+      const org = orgs?.[0] as { id: string; name: string; require_invite_approval?: boolean } | undefined;
       if (org && !orgError) {
         setOrgId(org.id);
         setOrgName(org.name);
+        setRequireApproval(org.require_invite_approval ?? false);
         void loadQuota(org.id);
+
+        // Fetch pending member count
+        const { count } = await supabase
+          .from("user_organization_roles")
+          .select("*", { count: "exact", head: true })
+          .eq("organization_id", org.id)
+          .eq("status", "pending");
+        setPendingCount(count ?? 0);
       }
 
       setIsLoading(false);
@@ -69,7 +89,7 @@ export default function InvitesPage() {
   if (isLoading) {
     return (
       <div>
-        <PageHeader title="Settings" description="Loading..." />
+        <PageHeader title={tSettings("title")} description={tCommon("loading")} />
         <div className="animate-pulse space-y-4">
           <div className="h-32 bg-muted rounded-xl" />
         </div>
@@ -77,13 +97,39 @@ export default function InvitesPage() {
     );
   }
 
+  const handleToggleApproval = async (checked: boolean) => {
+    if (!orgId) return;
+    setIsSavingToggle(true);
+    setApprovalError(null);
+
+    try {
+      const res = await fetch(`/api/organizations/${orgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ require_invite_approval: checked }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setApprovalError(data.error || "Failed to update approval setting");
+        return;
+      }
+
+      setRequireApproval(checked);
+    } catch {
+      setApprovalError("Failed to update approval setting");
+    } finally {
+      setIsSavingToggle(false);
+    }
+  };
+
   if (!orgId) return null;
 
   return (
     <div>
       <PageHeader
-        title="Settings"
-        description="Manage invites, subscriptions, and organization access"
+        title={tSettings("title")}
+        description={tSettings("description")}
         backHref={`/${orgSlug}`}
         actions={
           !showInviteForm && (
@@ -91,7 +137,7 @@ export default function InvitesPage() {
               <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
-              Create Invite
+              {tSettings("createInvite")}
             </Button>
           )
         }
@@ -104,6 +150,42 @@ export default function InvitesPage() {
         onQuotaRefresh={handleQuotaRefresh}
       />
 
+      {/* Invite Approval Settings */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-foreground">{tSettings("requireApproval")}</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              {tSettings("requireApprovalDescription")}
+            </p>
+          </div>
+          <ToggleSwitch
+            checked={requireApproval}
+            onChange={handleToggleApproval}
+            disabled={isSavingToggle}
+            label="Require invite approval"
+          />
+        </div>
+        {approvalError && (
+          <div className="mt-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm">
+            {approvalError}
+          </div>
+        )}
+        <div className={`mt-4 flex items-center justify-between p-3 rounded-lg ${pendingCount > 0 ? "bg-amber-50 dark:bg-amber-900/20" : "bg-muted/50"}`}>
+          <span className={`text-sm ${pendingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+            {pendingCount > 0
+              ? tSettings("pendingApprovals", { count: pendingCount })
+              : tSettings("noPendingApprovals")}
+          </span>
+          <Link
+            href={`/${orgSlug}/settings/approvals`}
+            className={`text-sm font-medium hover:underline ${pendingCount > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}
+          >
+            {pendingCount > 0 ? tSettings("reviewPendingMembers") : tSettings("viewApprovals")}
+          </Link>
+        </div>
+      </Card>
+
       <OrgInvitePanel
         orgId={orgId}
         quotaLimit={quota?.alumniLimit ?? null}
@@ -111,6 +193,7 @@ export default function InvitesPage() {
         showForm={showInviteForm}
         onShowFormChange={setShowInviteForm}
         onAlumniInviteCreated={handleQuotaRefresh}
+        orgRequireApproval={requireApproval}
       />
 
       <MembershipPanel

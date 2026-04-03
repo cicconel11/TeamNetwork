@@ -17,6 +17,7 @@ import {
   isSalesLed,
   getAlumniBucketPricing,
   getBillableOrgCount,
+  getFreeSubOrgCount,
   getSubOrgPricing,
   getEnterpriseTotalPricing,
   formatBucketRange,
@@ -191,6 +192,55 @@ describe("getBillableOrgCount", () => {
 });
 
 // =============================================================================
+// getFreeSubOrgCount Tests
+// =============================================================================
+
+describe("getFreeSubOrgCount", () => {
+  it("returns 3 for 1 bucket", () => {
+    assert.strictEqual(getFreeSubOrgCount(1), 3);
+  });
+
+  it("returns 6 for 2 buckets", () => {
+    assert.strictEqual(getFreeSubOrgCount(2), 6);
+  });
+
+  it("returns 9 for 3 buckets", () => {
+    assert.strictEqual(getFreeSubOrgCount(3), 9);
+  });
+
+  it("returns 12 for 4 buckets", () => {
+    assert.strictEqual(getFreeSubOrgCount(4), 12);
+  });
+});
+
+// =============================================================================
+// getBillableOrgCount with multiple buckets
+// =============================================================================
+
+describe("getBillableOrgCount with buckets", () => {
+  it("6 orgs with 2 buckets → 0 billable (6 free)", () => {
+    assert.strictEqual(getBillableOrgCount(6, 2), 0);
+  });
+
+  it("7 orgs with 2 buckets → 1 billable", () => {
+    assert.strictEqual(getBillableOrgCount(7, 2), 1);
+  });
+
+  it("12 orgs with 4 buckets → 0 billable (12 free)", () => {
+    assert.strictEqual(getBillableOrgCount(12, 4), 0);
+  });
+
+  it("15 orgs with 4 buckets → 3 billable", () => {
+    assert.strictEqual(getBillableOrgCount(15, 4), 3);
+  });
+
+  it("downgrade: 5 orgs with 1 bucket → 2 billable (was 0 with 2 buckets)", () => {
+    assert.strictEqual(getBillableOrgCount(5, 2), 0);
+    assert.strictEqual(getBillableOrgCount(5, 1), 2);
+  });
+});
+
+// =============================================================================
 // getSubOrgPricing Tests
 // =============================================================================
 
@@ -251,18 +301,18 @@ describe("getEnterpriseTotalPricing", () => {
       assert.strictEqual(result.totalCents, 5000); // $50/mo
     });
 
-    it("5 teams, 5,000 alumni → $130/mo", () => {
+    it("5 teams, 5,000 alumni → $100/mo (all 5 orgs free with 2 buckets)", () => {
       const result = getEnterpriseTotalPricing(2, 5, "month");
       assert.strictEqual(result.alumni.totalCents, 10000); // $100
-      assert.strictEqual(result.subOrgs.totalCents, 3000); // 2 × $15
-      assert.strictEqual(result.totalCents, 13000); // $130/mo
+      assert.strictEqual(result.subOrgs.totalCents, 0); // 2 buckets × 3 = 6 free, 5 orgs all free
+      assert.strictEqual(result.totalCents, 10000); // $100/mo
     });
 
-    it("8 teams, 10,000 alumni → $275/mo", () => {
+    it("8 teams, 10,000 alumni → $200/mo (all 8 orgs free with 4 buckets)", () => {
       const result = getEnterpriseTotalPricing(4, 8, "month");
       assert.strictEqual(result.alumni.totalCents, 20000); // $200
-      assert.strictEqual(result.subOrgs.totalCents, 7500); // 5 × $15
-      assert.strictEqual(result.totalCents, 27500); // $275/mo
+      assert.strictEqual(result.subOrgs.totalCents, 0); // 4 buckets × 3 = 12 free, 8 orgs all free
+      assert.strictEqual(result.totalCents, 20000); // $200/mo
     });
   });
 
@@ -274,18 +324,18 @@ describe("getEnterpriseTotalPricing", () => {
       assert.strictEqual(result.totalCents, 50000); // $500/yr
     });
 
-    it("5 teams, 5,000 alumni → $1,300/yr", () => {
+    it("5 teams, 5,000 alumni → $1,000/yr (all 5 orgs free with 2 buckets)", () => {
       const result = getEnterpriseTotalPricing(2, 5, "year");
       assert.strictEqual(result.alumni.totalCents, 100000); // $1,000
-      assert.strictEqual(result.subOrgs.totalCents, 30000); // 2 × $150
-      assert.strictEqual(result.totalCents, 130000); // $1,300/yr
+      assert.strictEqual(result.subOrgs.totalCents, 0); // 2 buckets × 3 = 6 free
+      assert.strictEqual(result.totalCents, 100000); // $1,000/yr
     });
 
-    it("8 teams, 10,000 alumni → $2,750/yr", () => {
+    it("8 teams, 10,000 alumni → $2,000/yr (all 8 orgs free with 4 buckets)", () => {
       const result = getEnterpriseTotalPricing(4, 8, "year");
       assert.strictEqual(result.alumni.totalCents, 200000); // $2,000
-      assert.strictEqual(result.subOrgs.totalCents, 75000); // 5 × $150
-      assert.strictEqual(result.totalCents, 275000); // $2,750/yr
+      assert.strictEqual(result.subOrgs.totalCents, 0); // 4 buckets × 3 = 12 free
+      assert.strictEqual(result.totalCents, 200000); // $2,000/yr
     });
   });
 
@@ -360,6 +410,7 @@ describe("source constants integrity", () => {
 
   it("ENTERPRISE_SEAT_PRICING has expected values", () => {
     assert.strictEqual(ENTERPRISE_SEAT_PRICING.freeSubOrgs, 3);
+    assert.strictEqual(ENTERPRISE_SEAT_PRICING.freeSubOrgsPerBucket, 3);
     assert.strictEqual(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsMonthly, 1500);
     assert.strictEqual(ENTERPRISE_SEAT_PRICING.pricePerAdditionalCentsYearly, 15000);
   });

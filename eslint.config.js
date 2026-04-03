@@ -11,6 +11,8 @@ module.exports = [
       "**/node_modules/**",
       "**/.claude/worktrees/**",
       "**/.worktrees/**",
+      "**/.claude/**",
+      "scripts/**",
       "apps/**",
       "packages/**",
       "playwright-report/**",

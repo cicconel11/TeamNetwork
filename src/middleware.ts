@@ -8,12 +8,43 @@ import {
   isPublicApiPattern as isPublicApiPatternCheck,
   isPublicRoute as isPublicRouteCheck,
   isAuthOnlyRoute,
+  isOrgRoute,
   getRedirectForMembershipStatus,
   shouldRedirectToCanonicalHost,
 } from "./lib/middleware/routing-decisions";
+import { SUPPORTED_LOCALES, DEFAULT_LOCALE } from "./i18n/config";
+import type { SupportedLocale } from "./i18n/config";
 
 // Validate at module load
 validateAuthTestMode();
+
+/** Sync the NEXT_LOCALE cookie from DB language preferences (user override → org default → 'en'). */
+function syncLocaleCookie(
+  request: NextRequest,
+  response: NextResponse,
+  userLangOverride: string | null | undefined,
+  orgDefaultLang: string | null | undefined,
+) {
+  const effective = (
+    SUPPORTED_LOCALES.includes(userLangOverride as SupportedLocale) ? userLangOverride :
+    SUPPORTED_LOCALES.includes(orgDefaultLang as SupportedLocale) ? orgDefaultLang :
+    DEFAULT_LOCALE
+  ) as string;
+
+  const current = request.cookies.get("NEXT_LOCALE")?.value;
+  if (effective !== current) {
+    // Set on the request so downstream server components (getRequestConfig)
+    // see the updated locale in THIS request, not one request late.
+    request.cookies.set("NEXT_LOCALE", effective);
+    // Set on the response to persist the cookie for future requests.
+    response.cookies.set("NEXT_LOCALE", effective, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+  }
+}
 
 const supabaseUrl = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKey = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
@@ -341,21 +372,14 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // ── Locale tracking (populated during org/user checks below) ──
+  let userLangOverride: string | null | undefined;
+  let orgDefaultLang: string | null | undefined;
+
   // Check for revoked access on org routes
-  // Org routes are paths like /[orgSlug]/... but not /app/ or /auth/ or /api/ or /settings/ or /enterprise/
-  const isOrgRoute = !pathname.startsWith("/app") &&
-    !pathname.startsWith("/auth") &&
-    !pathname.startsWith("/api") &&
-    !pathname.startsWith("/settings") &&
-    !pathname.startsWith("/enterprise") &&
-    pathname !== "/" &&
-    pathname.split("/").filter(Boolean).length >= 1;
-
-  if (isOrgRoute && user) {
+  if (isOrgRoute(pathname) && user) {
     const orgSlug = pathname.split("/")[1];
-
-    // Only check if it looks like an org slug (not a system path)
-    if (orgSlug && !["app", "auth", "api", "settings", "_next", "favicon.ico"].includes(orgSlug)) {
+    if (orgSlug) {
       // Check if user is dev-admin - if so, skip membership checks entirely
       const userEmail = "email" in user ? (user.email as string | null | undefined) : undefined;
       const userIsDevAdmin = isDevAdminEmail(userEmail);
@@ -395,6 +419,9 @@ export async function middleware(request: NextRequest) {
             }
           } else if (ctx?.found) {
             membershipStatus = ctx.membership?.status;
+            // Capture language fields from RPC for locale cookie sync (no extra query)
+            orgDefaultLang = ctx.organization?.default_language ?? null;
+            userLangOverride = ctx.membership?.language_override ?? null;
           }
           // If !ctx?.found the org doesn't exist — layout.tsx handles the 404 gate
 
@@ -409,6 +436,17 @@ export async function middleware(request: NextRequest) {
           }
         }
       } else {
+        // Dev-admin bypasses membership checks but still needs language data
+        try {
+          const { data: ctx } = await supabase.rpc("get_org_context_by_slug", { p_slug: orgSlug });
+          if (ctx?.found) {
+            orgDefaultLang = ctx.organization?.default_language ?? null;
+            userLangOverride = ctx.membership?.language_override ?? null;
+          }
+        } catch {
+          // Non-critical
+        }
+
         // Audit dev-admin bypass
         fireMiddlewareAudit({
           userId: user.id,
@@ -428,6 +466,50 @@ export async function middleware(request: NextRequest) {
         }
       }
     }
+  }
+
+  // ── Locale cookie sync ──
+  // For org routes, language fields were already captured from the RPC above.
+  // For non-org routes, always query the user's language preference so the
+  // cookie stays in sync with DB changes (e.g. after saving on /settings/language).
+  if (user) {
+    if (!isOrgRoute(pathname)) {
+      try {
+        const { data: userData } = await supabase
+          .from("users")
+          .select("language_override")
+          .eq("id", user.id)
+          .maybeSingle();
+        userLangOverride = userData?.language_override ?? null;
+
+        // When user chose "org default" (override is null), resolve their
+        // primary org's default_language so non-org pages render correctly.
+        if (!userLangOverride) {
+          const { data: membership } = await supabase
+            .from("user_organization_roles")
+            .select("organization_id")
+            .eq("user_id", user.id)
+            .eq("status", "active")
+            .is("deleted_at", null)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+
+          if (membership?.organization_id) {
+            const { data: org } = await supabase
+              .from("organizations")
+              .select("default_language")
+              .eq("id", membership.organization_id)
+              .maybeSingle();
+            orgDefaultLang = org?.default_language ?? null;
+          }
+        }
+      } catch {
+        // Non-critical — fall through to default locale
+      }
+    }
+
+    syncLocaleCookie(request, response, userLangOverride, orgDefaultLang);
   }
 
   response.headers.set("x-pathname", pathname);

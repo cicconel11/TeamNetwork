@@ -18,19 +18,28 @@ create table if not exists public.enterprise_audit_logs (
 );
 
 -- Composite indexes for common query patterns
-create index enterprise_audit_logs_enterprise_created_idx
+create index if not exists enterprise_audit_logs_enterprise_created_idx
   on public.enterprise_audit_logs(enterprise_id, created_at desc);
 
-create index enterprise_audit_logs_action_created_idx
+create index if not exists enterprise_audit_logs_action_created_idx
   on public.enterprise_audit_logs(action, created_at desc);
 
-create index enterprise_audit_logs_actor_created_idx
+create index if not exists enterprise_audit_logs_actor_created_idx
   on public.enterprise_audit_logs(actor_user_id, created_at desc);
 
 -- RLS: service role only (fire-and-forget writes from API routes)
 alter table public.enterprise_audit_logs enable row level security;
 
-create policy enterprise_audit_logs_service_only
-  on public.enterprise_audit_logs
-  for all using ((select auth.role()) = 'service_role')
-  with check ((select auth.role()) = 'service_role');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'enterprise_audit_logs'
+      AND policyname = 'enterprise_audit_logs_service_only'
+  ) THEN
+    CREATE POLICY enterprise_audit_logs_service_only
+      ON public.enterprise_audit_logs
+      FOR ALL USING ((select auth.role()) = 'service_role')
+      WITH CHECK ((select auth.role()) = 'service_role');
+  END IF;
+END $$;

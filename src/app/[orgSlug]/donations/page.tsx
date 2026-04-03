@@ -8,7 +8,9 @@ import { getOrgContext } from "@/lib/auth/roles";
 import { canEditNavItem } from "@/lib/navigation/permissions";
 import { getConnectAccountStatus } from "@/lib/stripe";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
+import { getLocale, getTranslations } from "next-intl/server";
 import { ExportCsvButton } from "@/components/shared";
+import { buildDonationPurposeTotals } from "@/lib/payments/donation-purpose-totals";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import type { OrganizationDonation, OrganizationDonationStat } from "@/types/database";
 
@@ -58,14 +60,16 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
   const donationCount = stats?.donation_count ?? donationRows.length;
   const avgDonation = donationCount > 0 ? totalAmount / donationCount : 0;
 
-  const purposeTotals = donationRows.reduce<Record<string, number>>((acc, donation) => {
-    const label = donation.purpose || "General support";
-    acc[label] = (acc[label] || 0) + (donation.amount_cents || 0);
-    return acc;
-  }, {});
-
   const navConfig = org.nav_config as NavConfig | null;
-  const pageLabel = resolveLabel("/donations", navConfig);
+  const [tNav, locale, tDonations, tCommon] = await Promise.all([
+    getTranslations("nav.items"),
+    getLocale(),
+    getTranslations("donations"),
+    getTranslations("common"),
+  ]);
+  const t = (key: string) => tNav(key);
+  const pageLabel = resolveLabel("/donations", navConfig, t, locale);
+  const purposeTotals = buildDonationPurposeTotals(donationRows, tDonations("generalSupport"));
   const exportStamp = new Date().toISOString().slice(0, 10);
 
   return (
@@ -105,17 +109,17 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
         <div className="space-y-3">
           <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">Total Raised</p>
+            <p className="text-sm text-muted-foreground mb-1">{tDonations("totalRaised")}</p>
             <p className="text-3xl font-bold text-foreground font-mono">
               ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </Card>
           <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">Contributions</p>
+            <p className="text-sm text-muted-foreground mb-1">{tDonations("contributions")}</p>
             <p className="text-3xl font-bold text-foreground font-mono">{donationCount}</p>
           </Card>
           <Card className="p-5">
-            <p className="text-sm text-muted-foreground mb-1">Average Gift</p>
+            <p className="text-sm text-muted-foreground mb-1">{tDonations("averageGift")}</p>
             <p className="text-3xl font-bold text-foreground font-mono">
               ${avgDonation.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
@@ -125,7 +129,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-6 lg:col-span-1">
-          <h3 className="font-semibold text-foreground mb-4">By Purpose</h3>
+          <h3 className="font-semibold text-foreground mb-4">{tDonations("byPurpose")}</h3>
           <div className="space-y-3">
             {Object.entries(purposeTotals).length > 0 ? (
               Object.entries(purposeTotals)
@@ -139,7 +143,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                   </div>
                 ))
             ) : (
-              <p className="text-sm text-muted-foreground">{pageLabel} will be grouped here once received.</p>
+              <p className="text-sm text-muted-foreground">{tDonations("willGroupHere", { label: pageLabel })}</p>
             )}
           </div>
         </Card>
@@ -149,7 +153,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
             <h3 className="font-semibold text-foreground">Recent {pageLabel}</h3>
             {canEdit && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                {isConnected ? "Funds settle directly via Stripe Connect" : "Stripe not connected yet"}
+                {isConnected ? tDonations("fundsSettle") : tDonations("stripeNotConnected")}
               </div>
             )}
           </div>
@@ -159,11 +163,11 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Donor</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Purpose</th>
-                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Amount</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tDonations("donor")}</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tDonations("purpose")}</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">{tCommon("date")}</th>
+                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">{tCommon("amount")}</th>
+                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">{tCommon("status")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -172,12 +176,12 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
                     return (
                     <tr key={donation.id} className="hover:bg-muted/50 transition-colors">
                       <td className="p-4">
-                        <p className="font-medium text-foreground">{isAnonymous ? "Anonymous" : (donation.donor_name || "Anonymous")}</p>
+                        <p className="font-medium text-foreground">{isAnonymous ? tCommon("anonymous") : (donation.donor_name || tCommon("anonymous"))}</p>
                         {!isAnonymous && donation.donor_email && (
                           <p className="text-sm text-muted-foreground">{donation.donor_email}</p>
                         )}
                       </td>
-                      <td className="p-4 text-muted-foreground">{donation.purpose || "General support"}</td>
+                      <td className="p-4 text-muted-foreground">{donation.purpose || tDonations("generalSupport")}</td>
                       <td className="p-4 text-muted-foreground">
                         {donation.created_at
                           ? new Date(donation.created_at).toLocaleDateString()
@@ -203,7 +207,7 @@ export default async function DonationsPage({ params }: DonationsPageProps) {
           ) : (
             <EmptyState
               title={`No ${pageLabel.toLowerCase()} yet`}
-              description={`${pageLabel} will appear after Stripe completes a payment.`}
+              description={tDonations("willAppear", { label: pageLabel })}
               action={
                 <Link href={`/${orgSlug}/philanthropy`} className="text-sm text-muted-foreground hover:text-foreground">
                   View philanthropy events →

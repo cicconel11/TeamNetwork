@@ -31,8 +31,8 @@ describe("Blackbaud OAuth", () => {
     const url = getAuthorizationUrl("test-state-uuid");
     const parsed = new URL(url);
 
-    assert.equal(parsed.hostname, "oauth2.sky.blackbaud.com");
-    assert.equal(parsed.pathname, "/authorization");
+    assert.equal(parsed.hostname, "app.blackbaud.com");
+    assert.equal(parsed.pathname, "/oauth/authorize");
     assert.equal(parsed.searchParams.get("client_id"), "test-client-id");
     assert.equal(parsed.searchParams.get("state"), "test-state-uuid");
     assert.ok(parsed.searchParams.get("redirect_uri")?.includes("/api/blackbaud/callback"));

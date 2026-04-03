@@ -13,6 +13,7 @@ import { sanitizeRedirectPath, buildAuthCallbackUrl, buildAuthLink } from "@/lib
 import { loginSchema, type LoginForm } from "@/lib/schemas/auth";
 import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { useTranslations } from "next-intl";
 
 interface LoginFormProps {
   hcaptchaSiteKey: string;
@@ -23,6 +24,7 @@ function LoginFormComponent({
   hcaptchaSiteKey,
   linkedinOauthAvailable,
 }: LoginFormProps) {
+  const t = useTranslations("auth");
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
@@ -53,7 +55,7 @@ function LoginFormComponent({
 
   const handleSocialLogin = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
@@ -78,7 +80,7 @@ function LoginFormComponent({
 
   const onPasswordLogin = async (data: LoginForm) => {
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
@@ -109,7 +111,7 @@ function LoginFormComponent({
     e.preventDefault();
 
     if (!isVerified || !captchaToken) {
-      setError("Please complete the captcha verification");
+      setError(t("completeCaptcha"));
       return;
     }
 
@@ -132,7 +134,7 @@ function LoginFormComponent({
       return;
     }
 
-    setMessage("Check your email for the magic link!");
+    setMessage(t("checkEmail"));
     setIsLoading(false);
     captchaRef.current?.reset();
   };
@@ -166,7 +168,7 @@ function LoginFormComponent({
             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
           />
         </svg>
-        Continue with Google
+        {t("continueWithGoogle")}
       </Button>
 
       {linkedinOauthAvailable && (
@@ -180,7 +182,7 @@ function LoginFormComponent({
           data-testid="login-linkedin"
         >
           <LinkedInIcon className="h-5 w-5 mr-2" />
-          Continue with LinkedIn
+          {t("continueWithLinkedIn")}
         </Button>
       )}
 
@@ -189,7 +191,7 @@ function LoginFormComponent({
           <div className="w-full border-t border-white/10" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-[#1a1a1a] px-2 text-white/50">Or continue with email</span>
+          <span className="bg-[#1a1a1a] px-2 text-white/50">{t("orContinueWithEmail")}</span>
         </div>
       </div>
 
@@ -204,7 +206,7 @@ function LoginFormComponent({
               : "text-white/50 hover:text-white"
           }`}
         >
-          Password
+          {t("passwordLabel")}
         </button>
         <button
           type="button"
@@ -216,7 +218,7 @@ function LoginFormComponent({
               : "text-white/50 hover:text-white"
           }`}
         >
-          Magic Link
+          {t("magicLink")}
         </button>
       </div>
 
@@ -238,9 +240,9 @@ function LoginFormComponent({
       <form data-testid="login-form" onSubmit={mode === "password" ? handleSubmit(onPasswordLogin) : handleMagicLink}>
         <div className="space-y-4">
           <Input
-            label="Email"
+            label={t("emailLabel")}
             type="email"
-            placeholder="you@example.com"
+            placeholder={t("emailPlaceholder")}
             data-testid="login-email"
             error={errors.email?.message}
             {...register("email")}
@@ -249,9 +251,9 @@ function LoginFormComponent({
           {mode === "password" && (
             <>
               <Input
-                label="Password"
+                label={t("passwordLabel")}
                 type="password"
-                placeholder="••••••••"
+                placeholder={t("passwordPlaceholder")}
                 data-testid="login-password"
                 error={errors.password?.message}
                 {...register("password")}
@@ -261,7 +263,7 @@ function LoginFormComponent({
                   href={`/auth/forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
                   className="text-sm text-white/50 hover:text-white hover:underline"
                 >
-                  Forgot password?
+                  {t("forgotPassword")}
                 </Link>
               </div>
             </>
@@ -285,15 +287,15 @@ function LoginFormComponent({
             disabled={!isVerified}
             data-testid="login-submit"
           >
-            {mode === "password" ? "Sign In" : "Send Magic Link"}
+            {mode === "password" ? t("signIn") : t("sendMagicLink")}
           </Button>
         </div>
       </form>
 
       <div className="mt-6 text-center text-sm text-white/50">
-        Don&apos;t have an account?{" "}
+        {t("noAccount")}{" "}
         <Link href={buildAuthLink("/auth/signup", redirectTo)} className="text-white font-medium hover:underline">
-          Sign up
+          {t("signUp")}
         </Link>
       </div>
     </Card>

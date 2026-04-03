@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { animate } from "animejs";
+import { useTranslations } from "next-intl";
 import { Badge, Button, Card, Input } from "@/components/ui";
 import { computeOrgThemeVariables } from "@/lib/theming/org-colors";
 import { hexColorSchema } from "@/lib/schemas/common";
@@ -29,6 +30,8 @@ export function BrandingCard({
 }: BrandingCardProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tSettings = useTranslations("settings");
+  const tCommon = useTranslations("common");
 
   const [primaryColor, setPrimaryColor] = useState(initialPrimaryColor);
   const [secondaryColor, setSecondaryColor] = useState(initialSecondaryColor);
@@ -92,12 +95,12 @@ export function BrandingCard({
 
   const handleBrandingSave = async () => {
     if (!isAdmin) {
-      setBrandError("Only admins can update branding.");
+      setBrandError(tSettings("branding.adminOnlyUpdate"));
       return;
     }
 
     if (!hexColorSchema.safeParse(primaryColor).success || !hexColorSchema.safeParse(secondaryColor).success) {
-      setBrandError("Use 6-digit hex colors like #1e3a5f.");
+      setBrandError(tSettings("branding.hexError"));
       return;
     }
 
@@ -120,7 +123,7 @@ export function BrandingCard({
       const data = await res.json().catch(() => null);
 
       if (!res.ok) {
-        throw new Error(data?.error || "Unable to save branding");
+        throw new Error(data?.error || tSettings("branding.unableToSave"));
       }
 
       const updatedOrg = (data?.organization || null) as {
@@ -135,13 +138,13 @@ export function BrandingCard({
       setLogoUrl(updatedOrg?.logo_url ?? logoUrl);
       setPrimaryColor(nextPrimary);
       setSecondaryColor(nextSecondary);
-      setBrandSuccess("Branding updated for this organization.");
+      setBrandSuccess(tSettings("branding.saved"));
       setSelectedLogo(null);
       setLogoPreview(null);
       applyThemeLocally(nextPrimary, nextSecondary);
       router.refresh();
     } catch (err) {
-      setBrandError(err instanceof Error ? err.message : "Unable to save branding");
+      setBrandError(err instanceof Error ? err.message : tSettings("branding.unableToSave"));
     } finally {
       setBrandSaving(false);
     }
@@ -153,12 +156,12 @@ export function BrandingCard({
     <Card className="org-settings-card p-5 space-y-4 opacity-0 translate-y-2">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-semibold text-foreground">Organization branding</p>
+          <p className="font-semibold text-foreground">{tSettings("branding.title")}</p>
           <p className="text-sm text-muted-foreground">
-            Upload a logo and set the colors used across your org experience.
+            {tSettings("branding.description")}
           </p>
         </div>
-        <Badge variant={isAdmin ? "muted" : "warning"}>{isAdmin ? "Admin" : "View only"}</Badge>
+        <Badge variant={isAdmin ? "muted" : "warning"}>{isAdmin ? tCommon("admin") : tCommon("viewOnly")}</Badge>
       </div>
 
       <div
@@ -211,7 +214,7 @@ export function BrandingCard({
             onClick={() => fileInputRef.current?.click()}
             disabled={!isAdmin}
           >
-            Upload organization photo
+            {tSettings("branding.uploadPhoto")}
           </Button>
           {selectedLogo && (
             <p className="text-sm text-muted-foreground truncate">
@@ -222,7 +225,7 @@ export function BrandingCard({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Primary color</p>
+            <p className="text-sm font-medium text-foreground">{tSettings("branding.primaryColor")}</p>
             <div className="flex items-center gap-3">
               <input
                 type="color"
@@ -246,12 +249,12 @@ export function BrandingCard({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Buttons and highlights will use this color.
+              {tSettings("branding.primaryHint")}
             </p>
           </div>
 
           <div className="space-y-2">
-            <p className="text-sm font-medium text-foreground">Secondary color</p>
+            <p className="text-sm font-medium text-foreground">{tSettings("branding.secondaryColor")}</p>
             <div className="flex items-center gap-3">
               <input
                 type="color"
@@ -275,7 +278,7 @@ export function BrandingCard({
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Accent surfaces and pills pull from this color.
+              {tSettings("branding.secondaryHint")}
             </p>
           </div>
         </div>
@@ -285,13 +288,13 @@ export function BrandingCard({
       {brandError && <div className="text-sm text-red-600 dark:text-red-400">{brandError}</div>}
       {!isAdmin && (
         <div className="text-sm text-muted-foreground">
-          Only admins can change branding. Ask an admin to update colors or the logo.
+          {tSettings("branding.adminOnly")}
         </div>
       )}
 
       <div className="flex justify-end pt-1">
         <Button onClick={handleBrandingSave} isLoading={brandSaving} disabled={!isAdmin}>
-          Save branding
+          {tSettings("branding.saveBranding")}
         </Button>
       </div>
     </Card>

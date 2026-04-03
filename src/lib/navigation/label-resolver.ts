@@ -4,22 +4,38 @@ import { ORG_NAV_ITEMS, type NavConfig } from "./nav-items";
  * Resolves the label for a navigation item, using custom label from navConfig
  * if available, otherwise falling back to the default label.
  *
+ * When a translate function `t` is provided (from next-intl), non-English
+ * locales prefer the i18n translation over custom admin labels (which are
+ * typically set in English).
+ *
  * @param href - The href path of the navigation item (e.g., "/workouts", "/members")
  * @param navConfig - The organization's navigation configuration
- * @returns The resolved label string
+ * @param t - Optional translate function from getTranslations("nav.items") or useTranslations("nav")
+ * @param locale - Current locale string (e.g., "en", "es"). Required when t is provided.
  */
 export function resolveLabel(
     href: string,
-    navConfig: NavConfig | null | undefined
+    navConfig: NavConfig | null | undefined,
+    t?: (key: string) => string,
+    locale?: string,
 ): string {
     const defaultItem = ORG_NAV_ITEMS.find((item) => item.href === href);
-    const defaultLabel = defaultItem?.label ?? "";
 
-    if (!navConfig || !navConfig[href]?.label) {
-        return defaultLabel;
+    // When a translate function is available, use it for the default label
+    const translatedLabel = t && defaultItem?.i18nKey ? t(defaultItem.i18nKey) : "";
+    const fallbackLabel = translatedLabel || defaultItem?.label || "";
+
+    // For non-English locales, prefer the i18n translation over custom labels
+    if (locale && locale !== "en" && translatedLabel) {
+        return translatedLabel;
     }
 
-    return navConfig[href].label || defaultLabel;
+    // For English (or no locale specified), custom admin label wins
+    if (navConfig?.[href]?.label) {
+        return navConfig[href].label || fallbackLabel;
+    }
+
+    return fallbackLabel;
 }
 
 /**
@@ -29,14 +45,17 @@ export function resolveLabel(
  * @param href - The href path of the navigation item
  * @param navConfig - The organization's navigation configuration
  * @param prefix - The action prefix (default: "Add")
- * @returns The resolved action label string (e.g., "Add Workout")
+ * @param t - Optional translate function
+ * @param locale - Current locale string
  */
 export function resolveActionLabel(
     href: string,
     navConfig: NavConfig | null | undefined,
-    prefix: string = "Add"
+    prefix: string = "Add",
+    t?: (key: string) => string,
+    locale?: string,
 ): string {
-    const label = resolveLabel(href, navConfig);
+    const label = resolveLabel(href, navConfig, t, locale);
 
     if (!label) {
         return prefix;

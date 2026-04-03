@@ -9,8 +9,11 @@ import { createClient } from "@/lib/supabase/client";
 import { Button, Input, Card, InlineBanner } from "@/components/ui";
 import { sanitizeRedirectPath } from "@/lib/auth/redirect";
 import { resetPasswordSchema, type ResetPasswordForm } from "@/lib/schemas/auth";
+import { useTranslations } from "next-intl";
 
 function ResetPasswordFormComponent() {
+  const t = useTranslations("auth");
+  const tCommon = useTranslations("common");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -83,14 +86,14 @@ function ResetPasswordFormComponent() {
     return (
       <Card className="p-6 text-center">
         <p className="text-white/50 mb-4">
-          Something went wrong. Please check your connection and try again.
+          {t("somethingWentWrong")}
         </p>
         <Button className="w-full" onClick={checkSession}>
-          Try again
+          {tCommon("tryAgain")}
         </Button>
         <div className="mt-4 text-sm text-white/50">
           <Link href="/auth/login" className="text-white font-medium hover:underline">
-            Back to sign in
+            {t("backToSignIn")}
           </Link>
         </div>
       </Card>
@@ -101,14 +104,14 @@ function ResetPasswordFormComponent() {
     return (
       <Card className="p-6 text-center">
         <p className="text-white/50 mb-4">
-          This password reset link is expired or invalid.
+          {t("resetLinkExpired")}
         </p>
         <Link href="/auth/forgot-password">
-          <Button className="w-full">Request a new reset link</Button>
+          <Button className="w-full">{t("requestNewLink")}</Button>
         </Link>
         <div className="mt-4 text-sm text-white/50">
           <Link href="/auth/login" className="text-white font-medium hover:underline">
-            Back to sign in
+            {t("backToSignIn")}
           </Link>
         </div>
       </Card>
@@ -132,17 +135,17 @@ function ResetPasswordFormComponent() {
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="space-y-4">
           <Input
-            label="New Password"
+            label={t("newPassword")}
             type="password"
-            placeholder="••••••••"
+            placeholder={t("passwordPlaceholder")}
             error={errors.password?.message}
             {...register("password")}
           />
 
           <Input
-            label="Confirm Password"
+            label={t("confirmPassword")}
             type="password"
-            placeholder="••••••••"
+            placeholder={t("passwordPlaceholder")}
             error={errors.confirmPassword?.message}
             {...register("confirmPassword")}
           />
@@ -152,14 +155,14 @@ function ResetPasswordFormComponent() {
             className="w-full"
             isLoading={isLoading}
           >
-            Update Password
+            {t("updatePassword")}
           </Button>
         </div>
       </form>
 
       <div className="mt-6 text-center text-sm text-white/50">
         <Link href="/auth/login" className="text-white font-medium hover:underline">
-          Back to sign in
+          {t("backToSignIn")}
         </Link>
       </div>
     </Card>

@@ -20,6 +20,8 @@ import {
 // A realistic Bright Data response with multiple jobs, schools, descriptions, and bio
 const FULL_PROFILE: BrightDataProfileResult = {
   name: "Jane Smith",
+  first_name: "Jane",
+  last_name: "Smith",
   city: "San Francisco, California, United States",
   position: "VP of Engineering at TechCorp",
   about: "Experienced engineering leader with 15+ years building scalable systems. Passionate about mentoring and growing engineering teams.",
@@ -228,6 +230,8 @@ describe("Bright Data sync pipeline", () => {
     it("handles profile with experience using 'Present' as end_date", () => {
       const profile: BrightDataProfileResult = {
         name: "Test",
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -248,6 +252,8 @@ describe("Bright Data sync pipeline", () => {
     it("falls back to position field when experience is empty", () => {
       const profile: BrightDataProfileResult = {
         name: "Test",
+        first_name: null,
+        last_name: null,
         city: "Boston",
         position: "Founder & CEO at Stealth Startup",
         about: "Building something new",
@@ -266,6 +272,8 @@ describe("Bright Data sync pipeline", () => {
     it("handles profile with only company and no other data", () => {
       const profile: BrightDataProfileResult = {
         name: "Test User",
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -285,6 +293,8 @@ describe("Bright Data sync pipeline", () => {
     it("extracts degree and field_of_study from education", () => {
       const profile: BrightDataProfileResult = {
         name: null,
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
@@ -305,6 +315,8 @@ describe("Bright Data sync pipeline", () => {
       // Real scenario: Bright Data returns education entries without title but has educations_details
       const profile: BrightDataProfileResult = {
         name: "Louis Ciccone",
+        first_name: null,
+        last_name: null,
         city: "New York City Metropolitan Area",
         position: null,
         about: null,
@@ -329,6 +341,8 @@ describe("Bright Data sync pipeline", () => {
     it("prefers education[].title over educations_details when both exist", () => {
       const profile: BrightDataProfileResult = {
         name: null,
+        first_name: null,
+        last_name: null,
         city: null,
         position: null,
         about: null,
