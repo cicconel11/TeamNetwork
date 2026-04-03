@@ -143,10 +143,14 @@ test("consumeSSEStream forwards pending_action events before completion", async 
 test("MessageInput renders tool status label when provided", () => {
   const html = renderToStaticMarkup(
     React.createElement(MessageInput, {
+      input: "Show me members",
       isStreaming: true,
       error: null,
       toolStatusLabel: "Finding connections...",
+      onInputChange: () => {},
       onSend: async () => {},
+      onAttachFile: async () => {},
+      onRemoveAttachment: () => {},
       onCancel: () => {},
       onClearError: () => {},
     })
@@ -154,6 +158,89 @@ test("MessageInput renders tool status label when provided", () => {
 
   assert.match(html, /Finding connections\.\.\./);
   assert.doesNotMatch(html, />Thinking\.\.\.</);
+});
+
+test("MessageInput renders attached schedule image state, generic labels, and upload errors", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(MessageInput, {
+      input: "Please extract this schedule file and prepare events for confirmation.",
+      isStreaming: false,
+      isUploadingAttachment: false,
+      error: null,
+      attachmentError: "File must be a PDF or image",
+      attachment: {
+        storagePath: "org-1/user-1/schedule.png",
+        fileName: "varsity-schedule.png",
+        mimeType: "image/png",
+      },
+      onInputChange: () => {},
+      onSend: async () => {},
+      onAttachFile: async () => {},
+      onRemoveAttachment: () => {},
+      onCancel: () => {},
+      onClearError: () => {},
+    })
+  );
+
+  assert.match(html, /varsity-schedule\.png/);
+  assert.match(html, /Remove attached schedule file/);
+  assert.match(html, /Replace attached schedule file/);
+  assert.match(html, /accept="\.pdf,\.png,\.jpg,\.jpeg,application\/pdf,image\/png,image\/jpeg,image\/jpg"/);
+  assert.match(html, /File must be a PDF or image/);
+});
+
+test("MessageInput renders generic uploading copy for schedule files", () => {
+  const html = renderToStaticMarkup(
+    React.createElement(MessageInput, {
+      input: "",
+      isStreaming: false,
+      isUploadingAttachment: true,
+      error: null,
+      onInputChange: () => {},
+      onSend: async () => {},
+      onAttachFile: async () => {},
+      onRemoveAttachment: () => {},
+      onCancel: () => {},
+      onClearError: () => {},
+    })
+  );
+
+  assert.match(html, /Uploading schedule file\.\.\./);
+});
+
+test("AIPanel uses generic schedule file defaults and preserves uploaded mime types", () => {
+  const source = readSource("src/components/ai-assistant/AIPanel.tsx");
+
+  assert.match(
+    source,
+    /const DEFAULT_SCHEDULE_FILE_PROMPT =\s*"Please extract this schedule file and prepare events for confirmation\.";/,
+    "AIPanel should use the generic schedule-file prompt"
+  );
+  assert.match(
+    source,
+    /mimeType: data\.mimeType,/,
+    "AIPanel should preserve the uploaded mimeType returned by the server"
+  );
+  assert.match(
+    source,
+    /setAttachmentError\(data\.error \|\| "Failed to upload schedule file\."\);/,
+    "AIPanel should use generic upload fallback copy"
+  );
+  assert.match(
+    source,
+    /error instanceof Error \? error\.message : "Failed to upload schedule file\."/,
+    "AIPanel should keep generic upload failure copy in the catch path"
+  );
+  assert.match(
+    source,
+    /fetch\(`\/api\/ai\/\$\{orgId\}\/upload-schedule`, \{\s*method: "DELETE"/,
+    "AIPanel should delete pending schedule uploads when attachments are cleared"
+  );
+  assert.match(
+    source,
+    /clearAttachment\(\{ deleteRemote: false \}\);/,
+    "AIPanel should leave extractor-owned attachments alone after a successful send"
+  );
 });
 
 test("useAIStream resets tool status during key lifecycle transitions", () => {
@@ -198,5 +285,10 @@ test("useAIStream resets tool status during key lifecycle transitions", () => {
     source,
     /error: err instanceof Error \? err\.message : \"Unknown error\",\s*toolStatusLabel: null,/s,
     "unexpected errors should clear tool status"
+  );
+  assert.match(
+    source,
+    /attachment: opts\.attachment,/,
+    "chat requests should include attachment metadata when provided"
   );
 });
