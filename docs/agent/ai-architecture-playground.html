@@ -847,14 +847,19 @@ const COMPONENTS = [
     files: [
       'src/lib/ai/tools/definitions.ts',
       'src/lib/ai/tools/executor.ts',
+      'src/lib/ai/schedule-extraction.ts',
+      'src/lib/ai/schedule-upload-path.ts',
       'src/lib/ai/pending-actions.ts',
       'src/lib/ai/navigation-targets.ts',
       'src/lib/ai/response-composer.ts',
       'src/app/api/ai/[orgId]/chat/handler.ts',
-      'supabase/migrations/20260727000000_ai_pending_actions.sql'
+      'src/app/api/ai/[orgId]/upload-schedule/handler.ts',
+      'supabase/migrations/20260727000000_ai_pending_actions.sql',
+      'supabase/migrations/20260402120000_ai_schedule_uploads_bucket.sql',
+      'supabase/migrations/20260403120000_ai_schedule_uploads_auth_delete.sql'
     ],
     built: [
-      'AI_TOOLS defines 10 OpenAI function-calling tools: list_members, list_events, list_announcements, list_discussions, list_job_postings, prepare_job_posting, prepare_discussion_thread, get_org_stats, suggest_connections, find_navigation_targets',
+      'AI_TOOLS defines 12 OpenAI function-calling tools: list_members, list_events, list_announcements, list_discussions, list_job_postings, prepare_job_posting, prepare_discussion_thread, get_org_stats, suggest_connections, find_navigation_targets, scrape_schedule_website, extract_schedule_pdf',
       'Full Zod argument validation per tool (limit, upcoming, pinned_only, etc.) with fail-closed behavior',
       'list_members reads valid members columns only, prefers members first_name + last_name, and falls back to public.users.name for placeholder linked rows',
       'executeToolCall with safeToolQuery/safeToolCount error wrappers',
@@ -867,6 +872,9 @@ const COMPONENTS = [
       'Usage accumulated across both passes via usageRef',
       'Tool calls recorded in audit log (toolCalls array)',
       'Tool-backed pass-2 text is withheld until grounding verification succeeds',
+      'Schedule ingestion tools: scrape_schedule_website (fetchUrlSafe with domain allowlist enforcement) and extract_schedule_pdf (PDF/image extraction with 2MB image size cap)',
+      'Schedule upload API: private storage bucket with MIME+magic-byte validation, UUID orgId gating, shared path-ownership check (isOwnedScheduleUploadPath), authenticated DELETE RLS policy',
+      'LLM-based schedule extraction pipeline: text/PDF/image → Zod-validated event drafts → pending_actions batch confirmation flow',
       'Confirmation-gated write tools: prepare_job_posting and prepare_discussion_thread create pending actions (ai_pending_actions table) with 15-min expiry',
       'Pending action lifecycle: pending → confirmed → executed | failed | cancelled | expired (with rollback-safe CAS transitions)',
       'Confirm handler rolls back to pending on unknown action_type (no stuck confirmed rows)',
@@ -880,7 +888,7 @@ const COMPONENTS = [
     missing: [
       'No tool chaining (intentionally limited to single pass)',
       'No streaming tool execution (tools run synchronously between passes)',
-      'Write tools limited to job postings and discussion threads (no create events, send announcements, manage members yet)'
+      'Write tools limited to job postings, discussion threads, and calendar events from schedule extraction (no send announcements, manage members yet)'
     ]
   },
   {

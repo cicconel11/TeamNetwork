@@ -25,6 +25,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/ai/turn-execution-policy.ts` | Internal execution-policy builder | `buildTurnExecutionPolicy` |
 | `src/lib/ai/tool-grounding.ts` | Deterministic verifier for current read-tool summaries, including connection-template validation against `suggest_connections` payload states, names, order, and reasons | `verifyToolBackedResponse` |
 | `src/lib/ai/tools/executor.ts` | Read-tool executor with executor-side active-admin recheck and discriminated result union | `executeToolCall`, `ToolExecutionResult`, `ToolExecutionContext` |
+| `src/lib/ai/schedule-upload-path.ts` | Shared path-ownership validator with traversal prevention for schedule uploads | `isOwnedScheduleUploadPath` |
+| `src/lib/ai/schedule-extraction.ts` | LLM-based schedule extraction from text/PDF/image with Zod validation and retry | `extractScheduleFromText`, `extractScheduleFromImage` |
 | `src/lib/falkordb/suggestions.ts` | `suggest_connections` implementation: unified person projection, server-side person-query resolution, chat-ready payload normalization, SQL fallback parity, graph freshness metadata | `suggestConnections` |
 | `src/lib/falkordb/client.ts` | Falkor client wrapper with env-gated availability and graph-scoped query helper | `falkorClient`, `FalkorUnavailableError`, `FalkorQueryError` |
 | `src/lib/falkordb/sync.ts` | Graph sync worker for members, alumni, and mentorship pairs | `processGraphSyncQueue` |
@@ -46,6 +48,7 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `supabase/migrations/20260321100001_ai_semantic_cache.sql` | DDL: `ai_semantic_cache`, purge RPC, audit columns |
 | `supabase/migrations/20260402120000_ai_schedule_uploads_bucket.sql` | Creates the private AI schedule upload bucket with PDF + image MIME allowlist |
 | `supabase/migrations/20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills preexisting AI schedule buckets so uploaded images are accepted |
+| `supabase/migrations/20260403120000_ai_schedule_uploads_auth_delete.sql` | Adds authenticated DELETE policy for defense-in-depth on schedule upload bucket |
 | `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
 | `supabase/migrations/20260719000000_ai_audit_stage_timings.sql` | Adds `stage_timings` JSONB to `ai_audit_log` |
 | `supabase/migrations/20260727000000_ai_pending_actions.sql` | Adds `ai_pending_actions` for confirmation-gated assistant writes |
