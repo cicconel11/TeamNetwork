@@ -186,26 +186,14 @@ export function AIPanel({ orgId }: AIPanelProps) {
     options?: { keepalive?: boolean }
   ) => {
     try {
-      const response = await fetch(`/api/ai/${orgId}/upload-schedule`, {
+      await fetch(`/api/ai/${orgId}/upload-schedule`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storagePath }),
         keepalive: options?.keepalive ?? false,
       });
-
-      if (!response.ok && response.status !== 404) {
-        const data = await response.json().catch(() => null);
-        console.warn("[ai/upload-schedule] Failed to delete pending upload", {
-          storagePath,
-          status: response.status,
-          error: data && typeof data.error === "string" ? data.error : null,
-        });
-      }
-    } catch (error) {
-      console.warn("[ai/upload-schedule] Failed to delete pending upload", {
-        storagePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
+      // Deletion failures are non-fatal — the upload is being discarded anyway.
     }
   }, [orgId]);
 
@@ -515,11 +503,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
 
   const handleConfirmAllPendingActions = useCallback(async () => {
     const ids = pendingActions.map((a) => a.actionId);
-    const results = await Promise.allSettled(
-      ids.map((id) => handleConfirmPendingAction(id))
-    );
     // Errors are tracked per-action by handleConfirmPendingAction
-    void results;
+    await Promise.allSettled(ids.map((id) => handleConfirmPendingAction(id)));
   }, [pendingActions, handleConfirmPendingAction]);
 
   const handleCancelPendingAction = useCallback(async (actionId: string) => {
