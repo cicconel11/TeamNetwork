@@ -1269,7 +1269,11 @@ export async function executeToolCall(
   const sb = ctx.serviceSupabase;
 
   try {
-    return await withStageTimeout(`tool_${toolName}`, TOOL_EXECUTION_TIMEOUT_MS, async () => {
+    // Batch tools need more time for multiple sequential DB round-trips
+    const timeoutMs = toolName === "prepare_events_batch"
+      ? TOOL_EXECUTION_TIMEOUT_MS * 3
+      : TOOL_EXECUTION_TIMEOUT_MS;
+    return await withStageTimeout(`tool_${toolName}`, timeoutMs, async () => {
       switch (toolName) {
         case "list_members":
           return listMembers(sb, ctx.orgId, args as z.infer<typeof listMembersSchema>, logContext);

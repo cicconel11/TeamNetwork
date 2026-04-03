@@ -816,7 +816,12 @@ function getPass1Tools(
     // Detect multi-event intent: "create 3 events", "schedule multiple events", numbered list patterns
     const multiEventPattern = /(?:\b(?:\d+|two|three|four|five|six|seven|eight|nine|ten|multiple|several|a few|some|batch)\s+events?\b|(?:events?.*,.*(?:and|&)\s))/i;
     if (multiEventPattern.test(message)) {
-      return [AI_TOOL_MAP.prepare_events_batch];
+      // Provide both tools — the model can use prepare_events_batch for all
+      // events in one call, or call prepare_event multiple times via parallel
+      // tool calls. Either path works because the frontend accumulates
+      // pending actions. Importantly, we do NOT force tool choice here — the
+      // batch schema is too complex for the 15s pass-1 timeout when forced.
+      return [AI_TOOL_MAP.prepare_events_batch, AI_TOOL_MAP.prepare_event];
     }
     return [AI_TOOL_MAP.prepare_event];
   }
@@ -869,8 +874,7 @@ function getForcedPass1ToolChoice(
   if (
     forcedToolName !== "prepare_job_posting" &&
     forcedToolName !== "prepare_discussion_thread" &&
-    forcedToolName !== "prepare_event" &&
-    forcedToolName !== "prepare_events_batch"
+    forcedToolName !== "prepare_event"
   ) {
     return undefined;
   }
