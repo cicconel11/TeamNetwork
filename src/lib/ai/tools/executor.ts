@@ -26,7 +26,8 @@ import {
 } from "@/lib/schemas/events-ai";
 import { fetchJobSourceDraft, JobSourceIntakeError } from "@/lib/jobs/source-intake";
 import { ScheduleSecurityError } from "@/lib/schedule-security/errors";
-import { safeFetch } from "@/lib/schedule-security/safe-fetch";
+import { fetchUrlSafe } from "@/lib/schedule-security/fetchUrlSafe";
+import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 import {
   buildPendingActionSummary,
   createPendingAction,
@@ -296,6 +297,7 @@ async function safeToolCount(
 const MAX_BODY_PREVIEW_CHARS = 500;
 const SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS = 10_000;
 const SCRAPE_SCHEDULE_MAX_BYTES = 512 * 1024;
+const MAX_SOURCE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — prevents oversized base64 payloads to LLM
 const SCHEDULE_UPLOAD_BUCKET = "ai-schedule-uploads";
 const SCHEDULE_IMAGE_MIME_TYPES = new Set<ScheduleImageMimeType>([
   "image/png",
@@ -337,11 +339,6 @@ async function getScheduleExtractionModule(): Promise<ScheduleExtractionModule> 
 
   cachedScheduleExtractionModule = await import("@/lib/ai/schedule-extraction");
   return cachedScheduleExtractionModule;
-}
-
-function isOwnedScheduleUploadPath(ctx: ToolExecutionContext, storagePath: string): boolean {
-  const expectedPrefix = `${ctx.orgId}/${ctx.userId}/`;
-  return storagePath.startsWith(expectedPrefix);
 }
 
 function truncateBody(body: string | null | undefined): string | null {
@@ -1196,14 +1193,18 @@ async function scrapeScheduleWebsite(
     return toolError("Failed to load organization context");
   }
 
-  let response: Awaited<ReturnType<typeof safeFetch>>;
+  let response: Awaited<ReturnType<typeof fetchUrlSafe>>;
   try {
-    response = await safeFetch(args.url, {
+    response = await fetchUrlSafe(args.url, {
       timeoutMs: SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS,
       maxBytes: SCRAPE_SCHEDULE_MAX_BYTES,
       headers: {
         Accept: "text/html,application/xhtml+xml,text/plain",
       },
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      supabase: sb,
+      allowlistMode: "enforce",
     });
   } catch (error) {
     if (error instanceof ScheduleSecurityError) {
@@ -1214,10 +1215,6 @@ async function scrapeScheduleWebsite(
       error: getSafeErrorMessage(error),
     });
     return toolError("Unable to fetch schedule website");
-  }
-
-  if (response.status >= 400) {
-    return toolError(`Fetch failed (${response.status})`);
   }
 
   const load = await getCheerioLoad();
@@ -1292,7 +1289,7 @@ async function extractSchedulePdf(
   }
   const attachment = ctx.attachment;
 
-  if (!isOwnedScheduleUploadPath(ctx, attachment.storagePath)) {
+  if (!isOwnedScheduleUploadPath(ctx.orgId, ctx.userId, attachment.storagePath)) {
     aiLog("warn", "ai-tools", "extract_schedule_pdf invalid storage path", logContext, {
       storagePath: attachment.storagePath,
     });
@@ -1331,6 +1328,12 @@ async function extractSchedulePdf(
       sourceLabel: attachment.fileName,
       now: new Date().toISOString(),
     };
+
+    if (attachment.mimeType !== "application/pdf" && attachmentBuffer.byteLength > MAX_SOURCE_IMAGE_BYTES) {
+      return toolError(
+        `Image too large for extraction (${Math.round(attachmentBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2MB.`
+      );
+    }
 
     let extracted: ScheduleExtractionResult;
 
