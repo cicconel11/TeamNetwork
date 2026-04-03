@@ -1547,6 +1547,87 @@ test("POST /api/ai/[orgId]/chat deterministically formats schedule image extract
   assert.equal(composeCalls, 1);
 });
 
+test("POST /api/ai/[orgId]/chat deterministically formats schedule image configuration failures", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "generic fallback should not appear" };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "tool_error",
+      error:
+        "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo.",
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/1712000000003_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /Schedule image extraction is misconfigured in this environment/i);
+  assert.match(body, /ZAI_IMAGE_MODEL/);
+  assert.doesNotMatch(body, /generic fallback should not appear/i);
+  assert.equal(composeCalls, 1);
+});
+
 test("POST /api/ai/[orgId]/chat short-circuits suspicious prompt-injection attempts before model execution", async () => {
   let composeCalls = 0;
 

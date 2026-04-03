@@ -1,5 +1,24 @@
 import OpenAI from "openai";
 
+const DEFAULT_ZAI_MODEL = "glm-5";
+const DEFAULT_ZAI_IMAGE_MODEL = "glm-5v-turbo";
+
+function validateZaiImageModel(value: string): string {
+  const normalized = value.trim();
+
+  if (normalized.length === 0) {
+    return DEFAULT_ZAI_IMAGE_MODEL;
+  }
+
+  if (!normalized.startsWith("glm-")) {
+    throw new Error(
+      `Invalid ZAI_IMAGE_MODEL value "${normalized}". Expected a Z.AI vision model such as ${DEFAULT_ZAI_IMAGE_MODEL}.`
+    );
+  }
+
+  return normalized;
+}
+
 export function createZaiClient(): OpenAI {
   const apiKey = process.env.ZAI_API_KEY;
   if (!apiKey) {
@@ -13,9 +32,9 @@ export function createZaiClient(): OpenAI {
 }
 
 export function getZaiModel(): string {
-  return process.env.ZAI_MODEL || "glm-5";
+  return process.env.ZAI_MODEL || DEFAULT_ZAI_MODEL;
 }
 
 export function getZaiImageModel(): string {
-  return process.env.ZAI_IMAGE_MODEL || "glm-5v-turbo";
+  return validateZaiImageModel(process.env.ZAI_IMAGE_MODEL || DEFAULT_ZAI_IMAGE_MODEL);
 }
