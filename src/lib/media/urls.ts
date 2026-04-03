@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// 24-hour signed URLs + 2-hour browser cache reduce storage egress significantly.
+// Tradeoff: a revoked member or moderated image stays accessible via cached/signed
+// URLs for up to 24h. Acceptable because auth is checked at the API layer before
+// URLs are issued, and the bucket is private (not publicly accessible).
 const SIGNED_URL_EXPIRY = 86400;
 const BUCKET = "org-media";
 
@@ -66,6 +70,7 @@ export async function batchGetMediaBrowseUrls(
     .createSignedUrls(paths, SIGNED_URL_EXPIRY);
 
   if (error || !data) {
+    console.error("createSignedUrls failed (browse):", error?.message);
     for (const m of media) {
       results.set(m.id, { thumbnailUrl: null });
     }
@@ -93,7 +98,7 @@ export async function batchGetGridPreviewUrls(
 ): Promise<Map<string, GridPreviewUrlResult>> {
   const results = new Map<string, GridPreviewUrlResult>();
 
-  const images: Array<{ index: number; id: string; path: string }> = [];
+  const images: Array<{ id: string; path: string }> = [];
 
   for (let i = 0; i < media.length; i++) {
     const m = media[i];
@@ -101,7 +106,7 @@ export async function batchGetGridPreviewUrls(
     if (isVideo) {
       results.set(m.id, { thumbnailUrl: null });
     } else {
-      images.push({ index: i, id: m.id, path: m.preview_storage_path ?? m.storage_path });
+      images.push({ id: m.id, path: m.preview_storage_path ?? m.storage_path });
     }
   }
 
@@ -114,6 +119,7 @@ export async function batchGetGridPreviewUrls(
     .createSignedUrls(paths, SIGNED_URL_EXPIRY);
 
   if (error || !data) {
+    console.error("createSignedUrls failed (grid):", error?.message);
     for (const img of images) {
       results.set(img.id, { thumbnailUrl: null });
     }

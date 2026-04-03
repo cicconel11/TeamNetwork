@@ -6,7 +6,8 @@
  * Downloads originals from Supabase Storage, resizes to 1024px max dimension
  * at 82% JPEG quality, uploads the preview, and updates the DB row.
  *
- * Usage: node scripts/backfill-previews.mjs [--dry-run]
+ * Prerequisites: npm install --no-save sharp
+ * Usage: node --env-file=.env.local scripts/backfill-previews.mjs [--dry-run]
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -27,20 +28,34 @@ const JPEG_QUALITY = 82;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-async function fetchImagesMissingPreviews() {
-  const { data, error } = await supabase
-    .from("media_items")
-    .select("id, storage_path, mime_type")
-    .is("deleted_at", null)
-    .eq("media_type", "image")
-    .is("preview_storage_path", null)
-    .order("created_at", { ascending: true });
+const PAGE_SIZE = 100;
 
-  if (error) {
-    throw new Error(`Query failed: ${error.message}`);
+async function fetchImagesMissingPreviews() {
+  const allRows = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("media_items")
+      .select("id, storage_path, mime_type")
+      .is("deleted_at", null)
+      .eq("media_type", "image")
+      .is("preview_storage_path", null)
+      .order("created_at", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (error) {
+      throw new Error(`Query failed: ${error.message}`);
+    }
+
+    const rows = data ?? [];
+    allRows.push(...rows);
+
+    if (rows.length < PAGE_SIZE) break;
+    offset += PAGE_SIZE;
   }
 
-  return data ?? [];
+  return allRows;
 }
 
 function buildPreviewPath(storagePath) {
@@ -89,8 +104,11 @@ async function processItem(item) {
     });
 
   if (uploadError) {
-    // If preview already exists in storage, still update the DB
-    if (!uploadError.message?.includes("already exists")) {
+    // 409 = file already exists in storage — still update the DB pointer
+    const isConflict =
+      uploadError.statusCode === "409" || uploadError.statusCode === 409 ||
+      uploadError.message?.includes("already exists");
+    if (!isConflict) {
       console.error(`  SKIP ${id}: upload failed — ${uploadError.message}`);
       return { id, status: "upload_failed" };
     }

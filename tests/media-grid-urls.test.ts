@@ -52,6 +52,24 @@ describe("batchGetGridPreviewUrls", () => {
     assert.equal(map.get("b")?.thumbnailUrl, null);
   });
 
+  it("returns null thumbnails when createSignedUrls fails", async () => {
+    const errorClient = {
+      storage: {
+        from: () => ({
+          createSignedUrls: async () => ({ data: null, error: { message: "storage down" } }),
+        }),
+      },
+    };
+
+    const map = await batchGetGridPreviewUrls(errorClient as never, [
+      { id: "err-a", storage_path: "o/i/1.jpg", mime_type: "image/jpeg", media_type: "image" as const },
+      { id: "err-b", storage_path: "o/i/2.jpg", mime_type: "image/jpeg", media_type: "image" as const },
+    ]);
+
+    assert.equal(map.get("err-a")?.thumbnailUrl, null);
+    assert.equal(map.get("err-b")?.thumbnailUrl, null);
+  });
+
   it("makes exactly 1 batch call for multiple images", async () => {
     const { batchCalls, mockClient } = createMockClient();
 
@@ -99,6 +117,24 @@ describe("batchGetMediaBrowseUrls", () => {
     assert.equal(batchCalls.length, 1);
     assert.deepEqual(batchCalls[0], ["feed/legacy.jpg"]);
     assert.equal(map.get("browse-2")?.thumbnailUrl, "https://example.com/feed/legacy.jpg");
+  });
+
+  it("returns null thumbnails when createSignedUrls fails", async () => {
+    const errorClient = {
+      storage: {
+        from: () => ({
+          createSignedUrls: async () => ({ data: null, error: { message: "storage down" } }),
+        }),
+      },
+    };
+
+    const map = await batchGetMediaBrowseUrls(errorClient as never, [
+      { id: "err-1", storage_path: "feed/a.jpg" },
+      { id: "err-2", storage_path: "feed/b.jpg" },
+    ]);
+
+    assert.equal(map.get("err-1")?.thumbnailUrl, null);
+    assert.equal(map.get("err-2")?.thumbnailUrl, null);
   });
 });
 
