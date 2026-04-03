@@ -1220,6 +1220,62 @@ function formatPrepareEventsBatchResponse(data: unknown): string | null {
   return null;
 }
 
+function formatExtractScheduleFileResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as {
+    state?: string;
+    pending_actions?: unknown[];
+    validation_errors?: Array<{ index: number; missing_fields: string[] }>;
+    source_file?: unknown;
+  };
+
+  if (payload.state === "no_events_found") {
+    return "I couldn't find any usable events in that schedule file. Try a clearer photo or upload a PDF export if you have one.";
+  }
+
+  if (payload.state === "missing_fields") {
+    const errors = Array.isArray(payload.validation_errors) ? payload.validation_errors : [];
+    const missingFields = [...new Set(errors.flatMap((error) => error.missing_fields))];
+
+    if (missingFields.length === 0) {
+      return "I could read the schedule file, but I need a few more event details before I can prepare anything for confirmation.";
+    }
+
+    return `I could read the schedule file, but I still need: ${missingFields.join(", ")} before I can prepare those events.`;
+  }
+
+  if (payload.state === "needs_batch_confirmation") {
+    const count = Array.isArray(payload.pending_actions) ? payload.pending_actions.length : 0;
+    const skipped = Array.isArray(payload.validation_errors) ? payload.validation_errors.length : 0;
+    let message = `I drafted ${count} event${count === 1 ? "" : "s"} from that schedule file. Review the details below and confirm when you're ready.`;
+    if (skipped > 0) {
+      message += ` ${skipped} event${skipped === 1 ? "" : "s"} still need more details.`;
+    }
+    return message;
+  }
+
+  return null;
+}
+
+function formatDeterministicToolErrorResponse(name: string, error: string): string | null {
+  if (name !== "extract_schedule_pdf") {
+    return null;
+  }
+
+  if (error === "Unable to read attached schedule image") {
+    return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
+  }
+
+  if (error === "Unable to read attached PDF") {
+    return "I couldn't read that PDF schedule. Try re-exporting the PDF or upload a clear image instead.";
+  }
+
+  return null;
+}
+
 function formatDeterministicToolResponse(
   name: string,
   data: unknown
@@ -1245,6 +1301,8 @@ function formatDeterministicToolResponse(
       return formatPrepareEventResponse(data);
     case "prepare_events_batch":
       return formatPrepareEventsBatchResponse(data);
+    case "extract_schedule_pdf":
+      return formatExtractScheduleFileResponse(data);
     case "get_org_stats":
       return formatOrgStatsResponse(data);
     case "list_members":
@@ -3127,10 +3185,26 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                   successfulToolResults[0].data
                 )
               : null;
+          const singleToolError =
+            toolResults.length === 1 &&
+            successfulToolResults.length === 0 &&
+            toolResults[0].data &&
+            typeof toolResults[0].data === "object" &&
+            "error" in toolResults[0].data &&
+            typeof toolResults[0].data.error === "string"
+              ? toolResults[0].data.error
+              : null;
+          const deterministicToolErrorContent =
+            singleToolError
+              ? formatDeterministicToolErrorResponse(
+                  toolResults[0].name,
+                  singleToolError
+                )
+              : null;
 
-          if (deterministicToolContent) {
+          if (deterministicToolContent || deterministicToolErrorContent) {
             skipStage(stageTimings, "pass2");
-            pass2BufferedContent = deterministicToolContent;
+            pass2BufferedContent = deterministicToolContent ?? deterministicToolErrorContent ?? "";
           } else {
             const hasToolErrors = toolResults.length > successfulToolResults.length;
             const connectionPass2 = successfulToolResults.some(

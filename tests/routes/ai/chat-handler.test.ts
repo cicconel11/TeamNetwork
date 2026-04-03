@@ -1288,6 +1288,265 @@ test("POST /api/ai/[orgId]/chat uses member-specific fallback for list_members g
   assert.match(body, /"type":"done"/);
 });
 
+test("POST /api/ai/[orgId]/chat deterministically formats successful schedule image imports", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "ok",
+      data: {
+        state: "needs_batch_confirmation",
+        pending_actions: [
+          {
+            id: "pending-event-1",
+            action_type: "create_event",
+            payload: {
+              title: "Acme vs Central",
+              start_date: "2026-04-10",
+              start_time: "18:30",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Acme vs Central",
+              description: "Review before creating",
+            },
+          },
+        ],
+      },
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/1712000000000_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I drafted 1 event from that schedule file/i);
+  assert.match(body, /"type":"pending_actions_batch"/);
+  assert.doesNotMatch(body, /fallback prose should not appear/);
+  assert.equal(composeCalls, 1);
+});
+
+test("POST /api/ai/[orgId]/chat deterministically formats no-events schedule image results", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "no-events fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "ok",
+      data: {
+        state: "no_events_found",
+        source_file: "schedule.png",
+      },
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/1712000000001_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I couldn.t find any usable events in that schedule file/i);
+  assert.doesNotMatch(body, /no-events fallback prose should not appear/);
+  assert.equal(composeCalls, 1);
+});
+
+test("POST /api/ai/[orgId]/chat deterministically formats schedule image extraction failures", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "I wasn't able to read or extract data from the attached image." };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "tool_error",
+      error: "Unable to read attached schedule image",
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/1712000000002_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I couldn.t read that schedule image/i);
+  assert.doesNotMatch(body, /I wasn't able to read or extract data from the attached image/i);
+  assert.equal(composeCalls, 1);
+});
+
 test("POST /api/ai/[orgId]/chat short-circuits suspicious prompt-injection attempts before model execution", async () => {
   let composeCalls = 0;
 
