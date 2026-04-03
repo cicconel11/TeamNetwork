@@ -59,11 +59,21 @@ export interface ToolExecutionContext {
   };
 }
 
+export type ScheduleFileToolErrorCode =
+  | "attachment_required"
+  | "invalid_attachment_path"
+  | "org_context_failed"
+  | "attachment_unavailable"
+  | "image_too_large"
+  | "image_unreadable"
+  | "image_model_misconfigured"
+  | "pdf_unreadable";
+
 export type ToolExecutionResult =
   | { kind: "ok"; data: unknown }
   | { kind: "forbidden"; error: "Forbidden" }
   | { kind: "auth_error"; error: "Auth check failed" }
-  | { kind: "tool_error"; error: string }
+  | { kind: "tool_error"; error: string; code?: ScheduleFileToolErrorCode }
   | { kind: "timeout"; error: "Tool timed out" };
 
 type CountResult =
@@ -225,8 +235,8 @@ function getSafeErrorMessage(error: unknown): string {
   return "unknown_error";
 }
 
-function toolError(error: string): ToolExecutionResult {
-  return { kind: "tool_error", error };
+function toolError(error: string, code?: ScheduleFileToolErrorCode): ToolExecutionResult {
+  return code ? { kind: "tool_error", error, code } : { kind: "tool_error", error };
 }
 
 function isScheduleImageConfigurationError(error: unknown): boolean {
@@ -1290,7 +1300,7 @@ async function extractSchedulePdf(
     (ctx.attachment.mimeType !== "application/pdf"
       && !SCHEDULE_IMAGE_MIME_TYPES.has(ctx.attachment.mimeType as ScheduleImageMimeType))
   ) {
-    return toolError("Schedule attachment required");
+    return toolError("Schedule attachment required", "attachment_required");
   }
   const attachment = ctx.attachment;
 
@@ -1298,7 +1308,7 @@ async function extractSchedulePdf(
     aiLog("warn", "ai-tools", "extract_schedule_pdf invalid storage path", logContext, {
       storagePath: attachment.storagePath,
     });
-    return toolError("Invalid schedule attachment path");
+    return toolError("Invalid schedule attachment path", "invalid_attachment_path");
   }
 
   const { data: org, error: orgError } = await sb
@@ -1311,7 +1321,7 @@ async function extractSchedulePdf(
     aiLog("warn", "ai-tools", "extract_schedule_pdf org lookup failed", logContext, {
       error: getSafeErrorMessage(orgError),
     });
-    return toolError("Failed to load organization context");
+    return toolError("Failed to load organization context", "org_context_failed");
   }
 
   const { data: attachmentFile, error: downloadError } = await sb.storage
@@ -1323,7 +1333,7 @@ async function extractSchedulePdf(
       error: getSafeErrorMessage(downloadError),
       storagePath: attachment.storagePath,
     });
-    return toolError("Unable to load attached schedule file");
+    return toolError("Unable to load attached schedule file", "attachment_unavailable");
   }
 
   try {
@@ -1336,7 +1346,8 @@ async function extractSchedulePdf(
 
     if (attachment.mimeType !== "application/pdf" && attachmentBuffer.byteLength > MAX_SOURCE_IMAGE_BYTES) {
       return toolError(
-        `Image too large for extraction (${Math.round(attachmentBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2MB.`
+        `Image too large for extraction (${Math.round(attachmentBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2MB.`,
+        "image_too_large"
       );
     }
 
@@ -1366,7 +1377,7 @@ async function extractSchedulePdf(
             })();
     } catch (error) {
       if (attachment.mimeType === "application/pdf") {
-        return toolError("Unable to read attached PDF");
+        return toolError("Unable to read attached PDF", "pdf_unreadable");
       }
 
       if (isScheduleImageConfigurationError(error)) {
@@ -1376,7 +1387,8 @@ async function extractSchedulePdf(
           mimeType: attachment.mimeType,
         });
         return toolError(
-          "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo."
+          "Schedule image extraction is misconfigured. Set ZAI_IMAGE_MODEL to a Z.AI vision model such as glm-5v-turbo.",
+          "image_model_misconfigured"
         );
       }
 
@@ -1385,7 +1397,7 @@ async function extractSchedulePdf(
         storagePath: attachment.storagePath,
         mimeType: attachment.mimeType,
       });
-      return toolError("Unable to read attached schedule image");
+      return toolError("Unable to read attached schedule image", "image_unreadable");
     }
 
     const extractionValidationErrors = extracted.rejected_rows ?? [];
