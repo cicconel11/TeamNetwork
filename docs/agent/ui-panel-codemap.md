@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, persisted open/close preference, persisted active-thread selection per org and surface, live tool-status labels, and review/confirm UI for assistant pending actions. All state is local to the panel and hook layer. The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
+The AI assistant UI is a slide-out panel anchored to the right edge of the screen, available to org admins. It supports chat with streaming responses, thread management, markdown rendering, route-aware scope hints, starter prompts, one attached schedule file per draft (`PDF`, `PNG`, `JPEG`, `JPG`), persisted open/close preference, persisted active-thread selection per org and surface, live tool-status labels, and review/confirm UI for assistant pending actions. All state is local to the panel and hook layer. The panel communicates with the backend via `fetch` and consumes Server-Sent Events for streaming responses.
 
 ## File Map
 
@@ -15,7 +15,7 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
 | `src/components/ai-assistant/AIPanel.tsx` | Main panel component — chat view + thread list view | `AIPanel` (L24) |
 | `src/components/ai-assistant/AIEdgeTab.tsx` | Floating edge tab to toggle the panel (admin-only) | `AIEdgeTab` (L10) |
 | `src/components/ai-assistant/MessageList.tsx` | Renders message bubbles, streaming indicator, empty state, starter prompts | `MessageList` (L16) |
-| `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, error display, route-aware placeholder text | `MessageInput` (L14) |
+| `src/components/ai-assistant/MessageInput.tsx` | Textarea with send/stop buttons, schedule-file picker, error display, route-aware placeholder text | `MessageInput` (L14) |
 | `src/components/ai-assistant/ThreadList.tsx` | Thread listing with select, new, and delete actions | `ThreadList` (L16) |
 | `src/components/ai-assistant/AssistantMessageContent.tsx` | Markdown renderer (react-markdown + remark-gfm) | `AssistantMessageContent` (L11) |
 | `src/components/ai-assistant/PendingActionCard.tsx` | Confirmation UI for assistant-prepared writes | `PendingActionCard` |
@@ -56,9 +56,10 @@ The AI assistant UI is a slide-out panel anchored to the right edge of the scree
               │     │     └── Confirm / Cancel assistant-prepared writes
               │     └── MessageInput
               │           ├── Error banner (dismissible)
+              │           ├── Schedule-file chip + upload state
               │           ├── Streaming indicator ("Thinking..." + Stop)
               │           ├── Live tool-status label
-              │           └── Textarea + Send/Stop button
+              │           └── Textarea + schedule-file picker + Send/Stop button
               └── [view === "threads"]
                     └── ThreadList
                           ├── "New conversation" button
@@ -77,6 +78,10 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 | `threadsLoading` | `boolean` | Thread list loading state |
 | `messages` | `AIPanelMessage[]` | Messages in the active thread |
 | `messagesLoading` | `boolean` | Message list loading state |
+| `draftInput` | `string` | Current textarea draft |
+| `attachment` | `AIChatAttachment \| null` | Current uploaded schedule file metadata |
+| `attachmentError` | `string \| null` | Upload/validation error shown above the input |
+| `attachmentUploading` | `boolean` | Locks replacement/send while upload is in flight |
 | `pendingAssistantContent` | `string \| null` | Streamed content shown before server refresh completes |
 | `pendingAction` | `PendingActionState \| null` | Confirm/cancel payload emitted by the backend |
 | `pendingActionBusy` | `boolean` | Locks pending-action controls while confirm/cancel request is in flight |
@@ -104,10 +109,11 @@ All state lives in `AIPanel` via `useState`. No global store or URL state.
 ### Optimistic Updates
 
 1. User types message → `handleSend` creates `optimisticMessage` with deterministic ID
-2. Optimistic message appended to `messages` immediately
-3. `useAIStream.sendMessage` fires fetch + SSE stream
-4. On success: messages reloaded from server (silent), `pendingAssistantContent` shown until load completes
-5. On failure: optimistic message removed, messages reloaded from server
+2. Optional schedule file upload stores `{ storagePath, fileName, mimeType }` and can prefill the draft prompt
+3. Optimistic message appended to `messages` immediately
+4. `useAIStream.sendMessage` fires fetch + SSE stream with optional `attachment`
+5. On success: messages reloaded from server (silent), `pendingAssistantContent` shown until load completes, then draft + attachment are cleared
+6. On failure/interruption: optimistic message removed or retried, and the uploaded attachment stays on the draft for resend
 
 ### Idempotency Key Management
 

@@ -137,10 +137,17 @@ describe("validateMagicBytes", () => {
     });
   });
 
+  describe("application/pdf", () => {
+    it("accepts valid PDF header", () => {
+      const buf = Buffer.from("%PDF-1.7\n");
+      assert.ok(validateMagicBytes(buf, "application/pdf"));
+    });
+  });
+
   describe("unknown type", () => {
     it("returns false for unsupported MIME type", () => {
       const buf = Buffer.from([0x00, 0x00, 0x00, 0x00]);
-      assert.ok(!validateMagicBytes(buf, "application/pdf"));
+      assert.ok(!validateMagicBytes(buf, "application/x-unknown"));
     });
   });
 

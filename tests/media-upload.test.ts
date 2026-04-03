@@ -88,9 +88,14 @@ describe("validateMagicBytes", () => {
     assert.strictEqual(validateMagicBytes(pngHeader, "image/jpeg"), false);
   });
 
+  test("validates PDF magic bytes", () => {
+    const pdfHeader = Buffer.from("%PDF-1.7\n");
+    assert.strictEqual(validateMagicBytes(pdfHeader, "application/pdf"), true);
+  });
+
   test("rejects unknown MIME type", () => {
     const data = Buffer.from([0x00, 0x01, 0x02, 0x03]);
-    assert.strictEqual(validateMagicBytes(data, "application/pdf"), false);
+    assert.strictEqual(validateMagicBytes(data, "application/x-unknown"), false);
   });
 
   test("rejects buffer too short for signature", () => {

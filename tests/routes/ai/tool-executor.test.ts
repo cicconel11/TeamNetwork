@@ -62,6 +62,8 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
     orderBy?: { column: string; ascending: boolean };
     limitValue?: number;
   }> = [];
+  const storageDownloads: Array<{ bucket: string; path: string }> = [];
+  const storageRemovals: Array<{ bucket: string; paths: string[] }> = [];
 
   function applyFilters(rows: any[], filters: any[]) {
     return rows.filter((row) =>
@@ -191,7 +193,42 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
     return { data: handler, error: null };
   };
 
-  return { from, rpc, queries };
+  const storage = {
+    from(bucket: string) {
+      return {
+        async download(path: string) {
+          storageDownloads.push({ bucket, path });
+
+          const handler = overrides.storage?.download;
+          if (typeof handler === "function") {
+            return handler({ bucket, path });
+          }
+
+          if (handler) {
+            return handler;
+          }
+
+          return { data: null, error: { message: "missing storage download handler" } };
+        },
+        async remove(paths: string[]) {
+          storageRemovals.push({ bucket, paths });
+
+          const handler = overrides.storage?.remove;
+          if (typeof handler === "function") {
+            return handler({ bucket, paths });
+          }
+
+          if (handler) {
+            return handler;
+          }
+
+          return { data: [], error: null };
+        },
+      };
+    },
+  };
+
+  return { from, rpc, queries, storage, storageDownloads, storageRemovals };
 }
 
 function expectOk(result: ToolExecutionResult): Extract<ToolExecutionResult, { kind: "ok" }> {
@@ -1161,6 +1198,78 @@ test("invalid args return tool_error", async () => {
 
   assert.equal(result.kind, "tool_error");
   assert.match(result.error, /invalid/i);
+});
+
+test("extract_schedule_pdf rejects attachments outside the caller upload prefix", async () => {
+  stub = createToolSupabaseStub();
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-123",
+    attachment: {
+      storagePath: "other-org/other-user/schedule.pdf",
+      fileName: "schedule.pdf",
+      mimeType: "application/pdf",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Invalid schedule attachment path",
+  });
+  assert.deepEqual(stub.storageDownloads, []);
+});
+
+test("extract_schedule_pdf allows in-prefix attachments to reach storage download", async () => {
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("not a real pdf")]),
+        error: null,
+      }),
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-456",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000000_schedule.pdf`,
+      fileName: "schedule.pdf",
+      mimeType: "application/pdf",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(stub.storageDownloads, [
+    {
+      bucket: "ai-schedule-uploads",
+      path: `${ORG_ID}/${USER_ID}/1712000000000_schedule.pdf`,
+    },
+  ]);
+  assert.deepEqual(stub.storageRemovals, [
+    {
+      bucket: "ai-schedule-uploads",
+      paths: [`${ORG_ID}/${USER_ID}/1712000000000_schedule.pdf`],
+    },
+  ]);
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Unable to read attached PDF",
+  });
 });
 
 test("db errors return tool_error", async () => {

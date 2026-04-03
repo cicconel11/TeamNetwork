@@ -96,6 +96,19 @@ export interface ChatRouteDeps {
   clearDraftSession?: typeof clearDraftSession;
 }
 
+type ChatAttachment = {
+  storagePath: string;
+  fileName: string;
+  mimeType: "application/pdf" | "image/png" | "image/jpeg" | "image/jpg";
+};
+
+const SCHEDULE_ATTACHMENT_MIME_TYPES = new Set<ChatAttachment["mimeType"]>([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
+
 const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   general: [
     "list_members",
@@ -108,7 +121,7 @@ const PASS1_TOOL_NAMES: Record<CacheSurface, ToolName[]> = {
   ],
   members: ["list_members", "get_org_stats", "suggest_connections"],
   analytics: ["get_org_stats"],
-  events: ["list_events", "get_org_stats"],
+  events: ["list_events"],
 };
 
 const CONNECTION_PROMPT_PATTERN =
@@ -121,6 +134,17 @@ const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
 const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
+const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
+  /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
+const MEMBER_COUNT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:how many|count|number of|total|totals|snapshot|stats)(?!\w)[\s\S]{0,80}\b(?:member|members|active members|alumni|parents?)\b|(?<!\w)(?:member|members|active members|alumni|parents?)(?!\w)[\s\S]{0,40}\b(?:how many|count|number of|total|totals)\b)/i;
+const MEMBER_ROSTER_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:tell|give|summarize)(?!\w)[\s\S]{0,80}\b(?:member|members|people|roster|team)\b|(?<!\w)(?:who(?:'s|\s+are)?|recent|new)(?!\w)[\s\S]{0,40}\b(?:member|members|people|roster|team)\b|(?<!\w)member roster(?!\w))/i;
+const SCRAPE_SCHEDULE_PROMPT_PATTERN =
+  /(?:scrape|import|extract|pull|get|grab|fetch|load)\b[\s\S]{0,120}\b(?:schedule|events?|calendar)[\s\S]{0,60}(?:from|at|on)\s+(?:https?:\/\/|(?:the\s+)?(?:website|page|url|link|site))/i;
+const PDF_SCHEDULE_PROMPT_PATTERN =
+  /(?:extract|import|upload|read|parse|pull)\b[\s\S]{0,120}\b(?:schedule|events?|calendar)[\s\S]{0,60}(?:pdf|file|document|upload)/i;
+const HTTPS_URL_PATTERN = /https?:\/\//i;
 
 function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
@@ -636,6 +660,78 @@ function formatOrgStatsResponse(data: unknown): string | null {
   return lines.length > 1 ? lines.join("\n") : null;
 }
 
+function formatMemberRole(value: unknown): string | null {
+  const role = getNonEmptyString(value);
+  if (!role) {
+    return null;
+  }
+
+  switch (role) {
+    case "admin":
+      return "Admin";
+    case "active_member":
+      return "Active Member";
+    case "alumni":
+      return "Alumni";
+    case "parent":
+      return "Parent";
+    default:
+      return role
+        .split(/[_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+  }
+}
+
+function formatMembersResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any active members for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const email = getNonEmptyString((row as { email?: unknown }).email);
+      const roleLabel = formatMemberRole((row as { role?: unknown }).role);
+      const addedDate = formatIsoDate((row as { created_at?: unknown }).created_at);
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+
+      const label = name
+        ? `${name}${roleLabel ? ` (${roleLabel})` : ""}`
+        : email
+          ? roleLabel === "Admin"
+            ? "Email-only admin account"
+            : "Email-only member account"
+          : null;
+
+      if (!label) {
+        return null;
+      }
+
+      const metadata = [email, addedDate ? `added ${addedDate}` : null].filter(
+        (value): value is string => Boolean(value)
+      );
+
+      return `- ${label}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return ["Recent active members", ...rows].join("\n");
+}
+
 function formatNavigationTargetsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -705,7 +801,8 @@ function getPass1Tools(
   message: string,
   effectiveSurface: CacheSurface,
   toolPolicy: TurnExecutionPolicy["toolPolicy"],
-  intentType: TurnExecutionPolicy["intentType"]
+  intentType: TurnExecutionPolicy["intentType"],
+  attachment?: ChatAttachment
 ) {
   if (toolPolicy !== "surface_read_tools") {
     return undefined;
@@ -717,6 +814,20 @@ function getPass1Tools(
 
   if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
     return [AI_TOOL_MAP.prepare_discussion_thread];
+  }
+
+  if (
+    PDF_SCHEDULE_PROMPT_PATTERN.test(message) ||
+    (attachment?.mimeType && SCHEDULE_ATTACHMENT_MIME_TYPES.has(attachment.mimeType))
+  ) {
+    return [AI_TOOL_MAP.extract_schedule_pdf];
+  }
+
+  if (
+    SCRAPE_SCHEDULE_PROMPT_PATTERN.test(message) ||
+    (HTTPS_URL_PATTERN.test(message) && CREATE_EVENT_PROMPT_PATTERN.test(message))
+  ) {
+    return [AI_TOOL_MAP.scrape_schedule_website];
   }
 
   if (CREATE_EVENT_PROMPT_PATTERN.test(message)) {
@@ -741,6 +852,16 @@ function getPass1Tools(
     return [AI_TOOL_MAP.suggest_connections];
   }
 
+  if (effectiveSurface === "members") {
+    if (MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.get_org_stats];
+    }
+
+    if (MEMBER_ROSTER_PROMPT_PATTERN.test(message)) {
+      return [AI_TOOL_MAP.list_members];
+    }
+  }
+
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
 }
 
@@ -755,7 +876,12 @@ function getForcedPass1ToolChoice(
   if (
     forcedToolName !== "prepare_job_posting" &&
     forcedToolName !== "prepare_discussion_thread" &&
-    forcedToolName !== "prepare_event"
+    forcedToolName !== "prepare_event" &&
+    forcedToolName !== "list_members" &&
+    forcedToolName !== "get_org_stats" &&
+    forcedToolName !== "list_events" &&
+    forcedToolName !== "scrape_schedule_website" &&
+    forcedToolName !== "extract_schedule_pdf"
   ) {
     return undefined;
   }
@@ -777,6 +903,7 @@ function isToolFirstEligible(
 
   const toolName = pass1Tools[0]?.function.name;
   return (
+    toolName === "list_members" ||
     toolName === "get_org_stats" ||
     toolName === "find_navigation_targets" ||
     toolName === "list_announcements" ||
@@ -1002,8 +1129,7 @@ function formatPrepareEventsBatchResponse(data: unknown): string | null {
 
 function formatDeterministicToolResponse(
   name: string,
-  data: unknown,
-  surface: CacheSurface
+  data: unknown
 ): string | null {
   switch (name) {
     case "suggest_connections":
@@ -1025,7 +1151,9 @@ function formatDeterministicToolResponse(
     case "prepare_events_batch":
       return formatPrepareEventsBatchResponse(data);
     case "get_org_stats":
-      return surface === "analytics" ? formatOrgStatsResponse(data) : null;
+      return formatOrgStatsResponse(data);
+    case "list_members":
+      return formatMembersResponse(data);
     case "find_navigation_targets":
       return formatNavigationTargetsResponse(data);
     default:
@@ -1443,7 +1571,7 @@ function shouldContinueDraftSession(
 ): boolean {
   const isJobPrompt = CREATE_JOB_PROMPT_PATTERN.test(message);
   const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
-  const isEventPrompt = CREATE_EVENT_PROMPT_PATTERN.test(message);
+  const isEventPrompt = EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test(message);
 
   if (draftSession.draft_type === "create_job_posting" && isJobPrompt) {
     return true;
@@ -1547,6 +1675,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     let existingThreadId: string | undefined;
     let idempotencyKey = "";
     let currentPath: string | undefined;
+    let attachment: ChatAttachment | undefined;
     let messageSafety!: ReturnType<typeof assessAiMessageSafety>;
     let routing!: ReturnType<typeof resolveSurfaceRouting>;
     let effectiveSurface!: CacheSurface;
@@ -1569,6 +1698,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           threadId: existingThreadId,
           idempotencyKey,
           currentPath,
+          attachment,
         } = validatedBody);
         messageSafety = assessAiMessageSafety(message);
         routing = resolveSurfaceRouting(messageSafety.promptSafeMessage, surface);
@@ -1625,7 +1755,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           messageSafety.promptSafeMessage,
           effectiveSurface,
           executionPolicy.toolPolicy,
-          executionPolicy.intentType
+          executionPolicy.intentType,
+          attachment
         );
       });
     } catch (err) {
@@ -1857,7 +1988,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           .gt("created_at", existingMsg.created_at)
           .order("created_at", { ascending: true })
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (assistantReplayError) {
           aiLog("error", "ai-chat", "idempotency replay lookup failed", {
@@ -1870,11 +2001,16 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           );
         }
 
+        if (!assistantReplay?.content) {
+          return NextResponse.json(
+            { error: "Request already in progress", threadId: existingMsg.thread_id },
+            { status: 409, headers: rateLimit.headers }
+          );
+        }
+
         return buildSseResponse(
           createSSEStream(async (enqueue) => {
-            if (assistantReplay?.content) {
-              enqueue({ type: "chunk", content: assistantReplay.content });
-            }
+            enqueue({ type: "chunk", content: assistantReplay.content });
             enqueue({
               type: "done",
               threadId: existingMsg.thread_id,
@@ -2417,6 +2553,50 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
 
         const contextBuildStartedAt = Date.now();
         const historyLoadStartedAt = Date.now();
+        const historyPromise = existingThreadId
+          ? ctx.supabase
+              .from("ai_messages")
+              .select("role, content")
+              .eq("thread_id", threadId)
+              .eq("status", "complete")
+              .order("created_at", { ascending: true })
+              .limit(20)
+              .then((result: { data: unknown; error: unknown }) => {
+                setStageStatus(
+                  stageTimings,
+                  "history_load",
+                  result.error ? "failed" : "completed",
+                  Date.now() - historyLoadStartedAt
+                );
+                return result;
+              })
+              .catch((error: unknown) => {
+                setStageStatus(
+                  stageTimings,
+                  "history_load",
+                  "failed",
+                  Date.now() - historyLoadStartedAt
+                );
+                throw error;
+              })
+          : Promise.resolve().then(() => {
+              setStageStatus(
+                stageTimings,
+                "history_load",
+                "completed",
+                Date.now() - historyLoadStartedAt
+              );
+              return {
+                data: [
+                  {
+                    role: "user",
+                    content: messageSafety.promptSafeMessage,
+                  },
+                ],
+                error: null,
+              };
+            });
+
         const [contextResult, { data: history, error: historyError }] =
           await Promise.all([
             buildPromptContextFn({
@@ -2454,45 +2634,26 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 "failed",
                 Date.now() - contextBuildStartedAt
               );
-              throw error;
-            }),
-            ctx.supabase
-              .from("ai_messages")
-              .select("role, content")
-              .eq("thread_id", threadId)
-              .eq("status", "complete")
-              .order("created_at", { ascending: true })
-              .limit(20)
-              .then((result: { error: unknown }) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  result.error ? "failed" : "completed",
-                  Date.now() - historyLoadStartedAt
-                );
-                return result;
-              })
-              .catch((error: unknown) => {
-                setStageStatus(
-                  stageTimings,
-                  "history_load",
-                  "failed",
-                  Date.now() - historyLoadStartedAt
-                );
                 throw error;
               }),
+            historyPromise,
           ]);
 
       const { systemPrompt, orgContextMessage, metadata } = contextResult;
       contextMetadata = metadata;
 
+      let historyRows = history;
       if (historyError) {
         aiLog("error", "ai-chat", "history fetch failed", {
           ...requestLogContext,
           threadId: threadId!,
         }, { error: historyError });
-        enqueue({ type: "error", message: "Failed to load conversation history", retryable: true });
-        return;
+        historyRows = [
+          {
+            role: "user",
+            content: messageSafety.promptSafeMessage,
+          },
+        ];
       }
 
       const draftSessionContextMessage = activeDraftSession
@@ -2502,7 +2663,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         ? `${systemPrompt}\n\n${ACTIVE_DRAFT_CONTINUATION_INSTRUCTION}`
         : systemPrompt;
 
-      const historyMessages = (history ?? [])
+      const historyMessages = (historyRows ?? [])
         .filter((m: any) => m.content)
         .map((m: any) => ({
           role: m.role as "user" | "assistant",
@@ -2513,17 +2674,32 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }))
         .filter((m: { content: string }) => Boolean(m.content));
 
+      const finalHistory =
+        attachment &&
+        historyMessages.length > 0 &&
+        historyMessages[historyMessages.length - 1]?.role === "user"
+          ? [
+              ...historyMessages.slice(0, -1),
+              {
+                ...historyMessages[historyMessages.length - 1],
+                content:
+                  `${historyMessages[historyMessages.length - 1].content}\n\n` +
+                  `[Attached schedule file: "${attachment.fileName}", storage path: "${attachment.storagePath}"]`,
+              },
+            ]
+          : historyMessages;
+
       const contextMessages = orgContextMessage
         ? [
             { role: "user" as const, content: orgContextMessage },
             ...(draftSessionContextMessage
               ? [{ role: "user" as const, content: draftSessionContextMessage }]
               : []),
-            ...historyMessages,
+            ...finalHistory,
           ]
         : draftSessionContextMessage
-          ? [{ role: "user" as const, content: draftSessionContextMessage }, ...historyMessages]
-          : historyMessages;
+          ? [{ role: "user" as const, content: draftSessionContextMessage }, ...finalHistory]
+          : finalHistory;
 
       const toolResults: ToolResultMessage[] = [];
       const pass1ToolChoice = getForcedPass1ToolChoice(pass1Tools);
@@ -2604,13 +2780,14 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               {
                 orgId: ctx.orgId,
                 userId: ctx.userId,
-                serviceSupabase: ctx.serviceSupabase,
-                authorization: toolAuthorization,
-                threadId,
-                requestId,
-              },
-              { name: toolEvent.name, args: parsedArgs }
-            );
+              serviceSupabase: ctx.serviceSupabase,
+              authorization: toolAuthorization,
+              threadId,
+              requestId,
+              attachment,
+            },
+            { name: toolEvent.name, args: parsedArgs }
+          );
 
             switch (result.kind) {
               case "ok":
@@ -2792,14 +2969,18 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         }
 
         if (toolCallMade && toolResults.length > 0) {
+          const canUseDeterministicMemberRoster =
+            successfulToolResults.length === 1 &&
+            successfulToolResults[0]?.name === "list_members" &&
+            MEMBER_ROSTER_PROMPT_PATTERN.test(messageSafety.promptSafeMessage);
           const deterministicToolContent =
             toolResults.length === 1 &&
             successfulToolResults.length === 1 &&
-            toolResults[0].name === successfulToolResults[0].name
+            toolResults[0].name === successfulToolResults[0].name &&
+            (successfulToolResults[0].name !== "list_members" || canUseDeterministicMemberRoster)
               ? formatDeterministicToolResponse(
                   successfulToolResults[0].name,
-                  successfulToolResults[0].data,
-                  effectiveSurface
+                  successfulToolResults[0].data
                 )
               : null;
 

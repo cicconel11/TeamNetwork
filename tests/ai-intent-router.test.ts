@@ -265,6 +265,15 @@ describe("resolveSurfaceRouting — content-type keyword routing", () => {
     assert.equal(result.confidence, "high");
   });
 
+  it("does not reroute generic file uploads to events", () => {
+    const result = resolveSurfaceRouting("Upload this job posting PDF", "general");
+    assert.equal(result.intentType, "action_request");
+    assert.equal(result.intent, "general_query");
+    assert.equal(result.effectiveSurface, "general");
+    assert.equal(result.inferredSurface, "general");
+    assert.equal(result.rerouted, false);
+  });
+
   it("preserves requestedSurface when no keywords match (dead ternary fix)", () => {
     // A message with no surface-specific or general-content keywords
     // on a non-general surface should keep the requested surface

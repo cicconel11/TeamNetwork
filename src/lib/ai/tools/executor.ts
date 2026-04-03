@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ToolName } from "./definitions";
+import type { PrepareEventArgs, ToolName } from "./definitions";
 import { TOOL_NAMES } from "./definitions";
 import {
+  EXTRACTION_TOOL_TIMEOUT_MS,
   isStageTimeoutError,
   TOOL_EXECUTION_TIMEOUT_MS,
   withStageTimeout,
@@ -24,6 +25,9 @@ import {
   assistantPreparedEventSchema,
 } from "@/lib/schemas/events-ai";
 import { fetchJobSourceDraft, JobSourceIntakeError } from "@/lib/jobs/source-intake";
+import { ScheduleSecurityError } from "@/lib/schedule-security/errors";
+import { fetchUrlSafe } from "@/lib/schedule-security/fetchUrlSafe";
+import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 import {
   buildPendingActionSummary,
   createPendingAction,
@@ -32,6 +36,10 @@ import {
   type CreateJobPostingPendingPayload,
 } from "@/lib/ai/pending-actions";
 import { aiLog, type AiLogContext } from "@/lib/ai/logger";
+import type {
+  ScheduleImageMimeType,
+  ScheduleExtractionResult,
+} from "@/lib/ai/schedule-extraction";
 
 export type ToolExecutionAuthorization =
   | { kind: "preverified_admin"; source: "ai_org_context" }
@@ -44,6 +52,11 @@ export interface ToolExecutionContext {
   authorization: ToolExecutionAuthorization;
   threadId?: string;
   requestId?: string;
+  attachment?: {
+    storagePath: string;
+    fileName: string;
+    mimeType: string;
+  };
 }
 
 export type ToolExecutionResult =
@@ -134,6 +147,12 @@ const prepareEventsBatchSchema = z
     events: z.array(prepareEventSchema).min(1).max(10),
   })
   .strict();
+const scrapeScheduleWebsiteSchema = z
+  .object({
+    url: z.string().url(),
+  })
+  .strict();
+const extractSchedulePdfSchema = z.object({}).strict();
 
 const getOrgStatsSchema = z.object({}).strict();
 const suggestConnectionsSchema = z
@@ -169,6 +188,8 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   prepare_discussion_thread: prepareDiscussionThreadSchema,
   prepare_event: prepareEventSchema,
   prepare_events_batch: prepareEventsBatchSchema,
+  scrape_schedule_website: scrapeScheduleWebsiteSchema,
+  extract_schedule_pdf: extractSchedulePdfSchema,
   get_org_stats: getOrgStatsSchema,
   suggest_connections: suggestConnectionsSchema,
   find_navigation_targets: findNavigationTargetsSchema,
@@ -274,6 +295,51 @@ async function safeToolCount(
 }
 
 const MAX_BODY_PREVIEW_CHARS = 500;
+const SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS = 10_000;
+const SCRAPE_SCHEDULE_MAX_BYTES = 512 * 1024;
+const MAX_SOURCE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — prevents oversized base64 payloads to LLM
+const SCHEDULE_UPLOAD_BUCKET = "ai-schedule-uploads";
+const SCHEDULE_IMAGE_MIME_TYPES = new Set<ScheduleImageMimeType>([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
+type CheerioLoad = typeof import("cheerio").load;
+type PdfParseCtor = typeof import("pdf-parse").PDFParse;
+type ScheduleExtractionModule = typeof import("@/lib/ai/schedule-extraction");
+
+let cachedCheerioLoad: CheerioLoad | null = null;
+let cachedPdfParseCtor: PdfParseCtor | null = null;
+let cachedScheduleExtractionModule: ScheduleExtractionModule | null = null;
+
+async function getCheerioLoad(): Promise<CheerioLoad> {
+  if (cachedCheerioLoad) {
+    return cachedCheerioLoad;
+  }
+
+  const { load } = await import("cheerio");
+  cachedCheerioLoad = load;
+  return load;
+}
+
+async function getPdfParseCtor(): Promise<PdfParseCtor> {
+  if (cachedPdfParseCtor) {
+    return cachedPdfParseCtor;
+  }
+
+  const { PDFParse } = await import("pdf-parse");
+  cachedPdfParseCtor = PDFParse;
+  return PDFParse;
+}
+
+async function getScheduleExtractionModule(): Promise<ScheduleExtractionModule> {
+  if (cachedScheduleExtractionModule) {
+    return cachedScheduleExtractionModule;
+  }
+
+  cachedScheduleExtractionModule = await import("@/lib/ai/schedule-extraction");
+  return cachedScheduleExtractionModule;
+}
 
 function truncateBody(body: string | null | undefined): string | null {
   if (typeof body !== "string" || body.trim().length === 0) {
@@ -304,6 +370,20 @@ interface UserNameRow {
 interface MembershipRow {
   role: string | null;
   status: string | null;
+}
+
+interface EventPendingActionRecord {
+  id: string;
+  action_type: string;
+  payload: CreateEventPendingPayload;
+  expires_at: string;
+  summary: { title: string; description: string };
+}
+
+interface EventValidationErrorRecord {
+  index: number;
+  missing_fields: string[];
+  draft: Record<string, unknown>;
 }
 
 function buildMemberName(firstName: string, lastName: string): string {
@@ -552,6 +632,113 @@ const REQUIRED_PREPARED_EVENT_FIELDS = [
   "start_date",
   "start_time",
 ] as const satisfies ReadonlyArray<keyof z.infer<typeof assistantPreparedEventSchema>>;
+
+async function createEventPendingActionsFromDrafts(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  events: PrepareEventArgs[],
+  logContext: AiLogContext,
+  orgSlug: string | null
+): Promise<{
+  pendingActions: EventPendingActionRecord[];
+  validationErrors: EventValidationErrorRecord[];
+}> {
+  const threadId = ctx.threadId;
+  if (!threadId) {
+    throw new Error("Event preparation requires a thread context");
+  }
+
+  const pendingActions: EventPendingActionRecord[] = [];
+  const validationErrors: EventValidationErrorRecord[] = [];
+
+  for (let i = 0; i < events.length; i++) {
+    const eventArgs = events[i];
+    const normalized = Object.fromEntries(
+      Object.entries(eventArgs).filter(
+        ([, value]) => !(typeof value === "string" && value.trim().length === 0)
+      )
+    ) as PrepareEventArgs;
+
+    const draftWithDefaults = {
+      ...normalized,
+      event_type: normalized.event_type ?? "general",
+      is_philanthropy:
+        normalized.is_philanthropy ?? normalized.event_type === "philanthropy",
+    };
+
+    const parsedDraft = assistantEventDraftSchema.safeParse(draftWithDefaults);
+    if (!parsedDraft.success) {
+      validationErrors.push({
+        index: i,
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: draftWithDefaults,
+      });
+      continue;
+    }
+
+    const missingFields = REQUIRED_PREPARED_EVENT_FIELDS.filter((field) => {
+      const value = parsedDraft.data[field];
+      return typeof value !== "string" || value.trim().length === 0;
+    });
+
+    if (missingFields.length > 0) {
+      validationErrors.push({
+        index: i,
+        missing_fields: [...missingFields],
+        draft: parsedDraft.data as unknown as Record<string, unknown>,
+      });
+      continue;
+    }
+
+    const prepared = assistantPreparedEventSchema.safeParse(parsedDraft.data);
+    if (!prepared.success) {
+      validationErrors.push({
+        index: i,
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: parsedDraft.data as unknown as Record<string, unknown>,
+      });
+      continue;
+    }
+
+    const pendingPayload: CreateEventPendingPayload = {
+      ...prepared.data,
+      orgSlug,
+    };
+
+    try {
+      const pendingAction = await createPendingAction(sb, {
+        organizationId: ctx.orgId,
+        userId: ctx.userId,
+        threadId,
+        actionType: "create_event",
+        payload: pendingPayload,
+      });
+      const summary = buildPendingActionSummary(pendingAction);
+      pendingActions.push({
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      });
+    } catch (error) {
+      aiLog("warn", "ai-tools", "event pending action insert failed", logContext, {
+        index: i,
+        error: getSafeErrorMessage(error),
+      });
+      validationErrors.push({
+        index: i,
+        missing_fields: ["_insert_failed"],
+        draft: prepared.data as unknown as Record<string, unknown>,
+      });
+    }
+  }
+
+  return {
+    pendingActions,
+    validationErrors,
+  };
+}
 
 function sanitizeDraftValue(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -834,7 +1021,7 @@ async function prepareEvent(
   const draftWithDefaults = {
     ...normalized,
     event_type: normalized.event_type ?? "general",
-    is_philanthropy: normalized.is_philanthropy ?? false,
+    is_philanthropy: normalized.is_philanthropy ?? normalized.event_type === "philanthropy",
   };
 
   const parsedDraft = assistantEventDraftSchema.safeParse(draftWithDefaults);
@@ -944,101 +1131,13 @@ async function prepareEventsBatch(
   }
 
   const orgSlug = typeof org?.slug === "string" ? org.slug : null;
-  const pendingActions: Array<{
-    id: string;
-    action_type: string;
-    payload: CreateEventPendingPayload;
-    expires_at: string;
-    summary: { title: string; description: string };
-  }> = [];
-  const validationErrors: Array<{
-    index: number;
-    missing_fields: string[];
-    draft: Record<string, unknown>;
-  }> = [];
-
-  for (let i = 0; i < args.events.length; i++) {
-    const eventArgs = args.events[i];
-
-    // Normalize empty strings to undefined
-    const normalized = Object.fromEntries(
-      Object.entries(eventArgs).filter(
-        ([, v]) => !(typeof v === "string" && v.trim().length === 0)
-      )
-    ) as typeof eventArgs;
-
-    const draftWithDefaults = {
-      ...normalized,
-      event_type: normalized.event_type ?? "general",
-      is_philanthropy: normalized.is_philanthropy ?? false,
-    };
-
-    const parsedDraft = assistantEventDraftSchema.safeParse(draftWithDefaults);
-    if (!parsedDraft.success) {
-      validationErrors.push({
-        index: i,
-        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
-        draft: draftWithDefaults,
-      });
-      continue;
-    }
-
-    const missingFields = REQUIRED_PREPARED_EVENT_FIELDS.filter((field) => {
-      const value = parsedDraft.data[field];
-      return typeof value !== "string" || value.trim().length === 0;
-    });
-
-    if (missingFields.length > 0) {
-      validationErrors.push({
-        index: i,
-        missing_fields: [...missingFields],
-        draft: parsedDraft.data as unknown as Record<string, unknown>,
-      });
-      continue;
-    }
-
-    const prepared = assistantPreparedEventSchema.safeParse(parsedDraft.data);
-    if (!prepared.success) {
-      validationErrors.push({
-        index: i,
-        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
-        draft: parsedDraft.data as unknown as Record<string, unknown>,
-      });
-      continue;
-    }
-
-    const pendingPayload: CreateEventPendingPayload = {
-      ...prepared.data,
-      orgSlug,
-    };
-    try {
-      const pendingAction = await createPendingAction(sb, {
-        organizationId: ctx.orgId,
-        userId: ctx.userId,
-        threadId: ctx.threadId,
-        actionType: "create_event",
-        payload: pendingPayload,
-      });
-      const summary = buildPendingActionSummary(pendingAction);
-      pendingActions.push({
-        id: pendingAction.id,
-        action_type: pendingAction.action_type,
-        payload: pendingPayload,
-        expires_at: pendingAction.expires_at,
-        summary,
-      });
-    } catch (insertError) {
-      aiLog("warn", "ai-tools", "prepare_events_batch insert failed for event", logContext, {
-        index: i,
-        error: getSafeErrorMessage(insertError),
-      });
-      validationErrors.push({
-        index: i,
-        missing_fields: ["_insert_failed"],
-        draft: prepared.data as unknown as Record<string, unknown>,
-      });
-    }
-  }
+  const { pendingActions, validationErrors } = await createEventPendingActionsFromDrafts(
+    sb,
+    ctx,
+    args.events,
+    logContext,
+    orgSlug
+  );
 
   if (pendingActions.length === 0) {
     return {
@@ -1058,6 +1157,324 @@ async function prepareEventsBatch(
       validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
     },
   };
+}
+
+async function scrapeScheduleWebsite(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof scrapeScheduleWebsiteSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Event preparation requires a thread context");
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(args.url);
+  } catch {
+    return toolError("Invalid schedule website URL");
+  }
+
+  if (parsedUrl.protocol !== "https:") {
+    return toolError("Schedule website URL must use HTTPS");
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug, name")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "scrape_schedule_website org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  let response: Awaited<ReturnType<typeof fetchUrlSafe>>;
+  try {
+    response = await fetchUrlSafe(args.url, {
+      timeoutMs: SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS,
+      maxBytes: SCRAPE_SCHEDULE_MAX_BYTES,
+      headers: {
+        Accept: "text/html,application/xhtml+xml,text/plain",
+      },
+      orgId: ctx.orgId,
+      userId: ctx.userId,
+      supabase: sb,
+      allowlistMode: "enforce",
+    });
+  } catch (error) {
+    if (error instanceof ScheduleSecurityError) {
+      return toolError(error.message);
+    }
+
+    aiLog("warn", "ai-tools", "scrape_schedule_website fetch failed", logContext, {
+      error: getSafeErrorMessage(error),
+    });
+    return toolError("Unable to fetch schedule website");
+  }
+
+  const load = await getCheerioLoad();
+  const $ = load(response.text);
+  $("script, style, nav, footer").remove();
+
+  const main = $("main").first();
+  const text = normalizeScrapedScheduleText((main.length ? main : $("body")).text());
+  const { extractScheduleFromText } = await getScheduleExtractionModule();
+  const extracted = await extractScheduleFromText(text, {
+    orgName: typeof org?.name === "string" ? org.name : undefined,
+    sourceType: "website",
+    sourceLabel: response.finalUrl,
+    now: new Date().toISOString(),
+  });
+
+  if (extracted.events.length === 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "no_events_found",
+        source_url: args.url,
+      },
+    };
+  }
+
+  const { pendingActions, validationErrors } = await createEventPendingActionsFromDrafts(
+    sb,
+    ctx,
+    extracted.events,
+    logContext,
+    typeof org?.slug === "string" ? org.slug : null
+  );
+
+  if (pendingActions.length === 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        validation_errors: validationErrors,
+      },
+    };
+  }
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_batch_confirmation",
+      pending_actions: pendingActions,
+      validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
+    },
+  };
+}
+
+async function extractSchedulePdf(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof extractSchedulePdfSchema>
+): Promise<ToolExecutionResult> {
+  void args;
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Event preparation requires a thread context");
+  }
+
+  if (
+    !ctx.attachment ||
+    (ctx.attachment.mimeType !== "application/pdf"
+      && !SCHEDULE_IMAGE_MIME_TYPES.has(ctx.attachment.mimeType as ScheduleImageMimeType))
+  ) {
+    return toolError("Schedule attachment required");
+  }
+  const attachment = ctx.attachment;
+
+  if (!isOwnedScheduleUploadPath(ctx.orgId, ctx.userId, attachment.storagePath)) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf invalid storage path", logContext, {
+      storagePath: attachment.storagePath,
+    });
+    return toolError("Invalid schedule attachment path");
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug, name")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const { data: attachmentFile, error: downloadError } = await sb.storage
+    .from(SCHEDULE_UPLOAD_BUCKET)
+    .download(attachment.storagePath);
+
+  if (downloadError || !attachmentFile) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf download failed", logContext, {
+      error: getSafeErrorMessage(downloadError),
+      storagePath: attachment.storagePath,
+    });
+    return toolError("Unable to load attached schedule file");
+  }
+
+  try {
+    const attachmentBuffer = Buffer.from(await attachmentFile.arrayBuffer());
+    const extractionContext = {
+      orgName: typeof org?.name === "string" ? org.name : undefined,
+      sourceLabel: attachment.fileName,
+      now: new Date().toISOString(),
+    };
+
+    if (attachment.mimeType !== "application/pdf" && attachmentBuffer.byteLength > MAX_SOURCE_IMAGE_BYTES) {
+      return toolError(
+        `Image too large for extraction (${Math.round(attachmentBuffer.byteLength / 1024 / 1024)}MB). Maximum is 2MB.`
+      );
+    }
+
+    let extracted: ScheduleExtractionResult;
+
+    try {
+      extracted =
+        attachment.mimeType === "application/pdf"
+          ? await extractScheduleTextFromPdfBuffer(attachmentBuffer, ctx, logContext, extractionContext)
+          : await (async () => {
+              const { extractScheduleFromImage } = await getScheduleExtractionModule();
+              return extractScheduleFromImage(
+                {
+                  dataUrl: buildScheduleAttachmentDataUrl(
+                    attachmentBuffer,
+                    attachment.mimeType as ScheduleImageMimeType
+                  ),
+                  mimeType: attachment.mimeType as ScheduleImageMimeType,
+                },
+                {
+                  ...extractionContext,
+                  sourceType: "image",
+                }
+              );
+            })();
+    } catch (error) {
+      if (attachment.mimeType === "application/pdf") {
+        return toolError("Unable to read attached PDF");
+      }
+
+      aiLog("warn", "ai-tools", "extract_schedule_pdf image extraction failed", logContext, {
+        error: getSafeErrorMessage(error),
+        storagePath: attachment.storagePath,
+        mimeType: attachment.mimeType,
+      });
+      return toolError("Unable to read attached schedule image");
+    }
+
+    if (extracted.events.length === 0) {
+      return {
+        kind: "ok",
+        data: {
+          state: "no_events_found",
+          source_file: attachment.fileName,
+        },
+      };
+    }
+
+    const { pendingActions, validationErrors } = await createEventPendingActionsFromDrafts(
+      sb,
+      ctx,
+      extracted.events,
+      logContext,
+      typeof org?.slug === "string" ? org.slug : null
+    );
+
+    if (pendingActions.length === 0) {
+      return {
+        kind: "ok",
+        data: {
+          state: "missing_fields",
+          validation_errors: validationErrors,
+        },
+      };
+    }
+
+    return {
+      kind: "ok",
+      data: {
+        state: "needs_batch_confirmation",
+        pending_actions: pendingActions,
+        validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
+      },
+    };
+  } finally {
+    await deleteScheduleUpload(sb, attachment.storagePath, logContext);
+  }
+}
+
+async function extractScheduleTextFromPdfBuffer(
+  pdfBuffer: Buffer,
+  ctx: ToolExecutionContext,
+  logContext: AiLogContext,
+  extractionContext: {
+    orgName?: string;
+    sourceLabel: string;
+    now: string;
+  }
+): Promise<ScheduleExtractionResult> {
+  let text = "";
+  let parser: InstanceType<PdfParseCtor> | null = null;
+
+  try {
+    const PDFParse = await getPdfParseCtor();
+    parser = new PDFParse({ data: pdfBuffer });
+    const result = await parser.getText();
+    text = normalizeScrapedScheduleText(result.text);
+  } catch (error) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf parsing failed", logContext, {
+      error: getSafeErrorMessage(error),
+      storagePath: ctx.attachment?.storagePath,
+    });
+    throw new Error("Unable to read attached PDF");
+  } finally {
+    if (parser) {
+      await parser.destroy().catch(() => undefined);
+    }
+  }
+
+  const { extractScheduleFromText } = await getScheduleExtractionModule();
+  return extractScheduleFromText(text, {
+    ...extractionContext,
+    sourceType: "pdf",
+  });
+}
+
+async function deleteScheduleUpload(
+  sb: SB,
+  storagePath: string,
+  logContext: AiLogContext
+): Promise<void> {
+  try {
+    const { error } = await sb.storage.from(SCHEDULE_UPLOAD_BUCKET).remove([storagePath]);
+
+    if (error) {
+      aiLog("warn", "ai-tools", "extract_schedule_pdf cleanup failed", logContext, {
+        error: getSafeErrorMessage(error),
+        storagePath,
+      });
+    }
+  } catch (error) {
+    aiLog("warn", "ai-tools", "extract_schedule_pdf cleanup failed", logContext, {
+      error: getSafeErrorMessage(error),
+      storagePath,
+    });
+  }
+}
+
+function buildScheduleAttachmentDataUrl(
+  fileBuffer: Buffer,
+  mimeType: ScheduleImageMimeType
+): string {
+  return `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
 }
 
 async function getOrgStats(
@@ -1281,10 +1698,13 @@ export async function executeToolCall(
   const sb = ctx.serviceSupabase;
 
   try {
-    // Batch tools need more time for multiple sequential DB round-trips
-    const timeoutMs = toolName === "prepare_events_batch"
-      ? TOOL_EXECUTION_TIMEOUT_MS * 3
-      : TOOL_EXECUTION_TIMEOUT_MS;
+    const timeoutMs =
+      toolName === "scrape_schedule_website"
+        || toolName === "extract_schedule_pdf"
+        ? EXTRACTION_TOOL_TIMEOUT_MS
+        : toolName === "prepare_events_batch"
+        ? TOOL_EXECUTION_TIMEOUT_MS * 3
+        : TOOL_EXECUTION_TIMEOUT_MS;
     return await withStageTimeout(`tool_${toolName}`, timeoutMs, async () => {
       switch (toolName) {
         case "list_members":
@@ -1336,6 +1756,18 @@ export async function executeToolCall(
             ctx,
             args as z.infer<typeof prepareEventsBatchSchema>
           );
+        case "scrape_schedule_website":
+          return scrapeScheduleWebsite(
+            sb,
+            ctx,
+            args as z.infer<typeof scrapeScheduleWebsiteSchema>
+          );
+        case "extract_schedule_pdf":
+          return extractSchedulePdf(
+            sb,
+            ctx,
+            args as z.infer<typeof extractSchedulePdfSchema>
+          );
         case "get_org_stats":
           return getOrgStats(sb, ctx.orgId, logContext);
         case "suggest_connections":
@@ -1363,4 +1795,8 @@ export async function executeToolCall(
     });
     return toolError("Unexpected error");
   }
+}
+
+function normalizeScrapedScheduleText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
 }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. The route now also has a materially faster single-tool deterministic path for simple `list_members`, `list_events`, and `get_org_stats` turns, which runs with `tool_first` context, skips pass 2 entirely, and emits the final answer directly from trusted tool data. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Schedule-import turns can now also attach the legacy-named `extract_schedule_pdf` tool for either uploaded PDFs or uploaded schedule images, and website imports still use `scrape_schedule_website`. Uploaded schedule files are treated as transient private attachments: the upload route validates PDF/image signatures before storing them, self-heals the private bucket if it is missing or still on the old PDF-only allowlist, exposes a `DELETE` cleanup endpoint for abandoned pending uploads, and the extractor deletes the storage object after it has been read into memory. The executor lazy-loads the schedule parser and extraction stack so plain chat turns do not evaluate PDF/image-specific dependencies unless a schedule tool is actually invoked. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. The route now also has a materially faster single-tool deterministic path for simple `list_members`, `list_events`, and `get_org_stats` turns, which runs with `tool_first` context, skips pass 2 entirely, and emits the final answer directly from trusted tool data. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -32,6 +32,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `src/lib/schemas/ai-assistant.ts` | Zod schemas for request validation and cache eligibility | `sendMessageSchema` (L25), `listThreadsSchema` (L34), `cacheEligibilitySchema` (L54) |
 | `src/app/api/ai/[orgId]/chat/route.ts` | Thin Next.js entrypoint — exports runtime config and `POST` handler | `POST` |
 | `src/app/api/ai/[orgId]/chat/handler.ts` | Chat pipeline orchestrator — auth, policy, retrieval, tools, SSE, persistence | `createChatPostHandler`, `ChatRouteDeps` |
+| `src/app/api/ai/[orgId]/upload-schedule/route.ts` | Thin Next.js entrypoint for private schedule uploads and pending-upload cleanup | `POST`, `DELETE` |
+| `src/app/api/ai/[orgId]/upload-schedule/handler.ts` | Schedule upload handler — auth, rate limit, MIME/header validation, runtime bucket reconciliation, private storage write, and idempotent pending-upload deletion | `createAiScheduleUploadHandler`, `createAiScheduleUploadDeleteHandler`, `AiScheduleUploadRouteDeps` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/route.ts` | POST handler — confirms and executes a pending assistant action | `POST` |
 | `src/app/api/ai/[orgId]/pending-actions/[actionId]/cancel/route.ts` | POST handler — cancels a pending assistant action | `POST` |
 | `src/app/api/ai/[orgId]/pending-actions/cleanup/route.ts` | POST handler — best-effort cleanup for expired or abandoned pending actions | `POST` |
@@ -42,6 +44,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 |---|---|
 | `supabase/migrations/20260319000000_ai_assistant_tables.sql` | DDL: `ai_threads`, `ai_messages`, `ai_audit_log`, RLS, indexes |
 | `supabase/migrations/20260321100001_ai_semantic_cache.sql` | DDL: `ai_semantic_cache`, purge RPC, audit columns |
+| `supabase/migrations/20260402120000_ai_schedule_uploads_bucket.sql` | Creates the private AI schedule upload bucket with PDF + image MIME allowlist |
+| `supabase/migrations/20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills preexisting AI schedule buckets so uploaded images are accepted |
 | `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
 | `supabase/migrations/20260719000000_ai_audit_stage_timings.sql` | Adds `stage_timings` JSONB to `ai_audit_log` |
 | `supabase/migrations/20260727000000_ai_pending_actions.sql` | Adds `ai_pending_actions` for confirmation-gated assistant writes |
@@ -73,7 +77,7 @@ src/app/api/ai/[orgId]/chat/route.ts  (entrypoint)
 
 ```
 Client POST /api/ai/{orgId}/chat
-  │  { message, surface, threadId?, idempotencyKey, bypassCache? }
+  │  { message, surface, threadId?, idempotencyKey, bypassCache?, attachment? }
   │
   ├─ 1.  Rate limit check (30/IP, 20/user per window)
   ├─ 2.  Auth — getAiOrgContext (validates admin role, fail-closed)
@@ -100,6 +104,9 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ live_lookup       → full context, tools allowed, retrieval may be allowed or skipped
   │       ├─ follow_up         → full context, tools allowed, no shared cache, retrieval depends on follow-up shape
   │       └─ out_of_scope      → no cache, no tools, retrieval skipped (`out_of_scope_request`)
+  ├─ 8.55 Attachment-aware tool selection
+  │       ├─ uploaded PDF/image schedule file → `extract_schedule_pdf`
+  │       └─ schedule website URL → `scrape_schedule_website`
   │
   ├─ 8.6 CACHE CHECK (if policy allows lookup_exact)
   │       ├─ HIT → insert assistant message (complete), stream cached content, audit, return
