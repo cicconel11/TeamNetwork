@@ -4,6 +4,11 @@ import assert from "node:assert/strict";
 import { executeToolCall } from "../../../src/lib/ai/tools/executor.ts";
 import { getSuggestionObservabilityByOrg } from "../../../src/lib/falkordb/suggestions.ts";
 import { resetFalkorTelemetryForTests } from "../../../src/lib/falkordb/telemetry.ts";
+import {
+  extractScheduleFromImage,
+  extractScheduleFromText,
+  setScheduleExtractionDepsForTests,
+} from "../../../src/lib/ai/schedule-extraction.ts";
 import type {
   ToolExecutionContext,
   ToolExecutionResult,
@@ -255,6 +260,7 @@ let stub: ReturnType<typeof createToolSupabaseStub>;
 
 beforeEach(() => {
   resetFalkorTelemetryForTests();
+  setScheduleExtractionDepsForTests(null);
   stub = createToolSupabaseStub({
     members: {
       select: {
@@ -310,6 +316,58 @@ beforeEach(() => {
     },
   });
   ctx = makeCtx(stub as any);
+});
+
+test("schedule extraction uses separate Z.AI models for text and image sources", async () => {
+  const completionCalls: Array<{ model: string; messages: unknown[] }> = [];
+  const fakeClient = {
+    chat: {
+      completions: {
+        create: async (params: { model: string; messages: unknown[] }) => {
+          completionCalls.push(params);
+          return {
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    events: [],
+                    source_summary: "No events found.",
+                    confidence: "low",
+                  }),
+                },
+              },
+            ],
+          };
+        },
+      },
+    },
+  } as any;
+
+  setScheduleExtractionDepsForTests({
+    createClient: () => fakeClient,
+    getTextModel: () => "glm-5",
+    getImageModel: () => "glm-5v-turbo",
+  });
+
+  await extractScheduleFromText("Varsity match schedule", {
+    sourceType: "pdf",
+    sourceLabel: "schedule.pdf",
+    now: "2026-04-03T12:00:00.000Z",
+  });
+  await extractScheduleFromImage(
+    {
+      dataUrl: "data:image/png;base64,ZmFrZQ==",
+      mimeType: "image/png",
+    },
+    {
+      sourceLabel: "schedule.png",
+      now: "2026-04-03T12:00:00.000Z",
+    }
+  );
+
+  assert.equal(completionCalls[0]?.model, "glm-5");
+  assert.equal(completionCalls[1]?.model, "glm-5v-turbo");
+  assert.match(JSON.stringify(completionCalls[1]?.messages), /image_url/);
 });
 
 test("list_members returns org-scoped members", async () => {
@@ -1269,6 +1327,223 @@ test("extract_schedule_pdf allows in-prefix attachments to reach storage downloa
   assert.deepEqual(result, {
     kind: "tool_error",
     error: "Unable to read attached PDF",
+  });
+});
+
+test("extract_schedule_pdf returns no_events_found for image uploads with no extracted events", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      events: [],
+                      source_summary: "No events visible in the image.",
+                      confidence: "low",
+                    }),
+                  },
+                },
+              ],
+            }),
+          },
+        },
+      }) as any,
+  });
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("fake image bytes")]),
+        error: null,
+      }),
+    },
+    organizations: {
+      maybeSingle: {
+        data: { slug: "acme", name: "Acme Athletics" },
+        error: null,
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-empty",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000001_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "extract_schedule_pdf",
+      args: {},
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "no_events_found",
+    source_file: "schedule.png",
+  });
+  assert.deepEqual(stub.storageRemovals, [
+    {
+      bucket: "ai-schedule-uploads",
+      paths: [`${ORG_ID}/${USER_ID}/1712000000001_schedule.png`],
+    },
+  ]);
+});
+
+test("extract_schedule_pdf returns needs_batch_confirmation for image uploads with extracted events", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      events: [
+                        {
+                          title: "Acme vs Central",
+                          start_date: "2026-04-10",
+                          start_time: "18:30",
+                          location: "Main Gym",
+                          event_type: "game",
+                        },
+                      ],
+                      source_summary: "One game extracted from the schedule image.",
+                      confidence: "high",
+                    }),
+                  },
+                },
+              ],
+            }),
+          },
+        },
+      }) as any,
+  });
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("fake image bytes")]),
+        error: null,
+      }),
+    },
+    organizations: {
+      maybeSingle: {
+        data: { slug: "acme", name: "Acme Athletics" },
+        error: null,
+      },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-event-1",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-image-success",
+          action_type: "create_event",
+          payload: {
+            title: "Acme vs Central",
+            start_date: "2026-04-10",
+            start_time: "18:30",
+            end_date: null,
+            end_time: null,
+            location: "Main Gym",
+            description: null,
+            event_type: "game",
+            is_philanthropy: false,
+            orgSlug: "acme",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-success",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000002_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = expectOk(
+    await executeToolCall(ctx, {
+      name: "extract_schedule_pdf",
+      args: {},
+    })
+  );
+  const payload = result.data as any;
+
+  assert.equal(payload.state, "needs_batch_confirmation");
+  assert.equal(payload.pending_actions.length, 1);
+  assert.equal(payload.pending_actions[0].payload.title, "Acme vs Central");
+  assert.equal(payload.pending_actions[0].payload.orgSlug, "acme");
+});
+
+test("extract_schedule_pdf returns a mapped tool_error when image extraction fails", async () => {
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async () => {
+              throw new Error("vision unsupported");
+            },
+          },
+        },
+      }) as any,
+  });
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => ({
+        data: new Blob([Buffer.from("fake image bytes")]),
+        error: null,
+      }),
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-error",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000003_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Unable to read attached schedule image",
   });
 });
 

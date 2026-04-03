@@ -1,9 +1,15 @@
 import type OpenAI from "openai";
 import { z } from "zod";
-import { createZaiClient, getZaiModel } from "@/lib/ai/client";
+import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client";
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
 const MAX_EXTRACTED_EVENTS = 25;
+const defaultDeps: ScheduleExtractionDeps = {
+  createClient: createZaiClient,
+  getTextModel: getZaiModel,
+  getImageModel: getZaiImageModel,
+};
+let testDeps: ScheduleExtractionDeps | null = null;
 
 type ScheduleExtractionSourceType = "website" | "pdf" | "image";
 
@@ -12,6 +18,12 @@ type ScheduleExtractionContext = {
   sourceType: ScheduleExtractionSourceType;
   sourceLabel: string;
   now: string;
+};
+
+type ScheduleExtractionDeps = {
+  createClient: () => OpenAI;
+  getTextModel: () => string;
+  getImageModel: () => string;
 };
 
 export type ScheduleImageMimeType = "image/png" | "image/jpeg" | "image/jpg";
@@ -48,6 +60,16 @@ const extractedScheduleEventSchema: z.ZodType<ExtractedScheduleEvent> = z.object
 
 const confidenceSchema = z.enum(["high", "medium", "low"]);
 
+function getScheduleExtractionDeps(): ScheduleExtractionDeps {
+  return testDeps ?? defaultDeps;
+}
+
+export function setScheduleExtractionDepsForTests(
+  overrides: Partial<ScheduleExtractionDeps> | null
+): void {
+  testDeps = overrides ? { ...defaultDeps, ...overrides } : null;
+}
+
 export async function extractScheduleFromText(
   text: string,
   context: ScheduleExtractionContext
@@ -61,12 +83,14 @@ export async function extractScheduleFromText(
     };
   }
 
-  const client = createZaiClient();
+  const deps = getScheduleExtractionDeps();
+  const client = deps.createClient();
 
   const messages = buildTextMessages(truncatedText, context);
 
   const initialResponse = await requestExtraction({
     client,
+    model: deps.getTextModel(),
     messages,
     temperature: 0.2,
   });
@@ -80,6 +104,7 @@ export async function extractScheduleFromText(
 
     const retryResponse = await requestExtraction({
       client,
+      model: deps.getTextModel(),
       messages,
       temperature: 0,
     });
@@ -97,7 +122,8 @@ export async function extractScheduleFromImage(
     sourceType?: Extract<ScheduleExtractionSourceType, "image">;
   }
 ): Promise<ScheduleExtractionResult> {
-  const client = createZaiClient();
+  const deps = getScheduleExtractionDeps();
+  const client = deps.createClient();
   const normalizedContext: ScheduleExtractionContext = {
     ...context,
     sourceType: "image",
@@ -106,6 +132,7 @@ export async function extractScheduleFromImage(
 
   const initialResponse = await requestExtraction({
     client,
+    model: deps.getImageModel(),
     messages,
     temperature: 0.2,
   });
@@ -119,6 +146,7 @@ export async function extractScheduleFromImage(
 
     const retryResponse = await requestExtraction({
       client,
+      model: deps.getImageModel(),
       messages,
       temperature: 0,
     });
@@ -129,14 +157,15 @@ export async function extractScheduleFromImage(
 
 async function requestExtraction(params: {
   client: OpenAI;
+  model: string;
   messages: OpenAI.Chat.ChatCompletionMessageParam[];
   temperature: number;
 }): Promise<string> {
-  const { client, messages, temperature } = params;
+  const { client, model, messages, temperature } = params;
 
   try {
     const completion = await client.chat.completions.create({
-      model: getZaiModel(),
+      model,
       temperature,
       max_tokens: 2500,
       response_format: { type: "json_object" },
@@ -150,7 +179,7 @@ async function requestExtraction(params: {
     }
 
     const completion = await client.chat.completions.create({
-      model: getZaiModel(),
+      model,
       temperature,
       max_tokens: 2500,
       messages,
