@@ -229,6 +229,18 @@ function createToolSupabaseStub(overrides: Record<string, any> = {}) {
 
           return { data: [], error: null };
         },
+        async createSignedUrl(path: string, expiresIn: number) {
+          const handler = overrides.storage?.createSignedUrl;
+          if (typeof handler === "function") {
+            return handler({ bucket, path, expiresIn });
+          }
+
+          if (handler) {
+            return handler;
+          }
+
+          return { data: { signedUrl: `https://example.com/${path}` }, error: null };
+        },
       };
     },
   };
@@ -356,7 +368,7 @@ test("schedule extraction uses separate Z.AI models for text and image sources",
   });
   await extractScheduleFromImage(
     {
-      dataUrl: "data:image/png;base64,ZmFrZQ==",
+      url: "https://example.com/schedule.png",
       mimeType: "image/png",
     },
     {
@@ -1331,12 +1343,15 @@ test("extract_schedule_pdf allows in-prefix attachments to reach storage downloa
 });
 
 test("extract_schedule_pdf returns no_events_found for image uploads with no extracted events", async () => {
+  const completionCalls: Array<{ messages: unknown[] }> = [];
   setScheduleExtractionDepsForTests({
     createClient: () =>
       ({
         chat: {
           completions: {
-            create: async () => ({
+            create: async (params: { messages: unknown[] }) => {
+              completionCalls.push(params);
+              return {
               choices: [
                 {
                   message: {
@@ -1348,7 +1363,8 @@ test("extract_schedule_pdf returns no_events_found for image uploads with no ext
                   },
                 },
               ],
-            }),
+            };
+            },
           },
         },
       }) as any,
@@ -1391,6 +1407,8 @@ test("extract_schedule_pdf returns no_events_found for image uploads with no ext
     state: "no_events_found",
     source_file: "schedule.png",
   });
+  assert.match(JSON.stringify(completionCalls[0]?.messages), /https:\/\/example\.com/);
+  assert.doesNotMatch(JSON.stringify(completionCalls[0]?.messages), /data:image\/png;base64/);
   assert.deepEqual(stub.storageRemovals, [
     {
       bucket: "ai-schedule-uploads",
