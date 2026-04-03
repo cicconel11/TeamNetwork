@@ -9,6 +9,12 @@ interface UseAIStreamOptions {
   orgId: string;
 }
 
+export interface AIChatAttachment {
+  storagePath: string;
+  fileName: string;
+  mimeType: "application/pdf" | "image/png" | "image/jpeg" | "image/jpg";
+}
+
 interface AIStreamState {
   isStreaming: boolean;
   error: string | null;
@@ -30,7 +36,13 @@ export interface AIStreamResult {
 interface UseAIStreamReturn extends AIStreamState {
   sendMessage: (
     message: string,
-    opts: { surface: string; currentPath?: string; threadId?: string; idempotencyKey: string }
+    opts: {
+      surface: string;
+      currentPath?: string;
+      threadId?: string;
+      idempotencyKey: string;
+      attachment?: AIChatAttachment;
+    }
   ) => Promise<AIStreamResult | null>;
   cancel: () => void;
   clearError: () => void;
@@ -164,7 +176,13 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
 
   const sendMessage = useCallback(async (
     message: string,
-    opts: { surface: string; currentPath?: string; threadId?: string; idempotencyKey: string }
+    opts: {
+      surface: string;
+      currentPath?: string;
+      threadId?: string;
+      idempotencyKey: string;
+      attachment?: AIChatAttachment;
+    }
   ) => {
     // Cancel any in-flight request
     abortRef.current?.abort();
@@ -191,6 +209,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
           currentPath: opts.currentPath,
           threadId: opts.threadId,
           idempotencyKey: opts.idempotencyKey,
+          attachment: opts.attachment,
         }),
         signal: controller.signal,
       });

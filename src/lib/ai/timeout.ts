@@ -1,6 +1,7 @@
 export const PASS1_MODEL_TIMEOUT_MS = 15_000;
 export const PASS2_MODEL_TIMEOUT_MS = 15_000;
 export const TOOL_EXECUTION_TIMEOUT_MS = 5_000;
+export const EXTRACTION_TOOL_TIMEOUT_MS = 30_000;
 
 export class StageTimeoutError extends Error {
   readonly stage: string;

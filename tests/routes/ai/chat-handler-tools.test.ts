@@ -217,6 +217,10 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
               ? '{"person_query":"Louis Ciccone"}'
               : firstToolName === "prepare_discussion_thread"
                 ? '{"title":"Spring Fundraising Volunteers","body":"Let\\u2019s organize volunteer assignments for the spring fundraiser."}'
+              : firstToolName === "scrape_schedule_website"
+                ? '{"url":"https://example.com/schedule"}'
+                : firstToolName === "extract_schedule_pdf"
+                  ? "{}"
             : '{"limit": 5}';
         yield {
           type: "tool_call_requested",
@@ -809,6 +813,129 @@ test("create discussion requests do not get misrouted to find_navigation_targets
     function: { name: "prepare_discussion_thread" },
   });
   assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_thread");
+});
+
+test("attached PDFs attach extract_schedule_pdf on pass 1", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please help with this upload",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.pdf",
+        fileName: "schedule.pdf",
+        mimeType: "application/pdf",
+      },
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["extract_schedule_pdf"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "extract_schedule_pdf" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "extract_schedule_pdf");
+  assert.deepEqual(executeToolCallCalls[0].ctx.attachment, {
+    storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.pdf",
+    fileName: "schedule.pdf",
+    mimeType: "application/pdf",
+  });
+});
+
+test("attached PNG schedules attach extract_schedule_pdf on pass 1", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please help with this upload",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.png",
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["extract_schedule_pdf"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "extract_schedule_pdf" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "extract_schedule_pdf");
+  assert.deepEqual(executeToolCallCalls[0].ctx.attachment, {
+    storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.png",
+    fileName: "schedule.png",
+    mimeType: "image/png",
+  });
+});
+
+test("attached JPEG schedules attach extract_schedule_pdf on pass 1", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please help with this upload",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.jpg",
+        fileName: "schedule.jpg",
+        mimeType: "image/jpeg",
+      },
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["extract_schedule_pdf"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "extract_schedule_pdf" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "extract_schedule_pdf");
+  assert.deepEqual(executeToolCallCalls[0].ctx.attachment, {
+    storagePath: "org-uuid-1/org-admin-user/1712000000000_schedule.jpg",
+    fileName: "schedule.jpg",
+    mimeType: "image/jpeg",
+  });
+});
+
+test("website schedule import attaches scrape_schedule_website on pass 1", async () => {
+  await (
+    await POST(makeRequest("Import the schedule from https://example.com/schedule") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["scrape_schedule_website"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "scrape_schedule_website" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "scrape_schedule_website");
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    url: "https://example.com/schedule",
+  });
 });
 
 test("create job requests still prefer prepare_job_posting over job reads", async () => {

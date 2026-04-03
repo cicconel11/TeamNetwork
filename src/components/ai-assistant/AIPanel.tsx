@@ -24,10 +24,14 @@ import {
   type AIPanelThread,
   type RetryRequestIdentity,
 } from "./panel-state";
+import type { AIChatAttachment } from "@/hooks/useAIStream";
 
 interface AIPanelProps {
   orgId: string;
 }
+
+const DEFAULT_SCHEDULE_FILE_PROMPT =
+  "Please extract this schedule file and prepare events for confirmation.";
 
 function getFeatureSegment(pathname: string): string {
   return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
@@ -152,6 +156,10 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [messages, setMessages] = useState<AIPanelMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [draftInput, setDraftInput] = useState("");
+  const [attachment, setAttachment] = useState<AIChatAttachment | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
   const [pendingAssistantContent, setPendingAssistantContent] = useState<string | null>(null);
   const [pendingActions, setPendingActions] = useState<PendingActionState[]>([]);
   const [pendingActionBusyIds, setPendingActionBusyIds] = useState<Set<string>>(new Set());
@@ -167,6 +175,68 @@ export function AIPanel({ orgId }: AIPanelProps) {
     cancel,
     clearError,
   } = useAIStream({ orgId });
+  const attachmentRef = useRef<AIChatAttachment | null>(null);
+
+  useEffect(() => {
+    attachmentRef.current = attachment;
+  }, [attachment]);
+
+  const deleteUploadedAttachment = useCallback(async (
+    storagePath: string,
+    options?: { keepalive?: boolean }
+  ) => {
+    try {
+      const response = await fetch(`/api/ai/${orgId}/upload-schedule`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storagePath }),
+        keepalive: options?.keepalive ?? false,
+      });
+
+      if (!response.ok && response.status !== 404) {
+        const data = await response.json().catch(() => null);
+        console.warn("[ai/upload-schedule] Failed to delete pending upload", {
+          storagePath,
+          status: response.status,
+          error: data && typeof data.error === "string" ? data.error : null,
+        });
+      }
+    } catch (error) {
+      console.warn("[ai/upload-schedule] Failed to delete pending upload", {
+        storagePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [orgId]);
+
+  const clearAttachment = useCallback((options?: {
+    deleteRemote?: boolean;
+    nextAttachment?: AIChatAttachment | null;
+  }) => {
+    const currentAttachment = attachmentRef.current;
+    const nextAttachment = options?.nextAttachment ?? null;
+
+    attachmentRef.current = nextAttachment;
+    setAttachment(nextAttachment);
+    setAttachmentError(null);
+
+    if (
+      options?.deleteRemote !== false
+      && currentAttachment
+      && currentAttachment.storagePath !== nextAttachment?.storagePath
+    ) {
+      void deleteUploadedAttachment(currentAttachment.storagePath);
+    }
+  }, [deleteUploadedAttachment]);
+
+  useEffect(() => () => {
+    const currentAttachment = attachmentRef.current;
+    if (!currentAttachment) {
+      return;
+    }
+
+    void deleteUploadedAttachment(currentAttachment.storagePath, { keepalive: true });
+  }, [deleteUploadedAttachment]);
 
   const loadThreads = useCallback(async () => {
     setThreadsLoading(true);
@@ -197,6 +267,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
           }
           setActiveThreadId(null);
           setMessages([]);
+          setDraftInput("");
+          clearAttachment();
           setPendingAssistantContent(null);
           setPendingActions([]);
           void loadThreads();
@@ -213,7 +285,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setMessagesLoading(false);
       }
     },
-    [loadThreads, orgId, surface]
+    [clearAttachment, loadThreads, orgId, surface]
   );
 
   useEffect(() => {
@@ -230,10 +302,12 @@ export function AIPanel({ orgId }: AIPanelProps) {
     prevPanelScopeKeyRef.current = panelScopeKey;
     setActiveThreadId(null);
     setMessages([]);
+    setDraftInput("");
+    clearAttachment();
     setPendingAssistantContent(null);
     setPendingActions([]);
     void loadThreads();
-  }, [loadThreads, panelScopeKey]);
+  }, [clearAttachment, loadThreads, panelScopeKey]);
 
   useEffect(() => {
     if (!isOpen || typeof window === "undefined") return;
@@ -276,6 +350,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
     if (!activeThreadId) {
       setMessages([]);
       setMessagesLoading(false);
+      setDraftInput("");
+      clearAttachment();
       setPendingAssistantContent(null);
       setPendingActions([]);
       return;
@@ -285,10 +361,53 @@ export function AIPanel({ orgId }: AIPanelProps) {
       return;
     }
     void loadMessages(activeThreadId);
-  }, [activeThreadId, isOpen, loadMessages]);
+  }, [activeThreadId, clearAttachment, isOpen, loadMessages]);
 
   // Track the last sent content + key so retries of the same message reuse the key
   const idempotencyRef = useRef<RetryRequestIdentity | null>(null);
+
+  const handleAttachFile = useCallback(async (file: File) => {
+    setAttachmentError(null);
+    setAttachmentUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+
+      const response = await fetch(`/api/ai/${orgId}/upload-schedule`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({ error: "Upload failed" }));
+
+      if (!response.ok) {
+        setAttachmentError(data.error || "Failed to upload schedule file.");
+        return;
+      }
+
+      clearAttachment({
+        deleteRemote: true,
+        nextAttachment: {
+          storagePath: data.storagePath,
+          fileName: data.fileName,
+          mimeType: data.mimeType,
+        },
+      });
+      setDraftInput((current) => current.trim() ? current : DEFAULT_SCHEDULE_FILE_PROMPT);
+      clearError();
+    } catch (error) {
+      setAttachmentError(
+        error instanceof Error ? error.message : "Failed to upload schedule file."
+      );
+    } finally {
+      setAttachmentUploading(false);
+    }
+  }, [clearAttachment, clearError, orgId]);
+
+  const handleRemoveAttachment = useCallback(() => {
+    if (attachmentUploading || isStreaming) return;
+    clearAttachment();
+  }, [attachmentUploading, clearAttachment, isStreaming]);
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -318,6 +437,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
         currentPath: pathname,
         threadId: activeThreadId ?? undefined,
         idempotencyKey,
+        attachment: attachmentRef.current ?? undefined,
       });
 
       if (!result) {
@@ -342,16 +462,23 @@ export function AIPanel({ orgId }: AIPanelProps) {
         setPendingAssistantContent(result.content);
       }
 
+      const sendSucceeded = !result.inFlight && !result.interrupted;
+
       const [loadedMessages] = await Promise.all([
         loadMessages(result.threadId, { silent: true }),
         loadThreads(),
       ]);
 
+      if (sendSucceeded) {
+        setDraftInput("");
+        clearAttachment({ deleteRemote: false });
+      }
+
       if (loadedMessages) {
         setPendingAssistantContent(null);
       }
     },
-    [activeThreadId, loadMessages, loadThreads, pathname, sendMessage, surface]
+    [activeThreadId, clearAttachment, loadMessages, loadThreads, pathname, sendMessage, surface]
   );
 
   const handleConfirmPendingAction = useCallback(async (actionId: string) => {
@@ -510,11 +637,18 @@ export function AIPanel({ orgId }: AIPanelProps) {
               onCancelAllPendingActions={handleCancelAllPendingActions}
             />
             <MessageInput
+              input={draftInput}
               isStreaming={isStreaming}
+              isUploadingAttachment={attachmentUploading}
               error={error}
+              attachmentError={attachmentError}
+              attachment={attachment}
               toolStatusLabel={toolStatusLabel}
               placeholder={inputPlaceholder}
+              onInputChange={setDraftInput}
               onSend={handleSend}
+              onAttachFile={handleAttachFile}
+              onRemoveAttachment={handleRemoveAttachment}
               onCancel={cancel}
               onClearError={clearError}
             />
@@ -525,6 +659,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
             loading={threadsLoading}
             activeThreadId={activeThreadId}
             onSelectThread={(id) => {
+              setDraftInput("");
+              clearAttachment();
               setPendingAssistantContent(null);
               setPendingActions([]);
               setActiveThreadId(id);
@@ -533,6 +669,8 @@ export function AIPanel({ orgId }: AIPanelProps) {
             onNewThread={() => {
               setActiveThreadId(null);
               setMessages([]);
+              setDraftInput("");
+              clearAttachment();
               setPendingAssistantContent(null);
               setPendingActions([]);
               setView("chat");

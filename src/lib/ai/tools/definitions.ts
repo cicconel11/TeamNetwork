@@ -44,6 +44,12 @@ export interface PrepareEventsBatchArgs {
   events: PrepareEventArgs[];
 }
 
+export interface ScrapeScheduleWebsiteArgs {
+  url: string;
+}
+
+export type ExtractSchedulePdfArgs = Record<string, never>;
+
 export type GetOrgStatsArgs = Record<string, never>;
 
 export interface SuggestConnectionsArgs {
@@ -320,6 +326,38 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  scrape_schedule_website: {
+    type: "function" as const,
+    function: {
+      name: "scrape_schedule_website" as const,
+      description:
+        "Fetch a team or organization website page over HTTPS and extract schedule or calendar events into pending event confirmations.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          url: {
+            type: "string" as const,
+            description: "HTTPS URL of the website page containing schedule or calendar information.",
+          },
+        },
+        required: ["url"] as const,
+        additionalProperties: false as const,
+      },
+    },
+  },
+  extract_schedule_pdf: {
+    type: "function" as const,
+    function: {
+      name: "extract_schedule_pdf" as const,
+      description:
+        "Read the uploaded schedule file from the current chat request and extract calendar events into pending event confirmations.",
+      parameters: {
+        type: "object" as const,
+        properties: {},
+        additionalProperties: false as const,
+      },
+    },
+  },
   get_org_stats: {
     type: "function" as const,
     function: {
@@ -405,6 +443,8 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
   TOOL_BY_NAME.prepare_events_batch,
+  TOOL_BY_NAME.scrape_schedule_website,
+  TOOL_BY_NAME.extract_schedule_pdf,
   TOOL_BY_NAME.get_org_stats,
   TOOL_BY_NAME.suggest_connections,
   TOOL_BY_NAME.find_navigation_targets,
