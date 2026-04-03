@@ -1011,21 +1011,33 @@ async function prepareEventsBatch(
       ...prepared.data,
       orgSlug,
     };
-    const pendingAction = await createPendingAction(sb, {
-      organizationId: ctx.orgId,
-      userId: ctx.userId,
-      threadId: ctx.threadId,
-      actionType: "create_event",
-      payload: pendingPayload,
-    });
-    const summary = buildPendingActionSummary(pendingAction);
-    pendingActions.push({
-      id: pendingAction.id,
-      action_type: pendingAction.action_type,
-      payload: pendingPayload,
-      expires_at: pendingAction.expires_at,
-      summary,
-    });
+    try {
+      const pendingAction = await createPendingAction(sb, {
+        organizationId: ctx.orgId,
+        userId: ctx.userId,
+        threadId: ctx.threadId,
+        actionType: "create_event",
+        payload: pendingPayload,
+      });
+      const summary = buildPendingActionSummary(pendingAction);
+      pendingActions.push({
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      });
+    } catch (insertError) {
+      aiLog("warn", "ai-tools", "prepare_events_batch insert failed for event", logContext, {
+        index: i,
+        error: getSafeErrorMessage(insertError),
+      });
+      validationErrors.push({
+        index: i,
+        missing_fields: ["_insert_failed"],
+        draft: prepared.data as unknown as Record<string, unknown>,
+      });
+    }
   }
 
   if (pendingActions.length === 0) {
