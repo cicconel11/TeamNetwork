@@ -44,7 +44,23 @@ const SURFACE_KEYWORDS: Record<Exclude<AiSurface, "general">, readonly string[]>
     "introduction",
   ],
   analytics: ["analytics", "metric", "metrics", "donation", "donations", "fundraising", "revenue", "expense", "expenses", "budget", "budgets", "financial", "finance"],
-  events: ["event", "events", "calendar", "schedule", "schedules", "meeting", "meetings", "ceremony", "game", "games", "rsvp"],
+  events: [
+    "event",
+    "events",
+    "calendar",
+    "schedule",
+    "schedules",
+    "meeting",
+    "meetings",
+    "ceremony",
+    "game",
+    "games",
+    "rsvp",
+    "scrape",
+    "import",
+    "website",
+    "extract",
+  ],
 };
 
 const SURFACE_TO_INTENT: Record<AiSurface, Exclude<AiIntent, "ambiguous_query">> = {

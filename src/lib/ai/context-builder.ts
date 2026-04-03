@@ -262,6 +262,8 @@ function describeAvailableTools(tools: readonly ToolName[] | undefined): string[
     prepare_discussion_thread: "Prepare a new discussion thread draft and create a confirmation action when ready.",
     prepare_event: "Prepare a new event draft and create a confirmation action when ready.",
     prepare_events_batch: "Prepare multiple event drafts at once when the user asks to create 2+ events in a single message.",
+    scrape_schedule_website: "Fetch an HTTPS schedule page and extract website events into pending confirmation actions.",
+    extract_schedule_pdf: "Read the attached schedule file and extract events into pending confirmation actions.",
     get_org_stats: "Read top-level organization counts and donation summary.",
     suggest_connections: "Suggest networking or introduction targets for a named member or alumnus.",
     find_navigation_targets: "Find the right in-app page for opening, managing, or creating something.",
