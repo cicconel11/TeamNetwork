@@ -115,7 +115,7 @@ export async function extractScheduleFromText(
 
 export async function extractScheduleFromImage(
   image: {
-    dataUrl: string;
+    url: string;
     mimeType: ScheduleImageMimeType;
   },
   context: Omit<ScheduleExtractionContext, "sourceType"> & {
@@ -231,7 +231,7 @@ function buildTextMessages(
 
 function buildImageMessages(
   image: {
-    dataUrl: string;
+    url: string;
     mimeType: ScheduleImageMimeType;
   },
   context: ScheduleExtractionContext
@@ -256,7 +256,7 @@ function buildImageMessages(
         {
           type: "image_url",
           image_url: {
-            url: image.dataUrl,
+            url: image.url,
           },
         },
       ],
