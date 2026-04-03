@@ -15,7 +15,7 @@ interface AIStreamState {
   currentContent: string;
   threadId: string | null;
   toolStatusLabel: string | null;
-  pendingAction: PendingActionState | null;
+  pendingActions: PendingActionState[];
 }
 
 export interface AIStreamResult {
@@ -42,6 +42,7 @@ interface StreamCallbacks {
   onError?: (message: string) => void;
   onToolStatus?: (event: Extract<SSEEvent, { type: "tool_status" }>) => void;
   onPendingAction?: (event: Extract<SSEEvent, { type: "pending_action" }>) => void;
+  onPendingActionsBatch?: (event: Extract<SSEEvent, { type: "pending_actions_batch" }>) => void;
 }
 
 interface AIErrorBody {
@@ -125,6 +126,11 @@ export async function consumeSSEStream(
 
         if (event.type === "pending_action") {
           callbacks.onPendingAction?.(event);
+          continue;
+        }
+
+        if (event.type === "pending_actions_batch") {
+          callbacks.onPendingActionsBatch?.(event);
         }
       } catch {
         // Ignore malformed events and keep streaming.
@@ -142,7 +148,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
     currentContent: "",
     threadId: null,
     toolStatusLabel: null,
-    pendingAction: null,
+    pendingActions: [],
   });
   const abortRef = useRef<AbortController | null>(null);
 
@@ -171,7 +177,7 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
       currentContent: "",
       threadId: opts.threadId ?? null,
       toolStatusLabel: null,
-      pendingAction: null,
+      pendingActions: [],
     });
     let responseThreadId = opts.threadId ?? null;
 
@@ -238,13 +244,28 @@ export function useAIStream({ orgId }: UseAIStreamOptions): UseAIStreamReturn {
         onPendingAction: (event) => {
           setState((prev) => ({
             ...prev,
-            pendingAction: {
-              actionId: event.actionId,
-              actionType: event.actionType,
-              summary: event.summary,
-              payload: event.payload,
-              expiresAt: event.expiresAt,
-            },
+            pendingActions: [
+              ...prev.pendingActions,
+              {
+                actionId: event.actionId,
+                actionType: event.actionType,
+                summary: event.summary,
+                payload: event.payload,
+                expiresAt: event.expiresAt,
+              },
+            ],
+          }));
+        },
+        onPendingActionsBatch: (event) => {
+          setState((prev) => ({
+            ...prev,
+            pendingActions: event.actions.map((a) => ({
+              actionId: a.actionId,
+              actionType: a.actionType,
+              summary: a.summary,
+              payload: a.payload,
+              expiresAt: a.expiresAt,
+            })),
           }));
         },
       });
