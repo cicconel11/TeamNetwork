@@ -225,6 +225,71 @@ function createSupabaseStub(options: { failHistoryQueries?: boolean } = {}) {
   };
 }
 
+function createPendingActionServiceSupabase(pendingActions: Array<Record<string, unknown>>) {
+  return {
+    rpc: aiContext?.serviceSupabase?.rpc ?? (async () => ({ data: null, error: null })),
+    from(table: string) {
+      if (table === "ai_draft_sessions") {
+        return {
+          select() {
+            return {
+              eq() { return this; },
+              maybeSingle: async () => ({ data: null, error: null }),
+            };
+          },
+        };
+      }
+
+      if (table !== "ai_pending_actions") {
+        throw new Error(`Unexpected service table: ${table}`);
+      }
+
+      const query = {
+        filters: [] as Array<{ kind: "eq"; column: string; value: unknown }>,
+        updated: null as Record<string, unknown> | null,
+      };
+
+      const builder: Record<string, any> = {
+        select() {
+          return builder;
+        },
+        update(payload: Record<string, unknown>) {
+          query.updated = payload;
+          return builder;
+        },
+        eq(column: string, value: unknown) {
+          query.filters.push({ kind: "eq", column, value });
+          return builder;
+        },
+      };
+
+      const resolve = () => {
+        const rows = pendingActions.filter((row) =>
+          query.filters.every((filter) => row[filter.column] === filter.value)
+        );
+
+        if (query.updated) {
+          for (const row of rows) {
+            Object.assign(row, query.updated);
+          }
+          return {
+            data: rows.map((row) => ({ id: row.id })),
+            error: null,
+          };
+        }
+
+        return { data: rows, error: null };
+      };
+
+      builder.then = (onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
+        Promise.resolve(resolve()).then(onFulfilled, onRejected);
+      builder.maybeSingle = async () => ({ data: null, error: null });
+      builder.single = async () => ({ data: null, error: null });
+      return builder;
+    },
+  };
+}
+
 let supabaseStub = createSupabaseStub();
 
 const { createChatPostHandler } = await import("../../../src/app/api/ai/[orgId]/chat/handler.ts");
@@ -1384,6 +1449,355 @@ test("POST /api/ai/[orgId]/chat deterministically formats successful schedule im
   assert.match(body, /"type":"pending_actions_batch"/);
   assert.doesNotMatch(body, /fallback prose should not appear/);
   assert.equal(composeCalls, 1);
+});
+
+test("POST /api/ai/[orgId]/chat revises pending imported schedule events and requires reconfirmation", async () => {
+  let composeCalls = 0;
+  let executedToolCall: any = null;
+  const threadId = "11111111-1111-4111-8111-111111111131";
+  const pendingActions = [
+    {
+      id: "pending-old-1",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs Central",
+        start_date: "2026-04-10",
+        start_time: "18:30",
+        event_type: "general",
+        is_philanthropy: false,
+      },
+    },
+    {
+      id: "pending-old-2",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs North",
+        start_date: "2026-04-17",
+        start_time: "19:00",
+        event_type: "general",
+        is_philanthropy: false,
+      },
+    },
+  ];
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => ({
+      ...aiContext,
+      serviceSupabase: createPendingActionServiceSupabase(pendingActions),
+    }),
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      composeCalls += 1;
+      yield { type: "chunk", content: "fallback revision prose should not appear" };
+    }) as any,
+    executeToolCall: async (_ctx: any, call: any) => {
+      executedToolCall = call;
+      return {
+        kind: "ok",
+        data: {
+          state: "needs_batch_confirmation",
+          pending_actions: [
+            {
+              id: "pending-new-1",
+              action_type: "create_event",
+              payload: {
+                title: "Acme vs Central",
+                start_date: "2026-04-10",
+                start_time: "18:30",
+                event_type: "practice",
+              },
+              expires_at: "2099-01-01T00:00:00.000Z",
+              summary: {
+                title: "Acme vs Central",
+                description: "Review before creating",
+              },
+            },
+            {
+              id: "pending-new-2",
+              action_type: "create_event",
+              payload: {
+                title: "Acme vs North",
+                start_date: "2026-04-17",
+                start_time: "19:00",
+                event_type: "practice",
+              },
+              expires_at: "2099-01-01T00:00:00.000Z",
+              summary: {
+                title: "Acme vs North",
+                description: "Review before creating",
+              },
+            },
+          ],
+        },
+      };
+    },
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: threadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId,
+      message: "these are actually practice",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.equal(executedToolCall?.name, "prepare_events_batch");
+  assert.deepEqual(executedToolCall?.args?.events?.map((event: any) => event.event_type), [
+    "practice",
+    "practice",
+  ]);
+  assert.match(body, /revised/i);
+  assert.match(body, /confirm/i);
+  assert.match(body, /"type":"pending_actions_batch"/);
+  assert.doesNotMatch(body, /fallback revision prose should not appear/);
+  assert.equal(composeCalls, 0);
+  assert.deepEqual(
+    pendingActions.map((action) => action.status),
+    ["cancelled", "cancelled"]
+  );
+});
+
+test("POST /api/ai/[orgId]/chat asks for clarification before revising an ambiguous pending schedule batch", async () => {
+  let composeCalls = 0;
+  const threadId = "11111111-1111-4111-8111-111111111132";
+  const pendingActions = [
+    {
+      id: "pending-old-1",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs Central",
+        start_date: "2026-04-10",
+        start_time: "18:30",
+        event_type: "general",
+        is_philanthropy: false,
+      },
+    },
+    {
+      id: "pending-old-2",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs North",
+        start_date: "2026-04-17",
+        start_time: "19:00",
+        event_type: "general",
+        is_philanthropy: false,
+      },
+    },
+  ];
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => ({
+      ...aiContext,
+      serviceSupabase: createPendingActionServiceSupabase(pendingActions),
+    }),
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      composeCalls += 1;
+      yield { type: "chunk", content: "ambiguous fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => {
+      throw new Error("executeToolCall should not run for ambiguous revision prompts");
+    },
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: threadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId,
+      message: "change the category to practice",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /all .*events|which specific event/i);
+  assert.doesNotMatch(body, /ambiguous fallback prose should not appear/);
+  assert.equal(composeCalls, 0);
+  assert.deepEqual(
+    pendingActions.map((action) => action.status),
+    ["pending", "pending"]
+  );
+});
+
+test("POST /api/ai/[orgId]/chat explains unsupported event types during schedule revision", async () => {
+  let composeCalls = 0;
+  const threadId = "11111111-1111-4111-8111-111111111133";
+  const pendingActions = [
+    {
+      id: "pending-old-1",
+      organization_id: ORG_ID,
+      user_id: ADMIN_USER.id,
+      thread_id: threadId,
+      action_type: "create_event",
+      status: "pending",
+      expires_at: "2099-01-01T00:00:00.000Z",
+      payload: {
+        title: "Acme vs Central",
+        start_date: "2026-04-10",
+        start_time: "18:30",
+        event_type: "general",
+        is_philanthropy: false,
+      },
+    },
+  ];
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => ({
+      ...aiContext,
+      serviceSupabase: createPendingActionServiceSupabase(pendingActions),
+    }),
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      composeCalls += 1;
+      yield { type: "chunk", content: "unsupported fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => {
+      throw new Error("executeToolCall should not run for unsupported revision categories");
+    },
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: threadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId,
+      message: "these are actually class",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /isn't a supported event type yet/i);
+  assert.match(body, /general, philanthropy, game, practice, meeting, social, workout, fundraiser/i);
+  assert.doesNotMatch(body, /unsupported fallback prose should not appear/);
+  assert.equal(composeCalls, 0);
+  assert.deepEqual(
+    pendingActions.map((action) => action.status),
+    ["pending"]
+  );
 });
 
 test("POST /api/ai/[orgId]/chat deterministically formats no-events schedule image results", async () => {
