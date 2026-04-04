@@ -7,6 +7,24 @@ const MAX_SOURCE_TEXT_CHUNK_COUNT = 4;
 const MAX_EXTRACTED_EVENTS = 25;
 const MAX_REJECTED_ROWS = 25;
 const REQUIRED_EVENT_FIELDS = ["title", "start_date", "start_time"] as const;
+const PDF_MONTH_INDEX: Record<string, string> = {
+  jan: "01",
+  feb: "02",
+  mar: "03",
+  apr: "04",
+  may: "05",
+  jun: "06",
+  jul: "07",
+  aug: "08",
+  sep: "09",
+  sept: "09",
+  oct: "10",
+  nov: "11",
+  dec: "12",
+};
+const PDF_DATE_PATTERN =
+  /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})\s+(\d{4})\b/i;
+const PDF_TIME_PATTERN = /\b(\d{1,2}:\d{2})\s*([AaPp])[.]?[Mm][.]?\b/;
 const PDF_CHROME_PHRASES = [
   "fordham preparatory school",
   "fordhampreparatoryschool",
@@ -31,6 +49,12 @@ const PDF_CHROME_PHRASES = [
 ];
 const PDF_SCHEDULE_SIGNAL_PATTERN =
   /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|am|pm|vs\.?|@\b|\d{1,2}:\d{2}|\d{4})\b/i;
+const PDF_SCHEDULE_HEADER_PATTERN =
+  /\bteam\b.*\bopponent\b.*\bdate\b.*\btime\b.*\blocation\b/i;
+const PDF_RESULT_PATTERN = /\b(?:result|score)\b/i;
+const PDF_TEAM_LEVEL_PATTERN = /\b(?:varsity|junior|freshman|jv)\b/i;
+const PDF_SPORT_PATTERN =
+  /\b(?:baseball|basketball|football|soccer|lacrosse|softball|volleyball|wrestling|tennis|golf|track|cross country|swimming|rowing|crew|hockey|rugby)\b/i;
 const defaultDeps: ScheduleExtractionDeps = {
   createClient: createZaiClient,
   getTextModel: getZaiModel,
@@ -77,6 +101,12 @@ export interface ScheduleExtractionResult {
   rejected_rows: ExtractedScheduleRejectedRow[];
   source_summary: string;
   confidence: "high" | "medium" | "low";
+  diagnostics?: {
+    strategy: "pdf_parser" | "llm_fallback" | "llm" | "image_model";
+    cleaned_line_count?: number;
+    parsed_row_count?: number;
+    candidate_row_count?: number;
+  };
 }
 
 const extractedScheduleEventSchema: z.ZodType<ExtractedScheduleEvent> = z.object({
@@ -109,6 +139,14 @@ export async function extractScheduleFromText(
   context: ScheduleExtractionContext
 ): Promise<ScheduleExtractionResult> {
   const preparedText = prepareScheduleSourceText(text, context);
+
+  if (context.sourceType === "pdf") {
+    const parsedPdf = parsePdfSportsSchedule(preparedText, context);
+    if (parsedPdf.events.length > 0 || parsedPdf.rejected_rows.length > 0) {
+      return parsedPdf;
+    }
+  }
+
   const chunks = chunkScheduleSourceText(preparedText);
 
   if (chunks.length === 0) {
@@ -117,6 +155,15 @@ export async function extractScheduleFromText(
       rejected_rows: [],
       source_summary: `No usable text found in ${context.sourceLabel}.`,
       confidence: "low",
+      diagnostics:
+        context.sourceType === "pdf"
+          ? {
+              strategy: "llm_fallback",
+              cleaned_line_count: countLines(preparedText),
+              parsed_row_count: 0,
+              candidate_row_count: 0,
+            }
+          : undefined,
     };
   }
 
@@ -151,7 +198,21 @@ export async function extractScheduleFromText(
     results.push(parseExtractionResponse(retryResponse, context));
   }
 
-  return mergeExtractionResults(results, context);
+  const merged = mergeExtractionResults(results, context);
+  return {
+    ...merged,
+    diagnostics: {
+      strategy:
+        context.sourceType === "pdf"
+          ? "llm_fallback"
+          : context.sourceType === "image"
+          ? "image_model"
+          : "llm",
+      cleaned_line_count: context.sourceType === "pdf" ? countLines(preparedText) : undefined,
+      parsed_row_count: merged.events.length,
+      candidate_row_count: merged.rejected_rows.length,
+    },
+  };
 }
 
 export async function extractScheduleFromImage(
@@ -361,13 +422,50 @@ function normalizePdfLine(line: string): string {
   );
   const mergedFragments = mergePdfWordFragments(fullyCollapsed.split(/\s+/)).join(" ");
 
-  return mergedFragments
-    .replace(/\b([A-Z][a-z]{2,})\s+([a-z]{2,})\b/g, "$1$2")
-    .replace(/([A-Za-z])((?:vs|Vs)\.?)/g, "$1 $2")
-    .replace(/([A-Za-z]{2,})(?=(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b)/g, "$1 ")
-    .replace(/\s*-\s*/g, " - ")
-    .replace(/\s{2,}/g, " ")
-    .trim();
+  return collapseRepeatedPdfLineSegments(
+    mergedFragments
+      .replace(/\b([A-Za-z]+)(?:\1){1,}\b/g, "$1")
+      .replace(/\b([A-Z][a-z]{2,})\s+([a-z]{2,})\b/g, "$1$2")
+      .replace(/([A-Za-z])((?:vs|Vs)\.?)/g, "$1 $2")
+      .replace(/([A-Za-z]{2,})(?=(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b)/g, "$1 ")
+      .replace(/\s*-\s*/g, " - ")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+  );
+}
+
+function collapseRepeatedPdfLineSegments(line: string): string {
+  const tokens = line.split(/\s+/);
+  const maxSegmentLength = Math.min(6, Math.floor(tokens.length / 2));
+
+  for (let segmentLength = maxSegmentLength; segmentLength >= 2; segmentLength -= 1) {
+    const segment = tokens.slice(0, segmentLength).join(" ");
+    if (!looksLikeRepeatedPdfTeamSegment(segment)) {
+      continue;
+    }
+
+    let repeats = 1;
+    let offset = segmentLength;
+    while (
+      offset + segmentLength <= tokens.length
+      && tokens.slice(offset, offset + segmentLength).join(" ").toLowerCase() === segment.toLowerCase()
+    ) {
+      offset += segmentLength;
+      repeats += 1;
+    }
+
+    if (repeats >= 2) {
+      return `${segment} ${tokens.slice(offset).join(" ")}`.trim();
+    }
+  }
+
+  return line;
+}
+
+function looksLikeRepeatedPdfTeamSegment(segment: string): boolean {
+  return PDF_SPORT_PATTERN.test(segment)
+    || PDF_TEAM_LEVEL_PATTERN.test(segment)
+    || segment.includes(" - ");
 }
 
 function isMergeablePdfWordFragment(token: string): boolean {
@@ -414,6 +512,304 @@ function isLikelyPdfChromeLine(line: string): boolean {
 
 function hasScheduleSignal(line: string): boolean {
   return PDF_SCHEDULE_SIGNAL_PATTERN.test(line);
+}
+
+function parsePdfSportsSchedule(
+  text: string,
+  context: ScheduleExtractionContext
+): ScheduleExtractionResult {
+  const cleanedLines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const scheduleLines = slicePdfScheduleLines(cleanedLines);
+  const blocks = buildPdfScheduleBlocks(scheduleLines);
+  const events: ExtractedScheduleEvent[] = [];
+  const rejectedRows: ExtractedScheduleRejectedRow[] = [];
+  const seenEventKeys = new Set<string>();
+  const seenRejectedKeys = new Set<string>();
+
+  for (const block of blocks) {
+    const candidate = buildPdfScheduleCandidate(block);
+    if (!candidate) {
+      continue;
+    }
+
+    const normalized = normalizeScheduleCandidate(candidate);
+    if (!normalized) {
+      continue;
+    }
+
+    if ("event" in normalized) {
+      const eventKey = buildEventKey(normalized.event);
+      if (seenEventKeys.has(eventKey)) {
+        continue;
+      }
+
+      seenEventKeys.add(eventKey);
+      events.push(normalized.event);
+      continue;
+    }
+
+    const rejectionKey = buildRejectedRowKey(normalized.rejected);
+    if (seenRejectedKeys.has(rejectionKey)) {
+      continue;
+    }
+
+    seenRejectedKeys.add(rejectionKey);
+    rejectedRows.push({
+      index: rejectedRows.length,
+      missing_fields: normalized.rejected.missing_fields,
+      draft: normalized.rejected.draft,
+    });
+  }
+
+  return {
+    events: events.slice(0, MAX_EXTRACTED_EVENTS),
+    rejected_rows: rejectedRows.slice(0, MAX_REJECTED_ROWS),
+    source_summary:
+      events.length > 0 || rejectedRows.length > 0
+        ? `Parsed athletic schedule rows from ${context.sourceLabel}.`
+        : `No usable text found in ${context.sourceLabel}.`,
+    confidence: events.length > 0 ? "high" : rejectedRows.length > 0 ? "medium" : "low",
+    diagnostics: {
+      strategy: "pdf_parser",
+      cleaned_line_count: cleanedLines.length,
+      parsed_row_count: events.length,
+      candidate_row_count: rejectedRows.length,
+    },
+  };
+}
+
+function slicePdfScheduleLines(lines: string[]): string[] {
+  const headerIndex = lines.findIndex((line) => PDF_SCHEDULE_HEADER_PATTERN.test(line));
+  if (headerIndex >= 0) {
+    return lines.slice(headerIndex + 1);
+  }
+
+  return lines.filter((line) => looksLikePdfScheduleLine(line));
+}
+
+function buildPdfScheduleBlocks(lines: string[]): string[] {
+  const blocks: string[] = [];
+  let current: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = normalizePdfBlockLine(rawLine);
+    if (line.length === 0 || PDF_SCHEDULE_HEADER_PATTERN.test(line)) {
+      continue;
+    }
+
+    if (current.length === 0) {
+      if (!looksLikePdfScheduleLine(line)) {
+        continue;
+      }
+      current = [line];
+      continue;
+    }
+
+    const currentText = normalizePdfBlockText(current.join(" "));
+    if (hasPdfDateAndTime(currentText) && looksLikePdfBlockBoundary(line)) {
+      const finalized = normalizePdfBlockText(current.join(" "));
+      if (finalized.length > 0) {
+        blocks.push(finalized);
+      }
+      current = [line];
+      continue;
+    }
+
+    current.push(line);
+  }
+
+  if (current.length > 0) {
+    const finalized = normalizePdfBlockText(current.join(" "));
+    if (finalized.length > 0) {
+      blocks.push(finalized);
+    }
+  }
+
+  return blocks;
+}
+
+function normalizePdfBlockLine(line: string): string {
+  return line
+    .replace(/\s+/g, " ")
+    .replace(/\b([A-Za-z]+)(?:\1){1,}\b/g, "$1")
+    .trim();
+}
+
+function normalizePdfBlockText(text: string): string {
+  return collapseRepeatedPdfLineSegments(
+    text
+      .replace(/\s+/g, " ")
+      .replace(/\b([A-Za-z]+)(?:\1){1,}\b/g, "$1")
+      .replace(/\s*-\s*/g, " - ")
+      .trim()
+  );
+}
+
+function looksLikePdfScheduleLine(line: string): boolean {
+  return hasScheduleSignal(line)
+    || PDF_SPORT_PATTERN.test(line)
+    || PDF_TEAM_LEVEL_PATTERN.test(line)
+    || PDF_RESULT_PATTERN.test(line);
+}
+
+function looksLikePdfBlockBoundary(line: string): boolean {
+  return looksLikePdfScheduleLine(line)
+    && (PDF_SPORT_PATTERN.test(line) || /\b(?:vs\.?|@)\b/i.test(line) || hasPdfDate(line));
+}
+
+function hasPdfDate(line: string): boolean {
+  return PDF_DATE_PATTERN.test(line);
+}
+
+function hasPdfTime(line: string): boolean {
+  return PDF_TIME_PATTERN.test(line);
+}
+
+function hasPdfDateAndTime(line: string): boolean {
+  return hasPdfDate(line) && hasPdfTime(line);
+}
+
+function buildPdfScheduleCandidate(block: string): Record<string, unknown> | null {
+  const dateMatch = block.match(PDF_DATE_PATTERN);
+  if (!dateMatch || dateMatch.index == null) {
+    return null;
+  }
+
+  const startDate = normalizePdfMonthDate(dateMatch);
+  if (!startDate) {
+    return null;
+  }
+
+  const beforeDate = block.slice(0, dateMatch.index).trim();
+  const afterDate = block.slice(dateMatch.index + dateMatch[0].length).trim();
+  const timeMatch = afterDate.match(PDF_TIME_PATTERN);
+  const afterTime =
+    timeMatch && timeMatch.index != null
+      ? afterDate.slice(timeMatch.index + timeMatch[0].length).trim()
+      : afterDate;
+  const startTime = normalizeTimeValue(
+    timeMatch ? `${timeMatch[1] ?? ""} ${timeMatch[2] ?? ""}M` : undefined
+  );
+  const titleParts = parsePdfTitleAndLocation(beforeDate);
+  const detailParts = splitPdfLocationAndDescription(afterTime);
+  const location = [titleParts.location, detailParts.location]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join(" ")
+    .trim();
+
+  const candidate: Record<string, unknown> = {
+    raw_text: block,
+    start_date: startDate,
+    event_type: "game",
+  };
+
+  if (titleParts.title) {
+    candidate.title = titleParts.title;
+  }
+  if (startTime) {
+    candidate.start_time = startTime;
+  }
+  if (location.length > 0) {
+    candidate.location = location;
+  }
+  if (detailParts.description) {
+    candidate.description = detailParts.description;
+  }
+
+  return candidate;
+}
+
+function normalizePdfMonthDate(match: RegExpMatchArray): string | undefined {
+  const month = PDF_MONTH_INDEX[(match[1] ?? "").toLowerCase()];
+  const day = match[2];
+  const year = match[3];
+
+  if (!month || !day || !year) {
+    return undefined;
+  }
+
+  return `${year}-${month}-${day.padStart(2, "0")}`;
+}
+
+function parsePdfTitleAndLocation(beforeDate: string): {
+  title?: string;
+  location?: string;
+} {
+  const normalized = normalizePdfTitleFragment(beforeDate);
+  const match = normalized.match(/^(.*?)\s+(vs\.?|Vs\.?|@)\s+(.+)$/);
+
+  if (!match) {
+    return {
+      title: normalized.length > 0 ? normalized : undefined,
+    };
+  }
+
+  const prefix = normalizePdfTitleFragment(match[1] ?? "");
+  const separator = (match[2] ?? "").toLowerCase() === "@" ? "@" : "vs.";
+  const rest = normalizePdfTitleFragment(match[3] ?? "");
+
+  if (separator === "@") {
+    return {
+      title: `${prefix} @ ${rest}`.trim(),
+    };
+  }
+
+  const locationMatch = rest.match(/^(.*?)\s+@\s+(.+)$/);
+  if (locationMatch) {
+    return {
+      title: `${prefix} vs. ${normalizePdfTitleFragment(locationMatch[1] ?? "")}`.trim(),
+      location: normalizePdfTitleFragment(locationMatch[2] ?? ""),
+    };
+  }
+
+  return {
+    title: `${prefix} vs. ${rest}`.trim(),
+  };
+}
+
+function normalizePdfTitleFragment(value: string): string {
+  return value
+    .replace(/\b(Freshman|Varsity|Junior)\s*([A-Za-z]+)/g, "$1 $2")
+    .replace(/\b([A-Za-z]{2,})(?=(HS|School|Catholic|Prep|Park|Field)\b)/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, " - ")
+    .trim();
+}
+
+function splitPdfLocationAndDescription(text: string): {
+  location?: string;
+  description?: string;
+} {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) {
+    return {};
+  }
+
+  const resultIndex = normalized.search(PDF_RESULT_PATTERN);
+  if (resultIndex >= 0) {
+    const location = normalized.slice(0, resultIndex).trim();
+    const description = normalized
+      .slice(resultIndex)
+      .replace(/\s*-\s*/g, "-")
+      .trim();
+    return {
+      location: location.length > 0 ? location : undefined,
+      description: description.length > 0 ? description : undefined,
+    };
+  }
+
+  return { location: normalized };
+}
+
+function countLines(text: string): number {
+  if (text.trim().length === 0) {
+    return 0;
+  }
+
+  return text.split("\n").filter((line) => line.trim().length > 0).length;
 }
 
 function chunkScheduleSourceText(text: string): string[] {
