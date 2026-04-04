@@ -393,6 +393,95 @@ test("confirm create_event rolls back and returns structured event_type errors",
   }
 });
 
+test("confirm allows a 25-event AI batch confirmation for the same user", async () => {
+  let createEventCalls = 0;
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert() {
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async (_supabase, actionId) =>
+      ({
+        id: actionId,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_event",
+        payload: {
+          title: `Fordham Baseball ${actionId}`,
+          start_date: "2026-04-10",
+          start_time: "18:00",
+          end_date: "2026-04-10",
+          end_time: "20:00",
+          location: "Moglia Stadium",
+          event_type: "game",
+          is_philanthropy: false,
+          orgSlug: "fordham-prep",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async () => ({ updated: true }),
+    createEvent: async ({ input }) => {
+      createEventCalls += 1;
+      return {
+        ok: true,
+        status: 201,
+        event: {
+          id: `event-${createEventCalls}`,
+          title: input.title,
+        },
+        eventUrl: `/fordham-prep/calendar/events/event-${createEventCalls}`,
+      } as any;
+    },
+    clearDraftSession: async () => {},
+  });
+
+  const responses = await Promise.all(
+    Array.from({ length: 25 }, async (_, index) => {
+      const response = await handler(buildRequest() as any, {
+        params: Promise.resolve({ orgId: ORG_ID, actionId: `action-${index + 1}` }),
+      });
+      return {
+        status: response.status,
+        body: await response.json(),
+      };
+    })
+  );
+
+  assert.equal(createEventCalls, 25);
+  assert.ok(
+    responses.every((response) => response.status === 200 && response.body.ok === true),
+    `expected all 25 confirmations to succeed, got ${JSON.stringify(responses)}`
+  );
+});
+
 test("cancel marks the pending action cancelled", async () => {
   const updatedStatuses: any[] = [];
 

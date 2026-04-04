@@ -510,7 +510,12 @@ export function AIPanel({ orgId }: AIPanelProps) {
     [activeThreadId, clearAttachment, loadMessages, loadThreads, pathname, sendMessage, surface]
   );
 
-  const handleConfirmPendingAction = useCallback(async (actionId: string) => {
+  const handleConfirmPendingAction = useCallback(async (
+    actionId: string,
+    options: { reloadCollections?: boolean; refreshCalendar?: boolean } = {}
+  ) => {
+    const shouldReloadCollections = options.reloadCollections ?? true;
+    const shouldRefreshCalendar = options.refreshCalendar ?? true;
     setPendingActionBusyIds((prev) => new Set(prev).add(actionId));
     setPendingActionErrors((prev) => {
       const next = { ...prev };
@@ -532,11 +537,13 @@ export function AIPanel({ orgId }: AIPanelProps) {
       }
 
       setPendingActions((prev) => prev.filter((a) => a.actionId !== actionId));
-      if (activeThreadId) {
+      if (shouldReloadCollections && activeThreadId) {
         await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
       }
-      window.dispatchEvent(new CustomEvent("calendar:refresh"));
-      router.refresh();
+      if (shouldRefreshCalendar) {
+        window.dispatchEvent(new CustomEvent("calendar:refresh"));
+        router.refresh();
+      }
     } finally {
       setPendingActionBusyIds((prev) => {
         const next = new Set(prev);
@@ -548,9 +555,15 @@ export function AIPanel({ orgId }: AIPanelProps) {
 
   const handleConfirmAllPendingActions = useCallback(async () => {
     const ids = pendingActions.map((a) => a.actionId);
-    // Errors are tracked per-action by handleConfirmPendingAction
-    await Promise.allSettled(ids.map((id) => handleConfirmPendingAction(id)));
-  }, [pendingActions, handleConfirmPendingAction]);
+    for (const id of ids) {
+      await handleConfirmPendingAction(id, { reloadCollections: false, refreshCalendar: false });
+    }
+    if (activeThreadId) {
+      await Promise.all([loadMessages(activeThreadId, { silent: true }), loadThreads()]);
+    }
+    window.dispatchEvent(new CustomEvent("calendar:refresh"));
+    router.refresh();
+  }, [activeThreadId, handleConfirmPendingAction, loadMessages, loadThreads, pendingActions, router]);
 
   const handleCancelPendingAction = useCallback(async (actionId: string) => {
     setPendingActionBusyIds((prev) => new Set(prev).add(actionId));
