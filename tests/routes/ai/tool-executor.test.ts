@@ -1845,6 +1845,39 @@ test("extract_schedule_pdf returns image_too_large for oversized image uploads",
   });
 });
 
+test("extract_schedule_pdf maps image stage timeouts to a deterministic tool_error", async () => {
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => {
+        throw new StageTimeoutError("tool_extract_schedule_pdf", 60_000);
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-image-timeout",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000007_schedule.png`,
+      fileName: "schedule.png",
+      mimeType: "image/png",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Schedule image extraction timed out",
+    code: "image_timeout",
+  });
+});
+
 test("db errors return tool_error", async () => {
   stub = createToolSupabaseStub({
     members: { select: { data: null, error: { message: "connection refused" } } },

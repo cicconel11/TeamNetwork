@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
+import { prepareImageUpload } from "@/lib/media/image-preparation";
 import { useAIPanel } from "./AIPanelContext";
 import { routeToSurface } from "./route-surface";
 import {
@@ -32,6 +33,12 @@ interface AIPanelProps {
 
 const DEFAULT_SCHEDULE_FILE_PROMPT =
   "Please extract this schedule file and prepare events for confirmation.";
+const MAX_SCHEDULE_IMAGE_BYTES = 2 * 1024 * 1024;
+const SCHEDULE_IMAGE_MIME_TYPES = new Set<AIChatAttachment["mimeType"]>([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+]);
 
 function getFeatureSegment(pathname: string): string {
   return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
@@ -140,6 +147,28 @@ function getInputPlaceholder(pathname: string, surface: ReturnType<typeof routeT
       return "Ask about stats, donations, or where to go in the app...";
     default:
       return "Ask about announcements, discussions, jobs, or where to go...";
+  }
+}
+
+async function normalizeScheduleUploadFile(file: File): Promise<File> {
+  if (!SCHEDULE_IMAGE_MIME_TYPES.has(file.type as AIChatAttachment["mimeType"])) {
+    return file;
+  }
+
+  const preparedUpload = await prepareImageUpload(file);
+
+  try {
+    if (preparedUpload.normalizedBytes > MAX_SCHEDULE_IMAGE_BYTES) {
+      throw new Error(
+        "That schedule image is too large to process. Please upload an image under 2MB or use a PDF instead."
+      );
+    }
+
+    return preparedUpload.file;
+  } finally {
+    if (preparedUpload.previewUrl) {
+      URL.revokeObjectURL(preparedUpload.previewUrl);
+    }
   }
 }
 
@@ -360,8 +389,9 @@ export function AIPanel({ orgId }: AIPanelProps) {
     setAttachmentUploading(true);
 
     try {
+      const normalizedFile = await normalizeScheduleUploadFile(file);
       const formData = new FormData();
-      formData.set("file", file);
+      formData.set("file", normalizedFile);
 
       const response = await fetch(`/api/ai/${orgId}/upload-schedule`, {
         method: "POST",
