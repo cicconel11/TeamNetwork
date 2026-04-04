@@ -52,6 +52,8 @@ For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph
 | `supabase/migrations/20260710100000_ai_audit_log_context_columns.sql` | Adds `context_surface`, `context_token_estimate` to `ai_audit_log` |
 | `supabase/migrations/20260719000000_ai_audit_stage_timings.sql` | Adds `stage_timings` JSONB to `ai_audit_log` |
 | `supabase/migrations/20260727000000_ai_pending_actions.sql` | Adds `ai_pending_actions` for confirmation-gated assistant writes |
+| `supabase/migrations/20260812000000_rls_initplan_auth_uid.sql` | Wraps bare `auth.uid()` in RLS policies with `(select auth.uid())` initplan — 10-100x improvement on large table scans |
+| `supabase/migrations/20260812000003_perf_hotpath_indexes_and_initplan.sql` | Adds composite indexes on `ai_threads(org_id, created_at, id)` and `ai_messages(thread_id, status, created_at)` for hot chat paths; wraps remaining `auth.role()` in 4 service-role policies |
 
 ## Dependency Graph
 
