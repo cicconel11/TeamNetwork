@@ -40,6 +40,16 @@ const SCHEDULE_IMAGE_MIME_TYPES = new Set<AIChatAttachment["mimeType"]>([
   "image/jpg",
 ]);
 
+function getPendingActionErrorMessage(data: { error?: unknown; code?: unknown }): string {
+  if (data.code === "event_type_unavailable") {
+    return "This class could not be added because the calendar database is missing the Class event type. The environment needs the latest event-type migration before you can confirm class drafts.";
+  }
+
+  return typeof data.error === "string" && data.error.trim().length > 0
+    ? data.error
+    : "Failed to confirm";
+}
+
 function getFeatureSegment(pathname: string): string {
   return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? "";
 }
@@ -514,7 +524,10 @@ export function AIPanel({ orgId }: AIPanelProps) {
       );
       const data = await response.json().catch(() => ({ error: "Request failed" }));
       if (!response.ok) {
-        setPendingActionErrors((prev) => ({ ...prev, [actionId]: data.error || "Failed to confirm" }));
+        setPendingActionErrors((prev) => ({
+          ...prev,
+          [actionId]: getPendingActionErrorMessage(data),
+        }));
         return;
       }
 

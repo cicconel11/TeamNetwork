@@ -243,6 +243,26 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
   );
   assert.match(
     source,
+    /function getPendingActionErrorMessage\(data: \{ error\?: unknown; code\?: unknown \}\): string \{/,
+    "AIPanel should centralize pending-action error handling"
+  );
+  assert.match(
+    source,
+    /data\.code === "event_type_unavailable"/,
+    "AIPanel should detect structured class event type drift failures"
+  );
+  assert.match(
+    source,
+    /This class could not be added because the calendar database is missing the Class event type\./,
+    "AIPanel should surface a specific migration hint for class confirm failures"
+  );
+  assert.match(
+    source,
+    /getPendingActionErrorMessage\(data\)/,
+    "AIPanel should use the shared pending-action error formatter during confirm failures"
+  );
+  assert.match(
+    source,
     /const router = useRouter\(\);/,
     "AIPanel should capture the Next router so confirmation can refresh server-rendered calendar views"
   );
