@@ -1590,6 +1590,8 @@ function formatDeterministicToolErrorResponse(
       return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
     case "image_model_misconfigured":
       return "Schedule image extraction is misconfigured in this environment. Set ZAI_IMAGE_MODEL to a Z.AI vision model like glm-5v-turbo and restart the server.";
+    case "pdf_timeout":
+      return "The attached PDF schedule timed out during extraction. Please try again, or send the event details in text if the PDF keeps failing.";
     case "pdf_unreadable":
       return "I couldn't read that PDF schedule. Try re-exporting the PDF or upload a clear image instead.";
     default:
@@ -1602,6 +1604,10 @@ function formatDeterministicToolErrorResponse(
 
   if (error === "Schedule image extraction timed out") {
     return "I wasn't able to extract the schedule from the attached image file because the extraction tool timed out. This can happen with larger or more complex image files. Please re-upload it and I'll try again, or upload a PDF version if you have one.";
+  }
+
+  if (error === "Schedule PDF extraction timed out") {
+    return "The attached PDF schedule timed out during extraction. Please try again, or send the event details in text if the PDF keeps failing.";
   }
 
   if (

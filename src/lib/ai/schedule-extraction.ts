@@ -3,9 +3,34 @@ import { z } from "zod";
 import { createZaiClient, getZaiImageModel, getZaiModel } from "@/lib/ai/client";
 
 const MAX_SOURCE_TEXT_CHARS = 12_000;
+const MAX_SOURCE_TEXT_CHUNK_COUNT = 4;
 const MAX_EXTRACTED_EVENTS = 25;
 const MAX_REJECTED_ROWS = 25;
 const REQUIRED_EVENT_FIELDS = ["title", "start_date", "start_time"] as const;
+const PDF_CHROME_PHRASES = [
+  "fordham preparatory school",
+  "fordhampreparatoryschool",
+  "faith, scholarship, and service",
+  "admissions",
+  "alumni",
+  "giving",
+  "search",
+  "about teams",
+  "master schedule",
+  "sports streams",
+  "home of champions",
+  "athletic facilities",
+  "who we are",
+  "mailing address",
+  "directions",
+  "contact us",
+  "privacy policy",
+  "accessibility policy",
+  "sitemap",
+  "program coaches schedule",
+];
+const PDF_SCHEDULE_SIGNAL_PATTERN =
+  /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|am|pm|vs\.?|@\b|\d{1,2}:\d{2}|\d{4})\b/i;
 const defaultDeps: ScheduleExtractionDeps = {
   createClient: createZaiClient,
   getTextModel: getZaiModel,
@@ -83,8 +108,10 @@ export async function extractScheduleFromText(
   text: string,
   context: ScheduleExtractionContext
 ): Promise<ScheduleExtractionResult> {
-  const truncatedText = text.slice(0, MAX_SOURCE_TEXT_CHARS);
-  if (truncatedText.trim().length === 0) {
+  const preparedText = prepareScheduleSourceText(text, context);
+  const chunks = chunkScheduleSourceText(preparedText);
+
+  if (chunks.length === 0) {
     return {
       events: [],
       rejected_rows: [],
@@ -95,21 +122,24 @@ export async function extractScheduleFromText(
 
   const deps = getScheduleExtractionDeps();
   const client = deps.createClient();
+  const results: ScheduleExtractionResult[] = [];
 
-  const messages = buildTextMessages(truncatedText, context);
+  for (const chunk of chunks) {
+    const messages = buildTextMessages(chunk, context);
+    const initialResponse = await requestExtraction({
+      client,
+      model: deps.getTextModel(),
+      messages,
+      temperature: 0.2,
+    });
 
-  const initialResponse = await requestExtraction({
-    client,
-    model: deps.getTextModel(),
-    messages,
-    temperature: 0.2,
-  });
-
-  try {
-    return parseExtractionResponse(initialResponse, context);
-  } catch (error) {
-    if (!(error instanceof SyntaxError)) {
-      throw error;
+    try {
+      results.push(parseExtractionResponse(initialResponse, context));
+      continue;
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        throw error;
+      }
     }
 
     const retryResponse = await requestExtraction({
@@ -118,9 +148,10 @@ export async function extractScheduleFromText(
       messages,
       temperature: 0,
     });
-
-    return parseExtractionResponse(retryResponse, context);
+    results.push(parseExtractionResponse(retryResponse, context));
   }
+
+  return mergeExtractionResults(results, context);
 }
 
 export async function extractScheduleFromImage(
@@ -273,6 +304,221 @@ function buildImageMessages(
       ],
     },
   ];
+}
+
+function prepareScheduleSourceText(
+  text: string,
+  context: ScheduleExtractionContext
+): string {
+  if (context.sourceType === "pdf") {
+    return cleanPdfExtractedText(text);
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function cleanPdfExtractedText(text: string): string {
+  const rawLines = text
+    .split(/\r?\n+/)
+    .map((line) => normalizePdfLine(line))
+    .filter((line) => line.length > 0);
+  const cleanedLines: string[] = [];
+  const seenNonEventLines = new Set<string>();
+
+  for (const line of rawLines) {
+    if (isLikelyPdfChromeLine(line)) {
+      continue;
+    }
+
+    const previousLine = cleanedLines[cleanedLines.length - 1];
+    if (previousLine === line) {
+      continue;
+    }
+
+    if (!hasScheduleSignal(line)) {
+      const dedupeKey = line.toLowerCase();
+      if (seenNonEventLines.has(dedupeKey)) {
+        continue;
+      }
+      seenNonEventLines.add(dedupeKey);
+    }
+
+    cleanedLines.push(line);
+  }
+
+  return cleanedLines.join("\n").trim();
+}
+
+function normalizePdfLine(line: string): string {
+  const compactWhitespace = line.replace(/\t+/g, " ").replace(/\s{2,}/g, " ").trim();
+  if (compactWhitespace.length === 0) {
+    return "";
+  }
+
+  const fullyCollapsed = compactWhitespace.replace(
+    /\b(?:[A-Za-z]\s+){2,}[A-Za-z]\b/g,
+    (match) => match.replace(/\s+/g, "")
+  );
+  const mergedFragments = mergePdfWordFragments(fullyCollapsed.split(/\s+/)).join(" ");
+
+  return mergedFragments
+    .replace(/\b([A-Z][a-z]{2,})\s+([a-z]{2,})\b/g, "$1$2")
+    .replace(/([A-Za-z])((?:vs|Vs)\.?)/g, "$1 $2")
+    .replace(/([A-Za-z]{2,})(?=(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\b)/g, "$1 ")
+    .replace(/\s*-\s*/g, " - ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function isMergeablePdfWordFragment(token: string): boolean {
+  return /^[A-Za-z]{1,3}$/.test(token);
+}
+
+function mergePdfWordFragments(tokens: string[]): string[] {
+  const merged: string[] = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index] ?? "";
+    if (!isMergeablePdfWordFragment(token)) {
+      merged.push(token);
+      continue;
+    }
+
+    const parts = [token];
+    let nextIndex = index + 1;
+    while (nextIndex < tokens.length && isMergeablePdfWordFragment(tokens[nextIndex] ?? "")) {
+      parts.push(tokens[nextIndex] ?? "");
+      nextIndex += 1;
+    }
+
+    if (parts.length >= 2) {
+      merged.push(parts.join(""));
+      index = nextIndex - 1;
+      continue;
+    }
+
+    merged.push(token);
+  }
+
+  return merged;
+}
+
+function isLikelyPdfChromeLine(line: string): boolean {
+  if (hasScheduleSignal(line)) {
+    return false;
+  }
+
+  const lowerLine = line.toLowerCase();
+  return PDF_CHROME_PHRASES.some((phrase) => lowerLine.includes(phrase));
+}
+
+function hasScheduleSignal(line: string): boolean {
+  return PDF_SCHEDULE_SIGNAL_PATTERN.test(line);
+}
+
+function chunkScheduleSourceText(text: string): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return [];
+  }
+
+  const lines = trimmed.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return [];
+  }
+
+  const chunks: string[] = [];
+  let currentChunk = "";
+
+  for (const line of lines) {
+    const nextChunk = currentChunk.length > 0 ? `${currentChunk}\n${line}` : line;
+    if (nextChunk.length <= MAX_SOURCE_TEXT_CHARS) {
+      currentChunk = nextChunk;
+      continue;
+    }
+
+    if (currentChunk.length > 0) {
+      chunks.push(currentChunk);
+      if (chunks.length >= MAX_SOURCE_TEXT_CHUNK_COUNT) {
+        return chunks;
+      }
+    }
+
+    currentChunk = line.slice(0, MAX_SOURCE_TEXT_CHARS);
+  }
+
+  if (currentChunk.length > 0 && chunks.length < MAX_SOURCE_TEXT_CHUNK_COUNT) {
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function mergeExtractionResults(
+  results: ScheduleExtractionResult[],
+  context: ScheduleExtractionContext
+): ScheduleExtractionResult {
+  const events: ExtractedScheduleEvent[] = [];
+  const rejectedRowsByKey = new Map<
+    string,
+    Omit<ExtractedScheduleRejectedRow, "index">
+  >();
+  const seenEventKeys = new Set<string>();
+  let bestConfidence: ScheduleExtractionResult["confidence"] = "low";
+
+  for (const result of results) {
+    if (confidenceRank(result.confidence) > confidenceRank(bestConfidence)) {
+      bestConfidence = result.confidence;
+    }
+
+    for (const event of result.events) {
+      const eventKey = buildEventKey(event);
+      if (seenEventKeys.has(eventKey)) {
+        continue;
+      }
+
+      seenEventKeys.add(eventKey);
+      events.push(event);
+      if (events.length >= MAX_EXTRACTED_EVENTS) {
+        break;
+      }
+    }
+
+    for (const row of result.rejected_rows) {
+      const rejectionKey = buildRejectedRowKey(row);
+      const existing = rejectedRowsByKey.get(rejectionKey);
+      if (!existing || getDraftSignalScore(row.draft) > getDraftSignalScore(existing.draft)) {
+        rejectedRowsByKey.set(rejectionKey, {
+          missing_fields: row.missing_fields,
+          draft: row.draft,
+        });
+      }
+    }
+  }
+
+  return {
+    events,
+    rejected_rows: Array.from(rejectedRowsByKey.values())
+      .slice(0, MAX_REJECTED_ROWS)
+      .map((row, index) => ({
+        index,
+        missing_fields: row.missing_fields,
+        draft: row.draft,
+      })),
+    source_summary: `Extracted schedule candidates from ${context.sourceLabel}.`,
+    confidence: bestConfidence,
+  };
+}
+
+function confidenceRank(value: ScheduleExtractionResult["confidence"]): number {
+  switch (value) {
+    case "high":
+      return 3;
+    case "medium":
+      return 2;
+    default:
+      return 1;
+  }
 }
 
 function readCompletionText(response: OpenAI.Chat.ChatCompletion): string {

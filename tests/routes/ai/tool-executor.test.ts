@@ -444,6 +444,59 @@ test("schedule image extraction preserves readable partial rows for follow-up va
   ]);
 });
 
+test("extractScheduleFromText cleans noisy Fordham-style PDF text before sending it to the model", async () => {
+  const completionCalls: Array<{ messages: unknown[] }> = [];
+
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async (params: { messages: unknown[] }) => {
+              completionCalls.push(params);
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        events: [],
+                        source_summary: "No events found.",
+                        confidence: "low",
+                      }),
+                    },
+                  },
+                ],
+              };
+            },
+          },
+        },
+      }) as any,
+  });
+
+  await extractScheduleFromText(
+    [
+      "F O R D H A M   P R E P A R A T O R Y   S C H O O L",
+      "F O R D H A M   P R E P A R A T O R Y   S C H O O L",
+      "A D M I S S I O N S",
+      "A L U M N I",
+      "Program Coaches Schedule",
+      "B a s e ba l l - Va rs ity vs. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field",
+      "B a s e ba l l - Va rs ity Vs. Paramus Catholic Mar 24 2026 4:15 PM Moglia Stadium @ Coffey Field",
+    ].join("\n"),
+    {
+      sourceType: "pdf",
+      sourceLabel: "fordham-baseball.pdf",
+      now: "2026-04-03T12:00:00.000Z",
+    }
+  );
+
+  const serializedMessages = JSON.stringify(completionCalls[0]?.messages);
+  assert.match(serializedMessages, /Baseball - Varsity vs\. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field/);
+  assert.match(serializedMessages, /Baseball - Varsity Vs\. Paramus Catholic Mar 24 2026 4:15 PM Moglia Stadium @ Coffey Field/);
+  assert.doesNotMatch(serializedMessages, /F O R D H A M\s+P R E P A R A T O R Y/);
+  assert.doesNotMatch(serializedMessages, /A D M I S S I O N S/);
+});
+
 test("getZaiImageModel rejects token-like configuration values", () => {
   const previous = process.env.ZAI_IMAGE_MODEL;
   process.env.ZAI_IMAGE_MODEL = "7f7732de249c4bc1a2a434bf7014818b.NDlA78k4ON44EGQQ";
@@ -1876,6 +1929,45 @@ test("extract_schedule_pdf maps image stage timeouts to a deterministic tool_err
     error: "Schedule image extraction timed out",
     code: "image_timeout",
   });
+});
+
+test("extract_schedule_pdf maps PDF stage timeouts to a deterministic tool_error and cleans up the upload", async () => {
+  stub = createToolSupabaseStub({
+    storage: {
+      download: async () => {
+        throw new StageTimeoutError("tool_extract_schedule_pdf", 60_000);
+      },
+    },
+  });
+  ctx = {
+    ...makeCtx(stub as any, {
+      kind: "preverified_admin",
+      source: "ai_org_context",
+    }),
+    threadId: "thread-pdf-timeout",
+    attachment: {
+      storagePath: `${ORG_ID}/${USER_ID}/1712000000008_schedule.pdf`,
+      fileName: "schedule.pdf",
+      mimeType: "application/pdf",
+    },
+  };
+
+  const result = await executeToolCall(ctx, {
+    name: "extract_schedule_pdf",
+    args: {},
+  });
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Schedule PDF extraction timed out",
+    code: "pdf_timeout",
+  });
+  assert.deepEqual(stub.storageRemovals, [
+    {
+      bucket: "ai-schedule-uploads",
+      paths: [`${ORG_ID}/${USER_ID}/1712000000008_schedule.pdf`],
+    },
+  ]);
 });
 
 test("db errors return tool_error", async () => {
