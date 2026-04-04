@@ -1137,6 +1137,26 @@ function getPass1Tools(
     return [AI_TOOL_MAP.suggest_connections];
   }
 
+  if (ALUMNI_ROSTER_PROMPT_PATTERN.test(message) && !MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.list_alumni];
+  }
+
+  if (PARENT_LIST_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.list_parents];
+  }
+
+  if (PHILANTHROPY_EVENTS_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.list_philanthropy_events];
+  }
+
+  if (
+    DONATION_LIST_PROMPT_PATTERN.test(message) &&
+    !MEMBER_COUNT_PROMPT_PATTERN.test(message) &&
+    !DONATION_STATS_PROMPT_PATTERN.test(message)
+  ) {
+    return [AI_TOOL_MAP.list_donations];
+  }
+
   if (effectiveSurface === "members") {
     if (MEMBER_COUNT_PROMPT_PATTERN.test(message)) {
       return [AI_TOOL_MAP.get_org_stats];
@@ -1165,6 +1185,10 @@ function getForcedPass1ToolChoice(
     forcedToolName !== "list_members" &&
     forcedToolName !== "get_org_stats" &&
     forcedToolName !== "list_events" &&
+    forcedToolName !== "list_alumni" &&
+    forcedToolName !== "list_donations" &&
+    forcedToolName !== "list_parents" &&
+    forcedToolName !== "list_philanthropy_events" &&
     forcedToolName !== "scrape_schedule_website" &&
     forcedToolName !== "extract_schedule_pdf"
   ) {
@@ -1195,6 +1219,10 @@ function isToolFirstEligible(
     toolName === "list_events" ||
     toolName === "list_discussions" ||
     toolName === "list_job_postings" ||
+    toolName === "list_alumni" ||
+    toolName === "list_donations" ||
+    toolName === "list_parents" ||
+    toolName === "list_philanthropy_events" ||
     toolName === "suggest_connections"
   );
 }
@@ -1531,6 +1559,14 @@ function formatDeterministicToolResponse(
       return formatOrgStatsResponse(data);
     case "list_members":
       return formatMembersResponse(data);
+    case "list_alumni":
+      return formatAlumniResponse(data);
+    case "list_donations":
+      return formatDonationsResponse(data);
+    case "list_parents":
+      return formatParentsResponse(data);
+    case "list_philanthropy_events":
+      return formatPhilanthropyEventsResponse(data);
     case "find_navigation_targets":
       return formatNavigationTargetsResponse(data);
     default:
