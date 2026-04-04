@@ -6009,6 +6009,7 @@ export type Database = {
         | "fundraiser"
         | "practice"
         | "workout"
+        | "class"
       media_entity_type: "feed_post" | "discussion_thread" | "job_posting"
       media_status: "uploading" | "pending" | "approved" | "rejected"
       media_upload_status: "pending" | "ready" | "failed" | "orphaned"
@@ -6183,6 +6184,7 @@ export const Constants = {
         "fundraiser",
         "practice",
         "workout",
+        "class",
       ],
       media_entity_type: ["feed_post", "discussion_thread", "job_posting"],
       media_status: ["uploading", "pending", "approved", "rejected"],
