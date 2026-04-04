@@ -109,6 +109,8 @@ export type Database = {
           thread_id: string | null
           tool_calls: Json | null
           user_id: string
+          write_action_id: string | null
+          write_action_status: string | null
         }
         Insert: {
           cache_bypass_reason?: string | null
@@ -135,6 +137,8 @@ export type Database = {
           thread_id?: string | null
           tool_calls?: Json | null
           user_id: string
+          write_action_id?: string | null
+          write_action_status?: string | null
         }
         Update: {
           cache_bypass_reason?: string | null
@@ -161,6 +165,8 @@ export type Database = {
           thread_id?: string | null
           tool_calls?: Json | null
           user_id?: string
+          write_action_id?: string | null
+          write_action_status?: string | null
         }
         Relationships: [
           {
@@ -228,6 +234,73 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_draft_sessions: {
+        Row: {
+          created_at: string
+          draft_payload: Json
+          draft_type: string
+          expires_at: string
+          id: string
+          missing_fields: string[]
+          organization_id: string
+          pending_action_id: string | null
+          status: string
+          thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          draft_payload?: Json
+          draft_type: string
+          expires_at?: string
+          id?: string
+          missing_fields?: string[]
+          organization_id: string
+          pending_action_id?: string | null
+          status: string
+          thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          draft_payload?: Json
+          draft_type?: string
+          expires_at?: string
+          id?: string
+          missing_fields?: string[]
+          organization_id?: string
+          pending_action_id?: string | null
+          status?: string
+          thread_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_draft_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_draft_sessions_pending_action_id_fkey"
+            columns: ["pending_action_id"]
+            isOneToOne: false
+            referencedRelation: "ai_pending_actions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_draft_sessions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "ai_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -371,6 +444,7 @@ export type Database = {
         Row: {
           action_type: string
           created_at: string
+          error_message: string | null
           executed_at: string | null
           expires_at: string
           id: string
@@ -386,8 +460,9 @@ export type Database = {
         Insert: {
           action_type: string
           created_at?: string
+          error_message?: string | null
           executed_at?: string | null
-          expires_at: string
+          expires_at?: string
           id?: string
           organization_id: string
           payload: Json
@@ -401,6 +476,7 @@ export type Database = {
         Update: {
           action_type?: string
           created_at?: string
+          error_message?: string | null
           executed_at?: string | null
           expires_at?: string
           id?: string
@@ -415,7 +491,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "ai_pending_actions_organization_id_fkey"
+            foreignKeyName: "ai_pending_actions_org_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -5454,6 +5530,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      cancel_ai_pending_action: {
+        Args: { p_action_id: string; p_user_id: string }
+        Returns: Json
+      }
       check_analytics_rate_limit: {
         Args: {
           p_max_events?: number
@@ -5494,6 +5574,10 @@ export type Database = {
         Args: { p_attempt_id: string }
         Returns: Json
       }
+      confirm_ai_pending_action: {
+        Args: { p_action_id: string; p_user_id: string }
+        Returns: Json
+      }
       create_enterprise_invite: {
         Args: {
           p_enterprise_id: string
@@ -5522,6 +5606,42 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_media_gallery_upload:
+        | {
+            Args: {
+              p_description?: string
+              p_file_name: string
+              p_file_size_bytes: number
+              p_media_type: string
+              p_mime_type: string
+              p_org_id: string
+              p_status?: string
+              p_storage_path: string
+              p_tags?: string[]
+              p_taken_at?: string
+              p_title: string
+              p_uploaded_by: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              p_description?: string
+              p_file_name: string
+              p_file_size_bytes: number
+              p_media_type: string
+              p_mime_type: string
+              p_org_id: string
+              p_preview_storage_path: string
+              p_status?: string
+              p_storage_path: string
+              p_tags?: string[]
+              p_taken_at?: string
+              p_title: string
+              p_uploaded_by: string
+            }
+            Returns: string
+          }
       create_org_invite: {
         Args: {
           p_expires_at?: string
@@ -5811,23 +5931,6 @@ export type Database = {
       shift_media_album_sort_orders: {
         Args: { p_org_id: string }
         Returns: undefined
-      }
-      create_media_gallery_upload: {
-        Args: {
-          p_description?: string
-          p_file_name: string
-          p_file_size_bytes: number
-          p_media_type: string
-          p_mime_type: string
-          p_org_id: string
-          p_status?: string
-          p_storage_path: string
-          p_tags?: string[]
-          p_taken_at?: string
-          p_title: string
-          p_uploaded_by: string
-        }
-        Returns: string
       }
       shift_media_gallery_sort_orders: {
         Args: { p_org_id: string }
