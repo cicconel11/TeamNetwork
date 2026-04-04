@@ -3,6 +3,7 @@
     "groups": {
       "people": "Persone",
       "community": "Comunità",
+      "schedule": "Programma",
       "activity": "Attività",
       "finance": "Finanze",
       "admin": "Admin"
@@ -125,7 +126,6 @@
     "createAccountBtn": "Crea account",
     "continueWithGoogle": "Continua con Google",
     "continueWithLinkedIn": "Continua con LinkedIn",
-    "continueWithMicrosoft": "Continua con Microsoft",
     "orContinueWithEmail": "Oppure continua con e-mail",
     "emailLabel": "E-mail",
     "emailPlaceholder": "tu@esempio.com",
@@ -149,7 +149,6 @@
     "newPassword": "Nuova password",
     "confirmPassword": "Conferma password",
     "updatePassword": "Aggiorna password",
-    "passwordUpdatedRedirecting": "Password aggiornata correttamente. Reindirizzamento...",
     "backToSignIn": "Torna all'accesso",
     "requestNewLink": "Richiedi un nuovo link di reimpostazione",
     "resetLinkExpired": "Questo link di reimpostazione è scaduto o non valido.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "Account collegati",
       "notifications": "Notifiche",
-      "language": "Lingua",
-      "account": "Account"
+      "language": "Lingua"
     },
     "language": {
       "title": "Lingua",
@@ -176,14 +174,12 @@
     },
     "description": "Gestisci inviti, abbonamenti e accesso all'organizzazione",
     "createInvite": "Crea invito",
-    "bulkImport": "Importazione in blocco",
     "requireApproval": "Richiedi approvazione per i nuovi membri",
     "requireApprovalDesc": "Quando attivato, gli utenti che si uniscono tramite invito devono essere approvati prima di ottenere l'accesso. Puoi anche sovrascrivere questa impostazione per singolo invito.",
     "requireApprovalLabel": "Richiedi approvazione dell'invito",
     "reviewPending": "Esamina membri in attesa",
     "viewApprovals": "Visualizza approvazioni",
     "pendingApprovals": "Approvazioni in attesa",
-    "pendingApprovalsCount": "Approvazioni in attesa: {count}",
     "orgName": {
       "title": "Nome dell'organizzazione",
       "description": "Modifica il nome visualizzato della tua organizzazione.",
@@ -221,27 +217,22 @@
       "savePreferences": "Salva preferenze",
       "turnOnOff": "Attiva o disattiva le e-mail per questa organizzazione.",
       "categories": {
-        "announcements": {
-          "label": "Annunci",
-          "desc": "Nuovi annunci dall'organizzazione"
-        },
-        "discussions": {
-          "label": "Discussioni",
-          "desc": "Nuove discussioni"
-        },
-        "events": {
-          "label": "Eventi",
-          "desc": "Nuovi eventi e programmi"
-        },
-        "workouts": {
-          "label": "Allenamenti",
-          "desc": "Nuovi piani di allenamento"
-        },
-        "competitions": {
-          "label": "Competizioni",
-          "desc": "Aggiornamenti sulle competizioni"
-        }
+        "announcements": { "label": "Annunci", "desc": "Nuovi annunci dall'organizzazione" },
+        "discussions": { "label": "Discussioni", "desc": "Nuove discussioni" },
+        "events": { "label": "Eventi", "desc": "Nuovi eventi e programmi" },
+        "workouts": { "label": "Allenamenti", "desc": "Nuovi piani di allenamento" },
+        "competitions": { "label": "Competizioni", "desc": "Aggiornamenti sulle competizioni" }
       }
+    },
+    "storage": {
+      "title": "Utilizzo dello spazio media",
+      "description": "Spazio utilizzato da elementi della galleria e caricamenti.",
+      "usedOf": "{used} di {quota} utilizzati",
+      "usedUnlimited": "{used} utilizzati (piano illimitato)",
+      "quotaExceeded": "Quota di spazio superata. Considera di rimuovere media inutilizzati o aggiornare il piano.",
+      "approachingLimit": "In avvicinamento al limite di spazio. Considera di rimuovere media inutilizzati o aggiornare il piano.",
+      "galleryItems": "{count} {count, plural, one {elemento} other {elementi}} della galleria",
+      "featureUploads": "{count} {count, plural, one {caricamento} other {caricamenti}}"
     },
     "billing": {
       "title": "Gestione fatturazione",
@@ -531,7 +522,6 @@
   },
   "sidebar": {
     "switchOrg": "Cambia organizzazione",
-    "userSettings": "Impostazioni utente",
     "poweredBy": "Realizzato da"
   },
   "app": {
@@ -546,7 +536,6 @@
     "orCreateEnterprise": "Oppure crea un'azienda per gestire più organizzazioni",
     "yourEnterprises": "Le tue aziende",
     "createEnterprise": "Crea azienda",
-    "enterpriseDescription": "Gestisci piu organizzazioni sotto un account aziendale",
     "manageMultiple": "Gestisci più organizzazioni sotto un unico account di fatturazione",
     "createFirstEnterprise": "Crea la tua prima azienda",
     "pendingApproval": "In attesa di approvazione",
@@ -589,11 +578,11 @@
     "philanthropy": "Filantropia",
     "game": "Partita",
     "meeting": "Riunione",
-    "social": "Sociale",
-    "fundraiser": "Raccolta fondi",
-    "practice": "Allenamento",
-    "workout": "Esercizio",
-    "class": "Class",
+  "social": "Sociale",
+  "fundraiser": "Raccolta fondi",
+  "practice": "Allenamento",
+  "class": "Lezione",
+  "workout": "Esercizio",
     "recurringEvent": "Evento ricorrente",
     "willAppear": "{label} apparirà qui una volta creato",
     "noUpcomingEvents": "Nessun {label} in programma",
@@ -822,16 +811,7 @@
     "dragAlbums": "Trascina gli album dalla maniglia per cambiare l'ordine.",
     "arrangeAlbums": "Organizza come appaiono gli album in questa pagina.",
     "newAlbum": "Nuovo album",
-    "failedToLoadAlbums": "Caricamento album non riuscito",
-    "storage": {
-      "title": "Spazio media",
-      "usedOf": "{used} di {quota} utilizzati",
-      "usedUnlimited": "{used} utilizzati (piano illimitato)",
-      "quotaExceeded": "Quota superata",
-      "approachingLimit": "In avvicinamento al limite",
-      "ariaUsedOf": "Spazio media: {used} di {quota} utilizzati, {percent} percento",
-      "ariaUsedUnlimited": "Spazio media: {used} utilizzati (piano illimitato)"
-    }
+    "failedToLoadAlbums": "Caricamento album non riuscito"
   },
   "mentorship": {
     "noPairs": "Nessuna coppia di mentoring ancora",
@@ -856,52 +836,7 @@
     "checkBackLater": "Torna più tardi man mano che gli ex studenti si registrano per aiutare",
     "expertise": "Competenza",
     "phone": "Telefono",
-    "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "linkedin": "LinkedIn"
   },
   "linkedin": {
     "profileUrl": "URL del profilo LinkedIn",
@@ -916,7 +851,7 @@
     "experience": "Esperienza",
     "education": "Formazione",
     "headline": "Titolo",
-    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24–48 ore per l'aggiornamento di LinkedIn",
+    "waitAfterChange": "Se hai appena cambiato queste impostazioni, aspetta 24\u201348 ore per l'aggiornamento di LinkedIn",
     "comeBackSync": "Torna e premi Sincronizza dati LinkedIn",
     "connectedAccount": "Account collegato",
     "lastSynced": "Ultima sincronizzazione: {time}",
@@ -959,30 +894,12 @@
     "failedDisconnect": "Disconnessione di Google Calendar non riuscita",
     "failedSync": "Sincronizzazione di Google Calendar non riuscita",
     "types": {
-      "general": {
-        "label": "Eventi generali",
-        "desc": "Eventi e attività generali dell'organizzazione"
-      },
-      "game": {
-        "label": "Partite",
-        "desc": "Partite sportive e competizioni"
-      },
-      "meeting": {
-        "label": "Riunioni",
-        "desc": "Riunioni e incontri del gruppo"
-      },
-      "social": {
-        "label": "Eventi sociali",
-        "desc": "Incontri sociali e feste"
-      },
-      "fundraiser": {
-        "label": "Raccolte fondi",
-        "desc": "Eventi e campagne di raccolta fondi"
-      },
-      "philanthropy": {
-        "label": "Filantropia",
-        "desc": "Servizio comunitario ed eventi di filantropia"
-      }
+      "general": { "label": "Eventi generali", "desc": "Eventi e attività generali dell'organizzazione" },
+      "game": { "label": "Partite", "desc": "Partite sportive e competizioni" },
+      "meeting": { "label": "Riunioni", "desc": "Riunioni e incontri del gruppo" },
+      "social": { "label": "Eventi sociali", "desc": "Incontri sociali e feste" },
+      "fundraiser": { "label": "Raccolte fondi", "desc": "Eventi e campagne di raccolta fondi" },
+      "philanthropy": { "label": "Filantropia", "desc": "Servizio comunitario ed eventi di filantropia" }
     }
   },
   "blackbaud": {

@@ -3,6 +3,7 @@
     "groups": {
       "people": "Pessoas",
       "community": "Comunidade",
+      "schedule": "Agenda",
       "activity": "Atividade",
       "finance": "Financeiro",
       "admin": "Admin"
@@ -125,7 +126,6 @@
     "createAccountBtn": "Criar conta",
     "continueWithGoogle": "Continuar com Google",
     "continueWithLinkedIn": "Continuar com LinkedIn",
-    "continueWithMicrosoft": "Continuar com Microsoft",
     "orContinueWithEmail": "Ou continuar com e-mail",
     "emailLabel": "E-mail",
     "emailPlaceholder": "voce@exemplo.com",
@@ -149,7 +149,6 @@
     "newPassword": "Nova senha",
     "confirmPassword": "Confirmar senha",
     "updatePassword": "Atualizar senha",
-    "passwordUpdatedRedirecting": "Senha atualizada com sucesso. Redirecionando...",
     "backToSignIn": "Voltar para login",
     "requestNewLink": "Solicitar um novo link de redefinicao",
     "resetLinkExpired": "Este link de redefinicao de senha expirou ou e invalido.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "Contas conectadas",
       "notifications": "Notificacoes",
-      "language": "Idioma",
-      "account": "Conta"
+      "language": "Idioma"
     },
     "language": {
       "title": "Idioma",
@@ -176,14 +174,12 @@
     },
     "description": "Gerencie convites, assinaturas e acesso a organizacao",
     "createInvite": "Criar convite",
-    "bulkImport": "Importar em massa",
     "requireApproval": "Exigir aprovacao para novos membros",
     "requireApprovalDesc": "Quando ativado, usuarios que ingressarem por convite precisam ser aprovados antes de obter acesso. Voce tambem pode configurar isso por convite.",
     "requireApprovalLabel": "Exigir aprovacao do convite",
     "reviewPending": "Revisar membros pendentes",
     "viewApprovals": "Ver aprovacoes",
     "pendingApprovals": "Aprovacoes pendentes",
-    "pendingApprovalsCount": "Aprovacoes pendentes: {count}",
     "orgName": {
       "title": "Nome da organizacao",
       "description": "Altere o nome de exibicao da sua organizacao.",
@@ -221,27 +217,22 @@
       "savePreferences": "Salvar preferencias",
       "turnOnOff": "Ative ou desative e-mails para esta organizacao.",
       "categories": {
-        "announcements": {
-          "label": "Avisos",
-          "desc": "Novos avisos da organizacao"
-        },
-        "discussions": {
-          "label": "Discussoes",
-          "desc": "Novos topicos de discussao"
-        },
-        "events": {
-          "label": "Eventos",
-          "desc": "Novos eventos e agendas"
-        },
-        "workouts": {
-          "label": "Treinos",
-          "desc": "Novos planos de treino"
-        },
-        "competitions": {
-          "label": "Competicoes",
-          "desc": "Novas atualizacoes de competicoes"
-        }
+        "announcements": { "label": "Avisos", "desc": "Novos avisos da organizacao" },
+        "discussions": { "label": "Discussoes", "desc": "Novos topicos de discussao" },
+        "events": { "label": "Eventos", "desc": "Novos eventos e agendas" },
+        "workouts": { "label": "Treinos", "desc": "Novos planos de treino" },
+        "competitions": { "label": "Competicoes", "desc": "Novas atualizacoes de competicoes" }
       }
+    },
+    "storage": {
+      "title": "Uso de armazenamento de midia",
+      "description": "Armazenamento consumido por itens da galeria e envios de recursos.",
+      "usedOf": "{used} de {quota} usado",
+      "usedUnlimited": "{used} usado (plano ilimitado)",
+      "quotaExceeded": "Cota de armazenamento excedida. Considere remover midias nao utilizadas ou fazer upgrade do seu plano.",
+      "approachingLimit": "Aproximando-se do limite de armazenamento. Considere remover midias nao utilizadas ou fazer upgrade do seu plano.",
+      "galleryItems": "{count} {count, plural, one {item} other {itens}} da galeria",
+      "featureUploads": "{count} {count, plural, one {envio} other {envios}} de recursos"
     },
     "billing": {
       "title": "Gerenciamento de cobranca",
@@ -531,7 +522,6 @@
   },
   "sidebar": {
     "switchOrg": "Trocar organizacao",
-    "userSettings": "Configuracoes do usuario",
     "poweredBy": "Desenvolvido por"
   },
   "app": {
@@ -546,7 +536,6 @@
     "orCreateEnterprise": "Ou crie uma empresa para gerenciar multiplas organizacoes",
     "yourEnterprises": "Suas empresas",
     "createEnterprise": "Criar empresa",
-    "enterpriseDescription": "Gerencie multiplas organizacoes sob uma conta empresarial",
     "manageMultiple": "Gerencie multiplas organizacoes em uma unica conta de cobranca",
     "createFirstEnterprise": "Crie sua primeira empresa",
     "pendingApproval": "Aprovacao pendente",
@@ -589,11 +578,11 @@
     "philanthropy": "Filantropia",
     "game": "Jogo",
     "meeting": "Reuniao",
-    "social": "Social",
-    "fundraiser": "Arrecadacao",
-    "practice": "Treino",
-    "workout": "Exercicio",
-    "class": "Class",
+  "social": "Social",
+  "fundraiser": "Arrecadacao",
+  "practice": "Treino",
+  "class": "Aula",
+  "workout": "Exercicio",
     "recurringEvent": "Evento recorrente",
     "willAppear": "{label} aparecera aqui apos ser criado",
     "noUpcomingEvents": "Nenhum {label} proximo",
@@ -822,16 +811,7 @@
     "dragAlbums": "Arraste os albuns pela alca para alterar a ordem.",
     "arrangeAlbums": "Organize como os albuns aparecem nesta pagina.",
     "newAlbum": "Novo album",
-    "failedToLoadAlbums": "Falha ao carregar albuns",
-    "storage": {
-      "title": "Armazenamento de midia",
-      "usedOf": "{used} de {quota} usado",
-      "usedUnlimited": "{used} usado (plano ilimitado)",
-      "quotaExceeded": "Cota excedida",
-      "approachingLimit": "Aproximando-se do limite",
-      "ariaUsedOf": "Armazenamento de midia: {used} de {quota} usado, {percent} por cento",
-      "ariaUsedUnlimited": "Armazenamento de midia: {used} usado (plano ilimitado)"
-    }
+    "failedToLoadAlbums": "Falha ao carregar albuns"
   },
   "mentorship": {
     "noPairs": "Nenhum par de mentoria ainda",
@@ -856,52 +836,7 @@
     "checkBackLater": "Volte mais tarde conforme ex-alunos se cadastram para ajudar",
     "expertise": "Especialidade",
     "phone": "Telefone",
-    "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "linkedin": "LinkedIn"
   },
   "linkedin": {
     "profileUrl": "URL do perfil do LinkedIn",
@@ -959,30 +894,12 @@
     "failedDisconnect": "Falha ao desconectar o Google Calendar",
     "failedSync": "Falha ao sincronizar o Google Calendar",
     "types": {
-      "general": {
-        "label": "Eventos gerais",
-        "desc": "Eventos e atividades gerais da organizacao"
-      },
-      "game": {
-        "label": "Jogos",
-        "desc": "Jogos esportivos e competicoes"
-      },
-      "meeting": {
-        "label": "Reunioes",
-        "desc": "Reunioes e encontros do grupo"
-      },
-      "social": {
-        "label": "Eventos sociais",
-        "desc": "Encontros sociais e festas"
-      },
-      "fundraiser": {
-        "label": "Arrecadacoes",
-        "desc": "Eventos e campanhas de arrecadacao"
-      },
-      "philanthropy": {
-        "label": "Filantropia",
-        "desc": "Servico comunitario e eventos de filantropia"
-      }
+      "general": { "label": "Eventos gerais", "desc": "Eventos e atividades gerais da organizacao" },
+      "game": { "label": "Jogos", "desc": "Jogos esportivos e competicoes" },
+      "meeting": { "label": "Reunioes", "desc": "Reunioes e encontros do grupo" },
+      "social": { "label": "Eventos sociais", "desc": "Encontros sociais e festas" },
+      "fundraiser": { "label": "Arrecadacoes", "desc": "Eventos e campanhas de arrecadacao" },
+      "philanthropy": { "label": "Filantropia", "desc": "Servico comunitario e eventos de filantropia" }
     }
   },
   "blackbaud": {
@@ -990,7 +907,7 @@
     "notConfigured": "A integracao do Blackbaud nao esta configurada neste ambiente. Entre em contato com seu administrador para configurar as credenciais de desenvolvedor do Blackbaud.",
     "connectDesc": "Conecte sua conta Blackbaud RE NXT para sincronizar automaticamente os dados de constituintes no seu diretorio de ex-alunos.",
     "connect": "Conectar Blackbaud",
-    "lastSyncedRecords": "Ultima sincronizacao: {time} · {count} registros sincronizados",
+    "lastSyncedRecords": "Ultima sincronizacao: {time} \u00b7 {count} registros sincronizados",
     "lastSyncDetails": "Detalhes da ultima sincronizacao",
     "created": "Criados",
     "updated": "Atualizados",

@@ -3,6 +3,7 @@
     "groups": {
       "people": "People",
       "community": "Community",
+      "schedule": "Schedule",
       "activity": "Activity",
       "finance": "Finance",
       "admin": "Admin"
@@ -125,7 +126,6 @@
     "createAccountBtn": "Create Account",
     "continueWithGoogle": "Continue with Google",
     "continueWithLinkedIn": "Continue with LinkedIn",
-    "continueWithMicrosoft": "Continue with Microsoft",
     "orContinueWithEmail": "Or continue with email",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
@@ -149,7 +149,6 @@
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
     "updatePassword": "Update Password",
-    "passwordUpdatedRedirecting": "Password updated successfully! Redirecting...",
     "backToSignIn": "Back to sign in",
     "requestNewLink": "Request a new reset link",
     "resetLinkExpired": "This password reset link is expired or invalid.",
@@ -165,8 +164,7 @@
     "tabs": {
       "connectedAccounts": "Connected Accounts",
       "notifications": "Notifications",
-      "language": "Language",
-      "account": "Account"
+      "language": "Language"
     },
     "language": {
       "title": "Language",
@@ -176,14 +174,12 @@
     },
     "description": "Manage invites, subscriptions, and organization access",
     "createInvite": "Create Invite",
-    "bulkImport": "Bulk Import",
     "requireApproval": "Require Approval for New Members",
     "requireApprovalDesc": "When enabled, users who join via invite must be approved before gaining access. You can also override this per invite.",
     "requireApprovalLabel": "Require invite approval",
     "reviewPending": "Review pending members",
     "viewApprovals": "View approvals",
     "pendingApprovals": "Pending Approvals",
-    "pendingApprovalsCount": "Pending approvals: {count}",
     "orgName": {
       "title": "Organization name",
       "description": "Change your organization's display name.",
@@ -221,27 +217,22 @@
       "savePreferences": "Save preferences",
       "turnOnOff": "Turn emails on or off for this org.",
       "categories": {
-        "announcements": {
-          "label": "Announcements",
-          "desc": "New announcements from org"
-        },
-        "discussions": {
-          "label": "Discussions",
-          "desc": "New discussion threads"
-        },
-        "events": {
-          "label": "Events",
-          "desc": "New events and schedules"
-        },
-        "workouts": {
-          "label": "Workouts",
-          "desc": "New workout plans"
-        },
-        "competitions": {
-          "label": "Competitions",
-          "desc": "New competition updates"
-        }
+        "announcements": { "label": "Announcements", "desc": "New announcements from org" },
+        "discussions": { "label": "Discussions", "desc": "New discussion threads" },
+        "events": { "label": "Events", "desc": "New events and schedules" },
+        "workouts": { "label": "Workouts", "desc": "New workout plans" },
+        "competitions": { "label": "Competitions", "desc": "New competition updates" }
       }
+    },
+    "storage": {
+      "title": "Media storage usage",
+      "description": "Storage consumed by gallery items and feature uploads.",
+      "usedOf": "{used} of {quota} used",
+      "usedUnlimited": "{used} used (unlimited plan)",
+      "quotaExceeded": "Storage quota exceeded. Consider removing unused media or upgrading your plan.",
+      "approachingLimit": "Approaching storage limit. Consider removing unused media or upgrading your plan.",
+      "galleryItems": "{count} gallery {count, plural, one {item} other {items}}",
+      "featureUploads": "{count} feature {count, plural, one {upload} other {uploads}}"
     },
     "billing": {
       "title": "Billing Management",
@@ -531,7 +522,6 @@
   },
   "sidebar": {
     "switchOrg": "Switch Organization",
-    "userSettings": "User Settings",
     "poweredBy": "Powered by"
   },
   "app": {
@@ -546,7 +536,6 @@
     "orCreateEnterprise": "Or create an enterprise to manage multiple organizations",
     "yourEnterprises": "Your Enterprises",
     "createEnterprise": "Create Enterprise",
-    "enterpriseDescription": "Manage multiple organizations under one enterprise account",
     "manageMultiple": "Manage multiple organizations under one billing account",
     "createFirstEnterprise": "Create your first enterprise",
     "pendingApproval": "Pending Approval",
@@ -589,11 +578,11 @@
     "philanthropy": "Philanthropy",
     "game": "Game",
     "meeting": "Meeting",
-    "social": "Social",
-    "fundraiser": "Fundraiser",
-    "practice": "Practice",
-    "workout": "Workout",
-    "class": "Class",
+  "social": "Social",
+  "fundraiser": "Fundraiser",
+  "practice": "Practice",
+  "class": "Class",
+  "workout": "Workout",
     "recurringEvent": "Recurring event",
     "willAppear": "{label} will appear here once created",
     "noUpcomingEvents": "No upcoming {label}",
@@ -840,16 +829,7 @@
     "dragAlbums": "Drag albums by the handle to change order.",
     "arrangeAlbums": "Arrange how albums appear on this page.",
     "newAlbum": "New Album",
-    "failedToLoadAlbums": "Failed to load albums",
-    "storage": {
-      "title": "Media storage",
-      "usedOf": "{used} of {quota} used",
-      "usedUnlimited": "{used} used (unlimited plan)",
-      "quotaExceeded": "Quota exceeded",
-      "approachingLimit": "Approaching limit",
-      "ariaUsedOf": "Media storage: {used} of {quota} used, {percent} percent",
-      "ariaUsedUnlimited": "Media storage: {used} used (unlimited plan)"
-    }
+    "failedToLoadAlbums": "Failed to load albums"
   },
   "mentorship": {
     "noPairs": "No mentorship pairs yet",
@@ -874,52 +854,7 @@
     "checkBackLater": "Check back later as alumni register to help",
     "expertise": "Expertise",
     "phone": "Phone",
-    "linkedin": "LinkedIn",
-    "editorialStrapline": "Connect with alumni who are ready to help",
-    "myMentor": "Your mentor",
-    "lookingForMentor": "Looking for a mentor",
-    "lastSession": "Last session",
-    "noSessionsYet": "No sessions yet",
-    "logSession": "Log a session",
-    "showAllLogs": "Show all {count} sessions",
-    "hideLogs": "Show fewer",
-    "availability": "Availability",
-    "availabilityDesc": "Toggle whether members can request you as a mentor",
-    "currentlyAvailable": "Available",
-    "currentlyUnavailable": "Not available",
-    "createPair": "Create a pair",
-    "createPairDesc": "Pair an alumni mentor with an active member",
-    "pairMembers": "Pair members",
-    "confirmPair": "Confirm pair",
-    "mentorSelectLabel": "Mentor (alumni)",
-    "menteeSelectLabel": "Mentee (active member)",
-    "selectMentor": "Select mentor",
-    "selectMentee": "Select mentee",
-    "yourMentee": "Your mentee",
-    "assignMentee": "Assign mentee",
-    "updateMentee": "Update mentee",
-    "removeMentee": "Remove mentee",
-    "noMenteeAssignedYet": "No mentee assigned yet",
-    "archivePair": "Archive pair",
-    "archivePairConfirm": "Archive this mentorship pair? All associated logs will also be archived.",
-    "openPairMenu": "Open pair menu",
-    "browseMentors": "Browse mentors below",
-    "beFirstMentor": "Be the first mentor",
-    "beFirstMentorDesc": "Alumni who register here help current members navigate their careers.",
-    "searchPlaceholder": "Search mentors by name",
-    "sessionSingular": "session",
-    "sessionPlural": "sessions",
-    "statusActive": "Active",
-    "statusPaused": "Paused",
-    "statusCompleted": "Completed",
-    "loggedBy": "by {name}",
-    "progressMetric": "Progress: {value}",
-    "pairCreated": "Pair created",
-    "pairCreatedNotifyFailed": "Pair created — notification failed to send",
-    "availabilityUpdated": "Availability updated",
-    "loadingControls": "Loading your mentorship controls...",
-    "signInManagePair": "You must be signed in to manage your pair.",
-    "signInManageAvailability": "Sign in to manage your mentee availability."
+    "linkedin": "LinkedIn"
   },
   "linkedin": {
     "profileUrl": "LinkedIn Profile URL",
@@ -934,7 +869,7 @@
     "experience": "Experience",
     "education": "Education",
     "headline": "Headline",
-    "waitAfterChange": "If you just changed these settings, wait 24–48 hours for LinkedIn to update",
+    "waitAfterChange": "If you just changed these settings, wait 24\u201348 hours for LinkedIn to update",
     "comeBackSync": "Come back and hit Sync LinkedIn Data",
     "connectedAccount": "Connected Account",
     "lastSynced": "Last synced: {time}",
@@ -948,7 +883,7 @@
     "connectLinkedIn": "Connect LinkedIn",
     "profileSync": "Profile Sync",
     "missingDetails": "We couldn't find your job title or education details. To fix this:",
-    "limitReached": "Limit reached — resets next month",
+    "limitReached": "Limit reached \u2014 resets next month",
     "syncsRemaining": "{remaining} of {max} syncs remaining",
     "resyncManaged": "Re-sync is managed by your organization",
     "urlSaved": "LinkedIn URL saved.",
@@ -960,7 +895,7 @@
   },
   "googleCalendar": {
     "title": "Google Calendar Sync",
-    "description": "Automatically sync {orgName}'s events to your personal Google Calendar. Games, meetings, socials, and more — always up to date.",
+    "description": "Automatically sync {orgName}'s events to your personal Google Calendar. Games, meetings, socials, and more \u2014 always up to date.",
     "disconnected": "Your Google Calendar connection has been disconnected. Please reconnect to continue syncing events.",
     "errorConnection": "There was an error with your Google Calendar connection. Please try reconnecting.",
     "connect": "Connect Google Calendar",
@@ -977,30 +912,12 @@
     "failedDisconnect": "Failed to disconnect Google Calendar",
     "failedSync": "Failed to sync Google Calendar",
     "types": {
-      "general": {
-        "label": "General Events",
-        "desc": "General organization events and activities"
-      },
-      "game": {
-        "label": "Games",
-        "desc": "Sports games and competitions"
-      },
-      "meeting": {
-        "label": "Meetings",
-        "desc": "Chapter meetings and gatherings"
-      },
-      "social": {
-        "label": "Social Events",
-        "desc": "Social gatherings and parties"
-      },
-      "fundraiser": {
-        "label": "Fundraisers",
-        "desc": "Fundraising events and campaigns"
-      },
-      "philanthropy": {
-        "label": "Philanthropy",
-        "desc": "Community service and philanthropy events"
-      }
+      "general": { "label": "General Events", "desc": "General organization events and activities" },
+      "game": { "label": "Games", "desc": "Sports games and competitions" },
+      "meeting": { "label": "Meetings", "desc": "Chapter meetings and gatherings" },
+      "social": { "label": "Social Events", "desc": "Social gatherings and parties" },
+      "fundraiser": { "label": "Fundraisers", "desc": "Fundraising events and campaigns" },
+      "philanthropy": { "label": "Philanthropy", "desc": "Community service and philanthropy events" }
     }
   },
   "blackbaud": {
@@ -1008,7 +925,7 @@
     "notConfigured": "Blackbaud integration is not configured in this environment. Contact your administrator to set up the Blackbaud developer credentials.",
     "connectDesc": "Connect your Blackbaud RE NXT account to automatically sync constituent data into your alumni directory.",
     "connect": "Connect Blackbaud",
-    "lastSyncedRecords": "Last synced: {time} · {count} records synced",
+    "lastSyncedRecords": "Last synced: {time} \u00b7 {count} records synced",
     "lastSyncDetails": "Last Sync Details",
     "created": "Created",
     "updated": "Updated",
@@ -1018,7 +935,7 @@
     "retrySyncBtn": "Retry Sync",
     "quotaReachedTime": "Blackbaud API daily quota reached. Try again in {time}.",
     "quotaReached": "Blackbaud API daily quota reached. Please try again later.",
-    "quotaReachedReset": "Blackbaud API daily quota reached. Please try again later — quota resets automatically.",
+    "quotaReachedReset": "Blackbaud API daily quota reached. Please try again later \u2014 quota resets automatically.",
     "cannotVerify": "Could not verify Blackbaud API access. Your connection may need to be refreshed.",
     "alreadyRunning": "A sync is already running. Please wait a few minutes and try again.",
     "syncComplete": "Sync complete: {created} created, {updated} updated",
@@ -1042,7 +959,7 @@
       "enterpriseBilling": "Enterprise Billing",
       "enterpriseBillingDesc": "Uses the pooled alumni quota from the enterprise subscription",
       "independentBilling": "Independent Billing (Coming Soon)",
-      "independentBillingDesc": "Organization pays separately with its own subscription — not yet available",
+      "independentBillingDesc": "Organization pays separately with its own subscription \u2014 not yet available",
       "createOrg": "Create Organization"
     },
     "subOrgList": {
