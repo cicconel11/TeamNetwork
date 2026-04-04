@@ -141,13 +141,23 @@ const CREATE_EVENT_PROMPT_PATTERN =
 const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|set\s+up)(?!\w)[\s\S]{0,80}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,60}\b(?:create|add|schedule|plan|make|set\s+up)(?!\w))/i;
 const MEMBER_COUNT_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:how many|count|number of|total|totals|snapshot|stats)(?!\w)[\s\S]{0,80}\b(?:member|members|active members|alumni|parents?)\b|(?<!\w)(?:member|members|active members|alumni|parents?)(?!\w)[\s\S]{0,40}\b(?:how many|count|number of|total|totals)\b)/i;
+  /(?:(?<!\w)(?:how many|count|number of|total|totals|snapshot|stats)(?!\w)[\s\S]{0,80}\b(?:member|members|active members|alumni|parents?|donors?|donations?)\b|(?<!\w)(?:member|members|active members|alumni|parents?|donors?|donations?)(?!\w)[\s\S]{0,40}\b(?:how many|count|number of|total|totals)\b)/i;
 const MEMBER_ROSTER_PROMPT_PATTERN =
   /(?:(?<!\w)(?:tell|give|summarize)(?!\w)[\s\S]{0,80}\b(?:member|members|people|roster|team)\b|(?<!\w)(?:who(?:'s|\s+are)?|recent|new)(?!\w)[\s\S]{0,40}\b(?:member|members|people|roster|team)\b|(?<!\w)member roster(?!\w))/i;
 const SCRAPE_SCHEDULE_PROMPT_PATTERN =
   /(?:scrape|import|extract|pull|get|grab|fetch|load)\b[\s\S]{0,120}\b(?:schedule|events?|calendar)[\s\S]{0,60}(?:from|at|on)\s+(?:https?:\/\/|(?:the\s+)?(?:website|page|url|link|site))/i;
 const PDF_SCHEDULE_PROMPT_PATTERN =
   /(?:extract|import|upload|read|parse|pull)\b[\s\S]{0,120}\b(?:schedule|events?|calendar)[\s\S]{0,60}(?:pdf|file|document|upload)/i;
+const ALUMNI_ROSTER_PROMPT_PATTERN =
+  /(?<!\w)(?:alumni|alumnus|alumna|alumnae|graduates?|who\s+graduated|graduation\s+(?:year|class)|class\s+of\b)(?!\w)/i;
+const DONATION_STATS_PROMPT_PATTERN =
+  /(?<!\w)(?:donation|donations|fundraising)\s+(?:metric|metrics|stats|statistics|total|totals|summary|overview|revenue|amount)(?!\w)/i;
+const DONATION_LIST_PROMPT_PATTERN =
+  /(?<!\w)(?:donations?|fundraising\s+details|donation\s+history|who\s+donated|list\s+(?:the\s+)?donors?)(?!\w)/i;
+const PARENT_LIST_PROMPT_PATTERN =
+  /(?<!\w)(?:parent\s+directory|parent\s+(?:list|roster|contacts)|guardians?|(?:list|show)\s+(?:the\s+)?parents)(?!\w)/i;
+const PHILANTHROPY_EVENTS_PROMPT_PATTERN =
+  /(?<!\w)(?:philanthropy\s+events?|service\s+events?|volunteer\s+events?)(?!\w)/i;
 const HTTPS_URL_PATTERN = /https?:\/\//i;
 
 function looksLikeStructuredJobDraft(message: string): boolean {
