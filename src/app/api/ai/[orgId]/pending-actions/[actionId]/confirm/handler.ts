@@ -52,8 +52,8 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
     const rateLimit = checkRateLimit(request, {
       feature: "AI pending action confirm",
-      limitPerIp: 10,
-      limitPerUser: 10,
+      limitPerIp: 60,
+      limitPerUser: 60,
     });
     if (!rateLimit.ok) return buildRateLimitResponse(rateLimit);
 
