@@ -59,6 +59,30 @@ export interface SuggestConnectionsArgs {
   limit?: number;
 }
 
+export interface ListAlumniArgs {
+  limit?: number;
+  graduation_year?: number;
+  industry?: string;
+  company?: string;
+  city?: string;
+}
+
+export interface ListDonationsArgs {
+  limit?: number;
+  status?: "succeeded" | "failed" | "pending";
+  purpose?: string;
+}
+
+export interface ListParentsArgs {
+  limit?: number;
+  relationship?: string;
+}
+
+export interface ListPhilanthropyEventsArgs {
+  limit?: number;
+  upcoming?: boolean;
+}
+
 export interface FindNavigationTargetsArgs {
   query: string;
   limit?: number;
@@ -405,6 +429,122 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  list_alumni: {
+    type: "function" as const,
+    function: {
+      name: "list_alumni" as const,
+      description:
+        "List alumni. Returns name, graduation year, company, industry, city, title. Use for alumni directory questions.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          graduation_year: {
+            type: "integer" as const,
+            minimum: 1900,
+            maximum: 2100,
+            description: "Filter by graduation year",
+          },
+          industry: {
+            type: "string" as const,
+            description: "Filter by industry (partial match)",
+          },
+          company: {
+            type: "string" as const,
+            description: "Filter by company name (partial match)",
+          },
+          city: {
+            type: "string" as const,
+            description: "Filter by city (partial match)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_donations: {
+    type: "function" as const,
+    function: {
+      name: "list_donations" as const,
+      description:
+        "List donation records. Returns donor, amount, status, purpose, date. Anonymous donations show redacted info.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          status: {
+            type: "string" as const,
+            enum: ["succeeded", "failed", "pending"],
+            description: "Filter by donation status",
+          },
+          purpose: {
+            type: "string" as const,
+            description: "Filter by donation purpose",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_parents: {
+    type: "function" as const,
+    function: {
+      name: "list_parents" as const,
+      description:
+        "List parents in the parent directory. Returns name, relationship, student name, email, phone.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          relationship: {
+            type: "string" as const,
+            description: "Filter by relationship type (partial match)",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  list_philanthropy_events: {
+    type: "function" as const,
+    function: {
+      name: "list_philanthropy_events" as const,
+      description:
+        "List philanthropy/service/volunteer events. Returns title, date, location, description.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          limit: {
+            type: "integer" as const,
+            minimum: 1,
+            maximum: 25,
+            description: "Max results to return (default 10)",
+          },
+          upcoming: {
+            type: "boolean" as const,
+            description:
+              "If true, only future events. If false, only past events. Default true.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   find_navigation_targets: {
     type: "function" as const,
     function: {
@@ -439,6 +579,10 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_announcements,
   TOOL_BY_NAME.list_discussions,
   TOOL_BY_NAME.list_job_postings,
+  TOOL_BY_NAME.list_alumni,
+  TOOL_BY_NAME.list_donations,
+  TOOL_BY_NAME.list_parents,
+  TOOL_BY_NAME.list_philanthropy_events,
   TOOL_BY_NAME.prepare_job_posting,
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
