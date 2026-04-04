@@ -14,6 +14,15 @@ export interface CreateEventInput {
   orgSlug?: string | null;
 }
 
+export interface CreateEventInternalError {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+}
+
+export type CreateEventErrorCode = "event_type_unavailable";
+
 export type CreateEventResult =
   | {
       ok: true;
@@ -25,8 +34,40 @@ export type CreateEventResult =
       ok: false;
       status: 400 | 403 | 500;
       error: string;
+      code?: CreateEventErrorCode;
       details?: string[];
+      internalError?: CreateEventInternalError;
     };
+
+function normalizeCreateEventInternalError(error: unknown): CreateEventInternalError | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+
+  const candidate = error as Record<string, unknown>;
+  return {
+    code: typeof candidate.code === "string" ? candidate.code : null,
+    message: typeof candidate.message === "string" ? candidate.message : null,
+    details: typeof candidate.details === "string" ? candidate.details : null,
+    hint: typeof candidate.hint === "string" ? candidate.hint : null,
+  };
+}
+
+function isUnsupportedEventTypeInsertError(
+  error: CreateEventInternalError | undefined,
+  eventType: AssistantPreparedEvent["event_type"],
+): boolean {
+  if (!error) {
+    return false;
+  }
+
+  const combined = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+  return (
+    (error.code === "22P02" || combined.includes("invalid input value for enum"))
+    && combined.includes("event_type")
+    && combined.includes(String(eventType).toLowerCase())
+  );
+}
 
 export async function createEvent(req: CreateEventInput): Promise<CreateEventResult> {
   const validationResult = assistantPreparedEventSchema.safeParse(req.input);
@@ -88,7 +129,29 @@ export async function createEvent(req: CreateEventInput): Promise<CreateEventRes
     .select("id, title")
     .single();
 
-  if (error || !event) {
+  if (error) {
+    const internalError = normalizeCreateEventInternalError(error);
+
+    if (isUnsupportedEventTypeInsertError(internalError, input.event_type)) {
+      return {
+        ok: false,
+        status: 500,
+        code: "event_type_unavailable",
+        error:
+          "This environment does not support the selected event type yet. Apply the latest database migrations and try again.",
+        internalError,
+      };
+    }
+
+    return {
+      ok: false,
+      status: 500,
+      error: "Failed to create event",
+      internalError,
+    };
+  }
+
+  if (!event) {
     return { ok: false, status: 500, error: "Failed to create event" };
   }
 

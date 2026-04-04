@@ -51,4 +51,18 @@ describe("timezone-aware event segments", () => {
 
     assert.equal(formatted, "Jan 5, 10:30 PM – Jan 6, 12:30 AM");
   });
+
+  it("formats multi-day event times without locale-dependent connector text", () => {
+    const formatted = formatCalendarEventTime(
+      {
+        startAt: "2026-04-02T18:00:00.000Z",
+        endAt: "2026-04-03T06:15:00.000Z",
+        allDay: false,
+      },
+      "en-US",
+      "America/New_York",
+    );
+
+    assert.equal(formatted, "Apr 2, 2:00 PM – Apr 3, 2:15 AM");
+  });
 });
