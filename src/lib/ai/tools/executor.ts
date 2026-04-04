@@ -69,7 +69,8 @@ export type ScheduleFileToolErrorCode =
   | "image_timeout"
   | "image_unreadable"
   | "image_model_misconfigured"
-  | "pdf_unreadable";
+  | "pdf_unreadable"
+  | "pdf_timeout";
 
 export type ToolExecutionResult =
   | { kind: "ok"; data: unknown }
@@ -352,6 +353,7 @@ const SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS = 10_000;
 const SCRAPE_SCHEDULE_MAX_BYTES = 512 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — prevents oversized base64 payloads to LLM
 const IMAGE_EXTRACTION_TOOL_TIMEOUT_MS = 60_000;
+const PDF_EXTRACTION_TOOL_TIMEOUT_MS = 60_000;
 const SCHEDULE_UPLOAD_BUCKET = "ai-schedule-uploads";
 const SCHEDULE_IMAGE_MIME_TYPES = new Set<ScheduleImageMimeType>([
   "image/png",
@@ -1566,19 +1568,19 @@ async function extractSchedulePdf(
     return toolError("Failed to load organization context", "org_context_failed");
   }
 
-  const { data: attachmentFile, error: downloadError } = await sb.storage
-    .from(SCHEDULE_UPLOAD_BUCKET)
-    .download(attachment.storagePath);
-
-  if (downloadError || !attachmentFile) {
-    aiLog("warn", "ai-tools", "extract_schedule_pdf download failed", logContext, {
-      error: getSafeErrorMessage(downloadError),
-      storagePath: attachment.storagePath,
-    });
-    return toolError("Unable to load attached schedule file", "attachment_unavailable");
-  }
-
   try {
+    const { data: attachmentFile, error: downloadError } = await sb.storage
+      .from(SCHEDULE_UPLOAD_BUCKET)
+      .download(attachment.storagePath);
+
+    if (downloadError || !attachmentFile) {
+      aiLog("warn", "ai-tools", "extract_schedule_pdf download failed", logContext, {
+        error: getSafeErrorMessage(downloadError),
+        storagePath: attachment.storagePath,
+      });
+      return toolError("Unable to load attached schedule file", "attachment_unavailable");
+    }
+
     const attachmentBuffer = Buffer.from(await attachmentFile.arrayBuffer());
     const extractionContext = {
       orgName: typeof org?.name === "string" ? org.name : undefined,
@@ -1618,6 +1620,10 @@ async function extractSchedulePdf(
               );
             })();
     } catch (error) {
+      if (isStageTimeoutError(error)) {
+        throw error;
+      }
+
       if (attachment.mimeType === "application/pdf") {
         return toolError("Unable to read attached PDF", "pdf_unreadable");
       }
@@ -1703,7 +1709,7 @@ async function extractScheduleTextFromPdfBuffer(
     const PDFParse = await getPdfParseCtor();
     parser = new PDFParse({ data: pdfBuffer });
     const result = await parser.getText();
-    text = normalizeScrapedScheduleText(result.text);
+    text = result.text;
   } catch (error) {
     aiLog("warn", "ai-tools", "extract_schedule_pdf parsing failed", logContext, {
       error: getSafeErrorMessage(error),
@@ -2000,7 +2006,7 @@ export async function executeToolCall(
         : toolName === "extract_schedule_pdf"
         ? isScheduleImageAttachment(ctx.attachment)
           ? IMAGE_EXTRACTION_TOOL_TIMEOUT_MS
-          : EXTRACTION_TOOL_TIMEOUT_MS
+          : PDF_EXTRACTION_TOOL_TIMEOUT_MS
         : toolName === "prepare_events_batch"
         ? TOOL_EXECUTION_TIMEOUT_MS * 3
         : TOOL_EXECUTION_TIMEOUT_MS;
@@ -2117,6 +2123,9 @@ export async function executeToolCall(
     if (isStageTimeoutError(err)) {
       if (toolName === "extract_schedule_pdf" && isScheduleImageAttachment(ctx.attachment)) {
         return toolError("Schedule image extraction timed out", "image_timeout");
+      }
+      if (toolName === "extract_schedule_pdf" && ctx.attachment?.mimeType === "application/pdf") {
+        return toolError("Schedule PDF extraction timed out", "pdf_timeout");
       }
       return { kind: "timeout", error: "Tool timed out" };
     }
