@@ -574,8 +574,8 @@ async function listDiscussions(
   const limit = Math.min(args.limit ?? 10, 25);
   return safeToolQuery(logContext, async () => {
     const { data, error } = await sb
-      .from("discussions")
-      .select("id, title, body, author_id, comment_count, created_at")
+      .from("discussion_threads")
+      .select("id, title, body, author_id, reply_count, created_at")
       .eq("organization_id", orgId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -590,7 +590,7 @@ async function listDiscussions(
         id: discussion.id,
         title: discussion.title,
         author_id: discussion.author_id,
-        comment_count: discussion.comment_count ?? 0,
+        reply_count: discussion.reply_count ?? 0,
         created_at: discussion.created_at ?? null,
         body_preview: truncateBody(discussion.body),
       })),
