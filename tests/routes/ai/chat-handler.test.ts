@@ -1639,6 +1639,87 @@ test("POST /api/ai/[orgId]/chat deterministically formats schedule image extract
   assert.equal(composeCalls, 1);
 });
 
+test("POST /api/ai/[orgId]/chat deterministically formats schedule image extraction timeouts", async () => {
+  let composeCalls = 0;
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => aiContext,
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* (options: { toolResults?: unknown[] }) {
+      composeCalls += 1;
+      if (!options.toolResults) {
+        yield {
+          type: "tool_call_requested",
+          id: "tool-call-1",
+          name: "extract_schedule_pdf",
+          argsJson: "{}",
+        };
+        return;
+      }
+
+      yield { type: "chunk", content: "timeout fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => ({
+      kind: "tool_error",
+      error: "Schedule image extraction timed out",
+      code: "image_timeout",
+    }),
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: "thread-1",
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Please import this schedule image.",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+      attachment: {
+        storagePath: `${ORG_ID}/${ADMIN_USER.id}/17120000000021_schedule.png`,
+        fileName: "schedule.png",
+        mimeType: "image/png",
+      },
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /I wasn't able to extract the schedule from the attached image file/i);
+  assert.match(body, /timed out/i);
+  assert.doesNotMatch(body, /timeout fallback prose should not appear/i);
+  assert.equal(composeCalls, 1);
+});
+
 test("POST /api/ai/[orgId]/chat deterministically formats attachment_unavailable schedule failures", async () => {
   let composeCalls = 0;
 

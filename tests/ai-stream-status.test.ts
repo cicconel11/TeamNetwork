@@ -251,6 +251,26 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
     /router\.refresh\(\);/,
     "AIPanel should refresh the current route after confirming a pending action"
   );
+  assert.match(
+    source,
+    /import \{ prepareImageUpload \} from "@\/lib\/media\/image-preparation";/,
+    "AIPanel should reuse the existing browser image preparation pipeline for schedule photos"
+  );
+  assert.match(
+    source,
+    /const normalizedFile = await normalizeScheduleUploadFile\(file\);/,
+    "AIPanel should normalize schedule image uploads before posting them to the server"
+  );
+  assert.match(
+    source,
+    /formData\.set\("file", normalizedFile\);/,
+    "AIPanel should upload the normalized schedule image file"
+  );
+  assert.match(
+    source,
+    /That schedule image is too large to process\. Please upload an image under 2MB or use a PDF instead\./,
+    "AIPanel should fail fast when a normalized schedule image still exceeds the extractor budget"
+  );
 });
 
 test("useAIStream resets tool status during key lifecycle transitions", () => {
