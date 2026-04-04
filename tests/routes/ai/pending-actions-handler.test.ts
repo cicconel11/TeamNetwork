@@ -237,7 +237,7 @@ test("confirm executes create_event and appends assistant message", async () => 
           end_date: "2026-04-10",
           end_time: "20:00",
           location: "Franklin Field",
-          event_type: "practice",
+          event_type: "class",
           is_philanthropy: false,
           orgSlug: "upenn-sprint-football",
         },

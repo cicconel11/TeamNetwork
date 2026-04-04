@@ -180,7 +180,7 @@ const prepareEventSchema = z
     end_time: z.string().trim().optional(),
     location: z.string().trim().optional(),
     event_type: z
-      .enum(["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"])
+      .enum(["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser", "class"])
       .optional(),
     is_philanthropy: z.boolean().optional(),
   })
@@ -970,6 +970,49 @@ async function createEventPendingActionsFromDrafts(
   };
 }
 
+export async function buildPendingEventBatchFromDrafts(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  events: PrepareEventArgs[],
+  logContext: AiLogContext,
+  orgSlug: string | null
+): Promise<{
+  state: "missing_fields" | "needs_batch_confirmation";
+  pending_actions?: Array<{
+    id: string;
+    action_type: string;
+    payload: CreateEventPendingPayload;
+    expires_at: string;
+    summary: { title: string; description: string };
+  }>;
+  validation_errors?: Array<{
+    index: number;
+    missing_fields: string[];
+    draft: Record<string, unknown>;
+  }>;
+}> {
+  const { pendingActions, validationErrors } = await createEventPendingActionsFromDrafts(
+    sb,
+    ctx,
+    events,
+    logContext,
+    orgSlug
+  );
+
+  if (pendingActions.length === 0) {
+    return {
+      state: "missing_fields",
+      validation_errors: validationErrors,
+    };
+  }
+
+  return {
+    state: "needs_batch_confirmation",
+    pending_actions: pendingActions,
+    validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
+  };
+}
+
 function sanitizeDraftValue(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -1361,31 +1404,15 @@ async function prepareEventsBatch(
   }
 
   const orgSlug = typeof org?.slug === "string" ? org.slug : null;
-  const { pendingActions, validationErrors } = await createEventPendingActionsFromDrafts(
-    sb,
-    ctx,
-    args.events,
-    logContext,
-    orgSlug
-  );
-
-  if (pendingActions.length === 0) {
-    return {
-      kind: "ok",
-      data: {
-        state: "missing_fields",
-        validation_errors: validationErrors,
-      },
-    };
-  }
-
   return {
     kind: "ok",
-    data: {
-      state: "needs_batch_confirmation",
-      pending_actions: pendingActions,
-      validation_errors: validationErrors.length > 0 ? validationErrors : undefined,
-    },
+    data: await buildPendingEventBatchFromDrafts(
+      sb,
+      ctx,
+      args.events,
+      logContext,
+      orgSlug
+    ),
   };
 }
 
