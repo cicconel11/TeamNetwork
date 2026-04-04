@@ -38,7 +38,7 @@ export interface ExtractedScheduleEvent {
   end_time?: string;
   location?: string;
   description?: string;
-  event_type?: "general" | "philanthropy" | "game" | "meeting" | "social" | "fundraiser";
+  event_type?: "general" | "philanthropy" | "game" | "practice" | "meeting" | "social" | "workout" | "fundraiser";
 }
 
 export interface ExtractedScheduleRejectedRow {
@@ -63,7 +63,7 @@ const extractedScheduleEventSchema: z.ZodType<ExtractedScheduleEvent> = z.object
   location: z.string().trim().min(1).max(500).optional(),
   description: z.string().trim().min(1).max(5000).optional(),
   event_type: z
-    .enum(["general", "philanthropy", "game", "meeting", "social", "fundraiser"])
+    .enum(["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"])
     .optional(),
 });
 
@@ -212,7 +212,7 @@ function buildSystemPrompt(context: ScheduleExtractionContext): string {
     "Resolve relative dates against the provided current timestamp.",
     "If a required event field is missing or ambiguous, omit that event from events instead of inventing values.",
     "If a schedule row is readable but still missing required fields, include it in candidate_rows with whatever fields you can confidently read plus raw_text when helpful.",
-    "Valid event_type values are general, philanthropy, game, meeting, social, fundraiser.",
+    "Valid event_type values are general, philanthropy, game, practice, meeting, social, workout, fundraiser.",
     "Keep source_summary concise and factual.",
     `Current timestamp for date resolution: ${context.now}`,
     orgLine,
@@ -570,8 +570,10 @@ function normalizeEventType(value: string | undefined): ExtractedScheduleEvent["
     case "general":
     case "philanthropy":
     case "game":
+    case "practice":
     case "meeting":
     case "social":
+    case "workout":
     case "fundraiser":
       return normalized;
     default:

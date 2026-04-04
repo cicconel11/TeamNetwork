@@ -180,7 +180,7 @@ const prepareEventSchema = z
     end_time: z.string().trim().optional(),
     location: z.string().trim().optional(),
     event_type: z
-      .enum(["general", "philanthropy", "game", "meeting", "social", "fundraiser"])
+      .enum(["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"])
       .optional(),
     is_philanthropy: z.boolean().optional(),
   })

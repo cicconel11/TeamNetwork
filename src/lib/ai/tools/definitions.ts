@@ -291,7 +291,7 @@ const TOOL_BY_NAME = {
           location: { type: "string" as const },
           event_type: {
             type: "string" as const,
-            enum: ["general", "philanthropy", "game", "meeting", "social", "fundraiser"],
+            enum: ["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"],
           },
           is_philanthropy: { type: "boolean" as const },
         },
@@ -337,7 +337,7 @@ const TOOL_BY_NAME = {
                 location: { type: "string" as const },
                 event_type: {
                   type: "string" as const,
-                  enum: ["general", "philanthropy", "game", "meeting", "social", "fundraiser"],
+                  enum: ["general", "philanthropy", "game", "practice", "meeting", "social", "workout", "fundraiser"],
                 },
                 is_philanthropy: { type: "boolean" as const },
               },
