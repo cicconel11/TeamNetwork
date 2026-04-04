@@ -102,6 +102,37 @@ function dateFromDateKey(dateKey: string): Date {
   return new Date(year, month - 1, day, 12);
 }
 
+function buildDateTimeFormatOptions(
+  timeZone: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+): Intl.DateTimeFormatOptions {
+  return timeZone ? { ...options, timeZone } : options;
+}
+
+function formatMonthDay(date: Date, locale: string, timeZone?: string): string {
+  const parts = new Intl.DateTimeFormat(
+    locale,
+    buildDateTimeFormatOptions(timeZone, {
+      month: "short",
+      day: "numeric",
+    }),
+  ).formatToParts(date);
+
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  const day = parts.find((part) => part.type === "day")?.value ?? "";
+  return `${month} ${day}`.trim();
+}
+
+function formatTime(date: Date, locale: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(
+    locale,
+    buildDateTimeFormatOptions(timeZone, {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  ).format(date);
+}
+
 function resolveEventRange(event: CalendarEventLike) {
   const start = event.allDay ? parseFloatingDate(event.startAt) : parseEventDate(event.startAt);
   if (!start) return null;
@@ -199,31 +230,17 @@ export function formatCalendarEventTime(event: CalendarEventLike, locale = "en-U
   if (event.allDay) return "All day";
 
   const { start, end } = range;
-  const timeOptions: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  if (timeZone) timeOptions.timeZone = timeZone;
-
-  const startTime = start.toLocaleTimeString(locale, timeOptions);
+  const startTime = formatTime(start, locale, timeZone);
   if (!event.endAt) {
     return startTime;
   }
 
   if (toDateKeyFromParts(getDateTimeParts(start, timeZone)) === toDateKeyFromParts(getDateTimeParts(end, timeZone))) {
-    const endTime = end.toLocaleTimeString(locale, timeOptions);
+    const endTime = formatTime(end, locale, timeZone);
     return `${startTime} – ${endTime}`;
   }
 
-  const dateTimeOptions: Intl.DateTimeFormatOptions = {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  };
-  if (timeZone) dateTimeOptions.timeZone = timeZone;
-
-  return `${start.toLocaleDateString(locale, dateTimeOptions)} – ${end.toLocaleDateString(locale, dateTimeOptions)}`;
+  return `${formatMonthDay(start, locale, timeZone)}, ${startTime} – ${formatMonthDay(end, locale, timeZone)}, ${formatTime(end, locale, timeZone)}`;
 }
 
 export function eventOverlapsRange(event: CalendarEventLike, start: Date, end: Date): boolean {

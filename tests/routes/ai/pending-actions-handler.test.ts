@@ -6,6 +6,7 @@ const ORG_ID = "org-uuid-1";
 const THREAD_ID = "11111111-1111-4111-8111-111111111111";
 const ACTION_ID = "22222222-2222-4222-8222-222222222222";
 const ADMIN_USER = { id: "admin-user", email: "admin@example.com" };
+let requestCounter = 1;
 
 const { createAiPendingActionConfirmHandler } = await import(
   "../../../src/app/api/ai/[orgId]/pending-actions/[actionId]/confirm/handler.ts"
@@ -17,6 +18,9 @@ const { createAiPendingActionCancelHandler } = await import(
 function buildRequest() {
   return new Request(`http://localhost/api/ai/${ORG_ID}/pending-actions/${ACTION_ID}/confirm`, {
     method: "POST",
+    headers: {
+      "x-forwarded-for": `127.0.0.${requestCounter++}`,
+    },
   });
 }
 
@@ -284,6 +288,109 @@ test("confirm executes create_event and appends assistant message", async () => 
     String(insertedMessages[0].content),
     /upenn-sprint-football\/calendar\/events\/event-123/
   );
+});
+
+test("confirm create_event rolls back and returns structured event_type errors", async () => {
+  const updatedStatuses: any[] = [];
+  const logged: any[] = [];
+  const originalError = console.error;
+  console.error = (...args: any[]) => logged.push(args);
+
+  try {
+    const handler = createAiPendingActionConfirmHandler({
+      createClient: async () =>
+        ({
+          auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+        }) as any,
+      getAiOrgContext: async () =>
+        ({
+          ok: true,
+          orgId: ORG_ID,
+          userId: ADMIN_USER.id,
+          role: "admin",
+          supabase: null,
+          serviceSupabase: {
+            from(table: string) {
+              if (table === "ai_messages") {
+                return {
+                  insert() {
+                    return Promise.resolve({ error: null });
+                  },
+                };
+              }
+              throw new Error(`unexpected table ${table}`);
+            },
+          },
+        }) as any,
+      getPendingAction: async () =>
+        ({
+          id: ACTION_ID,
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: THREAD_ID,
+          action_type: "create_event",
+          payload: {
+            title: "Chemistry 101",
+            start_date: "2026-04-10",
+            start_time: "18:00",
+            end_date: "2026-04-10",
+            end_time: "20:00",
+            location: "Franklin Field",
+            event_type: "class",
+            is_philanthropy: false,
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        }) as any,
+      updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+        updatedStatuses.push(payload);
+        return { updated: true };
+      },
+      createEvent: async () =>
+        ({
+          ok: false,
+          status: 500,
+          code: "event_type_unavailable",
+          error:
+            "This environment does not support the selected event type yet. Apply the latest database migrations and try again.",
+          internalError: {
+            code: "22P02",
+            message: 'invalid input value for enum event_type: "class"',
+            details: null,
+            hint: null,
+          },
+        }) as any,
+      clearDraftSession: async () => {},
+    });
+
+    const response = await handler(buildRequest() as any, {
+      params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 500);
+    assert.equal(body.error, "This environment does not support the selected event type yet. Apply the latest database migrations and try again.");
+    assert.equal(body.code, "event_type_unavailable");
+    assert.equal(updatedStatuses[0].status, "confirmed");
+    assert.equal(updatedStatuses[1].status, "pending");
+    assert.equal(updatedStatuses[1].expectedStatus, "confirmed");
+
+    const failureLog = logged.find(
+      (entry) => typeof entry[0] === "string" && entry[0].includes("create_event confirmation failed")
+    );
+    assert.ok(failureLog, "should log the structured create_event failure");
+    assert.equal(failureLog[1].actionId, ACTION_ID);
+    assert.equal(failureLog[1].attemptedEventType, "class");
+    assert.equal(failureLog[1].eventErrorCode, "event_type_unavailable");
+  } finally {
+    console.error = originalError;
+  }
 });
 
 test("cancel marks the pending action cancelled", async () => {

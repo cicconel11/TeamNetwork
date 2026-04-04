@@ -290,8 +290,26 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
               status: "pending",
               expectedStatus: "confirmed",
             });
+
+            aiLog("error", "ai-confirm", "create_event confirmation failed", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              attemptedEventType: payload.event_type,
+              eventErrorCode: result.code ?? null,
+              eventError: result.error,
+              eventStatus: result.status,
+              internalError: result.internalError ?? null,
+            });
+
             return NextResponse.json(
-              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              {
+                error: result.error,
+                ...(result.code ? { code: result.code } : {}),
+                ...(result.details ? { details: result.details } : {}),
+              },
               { status: result.status }
             );
           }
