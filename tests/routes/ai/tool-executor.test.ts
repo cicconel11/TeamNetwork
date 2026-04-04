@@ -444,7 +444,7 @@ test("schedule image extraction preserves readable partial rows for follow-up va
   ]);
 });
 
-test("extractScheduleFromText cleans noisy Fordham-style PDF text before sending it to the model", async () => {
+test("extractScheduleFromText parses Fordham-style PDF rows before calling the model", async () => {
   const completionCalls: Array<{ messages: unknown[] }> = [];
 
   setScheduleExtractionDepsForTests({
@@ -473,15 +473,20 @@ test("extractScheduleFromText cleans noisy Fordham-style PDF text before sending
       }) as any,
   });
 
-  await extractScheduleFromText(
+  const extracted = await extractScheduleFromText(
     [
       "F O R D H A M   P R E P A R A T O R Y   S C H O O L",
       "F O R D H A M   P R E P A R A T O R Y   S C H O O L",
       "A D M I S S I O N S",
       "A L U M N I",
       "Program Coaches Schedule",
-      "B a s e ba l l - Va rs ity vs. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field",
-      "B a s e ba l l - Va rs ity Vs. Paramus Catholic Mar 24 2026 4:15 PM Moglia Stadium @ Coffey Field",
+      "Team Opponent Date Time Location Result Score",
+      "Baseball - Varsity Baseball - Varsity Baseball - Varsity Baseball - Varsity vs. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field",
+      "Baseball - Varsity Baseball - Varsity Baseball - Varsity Baseball - Varsity vs. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field",
+      "Baseball - Freshman vs. Xavier High School Mar 28 2026 12:30 PM",
+      "Van Nest Field Result W 8-2",
+      "Baseball - Varsity vs. Xavier HS Apr 2 2026 11:00 AM",
+      "MCU Park",
     ].join("\n"),
     {
       sourceType: "pdf",
@@ -490,11 +495,91 @@ test("extractScheduleFromText cleans noisy Fordham-style PDF text before sending
     }
   );
 
-  const serializedMessages = JSON.stringify(completionCalls[0]?.messages);
-  assert.match(serializedMessages, /Baseball - Varsity vs\. James Monroe HS Mar 23 2026 4:15 PM Moglia Stadium @ Coffey Field/);
-  assert.match(serializedMessages, /Baseball - Varsity Vs\. Paramus Catholic Mar 24 2026 4:15 PM Moglia Stadium @ Coffey Field/);
-  assert.doesNotMatch(serializedMessages, /F O R D H A M\s+P R E P A R A T O R Y/);
-  assert.doesNotMatch(serializedMessages, /A D M I S S I O N S/);
+  assert.equal(completionCalls.length, 0);
+  assert.deepEqual(extracted.events, [
+    {
+      title: "Baseball - Varsity vs. James Monroe HS",
+      start_date: "2026-03-23",
+      start_time: "16:15",
+      location: "Moglia Stadium @ Coffey Field",
+      event_type: "game",
+    },
+    {
+      title: "Baseball - Freshman vs. Xavier High School",
+      start_date: "2026-03-28",
+      start_time: "12:30",
+      location: "Van Nest Field",
+      description: "Result W 8-2",
+      event_type: "game",
+    },
+    {
+      title: "Baseball - Varsity vs. Xavier HS",
+      start_date: "2026-04-02",
+      start_time: "11:00",
+      location: "MCU Park",
+      event_type: "game",
+    },
+  ]);
+  assert.deepEqual(extracted.rejected_rows, []);
+});
+
+test("extractScheduleFromText returns parser candidate rows for partial PDF schedule lines without calling the model", async () => {
+  const completionCalls: Array<{ messages: unknown[] }> = [];
+
+  setScheduleExtractionDepsForTests({
+    createClient: () =>
+      ({
+        chat: {
+          completions: {
+            create: async (params: { messages: unknown[] }) => {
+              completionCalls.push(params);
+              return {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        events: [],
+                        source_summary: "No events found.",
+                        confidence: "low",
+                      }),
+                    },
+                  },
+                ],
+              };
+            },
+          },
+        },
+      }) as any,
+  });
+
+  const extracted = await extractScheduleFromText(
+    [
+      "Team Opponent Date Time Location Result Score",
+      "Baseball - Varsity vs. Xavier HS Apr 2 2026",
+      "MCU Park",
+    ].join("\n"),
+    {
+      sourceType: "pdf",
+      sourceLabel: "fordham-partial.pdf",
+      now: "2026-04-03T12:00:00.000Z",
+    }
+  );
+
+  assert.equal(completionCalls.length, 0);
+  assert.deepEqual(extracted.events, []);
+  assert.deepEqual(extracted.rejected_rows, [
+    {
+      index: 0,
+      missing_fields: ["start_time"],
+      draft: {
+        raw_text: "Baseball - Varsity vs. Xavier HS Apr 2 2026 MCU Park",
+        title: "Baseball - Varsity vs. Xavier HS",
+        start_date: "2026-04-02",
+        location: "MCU Park",
+        event_type: "game",
+      },
+    },
+  ]);
 });
 
 test("getZaiImageModel rejects token-like configuration values", () => {
