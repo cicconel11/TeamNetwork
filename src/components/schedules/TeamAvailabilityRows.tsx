@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
 import { buildAvailabilityWeek } from "@/components/schedules/availability-week";
 import { computeEventBlocks, type EventBlock } from "@/components/schedules/availability-blocks";
 import { computeSummaryStats, formatDateKey } from "@/components/schedules/availability-stats";
@@ -196,7 +196,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     return result;
   }, [members, calendarEvents, week.weekDays, timeZone]);
 
-  // Build conflict grid for stats (team mode) and time-axis view
+  // Build conflict grid
   const conflictGrid = useMemo(() => {
     const grid = new Map<string, { userId: string; memberName: string; title: string; isOrg?: boolean }[]>();
     blocksByMemberAndDay.forEach((blocks, key) => {
@@ -254,7 +254,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     return map;
   }, [members, blocksByMemberAndDay, week.weekDays, totalMembers]);
 
-  // Parse selected cell to get date and hour
+  // Parse selected cell
   const selectedCellData = useMemo(() => {
     if (!selectedCell) return null;
     const match = selectedCell.match(/^(.+)-(\d+)$/);
@@ -274,25 +274,27 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     );
   }
 
+  // Grid column/row definitions
+  const gridCols = "minmax(48px, 56px) repeat(7, minmax(80px, 1fr))";
+  const gridRows = `68px repeat(16, 64px)`;
+
   return (
     <div className="space-y-4">
       {/* Stats bar */}
-      {totalMembers > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Avg availability</p>
-            <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{teamStats.avgAvailability}%</p>
-          </div>
-          <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Best time</p>
-            <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{teamStats.bestTime}</p>
-          </div>
-          <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Members</p>
-            <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{totalMembers}</p>
-          </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Avg availability</p>
+          <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{teamStats.avgAvailability}%</p>
         </div>
-      )}
+        <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Best time</p>
+          <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{teamStats.bestTime}</p>
+        </div>
+        <div className="rounded-xl bg-muted/40 px-3 py-2.5 text-center">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-1">Members</p>
+          <p className="font-mono text-2xl font-bold text-foreground tabular-nums">{totalMembers}</p>
+        </div>
+      </div>
 
       {/* Week navigation */}
       <div className="flex items-center justify-between">
@@ -327,154 +329,169 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
 
       {/* Time-axis grid */}
       {loading ? (
-        <div className="overflow-x-auto rounded-xl border border-border/50 bg-card animate-pulse">
+        <div className="overflow-x-auto rounded-xl border border-border/60 bg-card animate-pulse">
           <div
-            className="min-w-[480px]"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(52px, 64px) repeat(7, minmax(60px, 1fr))",
-              gridTemplateRows: `72px repeat(3, 56px)`,
-            }}
+            className="min-w-[560px]"
+            style={{ display: "grid", gridTemplateColumns: gridCols, gridTemplateRows: `68px repeat(4, 64px)` }}
           >
-            {/* Corner cell */}
-            <div className="sticky left-0 z-20 bg-card border-b border-r border-border/30" />
-            {/* Header cells */}
-            {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={`header-${i}`} className="border-b border-l border-border/20 bg-muted/10" />
+            <div className="sticky left-0 z-20 bg-card border-b border-r border-border/40" />
+            {[0,1,2,3,4,5,6].map((i) => (
+              <div key={i} className="border-b border-l border-border/30 bg-muted/20" />
             ))}
-            {/* Hour skeleton rows */}
-            {[0, 1, 2].map((hi) => (
-              <div key={`hour-${hi}`}>
-                <div className="sticky left-0 z-10 bg-card border-r border-b border-border/20 px-2 flex items-center" />
-                {[0, 1, 2, 3, 4, 5, 6].map((di) => (
-                  <div key={`cell-${di}`} className="border-b border-l border-border/15" />
+            {[0,1,2,3].map((hi) => (
+              <Fragment key={hi}>
+                <div className="sticky left-0 z-10 bg-card border-r border-b border-border/30" />
+                {[0,1,2,3,4,5,6].map((di) => (
+                  <div key={di} className="border-b border-l border-border/20 bg-muted/10" />
                 ))}
-              </div>
+              </Fragment>
             ))}
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border/50 bg-card">
+        <div className="overflow-x-auto rounded-xl border border-border/60 bg-card">
           <div
-            className="min-w-[480px]"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(52px, 64px) repeat(7, minmax(60px, 1fr))",
-              gridTemplateRows: `72px repeat(16, 56px)`,
-            }}
+            className="min-w-[560px]"
+            style={{ display: "grid", gridTemplateColumns: gridCols, gridTemplateRows: gridRows }}
           >
-            {/* Corner cell */}
-            <div className="sticky left-0 z-20 bg-card border-b border-r border-border/30" />
+            {/* ── Corner ── */}
+            <div className="sticky left-0 z-20 bg-card border-b border-r border-border/40" />
 
-            {/* Day header cells */}
+            {/* ── Day headers ── */}
             {week.weekDays.map((day) => {
               const dateKey = formatDateKey(day);
               const isToday = dateKey === week.todayKey;
-              const hasBestWindow = bestWindowByDay.has(dateKey);
               const bw = bestWindowByDay.get(dateKey);
               return (
                 <div
-                  key={`header-${dateKey}`}
-                  className={`border-b border-l border-border/20 py-2 px-2 flex flex-col items-center justify-center bg-card
-                    ${isToday ? "bg-org-primary/[0.03]" : ""}
-                    ${hasBestWindow ? "border-b-2 border-b-emerald-500/50" : ""}`}
+                  key={`hdr-${dateKey}`}
+                  className={[
+                    "border-b border-l border-border/40 flex flex-col items-center justify-center gap-1 px-2 py-2",
+                    isToday ? "bg-org-primary/[0.04]" : "bg-card",
+                    bw ? "border-b-2 border-b-emerald-500/60" : "",
+                  ].join(" ")}
                 >
-                  <div
-                    className={`text-[11px] font-medium uppercase tracking-wide
-                      ${isToday ? "text-org-primary" : "text-muted-foreground"}`}
-                  >
+                  <span className={`text-[10px] font-semibold uppercase tracking-widest ${isToday ? "text-org-primary" : "text-muted-foreground"}`}>
                     {day.toLocaleDateString("en-US", { weekday: "short" })}
-                  </div>
-                  <div className="mt-1 flex justify-center">
-                    <span
-                      className={`inline-flex items-center justify-center text-base font-semibold
-                        ${isToday ? "w-8 h-8 rounded-full bg-org-primary text-white" : "text-foreground"}`}
-                    >
-                      {day.getDate()}
-                    </span>
-                  </div>
-                  {hasBestWindow && bw && (
-                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
+                  </span>
+                  <span className={[
+                    "flex items-center justify-center w-9 h-9 rounded-full text-[15px] font-bold",
+                    isToday ? "bg-org-primary text-white" : "text-foreground",
+                  ].join(" ")}>
+                    {day.getDate()}
+                  </span>
+                  {bw && (
+                    <span className="text-[8px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 rounded-full px-2 py-0.5 truncate w-full text-center">
                       {bw.label}
-                    </div>
+                    </span>
                   )}
                 </div>
               );
             })}
 
-            {/* Hour rows */}
-            {Array.from({ length: 16 }).map((_, hourIdx) => {
-              const hour = 6 + hourIdx;
+            {/* ── Hour rows ── each row = Fragment with 1 label + 7 cells as direct grid children */}
+            {Array.from({ length: 16 }).map((_, hi) => {
+              const hour = 6 + hi;
               return (
-                <div key={`hour-${hour}`}>
-                  {/* Hour label cell — sticky */}
-                  <div className="sticky left-0 z-10 bg-card border-r border-b border-border/30 flex items-center justify-end pr-2 text-[11px] font-medium text-muted-foreground">
-                    {hourToLabel(hour)}
+                <Fragment key={`row-${hour}`}>
+                  {/* Hour label */}
+                  <div className="sticky left-0 z-10 bg-card border-r border-b border-border/30 flex items-start justify-end pt-2 pr-2">
+                    <span className="text-[11px] font-medium text-muted-foreground/70 tabular-nums">
+                      {hourToLabel(hour)}
+                    </span>
                   </div>
 
-                  {/* Hour × Day cells */}
+                  {/* Day cells */}
                   {week.weekDays.map((day) => {
                     const dateKey = formatDateKey(day);
                     const gridKey = `${dateKey}-${hour}`;
                     const cellData = freeCountGrid.get(gridKey);
                     const isToday = dateKey === week.todayKey;
                     const isNow = isToday && hour === new Date().getHours();
+                    const isSelected = selectedCell === gridKey;
 
-                    if (!cellData) return null;
+                    if (!cellData) return <div key={gridKey} className="border-b border-l border-border/20" />;
 
                     const freePct = totalMembers > 0 ? cellData.freeCount / totalMembers : 0;
-                    let bgColor = "bg-muted/30";
-                    let textColor = "text-muted-foreground";
+
+                    // Color system: stronger fills that clearly read
+                    let cellBg: string;
+                    let countColor: string;
+                    let dotFreeColor: string;
                     if (freePct >= 0.75) {
-                      bgColor = "bg-emerald-500/20 dark:bg-emerald-900/30 hover:bg-emerald-500/30 dark:hover:bg-emerald-900/40";
-                      textColor = "text-emerald-700 dark:text-emerald-400";
+                      cellBg = "bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-950/60";
+                      countColor = "text-emerald-700 dark:text-emerald-300";
+                      dotFreeColor = "bg-emerald-500";
                     } else if (freePct >= 0.4) {
-                      bgColor = "bg-amber-400/20 dark:bg-amber-900/30 hover:bg-amber-400/30 dark:hover:bg-amber-900/40";
-                      textColor = "text-amber-700 dark:text-amber-400";
+                      cellBg = "bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-950/60";
+                      countColor = "text-amber-700 dark:text-amber-300";
+                      dotFreeColor = "bg-amber-400";
                     } else {
-                      bgColor = "bg-red-500/20 dark:bg-red-900/30 hover:bg-red-500/30 dark:hover:bg-red-900/40";
-                      textColor = "text-red-700 dark:text-red-400";
+                      cellBg = "bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-950/60";
+                      countColor = "text-red-700 dark:text-red-300";
+                      dotFreeColor = "bg-red-400";
                     }
 
-                    const isSelected = selectedCell === gridKey;
+                    // Today column overlay
+                    const todayOverlay = isToday ? "ring-1 ring-inset ring-org-primary/10" : "";
+                    const selectedRing = isSelected ? "ring-2 ring-inset ring-org-primary/60" : "";
+                    const nowRing = isNow ? "ring-2 ring-inset ring-red-500/60" : "";
+
+                    // Capped dots
+                    const maxDots = 10;
+                    const freeSlice = cellData.freeMembers.slice(0, maxDots);
+                    const busySlice = cellData.busyEntries.slice(0, Math.max(0, maxDots - freeSlice.length));
+                    const overflow = totalMembers - freeSlice.length - busySlice.length;
 
                     return (
                       <div
-                        key={`cell-${gridKey}`}
+                        key={gridKey}
                         onClick={() => setSelectedCell((prev) => (prev === gridKey ? null : gridKey))}
-                        className={`relative border-b border-l border-border/30 flex items-center justify-center cursor-pointer transition-colors
-                          ${bgColor}
-                          ${isToday ? "bg-org-primary/[0.08]" : ""}
-                          ${isSelected ? "ring-2 ring-inset ring-org-primary/50" : ""}
-                          ${isNow ? "ring-2 ring-inset ring-red-500/50" : ""}`}
+                        className={[
+                          "border-b border-l border-border/30 cursor-pointer transition-colors",
+                          cellBg,
+                          todayOverlay,
+                          selectedRing,
+                          nowRing,
+                        ].join(" ")}
                       >
-                        <div className="flex flex-col items-center justify-center h-full px-1 gap-0.5">
-                          <span className={`text-sm font-bold leading-none ${textColor}`}>{cellData.freeCount}</span>
-                          <span className="text-[9px] text-muted-foreground leading-none">free</span>
-                          <div className="flex flex-wrap gap-[3px] justify-center mt-1">
-                            {cellData.freeMembers.slice(0, 12).map((member) => (
+                        {/* Inner layout: padded, vertically stacked */}
+                        <div className="h-full flex flex-col items-center justify-center gap-1.5 px-2 py-2">
+                          {/* Count line */}
+                          <div className="flex items-baseline gap-1">
+                            <span className={`text-base font-bold leading-none tabular-nums ${countColor}`}>
+                              {cellData.freeCount}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground leading-none">
+                              / {totalMembers}
+                            </span>
+                          </div>
+
+                          {/* Member dots */}
+                          <div className="flex flex-wrap justify-center gap-[3px]">
+                            {freeSlice.map((m) => (
+                              <span
+                                key={m.userId}
+                                className={`inline-block h-[6px] w-[6px] rounded-full ${dotFreeColor}`}
+                                title={m.name}
+                              />
+                            ))}
+                            {busySlice.map(({ member }) => (
                               <span
                                 key={member.userId}
-                                className="inline-block h-[5px] w-[5px] rounded-full bg-emerald-500"
+                                className="inline-block h-[6px] w-[6px] rounded-full bg-foreground/15"
                                 title={member.name}
                               />
                             ))}
-                            {cellData.busyEntries.slice(0, 12).map(({ member }) => (
-                              <span
-                                key={member.userId}
-                                className="inline-block h-[5px] w-[5px] rounded-full bg-muted-foreground/30"
-                                title={member.name}
-                              />
-                            ))}
-                            {(cellData.freeMembers.length + cellData.busyEntries.length) > 12 && (
-                              <span className="text-[8px] text-muted-foreground">+{(cellData.freeMembers.length + cellData.busyEntries.length) - 12}</span>
+                            {overflow > 0 && (
+                              <span className="text-[8px] text-muted-foreground leading-none">+{overflow}</span>
                             )}
                           </div>
                         </div>
                       </div>
                     );
                   })}
-                </div>
+                </Fragment>
               );
             })}
           </div>
@@ -483,66 +500,76 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
 
       {/* Detail panel */}
       {selectedCellData && (
-        <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/40 bg-muted/20">
             <div>
               <p className="text-sm font-semibold text-foreground">
-                {hourToLabel(selectedCellData.hour)} on {new Date(selectedCellData.dateKey).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                {hourToLabel(selectedCellData.hour)}–{hourToLabel(selectedCellData.hour + 1)}{" "}
+                &middot;{" "}
+                {new Date(selectedCellData.dateKey + "T12:00:00").toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "short",
+                  day: "numeric",
+                })}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {selectedCellData.freeCount} free · {selectedCellData.busyEntries.length} busy
+                {selectedCellData.freeCount} available · {selectedCellData.busyEntries.length} busy
               </p>
             </div>
             <button
               onClick={() => setSelectedCell(null)}
-              className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors"
+              className="text-muted-foreground hover:text-foreground h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted/50 transition-colors text-lg leading-none"
+              aria-label="Close"
             >
-              Close
+              ×
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Free members */}
-            <div>
-              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-2 flex items-center gap-1">
-                <span className="text-green-500">✓</span> Free ({selectedCellData.freeMembers.length})
+          <div className="grid grid-cols-2 divide-x divide-border/40">
+            {/* Free */}
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+                Available ({selectedCellData.freeMembers.length})
               </p>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {selectedCellData.freeMembers.length > 0 ? (
                   selectedCellData.freeMembers.map((member) => (
-                    <div key={member.userId} className="text-xs text-foreground flex items-center gap-1.5">
-                      <div className="h-5 w-5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                    <div key={member.userId} className="flex items-center gap-2">
+                      <div className="h-6 w-6 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center text-[10px] font-bold flex-shrink-0">
                         {getInitials(member.name)}
                       </div>
-                      <span>{member.name}</span>
+                      <span className="text-xs text-foreground">{member.name}</span>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-muted-foreground italic">None</p>
+                  <p className="text-xs text-muted-foreground italic">No one available</p>
                 )}
               </div>
             </div>
 
-            {/* Busy members */}
-            <div>
-              <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-2 flex items-center gap-1">
-                <span className="text-red-500">✗</span> Busy ({selectedCellData.busyEntries.length})
+            {/* Busy */}
+            <div className="px-4 py-3 space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-foreground/20" />
+                Busy ({selectedCellData.busyEntries.length})
               </p>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {selectedCellData.busyEntries.length > 0 ? (
                   selectedCellData.busyEntries.map(({ member, title }) => (
-                    <div key={member.userId} className="text-xs text-foreground">
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-5 w-5 rounded-full bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
-                          {getInitials(member.name)}
-                        </div>
-                        <span>{member.name}</span>
+                    <div key={member.userId} className="flex items-start gap-2">
+                      <div className="h-6 w-6 rounded-full bg-muted/60 text-muted-foreground flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-px">
+                        {getInitials(member.name)}
                       </div>
-                      {title && <p className="text-[10px] text-muted-foreground ml-6">{title}</p>}
+                      <div className="min-w-0">
+                        <p className="text-xs text-foreground leading-tight">{member.name}</p>
+                        {title && <p className="text-[10px] text-muted-foreground truncate">{title}</p>}
+                      </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-xs text-muted-foreground italic">None</p>
+                  <p className="text-xs text-muted-foreground italic">Everyone is free</p>
                 )}
               </div>
             </div>
@@ -551,18 +578,24 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 pt-1 text-xs">
+      <div className="flex items-center gap-5 pt-1">
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-emerald-500/40" />
-          <span className="text-muted-foreground">Most free (75%+)</span>
+          <div className="h-3 w-5 rounded-sm bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800" />
+          <span className="text-xs text-muted-foreground">75%+ free</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-amber-400/40" />
-          <span className="text-muted-foreground">Partly free (40–74%)</span>
+          <div className="h-3 w-5 rounded-sm bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800" />
+          <span className="text-xs text-muted-foreground">40–74% free</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-red-500/40" />
-          <span className="text-muted-foreground">Least free (&lt;40%)</span>
+          <div className="h-3 w-5 rounded-sm bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800" />
+          <span className="text-xs text-muted-foreground">&lt;40% free</span>
+        </div>
+        <div className="flex items-center gap-1.5 ml-auto">
+          <span className="inline-block h-[6px] w-[6px] rounded-full bg-emerald-500" />
+          <span className="text-xs text-muted-foreground">free</span>
+          <span className="inline-block h-[6px] w-[6px] rounded-full bg-foreground/15 ml-2" />
+          <span className="text-xs text-muted-foreground">busy</span>
         </div>
       </div>
     </div>
