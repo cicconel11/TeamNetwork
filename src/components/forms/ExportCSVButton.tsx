@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui";
+import { escapeCsvCell } from "@/lib/export/spreadsheet";
 import type { Form, FormSubmission, FormField, User } from "@/types/database";
 
 interface ExportCSVButtonProps {
@@ -27,8 +28,8 @@ export function ExportCSVButton({ form, submissions }: ExportCSVButtonProps) {
 
     // Create CSV content
     const csvContent = [
-      headers.map(escapeCSV).join(","),
-      ...rows.map((row) => row.map(escapeCSV).join(",")),
+      headers.map(escapeCsvCell).join(","),
+      ...rows.map((row) => row.map(escapeCsvCell).join(",")),
     ].join("\n");
 
     // Download
@@ -56,11 +57,4 @@ function formatValue(value: unknown): string {
   if (Array.isArray(value)) return value.join("; ");
   if (typeof value === "boolean") return value ? "Yes" : "No";
   return String(value);
-}
-
-function escapeCSV(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
 }

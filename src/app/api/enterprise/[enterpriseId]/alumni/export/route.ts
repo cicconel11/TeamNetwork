@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
+import {
+  getEnterpriseApiContext,
+  ENTERPRISE_ALUMNI_DATA_ROLE,
+} from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { escapeCsvCell, escapeTsvCell } from "@/lib/export/spreadsheet";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 // Field mappings for export
@@ -85,7 +89,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
-  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ALUMNI_DATA_ROLE);
   if (!ctx.ok) return ctx.response;
 
   const respond = (payload: unknown, status = 200) =>
@@ -203,21 +207,11 @@ export async function GET(req: Request, { params }: RouteParams) {
   const validFields = fields.filter((f) => FIELD_LABELS[f]);
   const headers = validFields.map((f) => FIELD_LABELS[f]);
 
-  // Escape CSV value
-  const escapeCSV = (value: unknown): string => {
-    if (value === null || value === undefined) return "";
-    const str = String(value);
-    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  };
-
   if (filters.format === "csv") {
     const csvRows = [
-      headers.join(","),
+      headers.map(escapeCsvCell).join(","),
       ...alumniWithOrg.map((alum) =>
-        validFields.map((field) => escapeCSV(alum[field as keyof typeof alum])).join(",")
+        validFields.map((field) => escapeCsvCell(alum[field as keyof typeof alum])).join(",")
       ),
     ];
 
@@ -251,13 +245,9 @@ export async function GET(req: Request, { params }: RouteParams) {
   // For now, return tab-separated values that Excel can open
   if (filters.format === "xlsx") {
     const tsvRows = [
-      headers.join("\t"),
+      headers.map(escapeTsvCell).join("\t"),
       ...alumniWithOrg.map((alum) =>
-        validFields.map((field) => {
-          const value = alum[field as keyof typeof alum];
-          if (value === null || value === undefined) return "";
-          return String(value).replace(/\t/g, " ").replace(/\n/g, " ");
-        }).join("\t")
+        validFields.map((field) => escapeTsvCell(alum[field as keyof typeof alum])).join("\t")
       ),
     ];
 

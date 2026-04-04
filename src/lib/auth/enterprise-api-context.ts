@@ -15,6 +15,7 @@ import {
 export const ENTERPRISE_ANY_ROLE: EnterpriseRole[] = ["owner", "billing_admin", "org_admin"];
 export const ENTERPRISE_BILLING_ROLE: EnterpriseRole[] = ["owner", "billing_admin"];
 export const ENTERPRISE_CREATE_ORG_ROLE: EnterpriseRole[] = ["owner", "org_admin"];
+export const ENTERPRISE_ALUMNI_DATA_ROLE: EnterpriseRole[] = ["owner", "org_admin"];
 export const ENTERPRISE_OWNER_ROLE: EnterpriseRole[] = ["owner"];
 
 // ── Discriminated union return type ──

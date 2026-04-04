@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * Tests for C1 security fix: enterprise alumni routes must NOT expose
@@ -115,6 +117,10 @@ function makeFullDbRow(): Record<string, unknown> {
   };
 }
 
+function readSource(relPath: string): string {
+  return fs.readFileSync(path.join(process.cwd(), relPath), "utf8");
+}
+
 describe("alumni list response (C1 fix)", () => {
   it("does NOT contain user_id in response", () => {
     const dbRow = makeFullDbRow();
@@ -208,5 +214,19 @@ describe("alumni export response (C1 fix)", () => {
     const response = simulateAlumniExportResponse(dbRow, "Test Org");
 
     assert.strictEqual("organization_slug" in response, false);
+  });
+});
+
+describe("enterprise alumni authz boundaries", () => {
+  it("browse route requires ENTERPRISE_ALUMNI_DATA_ROLE", () => {
+    const source = readSource("src/app/api/enterprise/[enterpriseId]/alumni/route.ts");
+    assert.ok(source.includes("ENTERPRISE_ALUMNI_DATA_ROLE"));
+    assert.ok(!source.includes("getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE)"));
+  });
+
+  it("export route requires ENTERPRISE_ALUMNI_DATA_ROLE", () => {
+    const source = readSource("src/app/api/enterprise/[enterpriseId]/alumni/export/route.ts");
+    assert.ok(source.includes("ENTERPRISE_ALUMNI_DATA_ROLE"));
+    assert.ok(!source.includes("getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE)"));
   });
 });

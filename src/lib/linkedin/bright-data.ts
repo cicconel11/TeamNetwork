@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { isLinkedInProfileUrl } from "@/lib/alumni/linkedin-url";
+import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
 
 /** Mapped fields ready to be written to member/alumni records. */
 export interface EnrichmentFields {
@@ -58,6 +59,20 @@ export interface BrightDataProfileResult {
   educations_details: string | null;
   /** Profile photo URL */
   avatar: string | null;
+}
+
+function sanitizeExperienceEntries(experience: BrightDataExperience[]): BrightDataExperience[] {
+  return experience.map((entry) => ({
+    ...entry,
+    description_html: sanitizeRichTextToPlainText(entry.description_html),
+  }));
+}
+
+function sanitizeEducationEntries(education: BrightDataEducation[]): BrightDataEducation[] {
+  return education.map((entry) => ({
+    ...entry,
+    description_html: sanitizeRichTextToPlainText(entry.description_html),
+  }));
 }
 
 export type BrightDataFetchFailureKind =
@@ -293,8 +308,8 @@ function normalizeBrightDataProfile(data: unknown): BrightDataProfileResult | nu
       : typeof raw.summary === "string" ? raw.summary : null,
     current_company: companyName,
     current_company_name: companyNameAlt,
-    experience,
-    education,
+    experience: sanitizeExperienceEntries(experience),
+    education: sanitizeEducationEntries(education),
     educations_details: educationsDetails,
     avatar: typeof raw.avatar === "string" ? raw.avatar : null,
   };
