@@ -273,6 +273,16 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
   );
   assert.match(
     source,
+    /for \(const id of ids\) \{\s*await handleConfirmPendingAction\(id, \{ reloadCollections: false, refreshCalendar: false \}\);/s,
+    "AIPanel should confirm pending batches sequentially and suppress per-action refreshes"
+  );
+  assert.doesNotMatch(
+    source,
+    /Promise\.allSettled\(ids\.map\(\(id\) => handleConfirmPendingAction\(id\)\)\)/,
+    "AIPanel should not confirm all pending actions in one parallel burst"
+  );
+  assert.match(
+    source,
     /import \{ prepareImageUpload \} from "@\/lib\/media\/image-preparation";/,
     "AIPanel should reuse the existing browser image preparation pipeline for schedule photos"
   );
