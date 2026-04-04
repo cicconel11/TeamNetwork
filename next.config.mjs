@@ -271,7 +271,7 @@ const nextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com",
+              "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://js.hcaptcha.com https://challenges.cloudflare.com https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' blob: data: https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://rytsziwekhtjdqzzpdso.supabase.co https://media.licdn.com",
               "font-src 'self' https://fonts.gstatic.com",
