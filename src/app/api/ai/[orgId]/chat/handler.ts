@@ -839,6 +839,184 @@ function formatMembersResponse(data: unknown): string | null {
   return ["Recent active members", ...rows].join("\n");
 }
 
+function formatAlumniResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any alumni for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+      if (!name) {
+        return null;
+      }
+
+      const gradYear = typeof (row as { graduation_year?: unknown }).graduation_year === "number"
+        ? `class of ${(row as { graduation_year: number }).graduation_year}`
+        : null;
+      const company = getNonEmptyString((row as { current_company?: unknown }).current_company);
+      const city = getNonEmptyString((row as { current_city?: unknown }).current_city);
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+
+      const metadata = [gradYear, company, city].filter(
+        (value): value is string => Boolean(value)
+      );
+      const suffix = title ? ` (${title})` : "";
+
+      return `- ${name}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}${suffix}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 10);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return ["Alumni", ...rows].join("\n");
+}
+
+function formatDonationsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any donations for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const donorName = getNonEmptyString((row as { donor_name?: unknown }).donor_name) ?? "Unknown";
+      const amountDollars = typeof (row as { amount_dollars?: unknown }).amount_dollars === "number"
+        ? `$${((row as { amount_dollars: number }).amount_dollars).toFixed(2)}`
+        : null;
+      const status = getNonEmptyString((row as { status?: unknown }).status);
+      const date = formatIsoDate((row as { created_at?: unknown }).created_at);
+      const purpose = getNonEmptyString((row as { purpose?: unknown }).purpose);
+
+      const metadata = [amountDollars, status, date].filter(
+        (value): value is string => Boolean(value)
+      );
+      const suffix = purpose ? ` (${purpose})` : "";
+
+      return `- ${donorName}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}${suffix}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 10);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return ["Donations", ...rows].join("\n");
+}
+
+function formatParentsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any parents for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const name = getNonEmptyString((row as { name?: unknown }).name);
+      if (!name) {
+        return null;
+      }
+
+      const relationship = getNonEmptyString((row as { relationship?: unknown }).relationship);
+      const studentName = getNonEmptyString((row as { student_name?: unknown }).student_name);
+
+      const metadata = [
+        relationship,
+        studentName ? `student: ${studentName}` : null,
+      ].filter((value): value is string => Boolean(value));
+
+      return `- ${name}${metadata.length > 0 ? ` - ${metadata.join(" - ")}` : ""}`;
+    })
+    .filter((row): row is string => Boolean(row))
+    .slice(0, 10);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return ["Parent directory", ...rows].join("\n");
+}
+
+function formatPhilanthropyEventsResponse(data: unknown): string | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  if (data.length === 0) {
+    return "I couldn't find any philanthropy events for this organization.";
+  }
+
+  const rows = data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+      if (!title) {
+        return null;
+      }
+
+      const metadata = [
+        formatIsoDate((row as { start_date?: unknown }).start_date),
+        getNonEmptyString((row as { location?: unknown }).location),
+      ].filter((value): value is string => Boolean(value));
+      const description = getNonEmptyString((row as { description?: unknown }).description);
+
+      return { title, metadata, description };
+    })
+    .filter(
+      (
+        row
+      ): row is {
+        title: string;
+        metadata: string[];
+        description: string | null;
+      } => Boolean(row)
+    )
+    .slice(0, 5);
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const lines = ["Philanthropy events"];
+  for (const row of rows) {
+    lines.push(`- ${row.title}${row.metadata.length > 0 ? ` - ${row.metadata.join(" - ")}` : ""}`);
+    if (row.description) {
+      lines.push(`  Details: ${row.description}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 function formatNavigationTargetsResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
