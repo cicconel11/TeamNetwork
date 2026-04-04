@@ -401,6 +401,8 @@ test("tool call: pass 2 receives toolResults without tools param", async () => {
   assert.equal(composeResponseCalls.length, 2);
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
+    "list_alumni",
+    "list_parents",
     "get_org_stats",
     "suggest_connections",
   ]);
@@ -452,6 +454,10 @@ test("ambiguous queries keep fallback surface tool set", async () => {
     "list_announcements",
     "list_discussions",
     "list_job_postings",
+    "list_alumni",
+    "list_parents",
+    "list_philanthropy_events",
+    "list_donations",
     "get_org_stats",
     "suggest_connections",
   ]);
@@ -758,6 +764,8 @@ test("action requests do not get forced into find_navigation_targets", async () 
 
   assert.deepEqual(toolNamesForCall(0), [
     "list_members",
+    "list_alumni",
+    "list_parents",
     "get_org_stats",
     "suggest_connections",
   ]);
@@ -2098,4 +2106,223 @@ test("no tool call: normal flow works without tool loop", async () => {
   // Audit should not have toolCalls
   assert.equal(auditEntries.length, 1, "should have 1 audit entry");
   assert.equal(auditEntries[0].toolCalls, undefined);
+});
+
+test("list_alumni takes the forced tool-first fast path and skips pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_alumni",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_alumni should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "alumni-1",
+            name: "Sarah Chen",
+            graduation_year: 2021,
+            current_company: "Google",
+            current_city: "San Francisco",
+            title: "Software Engineer",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Who are our alumni?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_alumni"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_alumni" },
+  });
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Alumni/);
+  assert.match(body, /Sarah Chen/);
+  assert.match(body, /class of 2021/);
+  assert.match(body, /"type":"done"/);
+});
+
+test("list_donations takes the forced tool-first fast path and skips pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_donations",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_donations should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "donation-1",
+            donor_name: "John McKillop",
+            amount_dollars: 125.00,
+            status: "succeeded",
+            created_at: "2026-03-20T12:00:00Z",
+            purpose: "Alumni Campaign",
+            anonymous: false,
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("What donations have we received?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_donations"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_donations" },
+  });
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Donations/);
+  assert.match(body, /John McKillop/);
+  assert.match(body, /\$125\.00/);
+  assert.match(body, /Alumni Campaign/);
+  assert.match(body, /"type":"done"/);
+});
+
+test("list_parents takes the forced tool-first fast path and skips pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_parents",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_parents should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "parent-1",
+            name: "Margaret Chen",
+            relationship: "Mother",
+            student_name: "Sarah Chen",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("Show the parent directory") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_parents"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_parents" },
+  });
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Parent directory/);
+  assert.match(body, /Margaret Chen/);
+  assert.match(body, /student: Sarah Chen/);
+  assert.match(body, /"type":"done"/);
+});
+
+test("list_philanthropy_events takes the forced tool-first fast path and skips pass 2", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "list_philanthropy_events",
+            argsJson: '{"limit":5}',
+          };
+          return;
+        }
+        throw new Error("list_philanthropy_events should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult([
+          {
+            id: "event-1",
+            title: "Beach Cleanup",
+            start_date: "2026-04-15T09:00:00Z",
+            location: "Ocean Beach",
+            description: "Annual community beach cleanup.",
+          },
+        ]);
+      },
+    })
+  );
+
+  const body = await (
+    await POST(makeRequest("What volunteer events do we have?") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["list_philanthropy_events"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "list_philanthropy_events" },
+  });
+  assert.equal(composeResponseCalls.length, 1);
+  assert.match(body, /Philanthropy events/);
+  assert.match(body, /Beach Cleanup/);
+  assert.match(body, /Ocean Beach/);
+  assert.match(body, /"type":"done"/);
+});
+
+test("donor count queries route to get_org_stats, not list_donations", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "How many donors do we have?",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(executeToolCallCalls[0].call.name, "get_org_stats");
 });
