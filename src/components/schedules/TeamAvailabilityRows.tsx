@@ -29,8 +29,7 @@ type CalendarEvent = {
 };
 
 const GRID_START_MINUTE = 6 * 60; // 6am
-const GRID_END_MINUTE = 22 * 60;  // 10pm
-const GRID_DURATION = GRID_END_MINUTE - GRID_START_MINUTE; // 960 min
+const GRID_END_MINUTE = 22 * 60; // 10pm
 
 function minutesToTimeLabel(m: number): string {
   const h = Math.floor(m / 60);
@@ -40,9 +39,10 @@ function minutesToTimeLabel(m: number): string {
   return min > 0 ? `${hour}:${String(min).padStart(2, "0")}${ampm}` : `${hour}${ampm}`;
 }
 
-function blockToPercent(minute: number): number {
-  const clamped = Math.max(GRID_START_MINUTE, Math.min(GRID_END_MINUTE, minute));
-  return ((clamped - GRID_START_MINUTE) / GRID_DURATION) * 100;
+function hourToLabel(h: number): string {
+  const ampm = h < 12 ? "am" : "pm";
+  const hour = h % 12 || 12;
+  return `${hour}${ampm}`;
 }
 
 function getInitials(name: string): string {
@@ -76,7 +76,6 @@ function computeBestWindow(
     slots.push({ start: m, freeCount: totalMembers - busyCount });
   }
 
-  // Find longest contiguous run where freeCount >= threshold
   let bestStart = -1;
   let bestEnd = -1;
   let bestFree = 0;
@@ -133,6 +132,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<string | null>(null);
 
   const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]);
 
@@ -179,7 +179,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
 
   const totalMembers = members.length;
 
-  // Compute event blocks per member per day key "userId-dateKey"
+  // Compute event blocks per member per day key
   const blocksByMemberAndDay = useMemo(() => {
     const result = new Map<string, EventBlock[]>();
     members.forEach((member) => {
@@ -196,7 +196,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     return result;
   }, [members, calendarEvents, week.weekDays, timeZone]);
 
-  // Build conflict grid for stats (team mode)
+  // Build conflict grid for stats (team mode) and time-axis view
   const conflictGrid = useMemo(() => {
     const grid = new Map<string, { userId: string; memberName: string; title: string; isOrg?: boolean }[]>();
     blocksByMemberAndDay.forEach((blocks, key) => {
@@ -216,6 +216,28 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     return grid;
   }, [blocksByMemberAndDay]);
 
+  // Compute free count grid for time-axis view
+  const freeCountGrid = useMemo(() => {
+    const map = new Map<string, { freeCount: number; freeMembers: TeamMember[]; busyEntries: Array<{ member: TeamMember; title: string }> }>();
+    week.weekDays.forEach((day) => {
+      const dateKey = formatDateKey(day);
+      for (let h = 6; h < 22; h++) {
+        const gridKey = `${dateKey}-${h}`;
+        const busyList = conflictGrid.get(gridKey) ?? [];
+        const busyUserIds = new Set(busyList.map((b) => b.userId));
+        const freeMembers = members.filter((m) => !busyUserIds.has(m.userId));
+        const busyEntries = members
+          .filter((m) => busyUserIds.has(m.userId))
+          .map((m) => ({
+            member: m,
+            title: busyList.find((b) => b.userId === m.userId)?.title ?? "",
+          }));
+        map.set(gridKey, { freeCount: freeMembers.length, freeMembers, busyEntries });
+      }
+    });
+    return map;
+  }, [conflictGrid, members, week.weekDays]);
+
   const stats = useMemo(
     () => computeSummaryStats(conflictGrid, week.weekDays, "team", totalMembers),
     [conflictGrid, week.weekDays, totalMembers]
@@ -231,6 +253,18 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
     });
     return map;
   }, [members, blocksByMemberAndDay, week.weekDays, totalMembers]);
+
+  // Parse selected cell to get date and hour
+  const selectedCellData = useMemo(() => {
+    if (!selectedCell) return null;
+    const match = selectedCell.match(/^(.+)-(\d+)$/);
+    if (!match) return null;
+    const [, dateKey, hourStr] = match;
+    const hour = parseInt(hourStr, 10);
+    const cellData = freeCountGrid.get(selectedCell);
+    if (!cellData) return null;
+    return { dateKey, hour, ...cellData };
+  }, [selectedCell, freeCountGrid]);
 
   if (totalMembers === 0) {
     return (
@@ -291,15 +325,15 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
         </button>
       </div>
 
-      {/* Weekly grid */}
+      {/* Time-axis grid */}
       {loading ? (
         <div className="overflow-x-auto rounded-xl border border-border/50 bg-card animate-pulse">
           <div
-            className="min-w-[520px]"
+            className="min-w-[480px]"
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(40px, 120px) repeat(7, minmax(60px, 1fr))",
-              gridTemplateRows: `48px repeat(3, 40px)`,
+              gridTemplateColumns: "minmax(60px, 80px) repeat(7, minmax(60px, 1fr))",
+              gridTemplateRows: `48px repeat(3, 36px)`,
             }}
           >
             {/* Corner cell */}
@@ -308,13 +342,10 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
             {[0, 1, 2, 3, 4, 5, 6].map((i) => (
               <div key={`header-${i}`} className="border-b border-l border-border/20 bg-muted/10" />
             ))}
-            {/* Member skeleton rows */}
-            {[0, 1, 2].map((mi) => (
-              <div key={`member-${mi}`}>
-                <div className="sticky left-0 z-10 bg-card border-r border-b border-border/20 px-2 flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-full bg-muted/50" />
-                  <div className="hidden sm:block h-3 flex-1 rounded bg-muted/40" />
-                </div>
+            {/* Hour skeleton rows */}
+            {[0, 1, 2].map((hi) => (
+              <div key={`hour-${hi}`}>
+                <div className="sticky left-0 z-10 bg-card border-r border-b border-border/20 px-2 flex items-center" />
                 {[0, 1, 2, 3, 4, 5, 6].map((di) => (
                   <div key={`cell-${di}`} className="border-b border-l border-border/15" />
                 ))}
@@ -325,11 +356,11 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border/50 bg-card">
           <div
-            className="min-w-[520px]"
+            className="min-w-[480px]"
             style={{
               display: "grid",
-              gridTemplateColumns: "minmax(40px, 120px) repeat(7, minmax(60px, 1fr))",
-              gridTemplateRows: `48px repeat(${members.length}, 40px)`,
+              gridTemplateColumns: "minmax(60px, 80px) repeat(7, minmax(60px, 1fr))",
+              gridTemplateRows: `48px repeat(16, 36px)`,
             }}
           >
             {/* Corner cell */}
@@ -371,80 +402,147 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
               );
             })}
 
-            {/* Member rows */}
-            {members.map((member) => (
-              <div key={`member-${member.userId}`}>
-                {/* Name/avatar cell — sticky */}
-                <div className="sticky left-0 z-10 bg-card border-r border-b border-border/20 flex items-center gap-2 px-2">
-                  <div className="h-7 w-7 rounded-full bg-org-primary/15 text-org-primary flex items-center justify-center text-[10px] font-semibold flex-shrink-0 select-none">
-                    {getInitials(member.name)}
+            {/* Hour rows */}
+            {Array.from({ length: 16 }).map((_, hourIdx) => {
+              const hour = 6 + hourIdx;
+              return (
+                <div key={`hour-${hour}`}>
+                  {/* Hour label cell — sticky */}
+                  <div className="sticky left-0 z-10 bg-card border-r border-b border-border/20 flex items-center justify-center px-1 text-xs font-medium text-muted-foreground">
+                    {hourToLabel(hour)}
                   </div>
-                  <span className="hidden sm:block text-xs text-muted-foreground truncate">{member.name}</span>
+
+                  {/* Hour × Day cells */}
+                  {week.weekDays.map((day) => {
+                    const dateKey = formatDateKey(day);
+                    const gridKey = `${dateKey}-${hour}`;
+                    const cellData = freeCountGrid.get(gridKey);
+                    const isToday = dateKey === week.todayKey;
+                    const isNow = isToday && hour === new Date().getHours();
+
+                    if (!cellData) return null;
+
+                    const freePct = totalMembers > 0 ? cellData.freeCount / totalMembers : 0;
+                    let bgColor = "bg-muted/20";
+                    let textColor = "text-muted-foreground";
+                    if (freePct >= 0.75) {
+                      bgColor = "bg-emerald-500/15 hover:bg-emerald-500/25";
+                      textColor = "text-emerald-700 dark:text-emerald-400";
+                    } else if (freePct >= 0.4) {
+                      bgColor = "bg-amber-400/15 hover:bg-amber-400/25";
+                      textColor = "text-amber-700 dark:text-amber-400";
+                    } else {
+                      bgColor = "bg-red-500/15 hover:bg-red-500/25";
+                      textColor = "text-red-700 dark:text-red-400";
+                    }
+
+                    const isSelected = selectedCell === gridKey;
+
+                    return (
+                      <div
+                        key={`cell-${gridKey}`}
+                        onClick={() => setSelectedCell((prev) => (prev === gridKey ? null : gridKey))}
+                        className={`relative border-b border-l border-border/15 flex items-center justify-center cursor-pointer transition-colors
+                          ${bgColor}
+                          ${isToday ? "bg-org-primary/[0.05]" : ""}
+                          ${isSelected ? "ring-2 ring-inset ring-org-primary/40" : ""}
+                          ${isNow ? "ring-2 ring-inset ring-red-500/40" : ""}`}
+                      >
+                        <div className={`text-xs font-semibold ${textColor}`}>
+                          {cellData.freeCount} <span className="text-[10px] font-normal">free</span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                {/* Day cells */}
-                {week.weekDays.map((day) => {
-                  const dateKey = formatDateKey(day);
-                  const isToday = dateKey === week.todayKey;
-                  const blocks = blocksByMemberAndDay.get(`${member.userId}-${dateKey}`) ?? [];
-                  return (
-                    <div
-                      key={`cell-${member.userId}-${dateKey}`}
-                      className={`relative border-b border-l border-border/15 overflow-hidden
-                        ${isToday ? "bg-org-primary/[0.02]" : ""}`}
-                    >
-                      {/* Busy blocks */}
-                      {blocks.map((block) => {
-                        const leftPct = blockToPercent(block.startMinute);
-                        const widthPct = blockToPercent(block.endMinute) - leftPct;
-                        const color = block.isOrg ? "bg-org-primary/60" : "bg-org-secondary/60";
-                        return (
-                          <div
-                            key={block.id}
-                            title={`${block.title} · ${minutesToTimeLabel(block.startMinute)}–${minutesToTimeLabel(block.endMinute)}`}
-                            className={`absolute top-1 bottom-1 rounded-sm ${color}`}
-                            style={{
-                              left: `${leftPct}%`,
-                              width: `${Math.max(widthPct, 1)}%`,
-                            }}
-                          />
-                        );
-                      })}
+      {/* Detail panel */}
+      {selectedCellData && (
+        <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {hourToLabel(selectedCellData.hour)} on {new Date(selectedCellData.dateKey).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {selectedCellData.freeCount} free · {selectedCellData.busyEntries.length} busy
+              </p>
+            </div>
+            <button
+              onClick={() => setSelectedCell(null)}
+              className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
 
-                      {/* Current time vertical line (today only) */}
-                      {isToday && (() => {
-                        const now = new Date();
-                        const currentMinute = now.getHours() * 60 + now.getMinutes();
-                        if (currentMinute < GRID_START_MINUTE || currentMinute > GRID_END_MINUTE) return null;
-                        return (
-                          <div
-                            className="absolute top-0 bottom-0 w-px bg-red-500 z-10 pointer-events-none"
-                            style={{ left: `${blockToPercent(currentMinute)}%` }}
-                          />
-                        );
-                      })()}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Free members */}
+            <div>
+              <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400 mb-2 flex items-center gap-1">
+                <span className="text-green-500">✓</span> Free ({selectedCellData.freeMembers.length})
+              </p>
+              <div className="space-y-1">
+                {selectedCellData.freeMembers.length > 0 ? (
+                  selectedCellData.freeMembers.map((member) => (
+                    <div key={member.userId} className="text-xs text-foreground flex items-center gap-1.5">
+                      <div className="h-5 w-5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                        {getInitials(member.name)}
+                      </div>
+                      <span>{member.name}</span>
                     </div>
-                  );
-                })}
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">None</p>
+                )}
               </div>
-            ))}
+            </div>
+
+            {/* Busy members */}
+            <div>
+              <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-2 flex items-center gap-1">
+                <span className="text-red-500">✗</span> Busy ({selectedCellData.busyEntries.length})
+              </p>
+              <div className="space-y-1">
+                {selectedCellData.busyEntries.length > 0 ? (
+                  selectedCellData.busyEntries.map(({ member, title }) => (
+                    <div key={member.userId} className="text-xs text-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-5 w-5 rounded-full bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                          {getInitials(member.name)}
+                        </div>
+                        <span>{member.name}</span>
+                      </div>
+                      {title && <p className="text-[10px] text-muted-foreground ml-6">{title}</p>}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">None</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 pt-1">
+      <div className="flex items-center gap-4 pt-1 text-xs">
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-org-primary/70" />
-          <span className="text-xs text-muted-foreground">Org Events</span>
+          <div className="h-3 w-3 rounded-sm bg-emerald-500/40" />
+          <span className="text-muted-foreground">Most free (75%+)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-org-secondary/70" />
-          <span className="text-xs text-muted-foreground">Academic</span>
+          <div className="h-3 w-3 rounded-sm bg-amber-400/40" />
+          <span className="text-muted-foreground">Partly free (40–74%)</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="h-3 w-3 rounded-sm bg-muted/60 border border-border/40" />
-          <span className="text-xs text-muted-foreground">Free</span>
+          <div className="h-3 w-3 rounded-sm bg-red-500/40" />
+          <span className="text-muted-foreground">Least free (&lt;40%)</span>
         </div>
       </div>
     </div>
