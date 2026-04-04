@@ -1648,6 +1648,17 @@ async function extractSchedulePdf(
       return toolError("Unable to read attached schedule image", "image_unreadable");
     }
 
+    if (extracted.diagnostics) {
+      aiLog("info", "ai-tools", "extract_schedule_pdf extraction completed", logContext, {
+        storagePath: attachment.storagePath,
+        mimeType: attachment.mimeType,
+        strategy: extracted.diagnostics.strategy,
+        cleanedLineCount: extracted.diagnostics.cleaned_line_count,
+        parsedRowCount: extracted.diagnostics.parsed_row_count,
+        candidateRowCount: extracted.diagnostics.candidate_row_count,
+      });
+    }
+
     const extractionValidationErrors = extracted.rejected_rows ?? [];
 
     if (extracted.events.length === 0 && extractionValidationErrors.length === 0) {
