@@ -1407,6 +1407,8 @@ function formatDeterministicToolErrorResponse(
       return "I couldn't load that uploaded schedule file. Please re-upload it and try again.";
     case "image_too_large":
       return "That schedule image is too large to process. Please upload an image under 2MB or use a PDF instead.";
+    case "image_timeout":
+      return "I wasn't able to extract the schedule from the attached image file because the extraction tool timed out. This can happen with larger or more complex image files. Please re-upload it and I'll try again, or upload a PDF version if you have one.";
     case "image_unreadable":
       return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
     case "image_model_misconfigured":
@@ -1419,6 +1421,10 @@ function formatDeterministicToolErrorResponse(
 
   if (error === "Unable to read attached schedule image") {
     return "I couldn't read that schedule image. Try a clearer photo, better lighting, or upload a PDF version of the schedule.";
+  }
+
+  if (error === "Schedule image extraction timed out") {
+    return "I wasn't able to extract the schedule from the attached image file because the extraction tool timed out. This can happen with larger or more complex image files. Please re-upload it and I'll try again, or upload a PDF version if you have one.";
   }
 
   if (

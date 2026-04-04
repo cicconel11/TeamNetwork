@@ -66,6 +66,7 @@ export type ScheduleFileToolErrorCode =
   | "org_context_failed"
   | "attachment_unavailable"
   | "image_too_large"
+  | "image_timeout"
   | "image_unreadable"
   | "image_model_misconfigured"
   | "pdf_unreadable";
@@ -350,6 +351,7 @@ const MAX_BODY_PREVIEW_CHARS = 500;
 const SCRAPE_SCHEDULE_FETCH_TIMEOUT_MS = 10_000;
 const SCRAPE_SCHEDULE_MAX_BYTES = 512 * 1024;
 const MAX_SOURCE_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB — prevents oversized base64 payloads to LLM
+const IMAGE_EXTRACTION_TOOL_TIMEOUT_MS = 60_000;
 const SCHEDULE_UPLOAD_BUCKET = "ai-schedule-uploads";
 const SCHEDULE_IMAGE_MIME_TYPES = new Set<ScheduleImageMimeType>([
   "image/png",
@@ -391,6 +393,15 @@ async function getScheduleExtractionModule(): Promise<ScheduleExtractionModule> 
 
   cachedScheduleExtractionModule = await import("@/lib/ai/schedule-extraction");
   return cachedScheduleExtractionModule;
+}
+
+function isScheduleImageAttachment(
+  attachment?: ToolExecutionContext["attachment"]
+): boolean {
+  return Boolean(
+    attachment
+      && SCHEDULE_IMAGE_MIME_TYPES.has(attachment.mimeType as ScheduleImageMimeType)
+  );
 }
 
 function truncateBody(body: string | null | undefined): string | null {
@@ -1958,8 +1969,11 @@ export async function executeToolCall(
   try {
     const timeoutMs =
       toolName === "scrape_schedule_website"
-        || toolName === "extract_schedule_pdf"
         ? EXTRACTION_TOOL_TIMEOUT_MS
+        : toolName === "extract_schedule_pdf"
+        ? isScheduleImageAttachment(ctx.attachment)
+          ? IMAGE_EXTRACTION_TOOL_TIMEOUT_MS
+          : EXTRACTION_TOOL_TIMEOUT_MS
         : toolName === "prepare_events_batch"
         ? TOOL_EXECUTION_TIMEOUT_MS * 3
         : TOOL_EXECUTION_TIMEOUT_MS;
@@ -2074,6 +2088,9 @@ export async function executeToolCall(
     });
   } catch (err) {
     if (isStageTimeoutError(err)) {
+      if (toolName === "extract_schedule_pdf" && isScheduleImageAttachment(ctx.attachment)) {
+        return toolError("Schedule image extraction timed out", "image_timeout");
+      }
       return { kind: "timeout", error: "Tool timed out" };
     }
     aiLog("warn", "ai-tools", "unexpected error", logContext, {
