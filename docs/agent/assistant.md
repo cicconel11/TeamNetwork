@@ -34,7 +34,7 @@ The panel UI is route-aware and now includes per-surface starter prompts, persis
 
 ## Database Tables
 
-Eight migrations create all AI-related schema:
+Ten migrations create all AI-related schema (plus two cross-cutting performance migrations):
 
 | Migration | Tables / Objects |
 |---|---|
@@ -47,6 +47,8 @@ Eight migrations create all AI-related schema:
 | `20260402120000_ai_schedule_uploads_bucket.sql` | Private `ai-schedule-uploads` storage bucket + INSERT/SELECT RLS policies |
 | `20260402123000_ai_schedule_uploads_allow_images.sql` | Backfills image MIME types on existing buckets |
 | `20260403120000_ai_schedule_uploads_auth_delete.sql` | Authenticated DELETE RLS policy for schedule uploads |
+| `20260812000000_rls_initplan_auth_uid.sql` | Wraps bare `auth.uid()` in all user-facing RLS policies with `(select auth.uid())` initplan (10-100x scan improvement) |
+| `20260812000003_perf_hotpath_indexes_and_initplan.sql` | Composite indexes on `ai_threads(org_id, created_at, id)` and `ai_messages(thread_id, status, created_at)` for thread listing and message history hot paths |
 
 ### Table Summary
 
@@ -112,7 +114,7 @@ The assistant now supports two confirmation-gated write paths: jobs and top-leve
 The UI no longer has zero coverage: utility and stream-level tests now cover route-surface inference, toggle visibility, message list behavior, SSE parsing, SSR safety, and panel state helpers. But there are still no full React integration tests for the end-to-end pending-action review flow, optimistic thread switching, or panel view transitions.
 
 ### 7. `get_org_stats` is still the slowest deterministic read path
-Simple roster and event questions now take the fast single-tool path, but full org snapshots still depend on the aggregate `get_org_stats` query. The remaining latency on donation / alumni / top-level metrics prompts is now more likely to come from the stats query itself than from chat orchestration.
+Simple roster and event questions now take the fast single-tool path, and thread listing / message history queries are now covered by dedicated composite indexes (`idx_ai_threads_org_listing`, `idx_ai_messages_thread_status`). Full org snapshots still depend on the aggregate `get_org_stats` query. The remaining latency on donation / alumni / top-level metrics prompts is now more likely to come from the stats query itself than from chat orchestration.
 
 ### 8. Vector similarity cache (deferred to v2)
 The `20260321100001` migration creates the `vector` extension, but all cache lookups use exact SHA-256 hash matching. Embedding-based semantic similarity is deferred to a future version.

@@ -84,6 +84,7 @@ Thread listing uses keyset pagination via the shared `src/lib/pagination/cursor.
 3. If more pages exist, the cursor encodes the last row's `(created_at, id)` for the next request
 4. `applyCursorFilter` adds a `WHERE (created_at, id) < (cursor_created_at, cursor_id)` condition
 5. RLS ensures only the authenticated user's non-deleted threads are visible
+6. The `idx_ai_threads_org_listing` partial composite index on `(org_id, created_at DESC, id DESC) WHERE deleted_at IS NULL` directly covers this pagination query
 
 ## Soft-Delete Flow
 
