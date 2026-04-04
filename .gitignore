@@ -81,3 +81,8 @@ docs/.obsidian/
 
 # Local issue-tracker metadata
 .beads/
+
+# Claude Code agent tooling (local-only)
+.factory/
+.understand-anything/
+.agents/

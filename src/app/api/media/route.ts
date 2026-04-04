@@ -19,7 +19,7 @@ import {
   applyGalleryCursorFilter,
   buildGalleryCursorResponse,
 } from "@/lib/pagination/cursor";
-import { batchGetGridPreviewUrls } from "@/lib/media/urls";
+import { batchGetGridPreviewUrls, MEDIA_CACHE_HEADERS } from "@/lib/media/urls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -161,7 +161,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       { data: enrichedData, nextCursor, hasMore },
-      { headers: rateLimit.headers },
+      { headers: { ...rateLimit.headers, ...MEDIA_CACHE_HEADERS } },
     );
   } catch (error) {
     if (error instanceof ValidationError) {

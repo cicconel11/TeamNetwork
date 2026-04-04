@@ -109,6 +109,42 @@ beforeEach(() => {
 });
 
 describe("POST /api/stripe/webhook trial flows", () => {
+  test("enterprise subscription upsert failure returns 500 and leaves the event retryable", async () => {
+    supabase.simulateError("enterprise_subscriptions", { message: "unique constraint violation" });
+
+    event = {
+      id: "evt_enterprise_sub_failure",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_enterprise_123",
+          object: "checkout.session",
+          mode: "subscription",
+          payment_status: "paid",
+          customer: "cus_enterprise_123",
+          subscription: "sub_enterprise_123",
+          metadata: {
+            type: "enterprise",
+            creatorId: "user_enterprise_1",
+            enterpriseName: "Acme Enterprise",
+            enterpriseSlug: "acme-enterprise",
+            billingInterval: "year",
+          },
+        },
+      },
+    };
+
+    const { response, body } = await postWebhook();
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(body, { error: "Enterprise subscription provisioning failed" });
+
+    const eventRows = supabase.getRows("stripe_events");
+    assert.equal(eventRows.length, 1);
+    assert.equal(eventRows[0].event_id, "evt_enterprise_sub_failure");
+    assert.equal(eventRows[0].processed_at ?? null, null);
+  });
+
   test("checkout.session.completed provisions orgs for no-payment-required trial checkouts", async () => {
     supabase.seed("payment_attempts", [
       {

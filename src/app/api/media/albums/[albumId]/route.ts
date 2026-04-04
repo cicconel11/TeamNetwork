@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { getOrgMembership } from "@/lib/auth/api-helpers";
 import { validateJson, ValidationError, validationErrorResponse, baseSchemas, safeString } from "@/lib/security/validation";
-import { batchGetGridPreviewUrls } from "@/lib/media/urls";
+import { batchGetGridPreviewUrls, MEDIA_CACHE_HEADERS } from "@/lib/media/urls";
 import {
   getAlbumCoverValidationError,
   resolveAlbumDeleteMode,
@@ -175,7 +175,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     return NextResponse.json(
       { album, data: enriched, nextCursor, hasMore },
-      { headers: rateLimit.headers },
+      { headers: { ...rateLimit.headers, ...MEDIA_CACHE_HEADERS } },
     );
   } catch (error) {
     if (error instanceof ValidationError) return validationErrorResponse(error);

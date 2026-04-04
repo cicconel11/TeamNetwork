@@ -10,7 +10,7 @@ import {
   shouldListMediaAlbum,
   withMediaAlbumsDraftColumnFallback,
 } from "@/lib/media/gallery-upload-server";
-import { batchGetGridPreviewUrls } from "@/lib/media/urls";
+import { batchGetGridPreviewUrls, MEDIA_CACHE_HEADERS } from "@/lib/media/urls";
 import { shouldExposeAlbumCover } from "@/lib/media/albums";
 import { z } from "zod";
 
@@ -76,7 +76,10 @@ export async function GET(request: NextRequest) {
         .eq("media_item_id", containsItemId);
       const albumIds = (albumItems || []).map((r: { album_id: string }) => r.album_id);
       if (albumIds.length === 0) {
-        return NextResponse.json({ data: [] }, { headers: rateLimit.headers });
+        return NextResponse.json(
+          { data: [] },
+          { headers: { ...rateLimit.headers, ...MEDIA_CACHE_HEADERS } },
+        );
       }
       // Reuse the same fallback path for both select shapes.
       const { data: albums, error, usedDraftColumn } = await withMediaAlbumsDraftColumnFallback({
@@ -97,7 +100,10 @@ export async function GET(request: NextRequest) {
         }))
         : albumRows;
 
-      return enrichAlbumsWithCovers(serviceClient, visibleAlbums, rateLimit.headers);
+      return enrichAlbumsWithCovers(serviceClient, visibleAlbums, {
+        ...rateLimit.headers,
+        ...MEDIA_CACHE_HEADERS,
+      });
     }
 
     const { data: albums, error, usedDraftColumn } = await withMediaAlbumsDraftColumnFallback({
@@ -118,7 +124,10 @@ export async function GET(request: NextRequest) {
       }))
       : albumRows;
 
-    return enrichAlbumsWithCovers(serviceClient, visibleAlbums, rateLimit.headers);
+    return enrichAlbumsWithCovers(serviceClient, visibleAlbums, {
+      ...rateLimit.headers,
+      ...MEDIA_CACHE_HEADERS,
+    });
   } catch (error) {
     if (error instanceof ValidationError) return validationErrorResponse(error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

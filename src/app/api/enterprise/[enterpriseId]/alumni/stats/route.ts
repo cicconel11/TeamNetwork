@@ -53,7 +53,7 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   return respond({
     totalCount: statsResult.total_count,
-    orgStats: statsResult.org_stats.map(({ name, count }) => ({ name, count })),
+    orgStats: (statsResult.org_stats ?? []).map(({ name, count }) => ({ name, count })),
     topIndustries: statsResult.top_industries,
     organizations,
     filterOptions: statsResult.filter_options,

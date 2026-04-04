@@ -12,7 +12,7 @@ import {
 import { checkOrgReadOnly, readOnlyResponse } from "@/lib/subscription/read-only-guard";
 import { galleryUpdateMediaSchema, moderateMediaSchema } from "@/lib/schemas/media";
 import { softDeleteMediaItems } from "@/lib/media/delete-media";
-import { getMediaUrls } from "@/lib/media/urls";
+import { getMediaUrls, MEDIA_CACHE_HEADERS } from "@/lib/media/urls";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         url: url || item.external_url || null,
         thumbnail_url: thumbnailUrl || item.thumbnail_url || null,
       },
-      { headers: rateLimit.headers },
+      { headers: { ...rateLimit.headers, ...MEDIA_CACHE_HEADERS } },
     );
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

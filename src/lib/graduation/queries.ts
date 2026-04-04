@@ -222,6 +222,11 @@ export async function transitionToAlumni(
     return { success: false, error: error.message };
   }
 
+  if (!data) {
+    debugLog("graduation", "transitionToAlumni: RPC returned null data");
+    return { success: false, error: "RPC returned no data" };
+  }
+
   const result = data as { success: boolean; skipped?: boolean; error?: string };
   debugLog("graduation", "transitionToAlumni result", result);
   return result;
@@ -250,6 +255,10 @@ export async function revokeMemberAccess(
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  if (!data) {
+    return { success: false, error: "RPC returned no data" };
   }
 
   const result = data as { success: boolean; skipped?: boolean; error?: string };
@@ -310,6 +319,11 @@ export async function reinstateToActiveMember(
   if (error) {
     debugLog("graduation", "reinstateToActiveMember RPC error", error.message);
     return { success: false, error: error.message };
+  }
+
+  if (!data) {
+    debugLog("graduation", "reinstateToActiveMember: RPC returned null data");
+    return { success: false, error: "RPC returned no data" };
   }
 
   const result = data as { success: boolean; skipped?: boolean; error?: string };
