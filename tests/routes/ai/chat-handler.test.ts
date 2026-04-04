@@ -250,6 +250,27 @@ function createPendingActionServiceSupabase(pendingActions: Array<Record<string,
       };
 
       const builder: Record<string, any> = {
+        insert(payload: Record<string, unknown>) {
+          return {
+            select() {
+              return {
+                single: async () => {
+                  const row = {
+                    id: `pending-new-${pendingActions.length + 1}`,
+                    created_at: "2026-01-01T00:00:00.000Z",
+                    updated_at: "2026-01-01T00:00:00.000Z",
+                    executed_at: null,
+                    result_entity_type: null,
+                    result_entity_id: null,
+                    ...payload,
+                  };
+                  pendingActions.push(row);
+                  return { data: row, error: null };
+                },
+              };
+            },
+          };
+        },
         select() {
           return builder;
         },
@@ -1709,6 +1730,107 @@ test("POST /api/ai/[orgId]/chat asks for clarification before revising an ambigu
   );
 });
 
+test("POST /api/ai/[orgId]/chat revises imported schedule batches larger than ten events without using prepare_events_batch", async () => {
+  let composeCalls = 0;
+  const threadId = "11111111-1111-4111-8111-111111111134";
+  const pendingActions = Array.from({ length: 12 }, (_, index) => ({
+    id: `pending-old-${index + 1}`,
+    organization_id: ORG_ID,
+    user_id: ADMIN_USER.id,
+    thread_id: threadId,
+    action_type: "create_event",
+    status: "pending",
+    expires_at: "2099-01-01T00:00:00.000Z",
+    payload: {
+      title: `Acme Event ${index + 1}`,
+      start_date: `2026-04-${String(index + 10).padStart(2, "0")}`,
+      start_time: "18:30",
+      event_type: "general",
+      is_philanthropy: false,
+    },
+  }));
+
+  POST = createChatPostHandler({
+    createClient: async () => supabaseStub as any,
+    getAiOrgContext: async () => ({
+      ...aiContext,
+      serviceSupabase: createPendingActionServiceSupabase(pendingActions),
+    }),
+    buildPromptContext: async (input: any) => {
+      buildPromptContextCalls.push(input);
+      return {
+        systemPrompt: "System prompt",
+        orgContextMessage: null,
+        metadata: { surface: input.surface, estimatedTokens: 100 },
+      };
+    },
+    createZaiClient: () => ({ client: "fake" } as any),
+    getZaiModel: () => "glm-5",
+    composeResponse: (async function* () {
+      composeCalls += 1;
+      yield { type: "chunk", content: "large batch fallback prose should not appear" };
+    }) as any,
+    executeToolCall: async () => {
+      throw new Error("executeToolCall should not run for large pending schedule revisions");
+    },
+    logAiRequest: async (_serviceSupabase: unknown, entry: unknown) => {
+      auditEntries.push(entry);
+    },
+    retrieveRelevantChunks: async () => [],
+    resolveOwnThread: async () => ({
+      ok: true,
+      thread: {
+        id: threadId,
+        user_id: ADMIN_USER.id,
+        org_id: ORG_ID,
+        surface: "general",
+        title: "Thread",
+      },
+    }),
+    trackOpsEventServer: async (...args: any[]) => {
+      trackedOpsEvents.push(args);
+    },
+  });
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      threadId,
+      message: "these are actually class",
+      surface: "general",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /revised/i);
+  assert.match(body, /confirm/i);
+  assert.match(body, /"type":"pending_actions_batch"/);
+  assert.match(body, /"event_type":"class"/);
+  assert.doesNotMatch(body, /Too big: expected array to have <=10 items/);
+  assert.doesNotMatch(body, /large batch fallback prose should not appear/);
+  assert.equal(composeCalls, 0);
+  assert.deepEqual(
+    pendingActions.slice(0, 12).map((action) => action.status),
+    Array.from({ length: 12 }, () => "cancelled")
+  );
+  assert.equal(pendingActions.length, 24);
+  assert.deepEqual(
+    pendingActions.slice(12).map((action) => action.status),
+    Array.from({ length: 12 }, () => "pending")
+  );
+  assert.deepEqual(
+    pendingActions.slice(12).map((action) => action.payload.event_type),
+    Array.from({ length: 12 }, () => "class")
+  );
+});
+
 test("POST /api/ai/[orgId]/chat explains unsupported event types during schedule revision", async () => {
   let composeCalls = 0;
   const threadId = "11111111-1111-4111-8111-111111111133";
@@ -1778,7 +1900,7 @@ test("POST /api/ai/[orgId]/chat explains unsupported event types during schedule
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       threadId,
-      message: "these are actually class",
+      message: "these are actually seminar",
       surface: "general",
       idempotencyKey: VALID_IDEMPOTENCY_KEY,
     }),
@@ -1791,7 +1913,7 @@ test("POST /api/ai/[orgId]/chat explains unsupported event types during schedule
   assert.equal(response.status, 200);
   const body = await response.text();
   assert.match(body, /isn't a supported event type yet/i);
-  assert.match(body, /general, philanthropy, game, practice, meeting, social, workout, fundraiser/i);
+  assert.match(body, /general, philanthropy, game, practice, meeting, social, workout, fundraiser, class/i);
   assert.doesNotMatch(body, /unsupported fallback prose should not appear/);
   assert.equal(composeCalls, 0);
   assert.deepEqual(

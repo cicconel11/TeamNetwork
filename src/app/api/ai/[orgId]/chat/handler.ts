@@ -21,6 +21,7 @@ import {
   type ToolName,
 } from "@/lib/ai/tools/definitions";
 import {
+  buildPendingEventBatchFromDrafts,
   executeToolCall,
   getToolAuthorizationMode,
 } from "@/lib/ai/tools/executor";
@@ -1737,11 +1738,12 @@ const SUPPORTED_EVENT_TYPE_LABELS = [
   "social",
   "workout",
   "fundraiser",
+  "class",
 ] as const;
 
 function normalizeEventType(
   value: string | undefined
-): "general" | "philanthropy" | "game" | "practice" | "meeting" | "social" | "workout" | "fundraiser" | undefined {
+): "general" | "philanthropy" | "game" | "practice" | "meeting" | "social" | "workout" | "fundraiser" | "class" | undefined {
   if (!value) {
     return undefined;
   }
@@ -1755,7 +1757,8 @@ function normalizeEventType(
     normalized === "meeting" ||
     normalized === "social" ||
     normalized === "workout" ||
-    normalized === "fundraiser"
+    normalized === "fundraiser" ||
+    normalized === "class"
   ) {
     return normalized;
   }
@@ -3214,6 +3217,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           revisedEvents.length > 1 ? "prepare_events_batch" : "prepare_event";
         const revisionArgs =
           revisedEvents.length > 1 ? { events: revisedEvents } : revisedEvents[0];
+        const revisedOrgSlug = activePendingEventActions.find((action) =>
+          action.payload &&
+          typeof action.payload === "object" &&
+          typeof action.payload.orgSlug === "string" &&
+          action.payload.orgSlug.trim().length > 0
+        )?.payload.orgSlug ?? null;
 
         toolCallMade = true;
         auditToolCalls.push({
@@ -3223,21 +3232,44 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
         enqueue({ type: "tool_status", toolName: revisionToolName, status: "calling" });
 
         const toolStartedAt = Date.now();
-        const revisionResult = await executeToolCallFn(
-          {
-            orgId: ctx.orgId,
-            userId: ctx.userId,
-            serviceSupabase: ctx.serviceSupabase,
-            authorization: toolAuthorization,
-            threadId,
-            requestId,
-            attachment,
-          },
-          {
-            name: revisionToolName,
-            args: revisionArgs,
-          }
-        );
+        const revisionResult =
+          revisedEvents.length > 10
+            ? ({
+                kind: "ok",
+                data: await buildPendingEventBatchFromDrafts(
+                  ctx.serviceSupabase as any,
+                  {
+                    orgId: ctx.orgId,
+                    userId: ctx.userId,
+                    serviceSupabase: ctx.serviceSupabase,
+                    authorization: toolAuthorization,
+                    threadId,
+                    requestId,
+                    attachment,
+                  },
+                  revisedEvents,
+                  {
+                    ...requestLogContext,
+                    threadId: threadId!,
+                  },
+                  revisedOrgSlug
+                ),
+              } as const)
+            : await executeToolCallFn(
+                {
+                  orgId: ctx.orgId,
+                  userId: ctx.userId,
+                  serviceSupabase: ctx.serviceSupabase,
+                  authorization: toolAuthorization,
+                  threadId,
+                  requestId,
+                  attachment,
+                },
+                {
+                  name: revisionToolName,
+                  args: revisionArgs,
+                }
+              );
 
         if (revisionResult.kind !== "ok") {
           addToolCallTiming(stageTimings, {
