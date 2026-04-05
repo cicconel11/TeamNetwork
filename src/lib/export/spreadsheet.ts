@@ -1,4 +1,4 @@
-const SPREADSHEET_FORMULA_PREFIX = /^[\t\r ]*[=+\-@]/;
+const SPREADSHEET_FORMULA_PREFIX = /^[\t\r\n ]*[=+\-@]/;
 
 function toExportString(value: unknown): string {
   if (value === null || value === undefined) {
