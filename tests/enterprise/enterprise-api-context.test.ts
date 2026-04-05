@@ -4,6 +4,7 @@ import assert from "node:assert";
 import {
   getEnterpriseApiContext,
   ENTERPRISE_ANY_ROLE,
+  ENTERPRISE_ALUMNI_DATA_ROLE,
   ENTERPRISE_BILLING_ROLE,
   ENTERPRISE_CREATE_ORG_ROLE,
   ENTERPRISE_OWNER_ROLE,
@@ -331,6 +332,50 @@ describe("getEnterpriseApiContext", () => {
         assert.strictEqual(result.role, "org_admin");
       }
     });
+
+    it("works with org_admin for ENTERPRISE_ALUMNI_DATA_ROLE", async () => {
+      const user = makeUser();
+      const result = await getEnterpriseApiContext(
+        "ent-uuid-123",
+        user as any,
+        rateLimit,
+        ENTERPRISE_ALUMNI_DATA_ROLE,
+        {
+          serviceSupabase: makeMockServiceSupabase({
+            data: { role: "org_admin" },
+            error: null,
+          }),
+          resolveEnterprise: makeSuccessResolver(),
+        }
+      );
+
+      assert.strictEqual(result.ok, true);
+      if (result.ok) {
+        assert.strictEqual(result.role, "org_admin");
+      }
+    });
+
+    it("rejects billing_admin for ENTERPRISE_ALUMNI_DATA_ROLE", async () => {
+      const user = makeUser();
+      const result = await getEnterpriseApiContext(
+        "ent-uuid-123",
+        user as any,
+        rateLimit,
+        ENTERPRISE_ALUMNI_DATA_ROLE,
+        {
+          serviceSupabase: makeMockServiceSupabase({
+            data: { role: "billing_admin" },
+            error: null,
+          }),
+          resolveEnterprise: makeSuccessResolver(),
+        }
+      );
+
+      assert.strictEqual(result.ok, false);
+      if (!result.ok) {
+        assert.strictEqual(result.response.status, 403);
+      }
+    });
   });
 
   // ── Rate-limit headers on all error responses ──
@@ -415,6 +460,13 @@ describe("getEnterpriseApiContext", () => {
     it("ENTERPRISE_CREATE_ORG_ROLE includes owner and org_admin", () => {
       assert.deepStrictEqual(
         [...ENTERPRISE_CREATE_ORG_ROLE].sort(),
+        ["org_admin", "owner"]
+      );
+    });
+
+    it("ENTERPRISE_ALUMNI_DATA_ROLE includes owner and org_admin", () => {
+      assert.deepStrictEqual(
+        [...ENTERPRISE_ALUMNI_DATA_ROLE].sort(),
         ["org_admin", "owner"]
       );
     });

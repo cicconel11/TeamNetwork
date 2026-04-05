@@ -9,6 +9,7 @@ import { resolveDataClient } from "@/lib/auth/dev-admin";
 import type { Member } from "@/types/database";
 import { LinkedInProfileLink } from "@/components/shared";
 import { ConnectedAccountsSection } from "@/components/members/ConnectedAccountsSection";
+import { sanitizeRichTextToPlainText } from "@/lib/security/rich-text";
 
 interface MemberDetailPageProps {
   params: Promise<{ orgSlug: string; memberId: string }>;
@@ -268,38 +269,41 @@ export default async function MemberDetailPage({ params }: MemberDetailPageProps
 
             <div className="space-y-0">
               {hasEnrichmentExperience ? (
-                enrichmentExperience.map((job, i) => (
-                  <div key={i} className={`flex gap-4 py-4 ${i > 0 ? "border-t border-border/50" : ""}`}>
-                    <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center text-muted-foreground">
-                      {job.company_logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={job.company_logo_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
-                      ) : (
-                        <svg className="h-6 w-6 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-foreground text-sm">{job.title || "Position"}</p>
-                      <p className="text-muted-foreground text-sm">
-                        {job.company}
-                        {job.location && <span className="text-muted-foreground/60"> &middot; {job.location}</span>}
-                      </p>
-                      {(job.start_date || job.end_date) && (
-                        <p className="text-muted-foreground/60 text-xs mt-0.5">
-                          {job.start_date || "?"} &ndash; {job.end_date || "Present"}
+                enrichmentExperience.map((job, i) => {
+                  const descriptionText = sanitizeRichTextToPlainText(job.description_html);
+
+                  return (
+                    <div key={i} className={`flex gap-4 py-4 ${i > 0 ? "border-t border-border/50" : ""}`}>
+                      <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center text-muted-foreground">
+                        {job.company_logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={job.company_logo_url} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                        ) : (
+                          <svg className="h-6 w-6 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground text-sm">{job.title || "Position"}</p>
+                        <p className="text-muted-foreground text-sm">
+                          {job.company}
+                          {job.location && <span className="text-muted-foreground/60"> &middot; {job.location}</span>}
                         </p>
-                      )}
-                      {job.description_html && (
-                        <div
-                          className="text-foreground/70 text-sm mt-2 leading-relaxed prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-4 [&_li]:my-0.5"
-                          dangerouslySetInnerHTML={{ __html: job.description_html }}
-                        />
-                      )}
+                        {(job.start_date || job.end_date) && (
+                          <p className="text-muted-foreground/60 text-xs mt-0.5">
+                            {job.start_date || "?"} &ndash; {job.end_date || "Present"}
+                          </p>
+                        )}
+                        {descriptionText && (
+                          <p className="text-foreground/70 text-sm mt-2 leading-relaxed whitespace-pre-wrap">
+                            {descriptionText}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="flex gap-4 py-1">
                   <div className="shrink-0 w-12 h-12 rounded-lg bg-[var(--muted)]/60 flex items-center justify-center">

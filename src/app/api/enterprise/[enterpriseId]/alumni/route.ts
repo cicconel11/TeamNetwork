@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
-import { getEnterpriseApiContext, ENTERPRISE_ANY_ROLE } from "@/lib/auth/enterprise-api-context";
+import {
+  getEnterpriseApiContext,
+  ENTERPRISE_ALUMNI_DATA_ROLE,
+} from "@/lib/auth/enterprise-api-context";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 const alumniSearchSchema = z.object({
@@ -43,7 +46,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     return buildRateLimitResponse(rateLimit);
   }
 
-  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE);
+  const ctx = await getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ALUMNI_DATA_ROLE);
   if (!ctx.ok) return ctx.response;
 
   const respond = (payload: unknown, status = 200) =>

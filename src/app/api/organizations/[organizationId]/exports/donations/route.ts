@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { baseSchemas } from "@/lib/security/validation";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
+import { escapeCsvCell } from "@/lib/export/spreadsheet";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -126,14 +127,7 @@ function formatCurrency(amountCents: number, currency: string) {
 
 function buildCsv(headers: string[], rows: string[][]) {
   return [
-    headers.map(escapeCsv).join(","),
-    ...rows.map((row) => row.map(escapeCsv).join(",")),
+    headers.map(escapeCsvCell).join(","),
+    ...rows.map((row) => row.map(escapeCsvCell).join(",")),
   ].join("\n");
-}
-
-function escapeCsv(value: string) {
-  if (value.includes(",") || value.includes("\"") || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
 }

@@ -14,23 +14,8 @@ function buildQuery(params: Record<string, string | null | undefined>) {
   return serialized ? `?${serialized}` : "";
 }
 
-export function calendarRootPath(orgSlug: string) {
+function calendarRootPath(orgSlug: string) {
   return `/${orgSlug}/calendar`;
-}
-
-export function calendarViewPath(
-  orgSlug: string,
-  view: CalendarSurfaceView,
-  params: {
-    timeframe?: CalendarEventTimeframe;
-    type?: string | null;
-  } = {}
-) {
-  return `${calendarRootPath(orgSlug)}${buildQuery({
-    view: view === "calendar" ? null : view,
-    timeframe: params.timeframe && params.timeframe !== "upcoming" ? params.timeframe : null,
-    type: params.type || null,
-  })}`;
 }
 
 export function calendarListPath(
@@ -60,20 +45,6 @@ export function calendarEventsPath(
   return calendarListPath(orgSlug, params);
 }
 
-/**
- * @deprecated Use calendarListPath instead. Maintained for backward compatibility.
- */
-export function calendarAllPath(orgSlug: string) {
-  return calendarListPath(orgSlug);
-}
-
-export function calendarAvailabilityPath(orgSlug: string) {
-  return calendarViewPath(orgSlug, "availability");
-}
-
-export function calendarMonthPath(orgSlug: string) {
-  return calendarRootPath(orgSlug);
-}
 
 export function calendarSourcesPath(orgSlug: string) {
   return `${calendarRootPath(orgSlug)}/sources`;

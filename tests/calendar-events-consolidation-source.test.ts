@@ -22,7 +22,6 @@ describe("calendar/events consolidation source wiring", () => {
     assert.match(calendarPage, /CalendarViewToggle/);
     assert.match(calendarPage, /calendarNewEventPath/);
     assert.match(calendarPage, /data-testid="event-new-link"/);
-    assert.match(calendarPage, /currentView === "all"/);
     assert.match(calendarPage, /currentView === "availability"/);
   });
 

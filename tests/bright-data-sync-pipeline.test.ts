@@ -206,9 +206,9 @@ describe("Bright Data sync pipeline", () => {
       // All experience entries preserved
       assert.equal(result.profile.experience.length, 2);
       assert.equal(result.profile.experience[0].title, "VP Eng");
-      assert.equal(result.profile.experience[0].description_html, "<p>Led team</p>");
+      assert.equal(result.profile.experience[0].description_html, "Led team");
       assert.equal(result.profile.experience[1].title, "SEM");
-      assert.equal(result.profile.experience[1].description_html, "<p>Managed teams</p>");
+      assert.equal(result.profile.experience[1].description_html, "Managed teams");
 
       // All education entries preserved
       assert.equal(result.profile.education.length, 2);
@@ -222,6 +222,38 @@ describe("Bright Data sync pipeline", () => {
       // Company object normalized to string
       assert.equal(result.profile.current_company, "TechCorp");
 
+      delete process.env.BRIGHT_DATA_API_KEY;
+    });
+
+    it("sanitizes dangerous HTML in experience descriptions", async () => {
+      process.env.BRIGHT_DATA_API_KEY = "test-key";
+
+      const rawApiResponse = {
+        name: "Jane Smith",
+        experience: [
+          {
+            title: "VP Eng",
+            company: "TechCorp",
+            end_date: null,
+            description_html: "<p>Hello</p><script>alert(1)</script><ul><li>World</li></ul>",
+          },
+        ],
+        education: [],
+      };
+
+      const mockFetch = mock.fn(async () => {
+        return new Response(JSON.stringify(rawApiResponse), { status: 200 });
+      });
+
+      const result = await fetchBrightDataProfile(
+        "https://www.linkedin.com/in/janesmith",
+        { fetchFn: mockFetch as unknown as typeof fetch },
+      );
+
+      assert.equal(result.ok, true);
+      if (!result.ok) return;
+
+      assert.equal(result.profile.experience[0].description_html, "Hello\n- World");
       delete process.env.BRIGHT_DATA_API_KEY;
     });
   });

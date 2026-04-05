@@ -225,7 +225,7 @@ describe("Bright Data LinkedIn client", () => {
             company_logo_url: null,
           },
         ],
-        education: [{ school: "University of Chicago", field_of_study: null }],
+        education: [{ school: "University of Chicago", field_of_study: null, description_html: null }],
         educations_details: null,
         avatar: null,
       });
