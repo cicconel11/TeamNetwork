@@ -308,7 +308,7 @@ export default function CreateOrgPage() {
                         onClick={() => setValue("billingInterval", interval)}
                         className={`flex-1 px-4 py-3 rounded-xl border ${
                           billingInterval === interval
-                            ? "border-org-primary bg-org-primary text-white"
+                            ? "border-org-primary bg-org-primary text-org-primary-foreground"
                             : "border-border bg-muted text-foreground"
                         }`}
                       >

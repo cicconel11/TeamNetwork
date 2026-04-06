@@ -22,6 +22,7 @@ const config: Config = {
           primary: "var(--color-org-primary)",
           "primary-light": "var(--color-org-primary-light)",
           "primary-dark": "var(--color-org-primary-dark)",
+          "primary-foreground": "var(--color-org-primary-foreground)",
           secondary: "var(--color-org-secondary)",
           "secondary-light": "var(--color-org-secondary-light)",
           "secondary-dark": "var(--color-org-secondary-dark)",

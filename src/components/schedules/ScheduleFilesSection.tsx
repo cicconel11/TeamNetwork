@@ -40,7 +40,7 @@ export function ScheduleFilesSection({
             onClick={() => setActiveTab("my")}
             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "my"
-                ? "bg-org-primary text-white"
+                ? "bg-org-primary text-org-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -50,7 +50,7 @@ export function ScheduleFilesSection({
             onClick={() => setActiveTab("all")}
             className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               activeTab === "all"
-                ? "bg-org-primary text-white"
+                ? "bg-org-primary text-org-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >

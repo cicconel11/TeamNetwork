@@ -95,7 +95,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
             href={`/${orgSlug}/records`}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               !filters.category
-                ? "bg-org-primary text-white"
+                ? "bg-org-primary text-org-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -107,7 +107,7 @@ export default async function RecordsPage({ params, searchParams }: RecordsPageP
               href={`/${orgSlug}/records?category=${encodeURIComponent(category!)}`}
               className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
                 filters.category === category
-                  ? "bg-org-primary text-white"
+                  ? "bg-org-primary text-org-primary-foreground"
                   : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >

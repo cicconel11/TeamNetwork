@@ -49,7 +49,7 @@ export function Avatar({ src, alt, name, size = "md", className = "", ...props }
 
   return (
     <div
-      className={`${sizes[size]} rounded-full bg-org-primary text-white flex items-center justify-center font-medium flex-shrink-0 ${className}`}
+      className={`${sizes[size]} rounded-full bg-org-primary text-org-primary-foreground flex items-center justify-center font-medium flex-shrink-0 ${className}`}
       {...props}
     >
       {name ? getInitials(name) : "?"}

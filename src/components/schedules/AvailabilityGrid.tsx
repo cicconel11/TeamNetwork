@@ -508,7 +508,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: 
                   <span
                     className={`inline-flex items-center justify-center text-sm font-semibold ${
                       isToday
-                        ? "w-8 h-8 rounded-full bg-org-primary text-white"
+                        ? "w-8 h-8 rounded-full bg-org-primary text-org-primary-foreground"
                         : "text-foreground"
                     }`}
                   >

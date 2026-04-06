@@ -72,7 +72,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
                   key={item.label}
                   href={buildHref(item.value, currentRole)}
                   className={`block px-4 py-2 text-sm transition-colors ${
-                    active ? "text-white bg-org-primary" : "text-foreground hover:bg-muted"
+                    active ? "text-org-primary-foreground bg-org-primary" : "text-foreground hover:bg-muted"
                   }`}
                   onClick={() => {
                     trackBehavioralEvent("directory_filter_apply", {
@@ -98,7 +98,7 @@ export function MembersFilter({ orgSlug, orgId, currentStatus, currentRole, role
                   key={item.label}
                   href={buildHref(currentStatus, item.value)}
                   className={`block px-4 py-2 text-sm transition-colors ${
-                    active ? "text-white bg-org-primary" : "text-foreground hover:bg-muted"
+                    active ? "text-org-primary-foreground bg-org-primary" : "text-foreground hover:bg-muted"
                   }`}
                   onClick={() => {
                     trackBehavioralEvent("directory_filter_apply", {

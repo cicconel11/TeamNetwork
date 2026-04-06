@@ -39,7 +39,7 @@ const SOURCE_FILTERS: {
   {
     key: "events",
     label: "Team Events",
-    colorClass: "bg-org-primary text-white border-org-primary/50",
+    colorClass: "bg-org-primary text-org-primary-foreground border-org-primary/50",
   },
   {
     key: "schedules",
@@ -63,7 +63,7 @@ function getSourceColors(sourceType: string) {
     case "event":
       return {
         dot: "bg-org-primary",
-        badge: "bg-org-primary text-white",
+        badge: "bg-org-primary text-org-primary-foreground",
       };
     case "schedule":
       return {

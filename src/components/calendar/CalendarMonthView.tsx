@@ -50,18 +50,18 @@ function buildMonthGrid(year: number, month: number): Date[][] {
   return weeks;
 }
 
-function getSourceColors(sourceType: string): { dot: string } {
+function getSourceColors(sourceType: string): { dot: string; text: string } {
   switch (sourceType) {
     case "event":
-      return { dot: "bg-org-primary" };
+      return { dot: "bg-org-primary", text: "text-org-primary-foreground" };
     case "schedule":
-      return { dot: "bg-org-secondary" };
+      return { dot: "bg-org-secondary", text: "text-org-secondary-foreground" };
     case "feed":
-      return { dot: "bg-blue-500" };
+      return { dot: "bg-blue-500", text: "text-white" };
     case "class":
-      return { dot: "bg-slate-500" };
+      return { dot: "bg-slate-500", text: "text-white" };
     default:
-      return { dot: "bg-muted-foreground" };
+      return { dot: "bg-muted-foreground", text: "text-foreground" };
   }
 }
 
@@ -86,6 +86,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
   const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedDayKey, setExpandedDayKey] = useState<string | null>(null);
 
   const initialDataRangeRef = useRef(buildUnifiedCalendarDateRange());
   const initialEventsRef = useRef(initialEvents);
@@ -148,6 +149,13 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
     const fetchEnd = new Date(year, month + 2, 0);
     fetchMonthEvents(fetchStart, fetchEnd);
   }, [year, month, fetchMonthEvents]);
+
+  useEffect(() => {
+    if (!expandedDayKey) return;
+    const handler = () => setExpandedDayKey(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [expandedDayKey]);
 
   const eventsByDateKey = useMemo<Map<string, UnifiedEvent[]>>(() => {
     const map = new Map<string, UnifiedEvent[]>();
@@ -253,7 +261,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
           return (
             <div
               key={idx}
-              className="border-r border-b border-border/60 min-h-[90px] sm:min-h-[110px] p-1.5 flex flex-col gap-0.5 bg-card"
+              className="relative border-r border-b border-border/60 min-h-[90px] sm:min-h-[110px] p-1.5 flex flex-col gap-0.5 bg-card"
             >
               {/* Date number */}
               <div className="flex justify-start mb-0.5">
@@ -262,7 +270,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                     text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full leading-none tabular-nums select-none
                     ${
                       isToday
-                        ? "bg-org-primary text-white"
+                        ? "bg-org-primary text-org-primary-foreground"
                         : isCurrentMonth
                           ? "text-foreground"
                           : "text-muted-foreground/35"
@@ -276,7 +284,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
               {/* Event chips (sm+) and dots (xs) */}
               <div className="flex-1 overflow-hidden space-y-0.5">
                 {visibleEvents.map((event) => {
-                  const { dot } = getSourceColors(event.sourceType);
+                  const { dot, text } = getSourceColors(event.sourceType);
                   const href = getUnifiedEventHref(orgSlug, event);
 
                   if (href) {
@@ -285,7 +293,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                         key={event.id}
                         href={href}
                         title={event.title}
-                        className={`hidden sm:block text-xs font-medium text-white px-1.5 py-0.5 rounded truncate leading-tight hover:opacity-80 transition-opacity border border-foreground/10 ${dot}`}
+                        className={`hidden sm:block text-xs font-medium ${text} px-1.5 py-0.5 rounded truncate leading-tight hover:opacity-80 transition-opacity border border-foreground/10 ${dot}`}
                       >
                         {event.title}
                       </Link>
@@ -296,7 +304,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                     <div
                       key={event.id}
                       title={event.title}
-                      className={`hidden sm:block text-xs font-medium text-white px-1.5 py-0.5 rounded truncate leading-tight border border-foreground/10 ${dot}`}
+                      className={`hidden sm:block text-xs font-medium ${text} px-1.5 py-0.5 rounded truncate leading-tight border border-foreground/10 ${dot}`}
                     >
                       {event.title}
                     </div>
@@ -315,11 +323,55 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                   </div>
                 )}
 
-                {/* Overflow count */}
+                {/* Overflow count - clickable button */}
                 {overflowCount > 0 && (
-                  <span className="hidden sm:block text-xs text-muted-foreground/60 pl-1.5 leading-tight">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setExpandedDayKey((k) => (k === cellKey ? null : cellKey));
+                    }}
+                    className="hidden sm:block text-xs text-muted-foreground hover:text-foreground pl-1.5 leading-tight transition-colors cursor-pointer"
+                  >
                     +{overflowCount} more
-                  </span>
+                  </button>
+                )}
+
+                {/* Overflow popover */}
+                {expandedDayKey === cellKey && overflowCount > 0 && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute z-50 left-0 top-full mt-1 w-56 bg-card border border-border/60 rounded-lg shadow-lg p-2 space-y-1 max-h-60 overflow-y-auto"
+                  >
+                    {cellEvents.map((event) => {
+                      const { dot, text } = getSourceColors(event.sourceType);
+                      const href = getUnifiedEventHref(orgSlug, event);
+
+                      if (href) {
+                        return (
+                          <Link
+                            key={event.id}
+                            href={href}
+                            onClick={(e) => e.stopPropagation()}
+                            title={event.title}
+                            className={`block text-xs font-medium ${text} px-2 py-1.5 rounded truncate leading-snug hover:opacity-80 transition-opacity border border-foreground/10 ${dot}`}
+                          >
+                            {event.title}
+                          </Link>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={event.id}
+                          title={event.title}
+                          className={`block text-xs font-medium ${text} px-2 py-1.5 rounded truncate leading-snug border border-foreground/10 ${dot}`}
+                        >
+                          {event.title}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

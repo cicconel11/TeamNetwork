@@ -428,7 +428,7 @@ export default function NewCalendarEventPage() {
                       onClick={() => toggleDay(String(index))}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                         selectedDays.includes(String(index))
-                          ? "bg-org-primary text-white"
+                          ? "bg-org-primary text-org-primary-foreground"
                           : "bg-muted text-muted-foreground hover:text-foreground"
                       }`}
                     >

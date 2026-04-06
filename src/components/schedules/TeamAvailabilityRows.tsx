@@ -376,7 +376,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
                   </span>
                   <span className={[
                     "flex items-center justify-center w-9 h-9 rounded-full text-[15px] font-bold",
-                    isToday ? "bg-org-primary text-white" : "text-foreground",
+                    isToday ? "bg-org-primary text-org-primary-foreground" : "text-foreground",
                   ].join(" ")}>
                     {day.getDate()}
                   </span>
