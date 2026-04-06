@@ -461,7 +461,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: 
         {weekOffset !== 0 && (
           <button
             onClick={() => setWeekOffset(0)}
-            className="px-4 py-2 rounded-full bg-org-primary/10 text-org-primary text-sm font-medium hover:bg-org-primary/20 transition-colors inline-flex items-center gap-1.5"
+            className="px-4 py-2 rounded-full bg-muted/50 text-foreground text-sm font-medium hover:bg-muted transition-colors inline-flex items-center gap-1.5"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
@@ -501,7 +501,7 @@ export function AvailabilityGrid({ schedules, orgId, mode = "team", timeZone }: 
                 key={dateKey}
                 className={`sticky top-0 z-20 bg-card border-b border-border/30 border-l border-l-border/20 py-2 px-1 text-center`}
               >
-                <div className={`text-xs font-medium uppercase tracking-wider ${isToday ? "text-org-primary" : "text-muted-foreground"}`}>
+                <div className={`text-xs font-medium uppercase tracking-wider ${isToday ? "text-card-foreground font-semibold" : "text-muted-foreground"}`}>
                   {DAYS[day.getDay()]}
                 </div>
                 <div className="mt-0.5 flex justify-center">

@@ -211,16 +211,16 @@ export function PersonalAvailabilityAgenda({ schedules, orgId, orgSlug, timeZone
             return (
               <div key={dateKey}>
                 {/* Day header */}
-                <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${isToday ? "border-org-primary/30" : "border-border/30"}`}>
+                <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${isToday ? "border-foreground/20" : "border-border/30"}`}>
                   <span
                     className={`text-xs font-semibold uppercase tracking-wider ${
-                      isToday ? "text-org-primary" : "text-muted-foreground"
+                      isToday ? "text-foreground" : "text-muted-foreground"
                     }`}
                   >
                     {dayLabel}
                   </span>
                   {isToday && (
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-org-primary/10 text-org-primary leading-none">
+                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-foreground/15 text-foreground leading-none">
                       Today
                     </span>
                   )}
