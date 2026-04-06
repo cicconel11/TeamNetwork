@@ -35,11 +35,11 @@ function minutesToTimeLabel(m: number): string {
 function getBlockColor(origin: string): { dot: string; badge: string } {
   switch (origin) {
     case "org":
-      return { dot: "bg-org-primary", badge: "bg-org-primary/10 text-org-primary" };
+      return { dot: "bg-org-primary", badge: "bg-org-primary/15 text-foreground" };
     case "academic":
-      return { dot: "bg-org-secondary", badge: "bg-org-secondary/10 text-org-secondary" };
+      return { dot: "bg-org-secondary", badge: "bg-org-secondary/15 text-foreground" };
     default:
-      return { dot: "bg-blue-500", badge: "bg-blue-500/10 text-blue-600" };
+      return { dot: "bg-blue-500", badge: "bg-blue-500/10 text-foreground" };
   }
 }
 
@@ -147,11 +147,11 @@ export function PersonalAvailabilityAgenda({ schedules, orgId, orgSlug, timeZone
   return (
     <div className="space-y-4">
       {/* Stats bar */}
-      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
+      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-muted/30 border border-border/50">
         <div className="h-2 w-2 rounded-full bg-emerald-500 flex-shrink-0" />
-        <p className="text-sm text-emerald-700 dark:text-emerald-400">
+        <p className="text-sm text-foreground">
           <span className="font-semibold">{personalStats.freeHours} free hours</span>
-          <span className="text-emerald-600/70 dark:text-emerald-500/70"> · {personalStats.busyHours} busy this week</span>
+          <span className="text-muted-foreground"> · {personalStats.busyHours} busy this week</span>
         </p>
       </div>
 

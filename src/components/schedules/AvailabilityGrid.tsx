@@ -78,21 +78,21 @@ function getBlockColor(block: PositionedBlock): {
     return {
       bg: "bg-org-primary/15 dark:bg-org-primary/25",
       border: "border-l-org-primary",
-      text: "text-org-primary dark:text-org-primary-light",
+      text: "text-foreground",
     };
   }
   if (block.origin === "academic") {
     return {
       bg: "bg-org-secondary/15 dark:bg-org-secondary/25",
       border: "border-l-org-secondary",
-      text: "text-org-secondary-dark dark:text-org-secondary-light",
+      text: "text-foreground",
     };
   }
   // calendar
   return {
     bg: "bg-blue-500/15 dark:bg-blue-500/25",
     border: "border-l-blue-500",
-    text: "text-blue-700 dark:text-blue-300",
+    text: "text-foreground",
   };
 }
 

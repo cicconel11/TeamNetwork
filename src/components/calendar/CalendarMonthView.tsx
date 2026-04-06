@@ -249,7 +249,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
       </div>
 
       {/* Month grid */}
-      <div className="grid grid-cols-7 border-l border-t border-border/60 rounded-sm overflow-hidden">
+      <div className="grid grid-cols-7 border-l border-t border-border/60 rounded-sm">
         {monthGrid.flat().map((cellDate, idx) => {
           const cellKey = toDateKeyInTimeZone(cellDate, timeZone);
           const isCurrentMonth = cellDate.getMonth() === month;
@@ -341,7 +341,9 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                 {expandedDayKey === cellKey && overflowCount > 0 && (
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute z-50 left-0 top-full mt-1 w-56 bg-card border border-border/60 rounded-lg shadow-lg p-2 space-y-1 max-h-60 overflow-y-auto"
+                    className={`absolute z-50 left-0 w-56 bg-card border border-border/60 rounded-lg shadow-lg p-2 space-y-1 max-h-60 overflow-y-auto ${
+                      idx >= 28 ? "bottom-full mb-1" : "top-full mt-1"
+                    }`}
                   >
                     {cellEvents.map((event) => {
                       const { dot, text } = getSourceColors(event.sourceType);
