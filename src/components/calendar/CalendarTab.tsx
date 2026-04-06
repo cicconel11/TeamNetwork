@@ -145,6 +145,7 @@ export function CalendarTab({
 
         {/* List view */}
         <UnifiedEventFeed
+          key={orgId}
           orgId={orgId}
           orgSlug={orgSlug}
           initialEvents={initialEvents}
@@ -157,6 +158,7 @@ export function CalendarTab({
 
   return (
     <CalendarMonthView
+      key={orgId}
       orgId={orgId}
       orgSlug={orgSlug}
       initialEvents={initialEvents}
