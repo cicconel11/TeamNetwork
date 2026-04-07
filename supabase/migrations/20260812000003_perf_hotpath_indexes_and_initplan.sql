@@ -56,6 +56,11 @@ CREATE INDEX IF NOT EXISTS idx_chat_group_members_role
 -- idx_events_recurrence_group covers all actual queries.
 DROP INDEX IF EXISTS idx_events_recurrence_parent;
 
--- Plain (organization_id) superseded by events_org_deleted_idx and idx_events_org_start
--- (both partial on deleted_at IS NULL). All real queries filter soft-deletes.
-DROP INDEX IF EXISTS events_org_id_idx;
+-- KEPT: events_org_id_idx
+-- The original comment claimed "all real queries filter soft-deletes" — that is false.
+-- Counterexamples that scan events without `deleted_at IS NULL`:
+--   src/app/api/stripe/create-donation/route.ts:144  (point lookup id + organization_id)
+--   src/app/[orgSlug]/philanthropy/page.tsx:32       (philanthropy event listing)
+-- Both should also be fixed at the application layer to filter soft-deletes,
+-- but until they are, this index prevents seq scans on the events table on
+-- every donation creation and philanthropy page load. See follow-up issue.

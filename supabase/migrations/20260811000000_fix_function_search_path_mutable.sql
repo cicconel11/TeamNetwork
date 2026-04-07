@@ -80,16 +80,18 @@ BEGIN
   END IF;
 
   -- Generate secure random code (8 chars, alphanumeric)
+  -- pgcrypto lives in `extensions`; under SET search_path = '' we must call
+  -- the public.gen_random_bytes wrapper from 20260416120000_fix_invite_random_bytes.sql.
   v_code := upper(substr(
     replace(replace(replace(
-      encode(gen_random_bytes(6), 'base64'),
+      encode(public.gen_random_bytes(6), 'base64'),
       '/', ''), '+', ''), '=', ''),
     1, 8
   ));
 
   -- Generate secure token (URL-safe base64, 32 chars)
   v_token := replace(replace(replace(
-    encode(gen_random_bytes(24), 'base64'),
+    encode(public.gen_random_bytes(24), 'base64'),
     '/', '_'), '+', '-'), '=', '');
 
   INSERT INTO public.organization_invites (

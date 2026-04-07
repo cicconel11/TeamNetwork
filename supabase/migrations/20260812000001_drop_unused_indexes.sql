@@ -36,16 +36,19 @@ DROP INDEX IF EXISTS idx_media_items_moderated_by;
 DROP INDEX IF EXISTS idx_media_items_tags;
 
 -- ============================================================
--- media_albums (3 indexes)
+-- media_albums (1 index)
 -- ============================================================
 DROP INDEX IF EXISTS idx_media_albums_cover_media_id;
-DROP INDEX IF EXISTS idx_media_albums_org_sort;
-DROP INDEX IF EXISTS idx_media_albums_draft_cleanup;
+-- KEPT: idx_media_albums_org_sort — used by src/app/api/media/albums/route.ts:65
+--   (organization_id + deleted_at IS NULL + ORDER BY sort_order, created_at)
+-- KEPT: idx_media_albums_draft_cleanup — used by src/app/api/cron/media-cleanup/route.ts:67
+--   (is_upload_draft + item_count + deleted_at IS NULL + created_at < cutoff)
 
 -- ============================================================
 -- media_uploads
 -- ============================================================
-DROP INDEX IF EXISTS idx_media_uploads_pending_cleanup;
+-- KEPT: idx_media_uploads_pending_cleanup — used by src/app/api/cron/media-cleanup/route.ts:29
+--   (status='pending' + deleted_at IS NULL + created_at < cutoff)
 
 -- ============================================================
 -- error tracking (5 indexes)
