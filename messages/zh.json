@@ -225,16 +225,6 @@
         "competitions": { "label": "比赛", "desc": "新的比赛动态" }
       }
     },
-    "storage": {
-      "title": "媒体存储用量",
-      "description": "相册项目和功能上传所消耗的存储空间。",
-      "usedOf": "已使用 {used}，共 {quota}",
-      "usedUnlimited": "已使用 {used}（无限套餐）",
-      "quotaExceeded": "存储配额已超出。请考虑删除未使用的媒体或升级套餐。",
-      "approachingLimit": "即将达到存储上限。请考虑删除未使用的媒体或升级套餐。",
-      "galleryItems": "{count} 个相册{count, plural, one {项目} other {项目}}",
-      "featureUploads": "{count} 个功能{count, plural, one {上传} other {上传}}"
-    },
     "billing": {
       "title": "账单管理",
       "description": "管理支付方式、查看发票或更新订阅。",
@@ -811,7 +801,16 @@
     "dragAlbums": "拖动手柄以更改相册顺序。",
     "arrangeAlbums": "安排相册在此页面上的显示方式。",
     "newAlbum": "新建相册",
-    "failedToLoadAlbums": "加载相册失败"
+    "failedToLoadAlbums": "加载相册失败",
+    "storage": {
+      "title": "媒体存储",
+      "usedOf": "已使用 {used}，共 {quota}",
+      "usedUnlimited": "已使用 {used}（无限套餐）",
+      "quotaExceeded": "配额已超出",
+      "approachingLimit": "即将达到上限",
+      "ariaUsedOf": "媒体存储：已使用 {used}，共 {quota}，使用率 {percent}%",
+      "ariaUsedUnlimited": "媒体存储：已使用 {used}（无限套餐）"
+    }
   },
   "mentorship": {
     "noPairs": "暂无导师配对",

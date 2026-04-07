@@ -225,16 +225,6 @@
         "competitions": { "label": "Competitions", "desc": "Nouvelles mises a jour des competitions" }
       }
     },
-    "storage": {
-      "title": "Utilisation du stockage media",
-      "description": "Espace consomme par les elements de la galerie et les telechargements.",
-      "usedOf": "{used} sur {quota} utilise",
-      "usedUnlimited": "{used} utilise (forfait illimite)",
-      "quotaExceeded": "Quota de stockage depasse. Envisagez de supprimer les medias inutilises ou de passer a un forfait superieur.",
-      "approachingLimit": "Limite de stockage bientot atteinte. Envisagez de supprimer les medias inutilises ou de passer a un forfait superieur.",
-      "galleryItems": "{count} {count, plural, one {element} other {elements}} de galerie",
-      "featureUploads": "{count} {count, plural, one {telechargement} other {telechargements}}"
-    },
     "billing": {
       "title": "Gestion de la facturation",
       "description": "Gerez les moyens de paiement, consultez les factures ou mettez a jour votre abonnement.",
@@ -811,7 +801,16 @@
     "dragAlbums": "Faites glisser les albums par la poignee pour modifier l'ordre.",
     "arrangeAlbums": "Organisez l'affichage des albums sur cette page.",
     "newAlbum": "Nouvel album",
-    "failedToLoadAlbums": "Echec du chargement des albums"
+    "failedToLoadAlbums": "Echec du chargement des albums",
+    "storage": {
+      "title": "Stockage media",
+      "usedOf": "{used} sur {quota} utilise",
+      "usedUnlimited": "{used} utilise (forfait illimite)",
+      "quotaExceeded": "Quota depasse",
+      "approachingLimit": "Limite bientot atteinte",
+      "ariaUsedOf": "Stockage media : {used} sur {quota} utilise, {percent} pour cent",
+      "ariaUsedUnlimited": "Stockage media : {used} utilise (forfait illimite)"
+    }
   },
   "mentorship": {
     "noPairs": "Aucun binome de mentorat pour le moment",

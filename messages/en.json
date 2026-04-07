@@ -225,16 +225,6 @@
         "competitions": { "label": "Competitions", "desc": "New competition updates" }
       }
     },
-    "storage": {
-      "title": "Media storage usage",
-      "description": "Storage consumed by gallery items and feature uploads.",
-      "usedOf": "{used} of {quota} used",
-      "usedUnlimited": "{used} used (unlimited plan)",
-      "quotaExceeded": "Storage quota exceeded. Consider removing unused media or upgrading your plan.",
-      "approachingLimit": "Approaching storage limit. Consider removing unused media or upgrading your plan.",
-      "galleryItems": "{count} gallery {count, plural, one {item} other {items}}",
-      "featureUploads": "{count} feature {count, plural, one {upload} other {uploads}}"
-    },
     "billing": {
       "title": "Billing Management",
       "description": "Manage payment methods, view invoices, or update your subscription.",
@@ -811,7 +801,16 @@
     "dragAlbums": "Drag albums by the handle to change order.",
     "arrangeAlbums": "Arrange how albums appear on this page.",
     "newAlbum": "New Album",
-    "failedToLoadAlbums": "Failed to load albums"
+    "failedToLoadAlbums": "Failed to load albums",
+    "storage": {
+      "title": "Media storage",
+      "usedOf": "{used} of {quota} used",
+      "usedUnlimited": "{used} used (unlimited plan)",
+      "quotaExceeded": "Quota exceeded",
+      "approachingLimit": "Approaching limit",
+      "ariaUsedOf": "Media storage: {used} of {quota} used, {percent} percent",
+      "ariaUsedUnlimited": "Media storage: {used} used (unlimited plan)"
+    }
   },
   "mentorship": {
     "noPairs": "No mentorship pairs yet",

@@ -225,16 +225,6 @@
         "competitions": { "label": "Competencias", "desc": "Nuevas actualizaciones de competencias" }
       }
     },
-    "storage": {
-      "title": "Uso de almacenamiento multimedia",
-      "description": "Almacenamiento consumido por elementos de la galeria y subidas de funciones.",
-      "usedOf": "{used} de {quota} usado",
-      "usedUnlimited": "{used} usado (plan ilimitado)",
-      "quotaExceeded": "Se excedio la cuota de almacenamiento. Considera eliminar archivos no utilizados o mejorar tu plan.",
-      "approachingLimit": "Acercandose al limite de almacenamiento. Considera eliminar archivos no utilizados o mejorar tu plan.",
-      "galleryItems": "{count} {count, plural, one {elemento} other {elementos}} de galeria",
-      "featureUploads": "{count} {count, plural, one {subida} other {subidas}} de funciones"
-    },
     "billing": {
       "title": "Gestion de facturacion",
       "description": "Administra metodos de pago, consulta facturas o actualiza tu suscripcion.",
@@ -811,7 +801,16 @@
     "dragAlbums": "Arrastra los albumes por el control para cambiar el orden.",
     "arrangeAlbums": "Organiza como aparecen los albumes en esta pagina.",
     "newAlbum": "Nuevo album",
-    "failedToLoadAlbums": "No se pudieron cargar los albumes"
+    "failedToLoadAlbums": "No se pudieron cargar los albumes",
+    "storage": {
+      "title": "Almacenamiento multimedia",
+      "usedOf": "{used} de {quota} usado",
+      "usedUnlimited": "{used} usado (plan ilimitado)",
+      "quotaExceeded": "Cuota excedida",
+      "approachingLimit": "Acercandose al limite",
+      "ariaUsedOf": "Almacenamiento multimedia: {used} de {quota} usado, {percent} por ciento",
+      "ariaUsedUnlimited": "Almacenamiento multimedia: {used} usado (plan ilimitado)"
+    }
   },
   "mentorship": {
     "noPairs": "Aun no hay pares de mentoria",

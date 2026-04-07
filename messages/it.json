@@ -225,16 +225,6 @@
         "competitions": { "label": "Competizioni", "desc": "Aggiornamenti sulle competizioni" }
       }
     },
-    "storage": {
-      "title": "Utilizzo dello spazio media",
-      "description": "Spazio utilizzato da elementi della galleria e caricamenti.",
-      "usedOf": "{used} di {quota} utilizzati",
-      "usedUnlimited": "{used} utilizzati (piano illimitato)",
-      "quotaExceeded": "Quota di spazio superata. Considera di rimuovere media inutilizzati o aggiornare il piano.",
-      "approachingLimit": "In avvicinamento al limite di spazio. Considera di rimuovere media inutilizzati o aggiornare il piano.",
-      "galleryItems": "{count} {count, plural, one {elemento} other {elementi}} della galleria",
-      "featureUploads": "{count} {count, plural, one {caricamento} other {caricamenti}}"
-    },
     "billing": {
       "title": "Gestione fatturazione",
       "description": "Gestisci metodi di pagamento, visualizza fatture o aggiorna il tuo abbonamento.",
@@ -811,7 +801,16 @@
     "dragAlbums": "Trascina gli album dalla maniglia per cambiare l'ordine.",
     "arrangeAlbums": "Organizza come appaiono gli album in questa pagina.",
     "newAlbum": "Nuovo album",
-    "failedToLoadAlbums": "Caricamento album non riuscito"
+    "failedToLoadAlbums": "Caricamento album non riuscito",
+    "storage": {
+      "title": "Spazio media",
+      "usedOf": "{used} di {quota} utilizzati",
+      "usedUnlimited": "{used} utilizzati (piano illimitato)",
+      "quotaExceeded": "Quota superata",
+      "approachingLimit": "In avvicinamento al limite",
+      "ariaUsedOf": "Spazio media: {used} di {quota} utilizzati, {percent} percento",
+      "ariaUsedUnlimited": "Spazio media: {used} utilizzati (piano illimitato)"
+    }
   },
   "mentorship": {
     "noPairs": "Nessuna coppia di mentoring ancora",

@@ -225,16 +225,6 @@
         "competitions": { "label": "المنافسات", "desc": "تحديثات المنافسات الجديدة" }
       }
     },
-    "storage": {
-      "title": "استخدام تخزين الوسائط",
-      "description": "المساحة المستهلكة من عناصر المعرض ورفع الميزات.",
-      "usedOf": "{used} من {quota} مستخدم",
-      "usedUnlimited": "{used} مستخدم (خطة غير محدودة)",
-      "quotaExceeded": "تم تجاوز حصة التخزين. فكّر في حذف الوسائط غير المستخدمة أو ترقية خطتك.",
-      "approachingLimit": "تقترب من حد التخزين. فكّر في حذف الوسائط غير المستخدمة أو ترقية خطتك.",
-      "galleryItems": "{count} {count, plural, one {عنصر} other {عناصر}} في المعرض",
-      "featureUploads": "{count} {count, plural, one {رفع} other {رفعات}} ميزة"
-    },
     "billing": {
       "title": "إدارة الفوترة",
       "description": "إدارة طرق الدفع، عرض الفواتير، أو تحديث اشتراكك.",
@@ -811,7 +801,16 @@
     "dragAlbums": "اسحب الألبومات من المقبض لتغيير الترتيب.",
     "arrangeAlbums": "رتّب كيفية ظهور الألبومات في هذه الصفحة.",
     "newAlbum": "ألبوم جديد",
-    "failedToLoadAlbums": "فشل في تحميل الألبومات"
+    "failedToLoadAlbums": "فشل في تحميل الألبومات",
+    "storage": {
+      "title": "تخزين الوسائط",
+      "usedOf": "{used} من {quota} مستخدم",
+      "usedUnlimited": "{used} مستخدم (خطة غير محدودة)",
+      "quotaExceeded": "تم تجاوز الحصة",
+      "approachingLimit": "الاقتراب من الحد",
+      "ariaUsedOf": "تخزين الوسائط: تم استخدام {used} من {quota}، بنسبة {percent} بالمئة",
+      "ariaUsedUnlimited": "تخزين الوسائط: تم استخدام {used} (خطة غير محدودة)"
+    }
   },
   "mentorship": {
     "noPairs": "لا توجد أزواج إرشاد بعد",

@@ -225,16 +225,6 @@
         "competitions": { "label": "Competicoes", "desc": "Novas atualizacoes de competicoes" }
       }
     },
-    "storage": {
-      "title": "Uso de armazenamento de midia",
-      "description": "Armazenamento consumido por itens da galeria e envios de recursos.",
-      "usedOf": "{used} de {quota} usado",
-      "usedUnlimited": "{used} usado (plano ilimitado)",
-      "quotaExceeded": "Cota de armazenamento excedida. Considere remover midias nao utilizadas ou fazer upgrade do seu plano.",
-      "approachingLimit": "Aproximando-se do limite de armazenamento. Considere remover midias nao utilizadas ou fazer upgrade do seu plano.",
-      "galleryItems": "{count} {count, plural, one {item} other {itens}} da galeria",
-      "featureUploads": "{count} {count, plural, one {envio} other {envios}} de recursos"
-    },
     "billing": {
       "title": "Gerenciamento de cobranca",
       "description": "Gerencie metodos de pagamento, veja faturas ou atualize sua assinatura.",
@@ -811,7 +801,16 @@
     "dragAlbums": "Arraste os albuns pela alca para alterar a ordem.",
     "arrangeAlbums": "Organize como os albuns aparecem nesta pagina.",
     "newAlbum": "Novo album",
-    "failedToLoadAlbums": "Falha ao carregar albuns"
+    "failedToLoadAlbums": "Falha ao carregar albuns",
+    "storage": {
+      "title": "Armazenamento de midia",
+      "usedOf": "{used} de {quota} usado",
+      "usedUnlimited": "{used} usado (plano ilimitado)",
+      "quotaExceeded": "Cota excedida",
+      "approachingLimit": "Aproximando-se do limite",
+      "ariaUsedOf": "Armazenamento de midia: {used} de {quota} usado, {percent} por cento",
+      "ariaUsedUnlimited": "Armazenamento de midia: {used} usado (plano ilimitado)"
+    }
   },
   "mentorship": {
     "noPairs": "Nenhum par de mentoria ainda",
