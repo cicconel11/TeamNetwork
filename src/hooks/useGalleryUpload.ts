@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
-  validateGalleryFile,
+  validateGalleryRawFile,
+  validateGalleryPreparedSize,
   deriveDefaultTitle,
   detectDuplicate,
   resolveGalleryMimeType,
@@ -12,7 +13,10 @@ import {
   getGalleryRetryProgress,
   getGalleryUploadMode,
 } from "@/lib/media/gallery-upload-flow";
-import { prepareImageUpload } from "@/lib/media/image-preparation";
+import {
+  prepareImageUpload,
+  type PreparedImageUpload,
+} from "@/lib/media/image-preparation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,6 +51,14 @@ export interface UploadFileEntry {
   retryCount: number;
   mediaId: string | null; // from upload intent response
   uploadFinalized: boolean;
+  /**
+   * The user's original file name and size, captured before
+   * `prepareImageUpload` rewrites `.jpeg` → `.jpg` and shrinks the byte
+   * count. Used as the dedupe key across `addFiles` calls so that re-picking
+   * the same source file is detected even after normalization.
+   */
+  originalName: string;
+  originalSize: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -179,6 +191,142 @@ const STAGGER_MS = 500;
 const MAX_RETRIES = 3;
 
 // ---------------------------------------------------------------------------
+// Pure helper: prepare a batch of files for upload
+// ---------------------------------------------------------------------------
+
+export interface PrepareGalleryUploadInput {
+  files: File[];
+  /** Raw `{name, size}` pairs of files already in the queue (for dedupe). */
+  existingEntries: { name: string; size: number }[];
+  /** Injectable for tests; defaults to the real `prepareImageUpload`. */
+  prepareImage?: (file: File) => Promise<PreparedImageUpload>;
+  /** Injectable for tests; defaults to `crypto.randomUUID`. */
+  generateId?: () => string;
+  /** Injectable for tests; defaults to `URL.createObjectURL`. */
+  createObjectUrl?: (file: File | Blob) => string;
+  /** Injectable for tests; defaults to `URL.revokeObjectURL`. */
+  revokeObjectUrl?: (url: string) => void;
+}
+
+export interface PrepareGalleryUploadResult {
+  entries: UploadFileEntry[];
+  rejected: { name: string; error: string }[];
+}
+
+/**
+ * Pure async helper that walks a batch of user-selected files, runs raw
+ * validation → dedupe → prep → prepared-size validation, and returns the
+ * accepted `UploadFileEntry`s plus any rejections.
+ *
+ * Extracted from `addFiles` so it can be unit-tested without rendering the
+ * hook. The hook is a thin wrapper that wires this helper into React state.
+ *
+ * Validation order is load-bearing: image size MUST be checked AFTER prep so
+ * that a 14 MB iPhone JPEG (which compresses to ~600 KB) is not rejected on
+ * its raw byte count.
+ */
+export async function prepareGalleryUploadEntries(
+  input: PrepareGalleryUploadInput,
+): Promise<PrepareGalleryUploadResult> {
+  const {
+    files,
+    existingEntries: initialExisting,
+    prepareImage = prepareImageUpload,
+    generateId = () => crypto.randomUUID(),
+    createObjectUrl = (file) => URL.createObjectURL(file),
+    revokeObjectUrl = (url) => URL.revokeObjectURL(url),
+  } = input;
+
+  const existing = [...initialExisting];
+  const entries: UploadFileEntry[] = [];
+  const rejected: { name: string; error: string }[] = [];
+
+  for (const file of files) {
+    const rawCheck = validateGalleryRawFile(file);
+    if (!rawCheck.valid) {
+      rejected.push({ name: file.name, error: rawCheck.error! });
+      continue;
+    }
+
+    if (detectDuplicate(file, existing)) {
+      rejected.push({ name: file.name, error: "File already in queue." });
+      continue;
+    }
+
+    const mimeType = resolveGalleryMimeType(file);
+    let uploadFile: File = file;
+    let previewFile: File | null = null;
+    let previewUrl: string | null = createObjectUrl(file);
+    let previewMimeType: string | null = null;
+    let fileSize = file.size;
+    let previewFileSize = 0;
+
+    if (mimeType.startsWith("image/")) {
+      try {
+        const prepared = await prepareImage(file);
+        uploadFile = prepared.file;
+        previewFile = prepared.previewFile;
+        previewMimeType = prepared.previewMimeType;
+        fileSize = prepared.file.size;
+        previewFileSize = prepared.previewFile?.size ?? 0;
+        if (previewUrl) revokeObjectUrl(previewUrl);
+        previewUrl = prepared.previewUrl;
+        console.log("[media/upload] prepared gallery image", {
+          fileName: file.name,
+          originalBytes: prepared.originalBytes,
+          normalizedBytes: prepared.normalizedBytes,
+        });
+      } catch (error) {
+        if (previewUrl) revokeObjectUrl(previewUrl);
+        rejected.push({
+          name: file.name,
+          error: error instanceof Error ? error.message : "Failed to prepare image upload.",
+        });
+        continue;
+      }
+    }
+
+    // Now that we know the post-prep byte count, enforce the image size cap.
+    const sizeCheck = validateGalleryPreparedSize(fileSize, uploadFile.type || mimeType);
+    if (!sizeCheck.valid) {
+      if (previewUrl) revokeObjectUrl(previewUrl);
+      rejected.push({ name: file.name, error: sizeCheck.error! });
+      continue;
+    }
+
+    const entry: UploadFileEntry = {
+      id: generateId(),
+      file: uploadFile,
+      previewFile,
+      fileName: uploadFile.name,
+      fileSize,
+      previewFileSize,
+      mimeType: uploadFile.type || mimeType,
+      previewMimeType,
+      previewUrl,
+      title: deriveDefaultTitle(file.name),
+      description: "",
+      tags: [],
+      takenAt: "",
+      status: "queued",
+      progress: 0,
+      error: null,
+      retryCount: 0,
+      mediaId: null,
+      uploadFinalized: false,
+      originalName: file.name,
+      originalSize: file.size,
+    };
+
+    entries.push(entry);
+    // Subsequent files in the same batch dedupe against the raw original.
+    existing.push({ name: file.name, size: file.size });
+  }
+
+  return { entries, rejected };
+}
+
+// ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
@@ -226,84 +374,17 @@ export function useGalleryUpload({ orgId, targetAlbumId, onFileComplete }: UseGa
         return { rejected: newFiles.map((f) => ({ name: f.name, error: batchCheck.error! })) };
       }
 
+      // Dedupe against raw original name/size — NOT post-prep `fileName`,
+      // which gets `.jpeg` rewritten to `.jpg` and trips false negatives.
       const existingEntries = (options?.replaceExisting ? [] : state.files).map((f) => ({
-        name: f.fileName,
-        size: f.fileSize,
+        name: f.originalName,
+        size: f.originalSize,
       }));
 
-      const entries: UploadFileEntry[] = [];
-      const rejected: { name: string; error: string }[] = [];
-
-      for (const file of newFiles) {
-        const validation = validateGalleryFile(file);
-        if (!validation.valid) {
-          rejected.push({ name: file.name, error: validation.error! });
-          continue;
-        }
-
-        if (detectDuplicate(file, existingEntries)) {
-          rejected.push({ name: file.name, error: "File already in queue." });
-          continue;
-        }
-
-        const mimeType = resolveGalleryMimeType(file);
-        let uploadFile = file;
-        let previewFile: File | null = null;
-        let previewUrl: string | null = URL.createObjectURL(file);
-        let previewMimeType: string | null = null;
-        let fileSize = file.size;
-        let previewFileSize = 0;
-
-        if (mimeType.startsWith("image/")) {
-          try {
-            const prepared = await prepareImageUpload(file);
-            uploadFile = prepared.file;
-            previewFile = prepared.previewFile;
-            previewMimeType = prepared.previewMimeType;
-            fileSize = prepared.file.size;
-            previewFileSize = prepared.previewFile?.size ?? 0;
-            URL.revokeObjectURL(previewUrl);
-            previewUrl = prepared.previewUrl;
-            console.log("[media/upload] prepared gallery image", {
-              fileName: file.name,
-              originalBytes: prepared.originalBytes,
-              normalizedBytes: prepared.normalizedBytes,
-            });
-          } catch (error) {
-            if (previewUrl) URL.revokeObjectURL(previewUrl);
-            rejected.push({
-              name: file.name,
-              error: error instanceof Error ? error.message : "Failed to prepare image upload.",
-            });
-            continue;
-          }
-        }
-
-        const entry: UploadFileEntry = {
-          id: crypto.randomUUID(),
-          file: uploadFile,
-          previewFile,
-          fileName: uploadFile.name,
-          fileSize,
-          previewFileSize,
-          mimeType: uploadFile.type || mimeType,
-          previewMimeType,
-          previewUrl,
-          title: deriveDefaultTitle(file.name),
-          description: "",
-          tags: [],
-          takenAt: "",
-          status: "queued",
-          progress: 0,
-          error: null,
-          retryCount: 0,
-          mediaId: null,
-          uploadFinalized: false,
-        };
-
-        entries.push(entry);
-        existingEntries.push({ name: uploadFile.name, size: fileSize });
-      }
+      const { entries, rejected } = await prepareGalleryUploadEntries({
+        files: newFiles,
+        existingEntries,
+      });
 
       if (entries.length > 0) {
         if (options?.replaceExisting) {

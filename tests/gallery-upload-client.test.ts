@@ -27,6 +27,8 @@ function makeEntry(overrides: Partial<UploadFileEntry> = {}): UploadFileEntry {
     retryCount: 0,
     mediaId: "media-1",
     uploadFinalized: true,
+    originalName: "spring-game.jpeg",
+    originalSize: 14 * 1024 * 1024,
     ...overrides,
   };
 }
