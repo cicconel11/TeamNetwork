@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, EmptyState } from "@/components/ui";
 import { MentorshipPairCard } from "./MentorshipPairCard";
+import {
+  getVisibleMentorshipPairs,
+  isUserInMentorshipPair,
+} from "@/lib/mentorship/presentation";
 
 interface MentorshipLog {
   id: string;
@@ -34,6 +38,8 @@ interface MentorshipPairsListProps {
   isAdmin: boolean;
   canLogActivity: boolean;
   orgId: string;
+  currentUserId?: string;
+  emptyStateAction?: ReactNode;
 }
 
 export function MentorshipPairsList({
@@ -43,9 +49,17 @@ export function MentorshipPairsList({
   isAdmin,
   canLogActivity,
   orgId,
+  currentUserId,
+  emptyStateAction,
 }: MentorshipPairsListProps) {
   const tMentorship = useTranslations("mentorship");
-  const [pairs, setPairs] = useState<MentorshipPair[]>(initialPairs);
+  const [deletedPairIds, setDeletedPairIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setDeletedPairIds((current) =>
+      current.filter((pairId) => initialPairs.some((pair) => pair.id === pairId))
+    );
+  }, [initialPairs]);
 
   const userLabel = (id: string) => {
     const u = users.find((user) => user.id === id);
@@ -53,15 +67,20 @@ export function MentorshipPairsList({
   };
 
   const handleDelete = (pairId: string) => {
-    setPairs((prev) => prev.filter((p) => p.id !== pairId));
+    setDeletedPairIds((current) =>
+      current.includes(pairId) ? current : [...current, pairId]
+    );
   };
 
-  if (pairs.length === 0) {
+  const visiblePairs = getVisibleMentorshipPairs(initialPairs, deletedPairIds);
+
+  if (visiblePairs.length === 0) {
     return (
       <Card>
         <EmptyState
           title={tMentorship("noPairs")}
           description={tMentorship("pairsWillAppear")}
+          action={emptyStateAction}
         />
       </Card>
     );
@@ -69,8 +88,9 @@ export function MentorshipPairsList({
 
   return (
     <div className="space-y-4">
-      {pairs.map((pair) => {
+      {visiblePairs.map((pair) => {
         const pairLogs = logs.filter((l) => l.pair_id === pair.id);
+        const isMine = isUserInMentorshipPair(pair, currentUserId);
         return (
           <MentorshipPairCard
             key={pair.id}
@@ -83,6 +103,7 @@ export function MentorshipPairsList({
             orgId={orgId}
             userLabel={userLabel}
             onDelete={handleDelete}
+            highlight={isMine}
           />
         );
       })}

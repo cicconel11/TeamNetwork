@@ -1,14 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
-import { MentorshipAdminPanel } from "@/components/mentorship/MentorshipAdminPanel";
-import { MentorPairManager } from "@/components/mentorship/MentorPairManager";
-import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
+import { MentorshipContextStrip } from "@/components/mentorship/MentorshipContextStrip";
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import { getLocale, getTranslations } from "next-intl/server";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { getMentorshipSectionOrder } from "@/lib/mentorship/presentation";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -151,41 +150,97 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
   ).sort((a, b) => b - a);
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
-  const [tNav, locale] = await Promise.all([getTranslations("nav.items"), getLocale()]);
+  const [tNav, tMentorship, locale] = await Promise.all([
+    getTranslations("nav.items"),
+    getTranslations("mentorship"),
+    getLocale(),
+  ]);
   const t = (key: string) => tNav(key);
   const pageLabel = resolveLabel("/mentorship", navConfig, t, locale);
 
+  // Compute "my pair" context for the active member header strip.
+  const hasPairs = filteredPairs.length > 0;
+
+  const myPair =
+    orgCtx.role === "active_member"
+      ? filteredPairs.find((p) => p.mentee_user_id === orgCtx.userId) ?? null
+      : null;
+
+  const myMentorName = myPair
+    ? usersForClient.find((u) => u.id === myPair.mentor_user_id)?.name ?? null
+    : null;
+
+  const myLastLogDate = myPair
+    ? logsForClient.find((l) => l.pair_id === myPair.id)?.entry_date ?? null
+    : null;
+
+  const pairsList = (
+    <MentorshipPairsList
+      initialPairs={filteredPairs}
+      logs={logsForClient}
+      users={usersForClient}
+      isAdmin={orgCtx.isAdmin}
+      canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
+      orgId={orgId}
+      currentUserId={orgCtx.userId ?? undefined}
+      emptyStateAction={
+        orgCtx.role === "active_member" ? (
+          <a
+            href="#mentor-directory"
+            className="text-sm text-[color:var(--color-org-secondary)] hover:underline"
+          >
+            {tMentorship("browseMentors")} ↓
+          </a>
+        ) : undefined
+      }
+    />
+  );
+
+  const directory = (
+    <MentorDirectory
+      mentors={mentorsForDirectory}
+      industries={industries}
+      years={years}
+      showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
+      orgId={orgId}
+      orgSlug={orgSlug}
+    />
+  );
+
+  // Order: active members & alumni with a pair see their pairs first;
+  // admins always see the directory first (they scan while managing).
+  const sectionOrder = getMentorshipSectionOrder({
+    hasPairs,
+    isAdmin: orgCtx.isAdmin,
+  });
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
       <PageHeader
         title={pageLabel}
-        description={`Manage and track ${pageLabel.toLowerCase()} pairs`}
+        description={tMentorship("editorialStrapline")}
+        variant="editorial"
       />
 
-      {orgCtx.role === "active_member" && <MenteeStatusToggle orgId={orgId} />}
-
-      {orgCtx.isAdmin && <MentorshipAdminPanel orgId={orgId} orgSlug={orgSlug} />}
-      {!orgCtx.isAdmin && orgCtx.role === "alumni" && (
-        <MentorPairManager orgId={orgId} orgSlug={orgSlug} />
-      )}
-
-      <MentorDirectory
-        mentors={mentorsForDirectory}
-        industries={industries}
-        years={years}
-        showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
+      <MentorshipContextStrip
+        role={orgCtx.role ?? ""}
         orgId={orgId}
         orgSlug={orgSlug}
+        myMentorName={myMentorName}
+        myLastLogDate={myLastLogDate}
       />
 
-      <MentorshipPairsList
-        initialPairs={filteredPairs}
-        logs={logsForClient}
-        users={usersForClient}
-        isAdmin={orgCtx.isAdmin}
-        canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
-        orgId={orgId}
-      />
+      {sectionOrder === "pairs-first" ? (
+        <>
+          {pairsList}
+          {directory}
+        </>
+      ) : (
+        <>
+          {directory}
+          {pairsList}
+        </>
+      )}
     </div>
   );
 }
