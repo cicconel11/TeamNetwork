@@ -212,6 +212,23 @@ interface AcceptInviteOptions {
    * claim, and delete the auth user so the parent can retry.
    */
   simulateParentLookupFailure?: boolean;
+  /**
+   * When true, simulates the membership-grant rollback path where the
+   * pre-existing role row was `revoked` (not absent). The route must restore
+   * the row to its previous role + status='revoked' rather than deleting it,
+   * which would erase membership history. Only meaningful when paired with
+   * simulateParentLookupFailure.
+   */
+  reactivatedFromRevoked?: { previousRole: string };
+  /**
+   * When true, simulates auth.admin.deleteUser failing during rollback after
+   * a downstream step fails. Per the recovery contract, the route must NOT
+   * restore the invite to pending in this case (a stranded auth user with
+   * the same email would lock out future redemption); it must leave the
+   * invite claimed and return a 500 with a recoveryId so support can find
+   * the orphan in logs.
+   */
+  simulateAuthUserDeleteFailureDuringRollback?: boolean;
 }
 
 interface OrgRoleRow {
@@ -232,6 +249,11 @@ interface AcceptInviteResult {
   /** The membership row that was created, if any. */
   orgRoleRow?: OrgRoleRow;
   error?: string;
+  /**
+   * Set when partial rollback failed and the response surfaces a correlation
+   * id for support recovery. Mirrors the route's `recoveryId` field.
+   */
+  recoveryId?: string;
 }
 
 function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
@@ -307,6 +329,18 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
   // the parent can retry. Without this, the invite is consumed, the auth user
   // is orphaned, and the user is locked out of re-redemption.
   if (opts.simulateMembershipFailure) {
+    // If the auth-user delete also fails, the route MUST leave the invite
+    // claimed (not pending) and surface a recoveryId. Restoring the invite
+    // while a stranded auth user holds the email would loop the next attempt
+    // into permanent failure.
+    if (opts.simulateAuthUserDeleteFailureDuringRollback) {
+      return {
+        status: 500,
+        error:
+          "Failed to create membership and partial cleanup did not complete. Please contact support with this id.",
+        recoveryId: randomUUID(),
+      };
+    }
     opts.store.update(invite.id, { status: "pending", accepted_at: null });
     return { status: 500, error: "Failed to create membership" };
   }
@@ -314,6 +348,32 @@ function simulateAcceptInvite(opts: AcceptInviteOptions): AcceptInviteResult {
   // Parent-lookup failure: additionally undo the membership row we just
   // created so a retry isn't blocked by unique(user_id, organization_id).
   if (opts.simulateParentLookupFailure) {
+    if (opts.simulateAuthUserDeleteFailureDuringRollback) {
+      return {
+        status: 500,
+        error:
+          "Failed to create parent record and partial cleanup did not complete. Please contact support with this id.",
+        recoveryId: randomUUID(),
+      };
+    }
+    // Reactivation-aware rollback: if the membership came from reactivating a
+    // previously-revoked row, the route must restore that row's previous role
+    // and revoked status — NOT delete it. Earlier behavior unconditionally
+    // deleted the row, destroying history.
+    if (opts.reactivatedFromRevoked) {
+      // Surface the restored shape so the test can assert it.
+      opts.store.update(invite.id, { status: "pending", accepted_at: null });
+      return {
+        status: 500,
+        error: "Failed to create parent record",
+        orgRoleRow: {
+          user_id: "<restored>",
+          organization_id: invite.organization_id,
+          role: opts.reactivatedFromRevoked.previousRole,
+          status: "revoked",
+        },
+      };
+    }
     opts.store.update(invite.id, { status: "pending", accepted_at: null });
     return { status: 500, error: "Failed to create parent record" };
   }
@@ -1057,6 +1117,101 @@ describe("POST /parents/invite/accept — claim-first TOCTOU protection", () => 
     const inviteAfter = store.findByCode(invite.code);
     assert.equal(inviteAfter?.status, "pending", "invite must be pending after parent-lookup rollback");
     assert.equal(inviteAfter?.accepted_at, null, "accepted_at must be cleared");
+  });
+
+  it("rollback restores a reactivated revoked row to its previous role+status (not delete)", () => {
+    // Regression guard for the rollback-correctness fix in todo #007:
+    // grantParentMembership may either INSERT a new row OR reactivate a
+    // previously-revoked row by UPDATEing it to status='active'/role='parent'.
+    // The earlier rollback unconditionally DELETEd by (user_id, org_id),
+    // which destroyed a previously-revoked membership row. The fix tracks
+    // which path the grant took and restores the original role+status on
+    // rollback instead of deleting.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent@example.com",
+      first_name: "Parent",
+      last_name: "Three",
+      password: "securepass123",
+      store,
+      existingOrgRoleStatus: "revoked",
+      simulateParentLookupFailure: true,
+      reactivatedFromRevoked: { previousRole: "alumni" },
+    });
+
+    assert.equal(result.status, 500);
+    // The pre-existing revoked alumni membership must be restored, not deleted.
+    assert.equal(result.orgRoleRow?.role, "alumni", "previous role must be restored");
+    assert.equal(result.orgRoleRow?.status, "revoked", "previous status must be restored");
+
+    // Invite is still rolled back to pending so the parent can retry.
+    assert.equal(store.findByCode(invite.code)?.status, "pending");
+  });
+
+  it("returns recoveryId and leaves invite claimed when auth-user delete fails during rollback", () => {
+    // Regression guard for the orphan-recovery contract in todo #007:
+    // if auth.admin.deleteUser() fails during rollback after a membership
+    // failure, restoring the invite to 'pending' would loop the next attempt
+    // into a permanent email_exists/rollback cycle. The route MUST leave the
+    // invite claimed and return a recoveryId so support can clean up.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent@example.com",
+      first_name: "Parent",
+      last_name: "Four",
+      password: "securepass123",
+      store,
+      simulateMembershipFailure: true,
+      simulateAuthUserDeleteFailureDuringRollback: true,
+    });
+
+    assert.equal(result.status, 500);
+    assert.ok(result.recoveryId, "must return a recoveryId for support");
+    assert.match(
+      result.error ?? "",
+      /contact support/i,
+      "error must instruct user to contact support",
+    );
+    // Critical: invite must NOT be restored to pending — that would lock out
+    // the next redemption attempt because the orphan auth user still holds
+    // the email.
+    const inviteAfter = store.findByCode(invite.code);
+    assert.notEqual(
+      inviteAfter?.status,
+      "pending",
+      "invite must NOT be restored to pending when auth-user delete fails",
+    );
+  });
+
+  it("returns recoveryId on auth-user delete failure during parent-lookup rollback", () => {
+    // Same contract, but exercising the findParentId failure path which has
+    // an extra rollback step (membership undo) before the auth user delete.
+    const invite = makeInvite({ organization_id: "org-1", status: "pending" });
+    const store = createStore([invite]);
+
+    const result = simulateAcceptInvite({
+      orgId: "org-1",
+      code: invite.code,
+      email: "parent@example.com",
+      first_name: "Parent",
+      last_name: "Five",
+      password: "securepass123",
+      store,
+      simulateParentLookupFailure: true,
+      simulateAuthUserDeleteFailureDuringRollback: true,
+    });
+
+    assert.equal(result.status, 500);
+    assert.ok(result.recoveryId);
+    assert.match(result.error ?? "", /contact support/i);
   });
 
   it("retryable: a second attempt succeeds after a transient user-creation failure", () => {
