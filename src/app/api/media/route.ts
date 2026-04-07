@@ -63,6 +63,11 @@ export async function GET(request: NextRequest) {
     });
 
     if (!parsed.success) {
+      console.warn("[media/gallery] rejected", {
+        userId: user.id,
+        reason: "list_query_invalid",
+        details: parsed.error.issues,
+      });
       return NextResponse.json(
         { error: "Invalid query parameters", details: parsed.error.issues },
         { status: 400 },
@@ -73,6 +78,11 @@ export async function GET(request: NextRequest) {
 
     const membership = await getOrgMembership(supabase, user.id, orgId);
     if (!membership) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "list_not_member",
+      });
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
@@ -122,6 +132,11 @@ export async function GET(request: NextRequest) {
     if (cursor) {
       const decoded = decodeGalleryCursor(cursor);
       if (!decoded) {
+        console.warn("[media/gallery] rejected", {
+          orgId,
+          userId: user.id,
+          reason: "list_cursor_invalid",
+        });
         return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
       }
       query = applyGalleryCursorFilter(query, decoded);
@@ -129,6 +144,11 @@ export async function GET(request: NextRequest) {
 
     const { data: items, error } = await query;
     if (error) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "list_query_failed",
+      });
       console.error("[media/gallery] List query failed:", error);
       return NextResponse.json({ error: "Failed to fetch media" }, { status: 500 });
     }
@@ -170,8 +190,13 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof ValidationError) {
+      console.warn("[media/gallery] validation rejected", {
+        reason: "list_schema_invalid",
+        details: error.details,
+      });
       return validationErrorResponse(error);
     }
+    console.error("[media/gallery] list internal error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -202,6 +227,11 @@ export async function POST(request: NextRequest) {
     // Check org membership and upload role
     const membership = await getOrgMembership(supabase, user.id, orgId);
     if (!membership) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "not_member",
+      });
       return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
     }
 
@@ -215,6 +245,12 @@ export async function POST(request: NextRequest) {
 
     const allowedRoles = (org as Record<string, unknown> | null)?.media_upload_roles as string[] || ["admin", "active_member"];
     if (!allowedRoles.includes(membership.role)) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "role_denied",
+        role: membership.role,
+      });
       return NextResponse.json(
         { error: "You do not have permission to upload media" },
         { status: 403 },
@@ -224,11 +260,22 @@ export async function POST(request: NextRequest) {
     // Check org read-only mode
     const { isReadOnly } = await checkOrgReadOnly(orgId);
     if (isReadOnly) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "read_only",
+      });
       return NextResponse.json(readOnlyResponse(), { status: 403 });
     }
 
     // Validate MIME type is in allowlist
     if (!GALLERY_ALLOWED_MIME_TYPES.has(mimeType)) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "mime_blocked",
+        mimeType,
+      });
       return NextResponse.json({ error: "Unsupported file type" }, { status: 400 });
     }
 
@@ -241,11 +288,23 @@ export async function POST(request: NextRequest) {
     );
     if (!quota.ok) {
       if (quota.reason === "lookup_failed") {
+        console.warn("[media/gallery] rejected", {
+          orgId,
+          userId: user.id,
+          reason: "quota_lookup_failed",
+        });
         return NextResponse.json(
           { error: "Failed to verify storage quota" },
           { status: 500 },
         );
       }
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        reason: "quota_exceeded",
+        usedBytes: quota.usedBytes,
+        quotaBytes: quota.quotaBytes,
+      });
       return NextResponse.json(
         {
           error: "Storage quota exceeded",
@@ -319,6 +378,13 @@ export async function POST(request: NextRequest) {
         .eq("status", initialStatus);
 
       if (previewSizeError) {
+        console.warn("[media/gallery] rejected", {
+          orgId,
+          userId: user.id,
+          mediaId,
+          reason: "preview_size_persist_failed",
+        });
+        console.error("[media/gallery] Preview size persist failed:", previewSizeError);
         await serviceClient.from("media_items").delete().eq("id", mediaId);
         return NextResponse.json({ error: "Failed to create media item" }, { status: 500 });
       }
@@ -333,12 +399,28 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (signedOriginal.error || !signedOriginal.data) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        mediaId,
+        reason: "signed_url_failed",
+        target: "original",
+      });
+      console.error("[media/gallery] Signed upload URL error:", signedOriginal.error);
       // Clean up the DB row if we can't get a signed URL
       await serviceClient.from("media_items").delete().eq("id", mediaId);
       return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
     }
 
     if (previewStoragePath && (signedPreview.error || !signedPreview.data)) {
+      console.warn("[media/gallery] rejected", {
+        orgId,
+        userId: user.id,
+        mediaId,
+        reason: "signed_url_failed",
+        target: "preview",
+      });
+      console.error("[media/gallery] Preview signed upload URL error:", signedPreview.error);
       await serviceClient.from("media_items").delete().eq("id", mediaId);
       return NextResponse.json({ error: "Failed to generate preview upload URL" }, { status: 500 });
     }
@@ -366,8 +448,13 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof ValidationError) {
+      console.warn("[media/gallery] validation rejected", {
+        reason: "schema_invalid",
+        details: error.details,
+      });
       return validationErrorResponse(error);
     }
+    console.error("[media/gallery] internal error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

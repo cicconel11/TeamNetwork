@@ -55,6 +55,11 @@ export async function POST(request: NextRequest) {
     // Check org membership
     const membership = await getOrgMembership(supabase, user.id, body.orgId);
     if (!membership) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "not_member",
+      });
       return NextResponse.json(
         { error: "Not a member of this organization" },
         { status: 403, headers: rateLimit.headers },
@@ -84,6 +89,13 @@ export async function POST(request: NextRequest) {
         (org as Record<string, unknown> | null)?.[roleColumn] as string[] ||
         featureDefaults[body.feature];
       if (!allowedRoles.includes(membership.role)) {
+        console.warn("[media/upload-intent] rejected", {
+          orgId: body.orgId,
+          userId: user.id,
+          reason: "role_denied",
+          feature: body.feature,
+          role: membership.role,
+        });
         return NextResponse.json(
           { error: "Your role is not allowed to upload for this feature" },
           { status: 403, headers: rateLimit.headers },
@@ -94,6 +106,11 @@ export async function POST(request: NextRequest) {
     // Block uploads if org is in read-only mode
     const { isReadOnly } = await checkOrgReadOnly(body.orgId);
     if (isReadOnly) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "read_only",
+      });
       return NextResponse.json(readOnlyResponse(), { status: 403, headers: rateLimit.headers });
     }
 
@@ -104,6 +121,15 @@ export async function POST(request: NextRequest) {
       body.fileSize,
     );
     if (constraintError) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "constraint_violation",
+        feature: body.feature,
+        mimeType: body.mimeType,
+        fileSize: body.fileSize,
+        error: constraintError,
+      });
       return NextResponse.json(
         { error: constraintError },
         { status: 400, headers: rateLimit.headers },
@@ -120,11 +146,23 @@ export async function POST(request: NextRequest) {
     );
     if (!quota.ok) {
       if (quota.reason === "lookup_failed") {
+        console.warn("[media/upload-intent] rejected", {
+          orgId: body.orgId,
+          userId: user.id,
+          reason: "quota_lookup_failed",
+        });
         return NextResponse.json(
           { error: "Failed to verify storage quota" },
           { status: 500, headers: rateLimit.headers },
         );
       }
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "quota_exceeded",
+        usedBytes: quota.usedBytes,
+        quotaBytes: quota.quotaBytes,
+      });
       return NextResponse.json(
         {
           error: "Storage quota exceeded",
@@ -151,6 +189,12 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (signedOriginal.error || !signedOriginal.data) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "signed_url_failed",
+        target: "original",
+      });
       console.error("[media/upload-intent] Signed URL error:", signedOriginal.error);
       return NextResponse.json(
         { error: "Failed to create upload URL" },
@@ -159,6 +203,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (previewStoragePath && (signedPreview.error || !signedPreview.data)) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "signed_url_failed",
+        target: "preview",
+      });
       console.error("[media/upload-intent] Preview signed URL error:", signedPreview.error);
       return NextResponse.json(
         { error: "Failed to create preview upload URL" },
@@ -186,6 +236,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (insertError || !mediaRecord) {
+      console.warn("[media/upload-intent] rejected", {
+        orgId: body.orgId,
+        userId: user.id,
+        reason: "insert_failed",
+        feature: body.feature,
+      });
       console.error("[media/upload-intent] Insert error:", insertError);
       return NextResponse.json(
         { error: "Failed to create media record" },
@@ -214,9 +270,13 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     if (error instanceof ValidationError) {
+      console.warn("[media/upload-intent] validation rejected", {
+        reason: "schema_invalid",
+        details: error.details,
+      });
       return validationErrorResponse(error);
     }
-    console.error("[media/upload-intent] Error:", error);
+    console.error("[media/upload-intent] internal error", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
