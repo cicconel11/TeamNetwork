@@ -66,3 +66,23 @@ test("latest create_org_invite migration schema-qualifies gen_random_bytes", () 
     `${file}: contains a bare gen_random_bytes(...) call — must be schema-qualified as public.gen_random_bytes`,
   );
 });
+
+test("latest create_org_invite migration stays after require_approval and preserves standard invite roles", () => {
+  const file = findLatestCreateOrgInviteMigration();
+  const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+
+  assert.ok(
+    file > "20260803100000_per_invite_require_approval.sql",
+    `${file}: must sort after 20260803100000_per_invite_require_approval.sql so the latest create_org_invite definition keeps the 5-arg require_approval shape`
+  );
+  assert.match(
+    sql,
+    /p_require_approval\s+boolean\s+DEFAULT\s+NULL/i,
+    `${file}: latest create_org_invite migration must retain the require_approval parameter`
+  );
+  assert.match(
+    sql,
+    /p_role\s+NOT\s+IN\s*\(\s*'admin'\s*,\s*'active_member'\s*,\s*'alumni'/i,
+    `${file}: latest create_org_invite validation must still allow admin, active_member, and alumni invites`
+  );
+});
