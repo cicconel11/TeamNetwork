@@ -11,6 +11,7 @@
     "build": "NODE_OPTIONS='--max-old-space-size=4096' next build",
     "start": "next start",
     "lint": "ESLINT_USE_FLAT_CONFIG=true eslint .",
+    "typecheck": "tsc --noEmit",
     "test": "npm run test:check-orphans && npm run test:fast",
     "test:fast": "node scripts/run-fast-tests.js",
     "test:check-orphans": "node scripts/check-orphaned-tests.js",
