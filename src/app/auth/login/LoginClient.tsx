@@ -78,6 +78,7 @@ function LoginFormComponent({
       provider,
       options: {
         redirectTo: buildAuthCallbackUrl(siteUrl, redirectTo, "login"),
+        ...(provider === MICROSOFT_SSO_PROVIDER && { scopes: "openid profile email" }),
       },
     });
 

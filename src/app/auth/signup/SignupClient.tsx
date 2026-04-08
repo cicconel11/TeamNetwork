@@ -188,6 +188,7 @@ export function SignupClient({
       provider,
       options: {
         redirectTo: callbackUrl,
+        ...(provider === MICROSOFT_SSO_PROVIDER && { scopes: "openid profile email" }),
       },
     });
 
