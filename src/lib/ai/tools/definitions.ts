@@ -28,6 +28,21 @@ export interface PrepareDiscussionThreadArgs {
   mediaIds?: string[];
 }
 
+export interface PrepareAnnouncementArgs {
+  title?: string;
+  body?: string;
+  is_pinned?: boolean;
+  audience?: "all" | "members" | "active_members" | "alumni" | "individuals";
+  send_notification?: boolean;
+  audience_user_ids?: string[];
+}
+
+export interface PrepareDiscussionReplyArgs {
+  discussion_thread_id?: string;
+  thread_title?: string;
+  body?: string;
+}
+
 export interface PrepareEventArgs {
   title?: string;
   description?: string;
@@ -198,6 +213,38 @@ const TOOL_BY_NAME = {
       },
     },
   },
+  prepare_announcement: {
+    type: "function" as const,
+    function: {
+      name: "prepare_announcement" as const,
+      description:
+        "Prepare a new organization announcement draft for the assistant. Use this when the user wants to create, post, or publish an announcement. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the draft is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          title: { type: "string" as const },
+          body: { type: "string" as const },
+          is_pinned: { type: "boolean" as const },
+          audience: {
+            type: "string" as const,
+            enum: ["all", "members", "active_members", "alumni", "individuals"],
+          },
+          send_notification: {
+            type: "boolean" as const,
+            description:
+              "If true, also email the announcement audience after it is published. Default false unless the user explicitly asks to notify people.",
+          },
+          audience_user_ids: {
+            type: "array" as const,
+            items: { type: "string" as const },
+            description:
+              "Required only when audience is individuals. Use explicit user ids for targeted announcements.",
+          },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
   prepare_job_posting: {
     type: "function" as const,
     function: {
@@ -256,6 +303,29 @@ const TOOL_BY_NAME = {
             type: "array" as const,
             items: { type: "string" as const },
           },
+        },
+        additionalProperties: false as const,
+      },
+    },
+  },
+  prepare_discussion_reply: {
+    type: "function" as const,
+    function: {
+      name: "prepare_discussion_reply" as const,
+      description:
+        "Prepare a reply to an existing discussion thread. Use this when the user wants to respond to a discussion thread that is already open. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the reply is ready.",
+      parameters: {
+        type: "object" as const,
+        properties: {
+          discussion_thread_id: {
+            type: "string" as const,
+            description: "UUID of the discussion thread that should receive the reply.",
+          },
+          thread_title: {
+            type: "string" as const,
+            description: "Optional thread title for confirmation UI copy.",
+          },
+          body: { type: "string" as const },
         },
         additionalProperties: false as const,
       },
@@ -583,7 +653,9 @@ export const AI_TOOLS = [
   TOOL_BY_NAME.list_donations,
   TOOL_BY_NAME.list_parents,
   TOOL_BY_NAME.list_philanthropy_events,
+  TOOL_BY_NAME.prepare_announcement,
   TOOL_BY_NAME.prepare_job_posting,
+  TOOL_BY_NAME.prepare_discussion_reply,
   TOOL_BY_NAME.prepare_discussion_thread,
   TOOL_BY_NAME.prepare_event,
   TOOL_BY_NAME.prepare_events_batch,

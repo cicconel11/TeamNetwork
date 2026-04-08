@@ -137,10 +137,14 @@ const CONNECTION_PROMPT_PATTERN =
   /(?<!\w)(?:connection|connections|connect|networking|introduc(?:e|tion))(?!\w)/i;
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
+const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:create|add|post|publish|make|send|draft)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft)(?!\w))/i;
 const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
+const DISCUSSION_REPLY_PROMPT_PATTERN =
+  /(?:(?<!\w)(?:reply|respond|answer|comment)(?!\w)[\s\S]{0,120}\b(?:discussion|thread|post|message|conversation)(?!\w)|(?<!\w)(?:discussion|thread|post|message|conversation)(?!\w)[\s\S]{0,80}\b(?:reply|respond|answer|comment)(?!\w))/i;
 const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
 const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
@@ -1054,8 +1058,16 @@ function getPass1Tools(
     return undefined;
   }
 
+  if (CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_announcement];
+  }
+
   if (CREATE_JOB_PROMPT_PATTERN.test(message) || looksLikeStructuredJobDraft(message)) {
     return [AI_TOOL_MAP.prepare_job_posting];
+  }
+
+  if (DISCUSSION_REPLY_PROMPT_PATTERN.test(message)) {
+    return [AI_TOOL_MAP.prepare_discussion_reply];
   }
 
   if (CREATE_DISCUSSION_PROMPT_PATTERN.test(message)) {
@@ -1140,7 +1152,9 @@ function getForcedPass1ToolChoice(
 
   const forcedToolName = pass1Tools[0]?.function.name;
   if (
+    forcedToolName !== "prepare_announcement" &&
     forcedToolName !== "prepare_job_posting" &&
+    forcedToolName !== "prepare_discussion_reply" &&
     forcedToolName !== "prepare_discussion_thread" &&
     forcedToolName !== "prepare_event" &&
     forcedToolName !== "list_members" &&
@@ -1317,6 +1331,31 @@ function formatPrepareJobPostingResponse(data: unknown): string | null {
   return null;
 }
 
+function formatPrepareAnnouncementResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (missingFields.length === 0) {
+      return "I still need an announcement title before I can prepare this post.";
+    }
+
+    return `I can draft this announcement, but I still need: ${missingFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the announcement. Review the details below and confirm when you're ready to publish it.";
+  }
+
+  return null;
+}
+
 function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
   if (!data || typeof data !== "object") {
     return null;
@@ -1337,6 +1376,31 @@ function formatPrepareDiscussionThreadResponse(data: unknown): string | null {
 
   if (payload.state === "needs_confirmation") {
     return "I drafted the discussion thread. Review the details below and confirm when you're ready to post it.";
+  }
+
+  return null;
+}
+
+function formatPrepareDiscussionReplyResponse(data: unknown): string | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const payload = data as PendingActionToolPayload;
+  if (payload.state === "missing_fields") {
+    const missingFields = Array.isArray(payload.missing_fields)
+      ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
+      : [];
+
+    if (missingFields.length === 0) {
+      return "I still need the reply body and the target discussion thread before I can prepare this reply.";
+    }
+
+    return `I can draft this discussion reply, but I still need: ${missingFields.join(", ")}.`;
+  }
+
+  if (payload.state === "needs_confirmation") {
+    return "I drafted the discussion reply. Review the details below and confirm when you're ready to post it.";
   }
 
   return null;
@@ -1546,8 +1610,12 @@ function formatDeterministicToolResponse(
       return formatDiscussionsResponse(data);
     case "list_job_postings":
       return formatJobPostingsResponse(data);
+    case "prepare_announcement":
+      return formatPrepareAnnouncementResponse(data);
     case "prepare_job_posting":
       return formatPrepareJobPostingResponse(data);
+    case "prepare_discussion_reply":
+      return formatPrepareDiscussionReplyResponse(data);
     case "prepare_discussion_thread":
       return formatPrepareDiscussionThreadResponse(data);
     case "prepare_event":
@@ -1600,7 +1668,7 @@ const ACTIVE_DRAFT_CONTINUATION_INSTRUCTION = [
   "- A matching assistant draft may already be in progress for this thread.",
   "- When a matching prepare tool is attached, treat the user's latest message as a continuation of that draft unless they clearly changed topics.",
   "- Call the attached prepare tool with the updated draft details instead of replying with read-only prose.",
-  "- Do not say you lack the ability to create jobs, events, or discussion threads when the matching prepare tool is attached.",
+  "- Do not say you lack the ability to create announcements, jobs, discussion replies, discussion threads, or events when the matching prepare tool is attached.",
 ].join("\n");
 const DRAFT_CANCEL_PATTERN =
   /(?<!\w)(?:cancel|never\s+mind|nevermind|forget\s+(?:that|it)|scratch\s+that|stop\s+working\s+on\s+that)(?!\w)/i;
@@ -1617,8 +1685,12 @@ function getGroundingFallbackForTools(toolNames: ToolName[]): string {
 
 function getToolNameForDraftType(draftType: DraftSessionType): ToolName {
   switch (draftType) {
+    case "create_announcement":
+      return "prepare_announcement";
     case "create_job_posting":
       return "prepare_job_posting";
+    case "create_discussion_reply":
+      return "prepare_discussion_reply";
     case "create_discussion_thread":
       return "prepare_discussion_thread";
     case "create_event":
@@ -1649,6 +1721,10 @@ type DraftHistoryMessage = {
 
 const DISCUSSION_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a discussion thread|i can draft this discussion|i drafted the discussion thread)/i;
+const ANNOUNCEMENT_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you create an announcement|i can draft this announcement|i drafted the announcement)/i;
+const DISCUSSION_REPLY_DRAFT_ASSISTANT_PATTERN =
+  /(?:happy to help you draft a reply|i can draft this reply|i drafted the discussion reply)/i;
 const JOB_DRAFT_ASSISTANT_PATTERN =
   /(?:happy to help you create a job posting|i can draft this job|i drafted the job posting)/i;
 const EVENT_DRAFT_ASSISTANT_PATTERN =
@@ -2034,8 +2110,14 @@ function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionTy
     return null;
   }
 
+  if (ANNOUNCEMENT_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "create_announcement";
+  }
   if (JOB_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "create_job_posting";
+  }
+  if (DISCUSSION_REPLY_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
+    return "create_discussion_reply";
   }
   if (DISCUSSION_DRAFT_ASSISTANT_PATTERN.test(message.content)) {
     return "create_discussion_thread";
@@ -2063,6 +2145,9 @@ function inferDraftSessionFromHistory(input: {
     let missingFields: string[];
 
     switch (draftType) {
+      case "create_announcement":
+      case "create_discussion_reply":
+        continue;
       case "create_job_posting":
         draftPayload = extractJobDraftFromHistory(relevantMessages);
         missingFields = [
@@ -2148,11 +2233,21 @@ function shouldContinueDraftSession(
   draftSession: DraftSessionRecord,
   routing: ReturnType<typeof resolveSurfaceRouting>
 ): boolean {
+  const isAnnouncementPrompt = CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message);
   const isJobPrompt = CREATE_JOB_PROMPT_PATTERN.test(message);
+  const isDiscussionReplyPrompt = DISCUSSION_REPLY_PROMPT_PATTERN.test(message);
   const isDiscussionPrompt = CREATE_DISCUSSION_PROMPT_PATTERN.test(message);
   const isEventPrompt = EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN.test(message);
 
+  if (draftSession.draft_type === "create_announcement" && isAnnouncementPrompt) {
+    return true;
+  }
+
   if (draftSession.draft_type === "create_job_posting" && isJobPrompt) {
+    return true;
+  }
+
+  if (draftSession.draft_type === "create_discussion_reply" && isDiscussionReplyPrompt) {
     return true;
   }
 
@@ -2165,9 +2260,16 @@ function shouldContinueDraftSession(
   }
 
   if (
-    (draftSession.draft_type === "create_job_posting" && (isDiscussionPrompt || isEventPrompt)) ||
-    (draftSession.draft_type === "create_discussion_thread" && (isJobPrompt || isEventPrompt)) ||
-    (draftSession.draft_type === "create_event" && (isJobPrompt || isDiscussionPrompt))
+    (draftSession.draft_type === "create_announcement" &&
+      (isJobPrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_job_posting" &&
+      (isAnnouncementPrompt || isDiscussionReplyPrompt || isDiscussionPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_discussion_reply" &&
+      (isAnnouncementPrompt || isJobPrompt || isDiscussionPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_discussion_thread" &&
+      (isAnnouncementPrompt || isJobPrompt || isDiscussionReplyPrompt || isEventPrompt)) ||
+    (draftSession.draft_type === "create_event" &&
+      (isAnnouncementPrompt || isJobPrompt || isDiscussionReplyPrompt || isDiscussionPrompt))
   ) {
     return false;
   }
@@ -3596,7 +3698,9 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               case "ok":
                 if (
                   canUseDraftSessions &&
-                  (toolEvent.name === "prepare_job_posting" ||
+                  (toolEvent.name === "prepare_announcement" ||
+                    toolEvent.name === "prepare_job_posting" ||
+                    toolEvent.name === "prepare_discussion_reply" ||
                     toolEvent.name === "prepare_discussion_thread" ||
                     toolEvent.name === "prepare_event") &&
                   result.data &&
@@ -3632,8 +3736,12 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                         userId: ctx.userId,
                         threadId: threadId!,
                         draftType:
-                          toolEvent.name === "prepare_job_posting"
+                          toolEvent.name === "prepare_announcement"
+                            ? "create_announcement"
+                            : toolEvent.name === "prepare_job_posting"
                             ? "create_job_posting"
+                            : toolEvent.name === "prepare_discussion_reply"
+                              ? "create_discussion_reply"
                             : toolEvent.name === "prepare_discussion_thread"
                               ? "create_discussion_thread"
                               : "create_event",

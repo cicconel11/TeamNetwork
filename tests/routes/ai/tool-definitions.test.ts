@@ -6,8 +6,8 @@ import type { ToolName } from "../../../src/lib/ai/tools/definitions.ts";
 type ToolProperties = Record<string, { type?: string; maximum?: number }>;
 type ToolParameters = { properties?: ToolProperties; additionalProperties?: boolean; required?: string[] };
 
-test("AI_TOOLS exports 18 tool definitions", () => {
-  assert.equal(AI_TOOLS.length, 18);
+test("AI_TOOLS exports 20 tool definitions", () => {
+  assert.equal(AI_TOOLS.length, 20);
 });
 
 test("every tool has type function and additionalProperties false", () => {
@@ -31,7 +31,9 @@ test("TOOL_NAMES contains all tool names", () => {
     "list_donations",
     "list_parents",
     "list_philanthropy_events",
+    "prepare_announcement",
     "prepare_job_posting",
+    "prepare_discussion_reply",
     "prepare_discussion_thread",
     "prepare_event",
     "prepare_events_batch",
@@ -80,6 +82,26 @@ test("list_announcements has a limit parameter", () => {
   const props = params.properties as ToolProperties;
   assert.ok(props.limit);
   assert.equal(props.limit.maximum, 25);
+});
+
+test("prepare_announcement supports broadcast and targeted fields", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_announcement")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.title);
+  assert.ok(props.body);
+  assert.ok(props.audience);
+  assert.ok(props.send_notification);
+});
+
+test("prepare_discussion_reply requires a thread id and body fields", () => {
+  const tool = AI_TOOLS.find((t) => t.function.name === "prepare_discussion_reply")!;
+  const params = tool.function.parameters as ToolParameters;
+  const props = params.properties as ToolProperties;
+
+  assert.ok(props.discussion_thread_id);
+  assert.ok(props.body);
 });
 
 test("get_org_stats has no required parameters", () => {

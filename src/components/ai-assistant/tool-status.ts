@@ -14,8 +14,12 @@ export function formatToolStatusLabel(toolName: string): string {
       return "Looking up discussions...";
     case "list_job_postings":
       return "Looking up job postings...";
+    case "prepare_announcement":
+      return "Preparing announcement...";
     case "prepare_job_posting":
       return "Preparing job posting...";
+    case "prepare_discussion_reply":
+      return "Preparing discussion reply...";
     case "prepare_discussion_thread":
       return "Preparing discussion thread...";
     case "get_org_stats":
