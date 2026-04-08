@@ -10,7 +10,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Linking from "expo-linking";
 import {
   Award,
-  BookOpen,
   Briefcase,
   Building2,
   ClipboardList,
@@ -96,7 +95,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     const trainingItems: NavItem[] = [
       { label: "Workouts", href: `/(app)/${slug}/workouts`, icon: Dumbbell },
       { label: "Competition", href: `/(app)/${slug}/competition`, icon: Award },
-      { label: "Schedules", href: `/(app)/${slug}/schedules`, icon: BookOpen },
       { label: "Records", href: `/(app)/${slug}/records`, icon: Trophy },
     ];
 

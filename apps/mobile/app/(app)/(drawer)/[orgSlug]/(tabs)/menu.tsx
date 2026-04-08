@@ -18,6 +18,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import {
   Bell,
+  BookOpen,
   Heart,
   Trophy,
   FileText,
@@ -448,7 +449,13 @@ export default function MenuScreen() {
   ];
 
   // Build community items based on feature flags
-  const communityItems: MenuItem[] = [];
+  const communityItems: MenuItem[] = [
+    {
+      icon: <BookOpen size={20} color={neutral.muted} />,
+      label: "Schedules",
+      onPress: () => router.push(`/(app)/${orgSlug}/schedules`),
+    },
+  ];
 
   if (permissions.canViewDonations) {
     communityItems.push({

@@ -27,7 +27,7 @@ AuthProvider → GestureHandlerRootView → StripeProvider → Stack
   └─ (auth): login, signup, forgot-password, reset-password, callback
   └─ (app)/(drawer): org list, profile, terms
        └─ [orgSlug] (OrgProvider)
-            └─ (tabs): home, members, alumni, announcements, events, menu
+            └─ (tabs): home, members, alumni, announcements, calendar, menu
             └─ Feature stacks: chat, events, announcements, workouts, schedules, etc.
 ```
 
