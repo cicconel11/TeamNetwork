@@ -1,11 +1,34 @@
-import { View, Text, Pressable, StyleSheet, StatusBar, useWindowDimensions } from "react-native";
+import { useEffect, useRef } from "react";
+import { View, Text, Pressable, StyleSheet, StatusBar, useWindowDimensions, Animated, Easing } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { Image } from "expo-image";
+import { spacing } from "@/lib/theme";
 
 export default function LandingScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
+
+  const brandOpacity = useRef(new Animated.Value(0)).current;
+  const brandTranslate = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(brandOpacity, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(brandTranslate, {
+        toValue: 0,
+        duration: 500,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [brandOpacity, brandTranslate]);
 
   const handleSignInPress = () => {
     router.push("/(auth)/login");
@@ -41,13 +64,22 @@ export default function LandingScreen() {
       {/* Bottom Card */}
       <SafeAreaView style={styles.cardWrapper} edges={["bottom"]}>
         <View style={styles.card}>
-          {/* Header with App Icon */}
-          <View style={styles.cardHeader}>
-            <View style={styles.appIcon}>
-              <Text style={styles.appIconText}>TN</Text>
-            </View>
-            <View style={styles.headerSpacer} />
-          </View>
+          <Animated.View
+            style={[
+              styles.brandZone,
+              { opacity: brandOpacity, transform: [{ translateY: brandTranslate }] },
+            ]}
+          >
+            <Image
+              source={require("../../assets/brand-logo.png")}
+              style={styles.brandLogo}
+              contentFit="contain"
+              transition={0}
+              cachePolicy="memory"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          </Animated.View>
 
           {/* Title */}
           <Text style={styles.title}>Get Started</Text>
@@ -143,29 +175,12 @@ const styles = StyleSheet.create({
   },
 
   // Header
-  cardHeader: {
-    flexDirection: "row",
+  brandZone: {
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 20,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  appIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderCurve: "continuous",
-    backgroundColor: "#059669",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  appIconText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  headerSpacer: {
-    width: 44,
-  },
+  brandLogo: { width: 220, height: 147 },
 
   // Typography
   title: {
