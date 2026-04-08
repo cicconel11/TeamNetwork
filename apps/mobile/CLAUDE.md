@@ -53,6 +53,8 @@ Use `StyleSheet.create()` for all styling. Design tokens in `src/lib/design-toke
 
 **APP_CHROME** (`src/lib/chrome.ts`): Fixed header gradient (`#0f172a` → `#020617`) and tab bar colors.
 
+**Brand wordmark** (`assets/brand-logo.png`, `@2x.png`, `@3x.png`): Product logo sourced from the web app (`apps/web/public/TeamNetwor.png`). Use via `require()` with `expo-image`, `contentFit="contain"`, `transition={0}`, `cachePolicy="memory"`. Intended for dark surfaces only (`#0a0a0a`–`#0f172a` range) — the type is light-colored. NOT for use as launcher icon or splash; those are separate assets in `android/app/src/main/res/` and `assets/splash.png`.
+
 ## Screen UI Pattern
 
 All org screens follow this layout:
