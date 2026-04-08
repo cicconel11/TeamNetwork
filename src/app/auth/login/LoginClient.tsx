@@ -12,22 +12,27 @@ import { useCaptcha } from "@/hooks/useCaptcha";
 import { sanitizeRedirectPath, buildAuthCallbackUrl, buildAuthLink } from "@/lib/auth/redirect";
 import { loginSchema, type LoginForm } from "@/lib/schemas/auth";
 import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
+import { MicrosoftIcon } from "@/components/shared/MicrosoftIcon";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { MICROSOFT_SSO_PROVIDER } from "@/lib/microsoft/sso-config";
 import { useTranslations } from "next-intl";
 
 interface LoginFormProps {
   hcaptchaSiteKey: string;
   linkedinOauthAvailable: boolean;
+  microsoftOauthAvailable: boolean;
 }
 
 function LoginFormComponent({
   hcaptchaSiteKey,
   linkedinOauthAvailable,
+  microsoftOauthAvailable,
 }: LoginFormProps) {
   const t = useTranslations("auth");
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
+  const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [mode, setMode] = useState<"password" | "magic-link">("password");
@@ -51,15 +56,20 @@ function LoginFormComponent({
   const searchParams = useSearchParams();
   const redirectTo = sanitizeRedirectPath(searchParams.get("redirect"));
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
-  const isSocialLoading = isGoogleLoading || isLinkedInLoading;
+  const isSocialLoading = isGoogleLoading || isLinkedInLoading || isMicrosoftLoading;
 
-  const handleSocialLogin = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
+  const handleSocialLogin = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER | typeof MICROSOFT_SSO_PROVIDER) => {
     if (!isVerified || !captchaToken) {
       setError(t("completeCaptcha"));
       return;
     }
 
-    const setLoading = provider === "google" ? setIsGoogleLoading : setIsLinkedInLoading;
+    const setLoading =
+      provider === "google"
+        ? setIsGoogleLoading
+        : provider === MICROSOFT_SSO_PROVIDER
+          ? setIsMicrosoftLoading
+          : setIsLinkedInLoading;
     setLoading(true);
     setError(null);
 
@@ -186,6 +196,21 @@ function LoginFormComponent({
         </Button>
       )}
 
+      {microsoftOauthAvailable && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full mb-6"
+          onClick={() => handleSocialLogin(MICROSOFT_SSO_PROVIDER)}
+          isLoading={isMicrosoftLoading}
+          disabled={isSocialLoading}
+          data-testid="login-microsoft"
+        >
+          <MicrosoftIcon className="h-5 w-5 mr-2" />
+          {t("continueWithMicrosoft")}
+        </Button>
+      )}
+
       <div className="relative mb-6">
         <div className="absolute inset-0 flex items-center">
           <div className="w-full border-t border-white/10" />
@@ -305,6 +330,7 @@ function LoginFormComponent({
 export function LoginClient({
   hcaptchaSiteKey,
   linkedinOauthAvailable,
+  microsoftOauthAvailable,
 }: LoginFormProps) {
   return (
     <Suspense fallback={
@@ -319,6 +345,7 @@ export function LoginClient({
       <LoginFormComponent
         hcaptchaSiteKey={hcaptchaSiteKey}
         linkedinOauthAvailable={linkedinOauthAvailable}
+        microsoftOauthAvailable={microsoftOauthAvailable}
       />
     </Suspense>
   );

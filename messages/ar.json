@@ -126,6 +126,7 @@
     "createAccountBtn": "إنشاء حساب",
     "continueWithGoogle": "المتابعة باستخدام Google",
     "continueWithLinkedIn": "المتابعة باستخدام LinkedIn",
+    "continueWithMicrosoft": "المتابعة باستخدام Microsoft",
     "orContinueWithEmail": "أو المتابعة بالبريد الإلكتروني",
     "emailLabel": "البريد الإلكتروني",
     "emailPlaceholder": "you@example.com",

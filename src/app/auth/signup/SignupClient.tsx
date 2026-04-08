@@ -15,7 +15,9 @@ import { shouldResumeSignupRegistration } from "@/lib/auth/signup-flow";
 import { AgeGate } from "@/components/auth/AgeGate";
 import { FeedbackButton } from "@/components/feedback";
 import { LinkedInIcon } from "@/components/shared/LinkedInIcon";
+import { MicrosoftIcon } from "@/components/shared/MicrosoftIcon";
 import { LINKEDIN_OIDC_PROVIDER } from "@/lib/linkedin/config";
+import { MICROSOFT_SSO_PROVIDER } from "@/lib/microsoft/sso-config";
 import { useTranslations } from "next-intl";
 
 type SignupStep = "age_gate" | "registration";
@@ -39,6 +41,7 @@ function clearAgeGateData() {
 interface SignupClientProps {
   hcaptchaSiteKey: string;
   linkedinOauthAvailable: boolean;
+  microsoftOauthAvailable: boolean;
   redirectTo?: string;
   initialError?: string | null;
 }
@@ -46,6 +49,7 @@ interface SignupClientProps {
 export function SignupClient({
   hcaptchaSiteKey,
   linkedinOauthAvailable,
+  microsoftOauthAvailable,
   redirectTo = "/app",
   initialError = null,
 }: SignupClientProps) {
@@ -58,11 +62,12 @@ export function SignupClient({
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isLinkedInLoading, setIsLinkedInLoading] = useState(false);
+  const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const [message, setMessage] = useState<string | null>(null);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
-  const isSocialLoading = isGoogleLoading || isLinkedInLoading;
+  const isSocialLoading = isGoogleLoading || isLinkedInLoading || isMicrosoftLoading;
 
   // Restore age gate data from sessionStorage on mount
   useEffect(() => {
@@ -156,7 +161,7 @@ export function SignupClient({
     }
   };
 
-  const handleSocialSignup = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER) => {
+  const handleSocialSignup = async (provider: "google" | typeof LINKEDIN_OIDC_PROVIDER | typeof MICROSOFT_SSO_PROVIDER) => {
     if (!isVerified || !captchaToken) {
       setError(t("completeCaptcha"));
       return;
@@ -167,7 +172,12 @@ export function SignupClient({
       return;
     }
 
-    const setLoading = provider === "google" ? setIsGoogleLoading : setIsLinkedInLoading;
+    const setLoading =
+      provider === "google"
+        ? setIsGoogleLoading
+        : provider === MICROSOFT_SSO_PROVIDER
+          ? setIsMicrosoftLoading
+          : setIsLinkedInLoading;
     setLoading(true);
     setError(null);
 
@@ -289,6 +299,21 @@ export function SignupClient({
         >
           <LinkedInIcon className="h-5 w-5 mr-2" />
           {t("continueWithLinkedIn")}
+        </Button>
+      )}
+
+      {microsoftOauthAvailable && (
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full mb-6"
+          onClick={() => handleSocialSignup(MICROSOFT_SSO_PROVIDER)}
+          isLoading={isMicrosoftLoading}
+          disabled={isSocialLoading}
+          data-testid="signup-microsoft"
+        >
+          <MicrosoftIcon className="h-5 w-5 mr-2" />
+          {t("continueWithMicrosoft")}
         </Button>
       )}
 

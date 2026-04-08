@@ -1,5 +1,6 @@
 import { AuthHeader } from "@/components/auth/AuthHeader";
 import { isLinkedInLoginEnabled } from "@/lib/linkedin/config.server";
+import { isMicrosoftLoginEnabled } from "@/lib/microsoft/sso-config.server";
 import { LoginClient } from "./LoginClient";
 import { getTranslations } from "next-intl/server";
 
@@ -10,6 +11,7 @@ export default async function LoginPage() {
   const t = await getTranslations("auth");
   const hcaptchaSiteKey = process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || "";
   const linkedinOauthAvailable = isLinkedInLoginEnabled();
+  const microsoftOauthAvailable = isMicrosoftLoginEnabled();
 
   return (
     <div className="auth-page min-h-screen flex items-center justify-center p-4">
@@ -19,6 +21,7 @@ export default async function LoginPage() {
         <LoginClient
           hcaptchaSiteKey={hcaptchaSiteKey}
           linkedinOauthAvailable={linkedinOauthAvailable}
+          microsoftOauthAvailable={microsoftOauthAvailable}
         />
       </div>
     </div>

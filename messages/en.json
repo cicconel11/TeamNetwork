@@ -126,6 +126,7 @@
     "createAccountBtn": "Create Account",
     "continueWithGoogle": "Continue with Google",
     "continueWithLinkedIn": "Continue with LinkedIn",
+    "continueWithMicrosoft": "Continue with Microsoft",
     "orContinueWithEmail": "Or continue with email",
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
