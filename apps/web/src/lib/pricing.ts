@@ -5,17 +5,8 @@ export {
   ALUMNI_BUCKET_LABELS,
   getTotalPrice,
   formatPrice,
+  FEATURES,
 } from "@teammeet/core";
-
-// Web-specific marketing content (not shared with mobile)
-export const FEATURES = [
-  { title: "Roster Management", description: "Maintain a living history of every athlete, coach, and alumni who's ever worn the jersey." },
-  { title: "Team Events", description: "Coordinate game days, banquets, alumni games, and fundraisers with RSVP tracking." },
-  { title: "Fundraising", description: "Accept donations for new equipment or travel expenses directly to your team's Stripe account." },
-  { title: "Record Books", description: "Preserve your team's history with digital trophy cases, record boards, and hall of fame." },
-  { title: "Communication", description: "Blast updates to parents, current players, and alumni without managing messy email lists." },
-  { title: "Digital Forms", description: "Collect liability waivers, medical forms, and registration docs securely online." },
-];
 
 export const FAQ_ITEMS = [
   {

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/server";
 import { ButtonLink } from "@/components/ui";
 import { FEATURES, FAQ_ITEMS } from "@/lib/pricing";
+import { BRAND_TAGLINE, HERO_SUB_COPY } from "@teammeet/core";
 
 // Lazy-load animation components - only needed on landing page
 const LandingAnimations = dynamic(
@@ -44,8 +45,8 @@ export default async function LandingPage() {
     <div id="top" className="landing-page min-h-screen text-landing-cream relative noise-overlay bg-landing-navy">
       <LandingAnimations />
 
-      {/* Diagonal stripe background */}
-      <div className="fixed inset-0 stripe-pattern pointer-events-none" />
+      {/* Diagonal stripe background — reduced opacity on mobile to let content breathe */}
+      <div className="fixed inset-0 stripe-pattern pointer-events-none opacity-40 md:opacity-100" />
 
       {/* Subtle depth gradient */}
       <div className="fixed inset-0 bg-gradient-to-b from-landing-navy via-landing-navy to-landing-navy/95 pointer-events-none" />
@@ -78,9 +79,11 @@ export default async function LandingPage() {
       </header>
 
       {/* Hero - "The Emergence" */}
-      <section className="relative z-10 pt-12 lg:pt-20 pb-20 px-6">
-        {/* Stadium Light Beams */}
-        <StadiumLightBeams />
+      <section className="relative z-10 pt-8 sm:pt-12 lg:pt-20 pb-16 sm:pb-20 px-6">
+        {/* Stadium Light Beams — desktop only; too visually heavy on small viewports */}
+        <div className="hidden md:block">
+          <StadiumLightBeams />
+        </div>
 
         <FloatingParticles />
 
@@ -90,24 +93,27 @@ export default async function LandingPage() {
             <div>
               <div className="hero-animate inline-flex items-center gap-2 px-4 py-2 rounded-full bg-landing-cream/10 border border-landing-cream/20 mb-4">
                 <span className="w-2 h-2 rounded-full bg-landing-green gold-shimmer" />
-                <span className="text-landing-cream/80 text-sm font-medium">Built for teams that go the distance</span>
+                <span className="text-landing-cream/80 text-sm font-medium">{BRAND_TAGLINE}</span>
               </div>
 
               <h1 className="hero-animate mb-6">
-                <span className="sr-only">TeamNetwork: Your team&apos;s home field advantage</span>
+                {/* Mobile: visible headline text instead of redundant wordmark image */}
+                <span className="block lg:hidden text-3xl sm:text-4xl font-display font-bold leading-[1.05] tracking-[-0.01em] text-landing-cream">
+                  Your team&apos;s<br />home field advantage
+                </span>
+                {/* Desktop: wordmark image */}
                 <Image
                   src="/TeamNetwor.png"
-                  alt=""
+                  alt="TeamNetwork: Your team's home field advantage"
                   width={541}
                   height={303}
-                  className="w-[300px] sm:w-[360px] lg:w-[420px] h-auto drop-shadow-[0_0_40px_rgba(34,197,94,0.15)]"
-                  aria-hidden="true"
+                  className="hidden lg:block w-[420px] h-auto drop-shadow-[0_0_40px_rgba(34,197,94,0.15)]"
                   priority
                 />
               </h1>
 
-              <p className="hero-animate text-xl text-landing-cream/70 max-w-lg mb-10 leading-relaxed">
-                Member directories, events, donations, philanthropy, and records — all in one place. Built for sports teams, students, clubs, and organizations of all kinds.
+              <p className="hero-animate text-base sm:text-lg lg:text-xl text-landing-cream/70 max-w-lg mb-10 leading-relaxed">
+                {HERO_SUB_COPY}
               </p>
 
               <div className="hero-animate flex flex-col sm:flex-row gap-4">
@@ -119,20 +125,24 @@ export default async function LandingPage() {
                 </ButtonLink>
               </div>
 
-              {/* Trust badges */}
+              {/* Have an invite code chip */}
               <div className="hero-animate mt-10">
-                <p className="text-landing-cream/50 text-sm">Have an invite code?</p>
-                <Link href="/auth/login?redirect=/app/join" className="inline-flex items-center gap-2 text-landing-cream/70 hover:text-landing-cream transition-colors mt-1">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <Link
+                  href="/auth/login?redirect=/app/join"
+                  className="inline-flex items-center gap-2 rounded-full border border-landing-cream/15 bg-landing-cream/5 px-4 py-2 text-sm text-landing-cream/70 hover:text-landing-cream hover:bg-landing-cream/10 transition-colors"
+                >
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                   </svg>
-                  <span className="font-medium">Join an Organization</span>
+                  <span className="font-medium">Have an invite code? Join an Organization</span>
                 </Link>
               </div>
             </div>
 
             {/* Right - Example Organization (Scoreboard Preview) */}
-            <div className="hero-animate relative">
+            <div className="hero-animate relative max-w-sm mx-auto lg:max-w-none">
+              {/* Mobile eyebrow label — signals this is a live product preview */}
+              <p className="lg:hidden text-[10px] uppercase tracking-[0.2em] text-landing-cream/40 text-center mb-3">A Live Org</p>
               {/* Mock organization card with scoreboard styling */}
               <div className="bg-landing-navy-light/80 rounded-2xl border border-landing-cream/10 overflow-hidden">
                 {/* Org header */}
@@ -147,18 +157,18 @@ export default async function LandingPage() {
                     </div>
                   </div>
                 </div>
-                {/* Quick stats - Scoreboard style */}
-                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-[#0a0a0a]">
+                {/* Quick stats - Scoreboard style; bg softened to navy/80 for card continuity */}
+                <div className="grid grid-cols-3 divide-x divide-landing-cream/10 border-b border-landing-cream/10 bg-landing-navy/80">
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>127</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 8px rgba(34,197,94,0.35)" }}>127</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Members</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>24</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 8px rgba(34,197,94,0.35)" }}>24</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Events</p>
                   </div>
                   <div className="p-4 text-center">
-                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 10px rgba(34,197,94,0.5)" }}>$8.2k</p>
+                    <p className="text-2xl font-bold font-mono text-landing-green" style={{ textShadow: "0 0 8px rgba(34,197,94,0.35)" }}>$8.2k</p>
                     <p className="text-xs text-landing-cream/50 uppercase tracking-wider">Donations</p>
                   </div>
                 </div>
@@ -216,13 +226,14 @@ export default async function LandingPage() {
       </section>
 
       {/* Features - "Trophy Case" */}
-      <section id="features" className="relative z-10 py-24 px-6">
+      <section id="features" className="relative z-10 py-16 sm:py-20 lg:py-24 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <div className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/60 text-xs uppercase tracking-[0.2em] mb-6">
+            {/* Eyebrow: tighter tracking + warmer opacity for better legibility without datedness */}
+            <div className="scroll-reveal inline-block px-4 py-1.5 rounded-full bg-landing-cream/5 text-landing-cream/70 text-xs uppercase tracking-[0.18em] mb-6">
               Features
             </div>
-            <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold mb-6">
+            <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold leading-[1.05] tracking-[-0.01em] mb-6">
               Everything Your
               <br />
               <span className="text-landing-cream">Team Needs</span>
@@ -232,18 +243,19 @@ export default async function LandingPage() {
             </p>
           </div>
 
-          <div className="features-grid grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="features-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {FEATURES.map((feature, i) => (
               <div
                 key={feature.title}
-                className="trophy-card bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-6 overflow-hidden"
+                className="trophy-card bg-landing-navy-light/50 backdrop-blur-sm rounded-2xl p-5 sm:p-6 overflow-hidden"
               >
                 {/* Trophy watermark */}
                 <svg className="trophy-watermark" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M7.73 9.728a6.726 6.726 0 002.748 1.35m3.044-1.35a6.726 6.726 0 01-2.748 1.35m0 0a6.772 6.772 0 01-3.044 0" />
                 </svg>
 
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-landing-cream/10 to-landing-cream/5 flex items-center justify-center mb-5">
+                {/* Icon tile: green-tinted gradient for section color continuity */}
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-landing-green/15 to-landing-green/5 flex items-center justify-center mb-5">
                   <FeatureIcon index={i} />
                 </div>
                 <h3 className="font-display font-semibold text-lg text-landing-cream mb-2">{feature.title}</h3>
@@ -255,7 +267,7 @@ export default async function LandingPage() {
       </section>
 
       {/* How It Works - "The Playbook" */}
-      <section className="relative z-10 py-24 px-6">
+      <section className="relative z-10 py-16 sm:py-20 lg:py-24 px-6">
         <div className="chalkboard max-w-5xl mx-auto rounded-2xl p-8 sm:p-12">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
@@ -291,7 +303,7 @@ export default async function LandingPage() {
       <PricingSection />
 
       {/* FAQ - "Press Conference" */}
-      <section id="faq" className="relative z-10 py-24 px-6 bg-landing-navy-light/30">
+      <section id="faq" className="relative z-10 py-16 sm:py-20 lg:py-24 px-6 bg-landing-navy-light/30">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="scroll-reveal font-display text-4xl sm:text-5xl font-bold">
@@ -330,7 +342,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Terms Summary */}
-      <section id="terms-summary" className="relative z-10 py-24 px-6">
+      <section id="terms-summary" className="relative z-10 py-16 sm:py-20 lg:py-24 px-6">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="scroll-reveal font-display text-3xl sm:text-4xl font-bold mb-4">Terms of Service</h2>
@@ -370,7 +382,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Final CTA - "Championship Moment" */}
-      <section className="relative z-10 py-24 px-6 overflow-hidden">
+      <section className="relative z-10 py-16 sm:py-20 lg:py-24 px-6 overflow-hidden">
         {/* Confetti burst */}
         <Confetti />
 
@@ -392,13 +404,13 @@ export default async function LandingPage() {
             />
           </div>
 
-          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 jersey-text">
+          <h2 className="scroll-reveal font-display text-4xl sm:text-5xl lg:text-6xl font-bold leading-[1.05] tracking-[-0.01em] mb-6 jersey-text">
             Build Your
             <br />
             <span className="text-landing-green">Championship Legacy</span>
           </h2>
 
-          <p className="scroll-reveal text-xl text-landing-cream/60 mb-10 max-w-2xl mx-auto">
+          <p className="scroll-reveal text-base sm:text-lg lg:text-xl text-landing-cream/60 mb-10 max-w-2xl mx-auto">
             Join today to create new opportunities for your organization and members.
           </p>
 
