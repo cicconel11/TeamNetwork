@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { sendNotificationBlast, sendEmail as sendEmailStub } from "@/lib/notifications";
 import type { EmailParams, NotificationResult, NotificationCategory } from "@/lib/notifications";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
@@ -90,15 +90,11 @@ async function sendEmailWithFallback(to: string, subject: string, bodyText: stri
   return sendEmailStub({ to, subject, body: bodyText });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   let respond: ((payload: unknown, status?: number) => ReturnType<typeof NextResponse.json>) | null = null;
   try {
-    const supabase = await createClient();
+    const { user, supabase } = await getUserFromRequest(request);
     const service = createServiceClient();
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
 
     const rateLimit = checkRateLimit(request, {
       userId: user?.id ?? null,
@@ -330,4 +326,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { ORG_NAV_ITEMS } from "@/lib/navigation/nav-items";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import {
@@ -96,7 +96,7 @@ function sanitizeNavConfig(payload: unknown): NavConfig {
   return config;
 }
 
-export async function PATCH(req: Request, { params }: RouteParams) {
+export async function PATCH(req: NextRequest, { params }: RouteParams) {
   try {
     const { organizationId } = await params;
     const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
@@ -122,8 +122,7 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       sanitizedName = trimmedName;
     }
 
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const { user, supabase } = await getUserFromRequest(req);
 
     const rateLimit = checkRateLimit(req, {
       userId: user?.id ?? null,
@@ -250,15 +249,14 @@ export async function PATCH(req: Request, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: RouteParams) {
+export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, supabase } = await getUserFromRequest(_req);
 
   const rateLimit = checkRateLimit(_req, {
     userId: user?.id ?? null,

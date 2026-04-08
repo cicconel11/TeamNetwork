@@ -52,6 +52,8 @@ supabase db push --db-url <PRODUCTION_DATABASE_URL>
 supabase migration list
 ```
 
+If a deploy includes the synced `...0001` migration filenames from the web import, treat them as intentional idempotent re-runs of the older `...0000` versions already used on `react-native`. Apply them normally, but verify `supabase migration list` afterward so the environment reflects the newer filenames.
+
 ## Environment Variables
 
 ### Required for Production

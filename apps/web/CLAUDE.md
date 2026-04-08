@@ -9,12 +9,10 @@ bun dev                # Next.js dev server at localhost:3000
 bun build              # Production build
 bun lint               # ESLint
 bun run typecheck      # TypeScript strict check (tsc --noEmit)
-bun run test           # All tests (unit + security + payments + mobile)
+bun run test           # Fast checks plus targeted web suites
 bun run test:unit      # middleware, cancel-subscription, grace-period
-bun run test:auth      # Middleware auth tests
 bun run test:payments  # Payment idempotency, webhook dedupe, platform fee
 bun run test:security  # Webhook rate limiting
-bun run test:mobile    # Mobile permissions, routing, menu parity
 ```
 
 Run a single test file:

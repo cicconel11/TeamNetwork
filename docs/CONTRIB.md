@@ -52,7 +52,6 @@ TeamMeet/
 | `bun format` | Format code with Prettier |
 | `bun format:check` | Check formatting without changes |
 | `bun test` | Run all web tests |
-| `bun test:auth` | Test authentication middleware |
 | `bun test:payments` | Test payment idempotency and Stripe webhooks |
 | `bun test:security` | Test security features (rate limiting, etc.) |
 
@@ -66,10 +65,8 @@ TeamMeet/
 | `bun run lint` | Run ESLint |
 | `bun run test` | Run all test suites |
 | `bun run test:unit` | Middleware, cancellation, grace period tests |
-| `bun run test:auth` | Authentication middleware tests |
 | `bun run test:payments` | Payment idempotency, webhook dedup, platform fee tests |
 | `bun run test:security` | Webhook rate limit tests |
-| `bun run test:mobile` | Mobile permissions, routing, parity tests |
 | `bun run typecheck` | TypeScript type checking |
 
 ### Mobile App (`apps/mobile/`)

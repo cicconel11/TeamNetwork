@@ -1,8 +1,8 @@
 import { randomUUID } from "crypto";
 import { extname } from "path";
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getUserFromRequest } from "@/lib/supabase/get-user-from-request";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { baseSchemas } from "@/lib/security/validation";
 import { normalizeRole } from "@/lib/auth/role-utils";
@@ -64,15 +64,14 @@ function normalizeHexColor(value: FormDataEntryValue | null): { color: string | 
   return { color: `#${match[1].toLowerCase()}`, invalid: false };
 }
 
-export async function POST(req: Request, { params }: RouteParams) {
+export async function POST(req: NextRequest, { params }: RouteParams) {
   const { organizationId } = await params;
   const orgIdParsed = baseSchemas.uuid.safeParse(organizationId);
   if (!orgIdParsed.success) {
     return NextResponse.json({ error: "Invalid organization id" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, supabase } = await getUserFromRequest(req);
 
   const rateLimit = checkRateLimit(req, {
     userId: user?.id ?? null,

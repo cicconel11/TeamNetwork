@@ -273,7 +273,7 @@ export default function NewAnnouncementPage() {
               {...register("send_notification")}
             />
             <label htmlFor="send_notification" className="text-sm text-foreground">
-              Send push notification to selected audience
+              Notify audience via email
             </label>
           </div>
 
