@@ -575,6 +575,7 @@
     "fundraiser": "Fundraiser",
     "practice": "Practice",
     "workout": "Workout",
+    "class": "Class",
     "recurringEvent": "Recurring event",
     "willAppear": "{label} will appear here once created",
     "noUpcomingEvents": "No upcoming {label}",

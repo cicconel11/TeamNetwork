@@ -7,4 +7,5 @@ export const EVENT_TYPE_OPTIONS = [
   { value: "social", label: "Social" },
   { value: "workout", label: "Workout" },
   { value: "fundraiser", label: "Fundraiser" },
+  { value: "class", label: "Class" },
 ] as const;

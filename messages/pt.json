@@ -575,6 +575,7 @@
     "fundraiser": "Arrecadacao",
     "practice": "Treino",
     "workout": "Exercicio",
+    "class": "Class",
     "recurringEvent": "Evento recorrente",
     "willAppear": "{label} aparecera aqui apos ser criado",
     "noUpcomingEvents": "Nenhum {label} proximo",

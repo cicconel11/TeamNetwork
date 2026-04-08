@@ -575,6 +575,7 @@
     "fundraiser": "筹款",
     "practice": "训练",
     "workout": "锻炼",
+    "class": "Class",
     "recurringEvent": "周期性活动",
     "willAppear": "{label}创建后将显示在此处",
     "noUpcomingEvents": "没有即将举行的{label}",
