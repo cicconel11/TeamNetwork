@@ -1,32 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { DEFAULT_MICROSOFT_REDIRECT_PATH, sanitizeMicrosoftRedirectPath } from "@/lib/microsoft/redirect";
 import { getMicrosoftAuthorizationUrl } from "@/lib/microsoft/oauth";
 import { getAppUrl } from "@/lib/url";
 
 export const dynamic = "force-dynamic";
-
-// Allowlist of valid redirect paths to prevent query param injection
-const ALLOWED_REDIRECT_PATHS = [
-    "/settings/notifications",
-    "/settings",
-    "/"
-];
-
-/**
- * Sanitizes the redirect parameter by stripping query params and validating against allowlist
- */
-function sanitizeRedirectPath(rawPath: string): string {
-    // Strip any query params from caller input
-    const basePath = rawPath.split("?")[0];
-
-    // Validate against allowlist
-    if (ALLOWED_REDIRECT_PATHS.includes(basePath)) {
-        return basePath;
-    }
-
-    // Default fallback
-    return "/settings/notifications";
-}
 
 /**
  * GET /api/microsoft/auth
@@ -40,8 +18,8 @@ function sanitizeRedirectPath(rawPath: string): string {
  */
 export async function GET(request: Request) {
     const url = new URL(request.url);
-    const rawRedirect = url.searchParams.get("redirect") || "/settings/notifications";
-    const redirectPath = sanitizeRedirectPath(rawRedirect);
+    const rawRedirect = url.searchParams.get("redirect") || DEFAULT_MICROSOFT_REDIRECT_PATH;
+    const redirectPath = sanitizeMicrosoftRedirectPath(rawRedirect);
     const appUrl = getAppUrl();
 
     try {

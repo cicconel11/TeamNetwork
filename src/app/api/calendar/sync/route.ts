@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getOutlookEntriesToSync } from "@/lib/calendar/manual-sync";
 import { getCalendarConnection } from "@/lib/google/oauth";
-import { syncEventToUsers } from "@/lib/google/calendar-sync";
 import { syncOutlookEventToUsers } from "@/lib/microsoft/calendar-sync";
+import { syncEventToUsers } from "@/lib/google/calendar-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function POST(request: Request) {
             getCalendarConnection(serviceClient, user.id),
             serviceClient
                 .from("user_calendar_connections")
-                .select("id, status")
+                .select("id, status, target_calendar_id")
                 .eq("user_id", user.id)
                 .eq("provider", "outlook")
                 .eq("status", "connected")
@@ -185,22 +186,15 @@ export async function POST(request: Request) {
             const outlookConnection = outlookConnectionResult.data;
 
             if (outlookConnection) {
-                // Get pending/failed Outlook entries
-                let outlookQuery = serviceClient
-                    .from("event_calendar_entries")
-                    .select("event_id, organization_id")
-                    .eq("user_id", user.id)
-                    .eq("provider", "outlook")
-                    .in("sync_status", ["pending", "failed"]);
+                const allOutlookEntriesToSync = await getOutlookEntriesToSync(
+                    serviceClient,
+                    user.id,
+                    outlookConnection.target_calendar_id,
+                    organizationId
+                );
 
-                if (organizationId) {
-                    outlookQuery = outlookQuery.eq("organization_id", organizationId);
-                }
-
-                const { data: pendingOutlookEntries } = await outlookQuery;
-
-                // Sync pending/failed Outlook entries
-                for (const entry of pendingOutlookEntries || []) {
+                // Sync pending/failed and mismatched Outlook entries
+                for (const entry of allOutlookEntriesToSync) {
                     try {
                         await syncOutlookEventToUsers(serviceClient, entry.organization_id, entry.event_id, "update");
                         syncedCount++;

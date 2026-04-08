@@ -2,6 +2,7 @@ import { fetchUrlSafe } from "./fetch";
 import { genericHtmlConnector } from "./genericHtml";
 import { googleCalendarConnector } from "./googleCalendar";
 import { icsConnector } from "./ics";
+import { outlookCalendarConnector } from "./outlookCalendar";
 import { vendorAConnector } from "./vendorA";
 import { vendorBConnector } from "./vendorB";
 import type { ScheduleConnector, VendorId } from "./types";
@@ -11,6 +12,7 @@ export const connectors: ScheduleConnector[] = [
   vendorAConnector,
   vendorBConnector,
   googleCalendarConnector,
+  outlookCalendarConnector,
   genericHtmlConnector,
 ];
 
@@ -21,6 +23,10 @@ export async function detectConnector(
   // Google Calendar URLs don't need HTTP fetch or content detection
   if (url.startsWith("google://")) {
     return { connector: googleCalendarConnector, confidence: 1.0 };
+  }
+
+  if (url.startsWith("outlook://")) {
+    return { connector: outlookCalendarConnector, confidence: 1.0 };
   }
 
   const icsCheck = await icsConnector.canHandle({ url });

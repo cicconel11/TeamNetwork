@@ -187,6 +187,12 @@ export async function storeMicrosoftConnection(
 ): Promise<{ success: boolean; error?: string }> {
     const encryptedAccessToken = encryptToken(tokens.accessToken);
     const encryptedRefreshToken = encryptToken(tokens.refreshToken);
+    const { data: existingConnection } = await supabase
+        .from("user_calendar_connections")
+        .select("target_calendar_id")
+        .eq("user_id", userId)
+        .eq("provider", "outlook")
+        .maybeSingle();
 
     const { error } = await supabase
         .from("user_calendar_connections")
@@ -199,7 +205,7 @@ export async function storeMicrosoftConnection(
             token_expires_at: tokens.expiresAt.toISOString(),
             status: "connected",
             last_sync_at: new Date().toISOString(),
-            target_calendar_id: null,
+            target_calendar_id: existingConnection?.target_calendar_id ?? null,
         } as unknown as Database["public"]["Tables"]["user_calendar_connections"]["Insert"] & {
             target_calendar_id: string | null;
         }, {

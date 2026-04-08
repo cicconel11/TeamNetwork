@@ -38,6 +38,43 @@ test("storeMicrosoftConnection stores Outlook default-calendar target as null", 
   assert.equal(rows[0].target_calendar_id, null);
 });
 
+test("storeMicrosoftConnection preserves an existing Outlook target calendar on reconnect", async () => {
+  const stub = createSupabaseStub();
+  const supabase = stub as unknown as SupabaseClient<Database>;
+
+  stub.seed("user_calendar_connections", [{
+    id: "conn-1",
+    user_id: "user-1",
+    provider: "outlook",
+    provider_email: "old@example.com",
+    access_token_encrypted: encryptToken("old-access"),
+    refresh_token_encrypted: encryptToken("old-refresh"),
+    token_expires_at: "2026-03-01T11:00:00.000Z",
+    status: "reconnect_required",
+    target_calendar_id: "calendar-123",
+    last_sync_at: null,
+  }]);
+
+  const result = await storeMicrosoftConnection(
+    supabase,
+    "user-1",
+    {
+      accessToken: "new-access-token",
+      refreshToken: "new-refresh-token",
+      expiresAt: new Date("2026-05-01T12:00:00.000Z"),
+      email: "new@example.com",
+    },
+  );
+
+  assert.equal(result.success, true);
+
+  const [row] = stub.getRows("user_calendar_connections");
+  assert.equal(row.provider, "outlook");
+  assert.equal(row.provider_email, "new@example.com");
+  assert.equal(row.target_calendar_id, "calendar-123");
+  assert.equal(row.status, "connected");
+});
+
 test("refreshAndStoreMicrosoftToken serializes refresh token rotation per user", async () => {
   const stub = createSupabaseStub();
   const supabase = stub as unknown as SupabaseClient<Database>;
