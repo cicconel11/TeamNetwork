@@ -219,6 +219,16 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         ]}
         scrollEnabled
       >
+        <View style={styles.brandRow}>
+          <Image
+            source={require("../../../assets/brand-logo.png")}
+            style={styles.brandLogo}
+            contentFit="contain"
+            transition={0}
+            cachePolicy="memory"
+            accessibilityLabel="TeamNetwork"
+          />
+        </View>
         {/* Profile Card */}
         <Pressable
           style={({ pressed }) => [styles.profileCard, pressed && styles.profileCardPressed]}
@@ -269,6 +279,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     // paddingTop is set dynamically with safe area inset
+  },
+  brandRow: {
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  brandLogo: {
+    width: 140,
+    height: 94,
+    alignSelf: "flex-start",
   },
   profileCard: {
     flexDirection: "row",
