@@ -22,6 +22,7 @@ import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { openHttpsUrl } from "@/lib/url-safety";
+import { track } from "@/lib/analytics";
 
 export default function NewDonationScreen() {
   const navigation = useNavigation();
@@ -226,6 +227,11 @@ export default function NewDonationScreen() {
       }
 
       if (data?.url) {
+        track("donation_checkout_started", {
+          org_slug: orgSlug,
+          amount: amountValue,
+          has_purpose: !!(purpose.trim()),
+        });
         if (!(await openHttpsUrl(data.url as string))) {
           throw new Error("Checkout URL was invalid");
         }

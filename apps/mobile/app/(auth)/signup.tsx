@@ -15,6 +15,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Link, useRouter, useNavigation } from "expo-router";
 import { ChevronLeft, Eye, EyeOff } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { borderRadius, spacing, fontSize } from "@/lib/theme";
 
 // Check if running in web browser (Expo web mode)
@@ -178,6 +179,7 @@ export default function SignupScreen() {
         }
         setApiError(helpfulMessage);
       } else {
+        track("user_signed_up", { method: "email" });
         // Show success and navigate to login
         setApiError("");
         router.replace({

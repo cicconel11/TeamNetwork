@@ -45,6 +45,7 @@
     "android": {
       "package": "com.myteamnetwork.teammeet",
       "versionCode": 3,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f172a"

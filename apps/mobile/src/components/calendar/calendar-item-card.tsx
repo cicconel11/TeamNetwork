@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { Link } from "expo-router";
 import { BookOpen, Calendar as CalendarIcon, Clock, MapPin } from "lucide-react-native";
 
+import { track } from "@/lib/analytics";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { RADIUS, SHADOWS, SPACING } from "@/lib/design-tokens";
@@ -113,6 +114,12 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+        onPress={() => {
+          track("calendar_event_tapped", {
+            source_type: item.sourceType,
+            org_slug: orgSlug,
+          });
+        }}
       >
         <View style={styles.headerRow}>
           <View

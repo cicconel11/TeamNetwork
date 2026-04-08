@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react-native";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useEventRSVPs, type EventRSVP } from "@/hooks/useEventRSVPs";
@@ -402,6 +403,8 @@ export default function CheckInScreen() {
     const result = await checkInAttendee(rsvp.id);
     if (!result.success) {
       Alert.alert("Error", result.error || "Failed to check in attendee");
+    } else {
+      track("event_check_in_completed", { event_id: eventId, org_slug: orgSlug });
     }
   };
 

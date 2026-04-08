@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, useNavigation } from "expo-router";
 import { DrawerActions } from "@react-navigation/native";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { fetchWithAuth } from "@/lib/web-api";
 import { showToast } from "@/components/ui/Toast";
@@ -386,6 +387,13 @@ export default function NewAnnouncementScreen() {
         }
       }
 
+      track("announcement_created", {
+        org_slug: orgSlug,
+        audience,
+        is_pinned: isPinned,
+        has_body: !!(body.trim()),
+        notification_sent: sendNotification,
+      });
       router.push(`/(app)/${orgSlug}/(tabs)/announcements`);
     } catch (e) {
       setError((e as Error).message || "Failed to create announcement.");

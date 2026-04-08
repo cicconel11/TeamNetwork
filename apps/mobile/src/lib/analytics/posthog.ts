@@ -8,7 +8,8 @@ let client: PostHog | null = null;
 
 export function init(apiKey: string): void {
   if (client) return;
-  client = new PostHog(apiKey, { host: "https://us.i.posthog.com" });
+  const host = process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+  client = new PostHog(apiKey, { host });
 }
 
 export function identify(

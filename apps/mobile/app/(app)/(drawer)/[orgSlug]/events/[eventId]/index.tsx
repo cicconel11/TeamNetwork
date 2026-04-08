@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Calendar, MapPin, Users, ChevronLeft, UserCheck, Edit3, XCircle, ExternalLink, List } from "lucide-react-native";
 import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
+import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import type { Event } from "@/hooks/useEvents";
@@ -126,6 +127,7 @@ export default function EventDetailScreen() {
                 .eq("organization_id", orgId);
 
               if (updateError) throw updateError;
+              track("event_cancelled", { event_id: eventId, org_id: orgId });
               router.back();
             } catch (e) {
               Alert.alert("Error", (e as Error).message || "Failed to cancel event");
