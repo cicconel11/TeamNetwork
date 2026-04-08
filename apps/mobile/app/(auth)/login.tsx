@@ -16,6 +16,7 @@ import { Link, useRouter, useNavigation, useLocalSearchParams } from "expo-route
 import { ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react-native";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
+import { Image } from "expo-image";
 import { supabase } from "@/lib/supabase";
 import { captureException } from "@/lib/analytics";
 import { showToast } from "@/components/ui/Toast";
@@ -272,9 +273,15 @@ export default function LoginScreen() {
           >
             <ChevronLeft size={24} color="#ffffff" />
           </Pressable>
-          <View style={styles.headerIcon}>
-            <Text style={styles.headerIconText}>TN</Text>
-          </View>
+          <Image
+            source={require("../../assets/brand-logo.png")}
+            style={styles.headerLogo}
+            contentFit="contain"
+            transition={0}
+            cachePolicy="memory"
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
         </SafeAreaView>
       </LinearGradient>
 
@@ -460,19 +467,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primaryButton,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerIconText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
+  headerLogo: { width: 120, height: 80 },
 
   // Content
   keyboardView: {
