@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCalendarConnection } from "@/lib/google/oauth";
 import { syncEventToUsers } from "@/lib/google/calendar-sync";
+import { syncOutlookEventToUsers } from "@/lib/microsoft/calendar-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -165,6 +166,87 @@ export async function POST(request: Request) {
             .eq("user_id", user.id)
             .eq("provider", "google");
 
+        // Sync Outlook events for connected members (isolated — does not affect Google sync result)
+        try {
+            const { data: outlookConnection } = await serviceClient
+                .from("user_calendar_connections")
+                .select("id, status")
+                .eq("user_id", user.id)
+                .eq("provider", "outlook")
+                .eq("status", "connected")
+                .maybeSingle();
+
+            if (outlookConnection) {
+                // Get pending/failed Outlook entries
+                let outlookQuery = serviceClient
+                    .from("event_calendar_entries")
+                    .select("event_id, organization_id")
+                    .eq("user_id", user.id)
+                    .eq("provider", "outlook")
+                    .in("sync_status", ["pending", "failed"]);
+
+                if (organizationId) {
+                    outlookQuery = outlookQuery.eq("organization_id", organizationId);
+                }
+
+                const { data: pendingOutlookEntries } = await outlookQuery;
+
+                // Sync pending/failed Outlook entries
+                for (const entry of pendingOutlookEntries || []) {
+                    try {
+                        await syncOutlookEventToUsers(serviceClient, entry.organization_id, entry.event_id, "update");
+                        syncedCount++;
+                    } catch (err) {
+                        failedCount++;
+                        const msg = err instanceof Error ? err.message : "Unknown error";
+                        errors.push(`[Outlook] Event ${entry.event_id}: ${msg}`);
+                    }
+                }
+
+                // Find unsynced events for Outlook
+                for (const orgId of orgIds) {
+                    const { data: events } = await serviceClient
+                        .from("events")
+                        .select("id")
+                        .eq("organization_id", orgId)
+                        .is("deleted_at", null);
+
+                    if (!events) continue;
+
+                    const { data: existingOutlookEntries } = await serviceClient
+                        .from("event_calendar_entries")
+                        .select("event_id")
+                        .eq("user_id", user.id)
+                        .eq("organization_id", orgId)
+                        .eq("provider", "outlook");
+
+                    const existingOutlookEventIds = new Set(existingOutlookEntries?.map(e => e.event_id) || []);
+
+                    for (const event of events) {
+                        if (!existingOutlookEventIds.has(event.id)) {
+                            try {
+                                await syncOutlookEventToUsers(serviceClient, orgId, event.id, "create");
+                                syncedCount++;
+                            } catch (err) {
+                                failedCount++;
+                                const msg = err instanceof Error ? err.message : "Unknown error";
+                                errors.push(`[Outlook] Event ${event.id}: ${msg}`);
+                            }
+                        }
+                    }
+                }
+
+                // Update last_sync_at for the Outlook connection
+                await serviceClient
+                    .from("user_calendar_connections")
+                    .update({ last_sync_at: new Date().toISOString() })
+                    .eq("user_id", user.id)
+                    .eq("provider", "outlook");
+            }
+        } catch (outlookSyncError) {
+            console.error("[calendar-sync] Outlook sync block error:", outlookSyncError instanceof Error ? outlookSyncError.message : outlookSyncError);
+        }
+
         return NextResponse.json({
             success: true,
             message: `Sync completed. ${syncedCount} events synced, ${failedCount} failed.`,
@@ -204,12 +286,21 @@ export async function GET() {
         // Use service client for database operations
         const serviceClient = createServiceClient();
 
-        // Get connection status
+        // Get Google connection status
         const connection = await getCalendarConnection(serviceClient, user.id);
-        if (!connection) {
+
+        // Get Outlook connection status
+        const { data: outlookConn } = await serviceClient
+            .from("user_calendar_connections")
+            .select("status, provider_email, last_sync_at")
+            .eq("user_id", user.id)
+            .eq("provider", "outlook")
+            .maybeSingle();
+
+        if (!connection && !outlookConn) {
             return NextResponse.json({
                 connected: false,
-                message: "Google Calendar not connected.",
+                message: "No calendar connected.",
             });
         }
 
@@ -239,9 +330,24 @@ export async function GET() {
 
         return NextResponse.json({
             connected: true,
-            status: connection.status,
-            googleEmail: connection.providerEmail,
-            lastSyncAt: connection.lastSyncAt?.toISOString() || null,
+            google: connection
+                ? {
+                    status: connection.status,
+                    email: connection.providerEmail,
+                    lastSyncAt: connection.lastSyncAt?.toISOString() || null,
+                }
+                : null,
+            outlook: outlookConn
+                ? {
+                    status: outlookConn.status,
+                    email: outlookConn.provider_email ?? null,
+                    lastSyncAt: outlookConn.last_sync_at ?? null,
+                }
+                : null,
+            // Legacy fields kept for backwards compatibility
+            status: connection?.status ?? outlookConn?.status ?? null,
+            googleEmail: connection?.providerEmail ?? null,
+            lastSyncAt: connection?.lastSyncAt?.toISOString() || outlookConn?.last_sync_at || null,
             stats,
         });
 

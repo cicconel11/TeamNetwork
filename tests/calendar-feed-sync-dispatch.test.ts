@@ -12,7 +12,7 @@ import {
 test("CALENDAR_FEED_SYNC_SELECT includes Google sync columns", () => {
   const columns = CALENDAR_FEED_SYNC_SELECT.split(",").map((value) => value.trim());
   assert.ok(columns.includes("connected_user_id"));
-  assert.ok(columns.includes("google_calendar_id"));
+  assert.ok(columns.includes("external_calendar_id"));
 });
 
 test("isGoogleFeedProvider only matches google", () => {
@@ -36,7 +36,7 @@ test("syncFeedByProvider uses Google sync path for google provider", async () =>
     last_synced_at: null,
     last_error: null,
     connected_user_id: null,
-    google_calendar_id: null,
+    external_calendar_id: null,
     created_at: now,
     updated_at: now,
   };
@@ -49,5 +49,5 @@ test("syncFeedByProvider uses Google sync path for google provider", async () =>
   );
 
   assert.strictEqual(result.status, "error");
-  assert.ok(result.lastError?.includes("Missing connected_user_id or google_calendar_id"));
+  assert.ok(result.lastError?.includes("Missing connected_user_id or external_calendar_id"));
 });

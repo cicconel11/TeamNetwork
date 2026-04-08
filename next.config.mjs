@@ -61,6 +61,11 @@ const blackbaudEnv = [
   "BLACKBAUD_SUBSCRIPTION_KEY",
 ];
 
+const microsoftCalendarEnv = [
+  "MICROSOFT_CLIENT_ID",
+  "MICROSOFT_CLIENT_SECRET",
+];
+
 function assertEnv(name, required = true) {
   const value = process.env[name];
   if (required && (!value || value.trim() === "")) {
@@ -124,6 +129,12 @@ function validateBuildEnv() {
   const missingBlackbaudVars = blackbaudEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
   if (missingBlackbaudVars.length > 0 && missingBlackbaudVars.length < blackbaudEnv.length) {
     console.warn(`⚠️  Partial Blackbaud config: missing ${missingBlackbaudVars.join(", ")}. Blackbaud integration will not work.`);
+  }
+
+  // Optional: warn if Microsoft Calendar env vars are partially configured
+  const missingMicrosoftVars = microsoftCalendarEnv.filter((key) => !process.env[key] || process.env[key].trim() === "");
+  if (missingMicrosoftVars.length > 0 && missingMicrosoftVars.length < microsoftCalendarEnv.length) {
+    console.warn(`⚠️  Partial Microsoft Calendar config: missing ${missingMicrosoftVars.join(", ")}. Outlook Calendar integration will not work.`);
   }
 
   // Optional: Bright Data enrichment (enriches member profiles from LinkedIn)

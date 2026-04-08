@@ -6,7 +6,9 @@ import {
   LinkedInSettingsPanel,
 } from "@/components/settings/LinkedInSettingsPanel";
 import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
+import { OutlookCalendarSyncPanel } from "@/components/settings/OutlookCalendarSyncPanel";
 import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
+import { useOutlookCalendarSync } from "@/hooks/useOutlookCalendarSync";
 import { useLinkedIn } from "@/hooks/useLinkedIn";
 
 interface ConnectedAccountsSectionProps {
@@ -32,6 +34,12 @@ function ConnectedAccountsSectionContent({
   const linkedIn = useLinkedIn({ redirectPath: pathname ?? undefined });
 
   const calendarSync = useGoogleCalendarSync({
+    orgId,
+    orgSlug,
+    redirectPath: pathname ?? undefined,
+  });
+
+  const outlookSync = useOutlookCalendarSync({
     orgId,
     orgSlug,
     redirectPath: pathname ?? undefined,
@@ -76,6 +84,25 @@ function ConnectedAccountsSectionContent({
           onReconnect={calendarSync.reconnect}
           onTargetCalendarChange={calendarSync.setTargetCalendar}
           onPreferenceChange={calendarSync.updatePreferences}
+        />
+        <OutlookCalendarSyncPanel
+          orgName={orgName}
+          organizationId={orgId}
+          connection={outlookSync.connection}
+          isConnected={outlookSync.isConnected}
+          connectionLoading={outlookSync.connectionLoading}
+          calendars={outlookSync.calendars}
+          calendarsLoading={outlookSync.calendarsLoading}
+          targetCalendarId={outlookSync.targetCalendarId}
+          preferences={outlookSync.preferences}
+          preferencesLoading={outlookSync.preferencesLoading}
+          reconnectRequired={outlookSync.reconnectRequired}
+          onConnect={outlookSync.connect}
+          onDisconnect={outlookSync.disconnect}
+          onSync={outlookSync.syncNow}
+          onReconnect={outlookSync.reconnect}
+          onTargetCalendarChange={outlookSync.setTargetCalendar}
+          onPreferenceChange={outlookSync.updatePreferences}
         />
       </div>
     </section>

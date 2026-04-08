@@ -4,38 +4,22 @@ import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, Card, Select, InlineBanner } from "@/components/ui";
 import { showFeedback } from "@/lib/feedback/show-feedback";
-
-export interface SyncPreferences {
-  sync_general: boolean;
-  sync_game: boolean;
-  sync_meeting: boolean;
-  sync_social: boolean;
-  sync_fundraiser: boolean;
-  sync_philanthropy: boolean;
-  sync_practice: boolean;
-  sync_workout: boolean;
-}
+import type { SyncPreferences } from "@/components/settings/GoogleCalendarSyncPanel";
+import type { OutlookCalendar } from "@/hooks/useOutlookCalendarSync";
 
 interface CalendarConnection {
   providerEmail: string;
-  status: "connected" | "disconnected" | "error";
+  status: "connected" | "disconnected" | "reconnect_required" | "error";
   lastSyncAt: string | null;
 }
 
-interface GoogleCalendar {
-  id: string;
-  summary: string;
-  primary: boolean;
-  backgroundColor?: string;
-}
-
-interface GoogleCalendarSyncPanelProps {
+interface OutlookCalendarSyncPanelProps {
   orgName: string;
   organizationId: string;
   connection: CalendarConnection | null;
   isConnected: boolean;
   connectionLoading: boolean;
-  calendars: GoogleCalendar[];
+  calendars: OutlookCalendar[];
   calendarsLoading: boolean;
   targetCalendarId: string;
   preferences: SyncPreferences;
@@ -60,14 +44,13 @@ const EVENT_TYPE_KEYS: (keyof SyncPreferences)[] = [
   "sync_workout",
 ];
 
-function CalendarIcon() {
+function MicrosoftIcon() {
   return (
-    <svg
-      className="w-5 h-5 text-foreground"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-    >
-      <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm-8 4H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2z" />
+    <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 21 21" fill="none">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
     </svg>
   );
 }
@@ -83,6 +66,8 @@ function getStatusBadge(status: CalendarConnection["status"], connectedLabel: st
       return <Badge variant="success">{connectedLabel}</Badge>;
     case "disconnected":
       return <Badge variant="warning">{disconnectedLabel}</Badge>;
+    case "reconnect_required":
+      return <Badge variant="warning">Reconnect required</Badge>;
     case "error":
       return <Badge variant="error">{errorLabel}</Badge>;
     default:
@@ -98,14 +83,7 @@ function Spinner() {
       fill="none"
       viewBox="0 0 24 24"
     >
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
         className="opacity-75"
         fill="currentColor"
@@ -115,7 +93,7 @@ function Spinner() {
   );
 }
 
-export function GoogleCalendarSyncPanel({
+export function OutlookCalendarSyncPanel({
   orgName,
   organizationId,
   connection,
@@ -133,7 +111,7 @@ export function GoogleCalendarSyncPanel({
   onReconnect,
   onTargetCalendarChange,
   onPreferenceChange,
-}: GoogleCalendarSyncPanelProps) {
+}: OutlookCalendarSyncPanelProps) {
   const tGCal = useTranslations("googleCalendar");
   const tCommon = useTranslations("common");
   const tSchedules = useTranslations("schedules");
@@ -142,7 +120,6 @@ export function GoogleCalendarSyncPanel({
   const [isSyncing, setIsSyncing] = useState(false);
   const [targetError, setTargetError] = useState<string | null>(null);
 
-  // Preferences local state for optimistic updates
   const [localPreferences, setLocalPreferences] = useState<SyncPreferences>(preferences);
   const [savingKey, setSavingKey] = useState<keyof SyncPreferences | null>(null);
   const [prefError, setPrefError] = useState<string | null>(null);
@@ -152,12 +129,12 @@ export function GoogleCalendarSyncPanel({
   }, [preferences]);
 
   const handleDisconnect = async () => {
-    if (!confirm(tGCal("disconnectConfirm"))) return;
+    if (!confirm("Are you sure you want to disconnect Outlook Calendar? You can reconnect at any time.")) return;
     setIsDisconnecting(true);
     try {
       await onDisconnect();
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : tGCal("failedDisconnect"), "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : "Failed to disconnect Outlook Calendar", "error", { duration: 5000 });
     } finally {
       setIsDisconnecting(false);
     }
@@ -169,7 +146,7 @@ export function GoogleCalendarSyncPanel({
       const result = await onSync();
       showFeedback(result.message, "success", { duration: 5000 });
     } catch (err) {
-      showFeedback(err instanceof Error ? err.message : tGCal("failedSync"), "error", { duration: 5000 });
+      showFeedback(err instanceof Error ? err.message : "Failed to sync Outlook Calendar", "error", { duration: 5000 });
     } finally {
       setIsSyncing(false);
     }
@@ -204,15 +181,14 @@ export function GoogleCalendarSyncPanel({
     }
   };
 
-  // Build calendar dropdown options
   const calendarOptions = calendarsLoading
     ? [{ value: targetCalendarId, label: tSchedules("loadingCalendars") }]
     : calendars.length > 0
     ? calendars.map((cal) => ({
         value: cal.id,
-        label: cal.primary ? `${cal.summary} (Primary)` : cal.summary,
+        label: cal.isDefault ? `${cal.name} (Default)` : cal.name,
       }))
-    : [{ value: "primary", label: "Primary Calendar" }];
+    : [{ value: "primary", label: "Default Calendar" }];
 
   // --- Loading skeleton ---
   if (connectionLoading) {
@@ -228,17 +204,6 @@ export function GoogleCalendarSyncPanel({
             <div className="h-4 bg-muted rounded w-1/4" />
             <div className="h-9 bg-muted rounded w-full" />
           </div>
-          <div className="border-t border-border/60 pt-4 space-y-3">
-            <div className="h-4 bg-muted rounded w-1/3" />
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="h-4 w-4 bg-muted rounded" />
-                  <div className="h-4 bg-muted rounded w-20" />
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </Card>
     );
@@ -249,22 +214,25 @@ export function GoogleCalendarSyncPanel({
     return (
       <Card className="p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <CalendarIcon />
-          <p className="font-medium text-foreground">{tGCal("title")}</p>
+          <MicrosoftIcon />
+          <p className="font-medium text-foreground">Outlook Calendar</p>
         </div>
         <p className="text-sm text-muted-foreground">
-          {tGCal("description", { orgName })}
+          Connect your Microsoft Outlook account to automatically sync {orgName} events to your personal Outlook calendar.
         </p>
 
         {connection?.status === "disconnected" && (
-          <InlineBanner variant="warning">{tGCal("disconnected")}</InlineBanner>
+          <InlineBanner variant="warning">Your Outlook Calendar was disconnected.</InlineBanner>
+        )}
+        {connection?.status === "reconnect_required" && (
+          <InlineBanner variant="warning">Your Outlook connection needs to be re-authorized. Please reconnect.</InlineBanner>
         )}
         {connection?.status === "error" && (
-          <InlineBanner variant="error">{tGCal("errorConnection")}</InlineBanner>
+          <InlineBanner variant="error">There was an error with your Outlook Calendar connection.</InlineBanner>
         )}
 
         <Button onClick={onConnect}>
-          {tGCal("connect")}
+          Connect Outlook Calendar
         </Button>
       </Card>
     );
@@ -287,15 +255,15 @@ export function GoogleCalendarSyncPanel({
       <div className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-2">
-            <CalendarIcon />
-            <p className="font-medium text-foreground">{tGCal("title")}</p>
+            <MicrosoftIcon />
+            <p className="font-medium text-foreground">Outlook Calendar</p>
           </div>
-          {connection && getStatusBadge(connection.status, tCommon("connected"), tGCal("disconnected"), tCommon("error"))}
+          {connection && getStatusBadge(connection.status, tCommon("connected"), "Disconnected", tCommon("error"))}
         </div>
 
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{tGCal("account")}</span>
+            <span className="text-muted-foreground">Microsoft account</span>
             <span className="font-medium text-foreground">{connection?.providerEmail}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -305,13 +273,12 @@ export function GoogleCalendarSyncPanel({
         </div>
 
         <p className="text-sm text-muted-foreground">
-          {tGCal("syncDesc", { orgName })}
+          {orgName} events are automatically synced to your Outlook calendar.
         </p>
 
         {connection?.status === "error" && (
-          <InlineBanner variant="error">{tGCal("errorConnection")}</InlineBanner>
+          <InlineBanner variant="error">There was an error with your Outlook Calendar connection.</InlineBanner>
         )}
-
       </div>
 
       {/* Section 2: Target calendar picker OR reconnect prompt */}
@@ -319,10 +286,10 @@ export function GoogleCalendarSyncPanel({
         {reconnectRequired ? (
           <>
             <p className="text-sm text-amber-600 dark:text-amber-400">
-              {tGCal("reconnectDesc")}
+              Your Outlook connection needs to be re-authorized. Please reconnect to continue syncing events.
             </p>
             <Button variant="secondary" size="sm" onClick={onReconnect}>
-              {tGCal("reconnect")}
+              Reconnect Outlook
             </Button>
           </>
         ) : (
@@ -376,14 +343,14 @@ export function GoogleCalendarSyncPanel({
                 return (
                   <label
                     key={key}
-                    htmlFor={`${organizationId}-${key}`}
+                    htmlFor={`outlook-${organizationId}-${key}`}
                     className={`flex items-center gap-2 cursor-pointer ${
                       savingKey ? "opacity-60 cursor-not-allowed" : ""
                     }`}
                   >
                     <div className="relative flex items-center justify-center">
                       <input
-                        id={`${organizationId}-${key}`}
+                        id={`outlook-${organizationId}-${key}`}
                         type="checkbox"
                         className="h-4 w-4 rounded border-border"
                         checked={isChecked}
@@ -412,23 +379,23 @@ export function GoogleCalendarSyncPanel({
       {/* Section 4: Actions footer */}
       <div className="p-5 space-y-3">
         <div className="flex items-center justify-between">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleSync}
-          isLoading={isSyncing}
-          disabled={isDisconnecting}
-        >
-          {tCommon("syncNow")}
-        </Button>
-        <button
-          type="button"
-          onClick={handleDisconnect}
-          disabled={isSyncing || isDisconnecting}
-          className="text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
-        >
-          {isDisconnecting ? tCommon("disconnecting") : tCommon("disconnect")}
-        </button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleSync}
+            isLoading={isSyncing}
+            disabled={isDisconnecting}
+          >
+            {tCommon("syncNow")}
+          </Button>
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            disabled={isSyncing || isDisconnecting}
+            className="text-sm text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50"
+          >
+            {isDisconnecting ? tCommon("disconnecting") : tCommon("disconnect")}
+          </button>
         </div>
       </div>
     </Card>

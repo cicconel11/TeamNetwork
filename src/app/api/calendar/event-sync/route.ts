@@ -74,6 +74,15 @@ export async function POST(request: Request) {
         // Trigger the sync operation
         await syncEventToUsers(serviceClient, organizationId, eventId, operation);
 
+        // Also sync to Outlook for connected members
+        try {
+            const { syncOutlookEventToUsers } = await import("@/lib/microsoft/calendar-sync");
+            await syncOutlookEventToUsers(serviceClient, organizationId, eventId, operation);
+        } catch (outlookError) {
+            // Log but don't fail the overall sync
+            console.error("[calendar-event-sync] Outlook sync error:", outlookError instanceof Error ? outlookError.message : outlookError);
+        }
+
         return NextResponse.json({
             success: true,
             message: `Calendar sync triggered for event ${eventId} (${operation})`,

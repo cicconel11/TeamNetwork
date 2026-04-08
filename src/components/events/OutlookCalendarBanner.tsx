@@ -2,17 +2,17 @@
 
 import { useState, useCallback } from "react";
 import { Card, Button } from "@/components/ui";
-import { useGoogleCalendarSync } from "@/hooks/useGoogleCalendarSync";
-import { GoogleCalendarSyncPanel } from "@/components/settings/GoogleCalendarSyncPanel";
+import { useOutlookCalendarSync } from "@/hooks/useOutlookCalendarSync";
+import { OutlookCalendarSyncPanel } from "@/components/settings/OutlookCalendarSyncPanel";
 import { calendarEventsPath } from "@/lib/calendar/routes";
 
-interface GoogleCalendarBannerProps {
+interface OutlookCalendarBannerProps {
   orgId: string;
   orgSlug: string;
   orgName: string;
 }
 
-const DISMISS_KEY_PREFIX = "gcal-banner-dismissed-";
+const DISMISS_KEY_PREFIX = "outlook-cal-banner-dismissed-";
 
 function getDismissed(orgId: string): boolean {
   if (typeof window === "undefined") return false;
@@ -31,19 +31,13 @@ function setDismissed(orgId: string) {
   }
 }
 
-function GoogleCalendarIcon() {
+function MicrosoftCalendarIcon() {
   return (
-    <svg className="w-8 h-8 flex-shrink-0" viewBox="0 0 24 24" fill="none">
-      <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground" />
-      <path d="M3 9h18" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground" />
-      <path d="M8 2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-muted-foreground" />
-      <path d="M16 2v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="text-muted-foreground" />
-      <rect x="7" y="12" width="3" height="2.5" rx="0.5" fill="#4285F4" />
-      <rect x="10.5" y="12" width="3" height="2.5" rx="0.5" fill="#EA4335" />
-      <rect x="14" y="12" width="3" height="2.5" rx="0.5" fill="#FBBC04" />
-      <rect x="7" y="15.5" width="3" height="2.5" rx="0.5" fill="#34A853" />
-      <rect x="10.5" y="15.5" width="3" height="2.5" rx="0.5" fill="#4285F4" />
-      <rect x="14" y="15.5" width="3" height="2.5" rx="0.5" fill="#EA4335" />
+    <svg className="w-8 h-8 flex-shrink-0" viewBox="0 0 21 21" fill="none">
+      <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+      <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
     </svg>
   );
 }
@@ -69,8 +63,8 @@ function formatLastSync(lastSyncAt: string | null): string {
   return date.toLocaleDateString();
 }
 
-export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendarBannerProps) {
-  const gcal = useGoogleCalendarSync({
+export function OutlookCalendarBanner({ orgId, orgSlug, orgName }: OutlookCalendarBannerProps) {
+  const ocal = useOutlookCalendarSync({
     orgId,
     orgSlug,
     redirectPath: calendarEventsPath(orgSlug),
@@ -90,36 +84,35 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
     setIsSyncing(true);
     setSyncError(null);
     try {
-      await gcal.syncNow();
+      await ocal.syncNow();
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setIsSyncing(false);
     }
-  }, [gcal]);
+  }, [ocal]);
 
-  // While loading connection status, render nothing (no flash, no skeleton)
-  if (gcal.connectionLoading) return null;
-
-  // If OAuth init failed (no Google env vars), hide entirely
-  if (gcal.oauthError === "oauth_init_failed") return null;
+  // While loading, render nothing
+  if (ocal.connectionLoading) return null;
 
   const hasErrorOrDisconnectedStatus =
-    gcal.connection?.status === "error" || gcal.connection?.status === "disconnected";
+    ocal.connection?.status === "error" ||
+    ocal.connection?.status === "disconnected" ||
+    ocal.connection?.status === "reconnect_required";
 
   // --- OAuth callback messages ---
-  const oauthBanner = gcal.oauthStatus === "connected" ? (
+  const oauthBanner = ocal.oauthStatus === "connected" ? (
     <div className="mb-4 rounded-lg bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-800 dark:text-green-200 animate-fade-in">
-      Google Calendar connected successfully!
+      Outlook Calendar connected successfully!
     </div>
-  ) : gcal.oauthError ? (
+  ) : ocal.oauthError ? (
     <div className="mb-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-800 dark:text-red-200 animate-fade-in">
-      {gcal.oauthErrorMessage || "Failed to connect Google Calendar. Please try again."}
+      {ocal.oauthErrorMessage || "Failed to connect Outlook Calendar. Please try again."}
     </div>
   ) : null;
 
   // --- Connected: compact status strip ---
-  if (gcal.isConnected) {
+  if (ocal.isConnected) {
     return (
       <div className="mb-6 animate-fade-in">
         {oauthBanner}
@@ -128,14 +121,14 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
             <div className="flex items-center gap-2 min-w-0">
               <CheckIcon />
               <span className="text-sm font-medium text-foreground truncate">
-                Synced to Google Calendar
+                Synced to Outlook Calendar
               </span>
               <span className="text-sm text-muted-foreground truncate hidden sm:inline">
-                {gcal.connection?.providerEmail}
+                {ocal.connection?.providerEmail}
               </span>
-              {gcal.connection?.lastSyncAt && (
+              {ocal.connection?.lastSyncAt && (
                 <span className="text-xs text-muted-foreground hidden md:inline">
-                  · {formatLastSync(gcal.connection.lastSyncAt)}
+                  · {formatLastSync(ocal.connection.lastSyncAt)}
                 </span>
               )}
             </div>
@@ -171,24 +164,24 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
           >
             <div className="overflow-hidden">
               <div className="border-t border-border/60">
-                <GoogleCalendarSyncPanel
+                <OutlookCalendarSyncPanel
                   orgName={orgName}
                   organizationId={orgId}
-                  connection={gcal.connection}
-                  isConnected={gcal.isConnected}
+                  connection={ocal.connection}
+                  isConnected={ocal.isConnected}
                   connectionLoading={false}
-                  calendars={gcal.calendars}
-                  calendarsLoading={gcal.calendarsLoading}
-                  targetCalendarId={gcal.targetCalendarId}
-                  preferences={gcal.preferences}
-                  preferencesLoading={gcal.preferencesLoading}
-                  reconnectRequired={gcal.reconnectRequired}
-                  onConnect={gcal.connect}
-                  onDisconnect={gcal.disconnect}
-                  onSync={gcal.syncNow}
-                  onReconnect={gcal.reconnect}
-                  onTargetCalendarChange={gcal.setTargetCalendar}
-                  onPreferenceChange={gcal.updatePreferences}
+                  calendars={ocal.calendars}
+                  calendarsLoading={ocal.calendarsLoading}
+                  targetCalendarId={ocal.targetCalendarId}
+                  preferences={ocal.preferences}
+                  preferencesLoading={ocal.preferencesLoading}
+                  reconnectRequired={ocal.reconnectRequired}
+                  onConnect={ocal.connect}
+                  onDisconnect={ocal.disconnect}
+                  onSync={ocal.syncNow}
+                  onReconnect={ocal.reconnect}
+                  onTargetCalendarChange={ocal.setTargetCalendar}
+                  onPreferenceChange={ocal.updatePreferences}
                 />
               </div>
             </div>
@@ -206,14 +199,14 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
   return (
     <div className="mb-6 animate-fade-in">
       {oauthBanner}
-      <Card className="border-l-4 border-l-org-primary bg-amber-50/50 dark:bg-amber-950/10">
+      <Card className="border-l-4 border-l-[#0078D4] bg-blue-50/30 dark:bg-blue-950/10">
         <div className="p-5 flex items-start gap-4">
-          <GoogleCalendarIcon />
+          <MicrosoftCalendarIcon />
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="font-semibold text-foreground text-sm">
-                  Sync events to Google Calendar
+                  Sync events to Outlook Calendar
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
                   Keep your team schedule up to date. Games, meetings, socials — always in sync.
@@ -233,20 +226,25 @@ export function GoogleCalendarBanner({ orgId, orgSlug, orgName }: GoogleCalendar
               )}
             </div>
 
-            {gcal.connection?.status === "disconnected" && (
+            {ocal.connection?.status === "disconnected" && (
               <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
-                Your Google Calendar was disconnected. Reconnect to resume syncing.
+                Your Outlook Calendar was disconnected. Reconnect to resume syncing.
               </p>
             )}
-            {gcal.connection?.status === "error" && (
+            {ocal.connection?.status === "reconnect_required" && (
+              <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                Your Outlook connection needs re-authorization. Please reconnect.
+              </p>
+            )}
+            {ocal.connection?.status === "error" && (
               <p className="text-sm text-red-600 dark:text-red-400 mt-2">
-                There was an error with your Google Calendar connection. Please reconnect.
+                There was an error with your Outlook Calendar connection. Please reconnect.
               </p>
             )}
 
             <div className="mt-3">
-              <Button size="sm" onClick={gcal.connect}>
-                {hasErrorOrDisconnectedStatus ? "Reconnect Google Calendar" : "Connect Google Calendar"}
+              <Button size="sm" onClick={ocal.connect}>
+                {hasErrorOrDisconnectedStatus ? "Reconnect Outlook Calendar" : "Connect Outlook Calendar"}
               </Button>
             </div>
           </div>

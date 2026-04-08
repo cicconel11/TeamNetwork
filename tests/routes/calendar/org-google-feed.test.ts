@@ -82,7 +82,7 @@ function simulateGoogleFeedCreate(
     organization_id: body.organizationId,
     scope: "org",
     connected_user_id: userId,
-    google_calendar_id: body.googleCalendarId,
+    external_calendar_id: body.googleCalendarId,
     status: "active",
     last_synced_at: null,
     last_error: null,
@@ -144,7 +144,7 @@ describe("POST /api/calendar/org-feeds (provider: google)", () => {
     const feeds = stub.getRows("calendar_feeds");
     assert.equal(feeds.length, 1);
     assert.equal(feeds[0].provider, "google");
-    assert.equal(feeds[0].google_calendar_id, "team@group.calendar.google.com");
+    assert.equal(feeds[0].external_calendar_id, "team@group.calendar.google.com");
     assert.equal(feeds[0].connected_user_id, auth.user!.id);
     assert.equal(feeds[0].feed_url, "google://team@group.calendar.google.com");
   });
@@ -264,7 +264,7 @@ describe("syncGoogleCalendarFeed admin role validation", () => {
       organization_id: orgId,
       scope: "org",
       connected_user_id: connectedUserId,
-      google_calendar_id: "cal@group.calendar.google.com",
+      external_calendar_id: "cal@group.calendar.google.com",
       last_synced_at: null,
       last_error: null,
     }]);
@@ -312,7 +312,7 @@ describe("syncGoogleCalendarFeed admin role validation", () => {
       organization_id: orgId,
       scope: "org",
       connected_user_id: connectedUserId,
-      google_calendar_id: "cal@group.calendar.google.com",
+      external_calendar_id: "cal@group.calendar.google.com",
       last_synced_at: null,
       last_error: null,
     }]);
@@ -377,7 +377,7 @@ describe("GET /api/calendar/org-feeds returns both providers", () => {
         organization_id: orgId,
         scope: "org",
         connected_user_id: "admin-1",
-        google_calendar_id: "team@group.calendar.google.com",
+        external_calendar_id: "team@group.calendar.google.com",
         last_synced_at: null,
         last_error: null,
       },
