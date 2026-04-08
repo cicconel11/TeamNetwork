@@ -149,6 +149,7 @@
     "newPassword": "Nuova password",
     "confirmPassword": "Conferma password",
     "updatePassword": "Aggiorna password",
+    "passwordUpdatedRedirecting": "Password aggiornata correttamente. Reindirizzamento...",
     "backToSignIn": "Torna all'accesso",
     "requestNewLink": "Richiedi un nuovo link di reimpostazione",
     "resetLinkExpired": "Questo link di reimpostazione è scaduto o non valido.",

@@ -62,7 +62,7 @@ function ResetPasswordFormComponent() {
       return;
     }
 
-    setMessage("Password updated successfully! Redirecting...");
+    setMessage(t("passwordUpdatedRedirecting"));
     setIsLoading(false);
 
     setTimeout(() => {

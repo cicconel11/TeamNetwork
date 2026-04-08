@@ -149,6 +149,7 @@
     "newPassword": "Nova senha",
     "confirmPassword": "Confirmar senha",
     "updatePassword": "Atualizar senha",
+    "passwordUpdatedRedirecting": "Senha atualizada com sucesso. Redirecionando...",
     "backToSignIn": "Voltar para login",
     "requestNewLink": "Solicitar um novo link de redefinicao",
     "resetLinkExpired": "Este link de redefinicao de senha expirou ou e invalido.",

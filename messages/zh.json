@@ -149,6 +149,7 @@
     "newPassword": "新密码",
     "confirmPassword": "确认密码",
     "updatePassword": "更新密码",
+    "passwordUpdatedRedirecting": "密码更新成功，正在跳转...",
     "backToSignIn": "返回登录",
     "requestNewLink": "请求新的重置链接",
     "resetLinkExpired": "此密码重置链接已过期或无效。",

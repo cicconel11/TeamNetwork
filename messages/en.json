@@ -149,6 +149,7 @@
     "newPassword": "New Password",
     "confirmPassword": "Confirm Password",
     "updatePassword": "Update Password",
+    "passwordUpdatedRedirecting": "Password updated successfully! Redirecting...",
     "backToSignIn": "Back to sign in",
     "requestNewLink": "Request a new reset link",
     "resetLinkExpired": "This password reset link is expired or invalid.",

@@ -149,6 +149,7 @@
     "newPassword": "Nouveau mot de passe",
     "confirmPassword": "Confirmer le mot de passe",
     "updatePassword": "Mettre a jour le mot de passe",
+    "passwordUpdatedRedirecting": "Mot de passe mis a jour avec succes. Redirection...",
     "backToSignIn": "Retour a la connexion",
     "requestNewLink": "Demander un nouveau lien de reinitialisation",
     "resetLinkExpired": "Ce lien de reinitialisation est expire ou invalide.",

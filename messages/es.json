@@ -149,6 +149,7 @@
     "newPassword": "Nueva contrasena",
     "confirmPassword": "Confirmar contrasena",
     "updatePassword": "Actualizar contrasena",
+    "passwordUpdatedRedirecting": "Contrasena actualizada correctamente. Redirigiendo...",
     "backToSignIn": "Volver a iniciar sesion",
     "requestNewLink": "Solicitar un nuevo enlace de restablecimiento",
     "resetLinkExpired": "Este enlace de restablecimiento ha expirado o es invalido.",

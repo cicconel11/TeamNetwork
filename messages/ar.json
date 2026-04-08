@@ -149,6 +149,7 @@
     "newPassword": "كلمة مرور جديدة",
     "confirmPassword": "تأكيد كلمة المرور",
     "updatePassword": "تحديث كلمة المرور",
+    "passwordUpdatedRedirecting": "تم تحديث كلمة المرور بنجاح. جارٍ إعادة التوجيه...",
     "backToSignIn": "العودة إلى تسجيل الدخول",
     "requestNewLink": "طلب رابط إعادة تعيين جديد",
     "resetLinkExpired": "رابط إعادة التعيين هذا منتهي الصلاحية أو غير صالح.",
