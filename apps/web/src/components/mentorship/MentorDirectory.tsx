@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Card, Badge, Avatar, Button, EmptyState, Select } from "@/components/ui";
+import { Card, Badge, Avatar, Button, EmptyState, Input, Select } from "@/components/ui";
 import { MentorRegistration } from "./MentorRegistration";
 
 interface MentorData {
@@ -39,14 +39,18 @@ export function MentorDirectory({
   orgSlug,
 }: MentorDirectoryProps) {
   const [filters, setFilters] = useState({
+    nameSearch: "",
     industry: "",
     year: "",
   });
 
   const [showRegistrationForm, setShowRegistrationForm] = useState(false);
+  const nameQuery = filters.nameSearch.trim().toLowerCase();
 
-  // Filter mentors
   const filteredMentors = mentors.filter((mentor) => {
+    if (nameQuery && !mentor.name.toLowerCase().includes(nameQuery)) {
+      return false;
+    }
     if (filters.industry && mentor.industry !== filters.industry) {
       return false;
     }
@@ -56,10 +60,12 @@ export function MentorDirectory({
     return true;
   });
 
-  const hasActiveFilters = filters.industry !== "" || filters.year !== "";
+  const hasActiveFilters =
+    filters.nameSearch !== "" || filters.industry !== "" || filters.year !== "";
 
   const clearFilters = () => {
     setFilters({
+      nameSearch: "",
       industry: "",
       year: "",
     });
@@ -76,29 +82,44 @@ export function MentorDirectory({
   ];
 
   return (
-    <div className="space-y-6">
+    <div id="mentor-directory" className="space-y-6">
       <div>
-        <h2 className="text-xl font-semibold mb-2">Willing to Help</h2>
+        <h2 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+          Willing to Help
+        </h2>
+        <div className="mt-3 mb-4 h-px bg-border" />
         <p className="text-muted-foreground text-sm mb-4">
-          Connect with alumni who are available to mentor and share their expertise
+          Browse alumni who have raised their hand to mentor and share their expertise.
         </p>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-end gap-3 mb-6">
-          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-6">
+          <div className="w-full sm:flex-1">
+            <Input
+              type="search"
+              value={filters.nameSearch}
+              onChange={(event) =>
+                setFilters({ ...filters, nameSearch: event.target.value })
+              }
+              placeholder="Search mentors by name"
+              aria-label="Search mentors by name"
+            />
+          </div>
+          <div className="w-full sm:w-48">
             <Select
               label="Industry"
               value={filters.industry}
               onChange={(e) => setFilters({ ...filters, industry: e.target.value })}
               options={industryOptions}
+              className="border-border/70"
             />
           </div>
-          <div className="w-full sm:w-auto sm:flex-1 sm:min-w-[140px]">
+          <div className="w-full sm:w-40">
             <Select
               label="Graduation Year"
               value={filters.year}
               onChange={(e) => setFilters({ ...filters, year: e.target.value })}
               options={yearOptions}
+              className="border-border/70"
             />
           </div>
           {hasActiveFilters && (
@@ -106,7 +127,7 @@ export function MentorDirectory({
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground shrink-0"
             >
               <svg
                 className="h-4 w-4 mr-1"
@@ -126,7 +147,6 @@ export function MentorDirectory({
           )}
         </div>
 
-        {/* Registration CTA */}
         {showRegistration && !showRegistrationForm && (
           <Card className="mb-6 bg-muted/30 border-dashed">
             <div className="flex items-center justify-between">
@@ -143,7 +163,6 @@ export function MentorDirectory({
           </Card>
         )}
 
-        {/* Registration Form */}
         {showRegistration && showRegistrationForm && (
           <div className="mb-6">
             <MentorRegistration
@@ -154,7 +173,6 @@ export function MentorDirectory({
           </div>
         )}
 
-        {/* Mentor Grid */}
         {filteredMentors.length === 0 ? (
           <EmptyState
             icon={
@@ -175,8 +193,21 @@ export function MentorDirectory({
             title={hasActiveFilters ? "No mentors found" : "No mentors yet"}
             description={
               hasActiveFilters
-                ? "Try adjusting your filters to see more results"
-                : "Check back later as alumni register to help"
+                ? "Try adjusting your filters to see more results."
+                : showRegistration
+                  ? "Be the first mentor in the directory for this organization."
+                  : "Check back later as alumni register to help."
+            }
+            action={
+              hasActiveFilters ? (
+                <Button variant="ghost" size="sm" onClick={clearFilters}>
+                  Clear filters
+                </Button>
+              ) : showRegistration && !showRegistrationForm ? (
+                <Button onClick={() => setShowRegistrationForm(true)}>
+                  Become a Mentor
+                </Button>
+              ) : undefined
             }
           />
         ) : (

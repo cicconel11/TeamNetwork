@@ -1,13 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/layout";
 import { getOrgContext } from "@/lib/auth/roles";
-import { MentorshipAdminPanel } from "@/components/mentorship/MentorshipAdminPanel";
-import { MentorPairManager } from "@/components/mentorship/MentorPairManager";
-import { MenteeStatusToggle } from "@/components/mentorship/MenteeStatusToggle";
+import { MentorshipContextStrip } from "@/components/mentorship/MentorshipContextStrip";
 import { MentorshipPairsList } from "@/components/mentorship/MentorshipPairsList";
 import { MentorDirectory } from "@/components/mentorship/MentorDirectory";
 import { resolveLabel } from "@/lib/navigation/label-resolver";
 import type { NavConfig } from "@/lib/navigation/nav-items";
+import { getMentorshipSectionOrder } from "@teammeet/core";
 
 interface MentorshipPageProps {
   params: Promise<{ orgSlug: string }>;
@@ -28,6 +27,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
       .from("mentorship_pairs")
       .select("*")
       .eq("organization_id", orgId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     orgCtx.userId
       ? supabase
@@ -68,6 +68,7 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
           .from("mentorship_logs")
           .select("*")
           .eq("organization_id", orgId)
+          .is("deleted_at", null)
           .in("pair_id", pairIds)
           .order("entry_date", { ascending: false })
           .order("created_at", { ascending: false })
@@ -149,38 +150,80 @@ export default async function MentorshipPage({ params }: MentorshipPageProps) {
 
   const navConfig = orgCtx.organization.nav_config as NavConfig | null;
   const pageLabel = resolveLabel("/mentorship", navConfig);
+  const hasPairs = filteredPairs.length > 0;
+  const myPair =
+    orgCtx.role === "active_member"
+      ? filteredPairs.find((pair) => pair.mentee_user_id === orgCtx.userId) ?? null
+      : null;
+  const myMentorName = myPair
+    ? usersForClient.find((user) => user.id === myPair.mentor_user_id)?.name ?? null
+    : null;
+  const myLastLogDate = myPair
+    ? logsForClient.find((log) => log.pair_id === myPair.id)?.entry_date ?? null
+    : null;
+  const sectionOrder = getMentorshipSectionOrder({
+    hasPairs,
+    isAdmin: orgCtx.isAdmin,
+  });
+
+  const pairsList = (
+    <MentorshipPairsList
+      initialPairs={filteredPairs}
+      logs={logsForClient}
+      users={usersForClient}
+      isAdmin={orgCtx.isAdmin}
+      canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
+      orgId={orgId}
+      currentUserId={orgCtx.userId ?? undefined}
+      emptyStateAction={
+        orgCtx.role === "active_member" ? (
+          <a
+            href="#mentor-directory"
+            className="text-sm text-[color:var(--color-org-secondary)] hover:underline"
+          >
+            Browse mentors ↓
+          </a>
+        ) : undefined
+      }
+    />
+  );
+
+  const directory = (
+    <MentorDirectory
+      mentors={mentorsForDirectory}
+      industries={industries}
+      years={years}
+      showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
+      orgId={orgId}
+      orgSlug={orgSlug}
+    />
+  );
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
       <PageHeader
         title={pageLabel}
-        description={`Manage and track ${pageLabel.toLowerCase()} pairs`}
+        description="Connect alumni with current members and keep mentorship momentum visible."
       />
 
-      {orgCtx.role === "active_member" && <MenteeStatusToggle orgId={orgId} />}
+      <MentorshipContextStrip
+        role={orgCtx.role ?? ""}
+        orgId={orgId}
+        myMentorName={myMentorName}
+        myLastLogDate={myLastLogDate}
+      />
 
-      {orgCtx.isAdmin && <MentorshipAdminPanel orgId={orgId} orgSlug={orgSlug} />}
-      {!orgCtx.isAdmin && orgCtx.role === "alumni" && (
-        <MentorPairManager orgId={orgId} orgSlug={orgSlug} />
+      {sectionOrder === "pairs-first" ? (
+        <>
+          {pairsList}
+          {directory}
+        </>
+      ) : (
+        <>
+          {directory}
+          {pairsList}
+        </>
       )}
-
-      <MentorDirectory
-        mentors={mentorsForDirectory}
-        industries={industries}
-        years={years}
-        showRegistration={orgCtx.role === "alumni" && !currentUserProfile}
-        orgId={orgId}
-        orgSlug={orgSlug}
-      />
-
-      <MentorshipPairsList
-        initialPairs={filteredPairs}
-        logs={logsForClient}
-        users={usersForClient}
-        isAdmin={orgCtx.isAdmin}
-        canLogActivity={orgCtx.isAdmin || orgCtx.isActiveMember}
-        orgId={orgId}
-      />
     </div>
   );
 }
