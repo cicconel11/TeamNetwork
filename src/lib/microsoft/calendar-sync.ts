@@ -40,15 +40,17 @@ export function isNotFoundError(errorMessage: string | undefined): boolean {
 
 /**
  * Creates a new event in the user's Outlook calendar via Microsoft Graph
+ * If calendarId is null/undefined, uses /me/events to write to the user's default calendar
+ * Otherwise uses /me/calendars/{calendarId}/events for a specific calendar
  */
 export async function createOutlookCalendarEvent(
     accessToken: string,
     event: MicrosoftCalendarEvent,
-    calendarId: string = "primary"
+    calendarId?: string
 ): Promise<MicrosoftSyncResult> {
     try {
-        const path = calendarId === "primary"
-            ? "/me/calendar/events"
+        const path = !calendarId
+            ? "/me/events"
             : `/me/calendars/${calendarId}/events`;
 
         const response = await graphFetch(path, accessToken, {
@@ -360,7 +362,8 @@ async function syncOutlookEventForUser(
     }
 
     const connection = await getMicrosoftConnection(supabase, userId);
-    const targetCalendarId = connection?.targetCalendarId || "primary";
+    // Use the target calendar if set; otherwise defaults to user's calendar (handled in createOutlookCalendarEvent)
+    const targetCalendarId = connection?.targetCalendarId || undefined;
 
     const { data: existingEntry } = await supabase
         .from("event_calendar_entries")
@@ -382,7 +385,7 @@ async function syncOutlookEventForUser(
             const result = await createOutlookCalendarEvent(accessToken, calendarEvent, targetCalendarId);
             await updateOutlookSyncEntry(supabase, eventId, userId, organizationId, targetCalendarId, result);
         } else {
-            const storedCalendarId = existingEntry.external_calendar_id || "primary";
+            const storedCalendarId = existingEntry.external_calendar_id;
 
             if (storedCalendarId !== targetCalendarId) {
                 // Calendar changed — migrate the event

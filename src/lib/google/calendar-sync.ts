@@ -539,11 +539,12 @@ async function handleDeleteSync(
     supabase: SupabaseClient<Database>,
     eventId: string
 ): Promise<void> {
-    // Get all entries for this event
+    // Get all entries for this event (Google provider only)
     const { data: entries, error } = await supabase
         .from("event_calendar_entries")
         .select("*")
         .eq("event_id", eventId)
+        .eq("provider", "google")
         .neq("sync_status", "deleted");
 
     if (error || !entries || entries.length === 0) {
