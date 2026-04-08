@@ -200,7 +200,7 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       metadata: { surface: input.surface, estimatedTokens: 100 },
     }),
     createZaiClient: () => ({ client: "fake" } as any),
-    getZaiModel: () => "glm-5",
+    getZaiModel: () => "glm-5.1",
     composeResponse: async function* (options: any) {
       composeResponseCalls.push(options);
       // First call: yield a tool call if tools are provided
@@ -211,16 +211,20 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             ? "{}"
             : firstToolName === "find_navigation_targets"
               ? '{"query":"open announcements"}'
-              : firstToolName === "list_announcements"
-                ? '{"limit": 5}'
-                : firstToolName === "suggest_connections"
-              ? '{"person_query":"Louis Ciccone"}'
-              : firstToolName === "prepare_discussion_thread"
-                ? '{"title":"Spring Fundraising Volunteers","body":"Let\\u2019s organize volunteer assignments for the spring fundraiser."}'
-              : firstToolName === "scrape_schedule_website"
-                ? '{"url":"https://example.com/schedule"}'
-                : firstToolName === "extract_schedule_pdf"
-                  ? "{}"
+            : firstToolName === "list_announcements"
+              ? '{"limit": 5}'
+            : firstToolName === "prepare_announcement"
+              ? '{"title":"Practice Update","body":"Practice starts at 6pm tomorrow.","audience":"all","send_notification":true}'
+            : firstToolName === "prepare_discussion_reply"
+              ? '{"discussion_thread_id":"33333333-3333-4333-8333-333333333333","thread_title":"Spring Fundraising Volunteers","body":"I can take the Friday evening shift."}'
+            : firstToolName === "suggest_connections"
+            ? '{"person_query":"Louis Ciccone"}'
+            : firstToolName === "prepare_discussion_thread"
+              ? '{"title":"Spring Fundraising Volunteers","body":"Let\\u2019s organize volunteer assignments for the spring fundraiser."}'
+            : firstToolName === "scrape_schedule_website"
+              ? '{"url":"https://example.com/schedule"}'
+            : firstToolName === "extract_schedule_pdf"
+              ? "{}"
             : '{"limit": 5}';
         yield {
           type: "tool_call_requested",
@@ -294,6 +298,60 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
             body_preview: "Practice starts Monday.",
           },
         ]);
+      }
+      if (call.name === "prepare_announcement") {
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            title: "Practice Update",
+            body: "Practice starts at 6pm tomorrow.",
+            audience: "all",
+            is_pinned: false,
+            send_notification: true,
+          },
+          pending_action: {
+            id: "pending-announcement-123",
+            action_type: "create_announcement",
+            payload: {
+              title: "Practice Update",
+              body: "Practice starts at 6pm tomorrow.",
+              audience: "all",
+              is_pinned: false,
+              send_notification: true,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review announcement",
+              description: "Confirm the drafted announcement before it is published.",
+            },
+          },
+        });
+      }
+      if (call.name === "prepare_discussion_reply") {
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: {
+            discussion_thread_id: "33333333-3333-4333-8333-333333333333",
+            thread_title: "Spring Fundraising Volunteers",
+            body: "I can take the Friday evening shift.",
+          },
+          pending_action: {
+            id: "pending-reply-123",
+            action_type: "create_discussion_reply",
+            payload: {
+              discussion_thread_id: "33333333-3333-4333-8333-333333333333",
+              thread_title: "Spring Fundraising Volunteers",
+              body: "I can take the Friday evening shift.",
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion reply",
+              description: "Confirm the drafted reply before it is posted to the discussion thread.",
+            },
+          },
+        });
       }
       if (call.name === "prepare_discussion_thread") {
         return okToolResult({
@@ -772,6 +830,25 @@ test("action requests do not get forced into find_navigation_targets", async () 
   assert.equal(executeToolCallCalls[0].call.name, "list_members");
 });
 
+test("create announcement requests only attach prepare_announcement on pass 1", async () => {
+  const body = await (
+    await POST(makeRequest("Publish an announcement reminding everyone about tomorrow's practice") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_announcement"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_announcement" },
+  });
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_announcement");
+  assert.match(body, /I drafted the announcement/i);
+  assert.match(body, /"type":"pending_action"/);
+  assert.match(body, /"actionType":"create_announcement"/);
+});
+
 test("create discussion requests only attach prepare_discussion_thread on pass 1", async () => {
   const contextModes: Array<string | undefined> = [];
 
@@ -806,6 +883,25 @@ test("create discussion requests only attach prepare_discussion_thread on pass 1
   assert.match(body, /I drafted the discussion thread/i);
   assert.match(body, /"type":"pending_action"/);
   assert.match(body, /"actionType":"create_discussion_thread"/);
+});
+
+test("discussion reply requests only attach prepare_discussion_reply on pass 1", async () => {
+  const body = await (
+    await POST(makeRequest("Reply to the discussion thread that I can take the Friday evening shift") as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_reply"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_reply" },
+  });
+  assert.equal(executeToolCallCalls.length, 1);
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_reply");
+  assert.match(body, /I drafted the discussion reply/i);
+  assert.match(body, /"type":"pending_action"/);
+  assert.match(body, /"actionType":"create_discussion_reply"/);
 });
 
 test("create discussion requests do not get misrouted to find_navigation_targets", async () => {

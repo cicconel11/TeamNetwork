@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-const DEFAULT_ZAI_MODEL = "glm-5";
+const DEFAULT_ZAI_MODEL = "glm-5.1";
 const DEFAULT_ZAI_IMAGE_MODEL = "glm-5v-turbo";
 
 function validateZaiImageModel(value: string): string {

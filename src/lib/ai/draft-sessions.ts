@@ -1,16 +1,23 @@
-import type { AssistantDiscussionDraft } from "@/lib/schemas/discussion";
+import type { AssistantAnnouncementDraft } from "@/lib/schemas/content";
+import type {
+  AssistantDiscussionDraft,
+  AssistantDiscussionReplyDraft,
+} from "@/lib/schemas/discussion";
 import type { AssistantEventDraft } from "@/lib/schemas/events-ai";
 import type { AssistantJobDraft } from "@/lib/schemas/jobs";
-import { AI_PENDING_ACTION_EXPIRY_MS, type PendingActionType } from "@/lib/ai/pending-actions";
+import { AI_PENDING_ACTION_EXPIRY_MS } from "@/lib/ai/pending-actions";
 
-export type DraftSessionType = PendingActionType;
 export type DraftSessionStatus = "collecting_fields" | "ready_for_confirmation";
 
 export interface DraftSessionPayloadByType {
+  create_announcement: AssistantAnnouncementDraft;
   create_job_posting: AssistantJobDraft;
+  create_discussion_reply: AssistantDiscussionReplyDraft;
   create_discussion_thread: AssistantDiscussionDraft;
   create_event: AssistantEventDraft;
 }
+
+export type DraftSessionType = keyof DraftSessionPayloadByType;
 
 export type DraftSessionPayload = DraftSessionPayloadByType[DraftSessionType];
 

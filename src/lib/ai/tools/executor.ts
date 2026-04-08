@@ -12,12 +12,19 @@ import type { AiToolAuthMode } from "@/lib/ai/chat-telemetry";
 import { searchNavigationTargets } from "@/lib/ai/navigation-targets";
 import type { NavConfig } from "@/lib/navigation/nav-items";
 import {
+  assistantAnnouncementDraftSchema,
+  assistantPreparedAnnouncementSchema,
+  type AssistantPreparedAnnouncement,
+} from "@/lib/schemas/content";
+import {
   assistantJobDraftSchema,
   assistantPreparedJobSchema,
   type AssistantPreparedJob,
 } from "@/lib/schemas/jobs";
 import {
   assistantDiscussionDraftSchema,
+  assistantDiscussionReplyDraftSchema,
+  assistantPreparedDiscussionReplySchema,
   assistantPreparedDiscussionSchema,
 } from "@/lib/schemas/discussion";
 import {
@@ -30,6 +37,8 @@ import { fetchUrlSafe } from "@/lib/schedule-security/fetchUrlSafe";
 import { isOwnedScheduleUploadPath } from "@/lib/ai/schedule-upload-path";
 import {
   buildPendingActionSummary,
+  type CreateAnnouncementPendingPayload,
+  type CreateDiscussionReplyPendingPayload,
   createPendingAction,
   type CreateDiscussionThreadPendingPayload,
   type CreateEventPendingPayload,
@@ -147,6 +156,17 @@ const listPhilanthropyEventsSchema = z
   })
   .strict();
 
+const prepareAnnouncementSchema = z
+  .object({
+    title: z.string().trim().min(1).optional(),
+    body: z.string().trim().optional(),
+    is_pinned: z.boolean().optional(),
+    audience: z.enum(["all", "members", "active_members", "alumni", "individuals"]).optional(),
+    send_notification: z.boolean().optional(),
+    audience_user_ids: z.array(z.string().uuid()).optional(),
+  })
+  .strict();
+
 const prepareJobPostingSchema = z
   .object({
     title: z.string().trim().min(1).optional(),
@@ -168,6 +188,14 @@ const prepareDiscussionThreadSchema = z
     title: z.string().trim().min(1).optional(),
     body: z.string().trim().min(1).optional(),
     mediaIds: z.array(z.string().uuid()).optional(),
+  })
+  .strict();
+
+const prepareDiscussionReplySchema = z
+  .object({
+    discussion_thread_id: z.string().uuid().optional(),
+    thread_title: z.string().trim().min(1).optional(),
+    body: z.string().trim().min(1).optional(),
   })
   .strict();
 
@@ -233,7 +261,9 @@ const ARG_SCHEMAS: Record<ToolName, z.ZodSchema> = {
   list_donations: listDonationsSchema,
   list_parents: listParentsSchema,
   list_philanthropy_events: listPhilanthropyEventsSchema,
+  prepare_announcement: prepareAnnouncementSchema,
   prepare_job_posting: prepareJobPostingSchema,
+  prepare_discussion_reply: prepareDiscussionReplySchema,
   prepare_discussion_thread: prepareDiscussionThreadSchema,
   prepare_event: prepareEventSchema,
   prepare_events_batch: prepareEventsBatchSchema,
@@ -859,6 +889,9 @@ const REQUIRED_PREPARED_JOB_FIELDS: Array<keyof AssistantPreparedJob> = [
   "experience_level",
   "description",
 ];
+const REQUIRED_PREPARED_ANNOUNCEMENT_FIELDS: Array<keyof AssistantPreparedAnnouncement> = [
+  "title",
+];
 const REQUIRED_PREPARED_EVENT_FIELDS = [
   "title",
   "start_date",
@@ -1185,6 +1218,111 @@ async function prepareJobPosting(
   };
 }
 
+async function prepareAnnouncement(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareAnnouncementSchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Announcement preparation requires a thread context");
+  }
+
+  const normalizedDraft = {
+    ...Object.fromEntries(
+      Object.entries({
+        ...args,
+        title: sanitizeDraftValue(args.title),
+        body: sanitizeDraftValue(args.body),
+      }).filter(([, value]) => value !== undefined)
+    ),
+    audience: args.audience ?? "all",
+    is_pinned: args.is_pinned ?? false,
+    send_notification: args.send_notification ?? false,
+  };
+
+  const parsedDraft = assistantAnnouncementDraftSchema.safeParse(normalizedDraft);
+  if (!parsedDraft.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: normalizedDraft,
+      },
+    };
+  }
+
+  const missingFields = REQUIRED_PREPARED_ANNOUNCEMENT_FIELDS.filter((field) => {
+    const value = parsedDraft.data[field];
+    return typeof value !== "string" || value.trim().length === 0;
+  });
+
+  if (missingFields.length > 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: missingFields,
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const prepared = assistantPreparedAnnouncementSchema.safeParse(parsedDraft.data);
+  if (!prepared.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_announcement org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: CreateAnnouncementPendingPayload = {
+    ...prepared.data,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "create_announcement",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
 async function prepareDiscussionThread(
   sb: SB,
   ctx: ToolExecutionContext,
@@ -1256,6 +1394,106 @@ async function prepareDiscussionThread(
     userId: ctx.userId,
     threadId: ctx.threadId,
     actionType: "create_discussion_thread",
+    payload: pendingPayload,
+  });
+  const summary = buildPendingActionSummary(pendingAction);
+
+  return {
+    kind: "ok",
+    data: {
+      state: "needs_confirmation",
+      draft: prepared.data,
+      pending_action: {
+        id: pendingAction.id,
+        action_type: pendingAction.action_type,
+        payload: pendingPayload,
+        expires_at: pendingAction.expires_at,
+        summary,
+      },
+    },
+  };
+}
+
+async function prepareDiscussionReply(
+  sb: SB,
+  ctx: ToolExecutionContext,
+  args: z.infer<typeof prepareDiscussionReplySchema>
+): Promise<ToolExecutionResult> {
+  const logContext = buildLogContext(ctx);
+  if (!ctx.threadId) {
+    return toolError("Discussion reply preparation requires a thread context");
+  }
+
+  const normalizedDraft = {
+    ...Object.fromEntries(
+      Object.entries({
+        ...args,
+        thread_title: sanitizeDraftValue(args.thread_title),
+        body: sanitizeDraftValue(args.body),
+      }).filter(([, value]) => value !== undefined)
+    ),
+  };
+  const parsedDraft = assistantDiscussionReplyDraftSchema.safeParse(normalizedDraft);
+  if (!parsedDraft.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: parsedDraft.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: normalizedDraft,
+      },
+    };
+  }
+
+  const missingFields: string[] = [];
+  if (!parsedDraft.data.discussion_thread_id) missingFields.push("discussion_thread_id");
+  if (!parsedDraft.data.body) missingFields.push("body");
+
+  if (missingFields.length > 0) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: missingFields,
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const prepared = assistantPreparedDiscussionReplySchema.safeParse(parsedDraft.data);
+  if (!prepared.success) {
+    return {
+      kind: "ok",
+      data: {
+        state: "missing_fields",
+        missing_fields: prepared.error.issues.map((issue) => issue.path.join(".") || "body"),
+        draft: parsedDraft.data,
+      },
+    };
+  }
+
+  const { data: org, error: orgError } = await sb
+    .from("organizations")
+    .select("slug")
+    .eq("id", ctx.orgId)
+    .maybeSingle();
+
+  if (orgError) {
+    aiLog("warn", "ai-tools", "prepare_discussion_reply org lookup failed", logContext, {
+      error: getSafeErrorMessage(orgError),
+    });
+    return toolError("Failed to load organization context");
+  }
+
+  const pendingPayload: CreateDiscussionReplyPendingPayload = {
+    ...prepared.data,
+    orgSlug: typeof org?.slug === "string" ? org.slug : null,
+  };
+  const pendingAction = await createPendingAction(sb, {
+    organizationId: ctx.orgId,
+    userId: ctx.userId,
+    threadId: ctx.threadId,
+    actionType: "create_discussion_reply",
     payload: pendingPayload,
   });
   const summary = buildPendingActionSummary(pendingAction);
@@ -2076,11 +2314,23 @@ export async function executeToolCall(
             args as z.infer<typeof listPhilanthropyEventsSchema>,
             logContext
           );
+        case "prepare_announcement":
+          return prepareAnnouncement(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareAnnouncementSchema>
+          );
         case "prepare_job_posting":
           return prepareJobPosting(
             sb,
             ctx,
             args as z.infer<typeof prepareJobPostingSchema>
+          );
+        case "prepare_discussion_reply":
+          return prepareDiscussionReply(
+            sb,
+            ctx,
+            args as z.infer<typeof prepareDiscussionReplySchema>
           );
         case "prepare_discussion_thread":
           return prepareDiscussionThread(

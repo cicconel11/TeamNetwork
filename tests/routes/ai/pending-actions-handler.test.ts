@@ -196,6 +196,185 @@ test("confirm executes create_discussion_thread and appends assistant message", 
   );
 });
 
+test("confirm executes create_announcement and appends assistant message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_announcement",
+        payload: {
+          title: "Practice moved indoors",
+          body: "Meet in Weight Room B at 6pm.",
+          audience: "all",
+          is_pinned: true,
+          send_notification: false,
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createAnnouncement: async () =>
+      ({
+        ok: true,
+        status: 201,
+        announcement: {
+          id: "announcement-123",
+          title: "Practice moved indoors",
+        },
+      }) as any,
+    clearDraftSession: async () => {},
+  } as any);
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "announcement");
+  assert.equal(updatedStatuses[1].resultEntityId, "announcement-123");
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.match(String(insertedMessages[0].content), /Created announcement/);
+  assert.match(
+    String(insertedMessages[0].content),
+    /upenn-sprint-football\/announcements/
+  );
+});
+
+test("confirm executes create_discussion_reply and appends assistant message", async () => {
+  const insertedMessages: any[] = [];
+  const updatedStatuses: any[] = [];
+  const discussionThreadId = "33333333-3333-4333-8333-333333333333";
+
+  const handler = createAiPendingActionConfirmHandler({
+    createClient: async () =>
+      ({
+        auth: { getUser: async () => ({ data: { user: ADMIN_USER } }) },
+      }) as any,
+    getAiOrgContext: async () =>
+      ({
+        ok: true,
+        orgId: ORG_ID,
+        userId: ADMIN_USER.id,
+        role: "admin",
+        supabase: null,
+        serviceSupabase: {
+          from(table: string) {
+            if (table === "ai_messages") {
+              return {
+                insert(payload: Record<string, unknown>) {
+                  insertedMessages.push(payload);
+                  return Promise.resolve({ error: null });
+                },
+              };
+            }
+            throw new Error(`unexpected table ${table}`);
+          },
+        },
+      }) as any,
+    getPendingAction: async () =>
+      ({
+        id: ACTION_ID,
+        organization_id: ORG_ID,
+        user_id: ADMIN_USER.id,
+        thread_id: THREAD_ID,
+        action_type: "create_discussion_reply",
+        payload: {
+          discussion_thread_id: discussionThreadId,
+          thread_title: "Spring Fundraising Volunteers",
+          body: "I can cover the alumni outreach shift.",
+          orgSlug: "upenn-sprint-football",
+        },
+        status: "pending",
+        expires_at: "2099-01-01T00:00:00.000Z",
+        created_at: "2026-01-01T00:00:00.000Z",
+        updated_at: "2026-01-01T00:00:00.000Z",
+        executed_at: null,
+        result_entity_type: null,
+        result_entity_id: null,
+      }) as any,
+    updatePendingActionStatus: async (_supabase, _actionId, payload) => {
+      updatedStatuses.push(payload);
+      return { updated: true };
+    },
+    createDiscussionReply: async () =>
+      ({
+        ok: true,
+        status: 201,
+        reply: {
+          id: "reply-123",
+          body: "I can cover the alumni outreach shift.",
+        },
+        thread: {
+          id: discussionThreadId,
+          title: "Spring Fundraising Volunteers",
+        },
+      }) as any,
+    clearDraftSession: async () => {},
+  } as any);
+
+  const response = await handler(buildRequest() as any, {
+    params: Promise.resolve({ orgId: ORG_ID, actionId: ACTION_ID }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(updatedStatuses[0].status, "confirmed");
+  assert.equal(updatedStatuses[1].status, "executed");
+  assert.equal(updatedStatuses[1].resultEntityType, "discussion_reply");
+  assert.equal(updatedStatuses[1].resultEntityId, "reply-123");
+  assert.equal(insertedMessages[0].thread_id, THREAD_ID);
+  assert.match(String(insertedMessages[0].content), /Posted reply in discussion thread/);
+  assert.match(
+    String(insertedMessages[0].content),
+    /upenn-sprint-football\/messages\/threads\/33333333-3333-4333-8333-333333333333/
+  );
+});
+
 test("confirm executes create_event and appends assistant message", async () => {
   const insertedMessages: any[] = [];
   const updatedStatuses: any[] = [];

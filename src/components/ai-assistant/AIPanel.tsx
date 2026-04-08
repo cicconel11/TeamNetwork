@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { X, MessageSquare, List, Sparkles } from "lucide-react";
 import { useAIStream } from "@/hooks/useAIStream";
+import { getAssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import { prepareImageUpload } from "@/lib/media/image-preparation";
 import { useAIPanel } from "./AIPanelContext";
 import { routeToSurface } from "./route-surface";
@@ -188,6 +189,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
   const router = useRouter();
   const surface = routeToSurface(pathname);
   const scopeLabel = getAssistantScopeLabel(pathname, surface);
+  const capabilitySnapshot = getAssistantCapabilitySnapshot(pathname, surface);
   const starterPrompts = getStarterPrompts(pathname, surface);
   const inputPlaceholder = getInputPlaceholder(pathname, surface);
   const [view, setView] = useState<"chat" | "threads">("chat");
@@ -657,6 +659,18 @@ export function AIPanel({ orgId }: AIPanelProps) {
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+
+        <div className="border-b border-border bg-muted/30 px-4 py-3 text-xs">
+          <p className="font-medium text-foreground">What I can do here</p>
+          <div className="mt-2 space-y-1 text-muted-foreground">
+            {capabilitySnapshot.supported.map((capability) => (
+              <p key={capability.toolName}>- {capability.description}</p>
+            ))}
+            {capabilitySnapshot.unsupported.map((item) => (
+              <p key={item}>- Not yet: {item}.</p>
+            ))}
           </div>
         </div>
 

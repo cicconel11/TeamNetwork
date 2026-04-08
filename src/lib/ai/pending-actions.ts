@@ -1,11 +1,15 @@
 import type { AssistantPreparedJob } from "@/lib/schemas/jobs";
 import type { AssistantPreparedDiscussion } from "@/lib/schemas/discussion";
+import type { AssistantPreparedDiscussionReply } from "@/lib/schemas/discussion";
 import type { AssistantPreparedEvent } from "@/lib/schemas/events-ai";
+import type { AssistantPreparedAnnouncement } from "@/lib/schemas/content";
 
 export const AI_PENDING_ACTION_EXPIRY_MS = 15 * 60 * 1000;
 
 export type PendingActionType =
+  | "create_announcement"
   | "create_job_posting"
+  | "create_discussion_reply"
   | "create_discussion_thread"
   | "create_event";
 export type PendingActionStatus =
@@ -20,7 +24,15 @@ export interface CreateJobPostingPendingPayload extends AssistantPreparedJob {
   orgSlug?: string | null;
 }
 
+export interface CreateAnnouncementPendingPayload extends AssistantPreparedAnnouncement {
+  orgSlug?: string | null;
+}
+
 export interface CreateDiscussionThreadPendingPayload extends AssistantPreparedDiscussion {
+  orgSlug?: string | null;
+}
+
+export interface CreateDiscussionReplyPendingPayload extends AssistantPreparedDiscussionReply {
   orgSlug?: string | null;
 }
 
@@ -29,7 +41,9 @@ export interface CreateEventPendingPayload extends AssistantPreparedEvent {
 }
 
 export interface PendingActionPayloadByType {
+  create_announcement: CreateAnnouncementPendingPayload;
   create_job_posting: CreateJobPostingPendingPayload;
+  create_discussion_reply: CreateDiscussionReplyPendingPayload;
   create_discussion_thread: CreateDiscussionThreadPendingPayload;
   create_event: CreateEventPendingPayload;
 }
@@ -251,10 +265,20 @@ export function isAuthorizedAction(
 
 export function buildPendingActionSummary(record: PendingActionRecord): PendingActionSummary {
   switch (record.action_type) {
+    case "create_announcement":
+      return {
+        title: "Review announcement",
+        description: "Confirm the drafted announcement before it is published.",
+      };
     case "create_job_posting":
       return {
         title: "Review job posting",
         description: "Confirm the drafted job before it is added to the jobs board.",
+      };
+    case "create_discussion_reply":
+      return {
+        title: "Review discussion reply",
+        description: "Confirm the drafted reply before it is posted to the discussion thread.",
       };
     case "create_discussion_thread":
       return {

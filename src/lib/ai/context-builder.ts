@@ -2,6 +2,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CacheSurface } from "./semantic-cache-utils";
 import type { ToolName } from "./tools/definitions";
+import { describeAttachedTools } from "./capabilities";
 import { aiLog, type AiLogContext } from "./logger";
 
 export interface RagChunkInput {
@@ -247,35 +248,6 @@ function formatCurrency(amount: number): string {
   }).format(amount / 100);
 }
 
-function describeAvailableTools(tools: readonly ToolName[] | undefined): string[] {
-  if (!tools || tools.length === 0) {
-    return ["- No live tools are attached for this turn. Answer from existing context only."];
-  }
-
-  const descriptions: Record<ToolName, string> = {
-    list_members: "Read the active member roster.",
-    list_events: "Read recent or upcoming events.",
-    list_announcements: "Read recent announcements and updates.",
-    list_discussions: "Read recent community discussion threads.",
-    list_job_postings: "Read active job postings and career opportunities.",
-    list_alumni: "Read the alumni directory with optional filters for graduation year, industry, company, and city.",
-    list_donations: "Read donation records with optional status and purpose filters.",
-    list_parents: "Read the parent directory with optional relationship filter.",
-    list_philanthropy_events: "Read philanthropy, service, and volunteer events.",
-    prepare_job_posting: "Prepare a new job posting draft and create a confirmation action when ready.",
-    prepare_discussion_thread: "Prepare a new discussion thread draft and create a confirmation action when ready.",
-    prepare_event: "Prepare a new event draft and create a confirmation action when ready.",
-    prepare_events_batch: "Prepare multiple event drafts at once when the user asks to create 2+ events in a single message.",
-    scrape_schedule_website: "Fetch an HTTPS schedule page and extract website events into pending confirmation actions.",
-    extract_schedule_pdf: "Read the attached schedule file and extract events into pending confirmation actions.",
-    get_org_stats: "Read top-level organization counts and donation summary.",
-    suggest_connections: "Suggest networking or introduction targets for a named member or alumnus.",
-    find_navigation_targets: "Find the right in-app page for opening, managing, or creating something.",
-  };
-
-  return tools.map((tool) => `- ${descriptions[tool]}`);
-}
-
 async function loadPromptContextData(input: BuildPromptInput): Promise<PromptContextData> {
   const { orgId, userId, serviceSupabase, contextMode = "full", surface = "general" } = input;
   const now = new Date().toISOString();
@@ -449,7 +421,7 @@ export async function buildPromptContext(
     "",
     "AVAILABLE TOOLS:",
     "Use the attached tools when the user asks for live organization data (members, events, announcements, discussions, job postings, stats) or asks to find the right page in the app.",
-    ...describeAvailableTools(input.availableTools),
+    ...describeAttachedTools(input.availableTools),
     "Do NOT use tools for greetings, general questions, or anything answerable from context.",
     "For networking, connection, or introduction questions about a named person, call suggest_connections directly. It can resolve the person from a natural-language person_query and return a chat-ready payload.",
     "For navigation or 'where do I go' requests, call find_navigation_targets and prefer returning direct in-app links.",

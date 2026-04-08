@@ -41,7 +41,9 @@ test("formatToolStatusLabel maps known tools and falls back safely", () => {
   assert.equal(formatToolStatusLabel("list_announcements"), "Looking up announcements...");
   assert.equal(formatToolStatusLabel("list_discussions"), "Looking up discussions...");
   assert.equal(formatToolStatusLabel("list_job_postings"), "Looking up job postings...");
+  assert.equal(formatToolStatusLabel("prepare_announcement"), "Preparing announcement...");
   assert.equal(formatToolStatusLabel("prepare_job_posting"), "Preparing job posting...");
+  assert.equal(formatToolStatusLabel("prepare_discussion_reply"), "Preparing discussion reply...");
   assert.equal(formatToolStatusLabel("prepare_discussion_thread"), "Preparing discussion thread...");
   assert.equal(formatToolStatusLabel("get_org_stats"), "Checking organization stats...");
   assert.equal(formatToolStatusLabel("suggest_connections"), "Finding connections...");
@@ -221,6 +223,14 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
     /mimeType: data\.mimeType,/,
     "AIPanel should preserve the uploaded mimeType returned by the server"
   );
+
+  assert.match(source, /What I can do here/);
+  assert.match(source, /getAssistantCapabilitySnapshot/);
+  assert.match(
+    source,
+    /Not yet: \{item\}\./,
+    "AIPanel should show explicit unsupported-capability copy"
+  );
   assert.match(
     source,
     /setAttachmentError\(data\.error \|\| "Failed to upload schedule file\."\);/,
@@ -301,6 +311,16 @@ test("AIPanel uses generic schedule file defaults and preserves uploaded mime ty
     /That schedule image is too large to process\. Please upload an image under 2MB or use a PDF instead\./,
     "AIPanel should fail fast when a normalized schedule image still exceeds the extractor budget"
   );
+});
+
+test("assistant capability metadata stays shared between the panel and prompt builder", () => {
+  const capabilitySource = readSource("src/lib/ai/capabilities.ts");
+  const promptSource = readSource("src/lib/ai/context-builder.ts");
+
+  assert.match(capabilitySource, /prepare_announcement/);
+  assert.match(capabilitySource, /prepare_discussion_reply/);
+  assert.match(capabilitySource, /Create or edit forms from chat/);
+  assert.match(promptSource, /describeAttachedTools/);
 });
 
 test("useAIStream resets tool status during key lifecycle transitions", () => {

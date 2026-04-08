@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAiOrgContext } from "@/lib/ai/context";
 import {
+  type CreateAnnouncementPendingPayload,
+  type CreateDiscussionReplyPendingPayload,
   getPendingAction,
   isAuthorizedAction,
   isPendingActionExpired,
@@ -17,6 +19,11 @@ import {
 import { createEvent } from "@/lib/events/create-event";
 import { createJobPosting } from "@/lib/jobs/create-job";
 import { createDiscussionThread } from "@/lib/discussions/create-thread";
+import { createDiscussionReply } from "@/lib/discussions/create-reply";
+import {
+  createAnnouncement,
+  sendAnnouncementNotification,
+} from "@/lib/announcements/create-announcement";
 import { calendarEventDetailPath } from "@/lib/calendar/routes";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { aiLog } from "@/lib/ai/logger";
@@ -26,7 +33,9 @@ export interface AiPendingActionConfirmRouteDeps {
   getAiOrgContext?: typeof getAiOrgContext;
   getPendingAction?: typeof getPendingAction;
   updatePendingActionStatus?: typeof updatePendingActionStatus;
+  createAnnouncement?: typeof createAnnouncement;
   createJobPosting?: typeof createJobPosting;
+  createDiscussionReply?: typeof createDiscussionReply;
   createDiscussionThread?: typeof createDiscussionThread;
   createEvent?: typeof createEvent;
   clearDraftSession?: typeof clearDraftSession;
@@ -37,7 +46,9 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
   const getAiOrgContextFn = deps.getAiOrgContext ?? getAiOrgContext;
   const getPendingActionFn = deps.getPendingAction ?? getPendingAction;
   const updatePendingActionStatusFn = deps.updatePendingActionStatus ?? updatePendingActionStatus;
+  const createAnnouncementFn = deps.createAnnouncement ?? createAnnouncement;
   const createJobPostingFn = deps.createJobPosting ?? createJobPosting;
+  const createDiscussionReplyFn = deps.createDiscussionReply ?? createDiscussionReply;
   const createDiscussionThreadFn = deps.createDiscussionThread ?? createDiscussionThread;
   const createEventFn = deps.createEvent ?? createEvent;
   const clearDraftSessionFn = deps.clearDraftSession ?? clearDraftSession;
@@ -131,6 +142,90 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
 
     try {
       switch (action.action_type) {
+        case "create_announcement": {
+          const payload = action.payload as CreateAnnouncementPendingPayload;
+          const result = await createAnnouncementFn({
+            supabase: ctx.serviceSupabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            input: {
+              ...payload,
+              audience_user_ids: payload.audience_user_ids ?? null,
+            },
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "announcement",
+            resultEntityId: result.announcement.id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          try {
+            await sendAnnouncementNotification({
+              supabase: ctx.serviceSupabase,
+              announcementId: result.announcement.id,
+              orgId: ctx.orgId,
+              input: {
+                ...payload,
+                audience_user_ids: payload.audience_user_ids ?? null,
+              },
+              apiUrlBase: process.env.NEXT_PUBLIC_APP_URL || "",
+            });
+          } catch {
+            // Notification failures should not block successful announcement creation.
+          }
+
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const announcementUrl = orgSlug ? `/${orgSlug}/announcements` : null;
+          const content = announcementUrl
+            ? `Created announcement: [${result.announcement.title}](${announcementUrl})`
+            : `Created announcement: ${result.announcement.title}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, announcement: result.announcement, actionId: action.id });
+        }
         case "create_job_posting": {
           const payload = action.payload as CreateJobPostingPendingPayload;
           const result = await createJobPostingFn({
@@ -270,6 +365,75 @@ export function createAiPendingActionConfirmHandler(deps: AiPendingActionConfirm
           }
 
           return NextResponse.json({ ok: true, thread: result.thread, actionId: action.id });
+        }
+        case "create_discussion_reply": {
+          const payload = action.payload as CreateDiscussionReplyPendingPayload;
+          const result = await createDiscussionReplyFn({
+            supabase: ctx.serviceSupabase,
+            threadId: payload.discussion_thread_id,
+            userId: ctx.userId,
+            orgId: ctx.orgId,
+            input: { body: payload.body },
+          });
+
+          if (!result.ok) {
+            await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+              status: "pending",
+              expectedStatus: "confirmed",
+            });
+            return NextResponse.json(
+              result.details ? { error: result.error, details: result.details } : { error: result.error },
+              { status: result.status }
+            );
+          }
+
+          await updatePendingActionStatusFn(ctx.serviceSupabase, action.id, {
+            status: "executed",
+            expectedStatus: "confirmed",
+            executedAt: new Date().toISOString(),
+            resultEntityType: "discussion_reply",
+            resultEntityId: result.reply.id,
+          });
+
+          if (canUseDraftSessions) {
+            await clearDraftSessionFn(ctx.serviceSupabase, {
+              organizationId: ctx.orgId,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+              pendingActionId: action.id,
+            });
+          }
+
+          const orgSlug =
+            typeof payload.orgSlug === "string" && payload.orgSlug.length > 0
+              ? payload.orgSlug
+              : null;
+          const threadUrl = orgSlug
+            ? `/${orgSlug}/messages/threads/${result.thread.id}`
+            : null;
+          const content = threadUrl
+            ? `Posted reply in discussion thread: [${result.thread.title}](${threadUrl})`
+            : `Posted reply in discussion thread: ${result.thread.title}`;
+
+          const { error: msgError } = await ctx.serviceSupabase.from("ai_messages").insert({
+            thread_id: action.thread_id,
+            role: "assistant",
+            content,
+            status: "complete",
+          });
+
+          if (msgError) {
+            aiLog("error", "ai-confirm", "failed to insert confirmation message", {
+              ...logContext,
+              userId: ctx.userId,
+              threadId: action.thread_id,
+            }, {
+              actionId: action.id,
+              error: msgError,
+            });
+          }
+
+          return NextResponse.json({ ok: true, reply: result.reply, actionId: action.id });
         }
         case "create_event": {
           const payload = action.payload as CreateEventPendingPayload;

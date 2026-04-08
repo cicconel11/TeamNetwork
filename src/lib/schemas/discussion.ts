@@ -31,3 +31,19 @@ export const createReplySchema = z.object({
 });
 
 export type CreateReplyForm = z.infer<typeof createReplySchema>;
+
+export const assistantDiscussionReplyDraftSchema = z.object({
+  discussion_thread_id: z.string().uuid().optional(),
+  thread_title: safeString(200, 1).optional(),
+  body: safeString(5000, 1).optional(),
+});
+
+export type AssistantDiscussionReplyDraft = z.infer<typeof assistantDiscussionReplyDraftSchema>;
+
+export const assistantPreparedDiscussionReplySchema = z.object({
+  discussion_thread_id: z.string().uuid(),
+  thread_title: safeString(200, 1).optional(),
+  body: safeString(5000, 1),
+});
+
+export type AssistantPreparedDiscussionReply = z.infer<typeof assistantPreparedDiscussionReplySchema>;

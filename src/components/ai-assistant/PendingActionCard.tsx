@@ -36,12 +36,14 @@ export function PendingActionCard({
   const endDate = getValue(payload, "end_date");
   const endTime = getValue(payload, "end_time");
   const eventType = getValue(payload, "event_type");
+  const audience = getValue(payload, "audience");
   const industry = getValue(payload, "industry");
   const experienceLevel = getValue(payload, "experience_level");
   const applicationUrl = getValue(payload, "application_url");
   const contactEmail = getValue(payload, "contact_email");
   const description = getValue(payload, "description");
   const body = getValue(payload, "body");
+  const threadTitle = getValue(payload, "thread_title");
   const mediaCount = getArrayLength(payload, "mediaIds");
 
   return (
@@ -64,6 +66,27 @@ export function PendingActionCard({
               ) : null}
               {mediaCount > 0 ? (
                 <p><span className="font-medium">Attachments:</span> {mediaCount}</p>
+              ) : null}
+            </>
+          ) : action.actionType === "create_discussion_reply" ? (
+            <>
+              {threadTitle ? <p><span className="font-medium">Thread:</span> {threadTitle}</p> : null}
+              {body ? (
+                <div>
+                  <p className="font-medium text-foreground">Reply</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+                </div>
+              ) : null}
+            </>
+          ) : action.actionType === "create_announcement" ? (
+            <>
+              {title ? <p><span className="font-medium">Title:</span> {title}</p> : null}
+              {audience ? <p><span className="font-medium">Audience:</span> {audience}</p> : null}
+              {body ? (
+                <div>
+                  <p className="font-medium text-foreground">Body</p>
+                  <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{body}</p>
+                </div>
               ) : null}
             </>
           ) : action.actionType === "create_event" ? (
