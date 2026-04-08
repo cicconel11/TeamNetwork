@@ -75,15 +75,66 @@ export function buildEmailSignupCallbackUrl(siteUrl: string, redirectTo: string)
 }
 
 /**
- * Builds the absolute redirect URL for Supabase resetPasswordForEmail.
- * The flow is: email link → /auth/callback?redirect=<encoded reset page> → reset page
+ * Builds the absolute `redirectTo` URL for Supabase `resetPasswordForEmail`.
+ *
+ * Uses `/auth/confirm` + `token_hash` (see Supabase PKCE password docs). Email links must be
+ * customized to append `&token_hash={{ .TokenHash }}&type=recovery` to this URL — otherwise
+ * mobile users who open the link in a different browser than the one that requested the reset
+ * hit PKCE exchange without a stored code_verifier and see "both auth code and code verifier...".
  */
 export function buildRecoveryRedirectTo(
   siteUrl: string,
   innerRedirect: string
 ): string {
   const safeRedirect = sanitizeRedirectPath(innerRedirect);
-  const resetPage = `/auth/reset-password?redirect=${encodeURIComponent(safeRedirect)}`;
+  const resetPage =
+    safeRedirect !== "/app"
+      ? `/auth/reset-password?redirect=${encodeURIComponent(safeRedirect)}`
+      : "/auth/reset-password";
   const base = normalizeOrigin(siteUrl);
-  return `${base}/auth/callback?redirect=${encodeURIComponent(resetPage)}`;
+  const nextEncoded = encodeURIComponent(resetPage);
+  return `${base}/auth/confirm?next=${nextEncoded}`;
+}
+
+/**
+ * Validates `next` after recovery email — only `/auth/reset-password` with an optional safe `redirect` query.
+ */
+export function sanitizeRecoveryNextParam(raw: string | null): string {
+  if (!raw?.trim()) {
+    return "/auth/reset-password";
+  }
+
+  let decoded = raw.trim();
+  try {
+    decoded = decodeURIComponent(decoded);
+  } catch {
+    return "/auth/reset-password";
+  }
+
+  decoded = decoded.trim();
+  if (!decoded.startsWith("/")) {
+    return "/auth/reset-password";
+  }
+
+  const qIndex = decoded.indexOf("?");
+  const pathname = qIndex === -1 ? decoded : decoded.slice(0, qIndex);
+  const search = qIndex === -1 ? "" : decoded.slice(qIndex);
+
+  if (pathname !== "/auth/reset-password") {
+    return "/auth/reset-password";
+  }
+
+  if (!search) {
+    return "/auth/reset-password";
+  }
+
+  const qs = search.startsWith("?") ? search.slice(1) : search;
+  const params = new URLSearchParams(qs);
+  const redirect = params.get("redirect");
+  if (!redirect) {
+    return "/auth/reset-password";
+  }
+
+  const safe = sanitizeRedirectPath(redirect);
+  return `/auth/reset-password?redirect=${encodeURIComponent(safe)}`;
 }

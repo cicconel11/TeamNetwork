@@ -1,6 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeRedirectPath, buildRecoveryRedirectTo } from "../src/lib/auth/redirect";
+import {
+  sanitizeRedirectPath,
+  buildRecoveryRedirectTo,
+  sanitizeRecoveryNextParam,
+} from "../src/lib/auth/redirect";
 import { validateNewPassword } from "../src/lib/auth/password";
 
 describe("sanitizeRedirectPath", () => {
@@ -70,34 +74,55 @@ describe("sanitizeRedirectPath", () => {
 });
 
 describe("buildRecoveryRedirectTo", () => {
-  it("produces correct absolute URL with double-encoded inner redirect", () => {
+  it("produces /auth/confirm with encoded next pointing at reset-password + redirect", () => {
     const result = buildRecoveryRedirectTo("https://www.example.com", "/dashboard");
     const url = new URL(result);
 
     assert.equal(url.origin, "https://www.example.com");
-    assert.equal(url.pathname, "/auth/callback");
+    assert.equal(url.pathname, "/auth/confirm");
 
-    const redirectParam = url.searchParams.get("redirect");
-    assert.ok(redirectParam);
-    assert.ok(redirectParam.startsWith("/auth/reset-password?redirect="));
+    const nextParam = url.searchParams.get("next");
+    assert.ok(nextParam);
+    assert.ok(nextParam.includes("/auth/reset-password"));
+    assert.ok(nextParam.includes("redirect"));
 
-    const innerUrl = new URLSearchParams(redirectParam.split("?")[1]);
-    assert.equal(innerUrl.get("redirect"), "/dashboard");
+    const decoded = decodeURIComponent(nextParam);
+    const inner = new URLSearchParams(decoded.split("?")[1] ?? "");
+    assert.equal(inner.get("redirect"), "/dashboard");
   });
 
   it("strips trailing slash from siteUrl", () => {
     const result = buildRecoveryRedirectTo("https://www.example.com/", "/app");
-    assert.ok(result.startsWith("https://www.example.com/auth/callback"));
-    assert.ok(!result.includes("//auth/callback"));
+    assert.ok(result.startsWith("https://www.example.com/auth/confirm"));
+    assert.ok(!result.includes("//auth/confirm"));
   });
 
-  it("sanitizes the inner redirect path", () => {
+  it("sanitizes the inner redirect path to /app and omits redundant redirect query", () => {
     const result = buildRecoveryRedirectTo("https://www.example.com", "//evil.com");
     const url = new URL(result);
-    const redirectParam = url.searchParams.get("redirect");
-    assert.ok(redirectParam);
-    const innerUrl = new URLSearchParams(redirectParam.split("?")[1]);
-    assert.equal(innerUrl.get("redirect"), "/app");
+    const nextParam = url.searchParams.get("next");
+    assert.ok(nextParam);
+    const decoded = decodeURIComponent(nextParam);
+    assert.equal(decoded, "/auth/reset-password");
+  });
+});
+
+describe("sanitizeRecoveryNextParam", () => {
+  it("defaults to /auth/reset-password", () => {
+    assert.equal(sanitizeRecoveryNextParam(null), "/auth/reset-password");
+    assert.equal(sanitizeRecoveryNextParam(""), "/auth/reset-password");
+  });
+
+  it("accepts encoded reset-password path with redirect", () => {
+    const raw = encodeURIComponent("/auth/reset-password?redirect=%2Ffoo");
+    assert.equal(
+      sanitizeRecoveryNextParam(raw),
+      "/auth/reset-password?redirect=%2Ffoo"
+    );
+  });
+
+  it("rejects non-reset-password paths", () => {
+    assert.equal(sanitizeRecoveryNextParam("/auth/login"), "/auth/reset-password");
   });
 });
 
