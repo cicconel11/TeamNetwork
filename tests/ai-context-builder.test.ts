@@ -174,8 +174,8 @@ describe("AI prompt context builder", () => {
     });
 
     assert.doesNotMatch(result.systemPrompt, /Current page path: \/acme\/announcements/);
-    assert.match(result.systemPrompt, /Read recent announcements and updates/);
-    assert.match(result.systemPrompt, /Find the right in-app page/i);
+    assert.match(result.systemPrompt, /List recent organization announcements/i);
+    assert.match(result.systemPrompt, /Find the best in-app pages/i);
     assert.match(result.orgContextMessage ?? "", /## Client-Reported Page Context/);
     assert.match(result.orgContextMessage ?? "", /Current page path: \/acme\/announcements/);
   });

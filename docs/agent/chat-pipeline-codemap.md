@@ -2,7 +2,7 @@
 
 ## Overview
 
-The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while job-creation prompts can attach `prepare_job_posting` and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Schedule-import turns can now also attach the legacy-named `extract_schedule_pdf` tool for either uploaded PDFs or uploaded schedule images, and website imports still use `scrape_schedule_website`. Uploaded schedule files are treated as transient private attachments: the upload route validates PDF/image signatures before storing them, self-heals the private bucket if it is missing or still on the old PDF-only allowlist, exposes a `DELETE` cleanup endpoint for abandoned pending uploads, and the extractor deletes the storage object after it has been read into memory. The executor lazy-loads the schedule parser and extraction stack so plain chat turns do not evaluate PDF/image-specific dependencies unless a schedule tool is actually invoked. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn. The route now also has a materially faster single-tool deterministic path for simple `list_members`, `list_events`, and `get_org_stats` turns, which runs with `tool_first` context, skips pass 2 entirely, and emits the final answer directly from trusted tool data. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
+The chat pipeline handles the full lifecycle of an AI chat request: rate limiting, active-admin auth, input validation, message-safety assessment, thread management, semantic cache check, prompt construction, conditional tool attachment, LLM streaming via SSE, message persistence, cache write-back, audit logging, and deterministic grounding enforcement for tool-backed summaries. A small internal `TurnExecutionPolicy` layer now centralizes cache, retrieval, context, and tool decisions from existing routing signals instead of spreading them across handler branches. Tool execution is now defense-in-depth hardened in the executor itself, and each turn stage is bounded so pass 1, each tool call, and pass 2 cannot hang indefinitely. The shipped read-tool set includes members, events, announcements, discussions, job postings, org stats, connection suggestions, and `find_navigation_targets` for page/deep-link lookup. Navigation/action requests short-circuit to `find_navigation_targets` instead of routing through the broader read-tool set, while announcement-creation prompts can attach `prepare_announcement`, reply prompts can attach `prepare_discussion_reply`, job-creation prompts can attach `prepare_job_posting`, and discussion-creation prompts can attach `prepare_discussion_thread` to validate a draft and emit a structured `pending_action` confirmation event. Schedule-import turns can now also attach the legacy-named `extract_schedule_pdf` tool for either uploaded PDFs or uploaded schedule images, and website imports still use `scrape_schedule_website`. Uploaded schedule files are treated as transient private attachments: the upload route validates PDF/image signatures before storing them, self-heals the private bucket if it is missing or still on the old PDF-only allowlist, exposes a `DELETE` cleanup endpoint for abandoned pending uploads, and the extractor deletes the storage object after it has been read into memory. The executor lazy-loads the schedule parser and extraction stack so plain chat turns do not evaluate PDF/image-specific dependencies unless a schedule tool is actually invoked. Prompt construction also receives the attached tool list plus a client-reported current page path as untrusted context for the turn, and the panel now derives its visible capability disclosure from the same shared tool-description source used in prompt construction. The route now also has a materially faster single-tool deterministic path for simple `list_members`, `list_events`, and `get_org_stats` turns, which runs with `tool_first` context, skips pass 2 entirely, and emits the final answer directly from trusted tool data. Audit rows now also persist a `stage_timings` JSON payload with per-stage duration/status plus the final retrieval decision/reason for each logged turn.
 
 For Falkor setup, sync, and troubleshooting, see `docs/agent/falkor-people-graph.md`.
 
@@ -138,7 +138,7 @@ Client POST /api/ai/{orgId}/chat
   │       └─ user-role history is re-assessed and sanitized before model replay
   ├─ 11. Resolve pass-1 tools from execution policy
   │       ├─ `none` for casual / static_general / out_of_scope
-  │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_job_posting` / `prepare_discussion_thread` for create requests
+  │       └─ surface-gated read tools for follow_up / live_lookup, plus `prepare_announcement` / `prepare_job_posting` / `prepare_discussion_reply` / `prepare_discussion_thread` for create requests
   ├─ 12. Stream LLM response via SSE (composeResponse async generator)
   │       ├─ Pass 1 runs with a 15s timeout budget
   │       ├─ Each requested tool runs with a 5s timeout budget
@@ -150,15 +150,19 @@ Client POST /api/ai/{orgId}/chat
   │       ├─ Simple event list asks can expose only `list_events`
   │       ├─ Direct-name connection prompts on the `members` surface expose only `suggest_connections`
   │       ├─ Navigation / action prompts can expose only `find_navigation_targets`
+  │       ├─ Announcement creation prompts can expose only `prepare_announcement`
   │       ├─ Job creation prompts can expose only `prepare_job_posting`
+  │       ├─ Discussion reply prompts can expose only `prepare_discussion_reply`
   │       ├─ Discussion creation prompts can expose only `prepare_discussion_thread`
-  │       ├─ Clear job/discussion create turns now preempt surface-specific read routing, so keywords like fundraising, alumni, or events do not knock the turn off the pending-action path
+  │       ├─ Clear announcement/job/discussion create turns now preempt surface-specific read routing, so keywords like fundraising, alumni, or events do not knock the turn off the pending-action path
   │       ├─ Those single-tool create turns also force pass-1 `tool_choice` to the prepare tool so the model cannot bypass the pending-action flow with a freeform draft
-  │       ├─ Active per-thread draft-session state can keep the matching prepare tool attached across missing-fields follow-ups
+  │       ├─ Active per-thread draft-session state can keep the matching prepare tool attached across missing-fields follow-ups for announcements, jobs, discussion replies, discussion threads, and events
   │       ├─ Those continuation turns merge stored draft payload with new tool args before re-validating the draft
   │       ├─ `suggest_connections` may resolve `person_query` server-side and return one of `resolved`, `ambiguous`, `not_found`, `no_suggestions`
   │       ├─ `find_navigation_targets` returns org-scoped deep links for open/create/manage page requests
+  │       ├─ `prepare_announcement` returns `missing_fields`, `needs_confirmation`, or `forbidden`
   │       ├─ `prepare_job_posting` returns `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
+  │       ├─ `prepare_discussion_reply` returns `missing_fields`, `needs_confirmation`, or `forbidden`
   │       ├─ `prepare_discussion_thread` returns `missing_fields`, `needs_confirmation`, or `forbidden`
   │       ├─ `needs_confirmation` emits a `pending_action` SSE payload instead of writing immediately
   │       ├─ the client stores that payload separately from streamed prose so review UI can render even when the assistant returns little or no text
@@ -200,7 +204,7 @@ Client POST /api/ai/{orgId}/chat
 
 | Parameter | Value |
 |---|---|
-| Model | `glm-5` (configurable via `ZAI_MODEL`) |
+| Model | `glm-5.1` (configurable via `ZAI_MODEL`) |
 | Temperature | 0.7 |
 | Max tokens | 2000 |
 | Stream | `true` (with `include_usage`) |
@@ -220,7 +224,7 @@ Timeouts are launch-time code constants, not env-configurable knobs.
 | Variable | Default | Purpose |
 |---|---|---|
 | `ZAI_API_KEY` | (required) | LLM provider key — if unset, returns config-error message |
-| `ZAI_MODEL` | `glm-5` | Model identifier |
+| `ZAI_MODEL` | `glm-5.1` | Model identifier |
 | `DISABLE_AI_CACHE` | `undefined` | Set `"true"` to disable cache (kill switch) |
 
 ### Context Builder: Surface-Gated Sections
@@ -339,6 +343,14 @@ type ToolExecutionResult =
 - **Outputs:** `{ state, query, matches[] }` where each match includes org-scoped `href`, `label`, `description`, and `kind`
 - **Deterministic path:** single-tool navigation turns are rendered in-route as clickable markdown links so the panel can deep-link users directly to matched pages
 
+### `prepare_announcement`
+
+- **Inputs:** partial announcement draft fields plus optional `audience_user_ids` for targeted sends
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft }`
+- `state`: `missing_fields`, `needs_confirmation`, or `forbidden`
+- **Behavior:** validates the assistant announcement draft, applies safe defaults for audience / pin / notification flags, and creates a pending confirmation record when the draft is complete
+- **Write safety:** never writes an announcement directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `announcements` is mutated
+
 ### `prepare_job_posting`
 
 - **Inputs:** partial job draft fields plus optional `application_url`, `contact_email`, `expires_at`, and `mediaIds`
@@ -346,6 +358,12 @@ type ToolExecutionResult =
 - `state`: `missing_fields`, `needs_confirmation`, `invalid_source_url`, or `forbidden`
 - **Behavior:** validates a stricter assistant-only job schema, optionally enriches missing fields from an HTTPS source URL, and creates a pending confirmation record when the draft is complete
 - **Write safety:** never writes a job directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `job_postings` is mutated
+
+### `prepare_discussion_reply`
+
+- **Purpose:** Validate a reply to an existing discussion thread, collect the missing thread/body fields, and create a pending confirmation action when complete.
+- **Outputs:** `{ state, missing_fields?, pending_action?, draft }`
+- **Write safety:** never writes a reply directly; completed drafts emit `pending_action` SSE and require a separate confirm route call before `discussion_replies` is mutated
 
 ### `prepare_discussion_thread`
 
@@ -368,8 +386,8 @@ type ToolExecutionResult =
 
 ### Write Actions Today
 
-- The shipped write paths are `prepare_job_posting` and `prepare_discussion_thread`, both backed by the same pending-action confirm/cancel routes.
-- Broader write tools like event creation or announcement publishing are still deferred.
+- The shipped write paths are `prepare_announcement`, `prepare_job_posting`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event`, all backed by the same pending-action confirm/cancel routes.
+- Broader write tools like forms, role changes, destructive edits, and other admin mutations are still deferred.
 - The confirmation UI depends on `pending_action` SSE handling in the assistant panel rather than parsing free-form "yes" replies in chat.
 
 ### Pending Actions

@@ -358,7 +358,7 @@ test("schedule extraction uses separate Z.AI models for text and image sources",
 
   setScheduleExtractionDepsForTests({
     createClient: () => fakeClient,
-    getTextModel: () => "glm-5",
+    getTextModel: () => "glm-5.1",
     getImageModel: () => "glm-5v-turbo",
   });
 
@@ -378,7 +378,7 @@ test("schedule extraction uses separate Z.AI models for text and image sources",
     }
   );
 
-  assert.equal(completionCalls[0]?.model, "glm-5");
+  assert.equal(completionCalls[0]?.model, "glm-5.1");
   assert.equal(completionCalls[1]?.model, "glm-5v-turbo");
   assert.match(JSON.stringify(completionCalls[1]?.messages), /image_url/);
 });
@@ -768,6 +768,105 @@ test("prepare_discussion_thread returns missing_fields for incomplete drafts", a
   });
 });
 
+test("prepare_announcement returns missing_fields for incomplete drafts", async () => {
+  const announcementCtx = { ...ctx, threadId: "thread-announce" };
+
+  const result = expectOk(
+    await executeToolCall(announcementCtx, {
+      name: "prepare_announcement",
+      args: { audience: "all" },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "missing_fields",
+    missing_fields: ["title"],
+    draft: {
+      audience: "all",
+      is_pinned: false,
+      send_notification: false,
+    },
+  });
+});
+
+test("prepare_announcement creates a pending confirmation action when complete", async () => {
+  const announcementStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-announcement-123",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "thread-announce",
+          action_type: "create_announcement",
+          payload: {
+            title: "Practice moved indoors",
+            body: "Meet in Weight Room B at 6pm.",
+            audience: "all",
+            is_pinned: true,
+            send_notification: true,
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+
+  const announcementCtx = { ...makeCtx(announcementStub as any), threadId: "thread-announce" };
+
+  const result = expectOk(
+    await executeToolCall(announcementCtx, {
+      name: "prepare_announcement",
+      args: {
+        title: "Practice moved indoors",
+        body: "Meet in Weight Room B at 6pm.",
+        audience: "all",
+        is_pinned: true,
+        send_notification: true,
+      },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "needs_confirmation",
+    draft: {
+      title: "Practice moved indoors",
+      body: "Meet in Weight Room B at 6pm.",
+      audience: "all",
+      is_pinned: true,
+      send_notification: true,
+    },
+    pending_action: {
+      id: "pending-announcement-123",
+      action_type: "create_announcement",
+      payload: {
+        title: "Practice moved indoors",
+        body: "Meet in Weight Room B at 6pm.",
+        audience: "all",
+        is_pinned: true,
+        send_notification: true,
+        orgSlug: "upenn-sprint-football",
+      },
+      expires_at: "2099-01-01T00:00:00.000Z",
+      summary: {
+        title: "Review announcement",
+        description: "Confirm the drafted announcement before it is published.",
+      },
+    },
+  });
+});
+
 test("prepare_discussion_thread creates a pending confirmation action when complete", async () => {
   const discussionStub = createToolSupabaseStub({
     organizations: {
@@ -838,6 +937,94 @@ test("prepare_discussion_thread creates a pending confirmation action when compl
   });
 });
 
+test("prepare_discussion_reply returns missing_fields without thread target or body", async () => {
+  const replyCtx = { ...ctx, threadId: "assistant-thread-123" };
+
+  const result = expectOk(
+    await executeToolCall(replyCtx, {
+      name: "prepare_discussion_reply",
+      args: {},
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "missing_fields",
+    missing_fields: ["discussion_thread_id", "body"],
+    draft: {},
+  });
+});
+
+test("prepare_discussion_reply creates a pending confirmation action when complete", async () => {
+  const discussionThreadId = "33333333-3333-4333-8333-333333333333";
+  const replyStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: { data: { slug: "upenn-sprint-football" }, error: null },
+    },
+    ai_pending_actions: {
+      single: {
+        data: {
+          id: "pending-reply-123",
+          organization_id: ORG_ID,
+          user_id: USER_ID,
+          thread_id: "assistant-thread-123",
+          action_type: "create_discussion_reply",
+          payload: {
+            discussion_thread_id: discussionThreadId,
+            thread_title: "Spring Fundraising Volunteers",
+            body: "I can cover the alumni outreach shift.",
+            orgSlug: "upenn-sprint-football",
+          },
+          status: "pending",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+          executed_at: null,
+          result_entity_type: null,
+          result_entity_id: null,
+        },
+        error: null,
+      },
+    },
+  });
+
+  const replyCtx = { ...makeCtx(replyStub as any), threadId: "assistant-thread-123" };
+
+  const result = expectOk(
+    await executeToolCall(replyCtx, {
+      name: "prepare_discussion_reply",
+      args: {
+        discussion_thread_id: discussionThreadId,
+        thread_title: "Spring Fundraising Volunteers",
+        body: "I can cover the alumni outreach shift.",
+      },
+    })
+  );
+
+  assert.deepEqual(result.data, {
+    state: "needs_confirmation",
+    draft: {
+      discussion_thread_id: discussionThreadId,
+      thread_title: "Spring Fundraising Volunteers",
+      body: "I can cover the alumni outreach shift.",
+    },
+    pending_action: {
+      id: "pending-reply-123",
+      action_type: "create_discussion_reply",
+      payload: {
+        discussion_thread_id: discussionThreadId,
+        thread_title: "Spring Fundraising Volunteers",
+        body: "I can cover the alumni outreach shift.",
+        orgSlug: "upenn-sprint-football",
+      },
+      expires_at: "2099-01-01T00:00:00.000Z",
+      summary: {
+        title: "Review discussion reply",
+        description: "Confirm the drafted reply before it is posted to the discussion thread.",
+      },
+    },
+  });
+});
+
 test("prepare_discussion_thread fails closed when organization slug lookup errors", async () => {
   const discussionStub = createToolSupabaseStub({
     organizations: {
@@ -855,6 +1042,33 @@ test("prepare_discussion_thread fails closed when organization slug lookup error
       args: {
         title: "Spring Fundraising Volunteers",
         body: "Let's organize volunteer assignments for the spring fundraiser.",
+      },
+    }
+  );
+
+  assert.deepEqual(result, {
+    kind: "tool_error",
+    error: "Failed to load organization context",
+  });
+});
+
+test("prepare_announcement fails closed when organization slug lookup errors", async () => {
+  const announcementStub = createToolSupabaseStub({
+    organizations: {
+      maybeSingle: {
+        data: null,
+        error: { message: "organization lookup failed" },
+      },
+    },
+  });
+
+  const result = await executeToolCall(
+    { ...makeCtx(announcementStub as any), threadId: "thread-announce" },
+    {
+      name: "prepare_announcement",
+      args: {
+        title: "Practice moved indoors",
+        audience: "all",
       },
     }
   );
