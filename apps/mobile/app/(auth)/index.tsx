@@ -1,34 +1,16 @@
-import { useEffect, useRef } from "react";
-import { View, Text, Pressable, StyleSheet, StatusBar, useWindowDimensions, Animated, Easing } from "react-native";
+import { Linking, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Image } from "expo-image";
-import { spacing } from "@/lib/theme";
+import { DEMO_ORG, FEATURES } from "@teammeet/core";
+import { LandingHero } from "@/components/landing/LandingHero";
+import { LandingDemoCard } from "@/components/landing/LandingDemoCard";
+import { LandingFeatures } from "@/components/landing/LandingFeatures";
+import { SPACING } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
-
-  const brandOpacity = useRef(new Animated.Value(0)).current;
-  const brandTranslate = useRef(new Animated.Value(12)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(brandOpacity, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(brandTranslate, {
-        toValue: 0,
-        duration: 500,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [brandOpacity, brandTranslate]);
 
   const handleSignInPress = () => {
     router.push("/(auth)/login");
@@ -42,88 +24,75 @@ export default function LandingScreen() {
     router.push("/(auth)/login");
   };
 
+  const handleTermsPress = () => {
+    Linking.openURL("https://www.myteamnetwork.com/terms").catch(() => {
+      // No-op: failing to open the browser shouldn't crash the auth screen.
+    });
+  };
+
+  const handlePrivacyPress = () => {
+    Linking.openURL("https://www.myteamnetwork.com/privacy").catch(() => {
+      // No-op: failing to open the browser shouldn't crash the auth screen.
+    });
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Gradient Background */}
+      {/* Gradient background — inline, single use */}
       <LinearGradient
         colors={["#134e4a", "#0f172a", "#0f172a"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.gradient}
+        style={StyleSheet.absoluteFill}
       />
 
-      {/* Decorative Circles */}
-      <View style={styles.circlesContainer}>
-        <View style={[styles.circle, { width: width * 0.8, height: width * 0.8, top: -width * 0.2, right: -width * 0.3 }]} />
-        <View style={[styles.circle, { width: width * 0.6, height: width * 0.6, top: height * 0.25, left: -width * 0.25 }]} />
-        <View style={[styles.circle, { width: width * 0.5, height: width * 0.5, top: height * 0.5, right: -width * 0.15 }]} />
+      {/* Decorative circles — inline, single use */}
+      <View style={styles.circles} pointerEvents="none">
+        <View style={styles.circleTopRight} />
+        <View style={styles.circleMiddleLeft} />
+        <View style={styles.circleBottomRight} />
       </View>
 
-      {/* Bottom Card */}
-      <SafeAreaView style={styles.cardWrapper} edges={["bottom"]}>
-        <View style={styles.card}>
-          <Animated.View
-            style={[
-              styles.brandZone,
-              { opacity: brandOpacity, transform: [{ translateY: brandTranslate }] },
-            ]}
-          >
-            <Image
-              source={require("../../assets/brand-logo.png")}
-              style={styles.brandLogo}
-              contentFit="contain"
-              transition={0}
-              cachePolicy="memory"
-              accessibilityElementsHidden
-              importantForAccessibility="no"
-            />
-          </Animated.View>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <LandingHero
+            onSignIn={handleSignInPress}
+            onCreateAccount={handleCreateAccountPress}
+            onContinueWithGoogle={handleGooglePress}
+          />
 
-          {/* Title */}
-          <Text style={styles.title}>Get Started</Text>
+          <View style={styles.demoCardWrap}>
+            <LandingDemoCard org={DEMO_ORG} />
+          </View>
 
-          {/* Subtitle */}
-          <Text style={styles.subtitle}>
-            Join your team's network or sign in to continue.
-          </Text>
+          <LandingFeatures features={FEATURES} />
 
-          {/* Primary Button: Sign In */}
-          <Pressable
-            style={({ pressed }) => [styles.primaryButton, pressed && { opacity: 0.8 }]}
-            onPress={handleSignInPress}
-            accessibilityLabel="Sign In"
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Sign In</Text>
-          </Pressable>
+          <View style={styles.footer}>
+            <Pressable
+              onPress={handleSignInPress}
+              accessibilityRole="link"
+              accessibilityLabel="Already a member? Sign in"
+              hitSlop={8}
+            >
+              <Text style={styles.footerLink}>Already a member? Sign in</Text>
+            </Pressable>
 
-          {/* Secondary Button: Create Account */}
-          <Pressable
-            style={({ pressed }) => [styles.secondaryButton, pressed && { opacity: 0.8 }]}
-            onPress={handleCreateAccountPress}
-            accessibilityLabel="Create Account"
-            accessibilityRole="button"
-          >
-            <Text style={styles.secondaryButtonText}>Create Account</Text>
-          </Pressable>
-
-          {/* Tertiary Button: Continue with Google */}
-          <Pressable
-            style={({ pressed }) => [styles.tertiaryButton, pressed && { opacity: 0.8 }]}
-            onPress={handleGooglePress}
-            accessibilityLabel="Continue with Google"
-            accessibilityRole="button"
-          >
-            <View style={styles.googleButtonContent}>
-              <View style={styles.googleIcon}>
-                <Text style={styles.googleIconText}>G</Text>
-              </View>
-              <Text style={styles.tertiaryButtonText}>Continue with Google</Text>
+            <View style={styles.footerLegal}>
+              <Pressable onPress={handleTermsPress} hitSlop={8}>
+                <Text style={styles.footerLegalText}>Terms</Text>
+              </Pressable>
+              <Text style={styles.footerLegalDivider}>·</Text>
+              <Pressable onPress={handlePrivacyPress} hitSlop={8}>
+                <Text style={styles.footerLegalText}>Privacy</Text>
+              </Pressable>
             </View>
-          </Pressable>
-        </View>
+          </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -132,129 +101,78 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#0f172a",
   },
-  gradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  safeArea: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: SPACING.xl,
   },
 
-  // Decorative Circles
-  circlesContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  // Decorative circles
+  circles: {
+    ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
   },
-  circle: {
+  circleTopRight: {
     position: "absolute",
+    width: 320,
+    height: 320,
     borderRadius: 9999,
     backgroundColor: "rgba(20, 184, 166, 0.08)",
+    top: -80,
+    right: -120,
   },
-
-  // Card
-  cardWrapper: {
+  circleMiddleLeft: {
     position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: 240,
+    height: 240,
+    borderRadius: 9999,
+    backgroundColor: "rgba(20, 184, 166, 0.08)",
+    top: "25%",
+    left: -100,
   },
-  card: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderCurve: "continuous",
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 24,
-    boxShadow: "0px -4px 12px rgba(0, 0, 0, 0.1)",
-  },
-
-  // Header
-  brandZone: {
-    alignItems: "center",
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  brandLogo: { width: 220, height: 147 },
-
-  // Typography
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#0f172a",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#64748b",
-    lineHeight: 24,
-    marginBottom: 28,
+  circleBottomRight: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 9999,
+    backgroundColor: "rgba(20, 184, 166, 0.08)",
+    top: "55%",
+    right: -60,
   },
 
-  // Buttons
-  primaryButton: {
-    backgroundColor: "#059669",
-    paddingVertical: 16,
-    borderRadius: 14,
-    borderCurve: "continuous",
+  // Demo card
+  demoCardWrap: {
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
+  },
+
+  // Footer
+  footer: {
     alignItems: "center",
-    marginBottom: 12,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
+    gap: SPACING.md,
   },
-  primaryButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
+  footerLink: {
+    ...TYPOGRAPHY.bodyMedium,
+    color: "rgba(255, 255, 255, 0.7)",
+    textDecorationLine: "underline",
   },
-  secondaryButton: {
-    backgroundColor: "#0f172a",
-    paddingVertical: 16,
-    borderRadius: 14,
-    borderCurve: "continuous",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  secondaryButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  tertiaryButton: {
-    backgroundColor: "transparent",
-    paddingVertical: 16,
-    borderRadius: 14,
-    borderCurve: "continuous",
-    alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "#1e293b",
-  },
-  googleButtonContent: {
+  footerLegal: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: SPACING.sm,
   },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#ffffff",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
+  footerLegalText: {
+    ...TYPOGRAPHY.bodySmall,
+    color: "rgba(255, 255, 255, 0.5)",
   },
-  googleIconText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#4285F4",
-  },
-  tertiaryButtonText: {
-    color: "#0f172a",
-    fontSize: 16,
-    fontWeight: "600",
+  footerLegalDivider: {
+    ...TYPOGRAPHY.bodySmall,
+    color: "rgba(255, 255, 255, 0.3)",
   },
 });
