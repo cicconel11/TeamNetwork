@@ -108,7 +108,7 @@ The panel now derives `surface` from the current route instead of hardcoding `"g
 The assistant now supports confirmation-gated write paths for announcements, jobs, top-level discussion threads, discussion replies, and calendar events. Broader write parity for role changes, forms, destructive edits, and other mutations is still not implemented.
 
 ### 5. Discussion and job reads are live, and both now have shipped create flows
-`list_discussions` and `list_job_postings` are both live tools now, so those prompts can emit `tool_status` events and return deterministic tool-backed answers. The shipped assistant mutations are the confirmation-gated `prepare_announcement`, `prepare_job_posting`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event` flows.
+`list_discussions` and `list_job_postings` are both live tools now, so those prompts can emit `tool_status` events and return deterministic tool-backed answers. The shipped assistant mutations are the confirmation-gated `prepare_announcement`, `prepare_job_posting`, `prepare_discussion_reply`, `prepare_discussion_thread`, and `prepare_event` flows. Discussion replies can now bind either to the trusted current thread route (`reply to this thread`) or to an org-scoped named thread title supplied in chat, with deterministic clarification when the title is missing, ambiguous, or not found.
 
 ### 6. UI integration coverage is still light
 The UI no longer has zero coverage: utility and stream-level tests now cover route-surface inference, toggle visibility, message list behavior, SSE parsing, SSR safety, and panel state helpers. But there are still no full React integration tests for the end-to-end pending-action review flow, optimistic thread switching, or panel view transitions.
