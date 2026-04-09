@@ -134,6 +134,7 @@ export function getAssistantCapabilitySnapshot(
           "list_job_postings",
           "prepare_announcement",
           "prepare_job_posting",
+          "prepare_discussion_reply",
           "prepare_discussion_thread",
           "prepare_event",
           "find_navigation_targets",

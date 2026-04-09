@@ -26,16 +26,26 @@ function createSupabaseStub() {
     assistantCount: 0,
     threads: [] as Array<Record<string, unknown>>,
     messages: [] as Array<Record<string, unknown>>,
+    discussionThreads: [
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        organization_id: ORG_ID,
+        title: "Spring Fundraising Volunteers",
+        deleted_at: null,
+      },
+    ] as Array<Record<string, unknown>>,
+    discussionThreadLookupError: null as unknown,
   };
 
   function applyFilters(
     rows: Array<Record<string, unknown>>,
-    filters: Array<{ kind: "eq" | "in" | "lt" | "gt"; column: string; value: unknown }>
+    filters: Array<{ kind: "eq" | "in" | "lt" | "gt" | "is"; column: string; value: unknown }>
   ) {
     return rows.filter((row) =>
       filters.every((filter) => {
         const value = row[filter.column];
         if (filter.kind === "eq") return value === filter.value;
+        if (filter.kind === "is") return value === filter.value;
         if (filter.kind === "in") {
           return Array.isArray(filter.value) && filter.value.includes(value);
         }
@@ -56,7 +66,7 @@ function createSupabaseStub() {
       op: "select" as "select" | "insert" | "update",
       inserted: null as Record<string, unknown> | null,
       updated: null as Record<string, unknown> | null,
-      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "gt"; column: string; value: unknown }>,
+      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "gt" | "is"; column: string; value: unknown }>,
       orderBy: null as { column: string; ascending: boolean } | null,
       limitValue: null as number | null,
     };
@@ -78,6 +88,10 @@ function createSupabaseStub() {
       },
       eq(column: string, value: unknown) {
         query.filters.push({ kind: "eq", column, value });
+        return builder;
+      },
+      is(column: string, value: unknown) {
+        query.filters.push({ kind: "is", column, value });
         return builder;
       },
       in(column: string, value: unknown[]) {
@@ -147,6 +161,15 @@ function createSupabaseStub() {
           }
           return { data: null, error: null };
         }
+      }
+
+      if (table === "discussion_threads" && query.op === "select") {
+        if (state.discussionThreadLookupError) {
+          return { data: null, error: state.discussionThreadLookupError };
+        }
+
+        const rows = applyFilters(state.discussionThreads, query.filters);
+        return { data: rows[0] ?? null, error: null };
       }
 
       return { data: null, error: null };
@@ -849,6 +872,33 @@ test("create announcement requests only attach prepare_announcement on pass 1", 
   assert.match(body, /"actionType":"create_announcement"/);
 });
 
+test("write announcement prompts still attach prepare_announcement on pass 1", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Write a short urgent announcement for parents that tonight's event has moved indoors.",
+      surface: "general",
+      currentPath: "/acme/announcements",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_announcement"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_announcement" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_announcement");
+  assert.match(body, /I drafted the announcement/i);
+});
+
 test("create discussion requests only attach prepare_discussion_thread on pass 1", async () => {
   const contextModes: Array<string | undefined> = [];
 
@@ -902,6 +952,120 @@ test("discussion reply requests only attach prepare_discussion_reply on pass 1",
   assert.match(body, /I drafted the discussion reply/i);
   assert.match(body, /"type":"pending_action"/);
   assert.match(body, /"actionType":"create_discussion_reply"/);
+});
+
+test("thread-page response prompts attach prepare_discussion_reply on pass 1", async () => {
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Draft a response to this thread: My new Thread - Check it out",
+      surface: "general",
+      currentPath: "/acme/messages/threads/33333333-3333-4333-8333-333333333333",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_reply"]);
+  assert.deepEqual(toolChoiceForCall(0), {
+    type: "function",
+    function: { name: "prepare_discussion_reply" },
+  });
+  assert.equal(executeToolCallCalls[0].call.name, "prepare_discussion_reply");
+});
+
+test("thread-page discussion replies inject the current discussion thread context when tool args omit it", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_reply",
+            argsJson: '{"body":"Thanks everyone for the feedback! We\\u2019ll post the final schedule tomorrow."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_reply should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-reply-context-123",
+            action_type: "create_discussion_reply",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion reply",
+              description: "Confirm the drafted reply before it is posted to the discussion thread.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to this thread thanking everyone for the feedback and let them know we'll post the final schedule tomorrow.",
+      surface: "general",
+      currentPath: "/acme/messages/threads/33333333-3333-4333-8333-333333333333",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    discussion_thread_id: "33333333-3333-4333-8333-333333333333",
+    thread_title: "Spring Fundraising Volunteers",
+    body: "Thanks everyone for the feedback! We’ll post the final schedule tomorrow.",
+  });
+  assert.match(body, /I drafted the discussion reply/i);
+});
+
+test("thread-page discussion reply grounding fails closed on lookup errors", async () => {
+  supabaseStub.state.discussionThreadLookupError = { message: "lookup failed" };
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to this thread thanking everyone for the feedback.",
+      surface: "general",
+      currentPath: "/acme/messages/threads/33333333-3333-4333-8333-333333333333",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const response = await POST(request as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const body = await response.text();
+
+  assert.equal(response.status, 500);
+  assert.match(body, /Failed to resolve the current discussion thread/);
 });
 
 test("create discussion requests do not get misrouted to find_navigation_targets", async () => {
@@ -1482,6 +1646,246 @@ test("discussion draft follow-up keeps prepare_discussion_thread forced and merg
     body: "Let’s organize volunteer assignments for the fundraiser.",
   });
   assert.match(secondBody, /I drafted the discussion thread/i);
+  assert.match(secondBody, /"type":"pending_action"/);
+});
+
+test("announcement draft follow-up keeps prepare_announcement forced and merges missing details", async () => {
+  let draftSession: any = null;
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getDraftSession: async () => draftSession,
+      saveDraftSession: async (_supabase: unknown, input: any) => {
+        draftSession = {
+          id: "draft-announcement-1",
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: input.threadId,
+          draft_type: input.draftType,
+          status: input.status,
+          draft_payload: input.draftPayload,
+          missing_fields: input.missingFields,
+          pending_action_id: input.pendingActionId ?? null,
+          expires_at: input.expiresAt ?? "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        };
+        return draftSession;
+      },
+      clearDraftSession: async () => {
+        draftSession = null;
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_announcement",
+            argsJson: draftSession
+              ? '{"title":"Team Practice","body":"Practice tomorrow at 7am.","audience":"members"}'
+              : '{"is_pinned":false,"send_notification":false}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_announcement should not require a second model pass");
+      },
+      executeToolCall: async (_ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx: _ctx, call });
+
+        if (!draftSession) {
+          return okToolResult({
+            state: "missing_fields",
+            missing_fields: ["title", "body", "audience"],
+            draft: {
+              is_pinned: false,
+              send_notification: false,
+            },
+          });
+        }
+
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-announcement-continue-123",
+            action_type: "create_announcement",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review announcement",
+              description: "Confirm the drafted announcement before it is published.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const firstResponse = await POST(makeRequest("Create an announcement about tomorrow's practice") as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const firstBody = await firstResponse.text();
+
+  assert.match(firstBody, /I can draft this announcement, but I still need: title, body, audience\./i);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const followUpRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Title: Team Practice\nBody: Practice tomorrow at 7am.\nAudience: members",
+      surface: "general",
+      threadId: draftSession.thread_id,
+      idempotencyKey: "55555555-5555-4555-8555-555555555555",
+    }),
+  });
+
+  const secondResponse = await POST(followUpRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const secondBody = await secondResponse.text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_announcement"]);
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    title: "Team Practice",
+    body: "Practice tomorrow at 7am.",
+    audience: "members",
+    is_pinned: false,
+    send_notification: false,
+  });
+  assert.match(secondBody, /I drafted the announcement/i);
+  assert.match(secondBody, /"type":"pending_action"/);
+});
+
+test("discussion reply draft follow-up keeps prepare_discussion_reply forced and merges current thread context", async () => {
+  let draftSession: any = null;
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      getDraftSession: async () => draftSession,
+      saveDraftSession: async (_supabase: unknown, input: any) => {
+        draftSession = {
+          id: "draft-reply-1",
+          organization_id: ORG_ID,
+          user_id: ADMIN_USER.id,
+          thread_id: input.threadId,
+          draft_type: input.draftType,
+          status: input.status,
+          draft_payload: input.draftPayload,
+          missing_fields: input.missingFields,
+          pending_action_id: input.pendingActionId ?? null,
+          expires_at: input.expiresAt ?? "2099-01-01T00:00:00.000Z",
+          created_at: "2026-01-01T00:00:00.000Z",
+          updated_at: "2026-01-01T00:00:00.000Z",
+        };
+        return draftSession;
+      },
+      clearDraftSession: async () => {
+        draftSession = null;
+      },
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_reply",
+            argsJson: draftSession
+              ? '{"body":"Thanks everyone for the feedback! We\\u2019ll post the final schedule tomorrow."}'
+              : "{}",
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_reply should not require a second model pass");
+      },
+      executeToolCall: async (_ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx: _ctx, call });
+
+        if (!draftSession) {
+          return okToolResult({
+            state: "missing_fields",
+            missing_fields: ["body"],
+            draft: {
+              discussion_thread_id: call.args.discussion_thread_id,
+              thread_title: call.args.thread_title,
+            },
+          });
+        }
+
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-reply-continue-123",
+            action_type: "create_discussion_reply",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion reply",
+              description: "Confirm the drafted reply before it is posted to the discussion thread.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const firstRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to this thread.",
+      surface: "general",
+      currentPath: "/acme/messages/threads/33333333-3333-4333-8333-333333333333",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const firstResponse = await POST(firstRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const firstBody = await firstResponse.text();
+
+  assert.match(firstBody, /I can draft this discussion reply, but I still need: body\./i);
+
+  composeResponseCalls = [];
+  executeToolCallCalls = [];
+
+  const followUpRequest = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Thanks everyone for the feedback! We'll post the final schedule tomorrow.",
+      surface: "general",
+      currentPath: "/acme/messages/threads/33333333-3333-4333-8333-333333333333",
+      threadId: draftSession.thread_id,
+      idempotencyKey: "66666666-6666-4666-8666-666666666666",
+    }),
+  });
+
+  const secondResponse = await POST(followUpRequest as any, {
+    params: Promise.resolve({ orgId: ORG_ID }),
+  });
+  const secondBody = await secondResponse.text();
+
+  assert.deepEqual(toolNamesForCall(0), ["prepare_discussion_reply"]);
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    discussion_thread_id: "33333333-3333-4333-8333-333333333333",
+    thread_title: "Spring Fundraising Volunteers",
+    body: "Thanks everyone for the feedback! We’ll post the final schedule tomorrow.",
+  });
+  assert.match(secondBody, /I drafted the discussion reply/i);
   assert.match(secondBody, /"type":"pending_action"/);
 });
 
