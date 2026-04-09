@@ -18,6 +18,8 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { Avatar } from "@/components/ui/Avatar";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui";
+import { useNetwork } from "@/contexts/NetworkContext";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
@@ -51,6 +53,7 @@ export default function ChatGroupsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { neutral } = useAppColorScheme();
+  const { isOffline } = useNetwork();
   const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
   const isMountedRef = useRef(true);
 
@@ -446,17 +449,11 @@ export default function ChatGroupsScreen() {
         </LinearGradient>
 
         <View style={styles.contentSheet}>
-          <View style={styles.centered}>
-            <Text style={styles.errorTitle}>Unable to load chat</Text>
-            <Text style={styles.errorText}>{error || threadsError}</Text>
-            <Pressable
-              style={styles.retryButton}
-              onPress={handleRefresh}
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </Pressable>
-          </View>
+          <ErrorState
+            onRetry={handleRefresh}
+            title="Unable to load chat"
+            isOffline={isOffline}
+          />
         </View>
       </View>
     );
@@ -536,56 +533,86 @@ export default function ChatGroupsScreen() {
       </View>
 
       <View style={styles.contentSheet}>
-        {activeTab === "channels" ? (
-          <FlatList
-            data={groups}
-            keyExtractor={(item) => item.id}
-            renderItem={renderGroup}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <MessageCircle size={28} color={CHAT_COLORS.muted} />
-                </View>
-                <Text style={styles.emptyTitle}>No channels yet</Text>
-                <Text style={styles.emptyText}>
-                  Chat channels will appear here once they are created.
-                </Text>
-              </View>
-            }
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            windowSize={5}
-            removeClippedSubviews={true}
+        {displayError && displayData.length === 0 ? (
+          <ErrorState
+            onRetry={handleRefresh}
+            title={`Unable to load ${activeTab === "channels" ? "channels" : "threads"}`}
+            isOffline={isOffline}
           />
+        ) : isLoading && displayData.length === 0 ? (
+          <View style={styles.skeletonContainer}>
+            <SkeletonList type="chat" count={6} />
+          </View>
         ) : (
-          <FlatList
-            data={threads}
-            keyExtractor={(item) => item.id}
-            renderItem={renderThread}
-            contentContainerStyle={styles.listContent}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <MessageCircle size={28} color={CHAT_COLORS.muted} />
-                </View>
-                <Text style={styles.emptyTitle}>No threads yet</Text>
-                <Text style={styles.emptyText}>
-                  Start a discussion thread to begin.
-                </Text>
+          <>
+            {displayError ? (
+              <View style={styles.inlineErrorBanner}>
+                <Text style={styles.inlineErrorText}>{displayError}</Text>
+                <Pressable
+                  onPress={handleRefresh}
+                  style={({ pressed }) => [
+                    styles.inlineRetryButton,
+                    pressed && styles.inlineRetryButtonPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retry loading ${activeTab}`}
+                >
+                  <Text style={styles.inlineRetryText}>Retry</Text>
+                </Pressable>
               </View>
-            }
-            initialNumToRender={10}
-            maxToRenderPerBatch={10}
-            windowSize={5}
-            removeClippedSubviews={true}
-          />
+            ) : null}
+            {activeTab === "channels" ? (
+              <FlatList
+                data={groups}
+                keyExtractor={(item) => item.id}
+                renderItem={renderGroup}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+                }
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <View style={styles.emptyIcon}>
+                      <MessageCircle size={28} color={CHAT_COLORS.muted} />
+                    </View>
+                    <Text style={styles.emptyTitle}>No channels yet</Text>
+                    <Text style={styles.emptyText}>
+                      Chat channels will appear here once they are created.
+                    </Text>
+                  </View>
+                }
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
+              />
+            ) : (
+              <FlatList
+                data={threads}
+                keyExtractor={(item) => item.id}
+                renderItem={renderThread}
+                contentContainerStyle={styles.listContent}
+                refreshControl={
+                  <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+                }
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <View style={styles.emptyIcon}>
+                      <MessageCircle size={28} color={CHAT_COLORS.muted} />
+                    </View>
+                    <Text style={styles.emptyTitle}>No threads yet</Text>
+                    <Text style={styles.emptyText}>
+                      Start a discussion thread to begin.
+                    </Text>
+                  </View>
+                }
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={5}
+                removeClippedSubviews={true}
+              />
+            )}
+          </>
         )}
       </View>
 
@@ -810,6 +837,40 @@ const createStyles = (surfaceColor: string) =>
       color: "#ffffff",
       fontSize: fontSize.sm,
       fontWeight: fontWeight.semibold,
+    },
+    inlineErrorBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: spacing.sm,
+      marginHorizontal: spacing.md,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: "rgba(220, 38, 38, 0.08)",
+      borderWidth: 1,
+      borderColor: "rgba(220, 38, 38, 0.18)",
+      borderRadius: borderRadius.md,
+    },
+    inlineErrorText: {
+      flex: 1,
+      fontSize: fontSize.xs,
+      color: CHAT_COLORS.title,
+    },
+    inlineRetryButton: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+      borderRadius: borderRadius.sm,
+      backgroundColor: "#ffffff",
+    },
+    inlineRetryButtonPressed: {
+      opacity: 0.7,
+    },
+    inlineRetryText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: "#dc2626",
     },
     emptyState: {
       alignItems: "center",

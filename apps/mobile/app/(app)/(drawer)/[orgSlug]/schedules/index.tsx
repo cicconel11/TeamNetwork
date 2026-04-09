@@ -28,6 +28,9 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useAuth } from "@/hooks/useAuth";
 import { useSchedules, formatOccurrence, formatTime } from "@/hooks/useSchedules";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { ErrorState } from "@/components/ui";
 import { useScheduleFiles } from "@/hooks/useScheduleFiles";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { AvailabilityGrid } from "@/components/schedules/AvailabilityGrid";
@@ -64,6 +67,7 @@ export default function SchedulesScreen() {
   const { user } = useAuth();
   const { isAdmin, permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
+  const { isOffline } = useNetwork();
 
   const {
     mySchedules,
@@ -128,6 +132,12 @@ export default function SchedulesScreen() {
       refetchFilesIfStale();
     }, [refetchSchedulesIfStale, refetchFilesIfStale])
   );
+
+  const reconnectRefetchSchedules = useCallback(() => {
+    refetchSchedules();
+    refetchFiles();
+  }, [refetchSchedules, refetchFiles]);
+  useAutoRefetchOnReconnect(reconnectRefetchSchedules);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -207,7 +217,7 @@ export default function SchedulesScreen() {
 
   const error = schedulesError || filesError;
 
-  if (error) {
+  if (error && mySchedules.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -231,9 +241,11 @@ export default function SchedulesScreen() {
             </View>
           </SafeAreaView>
         </LinearGradient>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error loading schedules: {error}</Text>
-        </View>
+        <ErrorState
+          onRetry={handleRefresh}
+          title="Unable to load schedules"
+          isOffline={isOffline}
+        />
       </View>
     );
   }

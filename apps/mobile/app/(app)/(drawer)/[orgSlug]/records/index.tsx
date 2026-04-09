@@ -18,6 +18,9 @@ import * as Linking from "expo-linking";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useRecords } from "@/hooks/useRecords";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { ErrorState } from "@/components/ui";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
@@ -67,6 +70,7 @@ export default function RecordsScreen() {
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
+  const { isOffline } = useNetwork();
   const { records, categories, loading, error, refetch, refetchIfStale } = useRecords(orgId);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -106,6 +110,8 @@ export default function RecordsScreen() {
       refetchIfStale();
     }, [refetchIfStale])
   );
+
+  useAutoRefetchOnReconnect(refetch);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -235,7 +241,7 @@ export default function RecordsScreen() {
     </View>
   );
 
-  if (error) {
+  if (error && records.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -259,9 +265,11 @@ export default function RecordsScreen() {
             </View>
           </SafeAreaView>
         </LinearGradient>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error loading records: {error}</Text>
-        </View>
+        <ErrorState
+          onRetry={handleRefresh}
+          title="Unable to load records"
+          isOffline={isOffline}
+        />
       </View>
     );
   }

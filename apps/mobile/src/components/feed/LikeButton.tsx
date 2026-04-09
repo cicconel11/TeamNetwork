@@ -3,6 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Heart } from "lucide-react-native";
 import { SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { showToast } from "@/components/ui/Toast";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 
@@ -10,9 +11,10 @@ interface LikeButtonProps {
   liked: boolean;
   count: number;
   onPress: () => void;
+  disabled?: boolean;
 }
 
-export function LikeButton({ liked, count, onPress }: LikeButtonProps) {
+export function LikeButton({ liked, count, onPress, disabled = false }: LikeButtonProps) {
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
     container: {
@@ -29,9 +31,17 @@ export function LikeButton({ liked, count, onPress }: LikeButtonProps) {
     },
   }));
 
+  const handlePress = () => {
+    if (disabled) {
+      showToast("You're offline. Try again when connected.", "info");
+      return;
+    }
+    onPress();
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={handlePress}
       style={styles.container}
       accessibilityLabel={liked ? "Unlike post" : "Like post"}
       accessibilityState={{ selected: liked }}

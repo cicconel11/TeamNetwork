@@ -30,7 +30,10 @@ import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui";
 
 // Relative time formatter
 function formatRelativeTime(dateString: string | null): string {
@@ -60,6 +63,7 @@ export default function NotificationsScreen() {
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
   const styles = useThemedStyles((n, s) => ({
     container: {
       flex: 1,
@@ -315,6 +319,8 @@ export default function NotificationsScreen() {
     }, [refetchIfStale])
   );
 
+  useAutoRefetchOnReconnect(refetch);
+
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
     setRefreshing(true);
@@ -439,10 +445,9 @@ export default function NotificationsScreen() {
     );
   }
 
-  if (error) {
+  if (error && notifications.length === 0) {
     return (
       <View style={styles.container}>
-        {/* Gradient Header */}
         <LinearGradient
           colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
           style={styles.headerGradient}
@@ -459,17 +464,11 @@ export default function NotificationsScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={styles.contentSheet}>
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable
-              onPress={handleRefresh}
-              style={styles.retryButton}
-              accessibilityRole="button"
-              accessibilityLabel="Retry"
-            >
-              <Text style={styles.retryButtonText}>Try again</Text>
-            </Pressable>
-          </View>
+          <ErrorState
+            onRetry={handleRefresh}
+            title="Unable to load notifications"
+            isOffline={isOffline}
+          />
         </View>
       </View>
     );
@@ -557,4 +556,3 @@ export default function NotificationsScreen() {
     </View>
   );
 }
-

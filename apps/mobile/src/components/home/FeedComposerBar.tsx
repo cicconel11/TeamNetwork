@@ -9,6 +9,7 @@ import { Edit3 } from "lucide-react-native";
 import { SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { Avatar } from "@/components/ui/Avatar";
+import { showToast } from "@/components/ui/Toast";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 
@@ -18,9 +19,10 @@ interface FeedComposerBarProps {
   onPress: () => void;
   userAvatarUrl?: string | null;
   userName?: string | null;
+  disabled?: boolean;
 }
 
-export function FeedComposerBar({ onPress, userAvatarUrl, userName }: FeedComposerBarProps) {
+export function FeedComposerBar({ onPress, userAvatarUrl, userName, disabled = false }: FeedComposerBarProps) {
   const { neutral } = useAppColorScheme();
   const styles = useThemedStyles((n) => ({
     container: {
@@ -57,16 +59,24 @@ export function FeedComposerBar({ onPress, userAvatarUrl, userName }: FeedCompos
 
   const hasUserInfo = userAvatarUrl || userName;
 
+  const handlePress = () => {
+    if (disabled) {
+      showToast("You're offline. Try again when connected.", "info");
+      return;
+    }
+    onPress();
+  };
+
   return (
     <AnimatedPressable
-      onPress={onPress}
+      onPress={handlePress}
       onPressIn={() => {
         scale.value = withSpring(0.97, ANIMATION.spring);
       }}
       onPressOut={() => {
         scale.value = withSpring(1, ANIMATION.spring);
       }}
-      style={[styles.container, animatedStyle]}
+      style={[styles.container, animatedStyle, disabled && { opacity: 0.5 }]}
       accessibilityRole="button"
       accessibilityLabel="Create a new post"
     >

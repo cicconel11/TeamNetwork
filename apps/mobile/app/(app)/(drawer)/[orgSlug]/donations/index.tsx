@@ -17,6 +17,9 @@ import * as Linking from "expo-linking";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useDonations } from "@/hooks/useDonations";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { ErrorState } from "@/components/ui";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
@@ -58,6 +61,7 @@ export default function DonationsScreen() {
   const navigation = useNavigation();
   const { isAdmin, permissions } = useOrgRole();
   const styles = useMemo(() => createStyles(), []);
+  const { isOffline } = useNetwork();
   const { donations, stats, loading, error, refetch, refetchIfStale } = useDonations(orgSlug || "");
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
@@ -96,6 +100,8 @@ export default function DonationsScreen() {
       refetchIfStale();
     }, [refetchIfStale])
   );
+
+  useAutoRefetchOnReconnect(refetch);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -246,7 +252,7 @@ export default function DonationsScreen() {
     </View>
   );
 
-  if (error) {
+  if (error && donations.length === 0) {
     return (
       <View style={styles.container}>
         <LinearGradient
@@ -270,9 +276,11 @@ export default function DonationsScreen() {
             </View>
           </SafeAreaView>
         </LinearGradient>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error loading donations: {error}</Text>
-        </View>
+        <ErrorState
+          onRetry={handleRefresh}
+          title="Unable to load donations"
+          isOffline={isOffline}
+        />
       </View>
     );
   }

@@ -12,6 +12,9 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { ErrorState } from "@/components/ui";
 import { useUnifiedCalendar } from "@/hooks/useUnifiedCalendar";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -29,6 +32,7 @@ export default function CalendarScreen() {
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
 
   const {
     items,
@@ -150,6 +154,8 @@ export default function CalendarScreen() {
     }, [refetchIfStale])
   );
 
+  useAutoRefetchOnReconnect(refetch);
+
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
     setRefreshing(true);
@@ -222,6 +228,21 @@ export default function CalendarScreen() {
         >
           <SkeletonList type="event" count={4} />
         </Animated.View>
+      </View>
+    );
+  }
+
+  if (error && items.length === 0) {
+    return (
+      <View style={styles.container}>
+        {renderHeader("Calendar")}
+        <View style={styles.contentSheet}>
+          <ErrorState
+            onRetry={handleRefresh}
+            title="Unable to load calendar"
+            isOffline={isOffline}
+          />
+        </View>
       </View>
     );
   }

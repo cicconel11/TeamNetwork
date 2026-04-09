@@ -22,6 +22,7 @@ import { useComments } from "@/hooks/useComments";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useNetwork } from "@/contexts/NetworkContext";
 import { PostMediaGrid } from "@/components/feed/PostMediaGrid";
 import { LikeButton } from "@/components/feed/LikeButton";
 import { CommentItem } from "@/components/feed/CommentItem";
@@ -44,6 +45,7 @@ export default function PostDetailScreen() {
   const { orgSlug, orgId } = useOrg();
   const { user } = useAuth();
   const { isAdmin } = useOrgRole();
+  const { isOffline } = useNetwork();
   const userId = user?.id ?? null;
 
   const { post, loading: postLoading } = usePost(postId);
@@ -211,6 +213,11 @@ export default function PostDetailScreen() {
 
   // Toggle like
   const handleToggleLike = useCallback(async () => {
+    if (isOffline) {
+      showToast("You're offline. Try again when connected.", "info");
+      return;
+    }
+
     if (!userId || !orgId || !postId) return;
 
     const wasLiked = liked;
@@ -241,7 +248,7 @@ export default function PostDetailScreen() {
       showToast("Failed to update like", "error");
       sentry.captureException(e as Error, { context: "PostDetail.toggleLike", postId });
     }
-  }, [liked, userId, orgId, postId]);
+  }, [isOffline, liked, userId, orgId, postId]);
 
   // Send comment
   const handleSendComment = useCallback(async () => {
@@ -445,7 +452,12 @@ export default function PostDetailScreen() {
 
               {/* Actions */}
               <View style={styles.actionsRow}>
-                <LikeButton liked={liked} count={likeCount} onPress={handleToggleLike} />
+                <LikeButton
+                  liked={liked}
+                  count={likeCount}
+                  onPress={handleToggleLike}
+                  disabled={isOffline}
+                />
                 <Text style={styles.commentCountText}>
                   {comments.length} {comments.length === 1 ? "comment" : "comments"}
                 </Text>

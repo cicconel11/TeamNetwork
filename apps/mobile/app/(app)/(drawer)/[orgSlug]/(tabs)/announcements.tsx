@@ -21,6 +21,8 @@ import { useOrgRole } from "@/hooks/useOrgRole";
 import { useAuth } from "@/hooks/useAuth";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Announcement } from "@teammeet/types";
 import { getWebPath } from "@/lib/web-api";
@@ -29,6 +31,7 @@ import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { AnnouncementCard, type AnnouncementCardAnnouncement } from "@/components/cards/AnnouncementCard";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui";
 
 export default function AnnouncementsScreen() {
   const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
@@ -37,6 +40,7 @@ export default function AnnouncementsScreen() {
   const { user } = useAuth();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
   // Use orgId from context for data hook (eliminates redundant org fetch)
   const { announcements, loading, error, refetch, refetchIfStale } = useAnnouncements(orgId);
   const { markAsRead } = useUnreadAnnouncementCount(orgId);
@@ -127,18 +131,6 @@ export default function AnnouncementsScreen() {
       ...TYPOGRAPHY.bodyMedium,
       color: n.muted,
     },
-    // Loading/Error states
-    centered: {
-      flex: 1,
-      justifyContent: "center" as const,
-      alignItems: "center" as const,
-      padding: 20,
-      backgroundColor: n.background,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: s.error,
-    },
   }));
 
   // Sort announcements: pinned first, then by created_at descending
@@ -190,6 +182,8 @@ export default function AnnouncementsScreen() {
       markAsRead();
     }, [refetchIfStale, markAsRead])
   );
+
+  useAutoRefetchOnReconnect(refetch);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -248,10 +242,29 @@ export default function AnnouncementsScreen() {
     );
   }
 
-  if (error) {
+  if (error && announcements.length === 0) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <View style={styles.orgLogoButton} />
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Announcements</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <View style={styles.contentSheet}>
+          <ErrorState
+            onRetry={handleRefresh}
+            title="Unable to load announcements"
+            isOffline={isOffline}
+          />
+        </View>
       </View>
     );
   }

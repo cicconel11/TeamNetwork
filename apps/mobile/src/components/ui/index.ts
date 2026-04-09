@@ -30,3 +30,5 @@ export {
   type ToastVariant,
 } from "./Toast";
 export { SelectField, SelectModal } from "./SelectField";
+export { ErrorState } from "./ErrorState";
+export { OfflineBanner } from "./OfflineBanner";

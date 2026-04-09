@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { View, Text, ActivityIndicator, Pressable, StyleSheet, LayoutChangeEvent } from "react-native";
+import { View, Text, Pressable, LayoutChangeEvent } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useFocusEffect, useNavigation } from "expo-router";
-import { Bell, RefreshCw, Search } from "lucide-react-native";
+import { Bell, Search } from "lucide-react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -25,6 +25,10 @@ import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS, SHADOWS, ANIMATION } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { ErrorState, SkeletonList } from "@/components/ui";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { showToast } from "@/components/ui/Toast";
 import { FeedTab } from "@/components/home/FeedTab";
 import { OverviewTab } from "@/components/home/OverviewTab";
 import { EventsTab } from "@/components/home/EventsTab";
@@ -55,6 +59,7 @@ export default function HomeScreen() {
   useOrgRole(); // subscribes to role changes; triggers re-render on role updates
 
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
 
   const handleDrawerToggle = useCallback(() => {
     try {
@@ -69,7 +74,6 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("feed");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const isRefetchingRef = useRef(false);
 
   // Tab pill animation
@@ -136,6 +140,7 @@ export default function HomeScreen() {
   const {
     posts,
     loading: feedLoading,
+    error: feedError,
     loadingMore,
     hasMore,
     pendingPosts,
@@ -146,11 +151,9 @@ export default function HomeScreen() {
     toggleLike,
   } = useFeed(orgId);
 
-  // Role validation is handled by useOrgRole() and RLS on all data hooks.
   // Transition from loading → ready once org and user context are available.
   useEffect(() => {
     if (orgId && user) {
-      setError(null);
       setLoading(false);
     }
   }, [orgId, user]);
@@ -166,6 +169,15 @@ export default function HomeScreen() {
       refetchFeedIfStale();
     }, [refetchEventsIfStale, refetchAnnouncementsIfStale, refetchMembersIfStale, refetchStatsIfStale, refetchFeedIfStale])
   );
+
+  const reconnectRefetch = useCallback(() => {
+    refetchEvents();
+    refetchAnnouncements();
+    refetchMembers();
+    refetchStats();
+    refetchFeed();
+  }, [refetchEvents, refetchAnnouncements, refetchMembers, refetchStats, refetchFeed]);
+  useAutoRefetchOnReconnect(reconnectRefetch);
 
   const handleRefresh = async () => {
     if (isRefetchingRef.current) return;
@@ -191,8 +203,25 @@ export default function HomeScreen() {
   );
 
   const handleCreatePost = useCallback(
-    () => router.push(`/(app)/(drawer)/${orgSlug}/feed/new`),
-    [router, orgSlug]
+    () => {
+      if (isOffline) {
+        showToast("You're offline. Try again when connected.", "info");
+        return;
+      }
+      router.push(`/(app)/(drawer)/${orgSlug}/feed/new`);
+    },
+    [isOffline, router, orgSlug]
+  );
+
+  const handleLikeToggle = useCallback(
+    (postId: string) => {
+      if (isOffline) {
+        showToast("You're offline. Try again when connected.", "info");
+        return;
+      }
+      toggleLike(postId);
+    },
+    [isOffline, toggleLike]
   );
 
   const handleNavigate = useCallback(
@@ -393,78 +422,31 @@ export default function HomeScreen() {
       right: 0,
       bottom: 0,
     },
-    // Loading / error states
     centered: {
       flex: 1,
       justifyContent: "center" as const,
       alignItems: "center" as const,
-      padding: 24,
+      padding: SPACING.lg,
       backgroundColor: n.background,
-    },
-    errorCard: {
-      backgroundColor: n.surface,
-      borderRadius: RADIUS.lg,
-      borderWidth: 1,
-      borderColor: n.border,
-      padding: SPACING.xl,
-      alignItems: "center" as const,
-      ...SHADOWS.sm,
-    },
-    errorTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: n.foreground,
-      marginTop: SPACING.sm,
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodySmall,
-      color: n.muted,
-      textAlign: "center" as const,
-      marginTop: SPACING.xs,
-    },
-    retryButton: {
-      flexDirection: "row" as const,
-      alignItems: "center" as const,
-      gap: SPACING.sm,
-      marginTop: SPACING.md,
-      paddingVertical: SPACING.sm + 2,
-      paddingHorizontal: SPACING.lg,
-      borderRadius: RADIUS.md,
-      backgroundColor: s.success,
-    },
-    retryButtonPressed: {
-      opacity: 0.8,
-    },
-    retryButtonText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: n.surface,
     },
   }));
 
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={semantic.success} />
+        <SkeletonList type="announcement" count={3} />
       </View>
     );
   }
 
-  if (error) {
+  if (feedError && posts.length === 0) {
     return (
       <View style={styles.centered}>
-        <View style={styles.errorCard}>
-          <RefreshCw size={40} color={neutral.border} />
-          <Text style={styles.errorTitle}>Something went wrong</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
-            onPress={handleRefresh}
-            accessibilityLabel="Retry loading"
-            accessibilityRole="button"
-          >
-            <RefreshCw size={16} color={neutral.surface} />
-            <Text style={styles.retryButtonText}>Try again</Text>
-          </Pressable>
-        </View>
+        <ErrorState
+          onRetry={handleRefresh}
+          title="Unable to load feed"
+          isOffline={isOffline}
+        />
       </View>
     );
   }
@@ -574,8 +556,9 @@ export default function HomeScreen() {
               onLoadMore={loadMore}
               onAcceptPending={acceptPendingPosts}
               onPostPress={handlePostPress}
-              onLikeToggle={toggleLike}
+              onLikeToggle={handleLikeToggle}
               onCreatePost={handleCreatePost}
+              isOffline={isOffline}
               upcomingEvents={transformedEvents}
               pinnedAnnouncement={pinnedAnnouncement}
               onEventPress={(id: string) =>

@@ -4,9 +4,11 @@ import { Tabs, useRouter } from "expo-router";
 import Constants from "expo-constants";
 import { OrgHeaderLeft } from "@/components/org-header-left";
 import { TabBar } from "@/components/TabBar";
+import { OfflineBanner } from "@/components/ui";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useUnreadAnnouncementCount } from "@/hooks/useUnreadAnnouncementCount";
+import { useNetwork } from "@/contexts/NetworkContext";
 import { getWebPath } from "@/lib/web-api";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
@@ -32,6 +34,7 @@ export default function TabsLayout() {
   const bottomSheetRef = useRef<any>(null);
   const { isAdmin } = useOrgRole();
   const { unreadCount } = useUnreadAnnouncementCount(orgId);
+  const { isOffline } = useNetwork();
 
   // Memoize badges object to prevent unnecessary re-renders
   const badges = useMemo(
@@ -41,7 +44,6 @@ export default function TabsLayout() {
 
   const handleActionPress = useCallback(() => {
     if (isExpoGo || !BottomSheet) {
-      // Show simple alert in Expo Go since BottomSheet requires native modules
       Alert.alert(
         "Quick Actions",
         "Action sheet is not available in Expo Go. Use a development build for full functionality.",
@@ -117,6 +119,7 @@ export default function TabsLayout() {
 
   return (
     <>
+      <OfflineBanner isOffline={isOffline} />
       <Tabs
         tabBar={renderTabBar}
         screenOptions={{

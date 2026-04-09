@@ -6,6 +6,9 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NetworkProvider } from "@/contexts/NetworkContext";
+import { ToastProvider, useToast } from "@/components/ui/Toast";
+import { setGlobalShowToast } from "@/components/ui/Toast";
 import AuthLoadingScreen from "@/components/AuthLoadingScreen";
 import { init as initAnalytics, identify, reset as resetAnalytics, captureException, hydrateEnabled } from "@/lib/analytics";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
@@ -45,11 +48,26 @@ if (Platform.OS === "web") {
  * RootLayoutInner consumes auth context for navigation, analytics, and deep links.
  * This avoids duplicate onAuthStateChange subscriptions.
  */
+/**
+ * ToastBridge wires the global imperative showToast() to the mounted ToastProvider.
+ * This makes showToast() calls in data hooks (outside the React tree) work.
+ */
+function ToastBridge() {
+  const { show } = useToast();
+  useEffect(() => {
+    setGlobalShowToast((msg, variant) => show(msg, variant));
+    return () => setGlobalShowToast(null);
+  }, [show]);
+  return null;
+}
+
 export default function RootLayout() {
   return (
     <ColorSchemeProvider>
       <AuthProvider>
-        <RootLayoutInner />
+        <NetworkProvider>
+          <RootLayoutInner />
+        </NetworkProvider>
       </AuthProvider>
     </ColorSchemeProvider>
   );
@@ -265,7 +283,10 @@ function RootLayoutInner() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      {navigation}
+      <ToastProvider>
+        <ToastBridge />
+        {navigation}
+      </ToastProvider>
     </GestureHandlerRootView>
   );
 }

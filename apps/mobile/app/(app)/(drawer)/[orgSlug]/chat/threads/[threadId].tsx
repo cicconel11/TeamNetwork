@@ -13,12 +13,11 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, ArrowUp, Lock, MoreVertical } from "lucide-react-native";
+import { ArrowLeft, ArrowUp, Lock } from "lucide-react-native";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useAuth } from "@/hooks/useAuth";
-import { useOrgRole } from "@/hooks/useOrgRole";
 import { Avatar } from "@/components/ui/Avatar";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
 import { APP_CHROME } from "@/lib/chrome";
@@ -55,7 +54,6 @@ export default function ThreadDetailScreen() {
   const resolvedThreadId = Array.isArray(threadId) ? threadId[0] : threadId;
   const { orgId, orgSlug } = useOrg();
   const { user } = useAuth();
-  const { isAdmin } = useOrgRole();
   const router = useRouter();
   const styles = useMemo(() => createStyles(), []);
   const listRef = useRef<FlatList<ReplyWithAuthor>>(null);
@@ -122,7 +120,53 @@ export default function ThreadDetailScreen() {
     };
   }, [loadThreadDetails]);
 
-  // Realtime subscription for new replies
+  // Realtime subscription for thread state and new replies
+  useEffect(() => {
+    if (!resolvedThreadId) return;
+
+    const threadChannel = supabase
+      .channel(`discussion_thread:${resolvedThreadId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "discussion_threads",
+          filter: `id=eq.${resolvedThreadId}`,
+        },
+        (payload: RealtimePostgresChangesPayload<DiscussionThread>) => {
+          if (!isMountedRef.current) return;
+
+          if (payload.eventType === "DELETE") {
+            setThread(null);
+            setError("Thread not found.");
+            return;
+          }
+
+          const updatedThread = payload.new as DiscussionThread;
+          if (updatedThread.deleted_at) {
+            setThread(null);
+            setError("Thread not found.");
+            return;
+          }
+
+          setThread((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  ...updatedThread,
+                }
+              : (updatedThread as ThreadWithAuthor)
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(threadChannel);
+    };
+  }, [resolvedThreadId]);
+
   useEffect(() => {
     if (!resolvedThreadId) return;
 
@@ -138,17 +182,38 @@ export default function ThreadDetailScreen() {
         },
         async (payload: RealtimePostgresChangesPayload<DiscussionReply>) => {
           const newReply = payload.new as DiscussionReply;
-          if (!replies.some((r) => r.id === newReply.id)) {
-            const { data: replyWithAuthor } = await supabase
-              .from("discussion_replies")
-              .select("*, author:users!discussion_replies_author_id_fkey(id, name, avatar_url)")
-              .eq("id", newReply.id)
-              .single();
+          const { data: replyWithAuthor } = await supabase
+            .from("discussion_replies")
+            .select("*, author:users!discussion_replies_author_id_fkey(id, name, avatar_url)")
+            .eq("id", newReply.id)
+            .single();
 
-            if (replyWithAuthor && isMountedRef.current) {
-              setReplies((prev) => [...prev, replyWithAuthor as ReplyWithAuthor]);
-              setTimeout(scrollToBottom, 80);
-            }
+          if (replyWithAuthor && isMountedRef.current) {
+            setReplies((prev) => {
+              if (prev.some((reply) => reply.id === newReply.id)) {
+                return prev;
+              }
+
+              const hasTempVersion = prev.some(
+                (reply) =>
+                  reply.id.startsWith("temp-") &&
+                  reply.author_id === newReply.author_id &&
+                  reply.body === newReply.body
+              );
+
+              if (hasTempVersion) {
+                return prev.map((reply) =>
+                  reply.id.startsWith("temp-") &&
+                  reply.author_id === newReply.author_id &&
+                  reply.body === newReply.body
+                    ? (replyWithAuthor as ReplyWithAuthor)
+                    : reply
+                );
+              }
+
+              return [...prev, replyWithAuthor as ReplyWithAuthor];
+            });
+            setTimeout(scrollToBottom, 80);
           }
         }
       )
@@ -157,7 +222,7 @@ export default function ThreadDetailScreen() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [resolvedThreadId, replies, scrollToBottom]);
+  }, [resolvedThreadId, scrollToBottom]);
 
   const groupedReplies = useMemo(() => {
     return replies.map((reply, index) => {
@@ -175,7 +240,9 @@ export default function ThreadDetailScreen() {
   }, [replies]);
 
   const handleSendReply = useCallback(async () => {
-    if (!replyBody.trim() || sending || !thread || !orgId || !currentUserId) return;
+    if (!replyBody.trim() || sending || !thread || thread.is_locked || !orgId || !currentUserId) {
+      return;
+    }
 
     setSending(true);
     const body = replyBody.trim();
@@ -213,6 +280,7 @@ export default function ThreadDetailScreen() {
     if (error) {
       setReplies((prev) => prev.filter((r) => r.id !== tempId));
       setReplyBody(body);
+      await loadThreadDetails();
     } else if (data) {
       setReplies((prev) =>
         prev.map((r) => (r.id === tempId ? (data as ReplyWithAuthor) : r))
@@ -220,7 +288,16 @@ export default function ThreadDetailScreen() {
     }
 
     setSending(false);
-  }, [replyBody, sending, thread, orgId, currentUserId, user, scrollToBottom]);
+  }, [
+    replyBody,
+    sending,
+    thread,
+    orgId,
+    currentUserId,
+    user,
+    scrollToBottom,
+    loadThreadDetails,
+  ]);
 
   const renderReply = useCallback(
     ({ item }: { item: ReplyWithAuthor }) => {
@@ -349,11 +426,6 @@ export default function ThreadDetailScreen() {
                 {replies.length} {replies.length === 1 ? "reply" : "replies"}
               </Text>
             </View>
-            {isAdmin && (
-              <Pressable style={styles.moreButton} accessibilityRole="button">
-                <MoreVertical size={20} color={APP_CHROME.headerTitle} />
-              </Pressable>
-            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -473,9 +545,6 @@ const createStyles = () =>
       fontSize: fontSize.xs,
       color: APP_CHROME.headerMeta,
       marginTop: 2,
-    },
-    moreButton: {
-      padding: spacing.xs,
     },
     centered: {
       flex: 1,

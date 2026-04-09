@@ -42,6 +42,7 @@ interface FeedTabProps {
   onAnnouncementPress?: (announcementId: string) => void;
   userAvatarUrl?: string | null;
   userName?: string | null;
+  isOffline?: boolean;
 }
 
 export function FeedTab({
@@ -63,6 +64,7 @@ export function FeedTab({
   onAnnouncementPress,
   userAvatarUrl,
   userName,
+  isOffline = false,
 }: FeedTabProps) {
   const { neutral, semantic } = useAppColorScheme();
   const styles = useThemedStyles((n, s) => ({
@@ -162,9 +164,14 @@ export function FeedTab({
 
   const renderItem = useCallback(
     ({ item }: { item: FeedPost }) => (
-      <PostCard post={item} onPress={onPostPress} onLikeToggle={onLikeToggle} />
+      <PostCard
+        post={item}
+        onPress={onPostPress}
+        onLikeToggle={onLikeToggle}
+        likeDisabled={isOffline}
+      />
     ),
-    [onPostPress, onLikeToggle]
+    [isOffline, onPostPress, onLikeToggle]
   );
 
   const keyExtractor = useCallback((item: FeedPost) => item.id, []);
@@ -218,6 +225,7 @@ export function FeedTab({
             onPress={onCreatePost}
             userAvatarUrl={userAvatarUrl}
             userName={userName}
+            disabled={isOffline}
           />
         </View>
       </View>
@@ -228,6 +236,7 @@ export function FeedTab({
       onEventPress,
       onAnnouncementPress,
       onCreatePost,
+      isOffline,
       userAvatarUrl,
       userName,
       styles,

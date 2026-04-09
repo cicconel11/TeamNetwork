@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -44,6 +44,14 @@ export default function NewThreadScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const currentUserId = user?.id ?? null;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const validateForm = useCallback((): string | null => {
     if (title.trim().length < 3) {

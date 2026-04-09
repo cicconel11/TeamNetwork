@@ -16,9 +16,10 @@ interface PostCardProps {
   post: FeedPost;
   onPress: (postId: string) => void;
   onLikeToggle: (postId: string) => void;
+  likeDisabled?: boolean;
 }
 
-function PostCardInner({ post, onPress, onLikeToggle }: PostCardProps) {
+function PostCardInner({ post, onPress, onLikeToggle, likeDisabled = false }: PostCardProps) {
   const { neutral } = useAppColorScheme();
   const styles = useThemedStyles((n) => ({
     card: {
@@ -152,6 +153,7 @@ function PostCardInner({ post, onPress, onLikeToggle }: PostCardProps) {
           liked={post.liked_by_user}
           count={post.like_count}
           onPress={handleLike}
+          disabled={likeDisabled}
         />
         <View style={styles.commentAction}>
           <MessageCircle size={18} color={neutral.muted} />
@@ -168,6 +170,7 @@ export const PostCard = React.memo(PostCardInner, (prev, next) => {
     prev.post.body === next.post.body &&
     prev.post.like_count === next.post.like_count &&
     prev.post.liked_by_user === next.post.liked_by_user &&
-    prev.post.comment_count === next.post.comment_count
+    prev.post.comment_count === next.post.comment_count &&
+    prev.likeDisabled === next.likeDisabled
   );
 });

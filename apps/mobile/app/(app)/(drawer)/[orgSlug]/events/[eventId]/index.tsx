@@ -9,6 +9,8 @@ import { supabase } from "@/lib/supabase";
 import { track } from "@/lib/analytics";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { ErrorState } from "@/components/ui";
 import type { Event } from "@/hooks/useEvents";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
@@ -47,6 +49,7 @@ export default function EventDetailScreen() {
   const router = useRouter();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
   const styles = useMemo(() => createStyles(), []);
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
@@ -203,11 +206,12 @@ export default function EventDetailScreen() {
 
   if (error || !event) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.errorText}>{error || "Event not found"}</Text>
-        <Pressable style={({ pressed }) => [styles.backButtonAlt, pressed && { opacity: 0.7 }]} onPress={() => router.back()}>
-          <Text style={styles.backButtonAltText}>Go Back</Text>
-        </Pressable>
+      <View style={styles.container}>
+        <ErrorState
+          onRetry={fetchEvent}
+          title={error ? "Unable to load event" : "Event not found"}
+          isOffline={isOffline}
+        />
       </View>
     );
   }

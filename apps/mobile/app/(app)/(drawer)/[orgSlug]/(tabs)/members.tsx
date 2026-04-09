@@ -16,6 +16,8 @@ import { useMemberDirectory, type DirectoryMember } from "@/hooks/useMemberDirec
 import { useOrg } from "@/contexts/OrgContext";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
@@ -25,8 +27,8 @@ import {
   DirectoryCard,
   DirectorySkeleton,
   DirectoryEmptyState,
-  DirectoryErrorState,
 } from "@/components/directory";
+import { ErrorState } from "@/components/ui";
 
 type RoleFilter = "all" | "admin" | "member";
 type SortOption = "name" | "year";
@@ -38,6 +40,7 @@ export default function MembersScreen() {
   // Use orgId from context for data hook (eliminates redundant org fetch)
   const { members, loading, error, refetch, refetchIfStale } = useMemberDirectory(orgId);
   const { neutral, semantic } = useAppColorScheme();
+  const { isOffline } = useNetwork();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRole, setSelectedRole] = useState<RoleFilter>("all");
@@ -172,6 +175,8 @@ export default function MembersScreen() {
       refetchIfStale();
     }, [refetchIfStale])
   );
+
+  useAutoRefetchOnReconnect(refetch);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -379,11 +384,10 @@ export default function MembersScreen() {
           </SafeAreaView>
         </LinearGradient>
         <View style={styles.contentSheet}>
-          <DirectoryErrorState
-            title="Unable to load members"
-            message={error}
-            colors={directoryColors}
+          <ErrorState
             onRetry={handleRefresh}
+            title="Unable to load members"
+            isOffline={isOffline}
           />
         </View>
       </View>

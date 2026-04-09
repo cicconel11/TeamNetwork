@@ -18,6 +18,9 @@ import * as Linking from "expo-linking";
 import { useForms } from "@/hooks/useForms";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { ErrorState } from "@/components/ui";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Form, FormDocument } from "@teammeet/types";
 import { getWebPath } from "@/lib/web-api";
@@ -54,6 +57,7 @@ export default function FormsScreen() {
   const { permissions } = useOrgRole();
   const { neutral } = useAppColorScheme();
   const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const { isOffline } = useNetwork();
   const {
     forms,
     formDocuments,
@@ -110,6 +114,8 @@ export default function FormsScreen() {
       refetchIfStale();
     }, [refetchIfStale])
   );
+
+  useAutoRefetchOnReconnect(refetch);
 
   const handleRefresh = useCallback(async () => {
     if (isRefetchingRef.current) return;
@@ -251,10 +257,26 @@ export default function FormsScreen() {
     );
   }
 
-  if (error) {
+  if (error && forms.length === 0 && formDocuments.length === 0) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+          style={styles.headerGradient}
+        >
+          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+            <View style={styles.headerContent}>
+              <View style={styles.headerTextContainer}>
+                <Text style={styles.headerTitle}>Forms</Text>
+              </View>
+            </View>
+          </SafeAreaView>
+        </LinearGradient>
+        <ErrorState
+          onRetry={handleRefresh}
+          title="Unable to load forms"
+          isOffline={isOffline}
+        />
       </View>
     );
   }
