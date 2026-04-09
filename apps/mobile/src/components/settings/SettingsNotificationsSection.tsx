@@ -137,6 +137,7 @@ export function SettingsNotificationsSection({ orgId }: Props) {
       shadowOpacity: 0.08,
       shadowRadius: 2,
       elevation: 1,
+      boxShadow: "0px 1px 2px rgba(0,0,0,0.08)",
     },
     segmentOptionText: {
       fontSize: fontSize.sm,

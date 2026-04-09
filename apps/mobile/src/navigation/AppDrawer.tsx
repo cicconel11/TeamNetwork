@@ -1,5 +1,5 @@
 import React from "react";
-import { useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { DrawerContent } from "@/navigation/DrawerContent";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
@@ -16,6 +16,7 @@ export function AppDrawer() {
     },
     scene: {
       backgroundColor: n.dark950,
+      overflow: "hidden" as const,
     },
   }));
 
@@ -23,9 +24,9 @@ export function AppDrawer() {
     <Drawer
       screenOptions={{
         headerShown: false,
-        drawerType: "front",
+        drawerType: Platform.OS === "web" ? "slide" : "front",
         overlayColor: "rgba(0, 0, 0, 0.5)",
-        swipeEnabled: true,
+        swipeEnabled: Platform.OS !== "web",
         swipeEdgeWidth: 40,
         drawerStyle: [
           styles.drawer,

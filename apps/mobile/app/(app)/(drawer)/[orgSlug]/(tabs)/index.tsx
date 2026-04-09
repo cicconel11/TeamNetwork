@@ -482,7 +482,7 @@ export default function HomeScreen() {
                 {greeting}{firstName ? `, ${firstName}` : ""}
               </Text>
               <Text style={styles.headerMeta}>
-                {orgName} · {memberCount} {memberCount === 1 ? "member" : "members"}
+                {`${orgName} · ${memberCount} ${memberCount === 1 ? "member" : "members"}`}
               </Text>
             </View>
 

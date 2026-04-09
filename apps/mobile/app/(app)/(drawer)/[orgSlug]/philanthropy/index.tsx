@@ -4,7 +4,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -13,44 +12,40 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useNavigation } from "expo-router";
-import { Calendar, Clock, Heart, MapPin, Plus, Sparkles } from "lucide-react-native";
+import {
+  Calendar,
+  Clock,
+  DollarSign,
+  Heart,
+  MapPin,
+  Plus,
+  Sparkles,
+} from "lucide-react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { supabase } from "@/lib/supabase";
-import { APP_CHROME } from "@/lib/chrome";
-import { borderRadius, fontSize, fontWeight, spacing } from "@/lib/theme";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { APP_CHROME } from "@/lib/chrome";
+import { SPACING, RADIUS, SEMANTIC } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import { formatMonthShort, formatTime } from "@/lib/date-format";
 import type { Event, OrganizationDonationStat } from "@teammeet/types";
 
-// Fixed color palette
-const PHILANTHROPY_COLORS = {
-  background: "#f8fafc",
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#ffffff",
-  primary: "#059669",
-  primaryForeground: "#ffffff",
-  error: "#ef4444",
-  success: "#22c55e",
-  warning: "#f59e0b",
-  secondary: "#8b5cf6",
-};
-
 type PhilanthropyView = "upcoming" | "past";
+
+// Accent color for philanthropy — heart/charity theme
+const ACCENT = "#059669"; // emerald-600
 
 export default function PhilanthropyScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const { isAdmin, isActiveMember } = useOrgRole();
-  const { neutral } = useAppColorScheme();
-  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const { neutral, semantic } = useAppColorScheme();
   const isMountedRef = useRef(true);
 
-  // Safe drawer toggle - only dispatch if drawer is available
   const handleDrawerToggle = useCallback(() => {
     try {
       if (navigation && typeof (navigation as any).dispatch === "function") {
@@ -60,6 +55,7 @@ export default function PhilanthropyScreen() {
       // Drawer not available - no-op
     }
   }, [navigation]);
+
   const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [donationStats, setDonationStats] = useState<OrganizationDonationStat | null>(null);
   const [stripeConnected, setStripeConnected] = useState(false);
@@ -91,24 +87,27 @@ export default function PhilanthropyScreen() {
       }
 
       try {
-        const [{ data: eventsData, error: eventsError }, { data: donationData, error: donationError }, { data: orgData, error: orgError }] =
-          await Promise.all([
-            supabase
-              .from("events")
-              .select("*")
-              .eq("organization_id", orgId)
-              .or("is_philanthropy.eq.true,event_type.eq.philanthropy"),
-            supabase
-              .from("organization_donation_stats")
-              .select("*")
-              .eq("organization_id", orgId)
-              .maybeSingle(),
-            supabase
-              .from("organizations")
-              .select("stripe_connect_account_id")
-              .eq("id", orgId)
-              .maybeSingle(),
-          ]);
+        const [
+          { data: eventsData, error: eventsError },
+          { data: donationData, error: donationError },
+          { data: orgData, error: orgError },
+        ] = await Promise.all([
+          supabase
+            .from("events")
+            .select("*")
+            .eq("organization_id", orgId)
+            .or("is_philanthropy.eq.true,event_type.eq.philanthropy"),
+          supabase
+            .from("organization_donation_stats")
+            .select("*")
+            .eq("organization_id", orgId)
+            .maybeSingle(),
+          supabase
+            .from("organizations")
+            .select("stripe_connect_account_id")
+            .eq("id", orgId)
+            .maybeSingle(),
+        ]);
 
         if (eventsError) throw eventsError;
         if (donationError) throw donationError;
@@ -234,9 +233,402 @@ export default function PhilanthropyScreen() {
     router.push(`/(app)/${orgSlug}/donations/new`);
   }, [router, orgSlug]);
 
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.background,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    addButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.sm + 4,
+      borderRadius: RADIUS.md,
+      backgroundColor: ACCENT,
+      borderCurve: "continuous" as const,
+    },
+    addButtonPressed: {
+      opacity: 0.9,
+    },
+    addButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 96,
+      gap: SPACING.md,
+    },
+    // Error
+    errorCard: {
+      backgroundColor: `${s.error}14`,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      borderWidth: 1,
+      borderColor: `${s.error}55`,
+      gap: SPACING.sm,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+    retryButton: {
+      alignSelf: "flex-start" as const,
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs + 2,
+      borderRadius: RADIUS.md,
+      backgroundColor: s.error,
+    },
+    retryButtonPressed: {
+      opacity: 0.85,
+    },
+    retryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    // Loading
+    loadingState: {
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      paddingTop: SPACING.xxl,
+    },
+    loadingText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    // Stats row — horizontal scroll of compact stat pills
+    statsRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.sm + 2,
+      gap: SPACING.xs,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    statIcon: {
+      width: 32,
+      height: 32,
+      borderRadius: RADIUS.sm,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    statValue: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      fontVariant: ["tabular-nums" as const],
+    },
+    statLabel: {
+      ...TYPOGRAPHY.caption,
+      color: n.secondary,
+    },
+    // Donations section
+    donationsSection: {
+      gap: SPACING.sm,
+    },
+    sectionLabel: {
+      ...TYPOGRAPHY.overline,
+      color: n.muted,
+    },
+    donationRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    donationCard: {
+      flex: 1,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    donationHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    donationIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: `${ACCENT}14`,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    donationLabel: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.secondary,
+    },
+    donationValue: {
+      ...TYPOGRAPHY.displayMedium,
+      color: n.foreground,
+      fontVariant: ["tabular-nums" as const],
+    },
+    donationSubtext: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+    },
+    statusBadge: {
+      alignSelf: "flex-start" as const,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xxs + 1,
+      borderRadius: RADIUS.full,
+    },
+    statusBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+    },
+    actionCard: {
+      flex: 1,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      gap: SPACING.sm,
+      justifyContent: "space-between" as const,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    actionContent: {
+      gap: SPACING.xs,
+    },
+    actionTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+    },
+    actionSubtitle: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    secondaryButton: {
+      alignSelf: "flex-start" as const,
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    secondaryButtonPressed: {
+      opacity: 0.85,
+    },
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    // Filter pills
+    filterRow: {
+      flexDirection: "row" as const,
+      gap: SPACING.sm,
+    },
+    filterChip: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.xs + 2,
+      borderRadius: RADIUS.full,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    },
+    filterChipPressed: {
+      opacity: 0.85,
+    },
+    filterChipText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.foreground,
+    },
+    // Event list
+    list: {
+      gap: SPACING.sm,
+    },
+    eventCard: {
+      flexDirection: "row" as const,
+      gap: SPACING.md,
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.06)",
+    },
+    eventCardPressed: {
+      opacity: 0.9,
+    },
+    eventDate: {
+      width: 56,
+      height: 56,
+      borderRadius: RADIUS.lg,
+      backgroundColor: `${ACCENT}12`,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    eventMonth: {
+      ...TYPOGRAPHY.overline,
+      color: ACCENT,
+      fontSize: 10,
+      letterSpacing: 0.8,
+    },
+    eventDay: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: ACCENT,
+      fontVariant: ["tabular-nums" as const],
+    },
+    eventContent: {
+      flex: 1,
+      gap: SPACING.xxs,
+    },
+    eventHeader: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      justifyContent: "space-between" as const,
+      gap: SPACING.sm,
+    },
+    eventTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+    eventBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xxs + 1,
+      borderRadius: RADIUS.full,
+      backgroundColor: `${ACCENT}14`,
+    },
+    eventBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: ACCENT,
+    },
+    eventDescription: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    eventMetaRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+      marginTop: SPACING.xxs,
+    },
+    eventMetaItem: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xxs,
+      flexShrink: 1,
+    },
+    eventMetaText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      flexShrink: 1,
+    },
+    // Empty state
+    emptyCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.lg,
+      gap: SPACING.md,
+      alignItems: "center" as const,
+    },
+    emptyIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: `${ACCENT}14`,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+      textAlign: "center" as const,
+    },
+    emptySubtitle: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      textAlign: "center" as const,
+    },
+    primaryButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+      backgroundColor: ACCENT,
+      borderRadius: RADIUS.md,
+      borderCurve: "continuous" as const,
+      paddingVertical: SPACING.xs + 2,
+      paddingHorizontal: SPACING.md,
+    },
+    primaryButtonPressed: {
+      opacity: 0.9,
+    },
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+  }));
+
   return (
     <View style={styles.container}>
-      {/* Custom Gradient Header */}
       <LinearGradient
         colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
         style={styles.headerGradient}
@@ -266,7 +658,7 @@ export default function PhilanthropyScreen() {
                   pressed && styles.addButtonPressed,
                 ]}
               >
-                <Plus size={16} color={PHILANTHROPY_COLORS.primaryForeground} />
+                <Plus size={16} color="#ffffff" />
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
             ) : null}
@@ -274,7 +666,6 @@ export default function PhilanthropyScreen() {
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Content Sheet */}
       <View style={styles.contentSheet}>
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -282,15 +673,13 @@ export default function PhilanthropyScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={PHILANTHROPY_COLORS.primary}
+              tintColor={neutral.secondary}
             />
           }
         >
           {error ? (
             <View style={styles.errorCard}>
-              <Text selectable style={styles.errorText}>
-                {error}
-              </Text>
+              <Text selectable style={styles.errorText}>{error}</Text>
               <Pressable
                 onPress={handleRefresh}
                 style={({ pressed }) => [
@@ -305,78 +694,102 @@ export default function PhilanthropyScreen() {
 
           {loading && allEvents.length === 0 ? (
             <View style={styles.loadingState}>
-              <ActivityIndicator color={PHILANTHROPY_COLORS.primary} />
-              <Text style={styles.loadingText}>Loading philanthropy events...</Text>
+              <ActivityIndicator color={ACCENT} />
+              <Text style={styles.loadingText}>Loading philanthropy...</Text>
             </View>
           ) : (
             <>
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryCard}>
-                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.success}22` }]}>
-                    <Heart size={18} color={PHILANTHROPY_COLORS.success} />
+              {/* Stats row */}
+              <Animated.View entering={FadeInDown.duration(300)} style={styles.statsRow}>
+                <View style={styles.statCard}>
+                  <View style={[styles.statIcon, { backgroundColor: `${SEMANTIC.success}18` }]}>
+                    <Heart size={16} color={SEMANTIC.success} />
                   </View>
-                  <Text style={styles.summaryValue}>{totalEvents}</Text>
-                  <Text style={styles.summaryLabel}>Total Events</Text>
+                  <Text style={styles.statValue}>{totalEvents}</Text>
+                  <Text style={styles.statLabel}>Total Events</Text>
                 </View>
-                <View style={styles.summaryCard}>
-                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.primary}22` }]}>
-                    <Calendar size={18} color={PHILANTHROPY_COLORS.primary} />
+                <View style={styles.statCard}>
+                  <View style={[styles.statIcon, { backgroundColor: `${ACCENT}18` }]}>
+                    <Calendar size={16} color={ACCENT} />
                   </View>
-                  <Text style={styles.summaryValue}>{upcomingCount}</Text>
-                  <Text style={styles.summaryLabel}>Upcoming</Text>
+                  <Text style={styles.statValue}>{upcomingCount}</Text>
+                  <Text style={styles.statLabel}>Upcoming</Text>
                 </View>
-                <View style={styles.summaryCard}>
-                  <View style={[styles.summaryIcon, { backgroundColor: `${PHILANTHROPY_COLORS.secondary}22` }]}>
-                    <Sparkles size={18} color={PHILANTHROPY_COLORS.secondary} />
+                <View style={styles.statCard}>
+                  <View style={[styles.statIcon, { backgroundColor: `${SEMANTIC.info}18` }]}>
+                    <Sparkles size={16} color={SEMANTIC.info} />
                   </View>
-                  <Text style={styles.summaryValue}>{pastCount}</Text>
-                  <Text style={styles.summaryLabel}>Completed</Text>
+                  <Text style={styles.statValue}>{pastCount}</Text>
+                  <Text style={styles.statLabel}>Completed</Text>
                 </View>
-              </View>
+              </Animated.View>
 
-              <View style={styles.donationRow}>
-                <View style={styles.donationCard}>
-                  <Text style={styles.donationLabel}>Stripe Donations</Text>
-                  <Text style={styles.donationValue}>
-                    ${totalRaised.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </Text>
-                  <Text style={styles.donationSubtext}>
-                    {donationCount} contributions recorded
-                  </Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      stripeConnected ? styles.statusConnected : styles.statusPending,
-                    ]}
-                  >
-                    <Text
+              {/* Donations + Action */}
+              <Animated.View entering={FadeInDown.delay(80).duration(300)} style={styles.donationsSection}>
+                <Text style={styles.sectionLabel}>Donations</Text>
+                <View style={styles.donationRow}>
+                  <View style={styles.donationCard}>
+                    <View style={styles.donationHeader}>
+                      <View style={styles.donationIconCircle}>
+                        <DollarSign size={18} color={ACCENT} />
+                      </View>
+                      <Text style={styles.donationLabel}>Stripe Donations</Text>
+                    </View>
+                    <Text style={styles.donationValue}>
+                      ${totalRaised.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </Text>
+                    <Text style={styles.donationSubtext}>
+                      {donationCount} {donationCount === 1 ? "contribution" : "contributions"} recorded
+                    </Text>
+                    <View
                       style={[
-                        styles.statusBadgeText,
-                        stripeConnected ? styles.statusConnectedText : styles.statusPendingText,
+                        styles.statusBadge,
+                        {
+                          backgroundColor: stripeConnected
+                            ? `${SEMANTIC.success}18`
+                            : `${SEMANTIC.warning}18`,
+                        },
                       ]}
                     >
-                      {stripeConnected ? "Connected" : "Connect Stripe to accept donations"}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.statusBadgeText,
+                          {
+                            color: stripeConnected
+                              ? SEMANTIC.success
+                              : SEMANTIC.warning,
+                          },
+                        ]}
+                      >
+                        {stripeConnected ? "Connected" : "Connect Stripe"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.actionCard}>
+                    <View style={styles.actionContent}>
+                      <Text style={styles.actionTitle}>Donate</Text>
+                      <Text style={styles.actionSubtitle}>
+                        Record a contribution or share a donation link.
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={handleDonate}
+                      style={({ pressed }) => [
+                        styles.secondaryButton,
+                        pressed && styles.secondaryButtonPressed,
+                      ]}
+                    >
+                      <Text style={styles.secondaryButtonText}>Open Donations</Text>
+                    </Pressable>
                   </View>
                 </View>
-                <View style={styles.actionCard}>
-                  <Text style={styles.actionTitle}>Donate</Text>
-                  <Text style={styles.actionSubtitle}>
-                    Record a contribution or share a donation link.
-                  </Text>
-                  <Pressable
-                    onPress={handleDonate}
-                    style={({ pressed }) => [
-                      styles.secondaryButton,
-                      pressed && styles.secondaryButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.secondaryButtonText}>Open Donations</Text>
-                  </Pressable>
-                </View>
-              </View>
+              </Animated.View>
 
-              <View style={styles.filterRow}>
+              {/* Filter tabs */}
+              <Animated.View entering={FadeInDown.delay(140).duration(300)} style={styles.filterRow}>
                 {(
                   [
                     { value: "upcoming", label: "Upcoming" },
@@ -390,14 +803,17 @@ export default function PhilanthropyScreen() {
                       onPress={() => setView(option.value)}
                       style={({ pressed }) => [
                         styles.filterChip,
-                        isSelected && { backgroundColor: PHILANTHROPY_COLORS.primary, borderColor: PHILANTHROPY_COLORS.primary },
+                        isSelected && {
+                          backgroundColor: ACCENT,
+                          borderColor: ACCENT,
+                        },
                         pressed && styles.filterChipPressed,
                       ]}
                     >
                       <Text
                         style={[
                           styles.filterChipText,
-                          isSelected && { color: PHILANTHROPY_COLORS.primaryForeground },
+                          isSelected && { color: "#ffffff" },
                         ]}
                       >
                         {option.label}
@@ -405,67 +821,77 @@ export default function PhilanthropyScreen() {
                     </Pressable>
                   );
                 })}
-              </View>
+              </Animated.View>
 
+              {/* Event list */}
               {visibleEvents.length > 0 ? (
                 <View style={styles.list}>
-                  {visibleEvents.map((event) => (
-                    <Pressable
+                  {visibleEvents.map((event, index) => (
+                    <Animated.View
                       key={event.id}
-                      onPress={() => handleOpenEvent(event.id)}
-                      style={({ pressed }) => [
-                        styles.eventCard,
-                        pressed && styles.eventCardPressed,
-                      ]}
+                      entering={FadeInDown.delay(180 + index * 50).duration(300)}
                     >
-                      <View style={styles.eventDate}>
-                        <Text style={styles.eventMonth}>
-                          {formatMonth(event.start_date)}
-                        </Text>
-                        <Text style={styles.eventDay}>
-                          {new Date(event.start_date).getDate()}
-                        </Text>
-                      </View>
-                      <View style={styles.eventContent}>
-                        <View style={styles.eventHeader}>
-                          <Text style={styles.eventTitle}>{event.title}</Text>
-                          <View style={styles.eventBadge}>
-                            <Text style={styles.eventBadgeText}>Philanthropy</Text>
-                          </View>
-                        </View>
-                        {event.description ? (
-                          <Text style={styles.eventDescription} numberOfLines={2}>
-                            {event.description}
+                      <Pressable
+                        onPress={() => handleOpenEvent(event.id)}
+                        style={({ pressed }) => [
+                          styles.eventCard,
+                          pressed && styles.eventCardPressed,
+                        ]}
+                      >
+                        <View style={styles.eventDate}>
+                          <Text style={styles.eventMonth}>
+                            {formatMonthShort(event.start_date)}
                           </Text>
-                        ) : null}
-                        <View style={styles.eventMetaRow}>
-                          <View style={styles.eventMetaItem}>
-                            <Clock size={14} color={PHILANTHROPY_COLORS.mutedText} />
-                            <Text style={styles.eventMetaText}>
-                              {formatTime(event.start_date)}
-                            </Text>
+                          <Text style={styles.eventDay}>
+                            {new Date(event.start_date).getDate()}
+                          </Text>
+                        </View>
+                        <View style={styles.eventContent}>
+                          <View style={styles.eventHeader}>
+                            <Text style={styles.eventTitle}>{event.title}</Text>
+                            <View style={styles.eventBadge}>
+                              <Text style={styles.eventBadgeText}>Philanthropy</Text>
+                            </View>
                           </View>
-                          {event.location ? (
+                          {event.description ? (
+                            <Text style={styles.eventDescription} numberOfLines={2}>
+                              {event.description}
+                            </Text>
+                          ) : null}
+                          <View style={styles.eventMetaRow}>
                             <View style={styles.eventMetaItem}>
-                              <MapPin size={14} color={PHILANTHROPY_COLORS.mutedText} />
-                              <Text style={styles.eventMetaText} numberOfLines={1}>
-                                {event.location}
+                              <Clock size={13} color={neutral.muted} />
+                              <Text style={styles.eventMetaText}>
+                                {formatTime(event.start_date)}
                               </Text>
                             </View>
-                          ) : null}
+                            {event.location ? (
+                              <View style={styles.eventMetaItem}>
+                                <MapPin size={13} color={neutral.muted} />
+                                <Text style={styles.eventMetaText} numberOfLines={1}>
+                                  {event.location}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
                         </View>
-                      </View>
-                    </Pressable>
+                      </Pressable>
+                    </Animated.View>
                   ))}
                 </View>
               ) : (
-                <View style={styles.emptyCard}>
+                <Animated.View entering={FadeIn.duration(300)} style={styles.emptyCard}>
+                  <View style={styles.emptyIcon}>
+                    <Heart size={28} color={ACCENT} />
+                  </View>
                   <Text style={styles.emptyTitle}>
-                    {view === "past" ? "No past philanthropy events" : "No upcoming philanthropy events"}
+                    {view === "past"
+                      ? "No past events"
+                      : "No upcoming events"}
                   </Text>
                   <Text style={styles.emptySubtitle}>
                     {view === "past"
-                      ? "Completed events will appear here."
+                      ? "Completed philanthropy events will appear here."
                       : "Add a new philanthropy event to get started."}
                   </Text>
                   {canEdit ? (
@@ -479,7 +905,7 @@ export default function PhilanthropyScreen() {
                       <Text style={styles.primaryButtonText}>Add Event</Text>
                     </Pressable>
                   ) : null}
-                </View>
+                </Animated.View>
               )}
             </>
           )}
@@ -496,396 +922,3 @@ function sortByStartAsc(a: Event, b: Event) {
 function sortByStartDesc(a: Event, b: Event) {
   return new Date(b.start_date).getTime() - new Date(a.start_date).getTime();
 }
-
-function formatMonth(dateString: string) {
-  return formatMonthShort(dateString);
-}
-
-const createStyles = (surfaceColor: string) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: PHILANTHROPY_COLORS.background,
-    },
-    // Gradient header styles
-    headerGradient: {
-      paddingBottom: spacing.md,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      fontSize: fontSize.xs,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    addButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      paddingVertical: spacing.xs + 2,
-      paddingHorizontal: spacing.sm,
-      borderRadius: borderRadius.md,
-      backgroundColor: PHILANTHROPY_COLORS.primary,
-    },
-    addButtonPressed: {
-      opacity: 0.9,
-    },
-    addButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryForeground,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: surfaceColor,
-    },
-    scrollContent: {
-      padding: spacing.md,
-      paddingBottom: spacing.xl,
-      gap: spacing.lg,
-    },
-    errorCard: {
-      backgroundColor: `${PHILANTHROPY_COLORS.error}14`,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      borderWidth: 1,
-      borderColor: `${PHILANTHROPY_COLORS.error}55`,
-      gap: spacing.sm,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.error,
-    },
-    retryButton: {
-      alignSelf: "flex-start",
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs + 2,
-      borderRadius: borderRadius.md,
-      backgroundColor: PHILANTHROPY_COLORS.error,
-    },
-    retryButtonPressed: {
-      opacity: 0.85,
-    },
-    retryButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: "#ffffff",
-    },
-    loadingState: {
-      alignItems: "center",
-      gap: spacing.sm,
-    },
-    loadingText: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    summaryGrid: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    summaryCard: {
-      flex: 1,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      padding: spacing.md,
-      gap: spacing.xs,
-      alignItems: "flex-start",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    summaryIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    summaryValue: {
-      fontSize: fontSize.xl,
-      fontWeight: fontWeight.bold,
-      color: PHILANTHROPY_COLORS.primaryText,
-      fontVariant: ["tabular-nums"],
-    },
-    summaryLabel: {
-      fontSize: fontSize.xs,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    donationRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.md,
-    },
-    donationCard: {
-      flex: 1,
-      minWidth: 220,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      padding: spacing.md,
-      gap: spacing.xs,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    donationLabel: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    donationValue: {
-      fontSize: fontSize.xl,
-      fontWeight: fontWeight.bold,
-      color: PHILANTHROPY_COLORS.primaryText,
-      fontVariant: ["tabular-nums"],
-    },
-    donationSubtext: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    statusBadge: {
-      alignSelf: "flex-start",
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: 999,
-      marginTop: spacing.xs,
-    },
-    statusBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.semibold,
-    },
-    statusConnected: {
-      backgroundColor: `${PHILANTHROPY_COLORS.success}22`,
-    },
-    statusConnectedText: {
-      color: PHILANTHROPY_COLORS.success,
-    },
-    statusPending: {
-      backgroundColor: `${PHILANTHROPY_COLORS.warning}22`,
-    },
-    statusPendingText: {
-      color: PHILANTHROPY_COLORS.warning,
-    },
-    actionCard: {
-      flex: 1,
-      minWidth: 200,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      padding: spacing.md,
-      gap: spacing.xs,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    actionTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryText,
-    },
-    actionSubtitle: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    filterRow: {
-      flexDirection: "row",
-      gap: spacing.sm,
-    },
-    filterChip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs + 2,
-      borderRadius: 999,
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-    },
-    filterChipPressed: {
-      opacity: 0.85,
-    },
-    filterChipText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: PHILANTHROPY_COLORS.primaryText,
-    },
-    list: {
-      gap: spacing.md,
-    },
-    eventCard: {
-      flexDirection: "row",
-      gap: spacing.md,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      padding: spacing.md,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    eventCardPressed: {
-      opacity: 0.9,
-    },
-    eventDate: {
-      width: 64,
-      height: 64,
-      borderRadius: borderRadius.lg,
-      backgroundColor: `${PHILANTHROPY_COLORS.success}18`,
-      alignItems: "center",
-      justifyContent: "center",
-      gap: spacing.xs,
-    },
-    eventMonth: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: PHILANTHROPY_COLORS.success,
-      textTransform: "uppercase",
-    },
-    eventDay: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.bold,
-      color: PHILANTHROPY_COLORS.success,
-      fontVariant: ["tabular-nums"],
-    },
-    eventContent: {
-      flex: 1,
-      gap: spacing.xs,
-    },
-    eventHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-    },
-    eventTitle: {
-      flex: 1,
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryText,
-    },
-    eventBadge: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderRadius: 999,
-      backgroundColor: `${PHILANTHROPY_COLORS.success}22`,
-    },
-    eventBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.success,
-    },
-    eventDescription: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-    },
-    eventMetaRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
-    eventMetaItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      flexShrink: 1,
-    },
-    eventMetaText: {
-      fontSize: fontSize.xs,
-      color: PHILANTHROPY_COLORS.secondaryText,
-      flexShrink: 1,
-    },
-    emptyCard: {
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      padding: spacing.lg,
-      gap: spacing.sm,
-      alignItems: "center",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.06)",
-    },
-    emptyTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryText,
-      textAlign: "center",
-    },
-    emptySubtitle: {
-      fontSize: fontSize.sm,
-      color: PHILANTHROPY_COLORS.secondaryText,
-      textAlign: "center",
-    },
-    primaryButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      backgroundColor: PHILANTHROPY_COLORS.primary,
-      borderRadius: borderRadius.md,
-      paddingVertical: spacing.xs + 2,
-      paddingHorizontal: spacing.md,
-      borderCurve: "continuous",
-    },
-    primaryButtonPressed: {
-      opacity: 0.9,
-    },
-    primaryButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryForeground,
-    },
-    secondaryButton: {
-      paddingVertical: spacing.xs + 2,
-      paddingHorizontal: spacing.md,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: PHILANTHROPY_COLORS.border,
-      backgroundColor: PHILANTHROPY_COLORS.card,
-      alignSelf: "flex-start",
-    },
-    secondaryButtonPressed: {
-      opacity: 0.85,
-    },
-    secondaryButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: PHILANTHROPY_COLORS.primaryText,
-    },
-  });

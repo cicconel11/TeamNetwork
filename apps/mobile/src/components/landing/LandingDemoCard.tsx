@@ -159,6 +159,7 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(34, 197, 94, 0.5)",
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
+    textShadow: "0px 0px 8px rgba(34, 197, 94, 0.5)",
   },
   statLabel: {
     ...TYPOGRAPHY.overline,

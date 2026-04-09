@@ -205,9 +205,13 @@ export default function PostDetailScreen() {
   useEffect(() => {
     if (!postLoading && post === null && postId) {
       showToast("This post has been removed", "info");
-      router.back();
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace(`/(app)/${orgSlug}/(tabs)`);
+      }
     }
-  }, [postLoading, post, postId, router]);
+  }, [postLoading, post, postId, router, orgSlug]);
 
   const canEdit = post && userId && (post.author_id === userId || isAdmin);
 
@@ -369,7 +373,16 @@ export default function PostDetailScreen() {
         >
           <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
             <View style={styles.headerContent}>
-              <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Pressable
+                onPress={() => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace(`/(app)/${orgSlug}/(tabs)`);
+                  }
+                }}
+                style={styles.backButton}
+              >
                 <ArrowLeft size={24} color={APP_CHROME.headerTitle} />
               </Pressable>
               <Text style={styles.headerTitle}>Post</Text>
@@ -396,7 +409,16 @@ export default function PostDetailScreen() {
       >
         <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
           <View style={styles.headerContent}>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace(`/(app)/${orgSlug}/(tabs)`);
+                }
+              }}
+              style={styles.backButton}
+            >
               <ArrowLeft size={24} color={APP_CHROME.headerTitle} />
             </Pressable>
             <View style={styles.headerTextContainer}>

@@ -52,33 +52,30 @@ export function MentorshipPairCard({
             setIsDeleting(true);
             setError(null);
 
-            const { error: logsError } = await supabase
+            // Soft-delete associated logs first (non-blocking — don't abort if this fails,
+            // since logs for deleted pairs are filtered out on load anyway).
+            await supabase
               .from("mentorship_logs")
               .update({ deleted_at: new Date().toISOString() })
+              .eq("organization_id", orgId)
               .eq("pair_id", pair.id)
               .is("deleted_at", null);
-
-            if (logsError) {
-              setError("Unable to delete mentorship logs. Please try again.");
-              setIsDeleting(false);
-              return;
-            }
 
             const { error: pairError } = await supabase
               .from("mentorship_pairs")
               .update({ deleted_at: new Date().toISOString() })
               .eq("id", pair.id)
+              .eq("organization_id", orgId)
               .is("deleted_at", null);
 
             if (pairError) {
-              setError("Unable to delete mentorship pair. Please try again.");
+              setError("Unable to archive this pair. Please try again.");
               setIsDeleting(false);
               return;
             }
 
             setIsDeleting(false);
             onArchive(pair.id);
-            onRefresh();
           },
         },
       ]

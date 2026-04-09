@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet, Pressable, Alert } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Pressable, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,20 +16,11 @@ import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING, RADIUS, RSVP_COLORS } from "@/lib/design-tokens";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { TYPOGRAPHY } from "@/lib/typography";
 import { formatShortWeekdayDate, formatTime } from "@/lib/date-format";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 
-const DETAIL_COLORS = {
-  background: "#ffffff",
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#f8fafc",
-  success: "#059669",
-  error: "#ef4444",
-};
 
 type RSVPStatus = "attending" | "not_attending" | "maybe";
 
@@ -50,7 +41,148 @@ export default function EventDetailScreen() {
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
   const { isOffline } = useNetwork();
-  const styles = useMemo(() => createStyles(), []);
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    centered: {
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      padding: SPACING.xs,
+      marginLeft: -SPACING.xs,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: SPACING.xxl,
+    },
+    title: {
+      ...TYPOGRAPHY.headlineLarge,
+      color: n.foreground,
+      marginBottom: SPACING.md,
+    },
+    details: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+      gap: SPACING.sm,
+    },
+    detailRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+    },
+    detailText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+    description: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+    },
+    descriptionText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+      lineHeight: 24,
+    },
+    rsvpSummary: {
+      backgroundColor: n.background,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.md,
+      marginBottom: SPACING.md,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    rsvpSummaryTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    },
+    rsvpCountsRow: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    rsvpCountBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
+      borderRadius: RADIUS.md,
+    },
+    rsvpCountText: {
+      ...TYPOGRAPHY.labelSmall,
+      fontWeight: "600" as const,
+    },
+    rsvpTapHint: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    checkInButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+      flexDirection: "row" as const,
+      justifyContent: "center" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.sm,
+    },
+    checkInButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    rsvpButton: {
+      backgroundColor: s.success,
+      borderRadius: RADIUS.lg,
+      paddingVertical: SPACING.md,
+      alignItems: "center" as const,
+    },
+    rsvpButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    loadingOverlay: {
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: n.surface + "cc",
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+    },
+  }));
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,7 +331,7 @@ export default function EventDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
+        <ActivityIndicator size="large" color={semantic.success} />
       </View>
     );
   }
@@ -250,7 +382,7 @@ export default function EventDetailScreen() {
 
         <View style={styles.details}>
           <View style={styles.detailRow}>
-            <Calendar size={18} color={DETAIL_COLORS.mutedText} />
+            <Calendar size={18} color={neutral.muted} />
             <Text style={styles.detailText}>
               {formatShortWeekdayDate(event.start_date)} at {formatTime(event.start_date)}
               {event.end_date && ` - ${formatTime(event.end_date)}`}
@@ -259,14 +391,14 @@ export default function EventDetailScreen() {
 
           {event.location && (
             <View style={styles.detailRow}>
-              <MapPin size={18} color={DETAIL_COLORS.mutedText} />
+              <MapPin size={18} color={neutral.muted} />
               <Text style={styles.detailText}>{event.location}</Text>
             </View>
           )}
 
           {event.rsvp_count !== undefined && (
             <View style={styles.detailRow}>
-              <Users size={18} color={DETAIL_COLORS.mutedText} />
+              <Users size={18} color={neutral.muted} />
               <Text style={styles.detailText}>{event.rsvp_count} attending</Text>
             </View>
           )}
@@ -324,165 +456,10 @@ export default function EventDetailScreen() {
 
       {isCancelling && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
+          <ActivityIndicator size="large" color={semantic.success} />
         </View>
       )}
     </View>
   );
 }
 
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: DETAIL_COLORS.background,
-    },
-    centered: {
-      justifyContent: "center",
-      alignItems: "center",
-      padding: SPACING.lg,
-    },
-    headerGradient: {
-      paddingBottom: SPACING.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: SPACING.md,
-      paddingTop: SPACING.xs,
-      minHeight: 40,
-      gap: SPACING.sm,
-    },
-    backButton: {
-      padding: SPACING.xs,
-      marginLeft: -SPACING.xs,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      ...TYPOGRAPHY.titleLarge,
-      color: APP_CHROME.headerTitle,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: SPACING.md,
-      paddingBottom: SPACING.xxl,
-    },
-    title: {
-      ...TYPOGRAPHY.headlineLarge,
-      color: DETAIL_COLORS.primaryText,
-      marginBottom: SPACING.md,
-    },
-    details: {
-      backgroundColor: DETAIL_COLORS.card,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      marginBottom: SPACING.md,
-      gap: SPACING.sm,
-    },
-    detailRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: SPACING.sm,
-    },
-    detailText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.primaryText,
-      flex: 1,
-    },
-    description: {
-      backgroundColor: DETAIL_COLORS.card,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      marginBottom: SPACING.md,
-    },
-    descriptionText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.primaryText,
-      lineHeight: 24,
-    },
-    rsvpSummary: {
-      backgroundColor: DETAIL_COLORS.card,
-      borderRadius: RADIUS.lg,
-      padding: SPACING.md,
-      marginBottom: SPACING.md,
-      borderWidth: 1,
-      borderColor: DETAIL_COLORS.border,
-    },
-    rsvpSummaryTitle: {
-      ...TYPOGRAPHY.titleMedium,
-      color: DETAIL_COLORS.primaryText,
-      marginBottom: SPACING.sm,
-    },
-    rsvpCountsRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: SPACING.sm,
-      marginBottom: SPACING.sm,
-    },
-    rsvpCountBadge: {
-      paddingHorizontal: SPACING.sm,
-      paddingVertical: SPACING.xs,
-      borderRadius: RADIUS.md,
-    },
-    rsvpCountText: {
-      ...TYPOGRAPHY.labelSmall,
-      fontWeight: "600",
-    },
-    rsvpTapHint: {
-      ...TYPOGRAPHY.caption,
-      color: DETAIL_COLORS.mutedText,
-    },
-    checkInButton: {
-      backgroundColor: DETAIL_COLORS.success,
-      borderRadius: RADIUS.lg,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: SPACING.sm,
-      marginBottom: SPACING.sm,
-    },
-    checkInButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-      fontWeight: "600",
-    },
-    rsvpButton: {
-      backgroundColor: DETAIL_COLORS.success,
-      borderRadius: RADIUS.lg,
-      paddingVertical: SPACING.md,
-      alignItems: "center",
-    },
-    rsvpButtonText: {
-      ...TYPOGRAPHY.labelLarge,
-      color: "#ffffff",
-      fontWeight: "600",
-    },
-    errorText: {
-      ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.error,
-      textAlign: "center",
-      marginBottom: SPACING.md,
-    },
-    backButtonAlt: {
-      paddingVertical: SPACING.sm,
-      paddingHorizontal: SPACING.md,
-      borderRadius: RADIUS.md,
-      backgroundColor: DETAIL_COLORS.success,
-    },
-    backButtonAltText: {
-      ...TYPOGRAPHY.labelMedium,
-      color: "#ffffff",
-    },
-    loadingOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-      justifyContent: "center",
-      alignItems: "center",
-    },
-  });

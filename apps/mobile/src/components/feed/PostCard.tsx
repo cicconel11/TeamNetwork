@@ -1,5 +1,5 @@
 import React, { useCallback } from "react";
-import { View, Text, Pressable, Platform } from "react-native";
+import { View, Text, Pressable, Platform, GestureResponderEvent } from "react-native";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { MessageCircle } from "lucide-react-native";
@@ -102,13 +102,16 @@ function PostCardInner({ post, onPress, onLikeToggle, likeDisabled = false }: Po
     }
     onPress(post.id);
   }, [onPress, post.id]);
-  const handleLike = useCallback(() => onLikeToggle(post.id), [onLikeToggle, post.id]);
+  const handleLike = useCallback((e?: GestureResponderEvent) => {
+    e?.stopPropagation();
+    onLikeToggle(post.id);
+  }, [onLikeToggle, post.id]);
 
   return (
     <Pressable
       onPress={handlePress}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      accessibilityRole="button"
+      accessibilityRole="none"
       accessibilityLabel={`Post by ${post.author?.full_name || "Unknown"}`}
     >
       {/* Author row */}

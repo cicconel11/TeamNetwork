@@ -148,14 +148,6 @@ function OrgLayoutInner() {
         }}
       />
       <Stack.Screen
-        name="alumni/[alumniId]"
-        options={{
-          headerShown: false,
-          title: "Alumni",
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
         name="mentorship"
         options={{
           headerShown: false,
@@ -169,6 +161,12 @@ function OrgLayoutInner() {
           headerShown: false,
           title: "Records",
           presentation: "card",
+        }}
+      />
+      <Stack.Screen
+        name="jobs"
+        options={{
+          headerShown: false,
         }}
       />
       <Stack.Screen

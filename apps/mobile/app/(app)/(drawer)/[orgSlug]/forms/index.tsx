@@ -1,11 +1,10 @@
-import { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useMemo } from "react";
 import {
   View,
   Text,
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  StyleSheet,
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
@@ -20,29 +19,15 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { ErrorState } from "@/components/ui";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import type { Form, FormDocument } from "@teammeet/types";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
-import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
-
-// Neutral color palette
-const FORMS_COLORS = {
-  background: "#f8fafc",
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#ffffff",
-  submittedBadge: "#d1fae5",
-  submittedText: "#065f46",
-  primaryCTA: "#059669",
-  primaryCTAText: "#ffffff",
-  error: "#ef4444",
-  pdfIcon: "#ef4444",
-};
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 
 type ListItem =
   | { type: "section-header"; title: string }
@@ -55,8 +40,7 @@ export default function FormsScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
-  const { neutral } = useAppColorScheme();
-  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const { neutral, semantic } = useAppColorScheme();
   const { isOffline } = useNetwork();
   const {
     forms,
@@ -70,6 +54,175 @@ export default function FormsScreen() {
   } = useForms(orgId);
   const [refreshing, setRefreshing] = useState(false);
   const isRefetchingRef = useRef(false);
+
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    } as const,
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    } as const,
+    headerSafeArea: {} as const,
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    backButton: {
+      width: 32,
+      height: 32,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    } as const,
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    } as const,
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    } as const,
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    } as const,
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      flexGrow: 1,
+    } as const,
+    sectionHeader: {
+      ...TYPOGRAPHY.overline,
+      color: n.secondary,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    card: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      marginBottom: 12,
+      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+    },
+    cardHeader: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      justifyContent: "space-between" as const,
+      gap: SPACING.sm,
+      marginBottom: SPACING.xs,
+    },
+    docTitleRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      flex: 1,
+    },
+    cardTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      flex: 1,
+    },
+    submittedBadge: {
+      backgroundColor: s.successLight,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: RADIUS.lg,
+    } as const,
+    submittedText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: s.successDark,
+    },
+    cardDescription: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      lineHeight: 20,
+      marginBottom: SPACING.sm,
+    },
+    cardFooter: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      marginTop: SPACING.xs,
+    },
+    fieldCount: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    actionButton: {
+      backgroundColor: s.success,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: RADIUS.md,
+    } as const,
+    actionButtonSecondary: {
+      backgroundColor: "transparent" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+    },
+    actionButtonText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: "#ffffff",
+    },
+    actionButtonTextSecondary: {
+      color: n.secondary,
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      paddingVertical: 64,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: n.foreground,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: 20,
+      backgroundColor: n.background,
+    },
+    errorText: {
+      ...TYPOGRAPHY.bodySmall,
+      color: s.error,
+    },
+  }));
 
   // Handle back navigation
   const handleBack = useCallback(() => {
@@ -99,14 +252,14 @@ export default function FormsScreen() {
       {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={FORMS_COLORS.primaryText} />,
+        icon: <ExternalLink size={20} color={neutral.foreground} />,
         onPress: () => {
           const webUrl = getWebPath(orgSlug, "forms");
           Linking.openURL(webUrl);
         },
       },
     ];
-  }, [permissions.canUseAdminActions, orgSlug]);
+  }, [permissions.canUseAdminActions, orgSlug, neutral.foreground]);
 
   // Refetch on screen focus if data is stale
   useFocusEffect(
@@ -165,7 +318,7 @@ export default function FormsScreen() {
     if (item.type === "empty") {
       return (
         <View style={styles.emptyContainer}>
-          <ClipboardList size={48} color={FORMS_COLORS.mutedText} />
+          <ClipboardList size={48} color={neutral.muted} />
           <Text style={styles.emptyTitle}>No Forms Available</Text>
           <Text style={styles.emptyText}>
             Forms will appear here when available.
@@ -220,7 +373,7 @@ export default function FormsScreen() {
         >
           <View style={styles.cardHeader}>
             <View style={styles.docTitleRow}>
-              <FileText size={20} color={FORMS_COLORS.pdfIcon} />
+              <FileText size={20} color={semantic.error} />
               <Text style={styles.cardTitle} numberOfLines={1}>{doc.title}</Text>
             </View>
             {isSubmitted && (
@@ -252,7 +405,7 @@ export default function FormsScreen() {
   if (loading && forms.length === 0 && formDocuments.length === 0) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={FORMS_COLORS.primaryCTA} />
+        <ActivityIndicator size="large" color={semantic.success} />
       </View>
     );
   }
@@ -335,7 +488,7 @@ export default function FormsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={handleRefresh}
-              tintColor={FORMS_COLORS.primaryCTA}
+              tintColor={semantic.success}
             />
           }
           initialNumToRender={10}
@@ -347,189 +500,3 @@ export default function FormsScreen() {
     </View>
   );
 }
-
-const createStyles = (surfaceColor: string) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    // Gradient header styles
-    headerGradient: {
-      paddingBottom: spacing.xs,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    // Content sheet
-    contentSheet: {
-      flex: 1,
-      backgroundColor: surfaceColor,
-    },
-    listContent: {
-      padding: spacing.md,
-      paddingBottom: 40,
-      flexGrow: 1,
-    },
-    // Section headers
-    sectionHeader: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-      color: FORMS_COLORS.secondaryText,
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    // Cards
-    card: {
-      backgroundColor: FORMS_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: FORMS_COLORS.border,
-      padding: spacing.md,
-      marginBottom: 12,
-      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
-    },
-    cardHeader: {
-      flexDirection: "row",
-      alignItems: "flex-start",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-      marginBottom: spacing.xs,
-    },
-    docTitleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      flex: 1,
-    },
-    cardTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: FORMS_COLORS.primaryText,
-      flex: 1,
-    },
-    submittedBadge: {
-      backgroundColor: FORMS_COLORS.submittedBadge,
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: borderRadius.lg,
-    },
-    submittedText: {
-      fontSize: 11,
-      fontWeight: fontWeight.medium,
-      color: FORMS_COLORS.submittedText,
-    },
-    cardDescription: {
-      fontSize: fontSize.sm,
-      color: FORMS_COLORS.secondaryText,
-      lineHeight: 20,
-      marginBottom: spacing.sm,
-    },
-    cardFooter: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      marginTop: spacing.xs,
-    },
-    fieldCount: {
-      fontSize: fontSize.xs,
-      color: FORMS_COLORS.mutedText,
-    },
-    actionButton: {
-      backgroundColor: FORMS_COLORS.primaryCTA,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: borderRadius.md,
-    },
-    actionButtonSecondary: {
-      backgroundColor: "transparent",
-      borderWidth: 1,
-      borderColor: FORMS_COLORS.border,
-    },
-    actionButtonText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: FORMS_COLORS.primaryCTAText,
-    },
-    actionButtonTextSecondary: {
-      color: FORMS_COLORS.secondaryText,
-    },
-    // Empty state
-    emptyContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      paddingVertical: 64,
-    },
-    emptyTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: FORMS_COLORS.primaryText,
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    emptyText: {
-      fontSize: fontSize.sm,
-      color: FORMS_COLORS.mutedText,
-      textAlign: "center",
-    },
-    // Loading/Error states
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-      backgroundColor: FORMS_COLORS.background,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: FORMS_COLORS.error,
-    },
-  });

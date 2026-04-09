@@ -65,15 +65,44 @@ export function useComments(postId: string | undefined, orgId: string | null): U
         } = await supabase.auth.getUser();
         if (!user) throw new Error("Not authenticated");
 
+        const trimmed = body.trim();
+
+        // Optimistic insert so comment appears instantly
+        const optimisticId = `optimistic-${Date.now()}`;
+        const optimistic: FeedComment = {
+          id: optimisticId,
+          post_id: postId,
+          organization_id: orgId,
+          author_id: user.id,
+          body: trimmed,
+          created_at: new Date().toISOString(),
+          deleted_at: null,
+          author: {
+            id: user.id,
+            full_name: user.user_metadata?.name ?? "You",
+            avatar_url: user.user_metadata?.avatar_url ?? null,
+          },
+        };
+
+        if (isMountedRef.current) {
+          setComments((prev) => [...prev, optimistic]);
+        }
+
         const { error: insertError } = await supabase.from("feed_comments").insert({
           post_id: postId,
           organization_id: orgId,
           author_id: user.id,
-          body: body.trim(),
+          body: trimmed,
         });
 
-        if (insertError) throw insertError;
-        // Realtime subscription will trigger refetch
+        if (insertError) {
+          // Revert optimistic insert on failure
+          if (isMountedRef.current) {
+            setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+          }
+          throw insertError;
+        }
+        // Realtime subscription will replace the optimistic entry with the real one
       } catch (e) {
         const message = (e as Error).message || "Failed to add comment";
         showToast(message, "error");

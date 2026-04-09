@@ -199,6 +199,7 @@ export const primitives = {
       shadowOpacity: 0.05,
       shadowRadius: 2,
       elevation: 1,
+      boxShadow: "0px 1px 2px rgba(0,0,0,0.05)",
       padding: spacing.md,
     },
     interactive: {
@@ -210,6 +211,7 @@ export const primitives = {
       shadowOpacity: 0.05,
       shadowRadius: 2,
       elevation: 1,
+      boxShadow: "0px 1px 2px rgba(0,0,0,0.05)",
       padding: spacing.md,
     },
   },

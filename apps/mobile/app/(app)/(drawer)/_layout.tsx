@@ -1,5 +1,5 @@
 import React from "react";
-import { useWindowDimensions } from "react-native";
+import { Platform, useWindowDimensions } from "react-native";
 import { Stack } from "expo-router";
 import { useDrawerProgress } from "@react-navigation/drawer";
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion } from "react-native-reanimated";
@@ -25,7 +25,11 @@ export default function DrawerStackLayout() {
     },
   }));
 
+  const isWeb = Platform.OS === "web";
+
   const animatedStyle = useAnimatedStyle(() => {
+    if (isWeb) return {};
+
     const progress = drawerProgress?.value ?? 0;
     const translateX = interpolate(progress, [0, 1], [0, drawerWidth * DRAWER_SHIFT_RATIO]);
     const scale = reduceMotion ? 1 : interpolate(progress, [0, 1], [1, SCALE_END]);
@@ -35,7 +39,7 @@ export default function DrawerStackLayout() {
       transform: [{ translateX }, { scale }],
       borderRadius,
     };
-  }, [drawerWidth, reduceMotion]);
+  }, [drawerWidth, reduceMotion, isWeb]);
 
   return (
     <Animated.View style={[styles.scene, animatedStyle]}>

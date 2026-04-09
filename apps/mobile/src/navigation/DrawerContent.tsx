@@ -269,7 +269,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           </View>
           <View style={styles.profileMeta}>
             <Text style={styles.profileName}>{displayName}</Text>
-            {displayEmail && <Text style={styles.profileEmail}>{displayEmail}</Text>}
+            {displayEmail ? <Text style={styles.profileEmail}>{displayEmail}</Text> : null}
           </View>
         </Pressable>
         <View style={styles.divider} />
@@ -277,20 +277,20 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         {/* Sections */}
         {sections.map((section) => (
           <View key={section.id} style={styles.section}>
-            {section.title && <Text style={styles.sectionHeader}>{section.title}</Text>}
+            {section.title ? <Text style={styles.sectionHeader}>{section.title}</Text> : null}
             {section.items.map((item) => renderNavItem(item))}
           </View>
         ))}
       </DrawerContentScrollView>
 
       {/* Pinned Footer */}
-      {slug && (
+      {slug ? (
         <View style={[styles.pinnedFooter, { paddingBottom: bottomInset }]}>
           <View style={styles.divider} />
           {pinnedItems.map((item) => renderNavItem(item))}
           {renderNavItem({ label: "Sign Out", href: "", icon: LogOut }, true)}
         </View>
-      )}
+      ) : null}
     </View>
   );
 }

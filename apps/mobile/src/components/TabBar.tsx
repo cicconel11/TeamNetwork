@@ -110,6 +110,7 @@ export function TabBar({ state, descriptors, navigation, onActionPress, badges }
       shadowOpacity: 0.2,
       shadowRadius: 8,
       elevation: 4,
+      boxShadow: "0px 4px 8px rgba(0,0,0,0.20)",
     },
   }));
 

@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   ScrollView,
   TextInput,
-  StyleSheet,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
@@ -20,29 +19,11 @@ import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import type { Form, FormField, FormFieldOption, FormSubmission } from "@teammeet/types";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { SPACING, RADIUS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { formatDefaultDate } from "@/lib/date-format";
-
-const FORM_COLORS = {
-  background: "#f8fafc",
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#ffffff",
-  primaryCTA: "#059669",
-  primaryCTAText: "#ffffff",
-  error: "#ef4444",
-  errorBackground: "#fef2f2",
-  infoBadge: "#dbeafe",
-  infoText: "#1e40af",
-  successBadge: "#d1fae5",
-  successText: "#065f46",
-  inputBackground: "#ffffff",
-  inputBorder: "#d1d5db",
-  inputFocusBorder: "#059669",
-};
 
 function isFormFieldOption(value: unknown): value is FormFieldOption {
   return (
@@ -110,8 +91,243 @@ export default function FormDetailScreen() {
   const { orgSlug: contextOrgSlug } = useOrg();
   const orgSlug = paramOrgSlug || contextOrgSlug;
   const router = useRouter();
-  const { neutral } = useAppColorScheme();
-  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: APP_CHROME.gradientEnd,
+    } as const,
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    } as const,
+    headerSafeArea: {} as const,
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    } as const,
+    backButton: {
+      width: 32,
+      height: 32,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    } as const,
+    headerTextContainer: {
+      flex: 1,
+    } as const,
+    headerTitle: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: APP_CHROME.headerTitle,
+    } as const,
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    } as const,
+    scrollView: {
+      flex: 1,
+    } as const,
+    scrollContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+    } as const,
+    description: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.secondary,
+      marginBottom: SPACING.md,
+    } as const,
+    infoBanner: {
+      backgroundColor: s.infoLight,
+      padding: SPACING.md,
+      borderRadius: RADIUS.lg,
+      marginBottom: SPACING.md,
+    } as const,
+    infoBannerText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.infoDark,
+    } as const,
+    errorBanner: {
+      backgroundColor: s.errorLight,
+      padding: SPACING.md,
+      borderRadius: RADIUS.lg,
+      marginBottom: SPACING.md,
+    } as const,
+    errorBannerText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+    } as const,
+    fieldContainer: {
+      marginBottom: SPACING.lg,
+    } as const,
+    fieldLabel: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    } as const,
+    input: {
+      backgroundColor: n.surface,
+      borderWidth: 1,
+      borderColor: n.border,
+      borderRadius: RADIUS.md,
+      padding: SPACING.md,
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.foreground,
+    } as const,
+    inputText: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.foreground,
+    } as const,
+    inputPlaceholder: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.muted,
+    } as const,
+    textArea: {
+      minHeight: 100,
+      textAlignVertical: "top" as const,
+    } as const,
+    optionsContainer: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+      gap: SPACING.sm,
+    } as const,
+    selectOption: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.lg,
+      borderWidth: 1,
+      borderColor: n.border,
+      backgroundColor: n.surface,
+    } as const,
+    selectOptionSelected: {
+      borderColor: s.success,
+      backgroundColor: s.successLight,
+    } as const,
+    selectOptionText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.foreground,
+    } as const,
+    selectOptionTextSelected: {
+      ...TYPOGRAPHY.labelLarge,
+      color: s.successDark,
+    } as const,
+    radioContainer: {
+      gap: SPACING.sm,
+    } as const,
+    radioOption: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      paddingVertical: SPACING.xs,
+    } as const,
+    radioSelected: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    } as const,
+    radioUnselected: {
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      borderWidth: 2,
+      borderColor: n.border,
+    } as const,
+    radioLabel: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.foreground,
+    } as const,
+    checkboxContainer: {
+      gap: SPACING.sm,
+    } as const,
+    checkboxOption: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      paddingVertical: SPACING.xs,
+    } as const,
+    checkboxLabel: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.foreground,
+    } as const,
+    buttonContainer: {
+      flexDirection: "row" as const,
+      gap: SPACING.md,
+      marginTop: SPACING.lg,
+      paddingTop: SPACING.lg,
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+    } as const,
+    primaryButton: {
+      flex: 1,
+      backgroundColor: s.success,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    } as const,
+    primaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: "#ffffff",
+    } as const,
+    secondaryButton: {
+      flex: 1,
+      backgroundColor: n.surface,
+      paddingVertical: SPACING.md,
+      borderRadius: RADIUS.md,
+      borderWidth: 1,
+      borderColor: n.border,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    } as const,
+    secondaryButtonText: {
+      ...TYPOGRAPHY.labelLarge,
+      color: n.secondary,
+    } as const,
+    buttonDisabled: {
+      opacity: 0.6,
+    } as const,
+    successContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+    } as const,
+    successIcon: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: s.successLight,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      marginBottom: SPACING.lg,
+    } as const,
+    successTitle: {
+      ...TYPOGRAPHY.headlineMedium,
+      color: n.foreground,
+      marginBottom: SPACING.sm,
+    } as const,
+    successText: {
+      ...TYPOGRAPHY.bodyLarge,
+      color: n.secondary,
+      marginBottom: SPACING.xl,
+    } as const,
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: 20,
+      backgroundColor: n.background,
+    } as const,
+    errorText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: s.error,
+    } as const,
+  }));
 
   const [form, setForm] = useState<Form | null>(null);
   const [existingSubmission, setExistingSubmission] = useState<FormSubmission | null>(null);
@@ -270,7 +486,7 @@ export default function FormDetailScreen() {
               value={(value as string) || ""}
               onChangeText={(text) => updateResponse(field.name, text)}
               placeholder={`Enter ${field.label.toLowerCase()}`}
-              placeholderTextColor={FORM_COLORS.mutedText}
+              placeholderTextColor={neutral.muted}
               multiline
               numberOfLines={4}
               textAlignVertical="top"
@@ -323,7 +539,7 @@ export default function FormDetailScreen() {
                   >
                     {value === optionValue ? (
                       <View style={styles.radioSelected}>
-                        <Circle size={12} color={FORM_COLORS.primaryCTA} fill={FORM_COLORS.primaryCTA} />
+                        <Circle size={12} color={semantic.success} fill={semantic.success} />
                       </View>
                     ) : (
                       <View style={styles.radioUnselected} />
@@ -359,9 +575,9 @@ export default function FormDetailScreen() {
                     }}
                   >
                     {isChecked ? (
-                      <CheckSquare size={20} color={FORM_COLORS.primaryCTA} />
+                      <CheckSquare size={20} color={semantic.success} />
                     ) : (
-                      <Square size={20} color={FORM_COLORS.inputBorder} />
+                      <Square size={20} color={neutral.border} />
                     )}
                     <Text style={styles.checkboxLabel}>{optionLabel}</Text>
                   </Pressable>
@@ -409,7 +625,7 @@ export default function FormDetailScreen() {
               value={(value as string) || ""}
               onChangeText={(text) => updateResponse(field.name, text)}
               placeholder="Enter email"
-              placeholderTextColor={FORM_COLORS.mutedText}
+              placeholderTextColor={neutral.muted}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -425,7 +641,7 @@ export default function FormDetailScreen() {
               value={(value as string) || ""}
               onChangeText={(text) => updateResponse(field.name, text)}
               placeholder="Enter phone number"
-              placeholderTextColor={FORM_COLORS.mutedText}
+              placeholderTextColor={neutral.muted}
               keyboardType="phone-pad"
             />
           </View>
@@ -440,7 +656,7 @@ export default function FormDetailScreen() {
               value={(value as string) || ""}
               onChangeText={(text) => updateResponse(field.name, text)}
               placeholder={`Enter ${field.label.toLowerCase()}`}
-              placeholderTextColor={FORM_COLORS.mutedText}
+              placeholderTextColor={neutral.muted}
             />
           </View>
         );
@@ -450,7 +666,7 @@ export default function FormDetailScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={FORM_COLORS.primaryCTA} />
+        <ActivityIndicator size="large" color={semantic.success} />
       </View>
     );
   }
@@ -506,7 +722,7 @@ export default function FormDetailScreen() {
         <View style={styles.contentSheet}>
           <View style={styles.successContainer}>
             <View style={styles.successIcon}>
-              <Check size={48} color={FORM_COLORS.primaryCTA} />
+              <Check size={48} color={semantic.success} />
             </View>
             <Text style={styles.successTitle}>
               {existingSubmission ? "Response Updated!" : "Form Submitted!"}
@@ -582,7 +798,7 @@ export default function FormDetailScreen() {
               disabled={submitting}
             >
               {submitting ? (
-                <ActivityIndicator size="small" color={FORM_COLORS.primaryCTAText} />
+                <ActivityIndicator size="small" color="#ffffff" />
               ) : (
                 <Text style={styles.primaryButtonText}>
                   {existingSubmission ? "Update Response" : "Submit"}
@@ -595,249 +811,3 @@ export default function FormDetailScreen() {
     </View>
   );
 }
-
-const createStyles = (surfaceColor: string) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: APP_CHROME.gradientEnd,
-    },
-    headerGradient: {
-      paddingBottom: spacing.xs,
-    },
-    headerSafeArea: {},
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: surfaceColor,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: spacing.md,
-      paddingBottom: 40,
-    },
-    description: {
-      fontSize: fontSize.sm,
-      color: FORM_COLORS.secondaryText,
-      marginBottom: spacing.md,
-      lineHeight: 20,
-    },
-    infoBanner: {
-      backgroundColor: FORM_COLORS.infoBadge,
-      padding: spacing.md,
-      borderRadius: borderRadius.lg,
-      marginBottom: spacing.md,
-    },
-    infoBannerText: {
-      fontSize: fontSize.sm,
-      color: FORM_COLORS.infoText,
-    },
-    errorBanner: {
-      backgroundColor: FORM_COLORS.errorBackground,
-      padding: spacing.md,
-      borderRadius: borderRadius.lg,
-      marginBottom: spacing.md,
-    },
-    errorBannerText: {
-      fontSize: fontSize.sm,
-      color: FORM_COLORS.error,
-    },
-    fieldContainer: {
-      marginBottom: spacing.lg,
-    },
-    fieldLabel: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: FORM_COLORS.primaryText,
-      marginBottom: spacing.sm,
-    },
-    input: {
-      backgroundColor: FORM_COLORS.inputBackground,
-      borderWidth: 1,
-      borderColor: FORM_COLORS.inputBorder,
-      borderRadius: borderRadius.md,
-      padding: spacing.md,
-      fontSize: fontSize.base,
-      color: FORM_COLORS.primaryText,
-    },
-    inputText: {
-      fontSize: fontSize.base,
-      color: FORM_COLORS.primaryText,
-    },
-    inputPlaceholder: {
-      fontSize: fontSize.base,
-      color: FORM_COLORS.mutedText,
-    },
-    textArea: {
-      minHeight: 100,
-      textAlignVertical: "top",
-    },
-    optionsContainer: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: spacing.sm,
-    },
-    selectOption: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.lg,
-      borderWidth: 1,
-      borderColor: FORM_COLORS.inputBorder,
-      backgroundColor: FORM_COLORS.inputBackground,
-    },
-    selectOptionSelected: {
-      borderColor: FORM_COLORS.primaryCTA,
-      backgroundColor: FORM_COLORS.successBadge,
-    },
-    selectOptionText: {
-      fontSize: fontSize.sm,
-      color: FORM_COLORS.primaryText,
-    },
-    selectOptionTextSelected: {
-      color: FORM_COLORS.successText,
-      fontWeight: fontWeight.medium,
-    },
-    radioContainer: {
-      gap: spacing.sm,
-    },
-    radioOption: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      paddingVertical: spacing.xs,
-    },
-    radioSelected: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      borderWidth: 2,
-      borderColor: FORM_COLORS.primaryCTA,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    radioUnselected: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      borderWidth: 2,
-      borderColor: FORM_COLORS.inputBorder,
-    },
-    radioLabel: {
-      fontSize: fontSize.base,
-      color: FORM_COLORS.primaryText,
-    },
-    checkboxContainer: {
-      gap: spacing.sm,
-    },
-    checkboxOption: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      paddingVertical: spacing.xs,
-    },
-    checkboxLabel: {
-      fontSize: fontSize.base,
-      color: FORM_COLORS.primaryText,
-    },
-    buttonContainer: {
-      flexDirection: "row",
-      gap: spacing.md,
-      marginTop: spacing.lg,
-      paddingTop: spacing.lg,
-      borderTopWidth: 1,
-      borderTopColor: FORM_COLORS.border,
-    },
-    primaryButton: {
-      flex: 1,
-      backgroundColor: FORM_COLORS.primaryCTA,
-      paddingVertical: spacing.md,
-      borderRadius: borderRadius.md,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    primaryButtonText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: FORM_COLORS.primaryCTAText,
-    },
-    secondaryButton: {
-      flex: 1,
-      backgroundColor: FORM_COLORS.card,
-      paddingVertical: spacing.md,
-      borderRadius: borderRadius.md,
-      borderWidth: 1,
-      borderColor: FORM_COLORS.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    secondaryButtonText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.medium,
-      color: FORM_COLORS.secondaryText,
-    },
-    buttonDisabled: {
-      opacity: 0.6,
-    },
-    // Success state
-    successContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: spacing.lg,
-    },
-    successIcon: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: FORM_COLORS.successBadge,
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: spacing.lg,
-    },
-    successTitle: {
-      fontSize: fontSize.xl,
-      fontWeight: fontWeight.semibold,
-      color: FORM_COLORS.primaryText,
-      marginBottom: spacing.sm,
-    },
-    successText: {
-      fontSize: fontSize.base,
-      color: FORM_COLORS.secondaryText,
-      marginBottom: spacing.xl,
-    },
-    // Loading/Error states
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: 20,
-      backgroundColor: FORM_COLORS.background,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: FORM_COLORS.error,
-    },
-  });

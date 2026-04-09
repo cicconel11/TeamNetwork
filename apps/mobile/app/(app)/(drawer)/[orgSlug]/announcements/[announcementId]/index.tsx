@@ -26,29 +26,16 @@ import type { Announcement } from "@teammeet/types";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 
-const DETAIL_COLORS = {
-  background: "#ffffff",
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-  border: "#e2e8f0",
-  card: "#f8fafc",
-  pinnedBg: "#fef3c7",
-  pinnedText: "#b45309",
-  error: "#ef4444",
-  success: "#059669",
-};
-
 export default function AnnouncementDetailScreen() {
   const { announcementId } = useLocalSearchParams<{ announcementId: string }>();
   const { orgSlug, orgId } = useOrg();
   const router = useRouter();
   const { permissions } = useOrgRole();
   const { neutral, semantic } = useAppColorScheme();
-  const styles = useThemedStyles((n, _s) => ({
+  const styles = useThemedStyles((n, s) => ({
     container: {
       flex: 1,
-      backgroundColor: DETAIL_COLORS.background,
+      backgroundColor: n.surface,
     },
     centered: {
       justifyContent: "center" as const,
@@ -93,7 +80,7 @@ export default function AnnouncementDetailScreen() {
     pinnedBadge: {
       flexDirection: "row" as const,
       alignItems: "center" as const,
-      backgroundColor: DETAIL_COLORS.pinnedBg,
+      backgroundColor: s.warningLight,
       paddingHorizontal: SPACING.sm,
       paddingVertical: SPACING.xs,
       borderRadius: RADIUS.sm,
@@ -102,7 +89,7 @@ export default function AnnouncementDetailScreen() {
     pinnedText: {
       ...TYPOGRAPHY.overline,
       fontSize: 10,
-      color: DETAIL_COLORS.pinnedText,
+      color: s.warningDark,
     },
     draftBadge: {
       backgroundColor: n.divider,
@@ -113,49 +100,49 @@ export default function AnnouncementDetailScreen() {
     draftText: {
       ...TYPOGRAPHY.overline,
       fontSize: 10,
-      color: DETAIL_COLORS.secondaryText,
+      color: n.secondary,
     },
     title: {
       ...TYPOGRAPHY.headlineMedium,
-      color: DETAIL_COLORS.primaryText,
+      color: n.foreground,
       marginBottom: SPACING.xs,
     },
     date: {
       ...TYPOGRAPHY.caption,
-      color: DETAIL_COLORS.mutedText,
+      color: n.muted,
       marginBottom: SPACING.lg,
     },
     bodyCard: {
-      backgroundColor: DETAIL_COLORS.card,
+      backgroundColor: n.background,
       borderRadius: RADIUS.lg,
       padding: SPACING.md,
       borderWidth: 1,
-      borderColor: DETAIL_COLORS.border,
+      borderColor: n.border,
       ...SHADOWS.sm,
     },
     bodyText: {
       ...TYPOGRAPHY.bodyLarge,
-      color: DETAIL_COLORS.primaryText,
+      color: n.foreground,
       lineHeight: 26,
     },
     metaSection: {
       marginTop: SPACING.lg,
       paddingTop: SPACING.md,
       borderTopWidth: 1,
-      borderTopColor: DETAIL_COLORS.border,
+      borderTopColor: n.border,
     },
     metaLabel: {
       ...TYPOGRAPHY.overline,
-      color: DETAIL_COLORS.mutedText,
+      color: n.muted,
       marginBottom: SPACING.xs,
     },
     metaValue: {
       ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.secondaryText,
+      color: n.secondary,
     },
     errorText: {
       ...TYPOGRAPHY.bodyMedium,
-      color: DETAIL_COLORS.error,
+      color: s.error,
       textAlign: "center" as const,
       marginBottom: SPACING.md,
     },
@@ -163,7 +150,7 @@ export default function AnnouncementDetailScreen() {
       paddingVertical: SPACING.sm,
       paddingHorizontal: SPACING.md,
       borderRadius: RADIUS.md,
-      backgroundColor: DETAIL_COLORS.success,
+      backgroundColor: s.success,
     },
     backButtonAltText: {
       ...TYPOGRAPHY.labelMedium,
@@ -175,7 +162,7 @@ export default function AnnouncementDetailScreen() {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
+      backgroundColor: n.surface + "cc",
       justifyContent: "center" as const,
       alignItems: "center" as const,
     },
@@ -377,7 +364,7 @@ export default function AnnouncementDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
+        <ActivityIndicator size="large" color={semantic.success} />
       </View>
     );
   }
@@ -427,7 +414,7 @@ export default function AnnouncementDetailScreen() {
         <View style={styles.statusRow}>
           {announcement.is_pinned && (
             <View style={styles.pinnedBadge}>
-              <Pin size={12} color={DETAIL_COLORS.pinnedText} />
+              <Pin size={12} color={semantic.warningDark} />
               <Text style={styles.pinnedText}>PINNED</Text>
             </View>
           )}
@@ -477,7 +464,7 @@ export default function AnnouncementDetailScreen() {
       {/* Loading overlay */}
       {isUpdating && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={DETAIL_COLORS.success} />
+          <ActivityIndicator size="large" color={semantic.success} />
         </View>
       )}
     </View>

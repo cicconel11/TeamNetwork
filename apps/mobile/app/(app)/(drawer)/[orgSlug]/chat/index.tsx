@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   FlatList,
   Pressable,
   RefreshControl,
-  StyleSheet,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,21 +21,11 @@ import { ErrorState } from "@/components/ui";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { APP_CHROME } from "@/lib/chrome";
 import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { SHADOWS } from "@/lib/design-tokens";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
 import type { Tables } from "@teammeet/types";
-
-const CHAT_COLORS = {
-  background: "#ffffff",
-  card: "#ffffff",
-  border: "#e2e8f0",
-  title: "#0f172a",
-  subtitle: "#64748b",
-  muted: "#94a3b8",
-  accent: "#059669",
-  pending: "#f59e0b",
-  emptyIcon: "#cbd5f5",
-};
 
 type ChatGroupWithMembers = ChatGroup & {
   chat_group_members: Pick<ChatGroupMember, "id" | "user_id" | "role">[];
@@ -52,9 +41,271 @@ export default function ChatGroupsScreen() {
   const { isAdmin } = useOrgRole();
   const router = useRouter();
   const navigation = useNavigation();
-  const { neutral } = useAppColorScheme();
+  const { neutral, semantic } = useAppColorScheme();
   const { isOffline } = useNetwork();
-  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    headerGradient: {
+      paddingBottom: spacing.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      minHeight: 40,
+      gap: spacing.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.bold,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: fontSize.lg,
+      fontWeight: fontWeight.semibold,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      fontSize: fontSize.xs,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    segmentedControl: {
+      flexDirection: "row" as const,
+      backgroundColor: n.background,
+      marginHorizontal: spacing.md,
+      marginVertical: spacing.md,
+      padding: 2,
+      borderRadius: borderRadius.xl,
+      gap: 2,
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: borderRadius.lg,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    segmentActive: {
+      backgroundColor: n.surface,
+      ...SHADOWS.sm,
+    },
+    segmentText: {
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.normal,
+      color: n.muted,
+    },
+    segmentTextActive: {
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    listContent: {
+      padding: spacing.md,
+      gap: 0,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    skeletonContainer: {
+      padding: spacing.md,
+    },
+    row: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      gap: spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: n.border,
+    },
+    rowPressed: {
+      backgroundColor: n.background,
+    },
+    rowContent: {
+      flex: 1,
+      gap: 4,
+    },
+    rowHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: spacing.xs,
+    },
+    rowTitle: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+      flex: 1,
+    },
+    defaultBadge: {
+      backgroundColor: "rgba(5, 150, 105, 0.12)",
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: borderRadius.sm,
+    },
+    defaultBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: s.success,
+    },
+    rowSubtitle: {
+      fontSize: fontSize.sm,
+      color: n.secondary,
+    },
+    threadIconContainer: {
+      width: 24,
+      height: 24,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    replyCount: {
+      fontSize: fontSize.xs,
+      color: n.muted,
+      minWidth: 70,
+      textAlign: "right" as const,
+    },
+    pendingBadge: {
+      backgroundColor: s.warningLight,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+      borderRadius: borderRadius.sm,
+      minWidth: 40,
+      alignItems: "center" as const,
+    },
+    pendingBadgeText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.medium,
+      color: s.warning,
+    },
+    errorTitle: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    errorText: {
+      fontSize: fontSize.sm,
+      color: n.secondary,
+      textAlign: "center" as const,
+    },
+    retryButton: {
+      backgroundColor: s.success,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: borderRadius.md,
+    },
+    retryButtonText: {
+      color: "#ffffff",
+      fontSize: fontSize.sm,
+      fontWeight: fontWeight.semibold,
+    },
+    inlineErrorBanner: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      justifyContent: "space-between" as const,
+      gap: spacing.sm,
+      marginHorizontal: spacing.md,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      backgroundColor: s.error + "14",
+      borderWidth: 1,
+      borderColor: s.error + "2e",
+      borderRadius: borderRadius.md,
+    },
+    inlineErrorText: {
+      flex: 1,
+      fontSize: fontSize.xs,
+      color: n.foreground,
+    },
+    inlineRetryButton: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 6,
+      borderRadius: borderRadius.sm,
+      backgroundColor: n.surface,
+    },
+    inlineRetryButtonPressed: {
+      opacity: 0.7,
+    },
+    inlineRetryText: {
+      fontSize: fontSize.xs,
+      fontWeight: fontWeight.semibold,
+      color: s.error,
+    },
+    emptyState: {
+      alignItems: "center" as const,
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.md,
+      gap: spacing.sm,
+    },
+    emptyIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      backgroundColor: n.background,
+    },
+    emptyTitle: {
+      fontSize: fontSize.base,
+      fontWeight: fontWeight.semibold,
+      color: n.foreground,
+    },
+    emptyText: {
+      fontSize: fontSize.sm,
+      color: n.secondary,
+      textAlign: "center" as const,
+    },
+    fab: {
+      position: "absolute" as const,
+      bottom: spacing.xl,
+      right: spacing.xl,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      shadowColor: s.success,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+  }));
   const isMountedRef = useRef(true);
 
   // Safe drawer toggle
@@ -354,10 +605,10 @@ export default function ChatGroupsScreen() {
           accessibilityLabel={`Open thread: ${item.title}`}
         >
           <View style={styles.threadIconContainer}>
-            {item.is_pinned && <Pin size={14} color={CHAT_COLORS.pending} />}
-            {item.is_locked && <Lock size={14} color={CHAT_COLORS.muted} />}
+            {item.is_pinned && <Pin size={14} color={semantic.warning} />}
+            {item.is_locked && <Lock size={14} color={neutral.muted} />}
             {!item.is_pinned && !item.is_locked && (
-              <MessageCircle size={14} color={CHAT_COLORS.muted} />
+              <MessageCircle size={14} color={neutral.muted} />
             )}
           </View>
           <View style={styles.rowContent}>
@@ -573,7 +824,7 @@ export default function ChatGroupsScreen() {
                 ListEmptyComponent={
                   <View style={styles.emptyState}>
                     <View style={styles.emptyIcon}>
-                      <MessageCircle size={28} color={CHAT_COLORS.muted} />
+                      <MessageCircle size={28} color={neutral.muted} />
                     </View>
                     <Text style={styles.emptyTitle}>No channels yet</Text>
                     <Text style={styles.emptyText}>
@@ -598,7 +849,7 @@ export default function ChatGroupsScreen() {
                 ListEmptyComponent={
                   <View style={styles.emptyState}>
                     <View style={styles.emptyIcon}>
-                      <MessageCircle size={28} color={CHAT_COLORS.muted} />
+                      <MessageCircle size={28} color={neutral.muted} />
                     </View>
                     <Text style={styles.emptyTitle}>No threads yet</Text>
                     <Text style={styles.emptyText}>
@@ -647,265 +898,3 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const createStyles = (surfaceColor: string) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: CHAT_COLORS.background,
-    },
-    headerGradient: {
-      paddingBottom: spacing.md,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      fontSize: fontSize.xs,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    segmentedControl: {
-      flexDirection: "row",
-      backgroundColor: "#f1f5f9",
-      marginHorizontal: spacing.md,
-      marginVertical: spacing.md,
-      padding: 2,
-      borderRadius: borderRadius.xl,
-      gap: 2,
-    },
-    segment: {
-      flex: 1,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-      borderRadius: borderRadius.lg,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    segmentActive: {
-      backgroundColor: "#ffffff",
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-    },
-    segmentText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.normal,
-      color: CHAT_COLORS.muted,
-    },
-    segmentTextActive: {
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: surfaceColor,
-    },
-    listContent: {
-      padding: spacing.md,
-      gap: 0,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    skeletonContainer: {
-      padding: spacing.md,
-    },
-    row: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingVertical: spacing.md,
-      paddingHorizontal: spacing.md,
-      gap: spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: CHAT_COLORS.border,
-    },
-    rowPressed: {
-      backgroundColor: "#f8fafc",
-    },
-    rowContent: {
-      flex: 1,
-      gap: 4,
-    },
-    rowHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-    },
-    rowTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-      flex: 1,
-    },
-    defaultBadge: {
-      backgroundColor: "rgba(5, 150, 105, 0.12)",
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: borderRadius.sm,
-    },
-    defaultBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: CHAT_COLORS.accent,
-    },
-    rowSubtitle: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-    },
-    threadIconContainer: {
-      width: 24,
-      height: 24,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    replyCount: {
-      fontSize: fontSize.xs,
-      color: CHAT_COLORS.muted,
-      minWidth: 70,
-      textAlign: "right",
-    },
-    pendingBadge: {
-      backgroundColor: "rgba(245, 158, 11, 0.15)",
-      paddingVertical: 4,
-      paddingHorizontal: 8,
-      borderRadius: borderRadius.sm,
-      minWidth: 40,
-      alignItems: "center",
-    },
-    pendingBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: CHAT_COLORS.pending,
-    },
-    errorTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-      textAlign: "center",
-    },
-    retryButton: {
-      backgroundColor: CHAT_COLORS.accent,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-    },
-    retryButtonText: {
-      color: "#ffffff",
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-    },
-    inlineErrorBanner: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-      marginHorizontal: spacing.md,
-      marginTop: spacing.md,
-      marginBottom: spacing.xs,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      backgroundColor: "rgba(220, 38, 38, 0.08)",
-      borderWidth: 1,
-      borderColor: "rgba(220, 38, 38, 0.18)",
-      borderRadius: borderRadius.md,
-    },
-    inlineErrorText: {
-      flex: 1,
-      fontSize: fontSize.xs,
-      color: CHAT_COLORS.title,
-    },
-    inlineRetryButton: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 6,
-      borderRadius: borderRadius.sm,
-      backgroundColor: "#ffffff",
-    },
-    inlineRetryButtonPressed: {
-      opacity: 0.7,
-    },
-    inlineRetryText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.semibold,
-      color: "#dc2626",
-    },
-    emptyState: {
-      alignItems: "center",
-      paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.md,
-      gap: spacing.sm,
-    },
-    emptyIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#f1f5f9",
-    },
-    emptyTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-    },
-    emptyText: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-      textAlign: "center",
-    },
-    fab: {
-      position: "absolute",
-      bottom: spacing.xl,
-      right: spacing.xl,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: CHAT_COLORS.accent,
-      alignItems: "center",
-      justifyContent: "center",
-      boxShadow: "0 2px 8px rgba(5, 150, 105, 0.3)",
-    },
-  });
