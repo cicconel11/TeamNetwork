@@ -210,104 +210,113 @@ test("MessageInput renders generic uploading copy for schedule files", () => {
   assert.match(html, /Uploading schedule file\.\.\./);
 });
 
-test("AIPanel uses generic schedule file defaults and preserves uploaded mime types", () => {
-  const source = readSource("src/components/ai-assistant/AIPanel.tsx");
+test("AI panel uses generic schedule file defaults and shares capability disclosure with the message list", () => {
+  const panelSource = readSource("src/components/ai-assistant/AIPanel.tsx");
+  const messageListSource = readSource("src/components/ai-assistant/MessageList.tsx");
 
   assert.match(
-    source,
+    panelSource,
     /const DEFAULT_SCHEDULE_FILE_PROMPT =\s*"Please extract this schedule file and prepare events for confirmation\.";/,
     "AIPanel should use the generic schedule-file prompt"
   );
   assert.match(
-    source,
+    panelSource,
     /mimeType: data\.mimeType,/,
     "AIPanel should preserve the uploaded mimeType returned by the server"
   );
-
-  assert.match(source, /What I can do here/);
-  assert.match(source, /getAssistantCapabilitySnapshot/);
   assert.match(
-    source,
-    /Not yet: \{item\}\./,
-    "AIPanel should show explicit unsupported-capability copy"
+    panelSource,
+    /getAssistantCapabilitySnapshot/,
+    "AIPanel should source capability metadata from the shared helper"
   );
   assert.match(
-    source,
+    panelSource,
+    /capabilitySnapshot=\{capabilitySnapshot\}/,
+    "AIPanel should pass capability metadata into the message list"
+  );
+  assert.match(messageListSource, /What I can do here/);
+  assert.match(
+    messageListSource,
+    /Not yet: \{item\}\./,
+    "MessageList should show explicit unsupported-capability copy"
+  );
+  assert.match(
+    panelSource,
     /setAttachmentError\(data\.error \|\| "Failed to upload schedule file\."\);/,
     "AIPanel should use generic upload fallback copy"
   );
   assert.match(
-    source,
+    panelSource,
     /error instanceof Error \? error\.message : "Failed to upload schedule file\."/,
     "AIPanel should keep generic upload failure copy in the catch path"
   );
   assert.match(
-    source,
+    panelSource,
     /fetch\(`\/api\/ai\/\$\{orgId\}\/upload-schedule`, \{\s*method: "DELETE"/,
     "AIPanel should delete pending schedule uploads when attachments are cleared"
   );
   assert.match(
-    source,
+    panelSource,
     /clearAttachment\(\{ deleteRemote: false \}\);/,
     "AIPanel should leave extractor-owned attachments alone after a successful send"
   );
   assert.match(
-    source,
+    panelSource,
     /function getPendingActionErrorMessage\(data: \{ error\?: unknown; code\?: unknown \}\): string \{/,
     "AIPanel should centralize pending-action error handling"
   );
   assert.match(
-    source,
+    panelSource,
     /data\.code === "event_type_unavailable"/,
     "AIPanel should detect structured class event type drift failures"
   );
   assert.match(
-    source,
+    panelSource,
     /This class could not be added because the calendar database is missing the Class event type\./,
     "AIPanel should surface a specific migration hint for class confirm failures"
   );
   assert.match(
-    source,
+    panelSource,
     /getPendingActionErrorMessage\(data\)/,
     "AIPanel should use the shared pending-action error formatter during confirm failures"
   );
   assert.match(
-    source,
+    panelSource,
     /const router = useRouter\(\);/,
     "AIPanel should capture the Next router so confirmation can refresh server-rendered calendar views"
   );
   assert.match(
-    source,
+    panelSource,
     /router\.refresh\(\);/,
     "AIPanel should refresh the current route after confirming a pending action"
   );
   assert.match(
-    source,
+    panelSource,
     /for \(const id of ids\) \{\s*await handleConfirmPendingAction\(id, \{ reloadCollections: false, refreshCalendar: false \}\);/s,
     "AIPanel should confirm pending batches sequentially and suppress per-action refreshes"
   );
   assert.doesNotMatch(
-    source,
+    panelSource,
     /Promise\.allSettled\(ids\.map\(\(id\) => handleConfirmPendingAction\(id\)\)\)/,
     "AIPanel should not confirm all pending actions in one parallel burst"
   );
   assert.match(
-    source,
+    panelSource,
     /import \{ prepareImageUpload \} from "@\/lib\/media\/image-preparation";/,
     "AIPanel should reuse the existing browser image preparation pipeline for schedule photos"
   );
   assert.match(
-    source,
+    panelSource,
     /const normalizedFile = await normalizeScheduleUploadFile\(file\);/,
     "AIPanel should normalize schedule image uploads before posting them to the server"
   );
   assert.match(
-    source,
+    panelSource,
     /formData\.set\("file", normalizedFile\);/,
     "AIPanel should upload the normalized schedule image file"
   );
   assert.match(
-    source,
+    panelSource,
     /That schedule image is too large to process\. Please upload an image under 2MB or use a PDF instead\./,
     "AIPanel should fail fast when a normalized schedule image still exceeds the extractor budget"
   );
