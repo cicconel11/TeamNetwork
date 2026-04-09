@@ -92,6 +92,7 @@ const ACTION_KEYWORDS: readonly string[] = [
   "schedule", "change", "set", "assign", "cancel", "approve", "reject",
   "make", "edit", "move", "rename", "archive", "unarchive", "restore",
   "enable", "disable", "reset", "upload", "post", "publish",
+  "write", "compose", "draft", "reply", "respond", "comment",
 ];
 
 // Keywords that map a message to general org content tools even when no surface-specific keyword fires
