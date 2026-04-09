@@ -138,13 +138,13 @@ const CONNECTION_PROMPT_PATTERN =
 const DIRECT_NAVIGATION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:go\s+to|take\s+me\s+to|navigate\s+to|open|where\s+is|where\s+(?:can|do)\s+i\s+find|find\s+the\s+page|link\s+to)(?!\w)|(?<!\w)show\s+me\b[\s\S]{0,80}\b(?:page|screen|tab|settings?)\b)/i;
 const CREATE_ANNOUNCEMENT_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:create|add|post|publish|make|send|draft)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft)(?!\w))/i;
+  /(?:(?<!\w)(?:create|add|post|publish|make|send|draft|write|compose)(?!\w)[\s\S]{0,120}\b(?:announcement|update|news post|bulletin)(?!\w)|(?<!\w)(?:announcement|update|news post|bulletin)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|send|draft|write|compose)(?!\w))/i;
 const CREATE_JOB_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|open)(?!\w)[\s\S]{0,120}\b(?:job|job posting|opening|role|position)(?!\w)|(?<!\w)(?:job|job posting|opening|role|position)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|open)(?!\w))/i;
 const CREATE_DISCUSSION_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|post|publish|make|start|open)(?!\w)[\s\S]{0,120}\b(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)|(?<!\w)(?:discussion|discussion thread|thread|forum thread|chat|group chat|conversation)(?!\w)[\s\S]{0,80}\b(?:create|add|post|publish|make|start|open)(?!\w))/i;
 const DISCUSSION_REPLY_PROMPT_PATTERN =
-  /(?:(?<!\w)(?:reply|respond|answer|comment)(?!\w)[\s\S]{0,120}\b(?:discussion|thread|post|message|conversation)(?!\w)|(?<!\w)(?:discussion|thread|post|message|conversation)(?!\w)[\s\S]{0,80}\b(?:reply|respond|answer|comment)(?!\w))/i;
+  /(?:(?<!\w)(?:reply|respond|answer|comment|draft|write)(?!\w)[\s\S]{0,120}\b(?:discussion reply|reply|response|discussion|thread|post|message|conversation)(?!\w)|(?<!\w)(?:discussion reply|reply|response|discussion|thread|post|message|conversation)(?!\w)[\s\S]{0,80}\b(?:reply|respond|answer|comment|draft|write)(?!\w))/i;
 const CREATE_EVENT_PROMPT_PATTERN =
   /(?:(?<!\w)(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w)[\s\S]{0,120}\b(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)|(?<!\w)(?:event|calendar event|meeting|fundraiser|social|philanthropy event)(?!\w)[\s\S]{0,80}\b(?:create|add|schedule|plan|make|organize|set\s+up)(?!\w))/i;
 const EXPLICIT_EVENT_DRAFT_SWITCH_PATTERN =
@@ -168,6 +168,30 @@ const PARENT_LIST_PROMPT_PATTERN =
 const PHILANTHROPY_EVENTS_PROMPT_PATTERN =
   /(?<!\w)(?:philanthropy\s+events?|service\s+events?|volunteer\s+events?)(?!\w)/i;
 const HTTPS_URL_PATTERN = /https?:\/\//i;
+const ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN =
+  /\b(?:title|body|audience|pin(?:ned)?|notify|notification|all members|active members|alumni|parents|individuals)\b/i;
+const DISCUSSION_REPLY_FALLBACK_PATTERN =
+  /\b(?:reply|respond|response|comment|answer)\b/i;
+
+function getCurrentPathFeatureSegment(pathname: string | undefined): string | null {
+  if (!pathname) {
+    return null;
+  }
+
+  return pathname.match(/^\/[^/]+\/([^/?#]+)/)?.[1] ?? null;
+}
+
+function extractCurrentDiscussionThreadRouteId(pathname: string | undefined): string | null {
+  if (!pathname) {
+    return null;
+  }
+
+  const match =
+    pathname.match(/^\/[^/]+\/messages\/threads\/([^/?#]+)(?:\/|$)/) ??
+    pathname.match(/^\/[^/]+\/discussions\/([^/?#]+)(?:\/|$)/);
+
+  return match?.[1] ?? null;
+}
 
 function looksLikeStructuredJobDraft(message: string): boolean {
   const hasJobContext =
@@ -1145,7 +1169,8 @@ function getPass1Tools(
   effectiveSurface: CacheSurface,
   toolPolicy: TurnExecutionPolicy["toolPolicy"],
   intentType: TurnExecutionPolicy["intentType"],
-  attachment?: ChatAttachment
+  attachment?: ChatAttachment,
+  currentPath?: string
 ) {
   if (toolPolicy !== "surface_read_tools") {
     return undefined;
@@ -1231,6 +1256,25 @@ function getPass1Tools(
     if (MEMBER_ROSTER_PROMPT_PATTERN.test(message)) {
       return [AI_TOOL_MAP.list_members];
     }
+  }
+
+  const currentFeatureSegment = getCurrentPathFeatureSegment(currentPath);
+  if (
+    currentFeatureSegment === "announcements" &&
+    ANNOUNCEMENT_DETAIL_FALLBACK_PATTERN.test(message) &&
+    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
+    !message.trim().endsWith("?")
+  ) {
+    return [AI_TOOL_MAP.prepare_announcement];
+  }
+
+  if (
+    extractCurrentDiscussionThreadRouteId(currentPath) &&
+    DISCUSSION_REPLY_FALLBACK_PATTERN.test(message) &&
+    !DIRECT_QUERY_START_PATTERN.test(message.trim()) &&
+    !message.trim().endsWith("?")
+  ) {
+    return [AI_TOOL_MAP.prepare_discussion_reply];
   }
 
   return PASS1_TOOL_NAMES[effectiveSurface].map((toolName) => AI_TOOL_MAP[toolName]);
@@ -2143,6 +2187,49 @@ function normalizeBooleanFlag(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+function extractAnnouncementDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const title = getNonEmptyString(fields.title);
+    const body = getNonEmptyString(fields.body);
+    const audience = getNonEmptyString(fields.audience);
+    const isPinned = normalizeBooleanFlag(
+      getNonEmptyString(fields["pin it"] ?? fields["is pinned"] ?? fields.pinned ?? fields.pin) ?? undefined
+    );
+    const sendNotification = normalizeBooleanFlag(
+      getNonEmptyString(
+        fields["send notification"] ??
+          fields.notification ??
+          fields.notify ??
+          fields.email
+      ) ?? undefined
+    );
+
+    if (title) draft.title = title;
+    if (body) draft.body = body;
+    if (
+      audience === "all" ||
+      audience === "members" ||
+      audience === "active_members" ||
+      audience === "alumni" ||
+      audience === "parents" ||
+      audience === "individuals"
+    ) {
+      draft.audience = audience;
+    }
+    if (typeof isPinned === "boolean") draft.is_pinned = isPinned;
+    if (typeof sendNotification === "boolean") draft.send_notification = sendNotification;
+  }
+
+  return draft;
+}
+
 function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Record<string, unknown> {
   const draft: Record<string, unknown> = {};
 
@@ -2160,6 +2247,48 @@ function extractDiscussionDraftFromHistory(messages: DraftHistoryMessage[]): Rec
     }
     if (body) {
       draft.body = body;
+    }
+  }
+
+  return draft;
+}
+
+function extractDiscussionReplyDraftFromHistory(
+  messages: DraftHistoryMessage[]
+): Record<string, unknown> {
+  const draft: Record<string, unknown> = {};
+
+  for (const message of messages) {
+    if (message.role !== "user") {
+      continue;
+    }
+
+    const fields = extractStructuredFieldMap(message.content);
+    const discussionThreadId = getNonEmptyString(
+      fields.discussion_thread_id ?? fields["discussion thread id"] ?? fields["thread id"]
+    );
+    const threadTitle = getNonEmptyString(fields.thread_title ?? fields["thread title"]);
+    const body = getNonEmptyString(fields.body);
+
+    if (discussionThreadId) {
+      draft.discussion_thread_id = discussionThreadId;
+    }
+    if (threadTitle) {
+      draft.thread_title = threadTitle;
+    }
+    if (body) {
+      draft.body = body;
+      continue;
+    }
+
+    const trimmed = message.content.trim();
+    if (
+      trimmed.length > 0 &&
+      !trimmed.endsWith("?") &&
+      !DISCUSSION_REPLY_PROMPT_PATTERN.test(trimmed) &&
+      !CREATE_DISCUSSION_PROMPT_PATTERN.test(trimmed)
+    ) {
+      draft.body = trimmed;
     }
   }
 
@@ -2236,6 +2365,12 @@ function extractJobDraftFromHistory(messages: DraftHistoryMessage[]): Record<str
 
 function inferDraftTypeFromMessage(message: DraftHistoryMessage): DraftSessionType | null {
   if (message.role === "user") {
+    if (CREATE_ANNOUNCEMENT_PROMPT_PATTERN.test(message.content)) {
+      return "create_announcement";
+    }
+    if (DISCUSSION_REPLY_PROMPT_PATTERN.test(message.content)) {
+      return "create_discussion_reply";
+    }
     if (CREATE_JOB_PROMPT_PATTERN.test(message.content) || looksLikeStructuredJobDraft(message.content)) {
       return "create_job_posting";
     }
@@ -2284,8 +2419,17 @@ function inferDraftSessionFromHistory(input: {
 
     switch (draftType) {
       case "create_announcement":
+        draftPayload = extractAnnouncementDraftFromHistory(relevantMessages);
+        missingFields = (["title"] as const).filter(
+          (field) => getNonEmptyString(draftPayload[field]) == null
+        );
+        break;
       case "create_discussion_reply":
-        continue;
+        draftPayload = extractDiscussionReplyDraftFromHistory(relevantMessages);
+        missingFields = (["body"] as const).filter(
+          (field) => getNonEmptyString(draftPayload[field]) == null
+        );
+        break;
       case "create_job_posting":
         draftPayload = extractJobDraftFromHistory(relevantMessages);
         missingFields = [
@@ -2364,6 +2508,62 @@ function buildDraftSessionContextMessage(
   }
 
   return lines.length > 1 ? lines.join("\n") : null;
+}
+
+interface CurrentDiscussionThreadContext {
+  discussionThreadId: string;
+  threadTitle: string | null;
+}
+
+type DiscussionThreadLookupQuery = {
+  eq(column: string, value: unknown): DiscussionThreadLookupQuery;
+  is?(column: string, value: unknown): DiscussionThreadLookupQuery;
+  maybeSingle(): Promise<{ data: unknown; error: unknown }>;
+};
+
+async function resolveCurrentDiscussionThreadContext(
+  supabase: {
+    from(table: "discussion_threads"): {
+      select(columns: string): {
+        eq(column: string, value: unknown): DiscussionThreadLookupQuery;
+      };
+    };
+  },
+  input: {
+    organizationId: string;
+    currentPath?: string;
+  }
+): Promise<CurrentDiscussionThreadContext | null> {
+  const routeThreadId = extractCurrentDiscussionThreadRouteId(input.currentPath);
+  if (!routeThreadId) {
+    return null;
+  }
+
+  const baseQuery = supabase
+    .from("discussion_threads")
+    .select("id, title")
+    .eq("id", routeThreadId)
+    .eq("organization_id", input.organizationId) as DiscussionThreadLookupQuery;
+
+  const query =
+    typeof baseQuery.is === "function"
+      ? baseQuery.is("deleted_at", null)
+      : baseQuery;
+
+  const { data, error } = await query.maybeSingle();
+  if (error) {
+    throw new Error("Failed to load current discussion thread context");
+  }
+
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  return {
+    discussionThreadId:
+      getNonEmptyString((data as { id?: unknown }).id) ?? routeThreadId,
+    threadTitle: getNonEmptyString((data as { title?: unknown }).title),
+  };
 }
 
 function shouldContinueDraftSession(
@@ -2504,6 +2704,7 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
     let usesSharedStaticContext = false;
     let pass1Tools: ReturnType<typeof getPass1Tools>;
     let activeDraftSession: DraftSessionRecord | null = null;
+    let currentDiscussionThreadContext: CurrentDiscussionThreadContext | null = null;
     let activePendingEventActions: PendingEventActionRecord[] = [];
     let pendingEventRevisionAnalysis: PendingEventRevisionAnalysis = { kind: "none" };
     let cacheStatus: CacheStatus;
@@ -2577,7 +2778,8 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
           effectiveSurface,
           executionPolicy.toolPolicy,
           executionPolicy.intentType,
-          attachment
+          attachment,
+          currentPath
         );
       });
     } catch (err) {
@@ -2769,6 +2971,27 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
       !usesSharedStaticContext &&
       executionPolicy.retrieval.reason === "tool_only_structured_query" &&
       isToolFirstEligible(pass1Tools);
+
+    if (extractCurrentDiscussionThreadRouteId(currentPath)) {
+      try {
+        currentDiscussionThreadContext = await resolveCurrentDiscussionThreadContext(
+          ctx.supabase as any,
+          {
+            organizationId: ctx.orgId,
+            currentPath,
+          }
+        );
+      } catch (error) {
+        aiLog("error", "ai-chat", "current discussion thread resolution failed", requestLogContext, {
+          error,
+          currentPath,
+        });
+        return NextResponse.json(
+          { error: "Failed to resolve the current discussion thread" },
+          { status: 500, headers: rateLimit.headers }
+        );
+      }
+    }
 
     // 5. Abandoned stream cleanup (5-min threshold)
     if (existingThreadId) {
@@ -3808,6 +4031,22 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
                 activeDraftSession.draft_payload as Record<string, unknown>,
                 parsedArgs
               );
+            }
+
+            if (
+              toolEvent.name === "prepare_discussion_reply" &&
+              currentDiscussionThreadContext
+            ) {
+              if (getNonEmptyString(parsedArgs.discussion_thread_id) == null) {
+                parsedArgs.discussion_thread_id =
+                  currentDiscussionThreadContext.discussionThreadId;
+              }
+              if (
+                getNonEmptyString(parsedArgs.thread_title) == null &&
+                currentDiscussionThreadContext.threadTitle
+              ) {
+                parsedArgs.thread_title = currentDiscussionThreadContext.threadTitle;
+              }
             }
 
             auditToolCalls.push({ name: toolEvent.name, args: parsedArgs });
