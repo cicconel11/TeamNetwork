@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
-import { requireEnv } from "@/lib/env";
+import { requireEnvOrDummy } from "@/lib/env";
 import type { Database } from "@/types/database";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { markStripeEventProcessed, registerStripeEvent } from "@/lib/payments/stripe-events";
@@ -30,7 +30,8 @@ import {
   isOrgTrialMetadata,
   shouldProvisionOrgCheckoutOnCompletion,
 } from "@/lib/subscription/org-trial";
-const webhookSecret = requireEnv("STRIPE_WEBHOOK_SECRET");
+// See src/lib/stripe.ts for the SKIP_STRIPE_VALIDATION rationale.
+const webhookSecret = requireEnvOrDummy("STRIPE_WEBHOOK_SECRET", "whsec_ci_dummy");
 
 export type StripeWebhookDeps = {
   stripeClient?: typeof stripe;

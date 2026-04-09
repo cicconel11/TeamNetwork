@@ -1,28 +1,45 @@
 import Stripe from "stripe";
 import type { AlumniBucket, SubscriptionInterval } from "@/types/database";
-import { requireEnv } from "./env";
+import { requireEnv, requireEnvOrDummy } from "./env";
 
-const stripeSecretKey = requireEnv("STRIPE_SECRET_KEY");
-const stripePublishableKey = requireEnv("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY");
+// `SKIP_STRIPE_VALIDATION=true` lets `next build` run (and its
+// "Collect page data" pass load this module) without real Stripe
+// credentials. Only ever set in CI / local dev — see next.config.mjs.
+const skipStripeValidation = process.env.SKIP_STRIPE_VALIDATION === "true";
+
+// Dummy price IDs must start with "price_" to satisfy `validatePriceIds()`
+// below. They're only used when the skip flag is set.
+const DUMMY_PRICE_ID = "price_ci_dummy";
+const DUMMY_STRIPE_KEY = "sk_test_ci_dummy";
+
+const stripeSecretKey = requireEnvOrDummy("STRIPE_SECRET_KEY", DUMMY_STRIPE_KEY);
+const stripePublishableKey = requireEnvOrDummy("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY", "pk_test_ci_dummy");
+// Supabase keys are gated through the same skip flag because CI doesn't
+// wire SUPABASE_SERVICE_ROLE_KEY, and this module loads at build time.
 const supabaseUrlForAudit = requireEnv("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseAnonKeyForAudit = requireEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-const supabaseServiceRoleForAudit = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
+const supabaseServiceRoleForAudit = requireEnvOrDummy("SUPABASE_SERVICE_ROLE_KEY", "dummy_service_role");
 const priceEnv = {
-  STRIPE_PRICE_BASE_MONTHLY: requireEnv("STRIPE_PRICE_BASE_MONTHLY"),
-  STRIPE_PRICE_BASE_YEARLY: requireEnv("STRIPE_PRICE_BASE_YEARLY"),
-  STRIPE_PRICE_ALUMNI_0_250_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_0_250_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_0_250_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_0_250_YEARLY"),
-  STRIPE_PRICE_ALUMNI_251_500_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_251_500_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_251_500_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_251_500_YEARLY"),
-  STRIPE_PRICE_ALUMNI_501_1000_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_501_1000_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_501_1000_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_501_1000_YEARLY"),
-  STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_1001_2500_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_1001_2500_YEARLY"),
-  STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY: requireEnv("STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY"),
-  STRIPE_PRICE_ALUMNI_2500_5000_YEARLY: requireEnv("STRIPE_PRICE_ALUMNI_2500_5000_YEARLY"),
+  STRIPE_PRICE_BASE_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_BASE_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_BASE_YEARLY: requireEnvOrDummy("STRIPE_PRICE_BASE_YEARLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_0_250_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_0_250_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_0_250_YEARLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_0_250_YEARLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_251_500_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_251_500_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_251_500_YEARLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_251_500_YEARLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_501_1000_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_501_1000_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_501_1000_YEARLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_501_1000_YEARLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_1001_2500_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_1001_2500_YEARLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_1001_2500_YEARLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_2500_5000_MONTHLY", DUMMY_PRICE_ID),
+  STRIPE_PRICE_ALUMNI_2500_5000_YEARLY: requireEnvOrDummy("STRIPE_PRICE_ALUMNI_2500_5000_YEARLY", DUMMY_PRICE_ID),
 } as const;
 
 function validatePriceIds() {
+  // In skip mode, everything resolves to DUMMY_PRICE_ID, which already
+  // satisfies the format check below — but skip the check anyway so a
+  // future change that tightens validation doesn't accidentally require
+  // CI to supply real price IDs.
+  if (skipStripeValidation) return;
   Object.entries(priceEnv).forEach(([key, value]) => {
     if (!value || value.trim() === "") {
       throw new Error(`Invalid Stripe price id for ${key}: <empty>`);

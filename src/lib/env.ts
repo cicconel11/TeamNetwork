@@ -10,6 +10,25 @@ export function requireEnv(name: string): string {
 }
 
 /**
+ * Like `requireEnv`, but returns `dummy` when `SKIP_STRIPE_VALIDATION=true`.
+ *
+ * Use this only at module-load-time in Stripe integration code, so that
+ * `next build` can do its "Collect page data" pass in CI without real Stripe
+ * credentials. The flag is only ever set in local dev and CI — never in
+ * production — so the fallback branch is unreachable at runtime in prod.
+ *
+ * See `.github/workflows/ci.yml` and `next.config.mjs`'s `validateBuildEnv()`
+ * for the other half of the skip-Stripe-in-CI story.
+ */
+export function requireEnvOrDummy(name: string, dummy: string): string {
+  if (process.env.SKIP_STRIPE_VALIDATION === "true") {
+    const value = process.env[name];
+    return value && value.trim() !== "" ? value.trim() : dummy;
+  }
+  return requireEnv(name);
+}
+
+/**
  * Checks if hCaptcha is properly configured
  * Returns true if the secret key is set, false otherwise
  */
