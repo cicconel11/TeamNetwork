@@ -39,13 +39,21 @@ function createSupabaseStub() {
 
   function applyFilters(
     rows: Array<Record<string, unknown>>,
-    filters: Array<{ kind: "eq" | "in" | "lt" | "gt" | "is"; column: string; value: unknown }>
+    filters: Array<{ kind: "eq" | "in" | "lt" | "gt" | "is" | "ilike"; column: string; value: unknown }>
   ) {
     return rows.filter((row) =>
       filters.every((filter) => {
         const value = row[filter.column];
         if (filter.kind === "eq") return value === filter.value;
         if (filter.kind === "is") return value === filter.value;
+        if (filter.kind === "ilike") {
+          if (typeof value !== "string" || typeof filter.value !== "string") return false;
+          const escapedPattern = filter.value
+            .replace(/([.+^${}()|[\]\\])/g, "\\$1")
+            .replace(/%/g, ".*")
+            .replace(/_/g, ".");
+          return new RegExp(`^${escapedPattern}$`, "i").test(value);
+        }
         if (filter.kind === "in") {
           return Array.isArray(filter.value) && filter.value.includes(value);
         }
@@ -66,9 +74,10 @@ function createSupabaseStub() {
       op: "select" as "select" | "insert" | "update",
       inserted: null as Record<string, unknown> | null,
       updated: null as Record<string, unknown> | null,
-      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "gt" | "is"; column: string; value: unknown }>,
+      filters: [] as Array<{ kind: "eq" | "in" | "lt" | "gt" | "is" | "ilike"; column: string; value: unknown }>,
       orderBy: null as { column: string; ascending: boolean } | null,
       limitValue: null as number | null,
+      singleMode: null as "single" | "maybeSingle" | null,
     };
 
     const builder: Record<string, any> = {
@@ -92,6 +101,10 @@ function createSupabaseStub() {
       },
       is(column: string, value: unknown) {
         query.filters.push({ kind: "is", column, value });
+        return builder;
+      },
+      ilike(column: string, value: string) {
+        query.filters.push({ kind: "ilike", column, value });
         return builder;
       },
       in(column: string, value: unknown[]) {
@@ -168,15 +181,34 @@ function createSupabaseStub() {
           return { data: null, error: state.discussionThreadLookupError };
         }
 
-        const rows = applyFilters(state.discussionThreads, query.filters);
-        return { data: rows[0] ?? null, error: null };
+        let rows = applyFilters(state.discussionThreads, query.filters);
+        if (query.orderBy) {
+          rows = [...rows].sort((a, b) => {
+            const left = String(a[query.orderBy!.column] ?? "");
+            const right = String(b[query.orderBy!.column] ?? "");
+            return query.orderBy!.ascending ? left.localeCompare(right) : right.localeCompare(left);
+          });
+        }
+        if (typeof query.limitValue === "number") {
+          rows = rows.slice(0, query.limitValue);
+        }
+        return {
+          data: query.singleMode ? (rows[0] ?? null) : rows,
+          error: null,
+        };
       }
 
       return { data: null, error: null };
     };
 
-    builder.maybeSingle = async () => resolve();
-    builder.single = async () => resolve();
+    builder.maybeSingle = async () => {
+      query.singleMode = "maybeSingle";
+      return resolve();
+    };
+    builder.single = async () => {
+      query.singleMode = "single";
+      return resolve();
+    };
     builder.then = (onFulfilled: any, onRejected?: any) =>
       Promise.resolve(resolve()).then(onFulfilled, onRejected);
     return builder;
@@ -205,17 +237,18 @@ function buildDefaultDeps(overrides: Record<string, any> = {}) {
       userId: ADMIN_USER.id,
       role: "admin",
       supabase: supabaseStub,
-        serviceSupabase: {
-          rpc: async (_fn: string, params: any) => ({
-            data: {
-              thread_id:
+      serviceSupabase: {
+        from: supabaseStub.from,
+        rpc: async (_fn: string, params: any) => ({
+          data: {
+            thread_id:
               params.p_thread_id ??
               buildThreadId(++supabaseStub.state.threadCount),
-              user_msg_id: "user-1",
-            },
-            error: null,
-          }),
-        },
+            user_msg_id: "user-1",
+          },
+          error: null,
+        }),
+      },
     }),
     buildPromptContext: async (input: any) => ({
       systemPrompt: "System prompt",
@@ -1043,6 +1076,185 @@ test("thread-page discussion replies inject the current discussion thread contex
     body: "Thanks everyone for the feedback! We’ll post the final schedule tomorrow.",
   });
   assert.match(body, /I drafted the discussion reply/i);
+});
+
+test("named-thread discussion replies resolve a unique thread title outside route context", async () => {
+  supabaseStub.state.discussionThreads.push({
+    id: "44444444-4444-4444-8444-444444444444",
+    organization_id: ORG_ID,
+    title: "My new Thread - Check it out",
+    deleted_at: null,
+  });
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_reply",
+            argsJson:
+              '{"thread_title":"My new Thread - Check it out","body":"Thanks everyone for the feedback."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_reply should not require a second model pass");
+      },
+      executeToolCall: async (ctx: any, call: any) => {
+        executeToolCallCalls.push({ ctx, call });
+        return okToolResult({
+          state: "needs_confirmation",
+          draft: call.args,
+          pending_action: {
+            id: "pending-reply-title-123",
+            action_type: "create_discussion_reply",
+            payload: {
+              ...call.args,
+              orgSlug: "acme",
+            },
+            expires_at: "2099-01-01T00:00:00.000Z",
+            summary: {
+              title: "Review discussion reply",
+              description: "Confirm the drafted reply before it is posted to the discussion thread.",
+            },
+          },
+        });
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to My new Thread - Check it out saying thanks everyone for the feedback.",
+      surface: "general",
+      currentPath: "/acme/messages",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.deepEqual(executeToolCallCalls[0].call.args, {
+    discussion_thread_id: "44444444-4444-4444-8444-444444444444",
+    thread_title: "My new Thread - Check it out",
+    body: "Thanks everyone for the feedback.",
+  });
+  assert.match(body, /I drafted the discussion reply/i);
+});
+
+test("off-route discussion replies without a target ask for a thread title instead of a UUID", async () => {
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_reply",
+            argsJson: '{"body":"Thanks everyone for the feedback."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_reply should not require a second model pass");
+      },
+      executeToolCall: async () => {
+        throw new Error("prepare_discussion_reply should clarify before execution");
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to that thread thanking everyone for the feedback.",
+      surface: "general",
+      currentPath: "/acme/messages",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(executeToolCallCalls.length, 0);
+  assert.match(body, /thread title/i);
+  assert.doesNotMatch(body, /uuid/i);
+});
+
+test("named-thread discussion replies clarify when multiple thread titles match", async () => {
+  supabaseStub.state.discussionThreads.push(
+    {
+      id: "44444444-4444-4444-8444-444444444441",
+      organization_id: ORG_ID,
+      title: "Volunteer Logistics",
+      deleted_at: null,
+    },
+    {
+      id: "44444444-4444-4444-8444-444444444442",
+      organization_id: ORG_ID,
+      title: "Volunteer Coordination",
+      deleted_at: null,
+    }
+  );
+
+  POST = createChatPostHandler(
+    buildDefaultDeps({
+      composeResponse: async function* (options: any) {
+        composeResponseCalls.push(options);
+        if (options.tools && !options.toolResults) {
+          yield {
+            type: "tool_call_requested",
+            id: "call-1",
+            name: "prepare_discussion_reply",
+            argsJson: '{"thread_title":"Volunteer","body":"Thanks everyone."}',
+          };
+          return;
+        }
+
+        throw new Error("prepare_discussion_reply should not require a second model pass");
+      },
+      executeToolCall: async () => {
+        throw new Error("prepare_discussion_reply should clarify before execution");
+      },
+    })
+  );
+
+  const request = new Request(`http://localhost/api/ai/${ORG_ID}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Reply to Volunteer saying thanks everyone.",
+      surface: "general",
+      currentPath: "/acme/messages",
+      idempotencyKey: VALID_IDEMPOTENCY_KEY,
+    }),
+  });
+
+  const body = await (
+    await POST(request as any, {
+      params: Promise.resolve({ orgId: ORG_ID }),
+    })
+  ).text();
+
+  assert.equal(executeToolCallCalls.length, 0);
+  assert.match(body, /Volunteer Logistics/);
+  assert.match(body, /Volunteer Coordination/);
+  assert.doesNotMatch(body, /uuid/i);
 });
 
 test("thread-page discussion reply grounding fails closed on lookup errors", async () => {

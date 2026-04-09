@@ -302,6 +302,9 @@ interface PendingActionToolPayload {
   draft?: unknown;
   message?: unknown;
   source_warning?: unknown;
+  clarification_kind?: unknown;
+  candidate_thread_titles?: unknown;
+  requested_thread_title?: unknown;
 }
 
 type PendingEventActionRecord = PendingActionRecord<"create_event">;
@@ -1432,15 +1435,51 @@ function formatPrepareDiscussionReplyResponse(data: unknown): string | null {
 
   const payload = data as PendingActionToolPayload;
   if (payload.state === "missing_fields") {
+    const clarificationKind = getNonEmptyString(payload.clarification_kind);
+    const requestedThreadTitle = getNonEmptyString(payload.requested_thread_title);
+    const candidateThreadTitles = Array.isArray(payload.candidate_thread_titles)
+      ? payload.candidate_thread_titles.filter(
+          (title): title is string => typeof title === "string" && title.trim().length > 0
+        )
+      : [];
     const missingFields = Array.isArray(payload.missing_fields)
       ? payload.missing_fields.filter((field): field is string => typeof field === "string" && field.length > 0)
       : [];
 
-    if (missingFields.length === 0) {
-      return "I still need the reply body and the target discussion thread before I can prepare this reply.";
+    if (clarificationKind === "thread_title_required") {
+      return "I can draft this discussion reply, but I still need the thread title before I can prepare it.";
     }
 
-    return `I can draft this discussion reply, but I still need: ${missingFields.join(", ")}.`;
+    if (clarificationKind === "thread_title_ambiguous") {
+      const options =
+        candidateThreadTitles.length > 0
+          ? candidateThreadTitles.join("; ")
+          : "the matching discussion threads";
+      return `I found a few discussion threads that match${
+        requestedThreadTitle ? ` "${requestedThreadTitle}"` : ""
+      }. Tell me which one you mean: ${options}.`;
+    }
+
+    if (clarificationKind === "thread_title_not_found") {
+      if (requestedThreadTitle) {
+        return `I couldn't find a discussion thread titled "${requestedThreadTitle}". Share a more specific thread title and I'll use that.`;
+      }
+      return "I couldn't find that discussion thread. Share a more specific thread title and I'll use that.";
+    }
+
+    if (clarificationKind === "thread_lookup_failed") {
+      return "I couldn't look up that thread right now. Please try again.";
+    }
+
+    if (missingFields.length === 0) {
+      return "I still need the reply body and the target discussion thread title before I can prepare this reply.";
+    }
+
+    const displayFields = missingFields.map((field) =>
+      field === "discussion_thread_id" ? "thread title" : field
+    );
+
+    return `I can draft this discussion reply, but I still need: ${displayFields.join(", ")}.`;
   }
 
   if (payload.state === "needs_confirmation") {
@@ -2377,6 +2416,17 @@ interface CurrentDiscussionThreadContext {
   threadTitle: string | null;
 }
 
+type DiscussionReplyTargetResolution =
+  | {
+      kind: "resolved";
+      discussionThreadId: string;
+      threadTitle: string | null;
+    }
+  | { kind: "thread_title_required" }
+  | { kind: "ambiguous"; requestedThreadTitle: string; candidateThreadTitles: string[] }
+  | { kind: "not_found"; requestedThreadTitle: string }
+  | { kind: "lookup_error" };
+
 type DiscussionThreadLookupQuery = {
   eq(column: string, value: unknown): DiscussionThreadLookupQuery;
   is?(column: string, value: unknown): DiscussionThreadLookupQuery;
@@ -2426,6 +2476,183 @@ async function resolveCurrentDiscussionThreadContext(
       getNonEmptyString((data as { id?: unknown }).id) ?? routeThreadId,
     threadTitle: getNonEmptyString((data as { title?: unknown }).title),
   };
+}
+
+function isDiscussionThreadDemonstrative(value: string | null | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+
+  return /\b(?:this thread|that thread|the thread|this discussion|that discussion|current thread|the current thread|here)\b/i.test(
+    value.trim()
+  );
+}
+
+function normalizeDiscussionThreadTitle(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function extractDiscussionThreadLookupRows(data: unknown): Array<{ id: string; title: string }> {
+  if (!Array.isArray(data)) {
+    return [];
+  }
+
+  return data
+    .map((row) => {
+      if (!row || typeof row !== "object") {
+        return null;
+      }
+
+      const id = getNonEmptyString((row as { id?: unknown }).id);
+      const title = getNonEmptyString((row as { title?: unknown }).title);
+      if (!id || !title) {
+        return null;
+      }
+
+      return { id, title };
+    })
+    .filter((row): row is { id: string; title: string } => row !== null);
+}
+
+async function resolveDiscussionReplyTarget(
+  supabase: {
+    from(table: "discussion_threads"): {
+      select(columns: string): {
+        eq(column: string, value: unknown): any;
+      };
+    };
+  },
+  input: {
+    organizationId: string;
+    requestedThreadTitle?: string | null;
+  }
+): Promise<DiscussionReplyTargetResolution> {
+  const requestedThreadTitle = getNonEmptyString(input.requestedThreadTitle);
+  if (!requestedThreadTitle || isDiscussionThreadDemonstrative(requestedThreadTitle)) {
+    return { kind: "thread_title_required" };
+  }
+
+  const normalizedTitle = normalizeDiscussionThreadTitle(requestedThreadTitle);
+
+  const buildBaseQuery = () => {
+    const baseQuery = supabase
+      .from("discussion_threads")
+      .select("id, title")
+      .eq("organization_id", input.organizationId);
+    return typeof baseQuery.is === "function" ? baseQuery.is("deleted_at", null) : baseQuery;
+  };
+
+  try {
+    const exactBaseQuery = buildBaseQuery();
+    const exactQuery =
+      typeof exactBaseQuery.ilike === "function"
+        ? exactBaseQuery.ilike("title", normalizedTitle)
+        : exactBaseQuery;
+    const exactOrderedQuery =
+      typeof exactQuery.order === "function"
+        ? exactQuery.order("title", { ascending: true })
+        : exactQuery;
+    const { data: exactData, error: exactError } = await exactOrderedQuery;
+    if (exactError) {
+      return { kind: "lookup_error" };
+    }
+
+    const exactMatches = extractDiscussionThreadLookupRows(exactData);
+    if (exactMatches.length === 1) {
+      return {
+        kind: "resolved",
+        discussionThreadId: exactMatches[0].id,
+        threadTitle: exactMatches[0].title,
+      };
+    }
+
+    if (exactMatches.length >= 2 && exactMatches.length <= 5) {
+      return {
+        kind: "ambiguous",
+        requestedThreadTitle: normalizedTitle,
+        candidateThreadTitles: [...new Set(exactMatches.map((row) => row.title))],
+      };
+    }
+
+    if (exactMatches.length > 5) {
+      return { kind: "not_found", requestedThreadTitle: normalizedTitle };
+    }
+
+    const substringBaseQuery = buildBaseQuery();
+    const substringPattern = `%${normalizedTitle}%`;
+    const substringQuery =
+      typeof substringBaseQuery.ilike === "function"
+        ? substringBaseQuery.ilike("title", substringPattern)
+        : substringBaseQuery;
+    const substringOrderedQuery =
+      typeof substringQuery.order === "function"
+        ? substringQuery.order("title", { ascending: true })
+        : substringQuery;
+    const { data: substringData, error: substringError } = await substringOrderedQuery;
+    if (substringError) {
+      return { kind: "lookup_error" };
+    }
+
+    const substringMatches = extractDiscussionThreadLookupRows(substringData);
+    if (substringMatches.length === 1) {
+      return {
+        kind: "resolved",
+        discussionThreadId: substringMatches[0].id,
+        threadTitle: substringMatches[0].title,
+      };
+    }
+
+    if (substringMatches.length >= 2 && substringMatches.length <= 5) {
+      return {
+        kind: "ambiguous",
+        requestedThreadTitle: normalizedTitle,
+        candidateThreadTitles: [...new Set(substringMatches.map((row) => row.title))],
+      };
+    }
+
+    return { kind: "not_found", requestedThreadTitle: normalizedTitle };
+  } catch {
+    return { kind: "lookup_error" };
+  }
+}
+
+function buildDiscussionReplyClarificationPayload(
+  draft: Record<string, unknown>,
+  resolution: Exclude<DiscussionReplyTargetResolution, { kind: "resolved" }>
+): PendingActionToolPayload {
+  switch (resolution.kind) {
+    case "thread_title_required":
+      return {
+        state: "missing_fields",
+        draft,
+        missing_fields: ["thread_title"],
+        clarification_kind: "thread_title_required",
+      };
+    case "ambiguous":
+      return {
+        state: "missing_fields",
+        draft,
+        missing_fields: ["thread_title"],
+        clarification_kind: "thread_title_ambiguous",
+        requested_thread_title: resolution.requestedThreadTitle,
+        candidate_thread_titles: resolution.candidateThreadTitles,
+      };
+    case "not_found":
+      return {
+        state: "missing_fields",
+        draft,
+        missing_fields: ["thread_title"],
+        clarification_kind: "thread_title_not_found",
+        requested_thread_title: resolution.requestedThreadTitle,
+      };
+    case "lookup_error":
+      return {
+        state: "missing_fields",
+        draft,
+        missing_fields: [],
+        clarification_kind: "thread_lookup_failed",
+      };
+  }
 }
 
 function shouldContinueDraftSession(
@@ -3895,19 +4122,56 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               );
             }
 
-            if (
-              toolEvent.name === "prepare_discussion_reply" &&
-              currentDiscussionThreadContext
-            ) {
-              if (getNonEmptyString(parsedArgs.discussion_thread_id) == null) {
+            let syntheticToolResult:
+              | Awaited<ReturnType<typeof executeToolCallFn>>
+              | null = null;
+            if (toolEvent.name === "prepare_discussion_reply") {
+              const discussionThreadId = getNonEmptyString(parsedArgs.discussion_thread_id);
+              const requestedThreadTitle = getNonEmptyString(parsedArgs.thread_title);
+              const explicitNamedThreadTitle =
+                requestedThreadTitle && !isDiscussionThreadDemonstrative(requestedThreadTitle)
+                  ? requestedThreadTitle
+                  : null;
+
+              if (!discussionThreadId && explicitNamedThreadTitle) {
+                const resolution = await resolveDiscussionReplyTarget(ctx.serviceSupabase as any, {
+                  organizationId: ctx.orgId,
+                  requestedThreadTitle: explicitNamedThreadTitle,
+                });
+
+                if (resolution.kind === "resolved") {
+                  parsedArgs.discussion_thread_id = resolution.discussionThreadId;
+                  parsedArgs.thread_title = resolution.threadTitle ?? explicitNamedThreadTitle;
+                } else {
+                  if (resolution.kind === "lookup_error") {
+                    aiLog("warn", "ai-chat", "discussion thread title resolution failed", {
+                      ...requestLogContext,
+                      threadId: threadId ?? undefined,
+                    }, {
+                      requestedThreadTitle: explicitNamedThreadTitle,
+                    });
+                  }
+                  syntheticToolResult = {
+                    kind: "ok",
+                    data: buildDiscussionReplyClarificationPayload(parsedArgs, resolution),
+                  };
+                }
+              } else if (currentDiscussionThreadContext && !discussionThreadId) {
                 parsedArgs.discussion_thread_id =
                   currentDiscussionThreadContext.discussionThreadId;
-              }
-              if (
-                getNonEmptyString(parsedArgs.thread_title) == null &&
-                currentDiscussionThreadContext.threadTitle
-              ) {
-                parsedArgs.thread_title = currentDiscussionThreadContext.threadTitle;
+                if (
+                  getNonEmptyString(parsedArgs.thread_title) == null &&
+                  currentDiscussionThreadContext.threadTitle
+                ) {
+                  parsedArgs.thread_title = currentDiscussionThreadContext.threadTitle;
+                }
+              } else if (!discussionThreadId && !syntheticToolResult) {
+                syntheticToolResult = {
+                  kind: "ok",
+                  data: buildDiscussionReplyClarificationPayload(parsedArgs, {
+                    kind: "thread_title_required",
+                  }),
+                };
               }
             }
 
@@ -3917,21 +4181,25 @@ export function createChatPostHandler(deps: ChatRouteDeps = {}) {
               return "continue";
             }
 
-            enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
-
             const toolStartedAt = Date.now();
-            const result = await executeToolCallFn(
-              {
-                orgId: ctx.orgId,
-                userId: ctx.userId,
-              serviceSupabase: ctx.serviceSupabase,
-              authorization: toolAuthorization,
-              threadId,
-              requestId,
-              attachment,
-            },
-            { name: toolEvent.name, args: parsedArgs }
-          );
+            let result: Awaited<ReturnType<typeof executeToolCallFn>>;
+            if (syntheticToolResult) {
+              result = syntheticToolResult;
+            } else {
+              enqueue({ type: "tool_status", toolName: toolEvent.name, status: "calling" });
+              result = await executeToolCallFn(
+                {
+                  orgId: ctx.orgId,
+                  userId: ctx.userId,
+                  serviceSupabase: ctx.serviceSupabase,
+                  authorization: toolAuthorization,
+                  threadId,
+                  requestId,
+                  attachment,
+                },
+                { name: toolEvent.name, args: parsedArgs }
+              );
+            }
 
             switch (result.kind) {
               case "ok":

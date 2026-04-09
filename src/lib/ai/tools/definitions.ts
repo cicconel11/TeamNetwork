@@ -313,7 +313,7 @@ const TOOL_BY_NAME = {
     function: {
       name: "prepare_discussion_reply" as const,
       description:
-        "Prepare a reply to an existing discussion thread. Use this when the user wants to respond to a discussion thread that is already open. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the reply is ready.",
+        "Prepare a reply to an existing discussion thread. Use this when the user wants to respond to a discussion thread that is already open. If the user names the thread but does not know its UUID, pass thread_title and let the server resolve it. It validates the draft, identifies missing required fields, and creates a pending confirmation action when the reply is ready.",
       parameters: {
         type: "object" as const,
         properties: {
@@ -323,7 +323,8 @@ const TOOL_BY_NAME = {
           },
           thread_title: {
             type: "string" as const,
-            description: "Optional thread title for confirmation UI copy.",
+            description:
+              "Optional thread title. Use this when the user names the thread but does not provide its UUID.",
           },
           body: { type: "string" as const },
         },
