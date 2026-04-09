@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
-import { buildAvailabilityWeek } from "@/components/schedules/availability-week";
+import { buildAvailabilityWeek, getCurrentTimeMarker } from "@/components/schedules/availability-week";
 import { computeEventBlocks, type EventBlock } from "@/components/schedules/availability-blocks";
 import { computeSummaryStats, formatDateKey } from "@/components/schedules/availability-stats";
 import type { AcademicSchedule, User } from "@/types/database";
@@ -52,6 +52,10 @@ function getInitials(name: string): string {
     .map((n) => n[0])
     .join("")
     .toUpperCase();
+}
+
+export function getCurrentAvailabilityHour(now: Date, timeZone?: string): number {
+  return Math.floor(getCurrentTimeMarker(now, timeZone).minute / 60);
 }
 
 function computeBestWindow(
@@ -129,12 +133,21 @@ function ChevronRightIcon() {
 }
 
 export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailabilityRowsProps) {
+  const [mounted, setMounted] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
 
-  const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]); // eslint-disable-line react-hooks/exhaustive-deps
+  // todayKey is only used for "isToday" highlights — suppress during SSR to
+  // avoid hydration mismatch between server/client timezones.
+  const todayKey = mounted ? week.todayKey : "";
+  const currentHour = mounted ? getCurrentAvailabilityHour(new Date(), timeZone) : null;
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -360,7 +373,7 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
             {/* ── Day headers ── */}
             {week.weekDays.map((day) => {
               const dateKey = formatDateKey(day);
-              const isToday = dateKey === week.todayKey;
+              const isToday = dateKey === todayKey;
               const bw = bestWindowByDay.get(dateKey);
               return (
                 <div
@@ -406,8 +419,8 @@ export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailab
                     const dateKey = formatDateKey(day);
                     const gridKey = `${dateKey}-${hour}`;
                     const cellData = freeCountGrid.get(gridKey);
-                    const isToday = dateKey === week.todayKey;
-                    const isNow = isToday && hour === new Date().getHours();
+                    const isToday = dateKey === todayKey;
+                    const isNow = isToday && hour === currentHour;
                     const isSelected = selectedCell === gridKey;
 
                     if (!cellData) return <div key={gridKey} className="border-b border-l border-border/20" />;

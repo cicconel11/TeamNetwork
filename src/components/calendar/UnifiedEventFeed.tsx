@@ -100,8 +100,8 @@ function groupEventsByDate(events: UnifiedEvent[], timeZone?: string): Map<strin
 
     if (floatingMatch) {
       const [, year, month, day] = floatingMatch;
-      const floatingDate = new Date(Number(year), Number(month) - 1, Number(day), 12);
-      dateKey = floatingDate.toLocaleDateString("en-US", opts);
+      const floatingDate = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+      dateKey = floatingDate.toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
     } else {
       if (timeZone) opts.timeZone = timeZone;
       dateKey = new Date(event.startAt).toLocaleDateString("en-US", opts);
