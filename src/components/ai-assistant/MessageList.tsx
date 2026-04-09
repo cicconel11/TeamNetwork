@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Bot, User, Sparkles } from "lucide-react";
+import type { AssistantCapabilitySnapshot } from "@/lib/ai/capabilities";
 import type { AIPanelMessage, PendingActionState } from "./panel-state";
 import { AssistantMessageContent } from "./AssistantMessageContent";
 import { PendingActionCard } from "./PendingActionCard";
@@ -14,6 +15,7 @@ interface MessageListProps {
   previewAssistantContent?: string;
   suggestedPrompts?: string[];
   onSelectPrompt?: (message: string) => Promise<void> | void;
+  capabilitySnapshot?: AssistantCapabilitySnapshot;
   pendingActions?: PendingActionState[];
   pendingActionBusyIds?: Set<string>;
   pendingActionErrors?: Record<string, string>;
@@ -31,6 +33,7 @@ export function MessageList({
   previewAssistantContent,
   suggestedPrompts,
   onSelectPrompt,
+  capabilitySnapshot,
   pendingActions,
   pendingActionBusyIds,
   pendingActionErrors,
@@ -60,9 +63,13 @@ export function MessageList({
   }
 
   if (!messages.length && !streamingContent && !previewAssistantContent) {
+    const hasCapabilities =
+      capabilitySnapshot &&
+      (capabilitySnapshot.supported.length > 0 || capabilitySnapshot.unsupported.length > 0);
+
     return (
-      <div className="flex flex-1 items-center justify-center p-8 text-center">
-        <div className="space-y-3">
+      <div className="flex flex-1 flex-col overflow-y-auto p-6">
+        <div className="mx-auto w-full max-w-sm space-y-4 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 dark:bg-indigo-950/50">
             <Sparkles className="h-6 w-6 text-indigo-500" />
           </div>
@@ -85,6 +92,23 @@ export function MessageList({
                 </button>
               ))}
             </div>
+          ) : null}
+          {hasCapabilities ? (
+            <details className="group rounded-lg border border-border bg-muted/30 px-3 py-2 text-left text-xs">
+              <summary className="cursor-pointer select-none list-none font-medium text-foreground marker:hidden [&::-webkit-details-marker]:hidden">
+                What I can do here
+                <span className="ml-1 text-muted-foreground group-open:hidden">+</span>
+                <span className="ml-1 hidden text-muted-foreground group-open:inline">−</span>
+              </summary>
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                {capabilitySnapshot.supported.map((capability) => (
+                  <p key={capability.toolName}>- {capability.description}</p>
+                ))}
+                {capabilitySnapshot.unsupported.map((item) => (
+                  <p key={item}>- Not yet: {item}.</p>
+                ))}
+              </div>
+            </details>
           ) : null}
         </div>
       </div>

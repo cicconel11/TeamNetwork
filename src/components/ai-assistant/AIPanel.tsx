@@ -660,18 +660,6 @@ export function AIPanel({ orgId }: AIPanelProps) {
           </div>
         </div>
 
-        <div className="border-b border-border bg-muted/30 px-4 py-3 text-xs">
-          <p className="font-medium text-foreground">What I can do here</p>
-          <div className="mt-2 space-y-1 text-muted-foreground">
-            {capabilitySnapshot.supported.map((capability) => (
-              <p key={capability.toolName}>- {capability.description}</p>
-            ))}
-            {capabilitySnapshot.unsupported.map((item) => (
-              <p key={item}>- Not yet: {item}.</p>
-            ))}
-          </div>
-        </div>
-
         {/* Content */}
         {view === "chat" ? (
           <div className="flex flex-1 flex-col overflow-hidden">
@@ -683,6 +671,7 @@ export function AIPanel({ orgId }: AIPanelProps) {
               previewAssistantContent={pendingAssistantContent ?? undefined}
               suggestedPrompts={starterPrompts}
               onSelectPrompt={handleSend}
+              capabilitySnapshot={capabilitySnapshot}
               pendingActions={pendingActions}
               pendingActionBusyIds={pendingActionBusyIds}
               pendingActionErrors={pendingActionErrors}
