@@ -410,24 +410,32 @@ export async function middleware(request: NextRequest) {
           let membershipStatus: string | null | undefined;
 
           if (rpcError) {
-            // RPC failed — fall back to sequential queries so users are not blocked
+            // RPC failed — try sequential queries before failing closed
             if (shouldLog) {
               console.error("[AUTH-MW] get_org_context_by_slug RPC failed, falling back:", rpcError);
             }
 
-            const { data: org } = await supabase
+            const { data: org, error: orgError } = await supabase
               .from("organizations")
               .select("id")
               .eq("slug", orgSlug)
               .maybeSingle();
 
+            if (orgError) {
+              throw orgError;
+            }
+
             if (org) {
-              const { data: membership } = await supabase
+              const { data: membership, error: membershipError } = await supabase
                 .from("user_organization_roles")
                 .select("status")
                 .eq("organization_id", org.id)
                 .eq("user_id", user.id)
                 .maybeSingle();
+
+              if (membershipError) {
+                throw membershipError;
+              }
 
               membershipStatus = membership?.status;
             }
@@ -436,6 +444,8 @@ export async function middleware(request: NextRequest) {
             // Capture language fields from RPC for locale cookie sync (no extra query)
             orgDefaultLang = ctx.organization?.default_language ?? null;
             userLangOverride = ctx.membership?.language_override ?? null;
+          } else if (ctx !== null && ctx !== undefined && !isOrgContextRpcResult(ctx)) {
+            throw new Error("get_org_context_by_slug returned an invalid payload");
           }
           // If ctx is invalid or !ctx.found the org doesn't exist — layout.tsx handles the 404 gate
 
@@ -444,10 +454,8 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL(membershipRedirect, request.url));
           }
         } catch (e) {
-          // Log error but don't block the request
-          if (shouldLog) {
-            console.error("[AUTH-MW] Error checking membership status:", e);
-          }
+          console.error("[AUTH-MW] Error checking membership status, failing closed:", e);
+          return NextResponse.redirect(new URL("/app?error=org_access_check_failed", request.url));
         }
       } else {
         // Dev-admin bypasses membership checks but still needs language data

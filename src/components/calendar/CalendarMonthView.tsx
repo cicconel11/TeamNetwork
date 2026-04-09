@@ -8,6 +8,7 @@ import {
   type UnifiedEvent,
 } from "@/lib/calendar/unified-events";
 import { getUnifiedEventHref } from "@/lib/calendar/navigation";
+import { resolveOrgTimezone } from "@/lib/utils/timezone";
 
 type CalendarMonthViewProps = {
   orgId: string;
@@ -19,6 +20,17 @@ type CalendarMonthViewProps = {
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MAX_VISIBLE_EVENTS = 3;
+
+type CalendarMonthCursor = {
+  year: number;
+  month: number;
+};
+
+type CalendarMonthCell = {
+  dateKey: string;
+  dayOfMonth: number;
+  month: number;
+};
 
 function toDateKeyInTimeZone(date: Date, timeZone?: string): string {
   const opts: Intl.DateTimeFormatOptions = {
@@ -32,22 +44,52 @@ function toDateKeyInTimeZone(date: Date, timeZone?: string): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function buildMonthGrid(year: number, month: number): Date[][] {
-  const firstDay = new Date(year, month, 1);
-  const startSunday = new Date(firstDay);
-  startSunday.setDate(1 - firstDay.getDay());
+function toUtcDateKey(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
 
-  const weeks: Date[][] = [];
+export function getCalendarMonthCursor(date: Date, timeZone?: string): CalendarMonthCursor {
+  const resolvedTimeZone = resolveOrgTimezone(timeZone);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: resolvedTimeZone,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? "0");
+
+  return {
+    year: get("year"),
+    month: get("month") - 1,
+  };
+}
+
+export function buildCalendarMonthGrid(year: number, month: number): CalendarMonthCell[][] {
+  const firstDay = new Date(Date.UTC(year, month, 1));
+  const startSunday = new Date(Date.UTC(year, month, 1 - firstDay.getUTCDay()));
+
+  const weeks: CalendarMonthCell[][] = [];
   const cursor = new Date(startSunday);
   for (let w = 0; w < 6; w++) {
-    const week: Date[] = [];
+    const week: CalendarMonthCell[] = [];
     for (let d = 0; d < 7; d++) {
-      week.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
+      week.push({
+        dateKey: toUtcDateKey(cursor),
+        dayOfMonth: cursor.getUTCDate(),
+        month: cursor.getUTCMonth(),
+      });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     weeks.push(week);
   }
   return weeks;
+}
+
+export function formatCalendarMonthName(year: number, month: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month, 1, 12)));
 }
 
 function getSourceColors(sourceType: string): { dot: string; text: string } {
@@ -82,7 +124,9 @@ function ChevronRightIcon() {
 }
 
 export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rightSlot }: CalendarMonthViewProps) {
-  const [displayDate, setDisplayDate] = useState<Date>(() => new Date());
+  const resolvedTimeZone = resolveOrgTimezone(timeZone);
+  const [mounted, setMounted] = useState(false);
+  const [displayMonth, setDisplayMonth] = useState<CalendarMonthCursor>(() => getCalendarMonthCursor(new Date(), resolvedTimeZone));
   const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,21 +135,22 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
   const initialDataRangeRef = useRef(buildUnifiedCalendarDateRange());
   const initialEventsRef = useRef(initialEvents);
 
-  const year = displayDate.getFullYear();
-  const month = displayDate.getMonth();
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const today = useMemo(() => new Date(), []);
-  const todayKey = useMemo(() => toDateKeyInTimeZone(today, timeZone), [today, timeZone]);
+  const { year, month } = displayMonth;
 
-  const monthGrid = useMemo(() => buildMonthGrid(year, month), [year, month]);
-
-  const monthName = useMemo(
-    () =>
-      new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(
-        new Date(year, month, 1)
-      ),
-    [year, month]
+  // todayKey drives the "isToday" highlight — only compute on client to avoid
+  // hydration mismatch between server and browser timezones.
+  const todayKey = useMemo(
+    () => (mounted ? toDateKeyInTimeZone(new Date(), resolvedTimeZone) : ""),
+    [mounted, resolvedTimeZone]
   );
+
+  const monthGrid = useMemo(() => buildCalendarMonthGrid(year, month), [year, month]);
+
+  const monthName = useMemo(() => formatCalendarMonthName(year, month), [year, month]);
 
   const fetchMonthEvents = useCallback(
     async (start: Date, end: Date) => {
@@ -169,7 +214,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
       } else if (event.allDay && /^\d{4}-\d{2}-\d{2}$/.test(event.startAt)) {
         dateKey = event.startAt;
       } else {
-        dateKey = toDateKeyInTimeZone(new Date(event.startAt), timeZone);
+        dateKey = toDateKeyInTimeZone(new Date(event.startAt), resolvedTimeZone);
       }
 
       const existing = map.get(dateKey) ?? [];
@@ -178,19 +223,27 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
     });
 
     return map;
-  }, [events, timeZone]);
+  }, [events, resolvedTimeZone]);
 
   const goToPrevMonth = useCallback(() => {
-    setDisplayDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+    setDisplayMonth((current) => (
+      current.month === 0
+        ? { year: current.year - 1, month: 11 }
+        : { year: current.year, month: current.month - 1 }
+    ));
   }, []);
 
   const goToNextMonth = useCallback(() => {
-    setDisplayDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+    setDisplayMonth((current) => (
+      current.month === 11
+        ? { year: current.year + 1, month: 0 }
+        : { year: current.year, month: current.month + 1 }
+    ));
   }, []);
 
   const goToToday = useCallback(() => {
-    setDisplayDate(new Date());
-  }, []);
+    setDisplayMonth(getCalendarMonthCursor(new Date(), resolvedTimeZone));
+  }, [resolvedTimeZone]);
 
   return (
     <div>
@@ -250,9 +303,9 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
 
       {/* Month grid */}
       <div className="grid grid-cols-7 border-l border-t border-border/60 rounded-sm">
-        {monthGrid.flat().map((cellDate, idx) => {
-          const cellKey = toDateKeyInTimeZone(cellDate, timeZone);
-          const isCurrentMonth = cellDate.getMonth() === month;
+        {monthGrid.flat().map((cell, idx) => {
+          const cellKey = cell.dateKey;
+          const isCurrentMonth = cell.month === month;
           const isToday = cellKey === todayKey;
           const cellEvents = eventsByDateKey.get(cellKey) ?? [];
           const visibleEvents = cellEvents.slice(0, MAX_VISIBLE_EVENTS);
@@ -277,7 +330,7 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
                     }
                   `}
                 >
-                  {cellDate.getDate()}
+                  {cell.dayOfMonth}
                 </span>
               </div>
 

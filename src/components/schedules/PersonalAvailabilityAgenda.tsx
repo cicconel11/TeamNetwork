@@ -82,11 +82,18 @@ function ChevronRightIcon() {
 }
 
 export function PersonalAvailabilityAgenda({ schedules, orgId, orgSlug, timeZone }: PersonalAvailabilityAgendaProps) {
+  const [mounted, setMounted] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Suppress todayKey during SSR to avoid hydration mismatch
+  const todayKey = mounted ? week.todayKey : "";
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -204,7 +211,7 @@ export function PersonalAvailabilityAgenda({ schedules, orgId, orgSlug, timeZone
             const blocks: EventBlock[] = (eventBlocksByDay.get(dateKey) ?? []).sort(
               (a, b) => a.startMinute - b.startMinute
             );
-            const isToday = dateKey === week.todayKey;
+            const isToday = dateKey === todayKey;
 
             const dayLabel = day.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
 
