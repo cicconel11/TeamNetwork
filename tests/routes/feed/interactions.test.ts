@@ -9,7 +9,6 @@ const OTHER_ORG_ID = "00000000-0000-0000-0000-000000000002";
 
 const memberAuth = AuthPresets.orgMember(ORG_ID);
 const adminAuth = AuthPresets.orgAdmin(ORG_ID);
-const nonMemberAuth = AuthPresets.authenticatedNoOrg;
 
 type PollMetadata = {
   question: string;
