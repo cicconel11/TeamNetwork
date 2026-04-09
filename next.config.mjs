@@ -188,6 +188,13 @@ const nextConfig = {
     // Temporarily ignore ESLint during builds to avoid circular reference issue
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    // Type-checking runs as a required GitHub Actions check (`.github/workflows/ci.yml` → typecheck job).
+    // Skipping it inside `next build` shaves ~30-60s off every Vercel Preview/Production build.
+    // SAFETY: this is only safe while branch protection requires the GitHub Actions `typecheck` job to pass.
+    // If that protection is removed, flip this back to false or delete the block.
+    ignoreBuildErrors: true,
+  },
   experimental: {
     staleTimes: {
       dynamic: 0,
