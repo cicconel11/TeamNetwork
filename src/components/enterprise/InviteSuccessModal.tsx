@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites/QRCodeDisplay";
+import { buildInviteLink } from "@/lib/invites/buildInviteLink";
 
 interface InviteSuccessModalProps {
   invite: {
@@ -23,7 +24,12 @@ export function InviteSuccessModal({
 }: InviteSuccessModalProps) {
   const [copied, setCopied] = useState(false);
 
-  const inviteUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/app/join?token=${encodeURIComponent(invite.token)}&invite=enterprise`;
+  const inviteUrl = buildInviteLink({
+    kind: "enterprise",
+    baseUrl: typeof window !== "undefined" ? window.location.origin : "",
+    token: invite.token,
+    isEnterpriseWide: invite.is_enterprise_wide ?? false,
+  });
 
   const handleCopy = async () => {
     try {

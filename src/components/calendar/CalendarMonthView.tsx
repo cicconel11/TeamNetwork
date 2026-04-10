@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useHasMounted } from "@/hooks/useHasMounted";
 import Link from "next/link";
 import {
   buildUnifiedCalendarDateRange,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/calendar/unified-events";
 import { getUnifiedEventHref } from "@/lib/calendar/navigation";
 import { resolveOrgTimezone } from "@/lib/utils/timezone";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/nav-icons";
 
 type CalendarMonthViewProps = {
   orgId: string;
@@ -107,25 +109,9 @@ function getSourceColors(sourceType: string): { dot: string; text: string } {
   }
 }
 
-function ChevronLeftIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  );
-}
-
 export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rightSlot }: CalendarMonthViewProps) {
   const resolvedTimeZone = resolveOrgTimezone(timeZone);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHasMounted();
   const [displayMonth, setDisplayMonth] = useState<CalendarMonthCursor>(() => getCalendarMonthCursor(new Date(), resolvedTimeZone));
   const [events, setEvents] = useState<UnifiedEvent[]>(initialEvents ?? []);
   const [loading, setLoading] = useState(false);
@@ -134,10 +120,6 @@ export function CalendarMonthView({ orgId, orgSlug, initialEvents, timeZone, rig
 
   const initialDataRangeRef = useRef(buildUnifiedCalendarDateRange());
   const initialEventsRef = useRef(initialEvents);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const { year, month } = displayMonth;
 

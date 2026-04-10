@@ -75,22 +75,19 @@ export async function GET(req: Request, { params }: RouteParams) {
     return respond({ error: "Internal server error" }, 500);
   }
 
-  // Get alumni counts for each organization (parallel count-only queries)
+  // Get alumni counts for each organization (single query)
   const orgIds = (organizations ?? []).map((org) => org.id);
 
   const alumniCounts: Record<string, number> = {};
   if (orgIds.length > 0) {
-    const countResults = await Promise.all(
-      orgIds.map((orgId) =>
-        ctx.serviceSupabase
-          .from("alumni")
-          .select("*", { count: "exact", head: true })
-          .eq("organization_id", orgId)
-          .is("deleted_at", null)
-      )
-    );
-    orgIds.forEach((orgId, i) => {
-      alumniCounts[orgId] = countResults[i].count ?? 0;
+    const { data: alumniRows } = await ctx.serviceSupabase
+      .from("alumni")
+      .select("organization_id")
+      .in("organization_id", orgIds)
+      .is("deleted_at", null);
+
+    (alumniRows ?? []).forEach((row: { organization_id: string }) => {
+      alumniCounts[row.organization_id] = (alumniCounts[row.organization_id] || 0) + 1;
     });
   }
 

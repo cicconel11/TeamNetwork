@@ -23,6 +23,15 @@ export function formatShortDate(dateStr: string, timeZone?: string): string {
   return date.toLocaleDateString("en-US", opts);
 }
 
+/** Format a minute-of-day value as a compact time label (e.g. 810 → "1:30pm") */
+export function minutesToTimeLabel(m: number): string {
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  const ampm = h < 12 ? "am" : "pm";
+  const hour = h % 12 || 12;
+  return min > 0 ? `${hour}:${String(min).padStart(2, "0")}${ampm}` : `${hour}${ampm}`;
+}
+
 /** Check if a nullable expiration date has passed */
 export function isExpired(expiresAt: string | null): boolean {
   if (!expiresAt) return false;

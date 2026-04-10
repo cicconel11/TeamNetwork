@@ -57,6 +57,7 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
         .select("organization_id")
         .in("organization_id", orgIds)
         .is("deleted_at", null)
+        .limit(50000)
     : { data: [] };
 
   // Build alumni count map
@@ -72,6 +73,7 @@ export default async function OrganizationsPage({ params }: OrganizationsPagePro
         .select("organization_id")
         .in("organization_id", orgIds)
         .is("deleted_at", null)
+        .limit(50000)
     : { data: [] };
 
   const parentsCountMap: Record<string, number> = {};
