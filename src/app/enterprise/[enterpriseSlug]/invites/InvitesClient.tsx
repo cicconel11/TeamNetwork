@@ -135,11 +135,15 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
       });
 
       if (res.ok) {
+        const targetInvite = invites.find((i) => i.id === inviteId);
         setInvites((prev) =>
           prev.map((i) =>
             i.id === inviteId ? { ...i, revoked_at: new Date().toISOString() } : i
           )
         );
+        if (targetInvite && !targetInvite.revoked_at) {
+          setStats((prev) => ({ ...prev, active: Math.max(0, prev.active - 1) }));
+        }
       }
     } catch {
       setError("Failed to revoke invite");
@@ -155,7 +159,19 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
       });
 
       if (res.ok) {
+        const targetInvite = invites.find((i) => i.id === inviteId);
         setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+        if (targetInvite) {
+          setStats((prev) => ({
+            total: Math.max(0, prev.total - 1),
+            active: !targetInvite.revoked_at
+              ? Math.max(0, prev.active - 1)
+              : prev.active,
+            enterpriseWide: targetInvite.organization_id === null
+              ? Math.max(0, prev.enterpriseWide - 1)
+              : prev.enterpriseWide,
+          }));
+        }
       }
     } catch {
       setError("Failed to delete invite");
