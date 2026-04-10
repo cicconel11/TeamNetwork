@@ -72,24 +72,45 @@ export async function POST(req: Request, { params }: RouteParams) {
   const validOrgIds = new Set(orgs?.map((o) => o.id) ?? []);
 
   const validInvites = invites.filter((i) => validOrgIds.has(i.organizationId));
-  const invalidCount = invites.length - validInvites.length;
 
-  // Process all valid invites in parallel (user-authenticated client so auth.uid() works)
-  const results = await Promise.allSettled(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    validInvites.map((invite) =>
-      (supabase as any).rpc("create_enterprise_invite", {
-        p_enterprise_id: ctx.enterpriseId,
-        p_organization_id: invite.organizationId,
-        p_role: invite.role,
-        p_uses: null,
-        p_expires_at: null,
-      })
-    )
-  );
+  // Process valid invites in batches of 10 to prevent connection pool exhaustion
+  const CONCURRENCY = 10;
+  const results: PromiseSettledResult<any>[] = [];
+  for (let i = 0; i < validInvites.length; i += CONCURRENCY) {
+    const batch = validInvites.slice(i, i + CONCURRENCY);
+    const batchResults = await Promise.allSettled(
+      batch.map((invite) =>
+        (supabase as any).rpc("create_enterprise_invite", {
+          p_enterprise_id: ctx.enterpriseId,
+          p_organization_id: invite.organizationId,
+          p_role: invite.role,
+          p_uses: null,
+          p_expires_at: null,
+        })
+      )
+    );
+    results.push(...batchResults);
+  }
 
-  const success = results.filter((r) => r.status === "fulfilled" && !r.value.error).length;
-  const failed = invalidCount + (validInvites.length - success);
+  const perItemResults = validInvites.map((invite, idx) => {
+    const result = results[idx];
+    if (result.status === "fulfilled" && !result.value.error) {
+      return { organizationId: invite.organizationId, role: invite.role, status: "created" as const };
+    }
+    const errorMsg = result.status === "rejected"
+      ? (result.reason instanceof Error ? result.reason.message : "Unknown error")
+      : result.value?.error?.message ?? "RPC error";
+    return { organizationId: invite.organizationId, role: invite.role, status: "failed" as const, error: errorMsg };
+  });
+
+  // Add invalid org entries
+  const invalidResults = invites
+    .filter((i) => !validOrgIds.has(i.organizationId))
+    .map((i) => ({ organizationId: i.organizationId, role: i.role, status: "failed" as const, error: "Organization not found in enterprise" }));
+
+  const allResults = [...perItemResults, ...invalidResults];
+  const successCount = allResults.filter((r) => r.status === "created").length;
+  const failedCount = allResults.filter((r) => r.status === "failed").length;
 
   logEnterpriseAuditAction({
     actorUserId: ctx.userId,
@@ -97,9 +118,12 @@ export async function POST(req: Request, { params }: RouteParams) {
     action: "bulk_invite",
     enterpriseId: ctx.enterpriseId,
     targetType: "invite",
-    metadata: { success, failed, total: invites.length },
+    metadata: { success: successCount, failed: failedCount, total: invites.length },
     ...extractRequestContext(req),
   });
 
-  return respond({ success, failed, total: invites.length });
+  return respond({
+    summary: { success: successCount, failed: failedCount, total: invites.length },
+    results: allResults,
+  });
 }

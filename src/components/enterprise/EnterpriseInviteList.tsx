@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Card, Badge, Button, EmptyState } from "@/components/ui";
 import { QRCodeDisplay } from "@/components/invites";
 import { getRoleBadgeVariant, getRoleLabel } from "@/lib/auth/role-display";
+import { buildInviteLink } from "@/lib/invites/buildInviteLink";
 import { formatShortDate, isExpired } from "@/lib/utils/dates";
 
 interface Invite {
@@ -55,8 +56,12 @@ export function EnterpriseInviteList({
   };
 
   const getInviteLink = (invite: Invite) => {
-    const base = typeof window !== "undefined" ? window.location.origin : "";
-    return `${base}/app/join?token=${encodeURIComponent(invite.token)}&invite=enterprise`;
+    return buildInviteLink({
+      kind: "enterprise",
+      baseUrl: typeof window !== "undefined" ? window.location.origin : "",
+      token: invite.token,
+      isEnterpriseWide: invite.is_enterprise_wide ?? false,
+    });
   };
 
   const isValid = (invite: Invite) => {

@@ -16,9 +16,10 @@ interface MobileNavProps {
   currentMemberId?: string;
   currentMemberName?: string;
   currentMemberAvatar?: string | null;
+  pendingApprovalsCount?: number;
 }
 
-export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar }: MobileNavProps) {
+export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, pendingApprovalsCount }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [hasEverOpened, setHasEverOpened] = useState(false);
   const basePath = `/${organization.slug}`;
@@ -114,6 +115,7 @@ export function MobileNav({ organization, role, isDevAdmin = false, hasAlumniAcc
             currentMemberId={currentMemberId}
             currentMemberName={currentMemberName}
             currentMemberAvatar={currentMemberAvatar}
+            pendingApprovalsCount={pendingApprovalsCount}
             className="h-full border-r border-border"
             onClose={closeMenu}
           />

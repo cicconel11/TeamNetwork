@@ -5,13 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limit";
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
-
-const createInviteSchema = z.object({
-  role: z.enum(["admin", "active_member", "alumni", "parent"]),
-  uses: z.number().int().positive().optional().nullable(),
-  expiresAt: z.string().datetime().optional().nullable(),
-  requireApproval: z.boolean().optional().nullable(),
-});
+import { orgInviteCreateSchema } from "@/lib/schemas/invite";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -67,9 +61,9 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({ error: "Forbidden" }, 403);
   }
 
-  let body: z.infer<typeof createInviteSchema>;
+  let body: z.infer<typeof orgInviteCreateSchema>;
   try {
-    body = await validateJson(req, createInviteSchema, { maxBodyBytes: 4_000 });
+    body = await validateJson(req, orgInviteCreateSchema, { maxBodyBytes: 4_000 });
   } catch (error) {
     if (error instanceof ValidationError) {
       return respond({ error: error.message, details: error.details }, 400);

@@ -7,7 +7,7 @@ import {
   ENTERPRISE_ALUMNI_DATA_ROLE,
 } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
-import { escapeCsvCell, escapeTsvCell } from "@/lib/export/spreadsheet";
+import { escapeCsvCell } from "@/lib/export/spreadsheet";
 import { sanitizeIlikeInput } from "@/lib/security/validation";
 
 // Field mappings for export
@@ -28,7 +28,7 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const alumniExportSchema = z.object({
-  format: z.enum(["csv", "xlsx"]).default("csv"),
+  format: z.enum(["csv"]).default("csv"),
   fields: z
     .string()
     .max(2000)
@@ -169,7 +169,7 @@ export async function GET(req: Request, { params }: RouteParams) {
     query = query.is("phone_number", null);
   }
 
-  query = query.order("last_name", { ascending: true });
+  query = query.order("last_name", { ascending: true }).limit(10000);
 
   const { data: alumni, error } = await query;
 
@@ -230,51 +230,21 @@ export async function GET(req: Request, { params }: RouteParams) {
       ...extractRequestContext(req),
     });
 
+    const responseHeaders: Record<string, string> = {
+      ...rateLimit.headers,
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    };
+    if (alumniWithOrg.length === 10000) {
+      responseHeaders["X-Export-Truncated"] = "true";
+      responseHeaders["X-Export-Row-Limit"] = "10000";
+    }
+
     return new NextResponse(csvContent, {
       status: 200,
-      headers: {
-        ...rateLimit.headers,
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
+      headers: responseHeaders,
     });
   }
 
-  // For XLSX, return a simpler format that the client can use
-  // Full XLSX generation would require a library like exceljs
-  // For now, return tab-separated values that Excel can open
-  if (filters.format === "xlsx") {
-    const tsvRows = [
-      headers.map(escapeTsvCell).join("\t"),
-      ...alumniWithOrg.map((alum) =>
-        validFields.map((field) => escapeTsvCell(alum[field as keyof typeof alum])).join("\t")
-      ),
-    ];
-
-    const tsvContent = tsvRows.join("\n");
-    const now = new Date().toISOString().split("T")[0];
-    const filename = `alumni-export-${now}.xls`;
-
-    logEnterpriseAuditAction({
-      actorUserId: ctx.userId,
-      actorEmail: ctx.userEmail,
-      action: "export_alumni_data",
-      enterpriseId: ctx.enterpriseId,
-      targetType: "alumni",
-      targetId: ctx.enterpriseId,
-      metadata: { format: filters.format, recordCount: alumniWithOrg.length, fields: validFields },
-      ...extractRequestContext(req),
-    });
-
-    return new NextResponse(tsvContent, {
-      status: 200,
-      headers: {
-        ...rateLimit.headers,
-        "Content-Type": "text/tab-separated-values; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    });
-  }
-
-  return respond({ error: "Invalid format. Use 'csv' or 'xlsx'." }, 400);
+  return respond({ error: "Unsupported export format" }, 400);
 }

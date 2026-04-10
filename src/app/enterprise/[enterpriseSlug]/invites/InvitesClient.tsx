@@ -49,19 +49,28 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   const [filterOrgId, setFilterOrgId] = useState<string>("all");
   const [adminCount, setAdminCount] = useState<number>(0);
   const [adminLimit, setAdminLimit] = useState<number>(12);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [stats, setStats] = useState<{ total: number; active: number; enterpriseWide: number }>({ total: 0, active: 0, enterpriseWide: 0 });
 
-  const fetchInvites = useCallback(async (entId: string) => {
+  const fetchInvites = useCallback(async (entId: string, cursor?: string | null) => {
     try {
-      const res = await fetch(`/api/enterprise/${entId}/invites`);
+      const params = new URLSearchParams({ limit: "25" });
+      if (cursor) params.set("cursor", cursor);
+      const res = await fetch(`/api/enterprise/${entId}/invites?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setInvites(data.invites || []);
-        if (typeof data.adminCount === "number") {
-          setAdminCount(data.adminCount);
+        if (cursor) {
+          setInvites((prev) => [...prev, ...(data.invites || [])]);
+        } else {
+          setInvites(data.invites || []);
         }
-        if (typeof data.adminLimit === "number") {
-          setAdminLimit(data.adminLimit);
-        }
+        setNextCursor(data.nextCursor ?? null);
+        setHasMore(data.hasMore ?? false);
+        if (data.stats) setStats(data.stats);
+        if (typeof data.adminCount === "number") setAdminCount(data.adminCount);
+        if (typeof data.adminLimit === "number") setAdminLimit(data.adminLimit);
       }
     } catch {
       setError("Failed to fetch invites");
@@ -71,27 +80,12 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch organizations and invites in parallel
-        const [orgsRes, invitesRes] = await Promise.all([
-          fetch(`/api/enterprise/${enterpriseId}/organizations`),
-          fetch(`/api/enterprise/${enterpriseId}/invites`),
-        ]);
-
+        const orgsRes = await fetch(`/api/enterprise/${enterpriseId}/organizations`);
         if (orgsRes.ok) {
           const orgsData = await orgsRes.json();
           setOrganizations(orgsData.organizations || []);
         }
-
-        if (invitesRes.ok) {
-          const invitesData = await invitesRes.json();
-          setInvites(invitesData.invites || []);
-          if (typeof invitesData.adminCount === "number") {
-            setAdminCount(invitesData.adminCount);
-          }
-          if (typeof invitesData.adminLimit === "number") {
-            setAdminLimit(invitesData.adminLimit);
-          }
-        }
+        await fetchInvites(enterpriseId);
       } catch {
         setError("Failed to load data");
       } finally {
@@ -108,16 +102,19 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
     }
   }, [preselectedOrgId, organizations]);
 
+  const handleLoadMore = async () => {
+    if (!nextCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    await fetchInvites(enterpriseId, nextCursor);
+    setIsLoadingMore(false);
+  };
+
   const handleInviteCreated = (invite?: CreatedInvite) => {
-    if (invite) {
-      setCreatedInvite(invite);
-    }
+    if (invite) setCreatedInvite(invite);
     setShowCreateForm(false);
     setShowEnterpriseWideForm(false);
     setShowBulkUpload(false);
-    if (enterpriseId) {
-      fetchInvites(enterpriseId);
-    }
+    if (enterpriseId) fetchInvites(enterpriseId);
   };
 
   const handleCloseSuccessModal = () => {
@@ -138,11 +135,15 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
       });
 
       if (res.ok) {
+        const targetInvite = invites.find((i) => i.id === inviteId);
         setInvites((prev) =>
           prev.map((i) =>
             i.id === inviteId ? { ...i, revoked_at: new Date().toISOString() } : i
           )
         );
+        if (targetInvite && !targetInvite.revoked_at) {
+          setStats((prev) => ({ ...prev, active: Math.max(0, prev.active - 1) }));
+        }
       }
     } catch {
       setError("Failed to revoke invite");
@@ -158,7 +159,19 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
       });
 
       if (res.ok) {
+        const targetInvite = invites.find((i) => i.id === inviteId);
         setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+        if (targetInvite) {
+          setStats((prev) => ({
+            total: Math.max(0, prev.total - 1),
+            active: !targetInvite.revoked_at
+              ? Math.max(0, prev.active - 1)
+              : prev.active,
+            enterpriseWide: targetInvite.organization_id === null
+              ? Math.max(0, prev.enterpriseWide - 1)
+              : prev.enterpriseWide,
+          }));
+        }
       }
     } catch {
       setError("Failed to delete invite");
@@ -205,17 +218,15 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
         <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">{invites.length}</p>
+          <p className="text-2xl font-bold text-foreground font-mono">{stats.total}</p>
           <p className="text-sm text-muted-foreground">Total Invites</p>
         </Card>
         <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">
-            {invites.filter((i) => !i.revoked_at && (!i.expires_at || new Date(i.expires_at) > new Date())).length}
-          </p>
+          <p className="text-2xl font-bold text-foreground font-mono">{stats.active}</p>
           <p className="text-sm text-muted-foreground">Active Invites</p>
         </Card>
         <Card className="p-5">
-          <p className="text-2xl font-bold text-foreground font-mono">{enterpriseWideInvites.length}</p>
+          <p className="text-2xl font-bold text-foreground font-mono">{stats.enterpriseWide}</p>
           <p className="text-sm text-muted-foreground">Enterprise-wide</p>
         </Card>
         <Card className="p-5">
@@ -363,6 +374,15 @@ export function InvitesClient({ enterpriseId }: InvitesClientProps) {
           )
         )}
       </div>
+
+      {/* Load More */}
+      {hasMore && (
+        <div className="mt-6 text-center">
+          <Button variant="secondary" onClick={handleLoadMore} isLoading={isLoadingMore}>
+            Load more invites
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

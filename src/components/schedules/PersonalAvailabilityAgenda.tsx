@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useHasMounted } from "@/hooks/useHasMounted";
 import Link from "next/link";
 import { buildAvailabilityWeek } from "@/components/schedules/availability-week";
 import { computeEventBlocks, type EventBlock } from "@/components/schedules/availability-blocks";
 import { computeSummaryStats, formatDateKey } from "@/components/schedules/availability-stats";
 import type { AcademicSchedule } from "@/types/database";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/nav-icons";
+import { minutesToTimeLabel } from "@/lib/utils/dates";
 
 type PersonalAvailabilityAgendaProps = {
   schedules: AcademicSchedule[];
@@ -23,14 +26,6 @@ type CalendarEvent = {
   sourceType?: string;
   isOrg?: boolean;
 };
-
-function minutesToTimeLabel(m: number): string {
-  const h = Math.floor(m / 60);
-  const min = m % 60;
-  const ampm = h < 12 ? "am" : "pm";
-  const hour = h % 12 || 12;
-  return min > 0 ? `${hour}:${String(min).padStart(2, "0")}${ampm}` : `${hour}${ampm}`;
-}
 
 function getBlockColor(origin: string): { dot: string; badge: string } {
   switch (origin) {
@@ -65,31 +60,11 @@ function getScheduleEditHref(orgSlug: string, block: EventBlock): string | null 
   return `/${orgSlug}/calendar/${scheduleId}/edit`;
 }
 
-function ChevronLeftIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  );
-}
-
 export function PersonalAvailabilityAgenda({ schedules, orgId, orgSlug, timeZone }: PersonalAvailabilityAgendaProps) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHasMounted();
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]); // eslint-disable-line react-hooks/exhaustive-deps
   // Suppress todayKey during SSR to avoid hydration mismatch

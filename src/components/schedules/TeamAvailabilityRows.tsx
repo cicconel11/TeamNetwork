@@ -1,10 +1,13 @@
 "use client";
 
 import { Fragment, useState, useEffect, useMemo, useCallback } from "react";
+import { useHasMounted } from "@/hooks/useHasMounted";
 import { buildAvailabilityWeek, getCurrentTimeMarker } from "@/components/schedules/availability-week";
 import { computeEventBlocks, type EventBlock } from "@/components/schedules/availability-blocks";
 import { computeSummaryStats, formatDateKey } from "@/components/schedules/availability-stats";
 import type { AcademicSchedule, User } from "@/types/database";
+import { ChevronLeftIcon, ChevronRightIcon } from "@/components/icons/nav-icons";
+import { minutesToTimeLabel } from "@/lib/utils/dates";
 
 type TeamMember = {
   userId: string;
@@ -30,14 +33,6 @@ type CalendarEvent = {
 
 const GRID_START_MINUTE = 6 * 60; // 6am
 const GRID_END_MINUTE = 22 * 60; // 10pm
-
-function minutesToTimeLabel(m: number): string {
-  const h = Math.floor(m / 60);
-  const min = m % 60;
-  const ampm = h < 12 ? "am" : "pm";
-  const hour = h % 12 || 12;
-  return min > 0 ? `${hour}:${String(min).padStart(2, "0")}${ampm}` : `${hour}${ampm}`;
-}
 
 function hourToLabel(h: number): string {
   const ampm = h < 12 ? "am" : "pm";
@@ -116,32 +111,12 @@ function computeBestWindow(
   };
 }
 
-function ChevronLeftIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-  );
-}
-
 export function TeamAvailabilityRows({ schedules, orgId, timeZone }: TeamAvailabilityRowsProps) {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHasMounted();
   const [weekOffset, setWeekOffset] = useState(0);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCell, setSelectedCell] = useState<string | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const week = useMemo(() => buildAvailabilityWeek(new Date(), weekOffset, timeZone), [weekOffset, timeZone]); // eslint-disable-line react-hooks/exhaustive-deps
   // todayKey is only used for "isToday" highlights — suppress during SSR to

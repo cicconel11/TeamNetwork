@@ -65,7 +65,7 @@ export function EnterpriseInviteForm({
       }
 
       if (expiresAt) {
-        body.expiresAt = new Date(expiresAt).toISOString();
+        body.expiresAt = new Date(`${expiresAt}T23:59:59`).toISOString();
       }
 
       const res = await fetch(`/api/enterprise/${enterpriseId}/invites`, {

@@ -284,7 +284,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
           <div className="orgs-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {orgs.map((org) => (
               <Link key={org.id} href={`/${org.slug}`}>
-                <Card interactive className="org-card p-5 space-y-3" style={{ opacity: 0 }}>
+                <Card interactive className="org-card h-full p-5 space-y-3" style={{ opacity: 0 }}>
                   <div className="flex items-center gap-3">
                     {org.logo_url ? (
                       <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-muted">

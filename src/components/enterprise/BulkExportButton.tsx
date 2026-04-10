@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui";
+import { Button, InlineBanner } from "@/components/ui";
 
 interface ExportField {
   key: string;
@@ -25,6 +25,8 @@ const EXPORT_FIELDS: ExportField[] = [
   { key: "notes", label: "Notes", default: false },
 ];
 
+const EXPORT_ROW_LIMIT = 10000;
+
 interface BulkExportButtonProps {
   enterpriseId: string;
   selectedIds?: Set<string>;
@@ -43,6 +45,7 @@ export function BulkExportButton({
     new Set(EXPORT_FIELDS.filter((f) => f.default).map((f) => f.key))
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [truncationMessage, setTruncationMessage] = useState<string | null>(null);
 
   const toggleField = (key: string) => {
     const newFields = new Set(selectedFields);
@@ -54,11 +57,12 @@ export function BulkExportButton({
     setSelectedFields(newFields);
   };
 
-  const handleExport = async (format: "csv" | "xlsx") => {
+  const handleExport = async () => {
     setIsExporting(true);
+    setTruncationMessage(null);
     try {
       const params = new URLSearchParams();
-      params.set("format", format);
+      params.set("format", "csv");
       params.set("fields", Array.from(selectedFields).join(","));
 
       // Add filters
@@ -81,7 +85,7 @@ export function BulkExportButton({
 
       // Get filename from Content-Disposition header or use default
       const contentDisposition = response.headers.get("Content-Disposition");
-      let filename = `alumni-export.${format}`;
+      let filename = "alumni-export.csv";
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="?(.+)"?/);
         if (match) filename = match[1];
@@ -98,6 +102,15 @@ export function BulkExportButton({
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
 
+      if (response.headers.get("X-Export-Truncated") === "true") {
+        const rowLimitHeader = response.headers.get("X-Export-Row-Limit");
+        const rowLimit = Number.parseInt(rowLimitHeader ?? "", 10);
+        const appliedLimit = Number.isFinite(rowLimit) ? rowLimit : EXPORT_ROW_LIMIT;
+        setTruncationMessage(
+          `This export was limited to the first ${appliedLimit.toLocaleString()} alumni. Narrow filters or export a smaller selection to download the rest.`
+        );
+      }
+
       setIsModalOpen(false);
     } catch (error) {
       console.error("Export failed:", error);
@@ -108,16 +121,24 @@ export function BulkExportButton({
   };
 
   const exportCount = selectedIds && selectedIds.size > 0 ? selectedIds.size : totalCount;
+  const willTruncate = exportCount > EXPORT_ROW_LIMIT;
 
   return (
     <>
-      <Button variant="secondary" onClick={() => setIsModalOpen(true)}>
-        <DownloadIcon className="h-4 w-4" />
-        Export
-        {selectedIds && selectedIds.size > 0 && (
-          <span className="ml-1 text-xs opacity-75">({selectedIds.size})</span>
+      <div className="flex flex-col items-end gap-2">
+        <Button variant="secondary" onClick={() => setIsModalOpen(true)}>
+          <DownloadIcon className="h-4 w-4" />
+          Export
+          {selectedIds && selectedIds.size > 0 && (
+            <span className="ml-1 text-xs opacity-75">({selectedIds.size})</span>
+          )}
+        </Button>
+        {truncationMessage && (
+          <InlineBanner variant="warning" className="max-w-sm text-left">
+            {truncationMessage}
+          </InlineBanner>
         )}
-      </Button>
+      </div>
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
@@ -140,6 +161,15 @@ export function BulkExportButton({
 
             {/* Field Selection */}
             <div className="p-6">
+              {willTruncate && (
+                <InlineBanner variant="warning" className="mb-4">
+                  {exportCount.toLocaleString()} alumni match, but this export will include only the
+                  {" "}
+                  first {EXPORT_ROW_LIMIT.toLocaleString()} rows. Narrow filters or export a smaller
+                  {" "}
+                  selection to download the rest.
+                </InlineBanner>
+              )}
               <h3 className="text-sm font-medium text-muted-foreground mb-3">
                 Select fields to include
               </h3>
@@ -164,9 +194,8 @@ export function BulkExportButton({
             {/* Actions */}
             <div className="flex items-center gap-3 p-6 border-t border-border bg-muted/30">
               <Button
-                variant="secondary"
                 className="flex-1"
-                onClick={() => handleExport("csv")}
+                onClick={() => handleExport()}
                 disabled={isExporting || selectedFields.size === 0}
               >
                 {isExporting ? (
@@ -175,18 +204,6 @@ export function BulkExportButton({
                   <FileIcon className="h-4 w-4" />
                 )}
                 Export CSV
-              </Button>
-              <Button
-                className="flex-1"
-                onClick={() => handleExport("xlsx")}
-                disabled={isExporting || selectedFields.size === 0}
-              >
-                {isExporting ? (
-                  <LoadingSpinner className="h-4 w-4" />
-                ) : (
-                  <TableIcon className="h-4 w-4" />
-                )}
-                Export Excel
               </Button>
             </div>
           </div>
@@ -223,18 +240,6 @@ function FileIcon({ className }: { className?: string }) {
         strokeLinecap="round"
         strokeLinejoin="round"
         d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
-      />
-    </svg>
-  );
-}
-
-function TableIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3.375 19.5h17.25m-17.25 0a1.125 1.125 0 01-1.125-1.125M3.375 19.5h7.5c.621 0 1.125-.504 1.125-1.125m-9.75 0V5.625m0 12.75v-1.5c0-.621.504-1.125 1.125-1.125m18.375 2.625V5.625m0 12.75c0 .621-.504 1.125-1.125 1.125m1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125m0 3.75h-7.5A1.125 1.125 0 0112 18.375m9.75-12.75c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125m19.5 0v1.5c0 .621-.504 1.125-1.125 1.125M2.25 5.625v1.5c0 .621.504 1.125 1.125 1.125m0 0h17.25m-17.25 0h7.5c.621 0 1.125.504 1.125 1.125M3.375 8.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125m17.25-3.75h-7.5c-.621 0-1.125.504-1.125 1.125m8.625-1.125c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125M12 10.875v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 10.875c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125M13.125 12h7.5m-7.5 0c-.621 0-1.125.504-1.125 1.125M20.625 12c.621 0 1.125.504 1.125 1.125v1.5c0 .621-.504 1.125-1.125 1.125m-17.25 0h7.5M12 14.625v-1.5m0 1.5c0 .621-.504 1.125-1.125 1.125M12 14.625c0 .621.504 1.125 1.125 1.125m-2.25 0c.621 0 1.125.504 1.125 1.125m0 1.5v-1.5m0 0c0-.621.504-1.125 1.125-1.125m0 0h7.5"
       />
     </svg>
   );

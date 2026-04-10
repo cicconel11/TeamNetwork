@@ -29,6 +29,9 @@ export default function ApprovalsPage() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,12 +48,14 @@ export default function ApprovalsPage() {
       if (org && !orgError) {
         setOrgId(org.id);
 
-        const { data: memberships } = await supabase
+        const offset = page * PAGE_SIZE;
+        const { data: memberships, count } = await supabase
           .from("user_organization_roles")
-          .select("user_id, role, status, created_at, users(name, email)")
+          .select("user_id, role, status, created_at, users(name, email)", { count: "exact" })
           .eq("organization_id", org.id)
           .eq("status", "pending")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1);
 
         const normalizedMemberships: PendingMember[] =
           memberships?.map((m) => {
@@ -69,13 +74,14 @@ export default function ApprovalsPage() {
 
         setPendingMembers(normalizedMemberships.filter(m => m.role === "active_member" || m.role === "admin"));
         setPendingAlumni(normalizedMemberships.filter(m => m.role === "alumni"));
+        setTotalCount(count ?? 0);
       }
 
       setIsLoading(false);
     };
 
     fetchData();
-  }, [orgSlug]);
+  }, [orgSlug, page]);
 
   const handleApprove = async (userId: string) => {
     if (!orgId) return;
@@ -95,6 +101,10 @@ export default function ApprovalsPage() {
 
     setPendingMembers((prev) => prev.filter((m) => m.user_id !== userId));
     setPendingAlumni((prev) => prev.filter((m) => m.user_id !== userId));
+    setTotalCount((prev) => Math.max(0, prev - 1));
+    if (totalPending === 1 && page > 0) {
+      setPage((prev) => Math.max(0, prev - 1));
+    }
   };
 
   const handleReject = async (userId: string) => {
@@ -117,6 +127,10 @@ export default function ApprovalsPage() {
 
     setPendingMembers((prev) => prev.filter((m) => m.user_id !== userId));
     setPendingAlumni((prev) => prev.filter((m) => m.user_id !== userId));
+    setTotalCount((prev) => Math.max(0, prev - 1));
+    if (totalPending === 1 && page > 0) {
+      setPage((prev) => Math.max(0, prev - 1));
+    }
   };
 
   if (isLoading) {
@@ -260,6 +274,30 @@ export default function ApprovalsPage() {
           >
             {tApprovals("backToSettings")}
           </Link>
+        </div>
+      )}
+
+      {totalCount > PAGE_SIZE && (
+        <div className="mt-8 pt-4 flex items-center justify-between">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={page === 0}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page + 1} of {Math.ceil(totalCount / PAGE_SIZE)}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={(page + 1) * PAGE_SIZE >= totalCount}
+          >
+            Next
+          </Button>
         </div>
       )}
     </div>

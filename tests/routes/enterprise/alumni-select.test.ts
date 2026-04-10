@@ -230,3 +230,23 @@ describe("enterprise alumni authz boundaries", () => {
     assert.ok(!source.includes("getEnterpriseApiContext(enterpriseId, user, rateLimit, ENTERPRISE_ANY_ROLE)"));
   });
 });
+
+describe("enterprise alumni export truncation contract", () => {
+  it("export route marks capped responses with truncation headers", () => {
+    const source = readSource("src/app/api/enterprise/[enterpriseId]/alumni/export/route.ts");
+
+    assert.ok(source.includes(".limit(10000)"));
+    assert.ok(source.includes('responseHeaders["X-Export-Truncated"] = "true"'));
+    assert.ok(source.includes('responseHeaders["X-Export-Row-Limit"] = "10000"'));
+  });
+
+  it("export UI warns before capped exports and consumes truncation headers", () => {
+    const source = readSource("src/components/enterprise/BulkExportButton.tsx");
+
+    assert.ok(source.includes("const EXPORT_ROW_LIMIT = 10000"));
+    assert.ok(source.includes('response.headers.get("X-Export-Truncated") === "true"'));
+    assert.ok(source.includes('response.headers.get("X-Export-Row-Limit")'));
+    assert.ok(source.includes("this export will include only the"));
+    assert.ok(source.includes("This export was limited to the first"));
+  });
+});

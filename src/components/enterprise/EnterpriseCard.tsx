@@ -4,6 +4,22 @@ import { Card } from "@/components/ui";
 import { Badge } from "@/components/ui";
 import type { EnterpriseRole } from "@/types/enterprise";
 
+/** Only render next/image for hostnames configured in next.config.mjs remotePatterns. */
+function isAllowedImageHost(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    const allowed = [
+      "lh3.googleusercontent.com",
+      "avatars.githubusercontent.com",
+      "rytsziwekhtjdqzzpdso.supabase.co",
+      "media.licdn.com",
+    ];
+    return allowed.includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
 interface EnterpriseCardProps {
   name: string;
   slug: string;
@@ -51,7 +67,7 @@ export function EnterpriseCard({
     <Link href={`/enterprise/${slug}`}>
       <Card interactive className="h-full">
         <div className="flex items-start gap-4">
-          {logoUrl ? (
+          {logoUrl && isAllowedImageHost(logoUrl) ? (
             <div className="relative h-12 w-12 rounded-xl overflow-hidden flex-shrink-0">
               <Image
                 src={logoUrl}
