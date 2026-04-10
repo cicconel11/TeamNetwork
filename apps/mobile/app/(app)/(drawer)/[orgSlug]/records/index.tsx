@@ -3,7 +3,6 @@ import {
   View,
   Text,
   SectionList,
-  StyleSheet,
   RefreshControl,
   ScrollView,
   Pressable,
@@ -15,50 +14,21 @@ import { DrawerActions } from "@react-navigation/native";
 import { useFocusEffect, useNavigation } from "expo-router";
 import { Trophy, ExternalLink } from "lucide-react-native";
 import * as Linking from "expo-linking";
+import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
 import { useRecords } from "@/hooks/useRecords";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useAutoRefetchOnReconnect } from "@/hooks/useAutoRefetchOnReconnect";
-import { ErrorState } from "@/components/ui";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
+import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
+import { ErrorState, SkeletonList } from "@/components/ui";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import { SPACING, RADIUS, SHADOWS } from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import type { Record } from "@teammeet/types";
-
-// Local colors for records screen
-const RECORDS_COLORS = {
-  // Backgrounds
-  background: "#ffffff",
-  sectionBackground: "#f8fafc",
-
-  // Text
-  primaryText: "#0f172a",
-  secondaryText: "#64748b",
-  mutedText: "#94a3b8",
-
-  // Borders & surfaces
-  border: "#e2e8f0",
-  card: "#ffffff",
-
-  // CTAs
-  primaryCTA: "#059669",
-  primaryCTAText: "#ffffff",
-
-  // Accent
-  trophyColor: "#f59e0b", // amber-500 for trophy icon
-
-  // States
-  error: "#ef4444",
-  errorBg: "#fee2e2",
-
-  // Filter chips
-  chipActive: "#059669",
-  chipActiveText: "#ffffff",
-  chipInactive: "#f1f5f9",
-  chipInactiveText: "#64748b",
-};
 
 interface RecordsByCategory {
   category: string;
@@ -69,7 +39,174 @@ export default function RecordsScreen() {
   const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
   const navigation = useNavigation();
   const { permissions } = useOrgRole();
-  const styles = useMemo(() => createStyles(), []);
+  const { semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.xs,
+    },
+    headerSafeArea: {},
+    navHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.titleSmall,
+      fontWeight: "700" as const,
+      color: APP_CHROME.avatarText,
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.titleLarge,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    chipContainer: {
+      maxHeight: 48,
+      backgroundColor: n.surface,
+    },
+    chipContent: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      gap: SPACING.sm,
+    },
+    chip: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      borderRadius: RADIUS.full,
+      backgroundColor: n.background,
+    },
+    chipActive: {
+      backgroundColor: s.success,
+    },
+    chipText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    chipTextActive: {
+      color: "#ffffff",
+      fontWeight: "600" as const,
+    },
+    listContent: {
+      padding: SPACING.md,
+      paddingBottom: 40,
+      flexGrow: 1,
+    },
+    sectionHeader: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.sm,
+      marginTop: SPACING.md,
+      marginBottom: SPACING.sm,
+    },
+    sectionTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+    },
+    recordCard: {
+      backgroundColor: n.surface,
+      borderRadius: RADIUS.lg,
+      borderCurve: "continuous" as const,
+      borderWidth: 1,
+      borderColor: n.border,
+      padding: SPACING.md,
+      marginBottom: SPACING.sm,
+      ...SHADOWS.sm,
+    },
+    recordHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "flex-start" as const,
+      marginBottom: SPACING.xs,
+    },
+    recordTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      flex: 1,
+      marginRight: SPACING.sm,
+    },
+    yearBadge: {
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: 2,
+      borderRadius: RADIUS.sm,
+      backgroundColor: n.background,
+    },
+    yearText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.secondary,
+    },
+    recordValue: {
+      ...TYPOGRAPHY.displayMedium,
+      color: s.success,
+      fontVariant: ["tabular-nums"] as const,
+      marginBottom: SPACING.xs,
+    },
+    recordHolder: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+    },
+    notesContainer: {
+      marginTop: SPACING.sm,
+      paddingTop: SPACING.sm,
+      borderTopWidth: 1,
+      borderTopColor: n.border,
+    },
+    recordNotes: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.muted,
+      lineHeight: 20,
+    },
+    emptyState: {
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingVertical: 64,
+      paddingHorizontal: SPACING.md,
+    },
+    emptyTitle: {
+      ...TYPOGRAPHY.titleMedium,
+      color: n.foreground,
+      marginTop: SPACING.md,
+    },
+    emptySubtitle: {
+      ...TYPOGRAPHY.bodySmall,
+      color: n.secondary,
+      marginTop: SPACING.xs,
+      textAlign: "center" as const,
+    },
+    skeletonContainer: {
+      padding: SPACING.md,
+    },
+  }));
   const { isOffline } = useNetwork();
   const { records, categories, loading, error, refetch, refetchIfStale } = useRecords(orgId);
   const [refreshing, setRefreshing] = useState(false);
@@ -95,14 +232,14 @@ export default function RecordsScreen() {
       {
         id: "open-in-web",
         label: "Open in Web",
-        icon: <ExternalLink size={20} color={RECORDS_COLORS.primaryCTA} />,
+        icon: <ExternalLink size={20} color={semantic.success} />,
         onPress: () => {
           const webUrl = getWebPath(orgSlug, "records");
           Linking.openURL(webUrl);
         },
       },
     ];
-  }, [permissions.canUseAdminActions, orgSlug]);
+  }, [permissions.canUseAdminActions, orgSlug, semantic.success]);
 
   // Refetch on screen focus if data is stale
   useFocusEffect(
@@ -181,7 +318,7 @@ export default function RecordsScreen() {
 
   const renderSectionHeader = ({ section }: { section: RecordsByCategory }) => (
     <View style={styles.sectionHeader}>
-      <Trophy size={18} color={RECORDS_COLORS.trophyColor} />
+      <Trophy size={18} color={semantic.warning} />
       <Text style={styles.sectionTitle}>{section.category}</Text>
     </View>
   );
@@ -233,7 +370,7 @@ export default function RecordsScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Trophy size={48} color={RECORDS_COLORS.mutedText} />
+      <Trophy size={48} color={semantic.warning} />
       <Text style={styles.emptyTitle}>No records yet</Text>
       <Text style={styles.emptySubtitle}>
         Add records to create your organization's record book
@@ -241,30 +378,49 @@ export default function RecordsScreen() {
     </View>
   );
 
+  const renderHeader = () => (
+    <LinearGradient
+      colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
+      style={styles.headerGradient}
+    >
+      <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+        <View style={styles.navHeader}>
+          <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
+            {orgLogoUrl ? (
+              <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
+            ) : (
+              <View style={styles.orgAvatar}>
+                <Text style={styles.orgAvatarText}>{orgName?.[0] || "R"}</Text>
+              </View>
+            )}
+          </Pressable>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle}>Records</Text>
+            <Text style={styles.headerMeta}>{headerSubtitle}</Text>
+          </View>
+          {adminMenuItems.length > 0 && (
+            <OverflowMenu items={adminMenuItems} accessibilityLabel="Records options" />
+          )}
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+
+  if (loading && records.length === 0) {
+    return (
+      <View style={styles.container}>
+        {renderHeader()}
+        <Animated.View entering={FadeIn} exiting={FadeOut} style={styles.skeletonContainer}>
+          <SkeletonList type="event" count={4} />
+        </Animated.View>
+      </View>
+    );
+  }
+
   if (error && records.length === 0) {
     return (
       <View style={styles.container}>
-        <LinearGradient
-          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-          style={styles.headerGradient}
-        >
-          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-            <View style={styles.navHeader}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0] || "R"}</Text>
-                  </View>
-                )}
-              </Pressable>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.headerTitle}>Records</Text>
-              </View>
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
+        {renderHeader()}
         <ErrorState
           onRetry={handleRefresh}
           title="Unable to load records"
@@ -276,37 +432,7 @@ export default function RecordsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Gradient Header */}
-      <LinearGradient
-        colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-        style={styles.headerGradient}
-      >
-        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-          <View style={styles.navHeader}>
-            {/* Logo */}
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0] || "R"}</Text>
-                </View>
-              )}
-            </Pressable>
-
-            {/* Text */}
-            <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>Records</Text>
-              <Text style={styles.headerMeta}>{headerSubtitle}</Text>
-            </View>
-
-            {/* Admin menu */}
-            {adminMenuItems.length > 0 && (
-              <OverflowMenu items={adminMenuItems} accessibilityLabel="Records options" />
-            )}
-          </View>
-        </SafeAreaView>
-      </LinearGradient>
+      {renderHeader()}
 
       {/* Category Filter Chips */}
       {categories.length > 0 && renderCategoryChips()}
@@ -324,199 +450,10 @@ export default function RecordsScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={RECORDS_COLORS.primaryCTA}
+            tintColor={semantic.success}
           />
         }
       />
     </View>
   );
 }
-
-const createStyles = () =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: RECORDS_COLORS.background,
-    },
-    // Header styles
-    headerGradient: {
-      paddingBottom: spacing.xs,
-    },
-    headerSafeArea: {},
-    navHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      fontSize: fontSize.xs,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    // Category chips
-    chipContainer: {
-      maxHeight: 48,
-      backgroundColor: RECORDS_COLORS.background,
-    },
-    chipContent: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      gap: spacing.sm,
-    },
-    chip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.xl,
-      backgroundColor: RECORDS_COLORS.chipInactive,
-      marginRight: spacing.sm,
-    },
-    chipActive: {
-      backgroundColor: RECORDS_COLORS.chipActive,
-    },
-    chipText: {
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.medium,
-      color: RECORDS_COLORS.chipInactiveText,
-    },
-    chipTextActive: {
-      color: RECORDS_COLORS.chipActiveText,
-    },
-    // List content
-    listContent: {
-      padding: spacing.md,
-      paddingBottom: 40,
-      flexGrow: 1,
-    },
-    // Section header
-    sectionHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      marginTop: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    sectionTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: RECORDS_COLORS.primaryText,
-    },
-    // Record card
-    recordCard: {
-      backgroundColor: RECORDS_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderWidth: 1,
-      borderColor: RECORDS_COLORS.border,
-      padding: spacing.md,
-      marginBottom: spacing.sm,
-    },
-    recordHeader: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "flex-start",
-      marginBottom: spacing.xs,
-    },
-    recordTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.medium,
-      color: RECORDS_COLORS.primaryText,
-      flex: 1,
-      marginRight: spacing.sm,
-    },
-    yearBadge: {
-      paddingHorizontal: spacing.sm,
-      paddingVertical: 2,
-      borderRadius: borderRadius.sm,
-      backgroundColor: RECORDS_COLORS.sectionBackground,
-    },
-    yearText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: RECORDS_COLORS.secondaryText,
-    },
-    recordValue: {
-      fontSize: 24,
-      fontWeight: fontWeight.bold,
-      color: RECORDS_COLORS.primaryCTA,
-      fontVariant: ["tabular-nums"],
-      marginBottom: spacing.xs,
-    },
-    recordHolder: {
-      fontSize: fontSize.sm,
-      color: RECORDS_COLORS.secondaryText,
-    },
-    notesContainer: {
-      marginTop: spacing.sm,
-      paddingTop: spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: RECORDS_COLORS.border,
-    },
-    recordNotes: {
-      fontSize: fontSize.sm,
-      color: RECORDS_COLORS.mutedText,
-      lineHeight: 20,
-    },
-    // Empty state
-    emptyState: {
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 64,
-      paddingHorizontal: spacing.md,
-    },
-    emptyTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: RECORDS_COLORS.primaryText,
-      marginTop: spacing.md,
-    },
-    emptySubtitle: {
-      fontSize: fontSize.sm,
-      color: RECORDS_COLORS.secondaryText,
-      marginTop: spacing.xs,
-      textAlign: "center",
-    },
-    // Error state
-    errorContainer: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-      padding: spacing.md,
-    },
-    errorText: {
-      color: RECORDS_COLORS.error,
-      textAlign: "center",
-      fontSize: fontSize.base,
-    },
-  });
