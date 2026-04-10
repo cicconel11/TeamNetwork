@@ -134,7 +134,7 @@ export function OrgInvitePanel({
 
     try {
       const usesRemaining = newUses ? parseInt(newUses, 10) : null;
-      const expiresAt = newExpires ? new Date(newExpires).toISOString() : null;
+      const expiresAt = newExpires ? new Date(`${newExpires}T23:59:59`).toISOString() : null;
 
       const res = await fetch(`/api/organizations/${orgId}/invites`, {
         method: "POST",

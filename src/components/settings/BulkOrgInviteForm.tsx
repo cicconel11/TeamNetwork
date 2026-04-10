@@ -38,10 +38,16 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseEmails = (text: string): string[] => {
+    const seen = new Set<string>();
+
     return text
       .split(/[\n,;]+/)
       .map((e) => e.trim().toLowerCase())
-      .filter((e) => e.length > 0 && e.includes("@"));
+      .filter((e) => {
+        if (e.length === 0 || !e.includes("@") || seen.has(e)) return false;
+        seen.add(e);
+        return true;
+      });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,7 +99,7 @@ export function BulkOrgInviteForm({ orgId, onComplete, onCancel }: BulkOrgInvite
         body: JSON.stringify({
           emails,
           role,
-          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+          expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : undefined,
         }),
       });
 
