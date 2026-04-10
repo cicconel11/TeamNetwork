@@ -82,6 +82,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   }
 
   const { emails, role, expiresAt, requireApproval } = body;
+  const uniqueEmails = emails;
 
   // Create a single invite code with uses = emails.length via the authenticated
   // client so auth.uid() is available inside the RPC.
@@ -89,7 +90,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const { data: invite, error: rpcError } = await (supabase as any).rpc("create_org_invite", {
     p_organization_id: organizationId,
     p_role: role,
-    p_uses: emails.length,
+    p_uses: uniqueEmails.length,
     p_expires_at: expiresAt ?? null,
     p_require_approval: requireApproval ?? null,
   });
@@ -124,8 +125,8 @@ export async function POST(req: Request, { params }: RouteParams) {
     return respond({
       emailsDelivered: false,
       invite: { id: invite.id, code: invite.code, token: invite.token, link: inviteLink },
-      summary: { success: 0, failed: 0, skipped: emails.length, total: emails.length },
-      results: emails.map((email) => ({ email, status: "skipped" as const })),
+      summary: { success: 0, failed: 0, skipped: uniqueEmails.length, total: uniqueEmails.length },
+      results: uniqueEmails.map((email) => ({ email, status: "skipped" as const })),
     });
   }
 
@@ -139,7 +140,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   const orgName = orgRow?.name || "your organization";
 
   // Fan out emails in batches of CONCURRENCY
-  const emailTasks = emails.map((email) => async (): Promise<EmailResult> => {
+  const emailTasks = uniqueEmails.map((email) => async (): Promise<EmailResult> => {
     try {
       const result = await sendEmail({
         to: email,
@@ -166,7 +167,7 @@ export async function POST(req: Request, { params }: RouteParams) {
       if (res.status === "fulfilled") {
         results.push(res.value);
       } else {
-        results.push({ email: emails[results.length], status: "failed", error: "Unexpected error" });
+        results.push({ email: uniqueEmails[results.length], status: "failed", error: "Unexpected error" });
       }
     }
   }
@@ -181,7 +182,7 @@ export async function POST(req: Request, { params }: RouteParams) {
   return respond({
     emailsDelivered: true,
     invite: { id: invite.id, code: invite.code, token: invite.token, link: inviteLink },
-    summary: { success: successCount, failed: failedCount, skipped: 0, total: emails.length },
+    summary: { success: successCount, failed: failedCount, skipped: 0, total: uniqueEmails.length },
     results,
   });
 }

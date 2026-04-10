@@ -16,7 +16,19 @@ export type OrgInviteCreateForm = z.infer<typeof orgInviteCreateSchema>;
 
 /** Schema for bulk org invite creation (POST /api/organizations/:id/invites/bulk). */
 export const orgBulkInviteSchema = baseInviteFieldsSchema.extend({
-  emails: z.array(z.string().email()).min(1).max(100),
+  emails: z.array(z.string().email()).min(1).max(100).transform((emails) => {
+    const seen = new Set<string>();
+    const unique: string[] = [];
+
+    for (const email of emails) {
+      const normalized = email.trim().toLowerCase();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      unique.push(normalized);
+    }
+
+    return unique;
+  }),
 });
 
 export type OrgBulkInviteForm = z.infer<typeof orgBulkInviteSchema>;
