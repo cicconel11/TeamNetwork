@@ -69,13 +69,51 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
 
   if (orgContext.status === "pending" && !isDevAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background px-6">
-        <div className="max-w-lg text-center space-y-4">
-          <h1 className="text-2xl font-bold text-foreground">Pending admin approval</h1>
-          <p className="text-muted-foreground">
-            Your request to join this organization is awaiting admin approval. You&apos;ll gain access once an admin approves your membership.
-          </p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <header className="border-b border-border bg-card">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <a href="/app" className="text-2xl font-bold text-foreground">
+              Team<span className="text-emerald-500">Network</span>
+            </a>
+            <form action="/auth/signout" method="POST">
+              <button type="submit" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Sign Out
+              </button>
+            </form>
+          </div>
+        </header>
+
+        <main className="max-w-md mx-auto px-6 py-16">
+          <a href="/app" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-8">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+            Back
+          </a>
+
+          <div className="rounded-2xl border border-border bg-card p-8 text-center">
+            <div className="h-16 w-16 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+              <svg className="h-8 w-8 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Pending admin approval</h2>
+            <p className="text-muted-foreground mb-6">
+              Your request to join <span className="font-semibold text-foreground">{orgContext.organization.name}</span> has been submitted.
+            </p>
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 text-sm mb-6">
+              <p className="font-medium mb-1">Awaiting Admin Approval</p>
+              <p className="text-amber-600 dark:text-amber-400">
+                An admin will review your request and grant you access. You&apos;ll be able to access the organization once approved.
+              </p>
+            </div>
+            <div className="flex justify-center gap-3">
+              <a href="/app" className="inline-flex items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors">
+                Back to Dashboard
+              </a>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
