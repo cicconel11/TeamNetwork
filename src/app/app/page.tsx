@@ -122,7 +122,9 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
     .filter(Boolean) as Array<OrganizationSummary & { role: string }>;
 
   // Split into regular orgs and enterprise sub-orgs
-  const orgs = allOrgs.filter((o) => !o.enterprise_id);
+  // Orgs with enterprise_id are shown nested under their enterprise card,
+  // but only if the user has an enterprise-level role. Otherwise they
+  // appear in the main org grid so they're never invisible.
   const knownEnterpriseIds = new Set(
     enterprises.map((e) => e.enterprise?.id).filter(Boolean)
   );
@@ -132,6 +134,9 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
       ...acc,
       [org.enterprise_id!]: [...(acc[org.enterprise_id!] ?? []), org],
     }), {});
+  const orgs = allOrgs.filter(
+    (o) => !o.enterprise_id || !knownEnterpriseIds.has(o.enterprise_id)
+  );
 
   // Get pending memberships for display
   const pendingDisplayMemberships = pendingMemberships
@@ -305,6 +310,14 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                     </div>
                     <Badge variant="muted" className="ml-auto capitalize">{org.role}</Badge>
                   </div>
+                  {org.enterprise_id && (
+                    <div className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400">
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                      </svg>
+                      <span>Enterprise</span>
+                    </div>
+                  )}
                   {org.description && (
                     <p className="text-sm text-muted-foreground line-clamp-2">{org.description}</p>
                   )}

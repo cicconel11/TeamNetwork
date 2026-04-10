@@ -299,7 +299,38 @@ export async function acceptAdoptionRequest(
     }
   }
 
-  // Step 3: Mark request as accepted
+  // Step 3: Grant enterprise org_admin role to all active org admins
+  // so they can access the enterprise dashboard after adoption.
+  const { data: orgAdmins, error: orgAdminsError } = await supabase
+    .from("user_organization_roles")
+    .select("user_id")
+    .eq("organization_id", request.organization_id)
+    .eq("role", "admin")
+    .eq("status", "active");
+
+  if (orgAdminsError) {
+    console.error("[acceptAdoptionRequest] Failed to fetch org admins for enterprise role grant:", orgAdminsError);
+    // Non-fatal: proceed with adoption even if enterprise role grant fails.
+    // Admins can be manually added to the enterprise later.
+  } else if (orgAdmins && orgAdmins.length > 0) {
+    const enterpriseRoleRows = orgAdmins.map((admin) => ({
+      user_id: admin.user_id,
+      enterprise_id: request.enterprise_id,
+      role: "org_admin",
+    }));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: roleGrantError } = await (supabase as any)
+      .from("user_enterprise_roles")
+      .upsert(enterpriseRoleRows, { onConflict: "user_id,enterprise_id" });
+
+    if (roleGrantError) {
+      console.error("[acceptAdoptionRequest] Failed to grant enterprise roles to org admins:", roleGrantError);
+      // Non-fatal: adoption still succeeds, admins can be added manually
+    }
+  }
+
+  // Step 4: Mark request as accepted
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: markAcceptedError } = await (supabase as any)
     .from("enterprise_adoption_requests")
