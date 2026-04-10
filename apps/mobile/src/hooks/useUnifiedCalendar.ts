@@ -30,6 +30,8 @@ export interface UnifiedCalendarItem {
   sourceType: CalendarSourceType;
   /** Display label, e.g. "Team Event" or "My Schedule" */
   sourceName: string;
+  /** Event type for color mapping (null for schedules) */
+  eventType: string | null;
   /** Present when sourceType === "event" */
   eventId?: string;
   /** Present when sourceType === "schedule" */
@@ -44,6 +46,8 @@ export interface CalendarDateGroup {
   items: UnifiedCalendarItem[];
 }
 
+export type CalendarViewMode = "month" | "week" | "3day" | "day" | "list";
+
 export interface UseUnifiedCalendarReturn {
   /** All items, chronologically sorted, no filter applied */
   items: UnifiedCalendarItem[];
@@ -55,6 +59,10 @@ export interface UseUnifiedCalendarReturn {
   error: string | null;
   activeSource: CalendarFilterSource;
   setActiveSource: (source: CalendarFilterSource) => void;
+  viewMode: CalendarViewMode;
+  setViewMode: (mode: CalendarViewMode) => void;
+  selectedDate: Date;
+  setSelectedDate: (date: Date) => void;
   refetch: () => Promise<void>;
   refetchIfStale: () => void;
 }
@@ -66,6 +74,7 @@ export interface EventRow {
   start_date: string;
   end_date: string | null;
   location: string | null;
+  event_type: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +125,7 @@ export function normalizeEvent(event: EventRow): UnifiedCalendarItem {
     location: event.location,
     sourceType: "event",
     sourceName: "Team Event",
+    eventType: event.event_type ?? null,
     eventId: event.id,
   };
 }
@@ -139,6 +149,7 @@ function buildScheduleItem(
     location: null,
     sourceType: "schedule",
     sourceName: "My Schedule",
+    eventType: "schedule",
     scheduleId: schedule.id,
   };
 }
@@ -324,6 +335,8 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSource, setActiveSource] = useState<CalendarFilterSource>("all");
+  const [viewMode, setViewMode] = useState<CalendarViewMode>("month");
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   // Reset state when org or user changes
   useEffect(() => {
@@ -356,7 +369,7 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
       const [eventsResult, schedulesResult] = await Promise.all([
         supabase
           .from("events")
-          .select("id, title, start_date, end_date, location")
+          .select("id, title, start_date, end_date, location, event_type")
           .eq("organization_id", orgId)
           .is("deleted_at", null)
           // Include events that are still in progress (end_date >= windowStart)
@@ -496,6 +509,10 @@ export function useUnifiedCalendar(orgId: string | null): UseUnifiedCalendarRetu
     error,
     activeSource,
     setActiveSource,
+    viewMode,
+    setViewMode,
+    selectedDate,
+    setSelectedDate,
     refetch: fetchAll,
     refetchIfStale,
   };

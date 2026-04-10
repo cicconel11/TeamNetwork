@@ -4,7 +4,11 @@
     "slug": "teammeet",
     "owner": "teamnetwork",
     "version": "1.0.0",
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -88,7 +92,8 @@
           "microphonePermission": false
         }
       ],
-      "./plugins/withOptionalHardwareFeatures"
+      "./plugins/withOptionalHardwareFeatures",
+      "expo-font"
     ],
     "extra": {
       "router": {

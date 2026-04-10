@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,13 +18,39 @@ import { ErrorState } from "@/components/ui";
 import { useUnifiedCalendar } from "@/hooks/useUnifiedCalendar";
 import { OverflowMenu, type OverflowMenuItem } from "@/components/OverflowMenu";
 import { SkeletonList } from "@/components/ui/Skeleton";
-import { SourceFilterChips } from "@/components/calendar/source-filter-chips";
+import { CalendarToolbar } from "@/components/calendar/calendar-toolbar";
+import { MonthView } from "@/components/calendar/month-view";
+import { TimeGridView } from "@/components/calendar/time-grid-view";
 import { UnifiedCalendarFeed } from "@/components/calendar/unified-calendar-feed";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { getWebPath } from "@/lib/web-api";
 import { APP_CHROME } from "@/lib/chrome";
 import { SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+
+function getWeekDates(date: Date): Date[] {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day;
+  const sundayDate = new Date(d.setDate(diff));
+  const dates: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const nextDate = new Date(sundayDate);
+    nextDate.setDate(nextDate.getDate() + i);
+    dates.push(nextDate);
+  }
+  return dates;
+}
+
+function getThreeDayDates(date: Date): Date[] {
+  const dates: Date[] = [];
+  for (let i = 0; i < 3; i++) {
+    const nextDate = new Date(date);
+    nextDate.setDate(nextDate.getDate() + i);
+    dates.push(nextDate);
+  }
+  return dates;
+}
 
 export default function CalendarScreen() {
   const { orgSlug, orgId, orgName, orgLogoUrl } = useOrg();
@@ -37,10 +63,15 @@ export default function CalendarScreen() {
   const {
     items,
     groups,
+    filteredItems,
     loading,
     error,
     activeSource,
     setActiveSource,
+    viewMode,
+    setViewMode,
+    selectedDate,
+    setSelectedDate,
     refetch,
     refetchIfStale,
   } = useUnifiedCalendar(orgId);
@@ -217,6 +248,19 @@ export default function CalendarScreen() {
     </LinearGradient>
   );
 
+  const visibleDates = useMemo(() => {
+    switch (viewMode) {
+      case "week":
+        return getWeekDates(selectedDate);
+      case "3day":
+        return getThreeDayDates(selectedDate);
+      case "day":
+        return [selectedDate];
+      default:
+        return [];
+    }
+  }, [viewMode, selectedDate]);
+
   if (loading && items.length === 0) {
     return (
       <View style={styles.container}>
@@ -250,19 +294,45 @@ export default function CalendarScreen() {
   return (
     <View style={styles.container}>
       {renderHeader(headerSubtitle)}
+      <CalendarToolbar
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        selectedDate={selectedDate}
+        onDateChange={setSelectedDate}
+        activeSource={activeSource}
+        onSourceChange={setActiveSource}
+      />
       <View style={styles.contentSheet}>
-        <SourceFilterChips
-          activeSource={activeSource}
-          onChange={setActiveSource}
-        />
-        <UnifiedCalendarFeed
-          groups={groups}
-          orgSlug={orgSlug}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          error={error}
-          onRetry={refetch}
-        />
+        {viewMode === "month" && (
+          <MonthView
+            items={filteredItems}
+            selectedDate={selectedDate}
+            onDayPress={(date) => {
+              setSelectedDate(date);
+              setViewMode("day");
+            }}
+            orgSlug={orgSlug}
+          />
+        )}
+
+        {(viewMode === "week" || viewMode === "3day" || viewMode === "day") && (
+          <TimeGridView
+            items={filteredItems}
+            visibleDates={visibleDates}
+            orgSlug={orgSlug}
+          />
+        )}
+
+        {viewMode === "list" && (
+          <UnifiedCalendarFeed
+            groups={groups}
+            orgSlug={orgSlug}
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            error={error}
+            onRetry={refetch}
+          />
+        )}
       </View>
     </View>
   );

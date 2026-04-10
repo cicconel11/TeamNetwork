@@ -257,6 +257,7 @@ export default function ThreadDetailScreen() {
       body,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      like_count: 0,
       deleted_at: null,
       author: user
         ? { id: user.id, name: user.email || "Unknown", avatar_url: null }

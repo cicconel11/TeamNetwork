@@ -77,14 +77,6 @@ export function useAvatarUpload(userId: string | undefined) {
 
       const avatarUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
 
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { avatar_url: avatarUrl },
-      });
-
-      if (updateError) {
-        throw updateError;
-      }
-
       return avatarUrl;
     } catch (e) {
       const message = (e as Error).message || "Failed to upload avatar";

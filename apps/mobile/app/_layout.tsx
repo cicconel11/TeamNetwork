@@ -2,6 +2,14 @@ import { useEffect, useCallback, useRef } from "react";
 import { StyleSheet, Platform } from "react-native";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as Linking from "expo-linking";
+import * as SplashScreen from "expo-splash-screen";
+import { useFonts } from "expo-font";
+import { DMSerifDisplay_400Regular } from "@expo-google-fonts/dm-serif-display";
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { supabase } from "@/lib/supabase";
 import { ColorSchemeProvider } from "@/contexts/ColorSchemeContext";
@@ -15,6 +23,9 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useScreenTracking } from "@/hooks/useScreenTracking";
 import { useSupabaseAppState } from "@/hooks/useSupabaseAppState";
 import { getNativeAppLinkRoute, sanitizeUrlForTelemetry } from "@/lib/url-safety";
+
+// Prevent splash screen from auto-hiding until fonts are loaded
+SplashScreen.preventAutoHideAsync();
 
 // Suppress known third-party library warnings on web platform
 // These are library compatibility issues that don't affect functionality
@@ -78,6 +89,12 @@ function RootLayoutInner() {
   const segments = useSegments() as string[];
   const { session, isLoading } = useAuth();
   const prevUserIdRef = useRef<string | undefined>(undefined);
+  const [fontsLoaded] = useFonts({
+    DMSerifDisplay_400Regular,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+  });
 
   // Track screen views automatically
   useScreenTracking();
@@ -90,6 +107,13 @@ function RootLayoutInner() {
     userId: session?.user?.id ?? null,
     enabled: true,
   });
+
+  // Hide splash screen once fonts are loaded
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
 
   // Initialize analytics on mount
   useEffect(() => {
@@ -260,7 +284,7 @@ function RootLayoutInner() {
     }
   }, [session, isLoading, segments, router]);
 
-  if (isLoading) {
+  if (!fontsLoaded || isLoading) {
     return <AuthLoadingScreen />;
   }
 

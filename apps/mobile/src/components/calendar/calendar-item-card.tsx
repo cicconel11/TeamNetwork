@@ -8,6 +8,7 @@ import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
 import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { RADIUS, SHADOWS, SPACING } from "@/lib/design-tokens";
 import { TYPOGRAPHY } from "@/lib/typography";
+import { getEventColor } from "./event-type-colors";
 import type { UnifiedCalendarItem } from "@/hooks/useUnifiedCalendar";
 
 interface CalendarItemCardProps {
@@ -28,13 +29,20 @@ function formatTimeRange(startAt: string, endAt: string | null): string {
 
 export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
   const { neutral } = useAppColorScheme();
+  const color = useMemo(
+    () => getEventColor(item.eventType, item.sourceType),
+    [item.eventType, item.sourceType]
+  );
+
   const styles = useThemedStyles((n, s) => ({
     card: {
-      backgroundColor: n.surface,
+      backgroundColor: color.bg,
       borderRadius: RADIUS.lg,
       borderCurve: "continuous" as const,
       borderWidth: 1,
+      borderLeftWidth: 3,
       borderColor: n.border,
+      borderLeftColor: color.text,
       padding: SPACING.md,
       ...SHADOWS.sm,
     },
@@ -55,25 +63,17 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
       paddingVertical: 2,
       borderRadius: RADIUS.full,
       borderCurve: "continuous" as const,
+      backgroundColor: color.bg,
     },
-    sourceBadgeEvent: {
-      backgroundColor: s.successLight,
-    },
-    sourceBadgeSchedule: {
-      backgroundColor: s.infoLight,
-    },
-    sourceBadgeTextEvent: {
+    sourceBadgeText: {
       ...TYPOGRAPHY.labelSmall,
-      color: s.successDark,
-    },
-    sourceBadgeTextSchedule: {
-      ...TYPOGRAPHY.labelSmall,
-      color: s.infoDark,
+      color: color.text,
     },
     title: {
       ...TYPOGRAPHY.titleMedium,
-      color: n.foreground,
+      color: color.text,
       marginBottom: SPACING.xs,
+      fontWeight: "600" as const,
     },
     detailRow: {
       flexDirection: "row" as const,
@@ -83,13 +83,15 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
     },
     detailText: {
       ...TYPOGRAPHY.bodySmall,
-      color: n.secondary,
+      color: color.text,
+      opacity: 0.8,
       flex: 1,
       fontVariant: ["tabular-nums"] as const,
     },
     locationText: {
       ...TYPOGRAPHY.bodySmall,
-      color: n.muted,
+      color: color.text,
+      opacity: 0.7,
       flex: 1,
     },
   }));
@@ -122,29 +124,9 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
         }}
       >
         <View style={styles.headerRow}>
-          <View
-            style={[
-              styles.sourceBadge,
-              isEvent ? styles.sourceBadgeEvent : styles.sourceBadgeSchedule,
-            ]}
-          >
-            <SourceIcon
-              size={12}
-              color={
-                isEvent
-                  ? styles.sourceBadgeTextEvent.color
-                  : styles.sourceBadgeTextSchedule.color
-              }
-            />
-            <Text
-              style={
-                isEvent
-                  ? styles.sourceBadgeTextEvent
-                  : styles.sourceBadgeTextSchedule
-              }
-            >
-              {item.sourceName}
-            </Text>
+          <View style={styles.sourceBadge}>
+            <SourceIcon size={12} color={color.text} />
+            <Text style={styles.sourceBadgeText}>{item.sourceName}</Text>
           </View>
         </View>
 
@@ -153,7 +135,7 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
         </Text>
 
         <View style={styles.detailRow}>
-          <Clock size={13} color={neutral.secondary} />
+          <Clock size={13} color={color.text} />
           <Text style={styles.detailText} selectable>
             {formatTimeRange(item.startAt, item.endAt)}
           </Text>
@@ -161,7 +143,7 @@ export function CalendarItemCard({ item, orgSlug }: CalendarItemCardProps) {
 
         {item.location && (
           <View style={styles.detailRow}>
-            <MapPin size={13} color={neutral.muted} />
+            <MapPin size={13} color={color.text} />
             <Text style={styles.locationText} numberOfLines={1} selectable>
               {item.location}
             </Text>

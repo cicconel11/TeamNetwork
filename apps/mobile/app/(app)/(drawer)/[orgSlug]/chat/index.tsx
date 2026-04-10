@@ -6,76 +6,464 @@ import {
   Pressable,
   RefreshControl,
   StyleSheet,
+  ActivityIndicator,
+  LayoutChangeEvent,
 } from "react-native";
-import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { DrawerActions } from "@react-navigation/native";
 import { useRouter, useNavigation } from "expo-router";
-import { MessageCircle } from "lucide-react-native";
+import { MessageCircle, Camera, Pin, Lock } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  type SharedValue,
+} from "react-native-reanimated";
 import { supabase } from "@/lib/supabase";
 import { useOrg } from "@/contexts/OrgContext";
 import { useOrgRole } from "@/hooks/useOrgRole";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import { Avatar } from "@/components/ui/Avatar";
 import { APP_CHROME } from "@/lib/chrome";
-import { spacing, borderRadius, fontSize, fontWeight } from "@/lib/theme";
+import {
+  SPACING,
+  RADIUS,
+  SHADOWS,
+  ANIMATION,
+  AVATAR_SIZES,
+} from "@/lib/design-tokens";
+import { TYPOGRAPHY } from "@/lib/typography";
 import { useAppColorScheme } from "@/contexts/ColorSchemeContext";
-import type { ChatGroup, ChatGroupMember } from "@teammeet/types";
+import { formatRelativeTime } from "@/lib/date-format";
+import {
+  buildMobileDiscussionThreadRoute,
+  buildMobileNewDiscussionThreadRoute,
+  MOBILE_DISCUSSION_AUTHOR_SELECT,
+  MOBILE_DISCUSSION_THREADS_TABLE,
+} from "@/lib/chat-helpers";
+import type {
+  ChatGroup,
+  ChatGroupMember,
+  DiscussionThread,
+} from "@teammeet/types";
 
-const CHAT_COLORS = {
-  background: "#ffffff",
-  card: "#ffffff",
-  border: "#e2e8f0",
-  title: "#0f172a",
-  subtitle: "#64748b",
-  muted: "#94a3b8",
-  accent: "#059669",
-  pending: "#f59e0b",
-  emptyIcon: "#cbd5f5",
-};
+type ActiveTab = "chat" | "discussions";
 
 type ChatGroupWithMembers = ChatGroup & {
+  avatar_url: string | null;
   chat_group_members: Pick<ChatGroupMember, "id" | "user_id" | "role">[];
 };
 
+type DiscussionThreadWithAuthor = DiscussionThread & {
+  author?: { id: string; name: string | null; avatar_url: string | null } | null;
+};
+
 export default function ChatGroupsScreen() {
-  const { orgId, orgSlug, orgName, orgLogoUrl } = useOrg();
+  const { orgId, orgSlug } = useOrg();
   const { isAdmin } = useOrgRole();
   const router = useRouter();
   const navigation = useNavigation();
-  const { neutral } = useAppColorScheme();
-  const styles = useMemo(() => createStyles(neutral.surface), [neutral.surface]);
+  const { neutral, semantic } = useAppColorScheme();
+  const styles = useThemedStyles((n, s) => ({
+    container: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    headerGradient: {
+      paddingBottom: SPACING.md,
+    },
+    headerSafeArea: {},
+    headerContent: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.md,
+      paddingTop: SPACING.xs,
+      minHeight: 40,
+      gap: SPACING.sm,
+    },
+    orgLogoButton: {
+      width: 36,
+      height: 36,
+    },
+    orgLogo: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    orgAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: APP_CHROME.avatarBackground,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    orgAvatarText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: APP_CHROME.avatarText,
+      fontWeight: "600",
+    },
+    headerTextContainer: {
+      flex: 1,
+    },
+    headerTitle: {
+      ...TYPOGRAPHY.headlineSmall,
+      color: APP_CHROME.headerTitle,
+    },
+    headerMeta: {
+      ...TYPOGRAPHY.caption,
+      color: APP_CHROME.headerMeta,
+      marginTop: 2,
+    },
+    segmentedControl: {
+      flexDirection: "row" as const,
+      backgroundColor: n.divider,
+      borderRadius: RADIUS.lg,
+      padding: SPACING.xxs,
+      marginHorizontal: SPACING.md,
+      marginTop: SPACING.sm,
+      marginBottom: SPACING.sm,
+      position: "relative" as const,
+    },
+    segment: {
+      flex: 1,
+      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.md,
+      borderRadius: RADIUS.md,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      zIndex: 1,
+    },
+    segmentPill: {
+      position: "absolute" as const,
+      top: SPACING.xxs,
+      bottom: SPACING.xxs,
+      width: "50%",
+      borderRadius: RADIUS.md,
+      backgroundColor: s.success,
+      ...SHADOWS.sm,
+    },
+    segmentText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    segmentTextActive: {
+      color: n.surface,
+      fontWeight: "600",
+    },
+    contentSheet: {
+      flex: 1,
+      backgroundColor: n.surface,
+    },
+    tabContentContainer: {
+      flex: 1,
+      position: "relative" as const,
+    },
+    tabPane: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: n.surface,
+    },
+    listContent: {
+      paddingHorizontal: SPACING.md,
+      paddingVertical: SPACING.sm,
+      gap: 0,
+    },
+    centered: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      padding: SPACING.lg,
+      gap: SPACING.sm,
+    },
+    skeletonContainer: {
+      padding: SPACING.md,
+    },
+    // Chat group row styles
+    groupRow: {
+      position: "relative" as const,
+      minHeight: AVATAR_SIZES.md + SPACING.md * 2,
+    },
+    groupRowButton: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: 0,
+      gap: SPACING.md,
+      backgroundColor: n.surface,
+      flex: 1,
+    },
+    groupRowPressed: {
+      backgroundColor: n.divider,
+    },
+    groupAvatarContainer: {
+      width: AVATAR_SIZES.md,
+      height: AVATAR_SIZES.md,
+      position: "relative" as const,
+    },
+    cameraBadge: {
+      position: "absolute" as const,
+      bottom: 0,
+      right: 0,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      borderWidth: 1.5,
+      borderColor: n.surface,
+    },
+    cameraBadgeFloating: {
+      position: "absolute" as const,
+      left: AVATAR_SIZES.md - 18,
+      top: SPACING.md + AVATAR_SIZES.md - 18,
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      borderWidth: 1.5,
+      borderColor: n.surface,
+      zIndex: 2,
+    },
+    avatarUploading: {
+      ...StyleSheet.absoluteFillObject,
+      borderRadius: AVATAR_SIZES.md / 2,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    groupInfo: {
+      flex: 1,
+      gap: 2,
+    },
+    groupNameRow: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    groupName: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      flex: 1,
+    },
+    defaultBadge: {
+      backgroundColor: "rgba(5, 150, 105, 0.12)",
+      paddingVertical: 2,
+      paddingHorizontal: 8,
+      borderRadius: RADIUS.sm,
+    },
+    defaultBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: s.success,
+      fontWeight: "500",
+    },
+    groupMeta: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+    },
+    groupRightContent: {
+      flexDirection: "column" as const,
+      alignItems: "flex-end" as const,
+      gap: SPACING.xs,
+    },
+    pendingBadge: {
+      minWidth: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: s.warning,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+      paddingHorizontal: SPACING.xs,
+    },
+    pendingBadgeText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: "#ffffff",
+      fontWeight: "600",
+    },
+    separator: {
+      height: 1,
+      backgroundColor: n.divider,
+      marginLeft: SPACING.md + AVATAR_SIZES.md + SPACING.md,
+      marginVertical: 0,
+    },
+    // Discussion discussion row styles
+    discussionRow: {
+      paddingVertical: SPACING.md,
+      paddingHorizontal: 0,
+      backgroundColor: n.surface,
+    },
+    discussionContent: {
+      flex: 1,
+      gap: SPACING.xs,
+    },
+    discussionTitleRow: {
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
+      gap: SPACING.xs,
+    },
+    pinIcon: {
+      marginTop: 2,
+      flexShrink: 0,
+    },
+    discussionTitle: {
+      ...TYPOGRAPHY.titleSmall,
+      color: n.foreground,
+      flex: 1,
+    },
+    discussionMeta: {
+      flexDirection: "row" as const,
+      alignItems: "center" as const,
+      gap: SPACING.xs,
+    },
+    discussionMetaText: {
+      ...TYPOGRAPHY.caption,
+      color: n.muted,
+      flex: 1,
+    },
+    // Discussions header
+    discussionsHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between" as const,
+      alignItems: "center" as const,
+      paddingVertical: SPACING.md,
+      paddingHorizontal: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: n.divider,
+    },
+    discussionsHeaderText: {
+      ...TYPOGRAPHY.labelMedium,
+      color: n.muted,
+    },
+    newDiscussionButton: {
+      paddingVertical: SPACING.xs,
+      paddingHorizontal: SPACING.sm,
+      borderRadius: RADIUS.sm,
+      backgroundColor: s.success,
+      alignItems: "center" as const,
+      justifyContent: "center" as const,
+    },
+    newDiscussionButtonText: {
+      ...TYPOGRAPHY.labelSmall,
+      color: n.surface,
+      fontWeight: "600",
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: "center" as const,
+      alignItems: "center" as const,
+      paddingHorizontal: SPACING.lg,
+      gap: SPACING.md,
+    },
+    emptyText: {
+      ...TYPOGRAPHY.bodyMedium,
+      color: n.muted,
+      textAlign: "center" as const,
+    },
+  }));
+
   const isMountedRef = useRef(true);
 
-  // Safe drawer toggle - only dispatch if drawer is available
+  // Tab state
+  const [activeTab, setActiveTab] = useState<ActiveTab>("chat");
+  const pillX = useSharedValue(0);
+  const chatTabX = useRef(0);
+  const discussionsTabX = useRef(0);
+
+  // Chat groups state
+  const [groups, setGroups] = useState<ChatGroupWithMembers[]>([]);
+  const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
+  const [loadingGroups, setLoadingGroups] = useState(true);
+  const [errorGroups, setErrorGroups] = useState<string | null>(null);
+
+  // Discussions state
+  const [discussions, setDiscussions] = useState<DiscussionThreadWithAuthor[]>([]);
+  const [loadingDiscussions, setLoadingDiscussions] = useState(true);
+
+  // Refresh state (both tabs)
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Avatar upload state
+  const [uploadingGroupId, setUploadingGroupId] = useState<string | null>(null);
+  const [localAvatarUrls, setLocalAvatarUrls] = useState<Record<string, string>>(
+    {}
+  );
+
+  // Tab animation
+  const chatOpacity = useSharedValue(1);
+  const discussionsOpacity = useSharedValue(0);
+
+  const opacityMap: Record<ActiveTab, SharedValue<number>> = {
+    chat: chatOpacity,
+    discussions: discussionsOpacity,
+  };
+
+  const chatAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: chatOpacity.value,
+  }));
+
+  const discussionsAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: discussionsOpacity.value,
+  }));
+
+  const pillAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value }],
+  }));
+
   const handleDrawerToggle = useCallback(() => {
     try {
       if (navigation && typeof (navigation as any).dispatch === "function") {
         (navigation as any).dispatch(DrawerActions.toggleDrawer());
       }
     } catch {
-      // Drawer not available - no-op
+      // Drawer not available
     }
   }, [navigation]);
-  const [groups, setGroups] = useState<ChatGroupWithMembers[]>([]);
-  const [pendingCounts, setPendingCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
 
+  const handleTabChange = useCallback(
+    (tab: ActiveTab) => {
+      setActiveTab(tab);
+      const targetX = tab === "chat" ? chatTabX.current : discussionsTabX.current;
+      pillX.value = withSpring(targetX, {
+        damping: ANIMATION.spring.damping,
+        stiffness: ANIMATION.spring.stiffness,
+      });
+      (["chat", "discussions"] as ActiveTab[]).forEach((t) => {
+        opacityMap[t].value = withSpring(t === tab ? 1 : 0, {
+          damping: ANIMATION.spring.damping,
+          stiffness: ANIMATION.spring.stiffness,
+        });
+      });
+    },
+    [pillX, chatOpacity, discussionsOpacity]
+  );
+
+  const handleTabLayout = useCallback(
+    (tab: ActiveTab, x: number) => {
+      if (tab === "chat") chatTabX.current = x;
+      else discussionsTabX.current = x;
+      if (tab === activeTab) pillX.value = x;
+    },
+    [activeTab, pillX]
+  );
+
+  // Fetch chat groups
   const fetchGroups = useCallback(async () => {
     if (!orgId) {
       if (isMountedRef.current) {
         setGroups([]);
         setPendingCounts({});
-        setLoading(false);
-        setError(null);
+        setLoadingGroups(false);
+        setErrorGroups(null);
       }
       return;
     }
 
     try {
-      setLoading(true);
       const { data: groupsData, error: groupsError } = await supabase
         .from("chat_groups")
         .select("*, chat_group_members (id, user_id, role)")
@@ -87,7 +475,7 @@ export default function ChatGroupsScreen() {
       if (groupsError) throw groupsError;
 
       let counts: Record<string, number> = {};
-      if (isAdmin) {
+      if (isAdmin && groupsData) {
         const { data: pendingMessages, error: pendingError } = await supabase
           .from("chat_messages")
           .select("chat_group_id")
@@ -98,40 +486,135 @@ export default function ChatGroupsScreen() {
         if (pendingError) throw pendingError;
 
         if (pendingMessages) {
-          counts = pendingMessages.reduce((acc, msg) => {
-            acc[msg.chat_group_id] = (acc[msg.chat_group_id] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
+          counts = pendingMessages.reduce(
+            (acc, msg) => {
+              acc[msg.chat_group_id] = (acc[msg.chat_group_id] || 0) + 1;
+              return acc;
+            },
+            {} as Record<string, number>
+          );
         }
       }
 
       if (isMountedRef.current) {
         setGroups((groupsData || []) as ChatGroupWithMembers[]);
         setPendingCounts(counts);
-        setError(null);
+        setErrorGroups(null);
       }
     } catch (e) {
       if (isMountedRef.current) {
-        setError((e as Error).message);
+        setErrorGroups((e as Error).message);
       }
     } finally {
-      if (isMountedRef.current) {
-        setLoading(false);
-      }
+      if (isMountedRef.current) setLoadingGroups(false);
     }
   }, [orgId, isAdmin]);
 
+  // Fetch discussions
+  const fetchDiscussions = useCallback(async () => {
+    if (!orgId) {
+      if (isMountedRef.current) {
+        setDiscussions([]);
+        setLoadingDiscussions(false);
+      }
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from(MOBILE_DISCUSSION_THREADS_TABLE)
+        .select(`*, ${MOBILE_DISCUSSION_AUTHOR_SELECT}`)
+        .eq("organization_id", orgId)
+        .is("deleted_at", null)
+        .order("is_pinned", { ascending: false })
+        .order("last_activity_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (isMountedRef.current) {
+        setDiscussions((data || []) as DiscussionThreadWithAuthor[]);
+      }
+    } catch (e) {
+      if (isMountedRef.current) {
+        console.error("[chat-discussions] Failed to load discussions:", e);
+        setDiscussions([]);
+      }
+    } finally {
+      if (isMountedRef.current) setLoadingDiscussions(false);
+    }
+  }, [orgId]);
+
+  // Handle group avatar upload
+  const handleUploadGroupAvatar = useCallback(
+    async (groupId: string) => {
+      if (uploadingGroupId) return;
+
+      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!granted) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setUploadingGroupId(groupId);
+      const asset = result.assets[0];
+      const ext = (asset.fileName?.split(".").pop() ?? "jpg").toLowerCase();
+      const path = `${orgId}/${groupId}.${ext}`;
+
+      try {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+
+        const { error: uploadError } = await supabase.storage
+          .from("chat-group-avatars")
+          .upload(path, blob, {
+            contentType: asset.mimeType ?? "image/jpeg",
+            upsert: true,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("chat-group-avatars")
+          .getPublicUrl(path);
+        const bustedUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+        // Optimistic update
+        setLocalAvatarUrls((prev) => ({ ...prev, [groupId]: bustedUrl }));
+
+        const { error: updateError } = await supabase
+          .from("chat_groups")
+          .update({ avatar_url: bustedUrl })
+          .eq("id", groupId);
+
+        if (updateError) throw updateError;
+        // Realtime will trigger fetchGroups
+      } catch (e) {
+        // Rollback optimistic update
+        setLocalAvatarUrls((prev) => {
+          const next = { ...prev };
+          delete next[groupId];
+          return next;
+        });
+      } finally {
+        if (isMountedRef.current) setUploadingGroupId(null);
+      }
+    },
+    [orgId, uploadingGroupId]
+  );
+
+  // Initial fetch and realtime subscriptions
   useEffect(() => {
     isMountedRef.current = true;
+
     fetchGroups();
+    fetchDiscussions();
 
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchGroups]);
-
-  useEffect(() => {
-    if (!orgId) return;
     const groupsChannel = supabase
       .channel(`chat_groups:${orgId}`)
       .on(
@@ -148,433 +631,317 @@ export default function ChatGroupsScreen() {
       )
       .subscribe();
 
-    const membersChannel = supabase
-      .channel(`chat_group_members:${orgId}`)
+    const discussionsChannel = supabase
+      .channel(`${MOBILE_DISCUSSION_THREADS_TABLE}:${orgId}`)
       .on(
         "postgres_changes",
         {
           event: "*",
           schema: "public",
-          table: "chat_group_members",
+          table: MOBILE_DISCUSSION_THREADS_TABLE,
           filter: `organization_id=eq.${orgId}`,
         },
         () => {
-          fetchGroups();
+          fetchDiscussions();
         }
       )
       .subscribe();
 
     return () => {
+      isMountedRef.current = false;
       supabase.removeChannel(groupsChannel);
-      supabase.removeChannel(membersChannel);
+      supabase.removeChannel(discussionsChannel);
     };
-  }, [orgId, fetchGroups]);
+  }, [orgId, fetchGroups, fetchDiscussions]);
 
-  useEffect(() => {
-    if (!orgId || !isAdmin) return;
-    const pendingChannel = supabase
-      .channel(`chat_messages_pending:${orgId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "chat_messages",
-          filter: `organization_id=eq.${orgId}`,
-        },
-        () => {
-          fetchGroups();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(pendingChannel);
-    };
-  }, [orgId, isAdmin, fetchGroups]);
-
-  const handleRefresh = useCallback(async () => {
+  const handleRefreshAll = useCallback(async () => {
     setRefreshing(true);
-    await fetchGroups();
-    setRefreshing(false);
-  }, [fetchGroups]);
+    await Promise.all([fetchGroups(), fetchDiscussions()]);
+    if (isMountedRef.current) setRefreshing(false);
+  }, [fetchGroups, fetchDiscussions]);
 
-  const handleOpenGroup = useCallback(
-    (groupId: string) => {
-      router.push(`/(app)/${orgSlug}/chat/${groupId}`);
-    },
-    [router, orgSlug]
-  );
-
+  // Render chat group row
   const renderGroup = useCallback(
     ({ item }: { item: ChatGroupWithMembers }) => {
-      const memberCount = item.chat_group_members?.length || 0;
-      const pendingCount = pendingCounts[item.id] || 0;
+      const memberCount = item.chat_group_members?.length ?? 0;
+      const pendingCount = pendingCounts[item.id] ?? 0;
+      const effectiveAvatarUrl = localAvatarUrls[item.id] ?? item.avatar_url ?? null;
+      const isUploading = uploadingGroupId === item.id;
+
+      return (
+        <View style={styles.groupRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.groupRowButton,
+              pressed && styles.groupRowPressed,
+            ]}
+            onPress={() => router.push(`/(app)/${orgSlug}/chat/${item.id}`)}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.name}`}
+          >
+            <View style={styles.groupAvatarContainer}>
+              <Avatar
+                uri={effectiveAvatarUrl}
+                name={item.name}
+                size="md"
+              />
+              {isAdmin && isUploading ? (
+                <View style={styles.avatarUploading}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.groupInfo}>
+              <View style={styles.groupNameRow}>
+                <Text style={styles.groupName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                {item.is_default && (
+                  <View style={styles.defaultBadge}>
+                    <Text style={styles.defaultBadgeText}>Default</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.groupMeta} numberOfLines={1}>
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+                {item.require_approval ? " · Approval required" : ""}
+                {item.description ? ` · ${item.description}` : ""}
+              </Text>
+            </View>
+
+            {isAdmin && pendingCount > 0 && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingBadgeText}>{pendingCount}</Text>
+              </View>
+            )}
+          </Pressable>
+
+          {isAdmin && !isUploading ? (
+            <Pressable
+              style={styles.cameraBadgeFloating}
+              onPress={() => handleUploadGroupAvatar(item.id)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Upload photo for ${item.name}`}
+            >
+              <Camera size={10} color="#ffffff" />
+            </Pressable>
+          ) : null}
+        </View>
+      );
+    },
+    [isAdmin, pendingCounts, localAvatarUrls, uploadingGroupId, styles, router, orgSlug, handleUploadGroupAvatar]
+  );
+
+  // Render discussion row
+  const renderDiscussion = useCallback(
+    ({ item }: { item: DiscussionThreadWithAuthor }) => {
       return (
         <Pressable
-          onPress={() => handleOpenGroup(item.id)}
-          style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          style={({ pressed }) => [
+            styles.discussionRow,
+            pressed && styles.groupRowPressed,
+          ]}
+          onPress={() =>
+            router.push(buildMobileDiscussionThreadRoute(orgSlug, item.id))
+          }
           accessibilityRole="button"
-          accessibilityLabel={`Open ${item.name}`}
+          accessibilityLabel={`Open discussion: ${item.title}`}
         >
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardTitle} numberOfLines={1}>
-                {item.name}
+          <View style={styles.discussionContent}>
+            <View style={styles.discussionTitleRow}>
+              {item.is_pinned && (
+                <Pin size={12} color={semantic.warning} style={styles.pinIcon} />
+              )}
+              <Text style={styles.discussionTitle} numberOfLines={2}>
+                {item.title}
               </Text>
-              {item.is_default && (
-                <View style={styles.defaultBadge}>
-                  <Text style={styles.defaultBadgeText}>Default</Text>
-                </View>
+            </View>
+            <View style={styles.discussionMeta}>
+              <Text style={styles.discussionMetaText} numberOfLines={1}>
+                {item.author?.name ?? "Unknown"} · {item.reply_count}{" "}
+                {item.reply_count === 1 ? "reply" : "replies"} ·{" "}
+                {formatRelativeTime(item.last_activity_at)}
+              </Text>
+              {item.is_locked && (
+                <Lock size={12} color={neutral.muted} />
               )}
             </View>
-            <MessageCircle size={18} color={CHAT_COLORS.muted} />
-          </View>
-          {item.description ? (
-            <Text style={styles.cardDescription} numberOfLines={2}>
-              {item.description}
-            </Text>
-          ) : null}
-          <View style={styles.cardFooter}>
-            <Text style={styles.cardMeta}>
-              {memberCount} member{memberCount !== 1 ? "s" : ""}
-              {item.require_approval ? " · Approval required" : ""}
-            </Text>
-            {pendingCount > 0 ? (
-              <View style={styles.pendingBadge}>
-                <Text style={styles.pendingBadgeText}>{pendingCount} pending</Text>
-              </View>
-            ) : null}
           </View>
         </Pressable>
       );
     },
-    [handleOpenGroup, pendingCounts, styles]
+    [styles, router, orgSlug, neutral.muted, semantic.warning]
   );
 
-  if (loading && groups.length === 0) {
-    return (
-      <View style={styles.container}>
-        {/* Custom Gradient Header */}
-        <LinearGradient
-          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-          style={styles.headerGradient}
+  // Discussions header with "New" button
+  const discussionsHeader = useMemo(
+    () => (
+      <View style={styles.discussionsHeader}>
+        <Text style={styles.discussionsHeaderText}>
+          {discussions.length} {discussions.length === 1 ? "discussion" : "discussions"}
+        </Text>
+        <Pressable
+          style={styles.newDiscussionButton}
+          onPress={() => router.push(buildMobileNewDiscussionThreadRoute(orgSlug))}
+          accessibilityRole="button"
+          accessibilityLabel="Start new discussion"
         >
-          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-            <View style={styles.headerContent}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
-                  </View>
-                )}
-              </Pressable>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.headerTitle}>Chat</Text>
-              </View>
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
-
-        {/* Content Sheet */}
-        <View style={styles.contentSheet}>
-          <View style={styles.skeletonContainer}>
-            <SkeletonList type="chat" count={6} />
-          </View>
-        </View>
+          <Text style={styles.newDiscussionButtonText}>New</Text>
+        </Pressable>
       </View>
-    );
-  }
+    ),
+    [discussions.length, router, orgSlug, styles]
+  );
 
-  if (error && groups.length === 0) {
-    return (
-      <View style={styles.container}>
-        {/* Custom Gradient Header */}
-        <LinearGradient
-          colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
-          style={styles.headerGradient}
-        >
-          <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
-            <View style={styles.headerContent}>
-              <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-                {orgLogoUrl ? (
-                  <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-                ) : (
-                  <View style={styles.orgAvatar}>
-                    <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
-                  </View>
-                )}
-              </Pressable>
-              <View style={styles.headerTextContainer}>
-                <Text style={styles.headerTitle}>Chat</Text>
-              </View>
-            </View>
-          </SafeAreaView>
-        </LinearGradient>
-
-        {/* Content Sheet */}
-        <View style={styles.contentSheet}>
-          <View style={styles.centered}>
-            <Text style={styles.errorTitle}>Unable to load chat</Text>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable
-              style={styles.retryButton}
-              onPress={fetchGroups}
-              accessibilityRole="button"
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    );
-  }
+  const headerMeta = useMemo(() => {
+    if (activeTab === "chat") {
+      return `${groups.length} group${groups.length === 1 ? "" : "s"}`;
+    } else {
+      return `${discussions.length} discussion${discussions.length === 1 ? "" : "s"}`;
+    }
+  }, [activeTab, groups.length, discussions.length]);
 
   return (
     <View style={styles.container}>
-      {/* Custom Gradient Header */}
+      {/* Header */}
       <LinearGradient
         colors={[APP_CHROME.gradientStart, APP_CHROME.gradientEnd]}
         style={styles.headerGradient}
       >
-        <SafeAreaView edges={["top"]} style={styles.headerSafeArea}>
+        <SafeAreaView edges={["top"]}>
           <View style={styles.headerContent}>
-            <Pressable onPress={handleDrawerToggle} style={styles.orgLogoButton}>
-              {orgLogoUrl ? (
-                <Image source={orgLogoUrl} style={styles.orgLogo} contentFit="contain" transition={200} />
-              ) : (
-                <View style={styles.orgAvatar}>
-                  <Text style={styles.orgAvatarText}>{orgName?.[0]}</Text>
-                </View>
-              )}
+            <Pressable
+              style={styles.orgLogoButton}
+              onPress={handleDrawerToggle}
+              accessibilityRole="button"
+              accessibilityLabel="Open drawer"
+            >
+              {/* Org logo or avatar */}
             </Pressable>
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle}>Chat</Text>
-              <Text style={styles.headerMeta}>{groups.length} {groups.length === 1 ? "group" : "groups"}</Text>
+              <Text style={styles.headerMeta}>{headerMeta}</Text>
             </View>
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Content Sheet */}
+      {/* Content */}
       <View style={styles.contentSheet}>
-        <FlatList
-          data={groups}
-          keyExtractor={(item) => item.id}
-          renderItem={renderGroup}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={CHAT_COLORS.accent} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <MessageCircle size={28} color={CHAT_COLORS.muted} />
-              </View>
-              <Text style={styles.emptyTitle}>No chat groups yet</Text>
-              <Text style={styles.emptyText}>
-                Chat groups will appear here once they are created.
+        {/* Segmented control */}
+        <View style={styles.segmentedControl}>
+          <Animated.View
+            style={[styles.segmentPill, pillAnimatedStyle]}
+          />
+          {(["chat", "discussions"] as ActiveTab[]).map((tab) => (
+            <Pressable
+              key={tab}
+              style={styles.segment}
+              onPress={() => handleTabChange(tab)}
+              onLayout={(e: LayoutChangeEvent) =>
+                handleTabLayout(tab, e.nativeEvent.layout.x)
+              }
+              accessibilityRole="tab"
+              accessibilityState={{ selected: activeTab === tab }}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  activeTab === tab && styles.segmentTextActive,
+                ]}
+              >
+                {tab === "chat" ? "Chat" : "Discussions"}
               </Text>
-            </View>
-          }
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          removeClippedSubviews={true}
-        />
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Tab content container */}
+        <View style={styles.tabContentContainer}>
+          {/* Chat tab */}
+          <Animated.View
+            style={[styles.tabPane, chatAnimatedStyle]}
+            pointerEvents={activeTab === "chat" ? "auto" : "none"}
+          >
+            {loadingGroups && groups.length === 0 ? (
+              <View style={styles.skeletonContainer}>
+                <SkeletonList type="chat" count={6} />
+              </View>
+            ) : (
+              <FlatList
+                data={groups}
+                keyExtractor={(item) => item.id}
+                renderItem={renderGroup}
+                contentContainerStyle={styles.listContent}
+                ItemSeparatorComponent={() => (
+                  <View style={styles.separator} />
+                )}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefreshAll}
+                    tintColor={semantic.success}
+                  />
+                }
+                ListEmptyComponent={
+                  !loadingGroups && groups.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <MessageCircle size={32} color={neutral.muted} />
+                      <Text style={styles.emptyText}>
+                        No chat groups yet
+                      </Text>
+                    </View>
+                  ) : null
+                }
+                scrollEnabled={!refreshing}
+              />
+            )}
+          </Animated.View>
+
+          {/* Discussions tab */}
+          <Animated.View
+            style={[styles.tabPane, discussionsAnimatedStyle]}
+            pointerEvents={activeTab === "discussions" ? "auto" : "none"}
+          >
+            {loadingDiscussions && discussions.length === 0 ? (
+              <View style={styles.skeletonContainer}>
+                <SkeletonList type="announcement" count={5} />
+              </View>
+            ) : (
+              <FlatList
+                data={discussions}
+                keyExtractor={(item) => item.id}
+                renderItem={renderDiscussion}
+                ListHeaderComponent={discussionsHeader}
+                contentContainerStyle={styles.listContent}
+                ItemSeparatorComponent={() => (
+                  <View style={styles.separator} />
+                )}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefreshAll}
+                    tintColor={semantic.success}
+                  />
+                }
+                ListEmptyComponent={
+                  !loadingDiscussions && discussions.length === 0 ? (
+                    <View style={styles.emptyContainer}>
+                      <MessageCircle size={32} color={neutral.muted} />
+                      <Text style={styles.emptyText}>
+                        No discussions yet
+                      </Text>
+                    </View>
+                  ) : null
+                }
+                scrollEnabled={!refreshing}
+              />
+            )}
+          </Animated.View>
+        </View>
       </View>
     </View>
   );
 }
-
-const createStyles = (surfaceColor: string) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: CHAT_COLORS.background,
-    },
-    // Gradient header styles
-    headerGradient: {
-      paddingBottom: spacing.md,
-    },
-    headerSafeArea: {
-      // SafeAreaView handles top inset
-    },
-    headerContent: {
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: spacing.md,
-      paddingTop: spacing.xs,
-      minHeight: 40,
-      gap: spacing.sm,
-    },
-    orgLogoButton: {
-      width: 36,
-      height: 36,
-    },
-    orgLogo: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-    },
-    orgAvatar: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: APP_CHROME.avatarBackground,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    orgAvatarText: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.bold,
-      color: APP_CHROME.avatarText,
-    },
-    headerTextContainer: {
-      flex: 1,
-    },
-    headerTitle: {
-      fontSize: fontSize.lg,
-      fontWeight: fontWeight.semibold,
-      color: APP_CHROME.headerTitle,
-    },
-    headerMeta: {
-      fontSize: fontSize.xs,
-      color: APP_CHROME.headerMeta,
-      marginTop: 2,
-    },
-    contentSheet: {
-      flex: 1,
-      backgroundColor: surfaceColor,
-    },
-    listContent: {
-      padding: spacing.md,
-      gap: spacing.sm,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-      padding: spacing.lg,
-      gap: spacing.sm,
-    },
-    skeletonContainer: {
-      padding: spacing.md,
-    },
-    card: {
-      backgroundColor: CHAT_COLORS.card,
-      borderRadius: borderRadius.lg,
-      borderCurve: "continuous",
-      borderWidth: 1,
-      borderColor: CHAT_COLORS.border,
-      padding: spacing.md,
-      gap: spacing.xs,
-      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
-    },
-    cardPressed: {
-      opacity: 0.85,
-    },
-    cardHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-    },
-    cardTitleRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.xs,
-      flex: 1,
-      paddingRight: spacing.sm,
-    },
-    cardTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-      flex: 1,
-    },
-    defaultBadge: {
-      backgroundColor: "rgba(5, 150, 105, 0.12)",
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: borderRadius.sm,
-    },
-    defaultBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: CHAT_COLORS.accent,
-    },
-    cardDescription: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-      lineHeight: 20,
-    },
-    cardFooter: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: spacing.sm,
-    },
-    cardMeta: {
-      fontSize: fontSize.xs,
-      color: CHAT_COLORS.muted,
-    },
-    pendingBadge: {
-      backgroundColor: "rgba(245, 158, 11, 0.15)",
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: borderRadius.sm,
-    },
-    pendingBadgeText: {
-      fontSize: fontSize.xs,
-      fontWeight: fontWeight.medium,
-      color: CHAT_COLORS.pending,
-    },
-    errorTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-    },
-    errorText: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-      textAlign: "center",
-    },
-    retryButton: {
-      backgroundColor: CHAT_COLORS.accent,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      borderRadius: borderRadius.md,
-    },
-    retryButtonText: {
-      color: "#ffffff",
-      fontSize: fontSize.sm,
-      fontWeight: fontWeight.semibold,
-    },
-    emptyState: {
-      alignItems: "center",
-      paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.md,
-      gap: spacing.sm,
-    },
-    emptyIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: "#f1f5f9",
-    },
-    emptyTitle: {
-      fontSize: fontSize.base,
-      fontWeight: fontWeight.semibold,
-      color: CHAT_COLORS.title,
-    },
-    emptyText: {
-      fontSize: fontSize.sm,
-      color: CHAT_COLORS.subtitle,
-      textAlign: "center",
-    },
-  });

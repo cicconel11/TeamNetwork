@@ -30,34 +30,35 @@ export function SourceFilterChips({
 }: SourceFilterChipsProps) {
   const styles = useThemedStyles((n, s) => ({
     container: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
+      paddingHorizontal: 0,
+      paddingVertical: 0,
     },
     scrollContent: {
-      gap: SPACING.sm,
-      paddingRight: SPACING.md,
+      gap: SPACING.xs,
+      paddingHorizontal: 0,
     },
     chip: {
-      paddingHorizontal: SPACING.md,
-      paddingVertical: SPACING.sm,
+      paddingHorizontal: SPACING.sm,
+      paddingVertical: SPACING.xs,
       borderRadius: RADIUS.full,
-      borderWidth: 1,
-      borderColor: n.border,
-      backgroundColor: n.surface,
+      borderWidth: 0,
+      backgroundColor: "transparent",
+      borderBottomWidth: 2,
+      borderBottomColor: "transparent",
     },
     chipActive: {
-      backgroundColor: s.success,
-      borderColor: s.success,
+      backgroundColor: "rgba(255,255,255,0.1)",
+      borderBottomColor: "#0ea5e9",
     },
     chipPressed: {
-      opacity: 0.7,
+      opacity: 0.8,
     },
     chipLabel: {
-      ...TYPOGRAPHY.labelMedium,
-      color: n.foreground,
+      ...TYPOGRAPHY.labelSmall,
+      color: n.muted,
     },
     chipLabelActive: {
-      color: "#ffffff",
+      color: "#0ea5e9",
       fontWeight: "600" as const,
     },
   }));

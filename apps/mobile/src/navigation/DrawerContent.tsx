@@ -257,7 +257,10 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           style={({ pressed }) => [styles.profileCard, pressed && styles.profileCardPressed]}
           onPress={() => {
             props.navigation.closeDrawer();
-            router.push("/(app)/(drawer)/profile");
+            router.push({
+              pathname: "/(app)/(drawer)/profile",
+              params: slug ? { currentSlug: slug } : undefined,
+            } as any);
           }}
         >
           <View style={styles.avatar}>
