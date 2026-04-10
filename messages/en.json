@@ -530,6 +530,7 @@
     "orCreateEnterprise": "Or create an enterprise to manage multiple organizations",
     "yourEnterprises": "Your Enterprises",
     "createEnterprise": "Create Enterprise",
+    "enterpriseDescription": "Manage multiple organizations under one enterprise account",
     "manageMultiple": "Manage multiple organizations under one billing account",
     "createFirstEnterprise": "Create your first enterprise",
     "pendingApproval": "Pending Approval",

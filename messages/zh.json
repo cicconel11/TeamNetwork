@@ -530,6 +530,7 @@
     "orCreateEnterprise": "或创建企业来管理多个组织",
     "yourEnterprises": "您的企业",
     "createEnterprise": "创建企业",
+    "enterpriseDescription": "在一个企业账户下管理多个组织",
     "manageMultiple": "在一个账单账户下管理多个组织",
     "createFirstEnterprise": "创建您的第一个企业",
     "pendingApproval": "待审批",

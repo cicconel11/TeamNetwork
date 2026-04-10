@@ -105,6 +105,16 @@ describe("orgBulkInviteSchema validation", () => {
     assert.equal(result.data.emails.length, 100);
   });
 
+  it("dedupes repeated emails and normalizes casing", () => {
+    const result = orgBulkInviteSchema.safeParse({
+      emails: ["ALICE@example.com", "alice@example.com", "Bob@example.com"],
+      role: "active_member",
+    });
+
+    assert.ok(result.success);
+    assert.deepEqual(result.data.emails, ["alice@example.com", "bob@example.com"]);
+  });
+
   it("accepts nullable expiresAt and requireApproval", () => {
     const result = orgBulkInviteSchema.safeParse({
       emails: ["test@example.com"],

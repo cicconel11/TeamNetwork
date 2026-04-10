@@ -530,6 +530,7 @@
     "orCreateEnterprise": "أو أنشئ مؤسسة لإدارة منظمات متعددة",
     "yourEnterprises": "مؤسساتك",
     "createEnterprise": "إنشاء مؤسسة",
+    "enterpriseDescription": "إدارة منظمات متعددة تحت حساب مؤسسي واحد",
     "manageMultiple": "إدارة منظمات متعددة تحت حساب فوترة واحد",
     "createFirstEnterprise": "أنشئ مؤسستك الأولى",
     "pendingApproval": "بانتظار الموافقة",

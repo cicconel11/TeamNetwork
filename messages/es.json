@@ -530,6 +530,7 @@
     "orCreateEnterprise": "O crea una empresa para gestionar multiples organizaciones",
     "yourEnterprises": "Tus empresas",
     "createEnterprise": "Crear empresa",
+    "enterpriseDescription": "Gestiona multiples organizaciones bajo una cuenta empresarial",
     "manageMultiple": "Gestiona multiples organizaciones bajo una sola cuenta de facturacion",
     "createFirstEnterprise": "Crea tu primera empresa",
     "pendingApproval": "Aprobacion pendiente",
