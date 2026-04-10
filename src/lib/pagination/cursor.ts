@@ -4,6 +4,19 @@
  * The cursor is a base64url-encoded JSON string containing the timestamp and id
  * of the last item in the current page. This allows efficient keyset pagination
  * without offset-based scanning.
+ *
+ * ## When to use cursor vs. offset pagination
+ *
+ * **Cursor (this module)** — append-only feeds, high-row-count tables, or any
+ * query where consistent ordering matters more than random page access.
+ * Consumers call `decodeCursor` → `applyCursorFilter` → `buildCursorResponse`.
+ *
+ * **Offset (`.range()`)** — admin UIs that need "Page X of Y" display and a
+ * total count (e.g., member lists, parent directories). Use Supabase's
+ * `{ count: "exact" }` option with `.range(offset, offset + pageSize - 1)`.
+ *
+ * All new paginated API routes should default to cursor pagination via
+ * `buildCursorResponse`. Existing offset routes remain as-is.
  */
 
 type CursorPayload = {

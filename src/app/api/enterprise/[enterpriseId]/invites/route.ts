@@ -5,6 +5,7 @@ import { checkRateLimit, buildRateLimitResponse } from "@/lib/security/rate-limi
 import { validateJson, ValidationError, baseSchemas } from "@/lib/security/validation";
 import { getEnterpriseApiContext, ENTERPRISE_CREATE_ORG_ROLE } from "@/lib/auth/enterprise-api-context";
 import { logEnterpriseAuditAction, extractRequestContext } from "@/lib/audit/enterprise-audit";
+import { decodeCursor, applyCursorFilter, buildCursorResponse } from "@/lib/pagination/cursor";
 
 const createInviteSchema = z.object({
   organizationId: baseSchemas.uuid.optional(),
@@ -35,6 +36,10 @@ interface EnterpriseInviteRow {
   status: string;
   created_at: string;
   expires_at: string | null;
+  code?: string;
+  token?: string;
+  uses_remaining?: number | null;
+  revoked_at?: string | null;
 }
 
 export async function GET(req: Request, { params }: RouteParams) {
@@ -68,13 +73,32 @@ export async function GET(req: Request, { params }: RouteParams) {
 
   const orgMap = new Map(orgs?.map((o) => [o.id, o.name]) ?? []);
 
-  // Get all invites for this enterprise (both org-specific and enterprise-wide)
+  // Parse pagination params
+  const url = new URL(req.url);
+  const cursorParam = url.searchParams.get("cursor");
+  const limitParam = url.searchParams.get("limit");
+  const limit = Math.min(Math.max(parseInt(limitParam || "25", 10) || 25, 1), 100);
+
+  const decoded = cursorParam ? decodeCursor(cursorParam) : null;
+  if (cursorParam && !decoded) {
+    return respond({ error: "Invalid cursor" }, 400);
+  }
+
+  // Get paginated invites for this enterprise
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: invites, error } = await (ctx.serviceSupabase as any)
+  let inviteQuery = (ctx.serviceSupabase as any)
     .from("enterprise_invites")
-    .select("*")
+    .select("id, organization_id, email, role, status, created_at, expires_at, code, token, uses_remaining, revoked_at")
     .eq("enterprise_id", ctx.enterpriseId)
-    .order("created_at", { ascending: false }) as { data: EnterpriseInviteRow[] | null; error: Error | null };
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1);
+
+  if (decoded) {
+    inviteQuery = applyCursorFilter(inviteQuery, decoded);
+  }
+
+  const { data: invites, error } = await inviteQuery as { data: EnterpriseInviteRow[] | null; error: Error | null };
 
   if (error) {
     console.error("[enterprise/invites GET] DB error:", error);
@@ -89,8 +113,9 @@ export async function GET(req: Request, { params }: RouteParams) {
     .eq("role", "admin")
     .eq("status", "active");
 
-  // Add organization names (null org_id = enterprise-wide)
-  const invitesWithOrg = (invites ?? []).map((invite: EnterpriseInviteRow) => ({
+  // Paginate and add organization names
+  const paginatedResult = buildCursorResponse(invites ?? [], limit);
+  const invitesWithOrg = paginatedResult.data.map((invite: EnterpriseInviteRow) => ({
     ...invite,
     organization_name: invite.organization_id
       ? (orgMap.get(invite.organization_id) ?? "Unknown")
@@ -98,7 +123,39 @@ export async function GET(req: Request, { params }: RouteParams) {
     is_enterprise_wide: invite.organization_id === null,
   }));
 
-  return respond({ invites: invitesWithOrg, adminCount: adminCount ?? 0, adminLimit: 12 });
+  // Total count for stats (separate HEAD query)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count: totalInvites } = await (ctx.serviceSupabase as any)
+    .from("enterprise_invites")
+    .select("*", { count: "exact", head: true })
+    .eq("enterprise_id", ctx.enterpriseId);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count: activeInvites } = await (ctx.serviceSupabase as any)
+    .from("enterprise_invites")
+    .select("*", { count: "exact", head: true })
+    .eq("enterprise_id", ctx.enterpriseId)
+    .is("revoked_at", null);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { count: enterpriseWideCount } = await (ctx.serviceSupabase as any)
+    .from("enterprise_invites")
+    .select("*", { count: "exact", head: true })
+    .eq("enterprise_id", ctx.enterpriseId)
+    .is("organization_id", null);
+
+  return respond({
+    invites: invitesWithOrg,
+    nextCursor: paginatedResult.nextCursor,
+    hasMore: paginatedResult.hasMore,
+    stats: {
+      total: totalInvites ?? 0,
+      active: activeInvites ?? 0,
+      enterpriseWide: enterpriseWideCount ?? 0,
+    },
+    adminCount: adminCount ?? 0,
+    adminLimit: 12,
+  });
 }
 
 export async function POST(req: Request, { params }: RouteParams) {

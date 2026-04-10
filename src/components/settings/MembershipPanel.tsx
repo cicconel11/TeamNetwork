@@ -32,14 +32,20 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
   const [showAdminConfirm, setShowAdminConfirm] = useState(false);
   const [pendingAdminUserId, setPendingAdminUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
 
   // Fetch memberships
   useEffect(() => {
     const fetchMemberships = async () => {
-      const { data: membershipRows } = await supabase
+      const offset = page * PAGE_SIZE;
+      const { data: membershipRows, count } = await supabase
         .from("user_organization_roles")
-        .select("user_id, role, status, users(name,email)")
-        .eq("organization_id", orgId);
+        .select("user_id, role, status, created_at, users(name,email)", { count: "exact" })
+        .eq("organization_id", orgId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
 
       const normalizedMemberships: Membership[] =
         membershipRows?.map((m) => {
@@ -56,10 +62,11 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
         }) || [];
 
       setMemberships(normalizedMemberships);
+      setTotalCount(count ?? 0);
     };
 
     fetchMemberships();
-  }, [orgId, supabase]);
+  }, [orgId, supabase, page]);
 
   const canChangeToAlumni = useCallback(() => {
     if (!quota) return true;
@@ -235,6 +242,31 @@ export function MembershipPanel({ orgId, quota, onAlumniRoleChanged }: Membershi
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination controls */}
+        {totalCount > PAGE_SIZE && (
+          <div className="pt-4 flex items-center justify-between">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page + 1} of {Math.ceil(totalCount / PAGE_SIZE)}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= totalCount}
+            >
+              Next
+            </Button>
           </div>
         )}
       </Card>

@@ -24,11 +24,12 @@ interface OrgSidebarProps {
   currentMemberId?: string;
   currentMemberName?: string;
   currentMemberAvatar?: string | null;
+  pendingApprovalsCount?: number;
   className?: string;
   onClose?: () => void;
 }
 
-export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, className = "", onClose }: OrgSidebarProps) {
+export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAccess = false, hasParentsAccess = false, currentMemberId, currentMemberName, currentMemberAvatar, pendingApprovalsCount, className = "", onClose }: OrgSidebarProps) {
   const pathname = usePathname();
   const basePath = `/${organization.slug}`;
   const { profile } = useUIProfile();
@@ -126,6 +127,14 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
     return { sections: s, globalIndexMap: g };
   }, [visibleNav, tNav]);
 
+  const badgeCounts = useMemo<Record<string, number>>(() => {
+    const counts: Record<string, number> = {};
+    if (pendingApprovalsCount && pendingApprovalsCount > 0) {
+      counts["/settings/approvals"] = pendingApprovalsCount;
+    }
+    return counts;
+  }, [pendingApprovalsCount]);
+
   return (
     <aside className={`flex flex-col bg-card border-r border-border h-full ${className}`}>
       {/* Logo/Org Header */}
@@ -192,6 +201,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                     organizationId={organization.id}
                     globalIndex={globalIndexMap.get(section.item.href) ?? 0}
                     onClose={onClose}
+                    badgeCounts={badgeCounts}
                   />
                 </ul>
               );
@@ -210,6 +220,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                   organizationId={organization.id}
                   globalIndexMap={globalIndexMap}
                   onClose={onClose}
+                  badgeCounts={badgeCounts}
                 />
               );
             }
@@ -226,6 +237,7 @@ export function OrgSidebar({ organization, role, isDevAdmin = false, hasAlumniAc
                       organizationId={organization.id}
                       globalIndex={globalIndexMap.get(item.href) ?? 0}
                       onClose={onClose}
+                      badgeCounts={badgeCounts}
                     />
                   ))}
                 </ul>

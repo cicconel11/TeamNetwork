@@ -16,6 +16,7 @@ interface NavGroupSectionProps {
   organizationId: string;
   globalIndexMap: Map<string, number>;
   onClose?: () => void;
+  badgeCounts?: Record<string, number>;
 }
 
 export function NavGroupSection({
@@ -29,6 +30,7 @@ export function NavGroupSection({
   organizationId,
   globalIndexMap,
   onClose,
+  badgeCounts,
 }: NavGroupSectionProps) {
   const panelId = `nav-group-${group.id}`;
 
@@ -72,6 +74,7 @@ export function NavGroupSection({
                 organizationId={organizationId}
                 globalIndex={globalIndexMap.get(item.href) ?? 0}
                 onClose={onClose}
+                badgeCounts={badgeCounts}
               />
             ))}
           </ul>
@@ -89,6 +92,7 @@ interface NavItemLinkProps {
   organizationId: string;
   globalIndex: number;
   onClose?: () => void;
+  badgeCounts?: Record<string, number>;
 }
 
 export function NavItemLink({
@@ -99,6 +103,7 @@ export function NavItemLink({
   organizationId,
   globalIndex,
   onClose,
+  badgeCounts,
 }: NavItemLinkProps) {
   const href = `${basePath}${item.href}`;
   let isActive = pathname === href;
@@ -138,6 +143,11 @@ export function NavItemLink({
       >
         <Icon className="h-5 w-5 flex-shrink-0" />
         {item.label}
+        {badgeCounts?.[item.href] != null && badgeCounts[item.href] > 0 && (
+          <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+            {badgeCounts[item.href]}
+          </span>
+        )}
       </Link>
     </li>
   );

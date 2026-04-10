@@ -176,6 +176,7 @@
     },
     "description": "Gestisci inviti, abbonamenti e accesso all'organizzazione",
     "createInvite": "Crea invito",
+    "bulkImport": "Importazione in blocco",
     "requireApproval": "Richiedi approvazione per i nuovi membri",
     "requireApprovalDesc": "Quando attivato, gli utenti che si uniscono tramite invito devono essere approvati prima di ottenere l'accesso. Puoi anche sovrascrivere questa impostazione per singolo invito.",
     "requireApprovalLabel": "Richiedi approvazione dell'invito",

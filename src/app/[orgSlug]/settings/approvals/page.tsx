@@ -50,7 +50,8 @@ export default function ApprovalsPage() {
           .select("user_id, role, status, created_at, users(name, email)")
           .eq("organization_id", org.id)
           .eq("status", "pending")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false })
+          .limit(100);
 
         const normalizedMemberships: PendingMember[] =
           memberships?.map((m) => {

@@ -152,6 +152,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
   let currentMemberId: string | undefined;
   let currentMemberName: string | undefined;
   let currentMemberAvatar: string | undefined;
+  let pendingApprovalsCount = 0;
   if (orgContext.userId) {
     const supabase = await createClient();
     const { data: memberRow } = await supabase
@@ -166,6 +167,16 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       ? `${memberRow.first_name} ${memberRow.last_name}`
       : undefined;
     currentMemberAvatar = memberRow?.photo_url ?? undefined;
+
+    // Pending approvals count for admin sidebar badge (HEAD query, ~2ms)
+    if (isAdmin) {
+      const { count } = await supabase
+        .from("user_organization_roles")
+        .select("*", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .eq("status", "pending");
+      pendingApprovalsCount = count ?? 0;
+    }
   }
 
   let serviceSupabase = null;
@@ -256,10 +267,10 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
       )}
 
       <div className="hidden lg:block fixed left-0 top-0 h-screen w-64 z-40">
-        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
+        <OrgSidebar organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       </div>
 
-      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} />
+      <MobileNav organization={organization} role={orgContext.role} isDevAdmin={isDevAdmin} hasAlumniAccess={orgContext.hasAlumniAccess} hasParentsAccess={orgContext.hasParentsAccess} currentMemberId={currentMemberId} currentMemberName={currentMemberName} currentMemberAvatar={currentMemberAvatar} pendingApprovalsCount={pendingApprovalsCount} />
       {!isDevAdmin && <ConsentModal />}
       {!isDevAdmin && <LinkedInUrlPrompt />}
 

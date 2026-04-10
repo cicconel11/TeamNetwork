@@ -11,6 +11,7 @@ import { ToggleSwitch } from "@/components/ui/ToggleSwitch";
 import type { SubscriptionInfo } from "@/types/subscription";
 import { OrgInvitePanel } from "@/components/settings/OrgInvitePanel";
 import { MembershipPanel } from "@/components/settings/MembershipPanel";
+import { BulkOrgInviteForm } from "@/components/settings/BulkOrgInviteForm";
 import { SubscriptionCard } from "@/components/settings/SubscriptionCard";
 import { DangerZoneCard } from "@/components/settings/DangerZoneCard";
 
@@ -26,6 +27,7 @@ export default function InvitesPage() {
   const [quota, setQuota] = useState<SubscriptionInfo | null>(null);
   const [isLoadingQuota, setIsLoadingQuota] = useState(true);
   const [showInviteForm, setShowInviteForm] = useState(false);
+  const [showBulkForm, setShowBulkForm] = useState(false);
   const [requireApproval, setRequireApproval] = useState(false);
   const [isSavingToggle, setIsSavingToggle] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -132,13 +134,21 @@ export default function InvitesPage() {
         description={tSettings("description")}
         backHref={`/${orgSlug}`}
         actions={
-          !showInviteForm && (
-            <Button data-testid="invite-open-form" onClick={() => setShowInviteForm(true)}>
-              <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              {tSettings("createInvite")}
-            </Button>
+          !showInviteForm && !showBulkForm && (
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setShowBulkForm(true)}>
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                {tSettings("bulkImport")}
+              </Button>
+              <Button data-testid="invite-open-form" onClick={() => setShowInviteForm(true)}>
+                <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                {tSettings("createInvite")}
+              </Button>
+            </div>
           )
         }
       />
@@ -185,6 +195,17 @@ export default function InvitesPage() {
           </Link>
         </div>
       </Card>
+
+      {showBulkForm && (
+        <BulkOrgInviteForm
+          orgId={orgId}
+          onComplete={() => {
+            setShowBulkForm(false);
+            window.location.reload();
+          }}
+          onCancel={() => setShowBulkForm(false)}
+        />
+      )}
 
       <OrgInvitePanel
         orgId={orgId}

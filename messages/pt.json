@@ -176,6 +176,7 @@
     },
     "description": "Gerencie convites, assinaturas e acesso a organizacao",
     "createInvite": "Criar convite",
+    "bulkImport": "Importar em massa",
     "requireApproval": "Exigir aprovacao para novos membros",
     "requireApprovalDesc": "Quando ativado, usuarios que ingressarem por convite precisam ser aprovados antes de obter acesso. Voce tambem pode configurar isso por convite.",
     "requireApprovalLabel": "Exigir aprovacao do convite",

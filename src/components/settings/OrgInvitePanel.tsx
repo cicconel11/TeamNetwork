@@ -78,6 +78,9 @@ export function OrgInvitePanel({
   const [showQR, setShowQR] = useState<string | null>(null);
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const PAGE_SIZE = 25;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   useEffect(() => {
     return () => {
       if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
@@ -96,15 +99,17 @@ export function OrgInvitePanel({
       const [inviteResult, parentInviteResult] = await Promise.all([
         supabase
           .from("organization_invites")
-          .select("*")
+          .select("id, code, token, role, uses_remaining, expires_at, revoked_at, created_at, require_approval")
           .eq("organization_id", orgId)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(200),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (supabase as any)
           .from("parent_invites")
           .select("id,email,code,expires_at,status,created_at")
           .eq("organization_id", orgId)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(200),
       ]);
 
       if (inviteResult.error) {
@@ -273,6 +278,15 @@ export function OrgInvitePanel({
     })),
   ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), [orgInvites, parentInvites]);
 
+  // Reset visible count when the invite list changes (e.g., after create/delete)
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [orgInvites.length, parentInvites.length]);
+
+  const visibleInvites = allInvites.slice(0, visibleCount);
+  const hasMoreVisible = allInvites.length > visibleCount;
+  const hitServerCap = orgInvites.length >= 200 || parentInvites.length >= 200;
+
   const atAlumniLimit = quotaLimit !== null && alumniCount >= quotaLimit;
 
   return (
@@ -352,7 +366,7 @@ export function OrgInvitePanel({
       {/* Invites List */}
       {allInvites.length > 0 ? (
         <div className="space-y-4">
-          {allInvites.map((invite) => {
+          {visibleInvites.map((invite) => {
             const inviteKey = `${invite.kind}-${invite.id}`;
             const isLegacyParentInvite = invite.source === "legacy_parent_invite";
             const role = invite.kind === "parent" ? "parent" : invite.role ?? "active_member";
@@ -486,6 +500,22 @@ export function OrgInvitePanel({
               </Card>
             );
           })}
+          {hitServerCap && (
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-sm text-center">
+              Showing the 200 most recent invites. Older invites are not displayed.
+            </div>
+          )}
+          {hasMoreVisible && (
+            <div className="text-center">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
+              >
+                Show more ({allInvites.length - visibleCount} remaining)
+              </Button>
+            </div>
+          )}
         </div>
       ) : (
         <Card className="p-8 text-center">

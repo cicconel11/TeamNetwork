@@ -176,6 +176,7 @@
     },
     "description": "Gerez les invitations, abonnements et acces a l'organisation",
     "createInvite": "Creer une invitation",
+    "bulkImport": "Importer en masse",
     "requireApproval": "Exiger l'approbation pour les nouveaux membres",
     "requireApprovalDesc": "Lorsqu'active, les utilisateurs qui rejoignent via invitation doivent etre approuves avant d'obtenir l'acces. Vous pouvez egalement modifier ce reglage pour chaque invitation.",
     "requireApprovalLabel": "Exiger l'approbation de l'invitation",
