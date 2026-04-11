@@ -168,7 +168,7 @@ export default async function OrgLayout({ children, params }: OrgLayoutProps) {
     }
   }
   
-  const activeStatuses = ["active", "trialing", "canceling"];
+  const activeStatuses = ["active", "trialing", "canceling", "enterprise_managed"];
   const shouldShowBillingGate = 
     subscriptionStatus && 
     !activeStatuses.includes(subscriptionStatus) && 
